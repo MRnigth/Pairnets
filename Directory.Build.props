@@ -1,0 +1,16 @@
+<Project>
+  <PropertyGroup>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <Deterministic>true</Deterministic>
+    <Authors>Tether contributors</Authors>
+    <Product>Tether</Product>
+    <Copyright>MIT License</Copyright>
+    <Version>1.0.0</Version>
+    <InvariantGlobalization Condition="'$(InvariantGlobalization)' == ''">false</InvariantGlobalization>
+    <!-- No telemetry, no source-link network fetches at build time. -->
+    <EnableSourceLink>false</EnableSourceLink>
+  </PropertyGroup>
+</Project>
