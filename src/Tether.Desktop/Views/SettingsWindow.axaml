@@ -1,0 +1,33 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="Tether.Desktop.Views.SettingsWindow"
+        Title="Tether" Width="580" SizeToContent="Height" CanResize="False"
+        WindowStartupLocation="CenterScreen" Icon="avares://Tether/Assets/tether-icon-256.png">
+  <StackPanel Margin="20" Spacing="10">
+    <TextBlock x:Name="IntroText" TextWrapping="Wrap" IsVisible="False"
+               Text="Welcome to Tether. Enter the server address and token printed by install.sh on your server, pick the folder to keep in sync, then press Start syncing." />
+    <Grid ColumnDefinitions="150,*,Auto" RowDefinitions="Auto,Auto,Auto,Auto,Auto" >
+      <TextBlock Grid.Row="0" Text="Server URL" VerticalAlignment="Center" />
+      <TextBox x:Name="ServerUrlBox" Grid.Row="0" Grid.Column="1" Grid.ColumnSpan="2" Margin="0,4" Watermark="http://100.x.y.z:5075/" />
+      <TextBlock Grid.Row="1" Text="Token" VerticalAlignment="Center" />
+      <TextBox x:Name="TokenBox" Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" Margin="0,4" PasswordChar="•" />
+      <TextBlock Grid.Row="2" Text="Folder to sync" VerticalAlignment="Center" />
+      <TextBox x:Name="FolderBox" Grid.Row="2" Grid.Column="1" Margin="0,4" />
+      <Button Grid.Row="2" Grid.Column="2" Content="Browse…" Margin="8,4,0,4" Click="OnBrowse" />
+      <TextBlock Grid.Row="3" Text="Device name" VerticalAlignment="Center" />
+      <TextBox x:Name="DeviceBox" Grid.Row="3" Grid.Column="1" Grid.ColumnSpan="2" Margin="0,4" />
+      <TextBlock Grid.Row="4" Text="Extra ignore patterns" VerticalAlignment="Top" Margin="0,8,0,0" />
+      <TextBox x:Name="IgnoreBox" Grid.Row="4" Grid.Column="1" Grid.ColumnSpan="2" Margin="0,4" Height="70"
+               AcceptsReturn="True" Watermark="one per line, e.g. *.bak" />
+    </Grid>
+    <CheckBox x:Name="AutoStartBox" Content="Start Tether when I log in" Margin="150,0,0,0" />
+    <StackPanel Orientation="Horizontal" Margin="150,4,0,0" Spacing="10">
+      <Button x:Name="TestButton" Content="Test connection" Click="OnTest" />
+      <TextBlock x:Name="TestResult" VerticalAlignment="Center" TextWrapping="Wrap" MaxWidth="260" />
+    </StackPanel>
+    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="0,8,0,0">
+      <Button x:Name="SaveButton" Content="Save" IsDefault="True" Click="OnSave" />
+      <Button Content="Cancel" IsCancel="True" Click="OnCancel" />
+    </StackPanel>
+  </StackPanel>
+</Window>

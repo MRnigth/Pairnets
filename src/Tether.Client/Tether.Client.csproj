@@ -10,6 +10,7 @@
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <StartupObject>Tether.Client.Program</StartupObject>
+    <ApplicationIcon>..\..\assets\tether.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
