@@ -1,12 +1,18 @@
 name: Release
 
-# Tags (v*) publish a GitHub release. Pushes to main only build the packages as a smoke test,
-# so the release pipeline is known to work before a tag is pushed.
+# Tags (v*) and releases published on GitHub (Releases -> Draft a new release) get the packages
+# attached. Pushes to main only build the packages as a smoke test.
 on:
   push:
     tags: ["v*"]
     branches: [main]
+  release:
+    types: [published]
   workflow_dispatch:
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 permissions:
   contents: read
@@ -102,4 +108,9 @@ jobs:
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" assets/* --repo "$GITHUB_REPOSITORY" --title "Tether $GITHUB_REF_NAME" --generate-notes
+        run: |
+          if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" assets/* --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" assets/* --repo "$GITHUB_REPOSITORY" --title "Tether $GITHUB_REF_NAME" --generate-notes
+          fi
