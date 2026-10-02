@@ -18,6 +18,9 @@ public interface IMainActions
     void OpenFolder();
     void ShowSettings();
     void ViewLog();
+    void UpdateNow();
+    void DismissUpdate();
+    void DownloadNow();
 }
 
 public partial class MainWindow : Window
@@ -55,7 +58,7 @@ public partial class MainWindow : Window
 
     public void ShowStatus(StatusSnapshot s, string? folder)
     {
-        var (brush, icon) = Visuals.ForStatus(s.Status);
+        var (brush, icon) = s.IsWaiting ? ("S.Grey", "I.Wait") : Visuals.ForStatus(s.Status);
         StatusBadge.Fill = Visuals.Resource<IBrush>(brush);
         StatusGlyph.Data = Visuals.Resource<Geometry>(icon);
         Headline.Text = s.Headline;
@@ -72,15 +75,49 @@ public partial class MainWindow : Window
         TransferCard.IsVisible = s.IsTransferring;
         if (s.IsTransferring)
         {
-            TransferGlyph.Data = Visuals.Resource<Geometry>(s.Operation == "download" ? "I.Down" : "I.Up");
-            TransferFile.Text = $"{s.OperationText} {s.CurrentFileName}";
-            TransferFolder.Text = s.CurrentFolder.Length > 0 ? s.CurrentFolder : "Top folder";
-            TransferCount.Text = s.FileCountText;
-            TransferProgress.IsIndeterminate = s.Percent is null;
-            TransferProgress.Value = s.Percent ?? 0;
-            TransferBytes.Text = s.ProgressText;
-            TransferBytes.IsVisible = s.ProgressText.Length > 0;
+            TransferTitle.Text = s.BatchTitle;
+            TransferSpeed.Text = s.SpeedText;
+            LimitPill.IsVisible = s.LimitText is not null;
+            LimitText.Text = s.LimitText ?? string.Empty;
+            TransferProgress.IsIndeterminate = s.OverallPercent is null;
+            TransferProgress.Value = s.OverallPercent ?? 0;
+            TransferOverall.Text = s.OverallText;
+            var several = s.Active.Count > 1 || s.FilesTotal > 1;
+            ActiveDivider.IsVisible = several && s.Active.Count > 0;
+            ActiveList.IsVisible = several;
+            ActiveList.ItemsSource = s.Active;
         }
+
+        // Free space on the server; a warning colour when it runs low.
+        ServerPill.IsVisible = s.ServerFreeText is not null;
+        ServerText.Text = s.ServerFreeText ?? string.Empty;
+        ServerPill.Classes.Set("warn", s.ServerSpaceLow);
+
+        // Waiting for the other computer's big batch.
+        WaitPanel.IsVisible = s.IsWaiting;
+        if (s.IsWaiting)
+        {
+            WaitProgress.IsIndeterminate = s.WaitingPercent is null;
+            WaitProgress.Value = s.WaitingPercent ?? 0;
+            WaitText.Text = s.WaitingProgressText;
+        }
+    }
+
+    /// <summary>
+    /// Shows or hides the update banner. <paramref name="progress"/> 0–100 while downloading, null otherwise.
+    /// </summary>
+    public void ShowUpdate(string? title, string detail, string button, double? progress = null, bool busy = false)
+    {
+        UpdateBanner.IsVisible = title is not null;
+        if (title is null)
+            return;
+        UpdateTitle.Text = title;
+        UpdateDetail.Text = detail;
+        UpdateButton.Content = button;
+        UpdateButton.IsEnabled = !busy;
+        UpdateLater.IsVisible = !busy;
+        UpdateProgress.IsVisible = progress is not null;
+        UpdateProgress.Value = progress ?? 0;
     }
 
     public void ShowActivity(IReadOnlyList<ActivityItem> items)
@@ -131,6 +168,9 @@ public partial class MainWindow : Window
     private void OnOpenFolder(object? sender, RoutedEventArgs e) => _actions?.OpenFolder();
     private void OnSettings(object? sender, RoutedEventArgs e) => _actions?.ShowSettings();
     private void OnViewLog(object? sender, RoutedEventArgs e) => _actions?.ViewLog();
+    private void OnUpdateNow(object? sender, RoutedEventArgs e) => _actions?.UpdateNow();
+    private void OnUpdateLater(object? sender, RoutedEventArgs e) => _actions?.DismissUpdate();
+    private void OnDownloadNow(object? sender, RoutedEventArgs e) => _actions?.DownloadNow();
 
     private void OnAttentionAction(object? sender, RoutedEventArgs e)
     {

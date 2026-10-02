@@ -10,6 +10,12 @@ public sealed record ActiveTransfer(string Path, string Operation, long BytesDon
     public int? Percent => BytesTotal > 0 ? (int)Math.Clamp(BytesDone * 100 / BytesTotal, 0, 100) : null;
 
     public string PercentText => Percent is { } p ? p.ToString(System.Globalization.CultureInfo.InvariantCulture) + "%" : string.Empty;
+
+    public bool IsUpload => Operation == "upload";
+
+    public bool HasPercent => Percent is not null;
+
+    public double PercentValue => Percent ?? 0;
 }
 
 /// <summary>Everything a UI needs to draw the current state, as one immutable value.</summary>

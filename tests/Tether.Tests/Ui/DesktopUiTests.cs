@@ -82,7 +82,7 @@ public class DesktopUiTests
     private static void RenderAll(string? outDir, string suffix)
     {
         var now = DateTimeOffset.Now;
-        var window = new MainWindow { Width = 720, Height = 600 };
+        var window = new MainWindow { Width = 720, Height = 700 };
         window.Show();
         var feed = new ActivityFeed();
         feed.Add(new ActivityItem(now.AddHours(-3), ActivityKind.Downloaded, "Projects/2026/plan.xlsx", "Downloaded"));
@@ -100,10 +100,21 @@ public class DesktopUiTests
         };
         window.ShowAttention(attention);
 
+        var server = new Tether.Core.ServerInfo("id", 1, 1, "1.0.58", 412L << 30, 1L << 40);
+        window.ShowUpdate("Tether 1.0.58 is available", "You have 1.0.52. Download it and replace the app (your settings are kept).", "Download");
         window.ShowStatus(StatusSnapshot.Initial with
         {
             Status = RunnerStatus.Syncing, Text = "Syncing", LastSyncAt = now.AddMinutes(-1),
-            CurrentPath = "Videos/presentation-final.mp4", Operation = "upload", BytesDone = 67_108_864, BytesTotal = 104_857_600, FilesDone = 2, FilesTotal = 5,
+            CurrentPath = "Videos/presentation-final.mp4", Operation = "upload", BytesDone = 67_108_864, BytesTotal = 104_857_600,
+            FilesDone = 37, FilesTotal = 120, PassBytesDone = 412L << 20, PassBytesTotal = 1331L << 20, BytesPerSecond = 4.9 * (1 << 20),
+            LimitText = "Limited to 5 MB/s", Server = server,
+            Active =
+            [
+                new ActiveTransfer("Photos/summer/holiday-0412.jpg", "upload", 78, 100),
+                new ActiveTransfer("Photos/summer/holiday-0413.jpg", "upload", 41, 100),
+                new ActiveTransfer("Videos/presentation-final.mp4", "upload", 12, 100),
+                new ActiveTransfer("Notes/meeting-2026-10-02.md", "upload", 95, 100),
+            ],
         }, "/Users/me/Work");
         Save(window, outDir, $"main-window-syncing-{suffix}.png");
 
@@ -115,9 +126,17 @@ public class DesktopUiTests
         window.ShowAttentionTab(true);
         Save(window, outDir, $"main-window-blocked-{suffix}.png");
 
+        window.ShowUpdate(null, string.Empty, string.Empty);
         window.ShowAttentionTab(false);
-        window.ShowStatus(StatusSnapshot.Initial with { Status = RunnerStatus.Idle, Text = "Up to date", LastSyncAt = now }, "/Users/me/Work");
+        window.ShowStatus(StatusSnapshot.Initial with { Status = RunnerStatus.Idle, Text = "Up to date", LastSyncAt = now, Server = server }, "/Users/me/Work");
         Save(window, outDir, $"main-window-idle-{suffix}.png");
+
+        window.ShowStatus(StatusSnapshot.Initial with
+        {
+            Status = RunnerStatus.Idle, Text = "Up to date", LastSyncAt = now.AddMinutes(-4), Server = server,
+            WaitingFor = new Tether.Core.Sync.PeerWait("DESKTOP", 340, 212),
+        }, "/Users/me/Work");
+        Save(window, outDir, $"main-window-waiting-{suffix}.png");
         window.AllowClose = true;
         window.Close();
 
@@ -126,6 +145,13 @@ public class DesktopUiTests
         settings.ShowTestResult(true, "Connected. Server and token are OK.");
         Save(settings, outDir, $"settings-first-run-{suffix}.png");
         settings.Close();
+
+        var serverUpdate = new ServerUpdateWindow(null, "1.0.52", "1.0.58");
+        serverUpdate.Show();
+        Save(serverUpdate, outDir, $"server-update-{suffix}.png");
+        serverUpdate.ShowResult(new ServerUpdateResult(false, "This server can't update itself yet.", "1.0.52", CanUpdateItself: false));
+        Save(serverUpdate, outDir, $"server-update-manual-{suffix}.png");
+        serverUpdate.Close();
     }
 
     private static void Save(Avalonia.Controls.Window window, string? outDir, string name)

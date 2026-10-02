@@ -15,6 +15,10 @@
       <SolidColorBrush x:Key="T.AccentHover" Color="#1D4FC4" />
       <SolidColorBrush x:Key="T.Track" Color="#E3E8EF" />
       <SolidColorBrush x:Key="T.Pill" Color="#EEF2F7" />
+      <SolidColorBrush x:Key="T.Banner" Color="#EAF1FE" />
+      <SolidColorBrush x:Key="T.BannerBorder" Color="#C9DAFB" />
+      <SolidColorBrush x:Key="T.WarnPill" Color="#FFF1DE" />
+      <SolidColorBrush x:Key="T.WarnText" Color="#9A4A0B" />
     </ResourceDictionary>
     <ResourceDictionary x:Key="Dark">
       <SolidColorBrush x:Key="T.Bg" Color="#14161A" />
@@ -29,6 +33,10 @@
       <SolidColorBrush x:Key="T.AccentHover" Color="#6A9FF8" />
       <SolidColorBrush x:Key="T.Track" Color="#2E333B" />
       <SolidColorBrush x:Key="T.Pill" Color="#262A31" />
+      <SolidColorBrush x:Key="T.Banner" Color="#18243A" />
+      <SolidColorBrush x:Key="T.BannerBorder" Color="#2C4470" />
+      <SolidColorBrush x:Key="T.WarnPill" Color="#3A2A17" />
+      <SolidColorBrush x:Key="T.WarnText" Color="#F4B26A" />
     </ResourceDictionary>
   </ResourceDictionary.ThemeDictionaries>
 

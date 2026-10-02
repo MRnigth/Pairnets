@@ -2,7 +2,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:v="using:Tether.Desktop.Views"
         x:Class="Tether.Desktop.Views.MainWindow"
-        Title="Tether" Width="720" Height="600" MinWidth="560" MinHeight="460"
+        Title="Tether" Width="720" Height="700" MinWidth="560" MinHeight="480"
         WindowStartupLocation="CenterScreen" Icon="avares://Tether/Assets/tether-icon-256.png">
   <Window.Resources>
     <v:ActivityBrushConverter x:Key="KindBrush" />
@@ -10,6 +10,21 @@
   </Window.Resources>
 
   <DockPanel Margin="16">
+    <!-- Update banner -->
+    <Border x:Name="UpdateBanner" DockPanel.Dock="Top" Classes="banner" Margin="0,0,0,12" IsVisible="False">
+      <Grid ColumnDefinitions="Auto,*,Auto,Auto">
+        <v:LineIcon Classes="icon" Width="20" Height="20" Stroke="{DynamicResource T.Accent}" Data="{StaticResource I.Download}"
+                    VerticalAlignment="Center" Margin="0,0,12,0" />
+        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
+          <TextBlock x:Name="UpdateTitle" Classes="strong" />
+          <TextBlock x:Name="UpdateDetail" Classes="muted small" TextWrapping="Wrap" />
+          <ProgressBar x:Name="UpdateProgress" Classes="thin" Minimum="0" Maximum="100" Margin="0,4,0,0" IsVisible="False" />
+        </StackPanel>
+        <Button x:Name="UpdateLater" Grid.Column="2" Classes="flat" Content="Later" Margin="8,0,0,0" VerticalAlignment="Center" Click="OnUpdateLater" />
+        <Button x:Name="UpdateButton" Grid.Column="3" Classes="accent" Content="Update now" Margin="4,0,0,0" VerticalAlignment="Center" Click="OnUpdateNow" />
+      </Grid>
+    </Border>
+
     <!-- Status card -->
     <Border DockPanel.Dock="Top" Classes="card">
       <Grid ColumnDefinitions="Auto,*,Auto">
@@ -31,28 +46,64 @@
                 <TextBlock x:Name="FolderText" Classes="small" TextTrimming="CharacterEllipsis" MaxWidth="320" />
               </StackPanel>
             </Border>
+            <Border x:Name="ServerPill" Classes="pill" Margin="0,0,8,4" IsVisible="False">
+              <StackPanel Orientation="Horizontal" Spacing="5">
+                <v:LineIcon x:Name="ServerIcon" Classes="icon muted" Width="15" Height="15" StrokeThickness="2" Data="{StaticResource I.Disk}" />
+                <TextBlock x:Name="ServerText" Classes="small" />
+              </StackPanel>
+            </Border>
           </WrapPanel>
+          <StackPanel x:Name="WaitPanel" Spacing="6" Margin="0,8,0,0" IsVisible="False">
+            <ProgressBar x:Name="WaitProgress" Minimum="0" Maximum="100" />
+            <Grid ColumnDefinitions="*,Auto">
+              <TextBlock x:Name="WaitText" Classes="muted small" />
+              <TextBlock Grid.Column="1" Classes="muted small" Text="Your own changes still upload" />
+            </Grid>
+            <StackPanel Orientation="Horizontal" Spacing="10" Margin="0,2,0,0">
+              <Button Classes="subtle" Content="Download now anyway" Click="OnDownloadNow" />
+              <TextBlock Classes="muted small" VerticalAlignment="Center" TextWrapping="Wrap" MaxWidth="300"
+                         Text="Stops waiting by itself if the other computer goes quiet for 2 minutes." />
+            </StackPanel>
+          </StackPanel>
         </StackPanel>
         <Button x:Name="FixButton" Grid.Column="2" Classes="warn" IsVisible="False" VerticalAlignment="Center"
                 Margin="12,0,0,0" Click="OnFix" />
       </Grid>
     </Border>
 
-    <!-- Current transfer -->
-    <Border x:Name="TransferCard" DockPanel.Dock="Top" Classes="card" Margin="0,12,0,0" IsVisible="False">
-      <Grid ColumnDefinitions="Auto,*,Auto" RowDefinitions="Auto,Auto,Auto">
-        <Grid Grid.RowSpan="2" Width="34" Height="34" Margin="0,0,12,0" VerticalAlignment="Top">
-          <Ellipse Fill="{DynamicResource T.Pill}" />
-          <v:LineIcon x:Name="TransferGlyph" Classes="icon" Width="20" Height="20" Stroke="{DynamicResource T.Accent}" Data="{StaticResource I.Up}" />
+    <!-- Current transfer: the whole batch, speed, and the files in progress -->
+    <Border x:Name="TransferCard" DockPanel.Dock="Top" Classes="card" Margin="0,12,0,0" Padding="18,14,18,16" IsVisible="False">
+      <StackPanel Spacing="8">
+        <Grid ColumnDefinitions="*,Auto,Auto">
+          <TextBlock x:Name="TransferTitle" Classes="strong" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+          <TextBlock x:Name="TransferSpeed" Grid.Column="1" Classes="muted small" VerticalAlignment="Center" Margin="8,0,0,0" />
+          <Border x:Name="LimitPill" Grid.Column="2" Classes="pill" Margin="8,0,0,0" IsVisible="False">
+            <TextBlock x:Name="LimitText" FontSize="11.5" />
+          </Border>
         </Grid>
-        <TextBlock x:Name="TransferFile" Grid.Column="1" Classes="strong" TextTrimming="CharacterEllipsis" />
-        <TextBlock x:Name="TransferCount" Grid.Column="2" Classes="muted small" VerticalAlignment="Center" />
-        <TextBlock x:Name="TransferFolder" Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" Classes="muted small" TextTrimming="CharacterEllipsis" />
-        <StackPanel Grid.Row="2" Grid.ColumnSpan="3" Margin="0,10,0,0" Spacing="6">
-          <ProgressBar x:Name="TransferProgress" Minimum="0" Maximum="100" />
-          <TextBlock x:Name="TransferBytes" Classes="muted small" />
-        </StackPanel>
-      </Grid>
+        <ProgressBar x:Name="TransferProgress" Minimum="0" Maximum="100" />
+        <TextBlock x:Name="TransferOverall" Classes="muted small" />
+        <Border x:Name="ActiveDivider" Classes="divider" Margin="0,2,0,0" />
+        <ItemsControl x:Name="ActiveList">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+              <UniformGrid Columns="2" />
+            </ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate>
+            <DataTemplate>
+              <StackPanel Spacing="4" Margin="0,4,16,4">
+                <Grid ColumnDefinitions="*,Auto">
+                  <TextBlock Text="{Binding FileName}" Classes="strong" FontSize="12.5" TextTrimming="CharacterEllipsis" />
+                  <TextBlock Grid.Column="1" Text="{Binding PercentText}" Classes="muted small" Margin="6,0,0,0" />
+                </Grid>
+                <ProgressBar Classes="thin" Classes.up="{Binding IsUpload}" Classes.down="{Binding !IsUpload}"
+                             Minimum="0" Maximum="100" Value="{Binding PercentValue}" IsIndeterminate="{Binding !HasPercent}" />
+              </StackPanel>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </StackPanel>
     </Border>
 
     <!-- Toolbar -->

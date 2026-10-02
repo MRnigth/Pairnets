@@ -2,7 +2,9 @@ using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
+using Tether.Core;
 using Tether.Core.Api;
+using Tether.Core.Client;
 using Tether.Core.Paths;
 using Tether.Core.Settings;
 using Tether.Core.Sync;
@@ -21,8 +23,11 @@ public partial class SettingsWindow : Window
     {
     }
 
-    public SettingsWindow(ClientSettings current, ISecretProtector? protector, bool firstRun, bool autoStart)
+    private readonly UpdateService? _updates;
+
+    public SettingsWindow(ClientSettings current, ISecretProtector? protector, bool firstRun, bool autoStart, UpdateService? updates = null)
     {
+        _updates = updates;
         InitializeComponent();
         _original = current;
         _protector = protector;
@@ -37,7 +42,43 @@ public partial class SettingsWindow : Window
         DeviceBox.Text = current.DeviceName ?? Environment.MachineName;
         IgnoreBox.Text = string.Join(Environment.NewLine, current.ExtraIgnore);
         AutoStartBox.IsChecked = autoStart;
+        UpdateBox.IsChecked = current.CheckForUpdates;
+        WaitBox.IsChecked = current.WaitForPeerBatches;
+        (current.EffectiveParallelTransfers switch { 1 => Par1, 2 => Par2, 8 => Par8, _ => Par4 }).IsChecked = true;
+        UpLimitBox.IsChecked = current.UploadLimitMBps is > 0;
+        UpLimitValue.Value = (decimal)(current.UploadLimitMBps is > 0 ? current.UploadLimitMBps.Value : 5);
+        DownLimitBox.IsChecked = current.DownloadLimitMBps is > 0;
+        DownLimitValue.Value = (decimal)(current.DownloadLimitMBps is > 0 ? current.DownloadLimitMBps.Value : 10);
+        ShowVersion(null);
     }
+
+    /// <summary>"You have 1.0.52 · checked 19:41" plus the outcome of "Check now".</summary>
+    public void ShowVersion(string? outcome)
+    {
+        var text = "You have " + TetherInfo.ProductVersion;
+        if (_updates?.LastChecked is { } at)
+            text += " · checked " + at.ToLocalTime().ToString("HH:mm", System.Globalization.CultureInfo.InvariantCulture);
+        if (outcome is not null)
+            text += " · " + outcome;
+        VersionText.Text = text;
+        CheckNowButton.IsVisible = _updates is not null;
+    }
+
+    private async void OnCheckNow(object? sender, RoutedEventArgs e)
+    {
+        if (_updates is null)
+            return;
+        CheckNowButton.IsEnabled = false;
+        ShowVersion("checking…");
+        var found = await _updates.CheckNowAsync(CancellationToken.None);
+        ShowVersion(found is null ? "up to date" : $"version {found.Version} is available");
+        CheckNowButton.IsEnabled = true;
+    }
+
+    private int ParallelChoice() => Par1.IsChecked == true ? 1 : Par2.IsChecked == true ? 2 : Par8.IsChecked == true ? 8 : 4;
+
+    private static double? Limit(CheckBox box, NumericUpDown value) =>
+        box.IsChecked == true && value.Value is { } v && v > 0 ? (double)v : null;
 
     /// <summary>The settings to save, when the window closes with a result.</summary>
     public ClientSettings? Result { get; private set; }
@@ -164,6 +205,12 @@ public partial class SettingsWindow : Window
                 StartWithWindows = AutoStartBox.IsChecked == true,
                 FirstRunCompleted = true,
                 Paused = _original.Paused,
+                CheckForUpdates = UpdateBox.IsChecked == true,
+                WaitForPeerBatches = WaitBox.IsChecked == true,
+                ParallelTransfers = ParallelChoice(),
+                UploadLimitMBps = Limit(UpLimitBox, UpLimitValue),
+                DownloadLimitMBps = Limit(DownLimitBox, DownLimitValue),
+                SkippedServerVersion = _original.SkippedServerVersion,
             };
             PlainToken = token;
             Close();

@@ -42,6 +42,10 @@ public sealed class DesktopController : IMainActions, IDisposable
     private NativeMenuItem? _autoStartItem;
     private volatile bool _dirty = true;
     private RunnerStatus? _shownStatus;
+    private readonly UpdateService _updates;
+    private bool _updateDismissed;
+    private string? _serverPromptShownFor;
+    private bool _lowSpaceNoticed;
 
     public DesktopController(Application app, IClassicDesktopStyleApplicationLifetime lifetime, IPlatformServices platform)
     {
@@ -53,6 +57,13 @@ public sealed class DesktopController : IMainActions, IDisposable
         _log = _loggers.CreateLogger("Tether.Desktop");
         _settings = SettingsStore.Load(SettingsStore.DefaultPath);
         _refresh = new DispatcherTimer(TimeSpan.FromMilliseconds(250), DispatcherPriority.Background, (_, _) => RefreshIfDirty());
+        _updates = new UpdateService(new UpdateChecker(new HttpClient()), TetherInfo.ProductVersion, UpdateChecker.AssetForThisPlatform());
+        _updates.UpdateAvailable += u =>
+        {
+            _updateDismissed = false;
+            _dirty = true;
+            Notify("update:" + u.Version, "Tether update available", $"Version {u.Version} is ready. Open Tether to download it.");
+        };
     }
 
     public void Start(string[] args)
@@ -60,6 +71,7 @@ public sealed class DesktopController : IMainActions, IDisposable
         _log.LogInformation("Tether {Version} starting on {Platform}", typeof(DesktopController).Assembly.GetName().Version, _platform.Name);
         CreateTray();
         _refresh.Start();
+        _updates.SetEnabled(_settings.CheckForUpdates);
         if (!_settings.IsComplete || !_settings.FirstRunCompleted)
         {
             ShowSettings(firstRun: true);
@@ -172,6 +184,7 @@ public sealed class DesktopController : IMainActions, IDisposable
             else if (r.Outcome == PassOutcome.AuthFailed)
                 Notify("auth", "The server rejected the token", "Open Settings and enter the token printed by install.sh.");
         };
+        session.ServerInfoChanged += info => Dispatcher.UIThread.Post(() => OnServerInfo(session, info));
         session.CatchUpCompleted += n => Notify("catchup", "Tether is up to date", $"Synced {n} change(s) made while this computer was away.");
         _session = session;
         _dirty = true;
@@ -226,6 +239,11 @@ public sealed class DesktopController : IMainActions, IDisposable
         }
         if (_window is { IsVisible: true })
         {
+            if (_updates.Available is { } update && !_updateDismissed)
+                _window.ShowUpdate($"Tether {update.Version} is available",
+                    $"You have {TetherInfo.ProductVersion}. Download it and replace the app (your settings are kept).", "Download");
+            else
+                _window.ShowUpdate(null, string.Empty, string.Empty);
             _window.ShowStatus(status, _settings.Folder);
             _window.ShowActivity(_session?.Activity.Items ?? []);
             _window.ShowAttention(BuildAttention(status));
@@ -343,9 +361,47 @@ public sealed class DesktopController : IMainActions, IDisposable
 
     public void ShowSettings() => ShowSettings(firstRun: false);
 
+    /// <summary>The app is unsigned on Mac and Linux, so it does not replace itself: open the download page.</summary>
+    public void UpdateNow()
+    {
+        if (_updates.Available is { } update)
+            _platform.Open(update.ReleasePage.ToString());
+    }
+
+    public void DismissUpdate()
+    {
+        _updateDismissed = true;
+        _dirty = true;
+    }
+
+    public void DownloadNow() => _session?.DownloadNow();
+
+    private void OnServerInfo(ClientSession session, ServerInfo info)
+    {
+        if (!ReferenceEquals(session, _session))
+            return;
+        if (session.Status.ServerSpaceLow && !_lowSpaceNoticed)
+        {
+            _lowSpaceNoticed = true;
+            Notify("disk", "The server is running out of space", $"{session.Status.ServerFreeText}. Free up space on the server or delete old history.");
+        }
+        if (!session.ServerNeedsUpdate(info) || _serverPromptShownFor == info.ServerVersion)
+            return;
+        _serverPromptShownFor = info.ServerVersion;
+        var dialog = new ServerUpdateWindow(session, info.ServerVersion!);
+        dialog.Closed += (_, _) =>
+        {
+            if (!dialog.Skipped)
+                return;
+            _settings.SkippedServerVersion = dialog.ServerVersion;
+            SettingsStore.Save(SettingsStore.DefaultPath, _settings);
+        };
+        dialog.Show();
+    }
+
     private void ShowSettings(bool firstRun)
     {
-        var window = new SettingsWindow(_settings, _platform.Secrets, firstRun, SafeIsAutoStart());
+        var window = new SettingsWindow(_settings, _platform.Secrets, firstRun, SafeIsAutoStart(), _updates);
         window.Closed += (_, _) =>
         {
             if (window.Result is null)
@@ -353,6 +409,7 @@ public sealed class DesktopController : IMainActions, IDisposable
             _settings = window.Result;
             SettingsStore.Save(SettingsStore.DefaultPath, _settings);
             SetAutoStart(_settings.StartWithWindows);
+            _updates.SetEnabled(_settings.CheckForUpdates);
             StartSession(window.PlainToken);
             ShowMainWindow();
         };
@@ -408,6 +465,7 @@ public sealed class DesktopController : IMainActions, IDisposable
 
     public void Dispose()
     {
+        _updates.Dispose();
         _refresh.Stop();
         StopSession();
         if (_tray is not null)
