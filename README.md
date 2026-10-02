@@ -20,6 +20,8 @@ to act when something looks wrong (wrong folder, unplugged drive, many deletions
                                            └──────────────────────┘
 ```
 
+**New here? Start with the step-by-step guide: [How to install Tether, and how it works](docs/HOWTO.md).**
+
 More detail: [Architecture](docs/ARCHITECTURE.md) · [Deploy](docs/DEPLOY.md) ·
 [Security](docs/SECURITY.md) · [Testing](docs/TESTING.md) · [Decisions](docs/DECISIONS.md)
 
