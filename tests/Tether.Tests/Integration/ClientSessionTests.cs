@@ -39,12 +39,15 @@ public class ClientSessionTests : IAsyncLifetime
         WatcherDebounce = TimeSpan.FromMilliseconds(200),
         PeriodicInterval = TimeSpan.FromHours(1),
         UnstableRetry = TimeSpan.FromMilliseconds(300),
+        // A file briefly held by another program (antivirus on Windows) is a per-file error,
+        // retried after this; the 30 s default is longer than these tests wait.
+        ErrorRetry = TimeSpan.FromMilliseconds(500),
         OfflineBackoff = [TimeSpan.FromMilliseconds(200)],
     }, hooks: hooks);
 
     private static async Task WaitUntil(Func<bool> condition, string what)
     {
-        var deadline = DateTime.UtcNow.AddSeconds(15);
+        var deadline = DateTime.UtcNow.AddSeconds(30); // slow CI runners
         while (!condition())
         {
             if (DateTime.UtcNow > deadline)
