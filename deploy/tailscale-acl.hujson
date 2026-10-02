@@ -1,0 +1,17 @@
+// Tailscale ACL snippet: only your two PCs may reach the Tether port on the server.
+// Merge into your tailnet policy (admin console → Access controls). Replace the
+// placeholders with your device names (or tags) as shown by `tailscale status`.
+{
+  "hosts": {
+    "tether-server": "100.x.y.z",   // the server's Tailscale IP: tailscale ip -4
+  },
+  "acls": [
+    {
+      "action": "accept",
+      "src": ["<desktop-device-name>", "<laptop-device-name>"],
+      "dst": ["tether-server:5075"],
+    },
+    // Keep (or add) your other rules here. Without a rule allowing them,
+    // no other device in the tailnet can reach port 5075.
+  ],
+}
