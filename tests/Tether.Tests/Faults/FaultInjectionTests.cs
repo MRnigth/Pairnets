@@ -45,10 +45,16 @@ public class FaultInjectionTests : IAsyncLifetime
         }
     }
 
+    /// <summary>
+    /// The server deletes an aborted upload's temp file as soon as it notices the dead connection:
+    /// immediately on a TCP reset, or (if the reset is not seen, as happens on macOS runners) when
+    /// Kestrel's minimum request-body data rate times out, about 5 s after the stall. Allow for both.
+    /// </summary>
     private static async Task WaitForEmptyTmp(string dir)
     {
-        for (var i = 0; i < 100 && Directory.EnumerateFiles(dir).Any(); i++)
-            await Task.Delay(50);
+        var deadline = DateTime.UtcNow.AddSeconds(30);
+        while (Directory.EnumerateFiles(dir).Any() && DateTime.UtcNow < deadline)
+            await Task.Delay(100);
         Assert.Empty(Directory.EnumerateFiles(dir));
     }
 
