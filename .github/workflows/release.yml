@@ -161,6 +161,12 @@ jobs:
         with:
           path: assets
           merge-multiple: true
+      - name: Version file (read by the apps' update check)
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then v="${GITHUB_REF_NAME#v}"; else v="1.0.${{ github.run_number }}"; fi
+          printf '{"version":"%s","commit":"%s"}\n' "$v" "$GITHUB_SHA" > assets/version.json
+          cat assets/version.json
       - name: Checksums
         working-directory: assets
         run: sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt
@@ -189,6 +195,12 @@ jobs:
         with:
           path: assets
           merge-multiple: true
+      - name: Version file (read by the apps' update check)
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then v="${GITHUB_REF_NAME#v}"; else v="1.0.${{ github.run_number }}"; fi
+          printf '{"version":"%s","commit":"%s"}\n' "$v" "$GITHUB_SHA" > assets/version.json
+          cat assets/version.json
       - name: Checksums
         working-directory: assets
         run: sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt

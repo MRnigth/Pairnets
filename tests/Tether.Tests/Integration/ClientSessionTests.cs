@@ -170,4 +170,40 @@ public class ClientSessionTests : IAsyncLifetime
         Assert.NotNull(session.Status.ServerFreeText);
         Assert.Equal(TetherInfo.ProductVersion, session.Status.Server!.ServerVersion);
     }
+
+    [Fact]
+    public async Task UpdateServerExplainsAServerThatCannotUpdateItself()
+    {
+        await using var session = Start();
+        var result = await session.UpdateServerAsync(null, default);
+        Assert.False(result.Success);
+        Assert.False(result.CanUpdateItself);
+    }
+
+    [Fact]
+    public async Task UpdateServerFollowsTheUpdaterAndReportsItsFailure()
+    {
+        await _server.DisposeAsync();
+        using var dir = new TempDir("updater");
+        var script = Path.Combine(dir.Path, "update.sh");
+        File.WriteAllText(script, "#!/bin/sh\n");
+        _server = await TestServer.StartAsync(config: new() { ["Sync:UpdaterScript"] = script });
+        await using var session = Start();
+        var steps = new List<string>();
+
+        // Play the root updater: pick up the request and report a failure.
+        var updateDir = Path.Combine(_server.Paths.DataDir, "update");
+        _ = Task.Run(async () =>
+        {
+            while (!File.Exists(Path.Combine(updateDir, "request")))
+                await Task.Delay(50);
+            File.Delete(Path.Combine(updateDir, "request"));
+            File.WriteAllText(Path.Combine(updateDir, "status.json"),
+                "{\"state\":\"failed\",\"message\":\"The download did not match its checksum. Nothing was changed.\"}");
+        });
+        var result = await session.UpdateServerAsync(new Progress<string>(steps.Add), default, pollInterval: TimeSpan.FromMilliseconds(100), timeout: TimeSpan.FromSeconds(10));
+        Assert.False(result.Success);
+        Assert.True(result.CanUpdateItself);
+        Assert.Contains("checksum", result.Message);
+    }
 }

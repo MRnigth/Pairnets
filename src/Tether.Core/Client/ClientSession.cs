@@ -389,6 +389,77 @@ public sealed class ClientSession : IAsyncDisposable
         return null;
     }
 
+    /// <summary>True when the server runs an older release than this app and the user did not skip that version.</summary>
+    public bool ServerNeedsUpdate(ServerInfo? info = null)
+    {
+        info ??= Status.Server;
+        return info?.ServerVersion is { } v && UpdateChecker.ServerIsOlder(v, TetherInfo.ProductVersion)
+            && !string.Equals(v, Settings.SkippedServerVersion, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// "Update server": asks the server to update itself, then follows it (it restarts on the way)
+    /// until it reports a newer version, the updater reports a failure, or <paramref name="timeout"/> passes.
+    /// </summary>
+    public async Task<ServerUpdateResult> UpdateServerAsync(IProgress<string>? progress, CancellationToken ct,
+        TimeSpan? pollInterval = null, TimeSpan? timeout = null)
+    {
+        var before = Status.Server?.ServerVersion;
+        TetherApiClient.ServerUpdateRequest request;
+        try
+        {
+            request = await Api.RequestServerUpdateAsync(ct).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is TetherNetworkException or TetherAuthException or TetherProtocolException)
+        {
+            return new ServerUpdateResult(false, "Could not reach the server: " + ex.Message, before, CanUpdateItself: true);
+        }
+        switch (request)
+        {
+            case TetherApiClient.ServerUpdateRequest.UpdaterMissing or TetherApiClient.ServerUpdateRequest.NotSupported:
+                return new ServerUpdateResult(false, "This server can't update itself yet. Run the install command on the server once.", before, CanUpdateItself: false);
+            case TetherApiClient.ServerUpdateRequest.TooSoon:
+                return new ServerUpdateResult(false, "An update was just requested. Wait a minute and try again.", before, CanUpdateItself: true);
+        }
+
+        progress?.Report("Downloading and checking the new version");
+        var deadline = _clock.GetUtcNow() + (timeout ?? TimeSpan.FromMinutes(3));
+        var restarting = false;
+        while (_clock.GetUtcNow() < deadline)
+        {
+            await Task.Delay(pollInterval ?? TimeSpan.FromSeconds(3), _clock, ct).ConfigureAwait(false);
+            ServerInfo info;
+            try
+            {
+                info = await Api.GetInfoAsync(ct).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is TetherNetworkException or TetherProtocolException)
+            {
+                if (!restarting)
+                    progress?.Report("Installing and restarting the server");
+                restarting = true;
+                continue;
+            }
+            Update(s => s with { Server = info });
+            if (info.ServerVersion is { } now && UpdateChecker.IsNewer(now, before))
+            {
+                ServerInfoChanged?.Invoke(info);
+                return new ServerUpdateResult(true, $"Server updated to {now}.", now, CanUpdateItself: true);
+            }
+            switch (info.Updater?.State)
+            {
+                case "failed":
+                    return new ServerUpdateResult(false, info.Updater.Message ?? "The update failed. Nothing was changed.", before, CanUpdateItself: true);
+                case "succeeded":
+                    return new ServerUpdateResult(info.ServerVersion != before, info.Updater.Message ?? "Done.", info.ServerVersion, CanUpdateItself: true);
+                case "running":
+                    progress?.Report(info.Updater.Message ?? "Installing");
+                    break;
+            }
+        }
+        return new ServerUpdateResult(false, "The server did not finish updating in time. Check it with: sudo journalctl -u tether-update -n 50", before, CanUpdateItself: true);
+    }
+
     /// <summary>"Download now anyway": stop waiting for another computer's big batch.</summary>
     public void DownloadNow() => Runner.ReleaseHold();
 
@@ -401,3 +472,6 @@ public sealed class ClientSession : IAsyncDisposable
         State.Dispose();
     }
 }
+
+/// <summary>How "Update server" ended. <see cref="CanUpdateItself"/> false: show the one-time install command.</summary>
+public sealed record ServerUpdateResult(bool Success, string Message, string? ServerVersion, bool CanUpdateItself);

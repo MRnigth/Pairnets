@@ -33,6 +33,8 @@ Name: "{userprograms}\Tether"; Filename: "{app}\Tether.exe"
 
 [Run]
 Filename: "{app}\Tether.exe"; Description: "Start Tether now"; Flags: nowait postinstall skipifsilent
+; After an update from inside Tether (a silent install) start it again by itself.
+Filename: "{app}\Tether.exe"; Flags: nowait; Check: WizardSilent
 
 [UninstallRun]
 Filename: "{cmd}"; Parameters: "/C taskkill /IM Tether.exe /F"; Flags: runhidden; RunOnceId: "StopTether"

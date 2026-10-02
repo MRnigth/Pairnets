@@ -86,6 +86,29 @@ public sealed class TetherApiClient : ITetherApi, IDisposable
         return await ReadJsonAsync<ServerInfo>(resp, timeout, ct).ConfigureAwait(false);
     }
 
+    public enum ServerUpdateRequest { Requested, UpdaterMissing, TooSoon, NotSupported }
+
+    /// <summary>Asks the server to update itself to the newest release (POST /api/update).</summary>
+    public async Task<ServerUpdateRequest> RequestServerUpdateAsync(CancellationToken ct)
+    {
+        using var timeout = Linked(ct, TimeSpan.FromSeconds(30));
+        using var resp = await SendAsync(new HttpRequestMessage(HttpMethod.Post, "api/update"), HttpCompletionOption.ResponseContentRead, timeout, ct).ConfigureAwait(false);
+        switch ((int)resp.StatusCode)
+        {
+            case 202:
+                return ServerUpdateRequest.Requested;
+            case 409:
+                return ServerUpdateRequest.UpdaterMissing;
+            case 429:
+                return ServerUpdateRequest.TooSoon;
+            case 404 or 405:
+                return ServerUpdateRequest.NotSupported; // a server from before self-update
+            default:
+                await ThrowForStatusAsync(resp).ConfigureAwait(false);
+                return ServerUpdateRequest.NotSupported;
+        }
+    }
+
     /// <summary>Checks reachability (health, no auth) and then the token (info). Never throws.</summary>
     public static async Task<ConnectionTestResult> TestConnectionAsync(string? serverUrl, string? token, string deviceId,
         HttpMessageHandler? handler = null, CancellationToken ct = default)
