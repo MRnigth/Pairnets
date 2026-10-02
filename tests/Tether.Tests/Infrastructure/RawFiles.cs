@@ -6,8 +6,13 @@ namespace Tether.Tests.Infrastructure;
 /// </summary>
 public static class RawFiles
 {
-    public static string ExactPath(string fullPath) =>
-        OperatingSystem.IsWindows() ? @"\\?\" + Path.GetFullPath(fullPath) : fullPath;
+    // No Path.GetFullPath here: on Windows it would strip the very trailing dot we want to keep.
+    public static string ExactPath(string fullPath)
+    {
+        if (!Path.IsPathFullyQualified(fullPath))
+            throw new ArgumentException("An absolute path is required.", nameof(fullPath));
+        return OperatingSystem.IsWindows() ? @"\\?\" + fullPath : fullPath;
+    }
 
     public static void Write(string fullPath, string content) => File.WriteAllText(ExactPath(fullPath), content);
 
