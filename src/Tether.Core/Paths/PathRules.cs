@@ -116,8 +116,22 @@ public static class PathRules
         return PathProblem.None;
     }
 
-    /// <summary>Key used to detect paths that differ only by letter case.</summary>
-    public static string CaseKey(string path) => path.ToLowerInvariant();
+    /// <summary>
+    /// Key used to detect paths that would be the same file on Windows or macOS: names differing only
+    /// in letter case, or in Unicode normalization (macOS treats "é" and "e + combining accent" as
+    /// one name).
+    /// </summary>
+    public static string CaseKey(string path)
+    {
+        try
+        {
+            return path.Normalize(System.Text.NormalizationForm.FormC).ToLowerInvariant();
+        }
+        catch (ArgumentException)
+        {
+            return path.ToLowerInvariant(); // invalid Unicode; such paths are rejected by Check anyway
+        }
+    }
 
     /// <summary>Converts an OS-relative path ("a\b.txt" on Windows) to a sync path ("a/b.txt").</summary>
     public static string FromOsRelative(string osRelative) =>

@@ -61,6 +61,9 @@ public sealed class SyncEngine
 
     public event Action<PathWarningInfo>? PathWarningRaised;
 
+    /// <summary>Raised after a file was uploaded, downloaded or deleted (for activity lists).</summary>
+    public event Action<SyncAction, string>? FileSynced;
+
     /// <summary>True if the engine itself wrote/deleted this path recently (used to ignore our own watcher events).</summary>
     public bool WasRecentlyTouched(string path, TimeSpan window)
     {
@@ -412,6 +415,7 @@ public sealed class SyncEngine
                     _state.UpsertRemote(entry);
                     _state.ClearWarning(path);
                     ctx.Result.Uploaded++;
+                    FileSynced?.Invoke(SyncAction.Upload, path);
                     _log.LogInformation("Uploaded {Path} ({Bytes} bytes)", path, sentBytes);
                     break;
                 case ApiOutcome.Conflict:
@@ -464,6 +468,7 @@ public sealed class SyncEngine
             var info = new FileInfo(full);
             _state.SetSynced(path, dl.Hash, info.Length, info.LastWriteTimeUtc.Ticks, dl.Hash, _clock.GetUtcNow().UtcTicks);
             ctx.Result.Downloaded++;
+            FileSynced?.Invoke(SyncAction.Download, path);
             _log.LogInformation("Downloaded {Path} ({Bytes} bytes)", path, dl.Size);
         }
         finally
@@ -539,6 +544,7 @@ public sealed class SyncEngine
         _state.RemoveFile(item.Path);
         PruneEmptyParents(item.Path);
         ctx.Result.DeletedLocal++;
+        FileSynced?.Invoke(SyncAction.DeleteLocal, item.Path);
         _log.LogInformation("Deleted local {Path} (deleted on another device)", item.Path);
     }
 
@@ -554,6 +560,7 @@ public sealed class SyncEngine
                 if (res.Entry is not null)
                     _state.UpsertRemote(res.Entry);
                 ctx.Result.DeletedRemote++;
+                FileSynced?.Invoke(SyncAction.DeleteRemote, item.Path);
                 _log.LogInformation("Deleted {Path} on the server (deleted here)", item.Path);
                 break;
             case ApiOutcome.Conflict:
