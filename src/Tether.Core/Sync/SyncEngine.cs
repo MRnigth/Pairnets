@@ -325,7 +325,7 @@ public sealed class SyncEngine
         if (options.DeferDownloads)
         {
             var deferred = plan.RemoveAll(p => p.Action == SyncAction.Download);
-            result.Deferred += deferred;
+            result.HeldDownloads += deferred; // not "Deferred": no quick retry, the hold ending triggers the pass
             if (deferred > 0)
                 _log.LogInformation("{Count} download(s) deferred until the other computer finishes its batch", deferred);
         }

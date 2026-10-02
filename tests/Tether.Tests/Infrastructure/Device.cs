@@ -99,9 +99,9 @@ public sealed class Device : IAsyncDisposable
         return d;
     }
 
-    public SyncRunner StartRunner(TimeSpan? debounce = null)
+    public SyncRunner StartRunner(TimeSpan? debounce = null, Func<RunnerOptions, RunnerOptions>? tweak = null)
     {
-        Runner = new SyncRunner(Engine, new RunnerOptions
+        var options = new RunnerOptions
         {
             ServerUrl = Url,
             Token = Token,
@@ -112,7 +112,8 @@ public sealed class Device : IAsyncDisposable
             PeriodicInterval = TimeSpan.FromHours(1),
             UnstableRetry = TimeSpan.FromMilliseconds(500),
             OfflineBackoff = [TimeSpan.FromMilliseconds(200), TimeSpan.FromMilliseconds(500), TimeSpan.FromSeconds(1)],
-        });
+        };
+        Runner = new SyncRunner(Engine, tweak?.Invoke(options) ?? options);
         Runner.Start();
         return Runner;
     }

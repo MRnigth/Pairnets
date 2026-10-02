@@ -76,6 +76,9 @@ public sealed class PassResult
     /// <summary>Uploads/deletes that got 409 because the server moved on; retried next pass.</summary>
     public int Deferred { get; set; }
 
+    /// <summary>Downloads skipped because another computer is still uploading a big batch.</summary>
+    public int HeldDownloads { get; set; }
+
     /// <summary>Paths that need the user's attention (invalid name, case collision).</summary>
     public int Warnings { get; set; }
 

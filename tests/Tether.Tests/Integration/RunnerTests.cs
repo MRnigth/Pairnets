@@ -139,4 +139,98 @@ public class RunnerTests : IAsyncLifetime
         await WaitUntil(() => _server.Store.ReadManifest(null).Entries.Count == 60, TimeSpan.FromSeconds(20), "all uploads after resume");
         await WaitUntil(() => runner.Status == RunnerStatus.Idle, TimeSpan.FromSeconds(10), "idle status");
     }
+
+    private static RunnerOptions SmallBatches(RunnerOptions o) => new()
+    {
+        ServerUrl = o.ServerUrl,
+        Token = o.Token,
+        DeviceId = o.DeviceId,
+        WatcherDebounce = o.WatcherDebounce,
+        WatcherMaxDelay = o.WatcherMaxDelay,
+        RemoteDebounce = o.RemoteDebounce,
+        PeriodicInterval = o.PeriodicInterval,
+        UnstableRetry = o.UnstableRetry,
+        OfflineBackoff = o.OfflineBackoff,
+        BatchThreshold = 10,
+        PeerQuietTimeout = TimeSpan.FromSeconds(2),
+        HoldCheckInterval = TimeSpan.FromMilliseconds(200),
+    };
+
+    private async Task<(SyncRunner Desktop, SyncRunner Laptop)> StartBothAsync()
+    {
+        var desktop = _desktop.StartRunner(tweak: SmallBatches);
+        var laptop = _laptop.StartRunner(tweak: SmallBatches);
+        await WaitUntil(() => desktop.HubConnected && laptop.HubConnected, TimeSpan.FromSeconds(15), "hub connections");
+        await WaitUntil(() => desktop.LastSyncAt is not null && laptop.LastSyncAt is not null, TimeSpan.FromSeconds(15), "startup passes");
+        return (desktop, laptop);
+    }
+
+    [Fact]
+    public async Task OtherComputerWaitsForABigBatchAndDownloadsItInOneGo()
+    {
+        var (desktop, laptop) = await StartBothAsync();
+        var downloadsPerPass = new List<int>();
+        laptop.PassCompleted += r => { lock (downloadsPerPass) downloadsPerPass.Add(r.Result.Downloaded); };
+        PeerWait? sawWait = null;
+        laptop.PeerWaitChanged += w => { if (w is not null) sawWait = w; };
+
+        _desktop.Hooks.BeforeTransfer = (_, _) => Task.Delay(80);
+        for (var i = 0; i < 30; i++)
+            _desktop.Write($"batch/f{i:00}.txt", "batch " + i);
+        desktop.RequestSync("test");
+
+        await WaitUntil(() => _server.Store.ReadManifest(null).Entries.Count(e => e.Path.StartsWith("batch/", StringComparison.Ordinal)) == 30,
+            TimeSpan.FromSeconds(20), "desktop to upload the batch");
+        await WaitUntil(() => Enumerable.Range(0, 30).All(i => _laptop.Exists($"batch/f{i:00}.txt")), TimeSpan.FromSeconds(15), "laptop to download it");
+
+        Assert.NotNull(sawWait);
+        Assert.Equal("desktop", sawWait!.Device);
+        Assert.Equal(30, sawWait.Count);
+        lock (downloadsPerPass)
+            Assert.Contains(30, downloadsPerPass); // in one go, not a few at a time
+        Assert.Null(laptop.WaitingFor);
+    }
+
+    [Fact]
+    public async Task WaitEndsWhenTheOtherComputerGoesQuietOrStops()
+    {
+        var (desktop, laptop) = await StartBothAsync();
+        var gate = new TaskCompletionSource();
+        var started = 0;
+        _desktop.Hooks.BeforeTransfer = async (_, _) =>
+        {
+            if (Interlocked.Increment(ref started) > 8)
+                await gate.Task; // the desktop's connection "hangs" after a few files
+        };
+        for (var i = 0; i < 20; i++)
+            _desktop.Write($"slow/f{i:00}.txt", "slow " + i);
+        desktop.RequestSync("test");
+
+        await WaitUntil(() => laptop.WaitingFor is not null, TimeSpan.FromSeconds(10), "laptop to start waiting");
+        // Nothing arrives for 2 s: the laptop stops waiting and fetches what is already there.
+        await WaitUntil(() => laptop.WaitingFor is null, TimeSpan.FromSeconds(10), "quiet timeout");
+        var onServer = _server.Store.ReadManifest(null).Entries.Count(e => e.Path.StartsWith("slow/", StringComparison.Ordinal));
+        Assert.InRange(onServer, 1, 19);
+        await WaitUntil(() => Directory.Exists(_laptop.Full("slow")) && Directory.EnumerateFiles(_laptop.Full("slow")).Count() >= onServer,
+            TimeSpan.FromSeconds(10), "laptop to download the files already on the server");
+
+        gate.SetResult();
+        await WaitUntil(() => Enumerable.Range(0, 20).All(i => _laptop.Exists($"slow/f{i:00}.txt")), TimeSpan.FromSeconds(20), "the rest");
+    }
+
+    [Fact]
+    public async Task DownloadNowAnywayEndsTheWait()
+    {
+        var (desktop, laptop) = await StartBothAsync();
+        var gate = new TaskCompletionSource();
+        _desktop.Hooks.BeforeTransfer = (_, _) => gate.Task;
+        for (var i = 0; i < 12; i++)
+            _desktop.Write($"held/f{i:00}.txt", "held " + i);
+        desktop.RequestSync("test");
+        await WaitUntil(() => laptop.WaitingFor is not null, TimeSpan.FromSeconds(10), "laptop to start waiting");
+        laptop.ReleaseHold();
+        Assert.Null(laptop.WaitingFor);
+        gate.SetResult();
+        await WaitUntil(() => Enumerable.Range(0, 12).All(i => _laptop.Exists($"held/f{i:00}.txt")), TimeSpan.FromSeconds(20), "all files");
+    }
 }

@@ -34,6 +34,7 @@ public static class TetherServerHost
         builder.Services.AddSingleton<SyncStore>();
         builder.Services.AddSingleton<FailureThrottle>();
         builder.Services.AddSingleton<ServerUpdater>();
+        builder.Services.AddSingleton<BatchRegistry>();
         builder.Services.AddSignalR(o =>
         {
             o.EnableDetailedErrors = false;

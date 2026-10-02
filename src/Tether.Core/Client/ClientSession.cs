@@ -126,7 +126,7 @@ public sealed class ClientSession : IAsyncDisposable
             ExtraIgnore = settings.ExtraIgnore,
             MaxParallelTransfers = settings.EffectiveParallelTransfers,
         }, api, state, trash, loggers.CreateLogger("Tether.Engine"), clock, hooks);
-        var options = new RunnerOptions { ServerUrl = url, Token = token, DeviceId = settings.DeviceName! };
+        var options = new RunnerOptions { ServerUrl = url, Token = token, DeviceId = settings.DeviceName!, WaitForPeerBatches = settings.WaitForPeerBatches };
         if (runnerOptions is not null)
             options = runnerOptions(options);
         var runner = new SyncRunner(engine, options, loggers.CreateLogger("Tether.Runner"));
@@ -234,6 +234,7 @@ public sealed class ClientSession : IAsyncDisposable
                 total = _burstOffset + _passTotal + pending;
             Update(s => s with { FilesTotal = Math.Max(total, s.FilesDone) });
         };
+        Runner.PeerWaitChanged += wait => Update(s => s with { WaitingFor = wait });
         Runner.StatusChanged += (status, text) => Update(s => s with
         {
             Status = status,
@@ -387,6 +388,9 @@ public sealed class ClientSession : IAsyncDisposable
             return "That folder is not your Tether folder (its .tether-marker is missing or different). Nothing was changed.";
         return null;
     }
+
+    /// <summary>"Download now anyway": stop waiting for another computer's big batch.</summary>
+    public void DownloadNow() => Runner.ReleaseHold();
 
     public async ValueTask DisposeAsync()
     {

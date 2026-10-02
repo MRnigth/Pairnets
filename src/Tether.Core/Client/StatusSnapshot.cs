@@ -77,6 +77,19 @@ public sealed record StatusSnapshot(
         : $"{Math.Min(FilesDone, FilesTotal)} of {FilesTotal} files"
           + (PassBytesTotal > 0 ? $" · {Format.Bytes(Math.Min(PassBytesDone, PassBytesTotal))} of {Format.Bytes(PassBytesTotal)}" : string.Empty);
 
+    // ---- waiting for another computer's big batch
+
+    /// <summary>The other computer's big upload this one waits for, or null.</summary>
+    public PeerWait? WaitingFor { get; init; }
+
+    /// <summary>True while waiting and nothing else is going on (the status card then shows the wait).</summary>
+    public bool IsWaiting => WaitingFor is not null && Status is RunnerStatus.Idle or RunnerStatus.Syncing && !IsTransferring;
+
+    /// <summary>"212 of 340 files are on the server".</summary>
+    public string WaitingProgressText => WaitingFor is { } w ? $"{w.Seen} of {w.Count} files are on the server" : string.Empty;
+
+    public int? WaitingPercent => WaitingFor is { Count: > 0 } w ? (int)Math.Clamp(w.Seen * 100L / w.Count, 0, 100) : null;
+
     // ---- the server
 
     /// <summary>Last known server info (version, free space, updater), or null before the first answer.</summary>
@@ -120,7 +133,7 @@ public sealed record StatusSnapshot(
     public string LastSyncText => LastSyncAt is { } at ? "Last synced " + at.ToLocalTime().ToString("HH:mm", System.Globalization.CultureInfo.InvariantCulture) : "Not synced yet";
 
     /// <summary>Short status line shown under the title.</summary>
-    public string Headline => Status switch
+    public string Headline => IsWaiting ? $"Waiting for {WaitingFor!.Device}" : Status switch
     {
         RunnerStatus.Idle => "Up to date",
         RunnerStatus.Syncing => "Syncing…",
@@ -135,6 +148,8 @@ public sealed record StatusSnapshot(
     {
         get
         {
+            if (IsWaiting)
+                return $"{WaitingFor!.Device} is uploading a big batch. Tether downloads it all in one go when it's done, so the two computers don't fight over the connection.";
             var root = Headline.TrimEnd('…', '.');
             var text = Text.Trim();
             if (text.Length == 0 || string.Equals(text.TrimEnd('…', '.'), root, StringComparison.OrdinalIgnoreCase))

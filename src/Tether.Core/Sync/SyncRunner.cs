@@ -34,7 +34,25 @@ public sealed class RunnerOptions
 
     /// <summary>A pass that transfers at least this many files after startup or an offline period raises CatchUpCompleted.</summary>
     public int CatchUpThreshold { get; init; } = 10;
+
+    /// <summary>While another computer uploads a big batch, wait and download it in one go afterwards.</summary>
+    public bool WaitForPeerBatches { get; init; } = true;
+
+    /// <summary>A pass with at least this many uploads is announced to the other computers as a big batch.</summary>
+    public int BatchThreshold { get; init; } = 100;
+
+    /// <summary>Stop waiting for a batch when its computer sends nothing for this long.</summary>
+    public TimeSpan PeerQuietTimeout { get; init; } = TimeSpan.FromMinutes(2);
+
+    /// <summary>Never wait for one batch longer than this.</summary>
+    public TimeSpan MaxHold { get; init; } = TimeSpan.FromMinutes(30);
+
+    /// <summary>How often the two timeouts above are checked.</summary>
+    public TimeSpan HoldCheckInterval { get; init; } = TimeSpan.FromSeconds(5);
 }
+
+/// <summary>Another computer is uploading a big batch; this one waits. <see cref="Seen"/> files of it reached the server so far.</summary>
+public sealed record PeerWait(string Device, int Count, int Seen);
 
 /// <summary>A completed pass and why it ran.</summary>
 public sealed record PassReport(PassResult Result, IReadOnlyCollection<string> Reasons, DateTimeOffset FinishedAt);
@@ -61,6 +79,17 @@ public sealed class SyncRunner : IAsyncDisposable
     private bool _paused;
     private CancellationTokenSource? _passCts;
     private readonly HashSet<string> _arrivedDuringPass = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, PeerBatchState> _peerBatches = new(StringComparer.Ordinal);
+    private bool _announced;
+    private Timer? _holdTimer;
+
+    private sealed class PeerBatchState(int count, DateTimeOffset now)
+    {
+        public int Count { get; } = count;
+        public int Seen { get; set; }
+        public DateTimeOffset Started { get; } = now;
+        public DateTimeOffset LastActivity { get; set; } = now;
+    }
     private bool _catchUpArmed = true;
     private int _offlineAttempts;
     private Task? _loop;
@@ -74,6 +103,7 @@ public sealed class SyncRunner : IAsyncDisposable
         _engine = engine;
         _options = options;
         _log = log ?? Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance;
+        _engine.ExecutionStarting += OnExecutionStarting;
     }
 
     public RunnerStatus Status { get; private set; } = RunnerStatus.Idle;
@@ -111,6 +141,127 @@ public sealed class SyncRunner : IAsyncDisposable
     /// <summary>Raised when <see cref="PendingChanges"/> changes.</summary>
     public event Action<int>? PendingChangesChanged;
 
+    /// <summary>The other computer's big batch this one is waiting for, or null.</summary>
+    public PeerWait? WaitingFor
+    {
+        get
+        {
+            lock (_gate)
+            {
+                var first = _peerBatches.OrderBy(b => b.Value.Started).FirstOrDefault();
+                return first.Value is null ? null : new PeerWait(first.Key, first.Value.Count, Math.Min(first.Value.Seen, first.Value.Count));
+            }
+        }
+    }
+
+    /// <summary>Raised when waiting for another computer starts, progresses or ends.</summary>
+    public event Action<PeerWait?>? PeerWaitChanged;
+
+    /// <summary>"Download now anyway": stop waiting for other computers' batches and sync now.</summary>
+    public void ReleaseHold()
+    {
+        lock (_gate)
+            _peerBatches.Clear();
+        PeerWaitChanged?.Invoke(null);
+        RequestSync("download-now");
+    }
+
+    private void OnPeerBatch(string device, int count, bool active)
+    {
+        if (string.Equals(device, _options.DeviceId, StringComparison.Ordinal) || !_options.WaitForPeerBatches)
+            return;
+        if (active)
+        {
+            lock (_gate)
+                _peerBatches[device] = new PeerBatchState(count, DateTimeOffset.UtcNow);
+            _log.LogInformation("{Device} is uploading {Count} files; waiting to download them in one go", device, count);
+            PeerWaitChanged?.Invoke(WaitingFor);
+        }
+        else
+        {
+            EndHold(device, "peer-batch-done");
+        }
+    }
+
+    /// <summary>A Changed event from a computer whose batch we wait for: count it instead of syncing.</summary>
+    private bool HoldsRemoteChange(string device)
+    {
+        lock (_gate)
+        {
+            if (!_peerBatches.TryGetValue(device, out var batch))
+                return false;
+            batch.Seen++;
+            batch.LastActivity = DateTimeOffset.UtcNow;
+        }
+        PeerWaitChanged?.Invoke(WaitingFor);
+        return true;
+    }
+
+    private void EndHold(string device, string reason)
+    {
+        bool sync;
+        lock (_gate)
+        {
+            if (!_peerBatches.Remove(device))
+                return;
+            sync = _peerBatches.Count == 0;
+        }
+        _log.LogInformation("Stopped waiting for {Device} ({Reason})", device, reason);
+        PeerWaitChanged?.Invoke(WaitingFor);
+        if (sync)
+            RequestSync(reason, full: true);
+    }
+
+    private void CheckHolds()
+    {
+        var now = DateTimeOffset.UtcNow;
+        List<(string Device, string Reason)> expired;
+        lock (_gate)
+        {
+            expired = _peerBatches
+                .Where(b => now - b.Value.LastActivity > _options.PeerQuietTimeout || now - b.Value.Started > _options.MaxHold)
+                .Select(b => (b.Key, now - b.Value.Started > _options.MaxHold ? "peer-batch-too-long" : "peer-batch-quiet"))
+                .ToList();
+        }
+        foreach (var (device, reason) in expired)
+            EndHold(device, reason);
+    }
+
+    private void ClearHolds()
+    {
+        lock (_gate)
+        {
+            if (_peerBatches.Count == 0)
+                return;
+            _peerBatches.Clear();
+        }
+        PeerWaitChanged?.Invoke(null);
+    }
+
+    /// <summary>Tells the other computers that this pass uploads a big batch (they wait for it).</summary>
+    private void OnExecutionStarting(int uploads, int downloads, long bytes)
+    {
+        if (uploads < _options.BatchThreshold || _hub?.State != HubConnectionState.Connected)
+            return;
+        lock (_gate)
+            _announced = true;
+        _ = InvokeHubAsync("BatchStarted", uploads);
+    }
+
+    private async Task InvokeHubAsync(string method, params object[] args)
+    {
+        try
+        {
+            if (_hub is { State: HubConnectionState.Connected } hub)
+                await hub.InvokeCoreAsync(method, args).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            // An older server without the method, or the connection just dropped: harmless.
+            _log.LogDebug("Hub call {Method} failed: {Error}", method, ex.Message);
+        }
+    }
+
     /// <summary>Remembers a change that arrived while a pass is running, so progress can count it.</summary>
     private void NoteArrival(string path)
     {
@@ -133,6 +284,7 @@ public sealed class SyncRunner : IAsyncDisposable
         if (_options.EnableHub)
             _hubLoop = Task.Run(() => ConnectHubAsync(_stop.Token));
         _periodic = new Timer(_ => RequestSync("periodic", full: true), null, _options.PeriodicInterval, _options.PeriodicInterval);
+        _holdTimer = new Timer(_ => CheckHolds(), null, _options.HoldCheckInterval, _options.HoldCheckInterval);
         _loop = Task.Run(() => LoopAsync(_stop.Token));
         RequestSync("startup", full: true);
     }
@@ -272,10 +424,13 @@ public sealed class SyncRunner : IAsyncDisposable
         }
         PendingChangesChanged?.Invoke(0);
         SetStatus(RunnerStatus.Syncing, "Syncing");
+        bool hold;
+        lock (_gate)
+            hold = _peerBatches.Count > 0;
         PassResult result;
         try
         {
-            result = await _engine.RunPassAsync(new PassOptions(string.Join(",", reasons), full), passCts.Token).ConfigureAwait(false);
+            result = await _engine.RunPassAsync(new PassOptions(string.Join(",", reasons), full, DeferDownloads: hold), passCts.Token).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -296,8 +451,15 @@ public sealed class SyncRunner : IAsyncDisposable
         }
         finally
         {
+            bool announced;
             lock (_gate)
+            {
                 _passCts = null;
+                announced = _announced;
+                _announced = false;
+            }
+            if (announced)
+                _ = InvokeHubAsync("BatchFinished");
         }
 
         LastResult = result;
@@ -444,9 +606,17 @@ public sealed class SyncRunner : IAsyncDisposable
             RemoteChangeReceived?.Invoke(device, path);
             if (string.Equals(device, _options.DeviceId, StringComparison.Ordinal))
                 return; // our own change echoed back
+            if (HoldsRemoteChange(device))
+                return; // part of a big batch: downloaded in one go when it is complete
             NoteArrival(path);
             RequestSync("remote-change", delay: _options.RemoteDebounce);
         });
+        _hub.On<string, int, bool>("PeerBatch", OnPeerBatch);
+        _hub.Reconnecting += _ =>
+        {
+            ClearHolds(); // the server re-sends active batches when we are back
+            return Task.CompletedTask;
+        };
         _hub.Reconnected += _ =>
         {
             _log.LogInformation("Push channel reconnected");
@@ -512,6 +682,7 @@ public sealed class SyncRunner : IAsyncDisposable
             return;
         _stop.Cancel();
         _periodic?.Dispose();
+        _holdTimer?.Dispose();
         _watcher?.Dispose();
         if (_hub is not null)
         {
