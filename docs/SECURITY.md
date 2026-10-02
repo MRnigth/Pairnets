@@ -46,6 +46,15 @@ changes made meanwhile sync after you update the token.
 
 If a PC is lost, also remove it from your tailnet in the Tailscale admin console.
 
+## Server self-update
+
+Anyone with the token can ask the server to update itself (`POST /api/update`). The request can
+only start `/opt/tether/update.sh` (root-owned, installed by `install.sh`); the server writes an
+empty file and the script never reads its content. The script installs only the newest release
+from the fixed GitHub address, verifies `SHA256SUMS.txt` over HTTPS, refuses downgrades and runs at
+most once per 10 minutes. The server service itself keeps all its systemd hardening and never gets
+root. Turn it off with `sudo systemctl disable --now tether-update.path`.
+
 ## Reporting
 
 This is a personal project. Open an issue on the repository without including tokens, IPs or file

@@ -142,6 +142,35 @@ sudo systemctl start tether-server
 Restoring a version makes it the current version; both PCs download it on their next sync. The
 previous current version goes to history too, so a restore can itself be undone.
 
+## 4b. Updating the server
+
+**From the app (recommended).** When the server runs an older version than the app, Tether shows
+"Your server should be updated" with an **Update server** button. What happens:
+
+1. The app sends `POST /api/update` (with the token).
+2. The server (which has no root rights) only creates the empty file
+   `/var/lib/tether/update/request`.
+3. The root-owned unit `tether-update.path` notices it and starts `tether-update.service`, which
+   runs `/opt/tether/update.sh` once.
+4. `update.sh` downloads the newest release from the fixed address
+   `github.com/MRnigth/Tether/releases/latest/download`, checks it against `SHA256SUMS.txt`,
+   refuses the same or an older version, allows one attempt per 10 minutes, and runs that release's
+   `install.sh`. Your token, address and settings are kept.
+5. Progress is written to `/var/lib/tether/update/status.json`; the app shows it and reconnects.
+
+This needs the GitHub repository to be public (the server downloads without signing in), and a
+server installed from a release that already contains `update.sh`. A server installed before that
+must be updated by hand once:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/MRnigth/Tether/main/deploy/get.sh | sudo bash
+```
+
+Upgrades keep the address the server listens on and every line of `/etc/tether/tether.env`; pass
+`--bind`/`--port` only to change the address. Check the updater with
+`systemctl status tether-update.path` and `sudo journalctl -u tether-update -n 50`. To turn
+self-updates off: `sudo systemctl disable --now tether-update.path`.
+
 ## 5. Uninstall
 
 ```bash

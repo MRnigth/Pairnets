@@ -26,6 +26,9 @@ public sealed class SyncOptions
     /// </summary>
     public TimeSpan UploadStallTimeout { get; set; } = TimeSpan.FromSeconds(60);
 
+    /// <summary>The root-run self-update script install.sh puts next to the binary (see ServerUpdater).</summary>
+    public string UpdaterScript { get; set; } = Path.Combine(AppContext.BaseDirectory, "update.sh");
+
     public static SyncOptions FromConfiguration(IConfiguration configuration)
     {
         var options = new SyncOptions();

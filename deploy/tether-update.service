@@ -1,0 +1,10 @@
+[Unit]
+Description=Tether server self-update (started by tether-update.path)
+Documentation=https://github.com/MRnigth/Tether/blob/main/docs/DEPLOY.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/tether/update.sh
+TimeoutStartSec=15min

@@ -1,0 +1,9 @@
+[Unit]
+Description=Watch for an update request from the Tether server
+
+[Path]
+PathExists=/var/lib/tether/update/request
+Unit=tether-update.service
+
+[Install]
+WantedBy=multi-user.target

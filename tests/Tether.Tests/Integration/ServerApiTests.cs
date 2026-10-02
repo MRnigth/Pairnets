@@ -300,4 +300,52 @@ public class ServerApiTests : IAsyncLifetime
         {
         }
     }
+
+    [Fact]
+    public async Task InfoReportsVersionDiskSpaceAndUpdater()
+    {
+        using var api = _server.Client();
+        var info = await api.GetInfoAsync(default);
+        Assert.Equal(TetherInfo.ProductVersion, info.ServerVersion);
+        Assert.NotNull(info.DiskFreeBytes);
+        Assert.True(info.DiskTotalBytes >= info.DiskFreeBytes);
+        Assert.Equal("missing", info.Updater!.State);
+        Assert.False(info.Updater.Installed);
+
+        // No updater script on this server: the app is told to run the install command once.
+        using var http = _server.RawHttp(_server.Token);
+        var resp = await http.PostAsync("api/update", null);
+        Assert.Equal(HttpStatusCode.Conflict, resp.StatusCode);
+        Assert.Equal(ErrorCodes.UpdaterMissing, await Code(resp));
+    }
+
+    [Fact]
+    public async Task UpdateRequestDropsAnEmptyFileForTheRootUpdaterAndIsRateLimited()
+    {
+        using var dir = new TempDir("updater");
+        var script = Path.Combine(dir.Path, "update.sh");
+        File.WriteAllText(script, "#!/bin/sh\n");
+        await using var server = await TestServer.StartAsync(config: new() { ["Sync:UpdaterScript"] = script });
+        using var http = server.RawHttp(server.Token);
+        var request = Path.Combine(server.Paths.DataDir, "update", "request");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, (await server.RawHttp().PostAsync("api/update", null)).StatusCode);
+        var resp = await http.PostAsync("api/update", null);
+        Assert.Equal(HttpStatusCode.Accepted, resp.StatusCode);
+        Assert.True(File.Exists(request));
+        Assert.Equal(0, new FileInfo(request).Length);
+
+        using var api = server.Client();
+        Assert.Equal("requested", (await api.GetInfoAsync(default)).Updater!.State);
+        Assert.Equal((HttpStatusCode)429, (await http.PostAsync("api/update", null)).StatusCode);
+
+        // What update.sh reports is passed on to the apps.
+        File.Delete(request);
+        File.WriteAllText(Path.Combine(server.Paths.DataDir, "update", "status.json"),
+            "{\"state\":\"succeeded\",\"message\":\"Updated from 1.0.1 to 1.0.2.\",\"at\":\"2026-10-02T20:00:00Z\"}");
+        var status = (await api.GetInfoAsync(default)).Updater!;
+        Assert.True(status.Installed);
+        Assert.Equal("succeeded", status.State);
+        Assert.Equal("Updated from 1.0.1 to 1.0.2.", status.Message);
+    }
 }

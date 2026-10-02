@@ -15,8 +15,22 @@ public sealed record ManifestEntry(
 /// <summary>Body of every non-2xx JSON response from the server.</summary>
 public sealed record ErrorBody(string Code, string? Message = null);
 
-/// <summary>Answer of GET /api/info.</summary>
-public sealed record ServerInfo(string ServerId, long Version, int ApiVersion);
+/// <summary>
+/// Answer of GET /api/info. <see cref="Version"/> is the manifest version (the change counter);
+/// <see cref="ServerVersion"/> is the installed Tether release. The fields after
+/// <see cref="ApiVersion"/> are missing on older servers.
+/// </summary>
+public sealed record ServerInfo(
+    string ServerId,
+    long Version,
+    int ApiVersion,
+    string? ServerVersion = null,
+    long? DiskFreeBytes = null,
+    long? DiskTotalBytes = null,
+    UpdaterStatus? Updater = null);
+
+/// <summary>The server's self-updater. <see cref="State"/>: missing, idle, requested, running, succeeded or failed.</summary>
+public sealed record UpdaterStatus(bool Installed, string State, string? Message = null, DateTimeOffset? At = null);
 
 /// <summary>One stored version of a file in the server's history/ folder.</summary>
 public sealed record HistoryVersion(string Id, DateTimeOffset StoredAtUtc, long Size, string Hash8);
@@ -30,6 +44,7 @@ public static class ErrorCodes
     public const string NotFound = "not-found";
     public const string Unauthorized = "unauthorized";
     public const string BadRequest = "bad-request";
+    public const string UpdaterMissing = "updater-missing";
 }
 
 /// <summary>HTTP header names used by Tether.</summary>

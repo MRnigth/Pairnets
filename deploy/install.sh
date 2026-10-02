@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Tether server installer for Ubuntu. Idempotent: run it again to upgrade.
 #
-#   sudo ./install.sh                # bind to this machine's Tailscale IPv4 address
+#   sudo ./install.sh                # first install: bind to this machine's Tailscale IPv4 address
+#                                    # upgrade: keep the address, token and settings already configured
 #   sudo ./install.sh --bind 100.x.y.z [--port 5075]
 #
 # Run it from the extracted release folder (it must contain tether-server).
@@ -32,6 +33,16 @@ done
 [[ "$PORT" =~ ^[0-9]+$ ]] || die "invalid port: $PORT"
 command -v systemctl >/dev/null || die "systemd is required"
 
+EXISTING_URL=""
+if [[ -f "$ENV_FILE" ]]; then
+  EXISTING_URL="$(grep '^ASPNETCORE_URLS=' "$ENV_FILE" | head -n1 | cut -d= -f2- || true)"
+fi
+if [[ -z "$BIND" && "$EXISTING_URL" =~ ^http://([^/:]+):([0-9]+)/?$ ]]; then
+  # Upgrade: keep the address the server already listens on.
+  BIND="${BASH_REMATCH[1]}"
+  PORT="${BASH_REMATCH[2]}"
+  echo "Keeping the configured address $BIND:$PORT"
+fi
 if [[ -z "$BIND" ]]; then
   if command -v tailscale >/dev/null && BIND="$(tailscale ip -4 2>/dev/null | head -n1)" && [[ -n "$BIND" ]]; then
     echo "Using Tailscale address $BIND"
@@ -50,15 +61,20 @@ fi
 install -d -m 0755 -o root -g root "$INSTALL_DIR"
 install -d -m 0700 -o tether -g tether "$DATA_DIR"
 install -d -m 0700 -o root -g root "$CONF_DIR"
+install -d -m 0750 -o tether -g tether "$DATA_DIR/update"
 
 # 2. Program files (stop first so the binary can be replaced).
 if systemctl is-active --quiet "$SERVICE"; then
   systemctl stop "$SERVICE"
 fi
 install -m 0755 -o root -g root "$SRC_DIR/tether-server" "$INSTALL_DIR/tether-server"
-for f in "$SRC_DIR"/*.so "$SRC_DIR"/appsettings.json; do
+for f in "$SRC_DIR"/*.so "$SRC_DIR"/appsettings.json "$SRC_DIR"/VERSION; do
   [[ -e "$f" ]] && install -m 0644 -o root -g root "$f" "$INSTALL_DIR/"
 done
+# The self-updater (runs as root only when the server asks for it; see DEPLOY.md).
+if [[ -f "$SRC_DIR/update.sh" ]]; then
+  install -m 0755 -o root -g root "$SRC_DIR/update.sh" "$INSTALL_DIR/update.sh"
+fi
 
 # 3. Token and environment file (the token is generated once and kept on upgrades).
 NEW_TOKEN=""
@@ -70,7 +86,12 @@ else
   NEW_TOKEN=1
 fi
 umask 077
-cat > "$ENV_FILE.tmp" <<ENV
+if [[ -f "$ENV_FILE" && -z "$NEW_TOKEN" ]]; then
+  # Upgrade: keep every setting, only (re)write the address in case --bind/--port was given.
+  sed -e "s#^ASPNETCORE_URLS=.*#ASPNETCORE_URLS=http://$BIND:$PORT#" "$ENV_FILE" > "$ENV_FILE.tmp"
+  grep -q '^ASPNETCORE_URLS=' "$ENV_FILE.tmp" || echo "ASPNETCORE_URLS=http://$BIND:$PORT" >> "$ENV_FILE.tmp"
+else
+  cat > "$ENV_FILE.tmp" <<ENV
 # Written by install.sh. Keep this file private (root only, mode 600).
 SYNC_TOKEN=$TOKEN
 ASPNETCORE_URLS=http://$BIND:$PORT
@@ -78,14 +99,22 @@ Sync__DataDir=$DATA_DIR
 Sync__HistoryRetentionDays=30
 Sync__HistoryMinVersions=5
 ENV
+fi
 chown root:root "$ENV_FILE.tmp"
 chmod 600 "$ENV_FILE.tmp"
 mv "$ENV_FILE.tmp" "$ENV_FILE"
 
 # 4. systemd unit.
 install -m 0644 -o root -g root "$SRC_DIR/tether-server.service" /etc/systemd/system/tether-server.service
+if [[ -f "$SRC_DIR/tether-update.service" && -f "$SRC_DIR/tether-update.path" ]]; then
+  install -m 0644 -o root -g root "$SRC_DIR/tether-update.service" /etc/systemd/system/tether-update.service
+  install -m 0644 -o root -g root "$SRC_DIR/tether-update.path" /etc/systemd/system/tether-update.path
+fi
 systemctl daemon-reload
 systemctl enable --now "$SERVICE"
+if [[ -f /etc/systemd/system/tether-update.path ]]; then
+  systemctl enable --now tether-update.path
+fi
 
 # 5. Wait for health.
 ok=""

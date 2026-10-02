@@ -35,7 +35,7 @@ jobs:
         id: v
         shell: bash
         run: |
-          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"; else echo "version=1.0.0" >> "$GITHUB_OUTPUT"; fi
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"; else echo "version=1.0.${{ github.run_number }}" >> "$GITHUB_OUTPUT"; fi
       - name: Test
         run: dotnet test Tether.sln -c Release
       - name: Publish
@@ -45,9 +45,11 @@ jobs:
           -p:Version=${{ steps.v.outputs.version }} -o dist/tether-server-linux-x64
       - name: Package
         run: |
-          cp deploy/install.sh deploy/tether-server.service deploy/tether.env.example deploy/tailscale-acl.hujson dist/tether-server-linux-x64/
+          cp deploy/install.sh deploy/update.sh deploy/tether-server.service deploy/tether-update.service deploy/tether-update.path \
+             deploy/tether.env.example deploy/tailscale-acl.hujson dist/tether-server-linux-x64/
+          echo "${{ steps.v.outputs.version }}" > dist/tether-server-linux-x64/VERSION
           cp docs/DEPLOY.md dist/tether-server-linux-x64/DEPLOY.md
-          chmod +x dist/tether-server-linux-x64/install.sh dist/tether-server-linux-x64/tether-server
+          chmod +x dist/tether-server-linux-x64/install.sh dist/tether-server-linux-x64/update.sh dist/tether-server-linux-x64/tether-server
           tar -C dist -czf dist/tether-server-linux-x64.tar.gz tether-server-linux-x64
       - uses: actions/upload-artifact@v4
         with:
@@ -66,7 +68,7 @@ jobs:
         id: v
         shell: bash
         run: |
-          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"; else echo "version=1.0.0" >> "$GITHUB_OUTPUT"; fi
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"; else echo "version=1.0.${{ github.run_number }}" >> "$GITHUB_OUTPUT"; fi
       - name: Publish
         run: >
           dotnet publish src/Tether.Client/Tether.Client.csproj -c Release -r win-x64 --self-contained true
@@ -103,7 +105,7 @@ jobs:
         id: v
         shell: bash
         run: |
-          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"; else echo "version=1.0.0" >> "$GITHUB_OUTPUT"; fi
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"; else echo "version=1.0.${{ github.run_number }}" >> "$GITHUB_OUTPUT"; fi
       - name: Publish
         run: >
           dotnet publish src/Tether.Desktop/Tether.Desktop.csproj -c Release -r linux-x64 --self-contained true
@@ -132,7 +134,7 @@ jobs:
         id: v
         shell: bash
         run: |
-          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"; else echo "version=1.0.0" >> "$GITHUB_OUTPUT"; fi
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"; else echo "version=1.0.${{ github.run_number }}" >> "$GITHUB_OUTPUT"; fi
       - name: Publish and bundle
         run: |
           mkdir -p dist

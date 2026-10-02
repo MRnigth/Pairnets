@@ -33,6 +33,7 @@ public static class TetherServerHost
         builder.Services.AddSingleton(new ServerPaths(options.DataDir));
         builder.Services.AddSingleton<SyncStore>();
         builder.Services.AddSingleton<FailureThrottle>();
+        builder.Services.AddSingleton<ServerUpdater>();
         builder.Services.AddSignalR(o =>
         {
             o.EnableDetailedErrors = false;

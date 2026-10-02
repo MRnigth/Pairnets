@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Net.Http.Headers;
 using Tether.Core;
+using Tether.Server.Services;
 using Tether.Server.Storage;
 
 namespace Tether.Server.Web;
@@ -14,8 +15,21 @@ public static class Endpoints
     {
         app.MapGet("/api/health", () => Results.Text("ok", "text/plain"));
 
-        app.MapGet("/api/info", (SyncStore store) =>
-            Json(new ServerInfo(store.ServerId, store.CurrentVersion, TetherInfo.ApiVersion)));
+        app.MapGet("/api/info", (SyncStore store, ServerUpdater updater) =>
+        {
+            var (free, total) = ServerUpdater.DiskSpace(store.Paths.DataDir);
+            return Json(new ServerInfo(store.ServerId, store.CurrentVersion, TetherInfo.ApiVersion,
+                TetherInfo.ProductVersion, free, total, updater.GetStatus()));
+        });
+
+        // "Update server" in the apps: asks the root-owned updater to install the newest release.
+        app.MapPost("/api/update", (ServerUpdater updater) => updater.Request() switch
+        {
+            ServerUpdater.RequestOutcome.Requested => Results.Json(updater.GetStatus(), TetherJson.Options, statusCode: StatusCodes.Status202Accepted),
+            ServerUpdater.RequestOutcome.TooSoon => Error(StatusCodes.Status429TooManyRequests, ErrorCodes.BadRequest, "An update was requested less than a minute ago."),
+            _ => Error(StatusCodes.Status409Conflict, ErrorCodes.UpdaterMissing,
+                "This server cannot update itself yet. Run the install command on the server once."),
+        });
 
         app.MapGet("/api/manifest", (HttpContext ctx, SyncStore store) =>
         {
