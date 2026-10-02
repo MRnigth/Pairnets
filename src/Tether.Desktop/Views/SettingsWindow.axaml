@@ -1,33 +1,84 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:v="using:Tether.Desktop.Views"
         x:Class="Tether.Desktop.Views.SettingsWindow"
         Title="Tether" Width="600" SizeToContent="Height" CanResize="False"
         WindowStartupLocation="CenterScreen" Icon="avares://Tether/Assets/tether-icon-256.png">
-  <StackPanel Margin="20" Spacing="10">
-    <TextBlock x:Name="IntroText" TextWrapping="Wrap" IsVisible="False"
-               Text="Welcome to Tether. Enter the server address and token printed by install.sh on your server, pick the folder to keep in sync, then press Start syncing." />
-    <Grid ColumnDefinitions="170,*,Auto" RowDefinitions="Auto,Auto,Auto,Auto,Auto" >
-      <TextBlock Grid.Row="0" Text="Server URL" VerticalAlignment="Center" />
-      <TextBox x:Name="ServerUrlBox" Grid.Row="0" Grid.Column="1" Grid.ColumnSpan="2" Margin="0,4" Watermark="http://100.x.y.z:5075/" />
-      <TextBlock Grid.Row="1" Text="Token" VerticalAlignment="Center" />
-      <TextBox x:Name="TokenBox" Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" Margin="0,4" PasswordChar="•" />
-      <TextBlock Grid.Row="2" Text="Folder to sync" VerticalAlignment="Center" />
-      <TextBox x:Name="FolderBox" Grid.Row="2" Grid.Column="1" Margin="0,4" />
-      <Button Grid.Row="2" Grid.Column="2" Content="Browse…" Margin="8,4,0,4" Click="OnBrowse" />
-      <TextBlock Grid.Row="3" Text="Device name" VerticalAlignment="Center" />
-      <TextBox x:Name="DeviceBox" Grid.Row="3" Grid.Column="1" Grid.ColumnSpan="2" Margin="0,4" />
-      <TextBlock Grid.Row="4" Text="Extra ignore patterns" VerticalAlignment="Top" Margin="0,8,0,0" />
-      <TextBox x:Name="IgnoreBox" Grid.Row="4" Grid.Column="1" Grid.ColumnSpan="2" Margin="0,4" Height="70"
-               AcceptsReturn="True" Watermark="one per line, e.g. *.bak" />
+  <StackPanel Margin="20" Spacing="12">
+    <!-- Welcome header (first run only) -->
+    <Grid x:Name="WelcomeHeader" ColumnDefinitions="Auto,*" IsVisible="False" Margin="0,0,0,4">
+      <Image Source="avares://Tether/Assets/tether-icon-256.png" Width="52" Height="52" Margin="0,0,14,0" VerticalAlignment="Top" />
+      <StackPanel Grid.Column="1" Spacing="3">
+        <TextBlock Classes="h1" Text="Welcome to Tether" />
+        <TextBlock Classes="muted" TextWrapping="Wrap"
+                   Text="Connect to your server, choose the folder to keep in sync, and you're done. The address and token were printed by install.sh on the server." />
+      </StackPanel>
     </Grid>
-    <CheckBox x:Name="AutoStartBox" Content="Start Tether when I log in" Margin="170,0,0,0" />
-    <StackPanel Orientation="Horizontal" Margin="170,4,0,0" Spacing="10">
-      <Button x:Name="TestButton" Content="Test connection" Click="OnTest" />
-      <TextBlock x:Name="TestResult" VerticalAlignment="Center" TextWrapping="Wrap" MaxWidth="260" />
-    </StackPanel>
-    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="0,8,0,0">
-      <Button x:Name="SaveButton" Content="Save" IsDefault="True" Click="OnSave" />
-      <Button Content="Cancel" IsCancel="True" Click="OnCancel" />
+    <TextBlock x:Name="SettingsHeader" Classes="h1" Text="Settings" />
+
+    <!-- Server -->
+    <Border Classes="card">
+      <StackPanel Spacing="10">
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <v:LineIcon Classes="icon" Width="17" Height="17" Data="{StaticResource I.Server}" />
+          <TextBlock Classes="h2" Text="Your server" />
+        </StackPanel>
+        <StackPanel>
+          <TextBlock Classes="label" Text="Server address" />
+          <TextBox x:Name="ServerUrlBox" Watermark="http://100.x.y.z:5075/" />
+        </StackPanel>
+        <StackPanel>
+          <TextBlock Classes="label" Text="Token" />
+          <TextBox x:Name="TokenBox" PasswordChar="•" />
+        </StackPanel>
+        <Grid ColumnDefinitions="Auto,*">
+          <Button x:Name="TestButton" Classes="subtle" Content="Test connection" Click="OnTest" VerticalAlignment="Top" />
+          <Border x:Name="TestChip" Grid.Column="1" Margin="10,0,0,0" IsVisible="False" HorizontalAlignment="Left">
+            <TextBlock x:Name="TestResult" TextWrapping="Wrap" />
+          </Border>
+        </Grid>
+      </StackPanel>
+    </Border>
+
+    <!-- Folder -->
+    <Border Classes="card">
+      <StackPanel Spacing="10">
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <v:LineIcon Classes="icon" Width="17" Height="17" Data="{StaticResource I.Folder}" />
+          <TextBlock Classes="h2" Text="Folder to keep in sync" />
+        </StackPanel>
+        <Grid ColumnDefinitions="*,Auto">
+          <TextBox x:Name="FolderBox" Watermark="Choose a folder…" />
+          <Button Grid.Column="1" Classes="subtle" Content="Browse…" Margin="8,0,0,0" Click="OnBrowse" />
+        </Grid>
+      </StackPanel>
+    </Border>
+
+    <!-- This computer -->
+    <Border Classes="card">
+      <StackPanel Spacing="10">
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <v:LineIcon Classes="icon" Width="17" Height="17" Data="{StaticResource I.Computer}" />
+          <TextBlock Classes="h2" Text="This computer" />
+        </StackPanel>
+        <StackPanel>
+          <TextBlock Classes="label" Text="Device name" />
+          <TextBox x:Name="DeviceBox" />
+          <TextBlock Classes="muted small" Margin="0,4,0,0" Text="Shown in conflict file names. Use a different name on each computer." />
+        </StackPanel>
+        <ToggleSwitch x:Name="AutoStartBox" OnContent="Start Tether when I log in" OffContent="Start Tether when I log in" />
+        <Expander Header="Advanced: files to ignore" HorizontalAlignment="Stretch">
+          <StackPanel Spacing="4">
+            <TextBox x:Name="IgnoreBox" Height="76" AcceptsReturn="True" Watermark="One pattern per line, e.g. *.bak or node_modules/" />
+            <TextBlock Classes="muted small" Text="Temporary and system files (~$*, *.tmp, Thumbs.db, .git/ …) are always ignored." TextWrapping="Wrap" />
+          </StackPanel>
+        </Expander>
+      </StackPanel>
+    </Border>
+
+    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+      <Button Classes="subtle" Content="Cancel" IsCancel="True" Click="OnCancel" />
+      <Button x:Name="SaveButton" Classes="accent" Content="Save" IsDefault="True" Click="OnSave" />
     </StackPanel>
   </StackPanel>
 </Window>

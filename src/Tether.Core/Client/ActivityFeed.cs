@@ -32,6 +32,39 @@ public sealed record ActivityItem(DateTimeOffset Time, ActivityKind Kind, string
     };
 
     public string TimeText => Time.ToLocalTime().ToString("HH:mm:ss", System.Globalization.CultureInfo.InvariantCulture);
+
+    /// <summary>Short label for the kind of event.</summary>
+    public string Title => Kind switch
+    {
+        ActivityKind.Uploaded => "Uploaded",
+        ActivityKind.Downloaded => "Downloaded",
+        ActivityKind.DeletedHere => "Deleted here",
+        ActivityKind.DeletedOnServer => "Deleted on server",
+        ActivityKind.Conflict => "Conflict copy kept",
+        ActivityKind.Warning => "Needs attention",
+        ActivityKind.Blocked => "Waiting for you",
+        ActivityKind.Offline => "Offline",
+        ActivityKind.Error => "Problem",
+        _ => "Info",
+    };
+
+    /// <summary>Main line of a list row: the file name, or the message when there is no file.</summary>
+    public string Primary => Path is null ? Text : Paths.PathRules.FileName(Path);
+
+    /// <summary>Second line: kind and folder ("Uploaded · Projects/2026").</summary>
+    public string Secondary
+    {
+        get
+        {
+            if (Path is null)
+                return Title;
+            var folder = Paths.PathRules.Parent(Path);
+            return folder is null ? Title : $"{Title} · {folder}";
+        }
+    }
+
+    /// <summary>"2 min ago", computed when read (lists are redrawn regularly).</summary>
+    public string WhenText => Format.RelativeTime(Time, DateTimeOffset.Now);
 }
 
 /// <summary>Bounded, thread-safe list of recent activity, newest first.</summary>

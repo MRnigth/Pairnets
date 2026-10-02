@@ -3,7 +3,6 @@ using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Media;
 using Tether.Core.Client;
-using Tether.Core.Sync;
 
 namespace Tether.Desktop.Views;
 
@@ -38,6 +37,7 @@ public partial class MainWindow : Window
         _actions = actions;
         ActivityList.ItemsSource = _activity;
         AttentionList.ItemsSource = _attention;
+        UpdatePanels();
     }
 
     /// <summary>Set when the app exits, so closing really closes instead of hiding.</summary>
@@ -55,31 +55,31 @@ public partial class MainWindow : Window
 
     public void ShowStatus(StatusSnapshot s, string? folder)
     {
-        StatusDot.Fill = new SolidColorBrush(s.Status switch
-        {
-            RunnerStatus.Idle => Color.FromRgb(46, 160, 67),
-            RunnerStatus.Syncing => Color.FromRgb(33, 118, 214),
-            RunnerStatus.Offline => Color.FromRgb(128, 128, 128),
-            RunnerStatus.Paused => Color.FromRgb(214, 160, 33),
-            RunnerStatus.Blocked => Color.FromRgb(230, 110, 20),
-            _ => Color.FromRgb(207, 34, 46),
-        });
+        var (brush, icon) = Visuals.ForStatus(s.Status);
+        StatusBadge.Fill = Visuals.Resource<IBrush>(brush);
+        StatusGlyph.Data = Visuals.Resource<Geometry>(icon);
         Headline.Text = s.Headline;
         Detail.Text = s.DetailText;
         Detail.IsVisible = s.DetailText.Length > 0;
         LastSync.Text = s.LastSyncText;
-        FolderText.Text = folder is null ? string.Empty : "Folder: " + folder;
-        PauseButton.Content = s.Paused ? "Resume" : "Pause";
+        FolderPill.IsVisible = folder is not null;
+        FolderText.Text = folder ?? string.Empty;
+        PauseText.Text = s.Paused ? "Resume" : "Pause";
+        PauseGlyph.Data = Visuals.Resource<Geometry>(s.Paused ? "I.Play" : "I.Pause");
         FixButton.IsVisible = s.FixLabel is not null;
         FixButton.Content = s.FixLabel;
 
-        TransferPanel.IsVisible = s.IsTransferring;
+        TransferCard.IsVisible = s.IsTransferring;
         if (s.IsTransferring)
         {
-            TransferFile.Text = $"{(s.Operation == "download" ? "Downloading" : s.Operation == "upload" ? "Uploading" : "Working on")} {s.CurrentPath}";
-            TransferCount.Text = s.FilesTotal > 0 ? $"{Math.Min(s.FilesDone + 1, s.FilesTotal)} of {s.FilesTotal}" : string.Empty;
+            TransferGlyph.Data = Visuals.Resource<Geometry>(s.Operation == "download" ? "I.Down" : "I.Up");
+            TransferFile.Text = $"{s.OperationText} {s.CurrentFileName}";
+            TransferFolder.Text = s.CurrentFolder.Length > 0 ? s.CurrentFolder : "Top folder";
+            TransferCount.Text = s.FileCountText;
             TransferProgress.IsIndeterminate = s.Percent is null;
             TransferProgress.Value = s.Percent ?? 0;
+            TransferBytes.Text = s.ProgressText;
+            TransferBytes.IsVisible = s.ProgressText.Length > 0;
         }
     }
 
@@ -88,7 +88,7 @@ public partial class MainWindow : Window
         _activity.Clear();
         foreach (var item in items)
             _activity.Add(item);
-        ActivityEmpty.IsVisible = _activity.Count == 0;
+        UpdatePanels();
     }
 
     public void ShowAttention(IReadOnlyList<AttentionItem> items)
@@ -96,16 +96,35 @@ public partial class MainWindow : Window
         _attention.Clear();
         foreach (var item in items)
             _attention.Add(item);
-        AttentionTab.Header = items.Count == 0 ? "Needs attention" : $"Needs attention ({items.Count})";
-        AttentionEmpty.IsVisible = items.Count == 0;
+        AttentionBadge.IsVisible = items.Count > 0;
+        AttentionCount.Text = items.Count.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        UpdatePanels();
+    }
+
+    private void UpdatePanels()
+    {
+        var showAttention = AttentionTab.IsChecked == true;
+        ActivityPanel.IsVisible = !showAttention && _activity.Count > 0;
+        ActivityEmpty.IsVisible = !showAttention && _activity.Count == 0;
+        AttentionPanel.IsVisible = showAttention && _attention.Count > 0;
+        AttentionEmpty.IsVisible = showAttention && _attention.Count == 0;
+    }
+
+    /// <summary>Switches to the "Needs attention" list (used by notifications and screenshots).</summary>
+    public void ShowAttentionTab(bool attention)
+    {
+        AttentionTab.IsChecked = attention;
+        ActivityTab.IsChecked = !attention;
+        UpdatePanels();
     }
 
     // Exposed for the headless UI test.
     internal string HeadlineText => Headline.Text ?? string.Empty;
     internal bool FixVisible => FixButton.IsVisible;
     internal int ActivityCount => _activity.Count;
-    internal bool TransferVisible => TransferPanel.IsVisible;
+    internal bool TransferVisible => TransferCard.IsVisible;
 
+    private void OnTabChanged(object? sender, RoutedEventArgs e) => UpdatePanels();
     private void OnFix(object? sender, RoutedEventArgs e) => _actions?.FixBlocked();
     private void OnSyncNow(object? sender, RoutedEventArgs e) => _actions?.SyncNow();
     private void OnPause(object? sender, RoutedEventArgs e) => _actions?.TogglePause();

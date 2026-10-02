@@ -1,0 +1,42 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <!-- Theme colours follow the operating system (light / dark). -->
+  <ResourceDictionary.ThemeDictionaries>
+    <ResourceDictionary x:Key="Light">
+      <SolidColorBrush x:Key="T.Bg" Color="#F3F5F8" />
+      <SolidColorBrush x:Key="T.Card" Color="#FFFFFF" />
+      <SolidColorBrush x:Key="T.Text" Color="#1B1F24" />
+      <SolidColorBrush x:Key="T.Muted" Color="#6B7280" />
+      <SolidColorBrush x:Key="T.Border" Color="#E3E7ED" />
+      <SolidColorBrush x:Key="T.Hover" Color="#F1F4F8" />
+      <SolidColorBrush x:Key="T.Subtle" Color="#E9EDF2" />
+      <SolidColorBrush x:Key="T.SubtleHover" Color="#DDE3EA" />
+      <SolidColorBrush x:Key="T.Accent" Color="#2563EB" />
+      <SolidColorBrush x:Key="T.AccentHover" Color="#1D4FC4" />
+      <SolidColorBrush x:Key="T.Track" Color="#E3E8EF" />
+      <SolidColorBrush x:Key="T.Pill" Color="#EEF2F7" />
+    </ResourceDictionary>
+    <ResourceDictionary x:Key="Dark">
+      <SolidColorBrush x:Key="T.Bg" Color="#14161A" />
+      <SolidColorBrush x:Key="T.Card" Color="#1D2026" />
+      <SolidColorBrush x:Key="T.Text" Color="#E8EAED" />
+      <SolidColorBrush x:Key="T.Muted" Color="#9AA1AB" />
+      <SolidColorBrush x:Key="T.Border" Color="#2B2F37" />
+      <SolidColorBrush x:Key="T.Hover" Color="#252930" />
+      <SolidColorBrush x:Key="T.Subtle" Color="#2A2E36" />
+      <SolidColorBrush x:Key="T.SubtleHover" Color="#343943" />
+      <SolidColorBrush x:Key="T.Accent" Color="#4C8DF6" />
+      <SolidColorBrush x:Key="T.AccentHover" Color="#6A9FF8" />
+      <SolidColorBrush x:Key="T.Track" Color="#2E333B" />
+      <SolidColorBrush x:Key="T.Pill" Color="#262A31" />
+    </ResourceDictionary>
+  </ResourceDictionary.ThemeDictionaries>
+
+  <!-- Status colours: the same in both themes. -->
+  <SolidColorBrush x:Key="S.Green" Color="#2EA043" />
+  <SolidColorBrush x:Key="S.Blue" Color="#2176D6" />
+  <SolidColorBrush x:Key="S.Grey" Color="#8A9099" />
+  <SolidColorBrush x:Key="S.Orange" Color="#E66E14" />
+  <SolidColorBrush x:Key="S.Red" Color="#CF222E" />
+  <SolidColorBrush x:Key="S.Yellow" Color="#D6A021" />
+</ResourceDictionary>

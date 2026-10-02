@@ -1,81 +1,165 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:v="using:Tether.Desktop.Views"
         x:Class="Tether.Desktop.Views.MainWindow"
-        Title="Tether" Width="680" Height="540" MinWidth="520" MinHeight="400"
+        Title="Tether" Width="720" Height="600" MinWidth="560" MinHeight="460"
         WindowStartupLocation="CenterScreen" Icon="avares://Tether/Assets/tether-icon-256.png">
-  <DockPanel>
-    <Border DockPanel.Dock="Top" Padding="20,16" BorderBrush="#22808080" BorderThickness="0,0,0,1">
+  <Window.Resources>
+    <v:ActivityBrushConverter x:Key="KindBrush" />
+    <v:ActivityIconConverter x:Key="KindIcon" />
+  </Window.Resources>
+
+  <DockPanel Margin="16">
+    <!-- Status card -->
+    <Border DockPanel.Dock="Top" Classes="card">
       <Grid ColumnDefinitions="Auto,*,Auto">
-        <Ellipse x:Name="StatusDot" Width="16" Height="16" Fill="Gray" VerticalAlignment="Top" Margin="0,8,14,0" />
-        <StackPanel Grid.Column="1" Spacing="2">
-          <TextBlock x:Name="Headline" Text="Starting…" FontSize="22" FontWeight="SemiBold" />
-          <TextBlock x:Name="Detail" Opacity="0.75" TextWrapping="Wrap" MaxWidth="420" HorizontalAlignment="Left" />
-          <TextBlock x:Name="LastSync" Opacity="0.6" />
-          <TextBlock x:Name="FolderText" Opacity="0.6" TextTrimming="CharacterEllipsis" />
+        <Grid Width="52" Height="52" VerticalAlignment="Top" Margin="0,0,16,0">
+          <Ellipse x:Name="StatusBadge" Fill="{StaticResource S.Grey}" />
+          <v:LineIcon x:Name="StatusGlyph" Classes="icon white" Width="24" Height="24" StrokeThickness="2.6"
+                Data="{StaticResource I.CloudOff}" />
+        </Grid>
+        <StackPanel Grid.Column="1" Spacing="4" VerticalAlignment="Center">
+          <TextBlock x:Name="Headline" Classes="h1" Text="Starting…" />
+          <TextBlock x:Name="Detail" Classes="muted" TextWrapping="Wrap" MaxWidth="440" HorizontalAlignment="Left" />
+          <WrapPanel Margin="0,4,0,0">
+            <Border Classes="pill" Margin="0,0,8,4">
+              <TextBlock x:Name="LastSync" Classes="small" Text="Not synced yet" />
+            </Border>
+            <Border x:Name="FolderPill" Classes="pill" Margin="0,0,8,4">
+              <StackPanel Orientation="Horizontal" Spacing="5">
+                <v:LineIcon Classes="icon muted" Width="15" Height="15" StrokeThickness="2.2" Data="{StaticResource I.Folder}" />
+                <TextBlock x:Name="FolderText" Classes="small" TextTrimming="CharacterEllipsis" MaxWidth="320" />
+              </StackPanel>
+            </Border>
+          </WrapPanel>
         </StackPanel>
-        <Button x:Name="FixButton" Grid.Column="2" IsVisible="False" VerticalAlignment="Top"
-                Background="#E66E14" Foreground="White" Click="OnFix" />
+        <Button x:Name="FixButton" Grid.Column="2" Classes="warn" IsVisible="False" VerticalAlignment="Center"
+                Margin="12,0,0,0" Click="OnFix" />
       </Grid>
     </Border>
 
-    <Border x:Name="TransferPanel" DockPanel.Dock="Top" Padding="20,10" Background="#1A2176D6" IsVisible="False">
-      <StackPanel Spacing="6">
-        <DockPanel>
-          <TextBlock x:Name="TransferCount" DockPanel.Dock="Right" Opacity="0.75" />
-          <TextBlock x:Name="TransferFile" TextTrimming="CharacterEllipsis" />
-        </DockPanel>
-        <ProgressBar x:Name="TransferProgress" Height="6" Minimum="0" Maximum="100" />
-      </StackPanel>
+    <!-- Current transfer -->
+    <Border x:Name="TransferCard" DockPanel.Dock="Top" Classes="card" Margin="0,12,0,0" IsVisible="False">
+      <Grid ColumnDefinitions="Auto,*,Auto" RowDefinitions="Auto,Auto,Auto">
+        <Grid Grid.RowSpan="2" Width="34" Height="34" Margin="0,0,12,0" VerticalAlignment="Top">
+          <Ellipse Fill="{DynamicResource T.Pill}" />
+          <v:LineIcon x:Name="TransferGlyph" Classes="icon" Width="20" Height="20" Stroke="{DynamicResource T.Accent}" Data="{StaticResource I.Up}" />
+        </Grid>
+        <TextBlock x:Name="TransferFile" Grid.Column="1" Classes="strong" TextTrimming="CharacterEllipsis" />
+        <TextBlock x:Name="TransferCount" Grid.Column="2" Classes="muted small" VerticalAlignment="Center" />
+        <TextBlock x:Name="TransferFolder" Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" Classes="muted small" TextTrimming="CharacterEllipsis" />
+        <StackPanel Grid.Row="2" Grid.ColumnSpan="3" Margin="0,10,0,0" Spacing="6">
+          <ProgressBar x:Name="TransferProgress" Minimum="0" Maximum="100" />
+          <TextBlock x:Name="TransferBytes" Classes="muted small" />
+        </StackPanel>
+      </Grid>
     </Border>
 
-    <Border DockPanel.Dock="Bottom" Padding="16,10" BorderBrush="#22808080" BorderThickness="0,1,0,0">
-      <StackPanel Orientation="Horizontal" Spacing="8">
-        <Button Content="Sync now" Click="OnSyncNow" />
-        <Button x:Name="PauseButton" Content="Pause" Click="OnPause" />
-        <Button Content="Open folder" Click="OnOpenFolder" />
-        <Button Content="Settings…" Click="OnSettings" />
-        <Button Content="View log" Click="OnViewLog" />
-      </StackPanel>
-    </Border>
+    <!-- Toolbar -->
+    <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Spacing="8" Margin="0,12,0,0">
+      <Button Classes="accent" Click="OnSyncNow">
+        <StackPanel Orientation="Horizontal" Spacing="7">
+          <v:LineIcon Classes="icon white" Width="17" Height="17" Data="{StaticResource I.Sync}" />
+          <TextBlock Text="Sync now" />
+        </StackPanel>
+      </Button>
+      <Button Classes="subtle" Click="OnPause">
+        <StackPanel Orientation="Horizontal" Spacing="7">
+          <v:LineIcon x:Name="PauseGlyph" Classes="icon" Width="17" Height="17" Data="{StaticResource I.Pause}" />
+          <TextBlock x:Name="PauseText" Text="Pause" />
+        </StackPanel>
+      </Button>
+      <Button Classes="subtle" Click="OnOpenFolder">
+        <StackPanel Orientation="Horizontal" Spacing="7">
+          <v:LineIcon Classes="icon" Width="17" Height="17" Data="{StaticResource I.Folder}" />
+          <TextBlock Text="Open folder" />
+        </StackPanel>
+      </Button>
+      <Button Classes="subtle" Click="OnSettings">
+        <StackPanel Orientation="Horizontal" Spacing="7">
+          <v:LineIcon Classes="icon" Width="17" Height="17" Data="{StaticResource I.Settings}" />
+          <TextBlock Text="Settings" />
+        </StackPanel>
+      </Button>
+      <Button Classes="subtle" Click="OnViewLog">
+        <StackPanel Orientation="Horizontal" Spacing="7">
+          <v:LineIcon Classes="icon" Width="17" Height="17" Data="{StaticResource I.Log}" />
+          <TextBlock Text="Log" />
+        </StackPanel>
+      </Button>
+    </StackPanel>
 
-    <TabControl Margin="8">
-      <TabItem Header="Activity" FontSize="15">
+    <!-- Activity / Needs attention -->
+    <Grid RowDefinitions="Auto,*" Margin="0,16,0,0">
+      <Border Classes="segments" HorizontalAlignment="Left">
+        <StackPanel Orientation="Horizontal">
+          <RadioButton x:Name="ActivityTab" Classes="seg" GroupName="view" IsChecked="True" Content="Activity" IsCheckedChanged="OnTabChanged" />
+          <RadioButton x:Name="AttentionTab" Classes="seg" GroupName="view" IsCheckedChanged="OnTabChanged">
+            <StackPanel Orientation="Horizontal" Spacing="7">
+              <TextBlock Text="Needs attention" />
+              <Border x:Name="AttentionBadge" Classes="badge" IsVisible="False">
+                <TextBlock x:Name="AttentionCount" Foreground="White" FontSize="11" FontWeight="SemiBold"
+                           HorizontalAlignment="Center" VerticalAlignment="Center" />
+              </Border>
+            </StackPanel>
+          </RadioButton>
+        </StackPanel>
+      </Border>
+
+      <Border Grid.Row="1" Classes="card" Margin="0,10,0,0" Padding="8">
         <Grid>
-          <ListBox x:Name="ActivityList" Background="Transparent">
-            <ListBox.ItemTemplate>
-              <DataTemplate>
-                <Grid ColumnDefinitions="70,24,*">
-                  <TextBlock Text="{Binding TimeText}" Opacity="0.6" />
-                  <TextBlock Grid.Column="1" Text="{Binding Symbol}" FontWeight="Bold" />
-                  <TextBlock Grid.Column="2" Text="{Binding Text}" TextWrapping="Wrap" />
-                </Grid>
-              </DataTemplate>
-            </ListBox.ItemTemplate>
-          </ListBox>
-          <TextBlock x:Name="ActivityEmpty" Text="Nothing has happened yet. Changes appear here as they sync."
-                     Opacity="0.6" HorizontalAlignment="Center" VerticalAlignment="Center" />
+          <ScrollViewer x:Name="ActivityPanel">
+            <ItemsControl x:Name="ActivityList">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                  <Border Classes="row" ToolTip.Tip="{Binding TimeText}">
+                    <Grid ColumnDefinitions="Auto,*,Auto">
+                      <Grid Width="30" Height="30" Margin="0,0,12,0">
+                        <Ellipse Fill="{Binding Kind, Converter={StaticResource KindBrush}}" />
+                        <v:LineIcon Classes="icon white" Width="19" Height="19" StrokeThickness="2.6"
+                              Data="{Binding Kind, Converter={StaticResource KindIcon}}" />
+                      </Grid>
+                      <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
+                        <TextBlock Text="{Binding Primary}" Classes="strong" TextTrimming="CharacterEllipsis" />
+                        <TextBlock Text="{Binding Secondary}" Classes="muted small" TextTrimming="CharacterEllipsis" />
+                      </StackPanel>
+                      <TextBlock Grid.Column="2" Text="{Binding WhenText}" Classes="muted small" VerticalAlignment="Center" Margin="12,0,4,0" />
+                    </Grid>
+                  </Border>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </ScrollViewer>
+          <StackPanel x:Name="ActivityEmpty" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="8">
+            <v:LineIcon Classes="icon muted" Width="30" Height="30" StrokeThickness="1.6" Data="{StaticResource I.Sync}" HorizontalAlignment="Center" />
+            <TextBlock Classes="muted" Text="Nothing has happened yet. Changes appear here as they sync." />
+          </StackPanel>
+
+          <ScrollViewer x:Name="AttentionPanel" IsVisible="False">
+            <ItemsControl x:Name="AttentionList">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                  <Border Classes="row" Margin="0,2">
+                    <Grid ColumnDefinitions="4,*,Auto">
+                      <Border Width="4" CornerRadius="2" Background="{StaticResource S.Orange}" />
+                      <StackPanel Grid.Column="1" Margin="12,2,0,2" Spacing="2">
+                        <TextBlock Text="{Binding Title}" Classes="strong" TextWrapping="Wrap" />
+                        <TextBlock Text="{Binding Detail}" Classes="muted small" TextWrapping="Wrap" />
+                      </StackPanel>
+                      <Button Grid.Column="2" Classes="subtle" Content="{Binding ActionLabel}" Margin="12,0,0,0"
+                              VerticalAlignment="Center" Click="OnAttentionAction" Tag="{Binding}" />
+                    </Grid>
+                  </Border>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </ScrollViewer>
+          <StackPanel x:Name="AttentionEmpty" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="8" IsVisible="False">
+            <v:LineIcon Classes="icon" Width="30" Height="30" StrokeThickness="1.8" Stroke="{StaticResource S.Green}" Data="{StaticResource I.Check}" HorizontalAlignment="Center" />
+            <TextBlock Classes="muted" Text="Nothing needs your attention." />
+          </StackPanel>
         </Grid>
-      </TabItem>
-      <TabItem x:Name="AttentionTab" Header="Needs attention" FontSize="15">
-        <Grid>
-          <ListBox x:Name="AttentionList" Background="Transparent">
-            <ListBox.ItemTemplate>
-              <DataTemplate>
-                <Grid ColumnDefinitions="*,Auto">
-                  <StackPanel>
-                    <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextWrapping="Wrap" />
-                    <TextBlock Text="{Binding Detail}" Opacity="0.75" TextWrapping="Wrap" />
-                  </StackPanel>
-                  <Button Grid.Column="1" Content="{Binding ActionLabel}" Margin="8,0,0,0" VerticalAlignment="Center"
-                          Click="OnAttentionAction" Tag="{Binding}" />
-                </Grid>
-              </DataTemplate>
-            </ListBox.ItemTemplate>
-          </ListBox>
-          <TextBlock x:Name="AttentionEmpty" Text="Nothing needs your attention."
-                     Opacity="0.6" HorizontalAlignment="Center" VerticalAlignment="Center" />
-        </Grid>
-      </TabItem>
-    </TabControl>
+      </Border>
+    </Grid>
   </DockPanel>
 </Window>

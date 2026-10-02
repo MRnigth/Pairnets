@@ -49,3 +49,48 @@ public class StatusDetailTests
     public void DetailDoesNotRepeatHeadline(RunnerStatus status, string text, string expected) =>
         Assert.Equal(expected, (StatusSnapshot.Initial with { Status = status, Text = text }).DetailText);
 }
+
+public class FormatTests
+{
+    [Theory]
+    [InlineData(0, "0 B")]
+    [InlineData(512, "512 B")]
+    [InlineData(1536, "1.5 KB")]
+    [InlineData(67108864, "64.0 MB")]
+    [InlineData(104857600, "100 MB")]
+    [InlineData(2254857830, "2.10 GB")]
+    public void Bytes(long value, string expected) => Assert.Equal(expected, Format.Bytes(value));
+
+    [Fact]
+    public void RelativeTimes()
+    {
+        var now = new DateTimeOffset(2026, 10, 2, 15, 0, 0, TimeSpan.Zero);
+        Assert.Equal("just now", Format.RelativeTime(now.AddSeconds(-10), now));
+        Assert.Equal("1 min ago", Format.RelativeTime(now.AddSeconds(-70), now));
+        Assert.Equal("12 min ago", Format.RelativeTime(now.AddMinutes(-12), now));
+        Assert.Contains("ago", Format.RelativeTime(now.AddHours(-2), now) + Format.RelativeTime(now.AddHours(-2), now));
+    }
+
+    [Fact]
+    public void ActivityRowTexts()
+    {
+        var item = new ActivityItem(DateTimeOffset.Now, ActivityKind.Uploaded, "Projects/2026/plan.xlsx", "Uploaded: Projects/2026/plan.xlsx");
+        Assert.Equal("plan.xlsx", item.Primary);
+        Assert.Equal("Uploaded · Projects/2026", item.Secondary);
+        Assert.Equal("just now", item.WhenText);
+        var info = new ActivityItem(DateTimeOffset.Now, ActivityKind.Offline, null, "Cannot reach the server");
+        Assert.Equal("Cannot reach the server", info.Primary);
+        Assert.Equal("Offline", info.Secondary);
+    }
+
+    [Fact]
+    public void TransferTexts()
+    {
+        var s = StatusSnapshot.Initial with { Status = RunnerStatus.Syncing, CurrentPath = "Videos/a.mp4", Operation = "upload", BytesDone = 67108864, BytesTotal = 104857600, FilesDone = 2, FilesTotal = 5 };
+        Assert.Equal("64.0 MB of 100 MB · 64%", s.ProgressText);
+        Assert.Equal("File 3 of 5", s.FileCountText);
+        Assert.Equal("a.mp4", s.CurrentFileName);
+        Assert.Equal("Videos", s.CurrentFolder);
+        Assert.Equal("Uploading", s.OperationText);
+    }
+}

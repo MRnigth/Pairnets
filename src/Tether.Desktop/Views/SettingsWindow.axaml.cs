@@ -28,7 +28,8 @@ public partial class SettingsWindow : Window
         _protector = protector;
         _firstRun = firstRun;
         Title = firstRun ? "Tether – first-time setup" : "Tether – settings";
-        IntroText.IsVisible = firstRun;
+        WelcomeHeader.IsVisible = firstRun;
+        SettingsHeader.IsVisible = !firstRun;
         SaveButton.Content = firstRun ? "Start syncing" : "Save";
         ServerUrlBox.Text = current.ServerUrl ?? string.Empty;
         TokenBox.Watermark = current.ProtectedToken is null ? "printed by install.sh" : "(saved – leave empty to keep)";
@@ -74,18 +75,32 @@ public partial class SettingsWindow : Window
     private async void OnTest(object? sender, RoutedEventArgs e)
     {
         TestButton.IsEnabled = false;
-        TestResult.Foreground = Brushes.Gray;
-        TestResult.Text = "Testing…";
+        ShowTestResult(null, "Testing…");
         try
         {
             var result = await TetherApiClient.TestConnectionAsync(ServerUrlBox.Text, CurrentToken(), DeviceName());
-            TestResult.Foreground = result.Status == ConnectionTestStatus.Ok ? Brushes.SeaGreen : Brushes.Firebrick;
-            TestResult.Text = result.Message;
+            ShowTestResult(result.Status == ConnectionTestStatus.Ok, result.Message);
         }
         finally
         {
             TestButton.IsEnabled = true;
         }
+    }
+
+    /// <summary>Shows the connection test result as a green (ok), red (failed) or grey (busy) chip.</summary>
+    internal void ShowTestResult(bool? ok, string text)
+    {
+        TestChip.IsVisible = true;
+        TestChip.Classes.Set("chip-ok", ok == true);
+        TestChip.Classes.Set("chip-bad", ok == false);
+        TestChip.Classes.Set("chip-busy", ok is null);
+        TestResult.Foreground = ok switch
+        {
+            true => new SolidColorBrush(Color.FromRgb(46, 160, 67)),
+            false => new SolidColorBrush(Color.FromRgb(207, 34, 46)),
+            _ => Visuals.Resource<IBrush>("T.Muted"),
+        };
+        TestResult.Text = (ok == true ? "✓ " : ok == false ? "✕ " : string.Empty) + text;
     }
 
     private void OnCancel(object? sender, RoutedEventArgs e) => Close();

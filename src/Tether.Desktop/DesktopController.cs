@@ -113,22 +113,21 @@ public sealed class DesktopController : IMainActions, IDisposable
     {
         if (_icons.TryGetValue(status, out var icon))
             return icon;
-        var color = status switch
-        {
-            RunnerStatus.Idle => Color.FromRgb(46, 160, 67),
-            RunnerStatus.Syncing => Color.FromRgb(33, 118, 214),
-            RunnerStatus.Offline => Color.FromRgb(128, 128, 128),
-            RunnerStatus.Paused => Color.FromRgb(214, 160, 33),
-            RunnerStatus.Blocked => Color.FromRgb(230, 110, 20),
-            _ => Color.FromRgb(207, 34, 46),
-        };
+        var (brushKey, iconKey) = Visuals.ForStatus(status);
         try
         {
+            var fill = Visuals.Resource<IBrush>(brushKey) ?? Brushes.Gray;
+            var glyph = Visuals.Resource<Geometry>(iconKey);
             var bitmap = new RenderTargetBitmap(new PixelSize(44, 44), new Vector(96, 96));
             using (var ctx = bitmap.CreateDrawingContext())
             {
-                ctx.DrawEllipse(new SolidColorBrush(color), null, new Point(22, 22), 18, 18);
-                ctx.DrawEllipse(null, new Pen(Brushes.White, 4), new Point(22, 22), 8, 8);
+                ctx.DrawEllipse(fill, null, new Point(22, 22), 21, 21);
+                if (glyph is not null)
+                {
+                    // 24-unit icon scaled into the middle 26 px of the circle.
+                    using (ctx.PushTransform(Matrix.CreateScale(26 / 24.0, 26 / 24.0) * Matrix.CreateTranslation(9, 9)))
+                        ctx.DrawGeometry(null, new Pen(Brushes.White, 3.2, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round), glyph);
+                }
             }
             using var ms = new MemoryStream();
             bitmap.Save(ms);
