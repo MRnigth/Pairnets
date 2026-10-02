@@ -1,6 +1,7 @@
 # Tether
 
-Tether keeps **one folder identical on two Windows PCs** that you use one at a time, through a
+Tether keeps **one folder identical on your computers** (built for two Windows PCs, also available
+for Mac and Linux desktops) that you use one at a time, through a
 small server you own on your **Tailscale** network. No cloud, no accounts, no telemetry.
 
 * Work on the desktop: changes flow to the server within seconds.
@@ -21,6 +22,15 @@ to act when something looks wrong (wrong folder, unplugged drive, many deletions
 ```
 
 **New here? Start with the step-by-step guide: [How to install Tether, and how it works](docs/HOWTO.md).**
+
+![The Tether window](docs/images/main-window-syncing.png)
+
+| Install on | How |
+|-----------|-----|
+| **Ubuntu server** | `curl -fsSL https://raw.githubusercontent.com/MRnigth/Tether/main/deploy/get.sh \| sudo bash` |
+| **Windows** | `TetherSetup.exe` or `tether-client-win-x64.zip` (`Tether.exe`) from the [latest release](https://github.com/MRnigth/Tether/releases/latest) |
+| **macOS** | `Tether-macos-arm64.dmg` (Apple Silicon) / `Tether-macos-x64.dmg` (Intel), or `curl -fsSL https://raw.githubusercontent.com/MRnigth/Tether/main/deploy/get.sh \| bash -s -- --mac` |
+| **Linux desktop** | `curl -fsSL https://raw.githubusercontent.com/MRnigth/Tether/main/deploy/get.sh \| bash -s -- --desktop` |
 
 More detail: [Architecture](docs/ARCHITECTURE.md) · [Deploy](docs/DEPLOY.md) ·
 [Security](docs/SECURITY.md) · [Testing](docs/TESTING.md) · [Decisions](docs/DECISIONS.md)
@@ -50,9 +60,11 @@ the Tailscale ACL in [DEPLOY.md](docs/DEPLOY.md#tailscale-acl-only-your-two-pcs-
    **Start syncing**.
 3. Optional: tick **Start with Windows**.
 
-Tether lives in the notification area. Its icon is green when up to date, blue while syncing, grey
-when offline, orange when it needs your decision, red on errors, and yellow when paused. Right-click
-for Sync now, Open folder, Settings, View log, Pause/Resume, Start with Windows and Exit.
+Tether has a window (status, current transfer with progress, recent activity, and a "Needs
+attention" list) and an icon in the notification area (Windows), menu bar (Mac) or system tray
+(Linux). The icon is green when up to date, blue while syncing, grey when offline, orange when it
+needs your decision, red on errors, and yellow when paused. Closing the window keeps Tether syncing
+in the background.
 
 ## How it works, in plain words
 

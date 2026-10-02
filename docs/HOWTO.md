@@ -24,9 +24,9 @@ Allow about 30 minutes.
 | | |
 |---|---|
 | **A server** | Any always-on Ubuntu machine (22.04 or newer): a mini PC, an old laptop, a Raspberry Pi-class x64 box or a VM. It needs enough disk for your folder **plus history** (old versions are kept 30 days). Rule of thumb: twice the size of your folder. |
-| **Two Windows PCs** | Windows 10 or 11, 64-bit. You use one at a time. |
+| **Your computers** | Windows 10/11 (64-bit), macOS 11 or newer (Apple Silicon or Intel), or a Linux desktop (64-bit, e.g. Ubuntu). Tether is built for using one at a time. |
 | **A Tailscale account** | Free for personal use: <https://tailscale.com>. This is what connects the three machines privately, wherever they are. |
-| **The Tether release** | From <https://github.com/MRnigth/Tether/releases/latest>: `tether-server-linux-x64.tar.gz` (server), and `tether-client-win-x64.zip` or `TetherSetup.exe` (PCs). |
+| **The Tether release** | From <https://github.com/MRnigth/Tether/releases/latest>, or let the one-line commands below fetch it for you. |
 
 Nothing else: no cloud storage, no extra accounts, no .NET installation.
 
@@ -48,11 +48,14 @@ tailscale ip -4              # prints the server's Tailscale address, e.g. 100.x
 
 Write that address down; this guide calls it **`100.x.y.z`**.
 
-**On each Windows PC**
+**On each computer**
 
-1. Download Tailscale for Windows from <https://tailscale.com/download/windows> and install it.
-2. Click the Tailscale icon in the notification area → **Log in**, using the same account.
-3. Check that the PC can reach the server: open *Command Prompt* and run `ping 100.x.y.z`.
+1. Install Tailscale from <https://tailscale.com/download>: the Windows installer, the Mac app
+   (Mac App Store or the standalone download), or for Linux
+   `curl -fsSL https://tailscale.com/install.sh | sh` followed by `sudo tailscale up`.
+2. Log in with the same account (Tailscale icon → **Log in**).
+3. Check that the computer can reach the server: run `ping 100.x.y.z` in *Command Prompt* (Windows)
+   or *Terminal* (Mac/Linux).
 
 > Tip: also enable Tailscale's "Run unattended" option on the PCs (Tailscale menu → Preferences)
 > so it connects before you sign in to Windows.
@@ -61,7 +64,17 @@ Write that address down; this guide calls it **`100.x.y.z`**.
 
 ## 3. Install the server
 
-On the Ubuntu server:
+**The quick way: one command.** On the Ubuntu server:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/MRnigth/Tether/main/deploy/get.sh | sudo bash
+```
+
+It downloads the latest release, checks its SHA-256 checksum (it refuses a damaged or altered
+download), and runs `install.sh`, which is described below. To pick the address yourself, add
+options after `-s --`, e.g. `... | sudo bash -s -- --bind 100.x.y.z`.
+
+**Or step by step**, if you prefer to see each file:
 
 ```bash
 # 1. Download the server package and its checksums
@@ -139,23 +152,53 @@ work laptop…) away from Tether.
 
 ---
 
-## 5. Set up the first PC (for example the desktop)
+## 5. Set up the first computer (for example the desktop)
 
 ### Install
 
-Choose **one**:
+**Windows**: download one of these from the
+[latest release](https://github.com/MRnigth/Tether/releases/latest):
 
-* **Installer**: run `TetherSetup.exe`. It installs for your user only (no admin rights) and adds
+* `TetherSetup.exe`: the installer. It installs for your user only (no admin rights) and adds
   Tether to the Start menu.
-* **Zip**: extract `tether-client-win-x64.zip` and put `Tether.exe` in a permanent place, for
-  example `%LocalAppData%\Programs\Tether\`.
+* `tether-client-win-x64.zip`: extract `Tether.exe` to a permanent place, for example
+  `%LocalAppData%\Programs\Tether\`.
 
-Windows may show "Windows protected your PC" because the program is not code-signed. Click
+Windows may say "Windows protected your PC" because the program is not code-signed. Click
 **More info → Run anyway**.
+
+**Mac**: either run this in *Terminal* (it picks the right version for Apple Silicon or Intel,
+puts Tether in Applications and starts it):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/MRnigth/Tether/main/deploy/get.sh | bash -s -- --mac
+```
+
+or download `Tether-macos-arm64.dmg` (Apple Silicon: M1/M2/M3/M4) or `Tether-macos-x64.dmg`
+(Intel) from the release, open it and drag **Tether** to **Applications**. The app is not
+notarized by Apple, so the first time macOS refuses to open it. Open it once with
+**right-click → Open → Open**. On macOS 15 and later, go to **System Settings → Privacy & Security**
+and click **Open Anyway**. The Terminal command above avoids this. On a Mac, Tether lives in the
+**menu bar** (top right), not the Dock.
+
+**Linux desktop** (Ubuntu and similar, 64-bit): run as your normal user, without sudo:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/MRnigth/Tether/main/deploy/get.sh | bash -s -- --desktop
+```
+
+It installs into your home folder, adds Tether to the app menu and starts it. For the best
+experience also run `sudo apt install libsecret-tools libnotify-bin`. Tether then keeps the token
+in your keyring and can show notifications. On GNOME the tray icon needs the *AppIndicator*
+extension, which Ubuntu enables by default.
 
 ### First-run setup
 
-When Tether starts for the first time, the **first-time setup** window opens:
+When Tether starts for the first time, the **first-time setup** window opens. It looks the same on
+Windows, Mac and Linux:
+
+![First-time setup window](images/settings-first-run.png)
+
 
 | Field | What to enter |
 |-------|---------------|
@@ -164,7 +207,7 @@ When Tether starts for the first time, the **first-time setup** window opens:
 | **Folder to sync** | click **Browse…** and pick the folder, e.g. `D:\Work`. It may already contain your files. |
 | **Device name** | pre-filled with the computer name. Leave it, but **each PC needs a different name**. It appears in conflict file names. |
 | **Extra ignore patterns** | optional, one per line, e.g. `*.bak` or `node_modules/`. Common junk is ignored already. |
-| **Start Tether when I sign in to Windows** | tick it so syncing starts automatically. |
+| **Start Tether when I sign in / log in** | tick it so syncing starts automatically. |
 
 1. Click **Test connection**. You should see *"Connected. Server and token are OK."*
    If not, see [section 9](#9-when-something-needs-your-attention).
@@ -173,10 +216,36 @@ When Tether starts for the first time, the **first-time setup** window opens:
 The first sync uploads everything in the folder. A 20 GB folder takes a while; you can keep
 working meanwhile.
 
-### The tray icon
+### The Tether window
 
-Tether has no window; it lives in the notification area (click **^** next to the clock if it is
-hidden, then drag it out to keep it visible).
+After setup the Tether window opens:
+
+![Tether window while syncing](images/main-window-syncing.png)
+
+* **Top**: a coloured dot and one word for the overall state, when it last synced, and which
+  folder it syncs.
+* **Blue bar** (only while transferring): the file being uploaded or downloaded, how far along it
+  is, and "3 of 5" files.
+* **Activity tab**: everything that happened recently: ↑ uploaded, ↓ downloaded, ✕ deleted,
+  ⚠ conflict, ! problem.
+* **Needs attention tab**: conflict copies and files that cannot be synced, each with a
+  **Show in folder** button.
+* **Buttons**: Sync now, Pause/Resume, Open folder, Settings…, View log.
+
+When Tether needs your decision (for example before deleting many files), the dot turns orange and
+a button at the top right says what to do:
+
+![Tether window waiting for a decision](images/main-window-blocked.png)
+
+Closing the window does **not** stop Tether. It keeps syncing in the background. Open the window
+again from its icon:
+
+* **Windows**: in the notification area next to the clock (click **^** if it is hidden). Left-click
+  opens the window, right-click shows the menu.
+* **Mac**: in the menu bar at the top right of the screen. Click it for the menu.
+* **Linux**: in the system tray or top bar, depending on your desktop.
+
+The icon colour always shows the state:
 
 | Icon | Meaning |
 |------|---------|
@@ -187,12 +256,7 @@ hidden, then drag it out to keep it visible).
 | 🔴 red | an error, or some files need attention |
 | 🟡 yellow | paused by you |
 
-Hover over the icon for the status and the time of the last sync. Double-click it to open the
-synced folder.
-
----
-
-## 6. Set up the second PC (for example the laptop)
+## 6. Set up the second computer (for example the laptop)
 
 Install Tether the same way and fill in the setup window with the **same server URL and token**,
 a **different device name**, and the folder you want on this PC.
@@ -226,10 +290,11 @@ You do not have to do anything. Just work in the folder on whichever PC you are 
 > Good habit: before shutting down a PC, glance at the icon. Green means everything reached the
 > server. Blue means wait a moment.
 
-### The tray menu (right-click the icon)
+### The icon menu (right-click on Windows, click on Mac)
 
 | Item | What it does |
 |------|--------------|
+| **Open Tether** | opens the Tether window |
 | **Sync now** | runs a complete check immediately |
 | **Open folder** | opens the synced folder in Explorer |
 | **Allow these deletions (N)…** | only shown when Tether blocked a large deletion (see section 9) |
@@ -238,8 +303,8 @@ You do not have to do anything. Just work in the folder on whichever PC you are 
 | **Settings…** | change server, token, folder, device name, ignore patterns |
 | **View log** | opens today's log (kept 14 days in `%LocalAppData%\Tether\logs`) |
 | **Pause syncing / Resume syncing** | temporarily stop syncing on this PC |
-| **Start with Windows** | start Tether automatically when you sign in |
-| **Exit** | quit Tether. Nothing syncs until you start it again. |
+| **Start with Windows / Start at login** | start Tether automatically when you sign in |
+| **Exit / Quit Tether** | quit Tether. Nothing syncs until you start it again. |
 
 ---
 
@@ -410,13 +475,22 @@ Neither ever contains your token.
 
 ## 10. Updating and uninstalling
 
-**Update the server**: download and unpack the new `tether-server-linux-x64.tar.gz` as in
-[step 3](#3-install-the-server) and run `sudo ./install.sh` again. Your token and data are kept.
+**Update the server**: run the same one-line command again
+(`curl -fsSL https://raw.githubusercontent.com/MRnigth/Tether/main/deploy/get.sh | sudo bash`),
+or unpack the new tarball and run `sudo ./install.sh`. Your token and data are kept.
 
-**Update a PC**: exit Tether (right-click → **Exit**), replace `Tether.exe` (or run the new
-`TetherSetup.exe`), and start it again. Settings and sync state are kept.
+**Update a computer**: on Mac and Linux, run the same one-line command again. On Windows, exit
+Tether (right-click → **Exit**), replace `Tether.exe` (or run the new `TetherSetup.exe`) and start it
+again. Settings and sync state are kept everywhere.
 
-**Uninstall from a PC**: right-click → **Exit**. Untick "Start with Windows" first if you had it
+**Uninstall from a Mac**: menu-bar icon → **Quit Tether**, untick "Start at login" first if you
+had it on, then delete **Tether** from Applications. The token is in the *Keychain Access* app
+under "Tether".
+
+**Uninstall from Linux**: quit Tether, then
+`rm -rf ~/.local/opt/tether ~/.local/bin/tether ~/.local/share/applications/tether.desktop ~/.config/autostart/tether.desktop`.
+
+**Uninstall from Windows**: right-click → **Exit**. Untick "Start with Windows" first if you had it
 on. Then delete `Tether.exe`, or uninstall through *Settings → Apps* if you used the installer.
 Your synced folder and its files stay where they are. To also remove Tether's settings and
 state, delete `%AppData%\Tether` and `%LocalAppData%\Tether`.

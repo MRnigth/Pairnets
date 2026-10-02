@@ -104,3 +104,35 @@ what cannot lose or silently overwrite data.
   token assignments and personal Windows paths. It runs before each push and in CI over the whole
   history.
 * **Commit attribution.** At your request, commits no longer carry `Co-Authored-By` trailers.
+
+## Mac and Linux desktop apps (added after v1 scope)
+
+* **Separate Avalonia app (`src/Tether.Desktop`) for macOS and Linux; Windows keeps the WPF app.**
+  This was your choice. WPF only runs on Windows, and Avalonia (MIT, a mature .NET cross-platform UI)
+  is the closest equivalent. Avalonia is the only third-party runtime dependency. All sync logic
+  and the window state (`ClientSession`, `ActivityFeed`, `StatusSnapshot`) live in Tether.Core, so
+  both UIs stay thin and behave the same.
+* **Token storage per OS.** Windows: DPAPI. macOS: the login Keychain through the Security framework
+  (the token never appears on a command line). Linux: the desktop keyring through `secret-tool`
+  (token passed on stdin). Without a keyring it falls back to a file readable only by the user
+  (mode 600).
+* **Trash per OS.** Windows: Recycle Bin. macOS: `NSFileManager trashItemAtURL`, which needs no
+  Finder automation permission. Linux: `gio trash`. Each falls back to a permanent delete, because
+  the server keeps history.
+* **Mac builds are unsigned and not notarized** (no Apple Developer account). They are ad-hoc signed
+  (required for Apple Silicon). The `get.sh --mac` command installs without the Gatekeeper prompt,
+  because files downloaded with curl are not quarantined. Signing and notarization can be added to
+  `release.yml` later with repository secrets.
+* **Menu-bar app on Mac** (`LSUIElement`, no Dock icon), like other sync tools.
+* **Unicode normalization.** macOS treats "é" (one character) and "e + combining accent" as the
+  same file name. The name-collision key is now NFC-normalized as well as lower-cased, so the
+  server rejects such pairs like case variants.
+* **Sleep/resume** is signalled to the runner on Windows. On Mac and Linux the 5-minute full pass
+  and the SignalR reconnect cover catch-up after wake.
+* **One-line installer (`deploy/get.sh`)** downloads from GitHub releases and verifies against
+  `SHA256SUMS.txt` before running anything. Server mode needs root; desktop mode refuses root and
+  installs into the home folder.
+* **Main window.** The apps now open a window (status, progress, activity, needs attention) in
+  addition to the tray/menu-bar icon. Closing it keeps syncing in the background.
+* **Screenshots** in `docs/images` are rendered by a headless UI test
+  (`TETHER_SCREENSHOT_DIR=... dotnet test --filter DesktopUi`).
