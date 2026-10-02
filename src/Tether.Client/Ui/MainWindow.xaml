@@ -2,11 +2,12 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:ui="clr-namespace:Tether.Client.Ui"
-        Title="Tether" Width="720" Height="600" MinWidth="560" MinHeight="460"
+        Title="Tether" Width="720" Height="700" MinWidth="560" MinHeight="480"
         WindowStartupLocation="CenterScreen">
   <Window.Resources>
     <ui:ActivityBrushConverter x:Key="KindBrush" />
     <ui:ActivityIconConverter x:Key="KindIcon" />
+    <ui:DirectionBrushConverter x:Key="DirectionBrush" />
     <Style x:Key="ToolIcon" TargetType="ui:LineIcon">
       <Setter Property="Width" Value="17" />
       <Setter Property="Height" Value="17" />
@@ -16,6 +17,26 @@
   </Window.Resources>
 
   <DockPanel Margin="16">
+    <!-- Update banner -->
+    <Border x:Name="UpdateBanner" DockPanel.Dock="Top" Style="{StaticResource Banner}" Margin="0,0,0,12" Visibility="Collapsed">
+      <Grid>
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="Auto" />
+          <ColumnDefinition Width="*" />
+          <ColumnDefinition Width="Auto" />
+          <ColumnDefinition Width="Auto" />
+        </Grid.ColumnDefinitions>
+        <ui:LineIcon Width="20" Height="20" Stroke="{DynamicResource T.Accent}" Data="{StaticResource I.Download}" VerticalAlignment="Center" Margin="0,0,12,0" />
+        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+          <TextBlock x:Name="UpdateTitle" FontWeight="SemiBold" />
+          <TextBlock x:Name="UpdateDetail" Style="{StaticResource MutedSmall}" TextWrapping="Wrap" Margin="0,1,0,0" />
+          <ProgressBar x:Name="UpdateProgress" Style="{StaticResource ThinProgress}" Minimum="0" Maximum="100" Margin="0,5,0,0" Visibility="Collapsed" />
+        </StackPanel>
+        <Button x:Name="UpdateLater" Grid.Column="2" Style="{StaticResource FlatButton}" Content="Later" Margin="8,0,0,0" VerticalAlignment="Center" Click="OnUpdateLater" />
+        <Button x:Name="UpdateButton" Grid.Column="3" Style="{StaticResource AccentButton}" Content="Update now" Margin="4,0,0,0" VerticalAlignment="Center" Click="OnUpdateNow" />
+      </Grid>
+    </Border>
+
     <!-- Status card -->
     <Border DockPanel.Dock="Top" Style="{StaticResource Card}">
       <Grid>
@@ -44,39 +65,78 @@
                 <TextBlock x:Name="FolderText" FontSize="12" TextTrimming="CharacterEllipsis" MaxWidth="320" />
               </StackPanel>
             </Border>
+            <Border x:Name="ServerPill" Style="{StaticResource Pill}" Margin="0,0,8,4" Visibility="Collapsed">
+              <StackPanel Orientation="Horizontal">
+                <ui:LineIcon x:Name="ServerIcon" Width="15" Height="15" StrokeThickness="2" Margin="0,0,5,0"
+                             Stroke="{DynamicResource T.Muted}" Data="{StaticResource I.Disk}" />
+                <TextBlock x:Name="ServerText" FontSize="12" />
+              </StackPanel>
+            </Border>
           </WrapPanel>
+          <StackPanel x:Name="WaitPanel" Margin="0,8,0,0" Visibility="Collapsed">
+            <ProgressBar x:Name="WaitProgress" Style="{StaticResource RoundProgress}" Minimum="0" Maximum="100" />
+            <Grid Margin="0,6,0,0">
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+              </Grid.ColumnDefinitions>
+              <TextBlock x:Name="WaitText" Style="{StaticResource MutedSmall}" />
+              <TextBlock Grid.Column="1" Style="{StaticResource MutedSmall}" Text="Your own changes still upload" />
+            </Grid>
+            <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+              <Button Style="{StaticResource SubtleButton}" Content="Download now anyway" Click="OnDownloadNow" />
+              <TextBlock Style="{StaticResource MutedSmall}" VerticalAlignment="Center" TextWrapping="Wrap" MaxWidth="300" Margin="10,0,0,0"
+                         Text="Stops waiting by itself if the other computer goes quiet for 2 minutes." />
+            </StackPanel>
+          </StackPanel>
         </StackPanel>
         <Button x:Name="FixButton" Grid.Column="2" Style="{StaticResource WarnButton}" Visibility="Collapsed"
                 VerticalAlignment="Center" Margin="12,0,0,0" Click="OnFix" />
       </Grid>
     </Border>
 
-    <!-- Current transfer -->
-    <Border x:Name="TransferCard" DockPanel.Dock="Top" Style="{StaticResource Card}" Margin="0,12,0,0" Visibility="Collapsed">
-      <Grid>
-        <Grid.ColumnDefinitions>
-          <ColumnDefinition Width="Auto" />
-          <ColumnDefinition Width="*" />
-          <ColumnDefinition Width="Auto" />
-        </Grid.ColumnDefinitions>
-        <Grid.RowDefinitions>
-          <RowDefinition Height="Auto" />
-          <RowDefinition Height="Auto" />
-          <RowDefinition Height="Auto" />
-        </Grid.RowDefinitions>
-        <Grid Grid.RowSpan="2" Width="34" Height="34" Margin="0,0,12,0" VerticalAlignment="Top">
-          <Ellipse Fill="{DynamicResource T.Pill}" />
-          <ui:LineIcon x:Name="TransferGlyph" Width="20" Height="20" Stroke="{DynamicResource T.Accent}" Data="{StaticResource I.Up}" />
+    <!-- Current transfer: the whole batch, speed, and the files in progress -->
+    <Border x:Name="TransferCard" DockPanel.Dock="Top" Style="{StaticResource Card}" Padding="18,14,18,16" Margin="0,12,0,0" Visibility="Collapsed">
+      <StackPanel>
+        <Grid>
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="Auto" />
+          </Grid.ColumnDefinitions>
+          <TextBlock x:Name="TransferTitle" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+          <TextBlock x:Name="TransferSpeed" Grid.Column="1" Style="{StaticResource MutedSmall}" VerticalAlignment="Center" Margin="8,0,0,0" />
+          <Border x:Name="LimitPill" Grid.Column="2" Style="{StaticResource Pill}" Margin="8,0,0,0" Visibility="Collapsed">
+            <TextBlock x:Name="LimitText" FontSize="11.5" />
+          </Border>
         </Grid>
-        <TextBlock x:Name="TransferFile" Grid.Column="1" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
-        <TextBlock x:Name="TransferCount" Grid.Column="2" Style="{StaticResource MutedSmall}" VerticalAlignment="Center" />
-        <TextBlock x:Name="TransferFolder" Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" Style="{StaticResource MutedSmall}"
-                   TextTrimming="CharacterEllipsis" />
-        <StackPanel Grid.Row="2" Grid.ColumnSpan="3" Margin="0,10,0,0">
-          <ProgressBar x:Name="TransferProgress" Style="{StaticResource RoundProgress}" Minimum="0" Maximum="100" />
-          <TextBlock x:Name="TransferBytes" Style="{StaticResource MutedSmall}" Margin="0,6,0,0" />
-        </StackPanel>
-      </Grid>
+        <ProgressBar x:Name="TransferProgress" Style="{StaticResource RoundProgress}" Minimum="0" Maximum="100" Margin="0,10,0,0" />
+        <TextBlock x:Name="TransferOverall" Style="{StaticResource MutedSmall}" Margin="0,8,0,0" />
+        <Border x:Name="ActiveDivider" Style="{StaticResource Divider}" Margin="0,10,0,2" />
+        <ItemsControl x:Name="ActiveList" Style="{StaticResource PlainList}">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+              <UniformGrid Columns="2" />
+            </ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate>
+            <DataTemplate>
+              <StackPanel Margin="0,6,16,2">
+                <Grid>
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                  </Grid.ColumnDefinitions>
+                  <TextBlock Text="{Binding FileName}" FontWeight="SemiBold" FontSize="12.5" TextTrimming="CharacterEllipsis" />
+                  <TextBlock Grid.Column="1" Text="{Binding PercentText}" Style="{StaticResource MutedSmall}" Margin="6,0,0,0" />
+                </Grid>
+                <ProgressBar Style="{StaticResource ThinProgress}" Minimum="0" Maximum="100" Value="{Binding PercentValue, Mode=OneWay}" Margin="0,4,0,0"
+                             Foreground="{Binding IsUpload, Converter={StaticResource DirectionBrush}}" />
+              </StackPanel>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </StackPanel>
     </Border>
 
     <!-- Toolbar -->

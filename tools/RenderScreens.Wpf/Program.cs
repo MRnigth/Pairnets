@@ -4,6 +4,7 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using Tether.Client.Themes;
 using Tether.Client.Ui;
+using Tether.Core;
 using Tether.Core.Client;
 using Tether.Core.Settings;
 using Tether.Core.Sync;
@@ -41,7 +42,7 @@ public static class Program
     private static void RenderAll(string outDir, string suffix, bool print)
     {
         var now = DateTimeOffset.Now;
-        var window = new MainWindow(null) { Width = 720, Height = 600 };
+        var window = new MainWindow(null) { Width = 720, Height = 700 };
         Place(window);
         var feed = new ActivityFeed();
         feed.Add(new ActivityItem(now.AddHours(-3), ActivityKind.Downloaded, "Projects/2026/plan.xlsx", "Downloaded"));
@@ -59,10 +60,21 @@ public static class Program
         ]);
         const string folder = @"D:\Sync\Work";
 
+        var server = new ServerInfo("id", 1, 1, "1.0.58", 412L << 30, 1L << 40);
+        window.ShowUpdate("Tether 1.0.58 is available", "You have 1.0.52. The update takes about 10 seconds and Tether restarts by itself.", "Update now");
         window.ShowStatus(StatusSnapshot.Initial with
         {
             Status = RunnerStatus.Syncing, Text = "Syncing", LastSyncAt = now.AddMinutes(-1),
-            CurrentPath = "Videos/presentation-final.mp4", Operation = "upload", BytesDone = 67_108_864, BytesTotal = 104_857_600, FilesDone = 2, FilesTotal = 5,
+            CurrentPath = "Videos/presentation-final.mp4", Operation = "upload", BytesDone = 67_108_864, BytesTotal = 104_857_600,
+            FilesDone = 37, FilesTotal = 120, PassBytesDone = 412L << 20, PassBytesTotal = 1331L << 20, BytesPerSecond = 4.9 * (1 << 20),
+            LimitText = "Limited to 5 MB/s", Server = server,
+            Active =
+            [
+                new ActiveTransfer("Photos/summer/holiday-0412.jpg", "upload", 78, 100),
+                new ActiveTransfer("Photos/summer/holiday-0413.jpg", "upload", 41, 100),
+                new ActiveTransfer("Videos/presentation-final.mp4", "upload", 12, 100),
+                new ActiveTransfer("Notes/meeting-2026-10-02.md", "upload", 95, 100),
+            ],
         }, folder);
         Save(window, outDir, $"windows-main-syncing-{suffix}.png", print);
 
@@ -74,17 +86,32 @@ public static class Program
         window.ShowAttentionTab(true);
         Save(window, outDir, $"windows-main-blocked-{suffix}.png", print);
 
+        window.ShowUpdate(null, string.Empty, string.Empty);
         window.ShowAttentionTab(false);
-        window.ShowStatus(StatusSnapshot.Initial with { Status = RunnerStatus.Idle, Text = "Up to date", LastSyncAt = now }, folder);
+        window.ShowStatus(StatusSnapshot.Initial with { Status = RunnerStatus.Idle, Text = "Up to date", LastSyncAt = now, Server = server }, folder);
         Save(window, outDir, $"windows-main-idle-{suffix}.png", print);
+
+        window.ShowStatus(StatusSnapshot.Initial with
+        {
+            Status = RunnerStatus.Idle, Text = "Up to date", LastSyncAt = now.AddMinutes(-4), Server = server,
+            WaitingFor = new PeerWait("DESKTOP", 340, 212),
+        }, folder);
+        Save(window, outDir, $"windows-main-waiting-{suffix}.png", print);
         window.AllowClose = true;
         window.Close();
 
-        var settings = new SettingsWindow(new ClientSettings { DeviceName = "DESKTOP" }, new NoProtector(), firstRun: true);
+        var settings = new SettingsWindow(new ClientSettings { DeviceName = "DESKTOP", UploadLimitMBps = 5 }, new NoProtector(), firstRun: true) { Height = 1320 };
         Place(settings);
         settings.ShowTestResult(true, "Connected. Server and token are OK.");
         Save(settings, outDir, $"windows-settings-first-run-{suffix}.png", print);
         settings.Close();
+
+        var serverUpdate = new ServerUpdateWindow(null, "1.0.52", "1.0.58");
+        Place(serverUpdate);
+        Save(serverUpdate, outDir, $"windows-server-update-{suffix}.png", print);
+        serverUpdate.ShowResult(new ServerUpdateResult(false, "This server can't update itself yet.", "1.0.52", CanUpdateItself: false));
+        Save(serverUpdate, outDir, $"windows-server-update-manual-{suffix}.png", print);
+        serverUpdate.Close();
     }
 
     private static void Place(Window window)

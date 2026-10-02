@@ -225,16 +225,31 @@ After setup the Tether window opens:
 
 ![Tether window while syncing](images/main-window-syncing-light.png)
 
+* **Update banner** (only when there is one): a new Tether version is available. See
+  [Updates](#updates) below.
 * **Status card** (top): a coloured badge with a symbol (✓ up to date, ↻ syncing, ⏸ paused,
   ! needs a decision, ✕ error, crossed-out cloud for offline), one line for the overall state,
-  when it last synced, and which folder it syncs.
-* **Transfer card** (only while transferring): the file being uploaded or downloaded and its
-  folder, a progress bar, "64.0 MB of 100 MB · 64%" and "File 3 of 5".
+  when it last synced, which folder it syncs, and how much space is left on the server (orange when
+  less than 5 GB or 5 % is left).
+* **Transfer card** (only while transferring): how many files are being sent, the speed and the
+  time left ("4.9 MB/s · about 4 min left"), one bar for the whole batch ("37 of 120 files · 412 MB
+  of 1.30 GB"), and the files in progress right now, each with its own small bar. Tether sends up
+  to four files at the same time. If new files appear while it syncs, the total grows straight away.
+  "Limited to 5 MB/s" shows when you set a speed limit.
 * **Activity**: everything that happened recently, newest first: green ↑ uploaded, blue ↓
   downloaded, red ✕ deleted, orange ⚠ conflict, red ! problem. Hover a row for the exact time.
 * **Needs attention** (the number shows how many): conflict copies and files that cannot be
   synced, each with a **Show in folder** button.
 * **Buttons**: Sync now, Pause/Resume, Open folder, Settings, Log.
+
+**Waiting for the other computer.** When your other computer uploads a big batch (more than 100
+files), this one waits and then downloads everything in one go instead of a few files at a time, so
+the two don't fight over the connection. The window shows how far the other computer is:
+
+![Tether waiting for the other computer (dark mode)](images/main-window-waiting-dark.png)
+
+Your own changes still upload while it waits. It stops waiting by itself when the other computer is
+done, goes quiet for 2 minutes, or after 30 minutes. **Download now anyway** stops waiting at once.
 
 When Tether needs your decision (for example before deleting many files), the badge turns orange and
 a button in the status card says what to do:
@@ -479,13 +494,52 @@ Neither ever contains your token.
 
 ## 10. Updating and uninstalling
 
-**Update the server**: run the same one-line command again
-(`curl -fsSL https://raw.githubusercontent.com/MRnigth/Tether/main/deploy/get.sh | sudo bash`),
-or unpack the new tarball and run `sudo ./install.sh`. Your token and data are kept.
+### Updates
 
-**Update a computer**: on Mac and Linux, run the same one-line command again. On Windows, exit
-Tether (right-click → **Exit**), replace `Tether.exe` (or run the new `TetherSetup.exe`) and start it
-again. Settings and sync state are kept everywhere.
+Tether checks for a new version 15 seconds after it starts and then once a day (turn this off in
+**Settings → Updates and speed**; **Check now** checks right away). This needs the GitHub
+repository to be public.
+
+**Update a computer.** When a new version is out, a banner appears at the top of the window and you
+get a notification.
+
+* **Windows** (installed with `TetherSetup.exe`): click **Update now**. Tether downloads the new
+  installer, checks it against `SHA256SUMS.txt`, installs it and starts again by itself, in about
+  10 seconds. If the check fails, nothing is installed and you keep your current version. A copy
+  run from the zip opens the download page instead.
+* **Mac and Linux**: click **Download**; the download page opens. Replace the app (Mac) or run the
+  one-line `--desktop` command again (Linux). The app is not signed, so it does not replace itself.
+
+**Update the server.** When the server runs an older version than your app, Tether asks:
+
+![Your server should be updated](images/server-update-light.png)
+
+Click **Update server**. The server downloads the newest release, checks it, installs it and
+restarts (about 30 seconds; syncing pauses briefly and your files stay as they are). **Don't ask
+for this version** hides the question until the next version. How this works safely is explained
+in [DEPLOY.md](DEPLOY.md#4b-updating-the-server).
+
+A server installed before this feature cannot update itself yet. Tether then shows the command to
+run once on the server:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/MRnigth/Tether/main/deploy/get.sh | sudo bash
+```
+
+Updates keep your token, address, settings and files.
+
+### Speed settings
+
+In **Settings → Updates and speed**:
+
+* **Files at the same time** (1, 2, 4 or 8): 4 is fastest for most connections. Use 1 on a very slow
+  or metered connection.
+* **Speed limits**: limit uploads to the server and downloads from it, in MB/s. Files from your
+  other computers always come through the server, so the download limit covers them too. Each
+  computer has its own limits; all files in progress together stay under the limit.
+* **Wait while my other computer uploads many files**: the batch wait described in section 5.
+
+### Uninstalling
 
 **Uninstall from a Mac**: menu-bar icon → **Quit Tether**, untick "Start at login" first if you
 had it on, then delete **Tether** from Applications. The token is in the *Keychain Access* app

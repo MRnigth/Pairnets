@@ -154,3 +154,21 @@ what cannot lose or silently overwrite data.
   Kestrel's minimum data rate is averaged over the whole body, so after a fast start a connection
   that dies without a reset (a laptop dropping off Wi-Fi) would otherwise hold the request and its
   temp file for hours.
+* **Four transfers at a time.** Each small file costs a network round trip, so the engine overlaps
+  uploads (and downloads) four at a time (1/2/4/8 in Settings). Deletes and conflicts stay one by
+  one. A network or token failure still ends the pass exactly as before.
+* **Speed limits** are one token bucket per direction shared by all transfers (100 KB/s minimum, so
+  the 60 s stall watchdog never fires while waiting for the limit).
+* **Waiting for big batches.** A pass with 100+ uploads announces itself over the push channel; the
+  other computer holds remote syncs and defers downloads (its own uploads continue) until the batch
+  ends, the sender disconnects or is quiet for 2 minutes, or 30 minutes pass. This avoids hundreds
+  of tiny passes that each rescan the folder, and sharing Wi-Fi with the upload.
+* **Pause cancels the running pass.** Half-sent files are discarded on both sides; nothing partial
+  is ever stored, and Resume finishes the work.
+* **Update check** reads `version.json` from the latest release without signing in, so it needs a
+  public repository. Builds are numbered `1.0.<release run>`. The Windows app installs updates
+  itself (checksum-verified, silent installer); the unsigned Mac and Linux apps open the download
+  page.
+* **Server self-update** runs as root only through a systemd path unit that the unprivileged server
+  triggers with an empty file, and only installs the newest official release after checking it.
+  The server process never gets root. See SECURITY.md.

@@ -14,4 +14,8 @@
   <SolidColorBrush x:Key="T.Pill" Color="#262A31" />
   <SolidColorBrush x:Key="T.Input" Color="#16181C" />
   <SolidColorBrush x:Key="T.InputBorder" Color="#3A3F48" />
+  <SolidColorBrush x:Key="T.Banner" Color="#18243A" />
+  <SolidColorBrush x:Key="T.BannerBorder" Color="#2C4470" />
+  <SolidColorBrush x:Key="T.WarnPill" Color="#3A2A17" />
+  <SolidColorBrush x:Key="T.WarnText" Color="#F4B26A" />
 </ResourceDictionary>

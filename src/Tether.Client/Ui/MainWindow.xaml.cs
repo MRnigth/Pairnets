@@ -22,6 +22,9 @@ public interface IMainActions
     void OpenFolder();
     void ShowSettings();
     void ViewLog();
+    void UpdateNow();
+    void DismissUpdate();
+    void DownloadNow();
 }
 
 /// <summary>
@@ -59,7 +62,7 @@ public partial class MainWindow : Window
 
     public void ShowStatus(StatusSnapshot s, string? folder)
     {
-        var (brush, icon) = Visuals.ForStatus(s.Status);
+        var (brush, icon) = s.IsWaiting ? ("S.Grey", "I.Wait") : Visuals.ForStatus(s.Status);
         StatusBadge.SetResourceReference(Shape.FillProperty, brush);
         StatusGlyph.Data = Visuals.Resource<Geometry>(icon);
         Headline.Text = s.Headline;
@@ -76,15 +79,46 @@ public partial class MainWindow : Window
         TransferCard.Visibility = Show(s.IsTransferring);
         if (s.IsTransferring)
         {
-            TransferGlyph.Data = Visuals.Resource<Geometry>(s.Operation == "download" ? "I.Down" : "I.Up");
-            TransferFile.Text = $"{s.OperationText} {s.CurrentFileName}";
-            TransferFolder.Text = s.CurrentFolder.Length > 0 ? s.CurrentFolder : "Top folder";
-            TransferCount.Text = s.FileCountText;
-            TransferProgress.IsIndeterminate = s.Percent is null;
-            TransferProgress.Value = s.Percent ?? 0;
-            TransferBytes.Text = s.ProgressText;
-            TransferBytes.Visibility = Show(s.ProgressText.Length > 0);
+            TransferTitle.Text = s.BatchTitle;
+            TransferSpeed.Text = s.SpeedText;
+            LimitPill.Visibility = Show(s.LimitText is not null);
+            LimitText.Text = s.LimitText ?? string.Empty;
+            TransferProgress.Value = s.OverallPercent ?? 0;
+            TransferOverall.Text = s.OverallText;
+            var several = s.Active.Count > 1 || s.FilesTotal > 1;
+            ActiveDivider.Visibility = Show(several && s.Active.Count > 0);
+            ActiveList.Visibility = Show(several);
+            ActiveList.ItemsSource = s.Active;
         }
+
+        // Free space on the server; a warning colour when it runs low.
+        ServerPill.Visibility = Show(s.ServerFreeText is not null);
+        ServerText.Text = s.ServerFreeText ?? string.Empty;
+        ServerPill.SetResourceReference(Border.BackgroundProperty, s.ServerSpaceLow ? "T.WarnPill" : "T.Pill");
+        ServerText.SetResourceReference(TextBlock.ForegroundProperty, s.ServerSpaceLow ? "T.WarnText" : "T.Text");
+
+        // Waiting for the other computer's big batch.
+        WaitPanel.Visibility = Show(s.IsWaiting);
+        if (s.IsWaiting)
+        {
+            WaitProgress.Value = s.WaitingPercent ?? 0;
+            WaitText.Text = s.WaitingProgressText;
+        }
+    }
+
+    /// <summary>Shows or hides the update banner. <paramref name="progress"/> 0–100 while downloading.</summary>
+    public void ShowUpdate(string? title, string detail, string button, double? progress = null, bool busy = false)
+    {
+        UpdateBanner.Visibility = Show(title is not null);
+        if (title is null)
+            return;
+        UpdateTitle.Text = title;
+        UpdateDetail.Text = detail;
+        UpdateButton.Content = button;
+        UpdateButton.IsEnabled = !busy;
+        UpdateLater.Visibility = Show(!busy);
+        UpdateProgress.Visibility = Show(progress is not null);
+        UpdateProgress.Value = progress ?? 0;
     }
 
     public void ShowActivity(IReadOnlyList<ActivityItem> items)
@@ -133,6 +167,9 @@ public partial class MainWindow : Window
     private void OnOpenFolder(object sender, RoutedEventArgs e) => _actions?.OpenFolder();
     private void OnSettings(object sender, RoutedEventArgs e) => _actions?.ShowSettings();
     private void OnViewLog(object sender, RoutedEventArgs e) => _actions?.ViewLog();
+    private void OnUpdateNow(object sender, RoutedEventArgs e) => _actions?.UpdateNow();
+    private void OnUpdateLater(object sender, RoutedEventArgs e) => _actions?.DismissUpdate();
+    private void OnDownloadNow(object sender, RoutedEventArgs e) => _actions?.DownloadNow();
 
     private void OnAttentionAction(object sender, RoutedEventArgs e)
     {

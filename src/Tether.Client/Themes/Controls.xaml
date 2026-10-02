@@ -64,6 +64,26 @@
     <Setter Property="Padding" Value="5,0" />
   </Style>
 
+  <Style x:Key="WarnPill" TargetType="Border" BasedOn="{StaticResource Pill}">
+    <Setter Property="Background" Value="{DynamicResource T.WarnPill}" />
+  </Style>
+  <Style x:Key="Banner" TargetType="Border">
+    <Setter Property="Background" Value="{DynamicResource T.Banner}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource T.BannerBorder}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="12" />
+    <Setter Property="Padding" Value="14,10,10,10" />
+  </Style>
+  <Style x:Key="Divider" TargetType="Border">
+    <Setter Property="Height" Value="1" />
+    <Setter Property="Background" Value="{DynamicResource T.Border}" />
+  </Style>
+  <Style x:Key="CodeBox" TargetType="Border">
+    <Setter Property="Background" Value="{DynamicResource T.Pill}" />
+    <Setter Property="CornerRadius" Value="8" />
+    <Setter Property="Padding" Value="10,8" />
+  </Style>
+
   <!-- Buttons: one template, three colour styles -->
   <Style x:Key="ButtonBase" TargetType="Button">
     <Setter Property="Padding" Value="13,7" />
@@ -114,6 +134,12 @@
     <Setter Property="FontWeight" Value="SemiBold" />
   </Style>
 
+  <Style x:Key="FlatButton" TargetType="Button" BasedOn="{StaticResource ButtonBase}">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Tag" Value="{DynamicResource T.Hover}" />
+    <Setter Property="Foreground" Value="{DynamicResource T.Text}" />
+  </Style>
+
   <!-- Segmented control -->
   <Style x:Key="Segments" TargetType="Border">
     <Setter Property="Background" Value="{DynamicResource T.Subtle}" />
@@ -156,6 +182,10 @@
         </ControlTemplate>
       </Setter.Value>
     </Setter>
+  </Style>
+
+  <Style x:Key="ThinProgress" TargetType="ProgressBar" BasedOn="{StaticResource RoundProgress}">
+    <Setter Property="Height" Value="4" />
   </Style>
 
   <!-- Inputs -->

@@ -1,10 +1,12 @@
 using System.Diagnostics;
+using System.Net.Http;
 using System.Windows;
 using System.Windows.Threading;
 using Microsoft.Extensions.Logging;
 using Microsoft.Win32;
 using Tether.Client.Platform;
 using Tether.Client.Ui;
+using Tether.Core;
 using Tether.Core.Client;
 using Tether.Core.Logging;
 using Tether.Core.Paths;
@@ -34,6 +36,12 @@ public sealed class TrayController : IMainActions, IDisposable
     private Action? _balloonClick;
     private volatile bool _dirty = true;
     private RunnerStatus? _shownStatus;
+    private readonly UpdateService _updates = new(new UpdateChecker(new HttpClient()), TetherInfo.ProductVersion, UpdateChecker.AssetForThisPlatform());
+    private bool _updateDismissed;
+    private double? _updateProgress;
+    private string? _updateError;
+    private string? _serverPromptShownFor;
+    private bool _lowSpaceNoticed;
 
     private readonly Forms.ToolStripMenuItem _openApp = new("Open Tether") { Font = new System.Drawing.Font(Forms.Control.DefaultFont, System.Drawing.FontStyle.Bold) };
     private readonly Forms.ToolStripMenuItem _statusItem = new("Starting…") { Enabled = false };
@@ -90,6 +98,14 @@ public sealed class TrayController : IMainActions, IDisposable
 
     public void Start()
     {
+        _updates.UpdateAvailable += u => _app.RunOnUi(() =>
+        {
+            _updateDismissed = false;
+            _updateError = null;
+            _dirty = true;
+            Toast("update:" + u.Version, "Tether update available", $"Version {u.Version} is ready. Open Tether to update.", Forms.ToolTipIcon.Info, ShowMainWindow);
+        });
+        _updates.SetEnabled(_settings.CheckForUpdates);
         if (!_settings.IsComplete || !_settings.FirstRunCompleted)
         {
             ShowSettings(firstRun: true);
@@ -126,6 +142,7 @@ public sealed class TrayController : IMainActions, IDisposable
         session.PassCompleted += r => _app.RunOnUi(() => OnPassCompleted(r));
         session.CatchUpCompleted += n => _app.RunOnUi(() => Toast("catchup", "Tether is up to date",
             $"Synced {n} change(s) made while this computer was away.", Forms.ToolTipIcon.Info, ShowMainWindow));
+        session.ServerInfoChanged += info => _app.RunOnUi(() => OnServerInfo(session, info));
         _session = session;
         _dirty = true;
         _log.LogInformation("Syncing {Folder} with {Server} as {Device}", _settings.Folder, _settings.ServerUrl, _settings.DeviceName);
@@ -167,6 +184,7 @@ public sealed class TrayController : IMainActions, IDisposable
 
         if (_window is { IsVisible: true })
         {
+            DrawUpdateBanner();
             _window.ShowStatus(status, _settings.Folder);
             _window.ShowActivity(_session?.Activity.Items ?? []);
             _window.ShowAttention(BuildAttention(status));
@@ -312,14 +330,117 @@ public sealed class TrayController : IMainActions, IDisposable
 
     public void ShowSettings(bool firstRun)
     {
-        var window = new SettingsWindow(_settings, _protector, firstRun);
+        var window = new SettingsWindow(_settings, _protector, firstRun, _updates);
         if (window.ShowDialog() != true || window.Result is null)
             return;
         _settings = window.Result;
         SettingsStore.Save(SettingsStore.DefaultPath, _settings);
         SetAutoStart(_settings.StartWithWindows);
+        _updates.SetEnabled(_settings.CheckForUpdates);
         StartSession(window.PlainToken);
         ShowMainWindow();
+    }
+
+    // ------------------------------------------------------------------ updates and the server
+
+    private void DrawUpdateBanner()
+    {
+        if (_window is null)
+            return;
+        if (_updates.Available is not { } update || _updateDismissed)
+        {
+            _window.ShowUpdate(null, string.Empty, string.Empty);
+            return;
+        }
+        if (_updateError is not null)
+            _window.ShowUpdate($"Tether {update.Version} could not be installed", _updateError, "Open download page");
+        else if (_updateProgress is { } p)
+            _window.ShowUpdate($"Downloading Tether {update.Version}…", "Syncing continues while it downloads.", "Update now", p, busy: true);
+        else
+            _window.ShowUpdate($"Tether {update.Version} is available",
+                $"You have {TetherInfo.ProductVersion}. The update takes about 10 seconds and Tether restarts by itself.",
+                IsInstalledCopy ? "Update now" : "Download");
+    }
+
+    /// <summary>True when this Tether.exe was put there by TetherSetup.exe (so the installer can replace it).</summary>
+    private static bool IsInstalledCopy
+    {
+        get
+        {
+            var installDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "Tether");
+            return string.Equals(Path.TrimEndingDirectorySeparator(AppContext.BaseDirectory), installDir, StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
+    /// <summary>
+    /// Downloads TetherSetup.exe, checks it against SHA256SUMS.txt and runs it silently; the
+    /// installer closes this Tether, replaces it and starts the new one. A copy started from the
+    /// zip (not installed) opens the download page instead.
+    /// </summary>
+    public async void UpdateNow()
+    {
+        if (_updates.Available is not { } update || _updateProgress is not null)
+            return;
+        if (_updateError is not null || !IsInstalledCopy)
+        {
+            Shell(update.ReleasePage.ToString());
+            return;
+        }
+        var setup = Path.Combine(Path.GetTempPath(), $"TetherSetup-{update.Version}.exe");
+        _updateProgress = 0;
+        _dirty = true;
+        try
+        {
+            var progress = new Progress<(long Done, long? Total)>(p =>
+            {
+                _updateProgress = p.Total is > 0 ? p.Done * 100.0 / p.Total.Value : 0;
+                _dirty = true;
+            });
+            await new UpdateChecker(new HttpClient()).DownloadVerifiedAsync(update, setup, progress, CancellationToken.None);
+            _log.LogInformation("Installing Tether {Version}", update.Version);
+            Process.Start(new ProcessStartInfo(setup, "/SILENT /SUPPRESSMSGBOXES /NORESTART /CLOSEAPPLICATIONS") { UseShellExecute = true });
+            Exit();
+        }
+        catch (Exception ex) when (ex is UpdateVerificationException or HttpRequestException or IOException or System.ComponentModel.Win32Exception)
+        {
+            _log.LogWarning("Update failed: {Error}", ex.Message);
+            _updateError = ex is UpdateVerificationException
+                ? "The download didn't match its checksum, so Tether didn't install it and kept your current version."
+                : "The download failed: " + ex.Message;
+            _updateProgress = null;
+            _dirty = true;
+        }
+    }
+
+    public void DismissUpdate()
+    {
+        _updateDismissed = true;
+        _dirty = true;
+    }
+
+    public void DownloadNow() => _session?.DownloadNow();
+
+    private void OnServerInfo(ClientSession session, Core.ServerInfo info)
+    {
+        if (!ReferenceEquals(session, _session))
+            return;
+        if (session.Status.ServerSpaceLow && !_lowSpaceNoticed)
+        {
+            _lowSpaceNoticed = true;
+            Toast("disk", "The server is running out of space", $"{session.Status.ServerFreeText}. Free up space on the server or delete old history.", Forms.ToolTipIcon.Warning, ShowMainWindow);
+        }
+        if (!session.ServerNeedsUpdate(info) || _serverPromptShownFor == info.ServerVersion)
+            return;
+        _serverPromptShownFor = info.ServerVersion;
+        var dialog = new ServerUpdateWindow(session, info.ServerVersion!);
+        dialog.Closed += (_, _) =>
+        {
+            if (!dialog.Skipped)
+                return;
+            _settings.SkippedServerVersion = dialog.ServerVersion;
+            SettingsStore.Save(SettingsStore.DefaultPath, _settings);
+        };
+        dialog.Show();
     }
 
     public void OpenFolder()
@@ -409,6 +530,7 @@ public sealed class TrayController : IMainActions, IDisposable
 
     public void Dispose()
     {
+        _updates.Dispose();
         _refresh.Stop();
         SystemEvents.PowerModeChanged -= OnPowerModeChanged;
         StopSession();

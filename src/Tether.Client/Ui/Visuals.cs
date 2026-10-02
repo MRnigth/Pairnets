@@ -52,3 +52,12 @@ public sealed class ActivityIconConverter : IValueConverter
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) => throw new NotSupportedException();
 }
+
+/// <summary>Upload (true) → green, download → blue: the colour of a file's progress bar.</summary>
+public sealed class DirectionBrushConverter : IValueConverter
+{
+    public object? Convert(object value, Type targetType, object parameter, CultureInfo culture) =>
+        Visuals.Resource<Brush>(value is true ? "S.Green" : "S.Blue");
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) => throw new NotSupportedException();
+}

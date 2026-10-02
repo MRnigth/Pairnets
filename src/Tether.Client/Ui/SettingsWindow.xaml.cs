@@ -1,10 +1,13 @@
+using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using Microsoft.Win32;
 using Tether.Client.Themes;
+using Tether.Core;
 using Tether.Core.Api;
+using Tether.Core.Client;
 using Tether.Core.Paths;
 using Tether.Core.Settings;
 using Tether.Core.Sync;
@@ -18,8 +21,11 @@ public partial class SettingsWindow : Window
     private readonly ISecretProtector _protector;
     private readonly bool _firstRun;
 
-    public SettingsWindow(ClientSettings current, ISecretProtector protector, bool firstRun)
+    private readonly UpdateService? _updates;
+
+    public SettingsWindow(ClientSettings current, ISecretProtector protector, bool firstRun, UpdateService? updates = null)
     {
+        _updates = updates;
         ThemeManager.Attach(this);
         InitializeComponent();
         _original = current;
@@ -35,6 +41,56 @@ public partial class SettingsWindow : Window
         DeviceBox.Text = current.DeviceName ?? Environment.MachineName;
         IgnoreBox.Text = string.Join(Environment.NewLine, current.ExtraIgnore);
         AutoStartBox.IsChecked = current.StartWithWindows;
+        UpdateBox.IsChecked = current.CheckForUpdates;
+        WaitBox.IsChecked = current.WaitForPeerBatches;
+        (current.EffectiveParallelTransfers switch { 1 => Par1, 2 => Par2, 8 => Par8, _ => Par4 }).IsChecked = true;
+        UpLimitBox.IsChecked = current.UploadLimitMBps is > 0;
+        UpLimitValue.Text = Number(current.UploadLimitMBps is > 0 ? current.UploadLimitMBps.Value : 5);
+        DownLimitBox.IsChecked = current.DownloadLimitMBps is > 0;
+        DownLimitValue.Text = Number(current.DownloadLimitMBps is > 0 ? current.DownloadLimitMBps.Value : 10);
+        ShowVersion(null);
+    }
+
+    private static string Number(double v) => v.ToString("0.##", CultureInfo.CurrentCulture);
+
+    /// <summary>"You have 1.0.52 · checked 19:41" plus the outcome of "Check now".</summary>
+    public void ShowVersion(string? outcome)
+    {
+        var text = "You have " + TetherInfo.ProductVersion;
+        if (_updates?.LastChecked is { } at)
+            text += " · checked " + at.ToLocalTime().ToString("HH:mm", CultureInfo.InvariantCulture);
+        if (outcome is not null)
+            text += " · " + outcome;
+        VersionText.Text = text;
+        CheckNowButton.Visibility = _updates is null ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    private async void OnCheckNow(object sender, RoutedEventArgs e)
+    {
+        if (_updates is null)
+            return;
+        CheckNowButton.IsEnabled = false;
+        ShowVersion("checking…");
+        var found = await _updates.CheckNowAsync(CancellationToken.None);
+        ShowVersion(found is null ? "up to date" : $"version {found.Version} is available");
+        CheckNowButton.IsEnabled = true;
+    }
+
+    private int ParallelChoice() => Par1.IsChecked == true ? 1 : Par2.IsChecked == true ? 2 : Par8.IsChecked == true ? 8 : 4;
+
+    /// <summary>The limit in MB/s, null when off; false when the number cannot be read.</summary>
+    private static bool TryLimit(CheckBox box, TextBox value, out double? limit)
+    {
+        limit = null;
+        if (box.IsChecked != true)
+            return true;
+        if (!double.TryParse(value.Text.Trim(), NumberStyles.Float, CultureInfo.CurrentCulture, out var v)
+            && !double.TryParse(value.Text.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out v))
+            return false;
+        if (v < 0.1)
+            return false;
+        limit = v;
+        return true;
     }
 
     /// <summary>The settings to save (token protected) when the dialog returns true.</summary>
@@ -151,6 +207,11 @@ public partial class SettingsWindow : Window
             Fail("Enter the token printed by install.sh on the server.");
             return;
         }
+        if (!TryLimit(UpLimitBox, UpLimitValue, out var upLimit) || !TryLimit(DownLimitBox, DownLimitValue, out var downLimit))
+        {
+            Fail("Enter the speed limits in MB/s, for example 5 or 0.5 (at least 0.1).");
+            return;
+        }
         var folder = FolderBox.Text.Trim();
         if (folder.Length == 0 || !Path.IsPathFullyQualified(folder))
         {
@@ -194,6 +255,12 @@ public partial class SettingsWindow : Window
                 StartWithWindows = AutoStartBox.IsChecked == true,
                 FirstRunCompleted = true,
                 Paused = _original.Paused,
+                CheckForUpdates = UpdateBox.IsChecked == true,
+                WaitForPeerBatches = WaitBox.IsChecked == true,
+                ParallelTransfers = ParallelChoice(),
+                UploadLimitMBps = upLimit,
+                DownloadLimitMBps = downLimit,
+                SkippedServerVersion = _original.SkippedServerVersion,
             };
             PlainToken = token;
             DialogResult = true;
