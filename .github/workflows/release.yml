@@ -1,8 +1,11 @@
 name: Release
 
+# Tags (v*) publish a GitHub release. Pushes to main only build the packages as a smoke test,
+# so the release pipeline is known to work before a tag is pushed.
 on:
   push:
     tags: ["v*"]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
