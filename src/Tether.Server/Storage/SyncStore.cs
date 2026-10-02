@@ -29,6 +29,9 @@ public sealed class SyncStore : IDisposable
 
     public ServerPaths Paths { get; }
 
+    /// <summary>An upload that delivers no data for this long is abandoned (see SyncOptions).</summary>
+    public TimeSpan UploadStallTimeout { get; set; } = TimeSpan.FromSeconds(60);
+
     public ManifestStore Manifest { get; }
 
     public string ServerId => Manifest.ServerId;
@@ -154,7 +157,7 @@ public sealed class SyncStore : IDisposable
             await using (var fs = new FileStream(tmp, FileMode.CreateNew, FileAccess.Write, FileShare.None, 1024 * 1024, FileOptions.Asynchronous))
             {
                 await using var hashing = new HashingStream(fs, leaveOpen: true);
-                await body.CopyToAsync(hashing, 1024 * 1024, ct).ConfigureAwait(false);
+                await CopyWithStallTimeoutAsync(body, hashing, path, ct).ConfigureAwait(false);
                 await hashing.FlushAsync(CancellationToken.None).ConfigureAwait(false);
                 hash = hashing.GetHash();
                 size = hashing.BytesTransferred;
@@ -167,6 +170,33 @@ public sealed class SyncStore : IDisposable
         finally
         {
             TryDelete(tmp);
+        }
+    }
+
+    /// <summary>
+    /// Copies the request body, giving up when no data arrives for <see cref="UploadStallTimeout"/>.
+    /// Kestrel's own minimum data rate is averaged over the whole body, so after a fast start a dead
+    /// connection that never sends a reset would otherwise keep the request (and its temp file) for hours.
+    /// </summary>
+    private async Task CopyWithStallTimeoutAsync(Stream body, Stream destination, string path, CancellationToken ct)
+    {
+        using var stall = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        var buffer = new byte[1024 * 1024];
+        try
+        {
+            while (true)
+            {
+                stall.CancelAfter(UploadStallTimeout);
+                var n = await body.ReadAsync(buffer, stall.Token).ConfigureAwait(false);
+                if (n == 0)
+                    return;
+                await destination.WriteAsync(buffer.AsMemory(0, n), ct).ConfigureAwait(false);
+            }
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            _log.LogInformation("Upload of {Path} stalled for {Timeout}; discarded", path, UploadStallTimeout);
+            throw;
         }
     }
 

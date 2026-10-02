@@ -20,6 +20,12 @@ public sealed class SyncOptions
 
     public TimeSpan PurgeInterval { get; set; } = TimeSpan.FromDays(1);
 
+    /// <summary>
+    /// An upload that delivers no data for this long is abandoned and its temp file deleted. Covers
+    /// connections that die without a reset (laptop dropped off Wi-Fi). Matches the client's watchdog.
+    /// </summary>
+    public TimeSpan UploadStallTimeout { get; set; } = TimeSpan.FromSeconds(60);
+
     public static SyncOptions FromConfiguration(IConfiguration configuration)
     {
         var options = new SyncOptions();
@@ -46,6 +52,8 @@ public sealed class SyncOptions
             return "Sync:HistoryRetentionDays must be >= 0.";
         if (HistoryMinVersions < 0)
             return "Sync:HistoryMinVersions must be >= 0.";
+        if (UploadStallTimeout <= TimeSpan.Zero)
+            return "Sync:UploadStallTimeout must be greater than zero.";
         return null;
     }
 }

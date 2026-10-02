@@ -56,6 +56,7 @@ public sealed class TestServer : IAsyncDisposable
             ["Sync:Token"] = Token,
             ["Sync:DataDir"] = DataDir,
             ["Sync:PurgeInitialDelay"] = "01:00:00",
+            ["Sync:UploadStallTimeout"] = "00:00:02",
         };
         foreach (var (k, v) in _extraConfig)
             settings[k] = v;

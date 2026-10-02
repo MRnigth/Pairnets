@@ -50,6 +50,7 @@ public static class TetherServerHost
         var app = builder.Build();
 
         var store = app.Services.GetRequiredService<SyncStore>();
+        store.UploadStallTimeout = options.UploadStallTimeout;
         store.Initialize();
         ReportDrift(store, app.Logger);
         WarnAboutBinding(app);

@@ -66,7 +66,16 @@ public static class Endpoints
                 mtime = parsed;
             }
 
-            var result = await store.PutAsync(path, baseValue, mtime, ctx.Request.Body, ctx.RequestAborted);
+            ChangeResult result;
+            try
+            {
+                result = await store.PutAsync(path, baseValue, mtime, ctx.Request.Body, ctx.RequestAborted);
+            }
+            catch (OperationCanceledException) when (!ctx.RequestAborted.IsCancellationRequested)
+            {
+                // The body stalled (see SyncOptions.UploadStallTimeout); the temp file is already gone.
+                return Error(StatusCodes.Status408RequestTimeout, ErrorCodes.BadRequest, "Upload stalled and was discarded.");
+            }
             return await ToResultAsync(result, ctx, path, hub);
         });
 

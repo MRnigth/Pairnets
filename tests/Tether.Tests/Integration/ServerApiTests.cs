@@ -254,4 +254,50 @@ public class ServerApiTests : IAsyncLifetime
         Assert.Equal(ConnectionTestStatus.InvalidUrl, (await TetherApiClient.TestConnectionAsync("ftp://x", "t", "t")).Status);
         Assert.Equal(ConnectionTestStatus.Unreachable, (await TetherApiClient.TestConnectionAsync("http://127.0.0.1:1/", "token-token-token", "t")).Status);
     }
+
+    /// <summary>Sends part of a body, then goes silent without closing: a connection that died without a reset.</summary>
+    private sealed class StallingContent(int bytesBeforeStall, CancellationToken hold) : HttpContent
+    {
+        protected override async Task SerializeToStreamAsync(Stream stream, System.Net.TransportContext? context)
+        {
+            await stream.WriteAsync(new byte[bytesBeforeStall], hold);
+            await stream.FlushAsync(hold);
+            await Task.Delay(Timeout.Infinite, hold);
+        }
+
+        protected override bool TryComputeLength(out long length)
+        {
+            length = 0;
+            return false;
+        }
+    }
+
+    [Fact]
+    public async Task StalledUploadIsDiscardedAfterTheStallTimeout()
+    {
+        using var hold = new CancellationTokenSource();
+        using var http = _server.RawHttp(_server.Token);
+        var put = http.PutAsync("api/file?path=stalled.bin&base=none", new StallingContent(512 * 1024, hold.Token), hold.Token);
+
+        // The partial upload appears in tmp/ and is deleted once the 2 s test stall timeout fires.
+        var deadline = DateTime.UtcNow.AddSeconds(5);
+        while (!Directory.EnumerateFiles(_server.Paths.Tmp).Any() && DateTime.UtcNow < deadline)
+            await Task.Delay(20);
+        Assert.NotEmpty(Directory.EnumerateFiles(_server.Paths.Tmp));
+        deadline = DateTime.UtcNow.AddSeconds(15);
+        while (Directory.EnumerateFiles(_server.Paths.Tmp).Any() && DateTime.UtcNow < deadline)
+            await Task.Delay(50);
+        Assert.Empty(Directory.EnumerateFiles(_server.Paths.Tmp));
+        Assert.Null(_server.Store.Manifest.Get("stalled.bin"));
+        Assert.False(File.Exists(Path.Combine(_server.Paths.Files, "stalled.bin")));
+
+        await hold.CancelAsync();
+        try
+        {
+            await put;
+        }
+        catch (Exception ex) when (ex is OperationCanceledException or HttpRequestException)
+        {
+        }
+    }
 }

@@ -149,3 +149,8 @@ what cannot lose or silently overwrite data.
   README and HOWTO (`releases/download/latest/<file>`) therefore always give the newest build
   without anyone tagging a version. Versioned `v*` releases are created separately and are never
   touched by this job.
+* **Upload stall timeout.** The server abandons an upload that sends no data for 60 s
+  (`Sync:UploadStallTimeout`) and deletes its temp file, matching the client's 60 s watchdog.
+  Kestrel's minimum data rate is averaged over the whole body, so after a fast start a connection
+  that dies without a reset (a laptop dropping off Wi-Fi) would otherwise hold the request and its
+  temp file for hours.
