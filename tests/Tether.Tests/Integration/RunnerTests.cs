@@ -182,6 +182,8 @@ public class RunnerTests : IAsyncLifetime
         await WaitUntil(() => _server.Store.ReadManifest(null).Entries.Count(e => e.Path.StartsWith("batch/", StringComparison.Ordinal)) == 30,
             TimeSpan.FromSeconds(20), "desktop to upload the batch");
         await WaitUntil(() => Enumerable.Range(0, 30).All(i => _laptop.Exists($"batch/f{i:00}.txt")), TimeSpan.FromSeconds(15), "laptop to download it");
+        // The files land on disk before the pass reports, so wait for the report too.
+        await WaitUntil(() => { lock (downloadsPerPass) return downloadsPerPass.Sum() >= 30; }, TimeSpan.FromSeconds(10), "laptop's pass report");
 
         Assert.NotNull(sawWait);
         Assert.Equal("desktop", sawWait!.Device);
