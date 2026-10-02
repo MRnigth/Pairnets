@@ -23,7 +23,10 @@ to act when something looks wrong (wrong folder, unplugged drive, many deletions
 
 **New here? Start with the step-by-step guide: [How to install Tether, and how it works](docs/HOWTO.md).**
 
-![The Tether window](docs/images/main-window-syncing.png)
+<p>
+  <img src="docs/images/main-window-syncing-light.png" alt="The Tether window, light mode" width="49%">
+  <img src="docs/images/main-window-blocked-dark.png" alt="The Tether window, dark mode" width="49%">
+</p>
 
 | Install on | How |
 |-----------|-----|

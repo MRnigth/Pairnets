@@ -195,9 +195,9 @@ extension, which Ubuntu enables by default.
 ### First-run setup
 
 When Tether starts for the first time, the **first-time setup** window opens. It looks the same on
-Windows, Mac and Linux:
+Windows, Mac and Linux, and follows your system's light or dark mode:
 
-![First-time setup window](images/settings-first-run.png)
+![First-time setup window](images/settings-first-run-light.png)
 
 
 | Field | What to enter |
@@ -220,22 +220,23 @@ working meanwhile.
 
 After setup the Tether window opens:
 
-![Tether window while syncing](images/main-window-syncing.png)
+![Tether window while syncing](images/main-window-syncing-light.png)
 
-* **Top**: a coloured dot and one word for the overall state, when it last synced, and which
-  folder it syncs.
-* **Blue bar** (only while transferring): the file being uploaded or downloaded, how far along it
-  is, and "3 of 5" files.
-* **Activity tab**: everything that happened recently: ↑ uploaded, ↓ downloaded, ✕ deleted,
-  ⚠ conflict, ! problem.
-* **Needs attention tab**: conflict copies and files that cannot be synced, each with a
-  **Show in folder** button.
-* **Buttons**: Sync now, Pause/Resume, Open folder, Settings…, View log.
+* **Status card** (top): a coloured badge with a symbol (✓ up to date, ↻ syncing, ⏸ paused,
+  ! needs a decision, ✕ error, crossed-out cloud for offline), one line for the overall state,
+  when it last synced, and which folder it syncs.
+* **Transfer card** (only while transferring): the file being uploaded or downloaded and its
+  folder, a progress bar, "64.0 MB of 100 MB · 64%" and "File 3 of 5".
+* **Activity**: everything that happened recently, newest first: green ↑ uploaded, blue ↓
+  downloaded, red ✕ deleted, orange ⚠ conflict, red ! problem. Hover a row for the exact time.
+* **Needs attention** (the number shows how many): conflict copies and files that cannot be
+  synced, each with a **Show in folder** button.
+* **Buttons**: Sync now, Pause/Resume, Open folder, Settings, Log.
 
-When Tether needs your decision (for example before deleting many files), the dot turns orange and
-a button at the top right says what to do:
+When Tether needs your decision (for example before deleting many files), the badge turns orange and
+a button in the status card says what to do:
 
-![Tether window waiting for a decision](images/main-window-blocked.png)
+![Tether window waiting for a decision (dark mode)](images/main-window-blocked-dark.png)
 
 Closing the window does **not** stop Tether. It keeps syncing in the background. Open the window
 again from its icon:

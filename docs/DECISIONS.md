@@ -83,7 +83,15 @@ what cannot lose or silently overwrite data.
 * **Toasts** use `NotifyIcon.ShowBalloonTip`, which Windows 10/11 render as toast notifications.
   This avoids a third-party notification package. Each kind of toast appears at most once per 10
   minutes.
-* **Tray icons** are drawn at runtime (colored circles), so there are no binary assets.
+* **Tray icons** are drawn at runtime (colored circles with a white glyph: ✓, ↻, ⏸, !, ✕, –), so
+  they read at 16 px and there are no binary assets.
+* **Look and feel.** Windows (WPF) and Mac/Linux (Avalonia) share one design: cards, a segmented
+  Activity / Needs attention switch, coloured activity icons, and light and dark palettes that follow
+  the system setting (on Windows the `AppsUseLightTheme` value, switched live, with a matching title
+  bar). The line icons are our own 24×24 path geometries, so no icon font or third-party icon
+  licence is involved. CI renders the real Windows windows in light and dark
+  (`tools/RenderScreens.Wpf`, artifact `windows-ui-screenshots`), which also proves every window's
+  XAML loads.
 * **Host:** a WPF `Application` without a main window, plus a WinForms `NotifyIcon` for the tray.
 * **Recycle Bin** through `SHFileOperation` (silent). For paths longer than 260 characters, or when
   that fails, the file is deleted permanently. The server still has it in history.
