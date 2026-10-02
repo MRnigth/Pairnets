@@ -135,7 +135,9 @@ public sealed class ChaosProxy : IAsyncDisposable
     {
         try
         {
-            c.Client.LingerState = new LingerOption(true, 0); // RST, like a dropped link
+            // Client is null once the connection was closed (Heal and the pump can both get here).
+            if (c.Client is { } socket)
+                socket.LingerState = new LingerOption(true, 0); // RST, like a dropped link
             c.Close();
         }
         catch (Exception ex) when (ex is SocketException or ObjectDisposedException)
