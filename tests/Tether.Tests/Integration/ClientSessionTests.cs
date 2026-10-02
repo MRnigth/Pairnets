@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text;
+using Tether.Core;
 using Tether.Core.Client;
 using Tether.Core.Settings;
 using Tether.Core.Sync;
@@ -140,5 +141,33 @@ public class ClientSessionTests : IAsyncLifetime
         await WaitUntil(() => _server.Store.ReadManifest(null).Entries.Count == 32, "all uploads");
         await WaitUntil(() => session.Status.Status == RunnerStatus.Idle, "idle");
         Assert.Equal(32, Volatile.Read(ref maxTotal));
+    }
+
+    [Fact]
+    public async Task SessionShowsFilesInProgressSpeedAndServerSpace()
+    {
+        var hooks = new EngineHooks { BeforeTransfer = (_, _) => Task.Delay(150) };
+        for (var i = 0; i < 12; i++)
+            File.WriteAllBytes(Path.Combine(_folder.Path, $"f{i:00}.bin"), new byte[200_000]);
+        await using var session = Start(hooks);
+        var sawActive = 0;
+        long sawTotal = 0;
+        session.StatusChanged += s =>
+        {
+            if (s.Active.Count > Volatile.Read(ref sawActive))
+                Volatile.Write(ref sawActive, s.Active.Count);
+            if (s.PassBytesTotal > Interlocked.Read(ref sawTotal))
+                Interlocked.Exchange(ref sawTotal, s.PassBytesTotal);
+        };
+
+        await WaitUntil(() => _server.Store.ReadManifest(null).Entries.Count == 12, "uploads");
+        await WaitUntil(() => session.Status.Status == RunnerStatus.Idle, "idle");
+        Assert.True(Volatile.Read(ref sawActive) >= 2, "several files were shown in progress at once");
+        Assert.Equal(12 * 200_000L, Interlocked.Read(ref sawTotal));
+        Assert.Empty(session.Status.Active);
+
+        await WaitUntil(() => session.Status.Server is not null, "server info");
+        Assert.NotNull(session.Status.ServerFreeText);
+        Assert.Equal(TetherInfo.ProductVersion, session.Status.Server!.ServerVersion);
     }
 }

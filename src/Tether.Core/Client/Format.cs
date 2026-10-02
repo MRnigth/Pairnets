@@ -41,4 +41,21 @@ public static class Format
             return "yesterday " + local.ToString("HH:mm", CultureInfo.InvariantCulture);
         return local.ToString("d MMM HH:mm", CultureInfo.InvariantCulture);
     }
+
+    /// <summary>"12.4 MB/s", "820 KB/s".</summary>
+    public static string Speed(double bytesPerSecond) => Bytes((long)Math.Max(0, bytesPerSecond)) + "/s";
+
+    /// <summary>"less than a minute", "about 2 min", "about 1 h 20 min".</summary>
+    public static string Duration(TimeSpan time)
+    {
+        if (time < TimeSpan.FromMinutes(1))
+            return "less than a minute";
+        if (time < TimeSpan.FromHours(1))
+            return $"about {(int)Math.Ceiling(time.TotalMinutes)} min";
+        var minutes = (int)Math.Round(time.TotalMinutes) % 60;
+        return minutes == 0 ? $"about {(int)time.TotalHours} h" : $"about {(int)time.TotalHours} h {minutes} min";
+    }
+
+    /// <summary>Megabytes per second as the user typed it: "5 MB/s", "0.5 MB/s".</summary>
+    public static string Megabytes(double mbps) => mbps.ToString("0.##", CultureInfo.InvariantCulture) + " MB/s";
 }

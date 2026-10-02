@@ -2,6 +2,16 @@ using Tether.Core.Sync;
 
 namespace Tether.Core.Client;
 
+/// <summary>A file being uploaded or downloaded right now (several run at once).</summary>
+public sealed record ActiveTransfer(string Path, string Operation, long BytesDone, long BytesTotal)
+{
+    public string FileName => Paths.PathRules.FileName(Path);
+
+    public int? Percent => BytesTotal > 0 ? (int)Math.Clamp(BytesDone * 100 / BytesTotal, 0, 100) : null;
+
+    public string PercentText => Percent is { } p ? p.ToString(System.Globalization.CultureInfo.InvariantCulture) + "%" : string.Empty;
+}
+
 /// <summary>Everything a UI needs to draw the current state, as one immutable value.</summary>
 public sealed record StatusSnapshot(
     RunnerStatus Status,
@@ -20,6 +30,64 @@ public sealed record StatusSnapshot(
 {
     public static StatusSnapshot Initial { get; } =
         new(RunnerStatus.Offline, "Starting…", null, null, null, 0, 0, 0, 0, BlockReason.None, 0, 0, false);
+
+    // ---- transfers: several files at once, speed and time left
+
+    /// <summary>The uploads and downloads running right now.</summary>
+    public IReadOnlyList<ActiveTransfer> Active { get; init; } = [];
+
+    /// <summary>Bytes moved and planned in this sync (several passes in a row count as one).</summary>
+    public long PassBytesDone { get; init; }
+
+    public long PassBytesTotal { get; init; }
+
+    /// <summary>Recent transfer speed (about the last 5 seconds).</summary>
+    public double BytesPerSecond { get; init; }
+
+    /// <summary>"Limited to 5 MB/s" (or "Limited to 5 MB/s up, 10 MB/s down"), or null without limits.</summary>
+    public string? LimitText { get; init; }
+
+    /// <summary>"Uploading 120 files", "Downloading 32 files" or "Syncing 50 files".</summary>
+    public string BatchTitle => FilesTotal <= 1 && Active.Count <= 1
+        ? $"{OperationText} {CurrentFileName}"
+        : $"{(Active.Count > 0 && Active.All(a => a.Operation == Active[0].Operation) ? OperationText : "Syncing")} {FilesTotal} files";
+
+    /// <summary>"12.4 MB/s · about 2 min left" (empty until the speed is known).</summary>
+    public string SpeedText
+    {
+        get
+        {
+            if (BytesPerSecond < 1)
+                return string.Empty;
+            var text = Format.Speed(BytesPerSecond);
+            var left = PassBytesTotal - PassBytesDone;
+            if (left > 0)
+                text += " · " + Format.Duration(TimeSpan.FromSeconds(left / BytesPerSecond)) + " left";
+            return text;
+        }
+    }
+
+    /// <summary>0–100 over the whole sync by bytes (falls back to files), or null.</summary>
+    public int? OverallPercent => PassBytesTotal > 0
+        ? (int)Math.Clamp(PassBytesDone * 100 / PassBytesTotal, 0, 100)
+        : FilesTotal > 0 ? (int)Math.Clamp(FilesDone * 100L / FilesTotal, 0, 100) : null;
+
+    /// <summary>"37 of 120 files · 412 MB of 1.30 GB".</summary>
+    public string OverallText => FilesTotal == 0 ? string.Empty
+        : $"{Math.Min(FilesDone, FilesTotal)} of {FilesTotal} files"
+          + (PassBytesTotal > 0 ? $" · {Format.Bytes(Math.Min(PassBytesDone, PassBytesTotal))} of {Format.Bytes(PassBytesTotal)}" : string.Empty);
+
+    // ---- the server
+
+    /// <summary>Last known server info (version, free space, updater), or null before the first answer.</summary>
+    public ServerInfo? Server { get; init; }
+
+    /// <summary>"412 GB free on server" or null when the server does not say.</summary>
+    public string? ServerFreeText => Server?.DiskFreeBytes is { } free ? Format.Bytes(free) + " free on server" : null;
+
+    /// <summary>Less than 5 GB or 5 % left on the server's disk.</summary>
+    public bool ServerSpaceLow => Server is { DiskFreeBytes: { } free, DiskTotalBytes: { } total }
+        && (free < 5L * 1024 * 1024 * 1024 || (total > 0 && free * 20 < total));
 
     /// <summary>0–100 for the current file, or null when unknown (no size yet / not transferring).</summary>
     public int? Percent => CurrentPath is not null && BytesTotal > 0 ? (int)Math.Clamp(BytesDone * 100 / BytesTotal, 0, 100) : null;

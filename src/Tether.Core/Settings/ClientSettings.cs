@@ -24,6 +24,47 @@ public sealed class ClientSettings
 
     public bool Paused { get; set; }
 
+    /// <summary>Look for a new Tether version at start-up and once a day.</summary>
+    public bool CheckForUpdates { get; set; } = true;
+
+    /// <summary>While another computer uploads a big batch, download it in one go when it's done.</summary>
+    public bool WaitForPeerBatches { get; set; } = true;
+
+    /// <summary>Files transferred at the same time: 1, 2, 4 or 8.</summary>
+    public int ParallelTransfers { get; set; } = 4;
+
+    /// <summary>Upload speed limit in MB/s; null or 0 = no limit.</summary>
+    public double? UploadLimitMBps { get; set; }
+
+    /// <summary>Download speed limit in MB/s; null or 0 = no limit.</summary>
+    public double? DownloadLimitMBps { get; set; }
+
+    /// <summary>A server version the user chose not to be reminded about ("Don't ask for this version").</summary>
+    public string? SkippedServerVersion { get; set; }
+
+    /// <summary><see cref="ParallelTransfers"/> limited to the offered choices.</summary>
+    public int EffectiveParallelTransfers => ParallelTransfers is 1 or 2 or 4 or 8 ? ParallelTransfers : 4;
+
+    /// <summary>"Limited to 5 MB/s", "Limited to 5 MB/s up, 10 MB/s down", or null.</summary>
+    public string? LimitText
+    {
+        get
+        {
+            var up = UploadLimitMBps is > 0 ? UploadLimitMBps : null;
+            var down = DownloadLimitMBps is > 0 ? DownloadLimitMBps : null;
+            if (up is null && down is null)
+                return null;
+            if (up == down)
+                return "Limited to " + Client.Format.Megabytes(up!.Value);
+            var parts = new List<string>();
+            if (up is not null)
+                parts.Add(Client.Format.Megabytes(up.Value) + " up");
+            if (down is not null)
+                parts.Add(Client.Format.Megabytes(down.Value) + " down");
+            return "Limited to " + string.Join(", ", parts);
+        }
+    }
+
     public bool IsComplete =>
         !string.IsNullOrWhiteSpace(ServerUrl) && !string.IsNullOrWhiteSpace(ProtectedToken)
         && !string.IsNullOrWhiteSpace(Folder) && !string.IsNullOrWhiteSpace(DeviceName);

@@ -144,6 +144,12 @@ public sealed class TetherApiClient : ITetherApi, IDisposable
 
     // ------------------------------------------------------------------ download
 
+    /// <summary>Speed limit shared by all uploads of this client (no limit by default).</summary>
+    public Throttle UploadLimit { get; } = new();
+
+    /// <summary>Speed limit shared by all downloads of this client (no limit by default).</summary>
+    public Throttle DownloadLimit { get; } = new();
+
     public async Task<DownloadResult> DownloadAsync(string path, Stream destination, Action<long>? progress, CancellationToken ct)
     {
         using var stall = Linked(ct, _stallTimeout);
@@ -177,6 +183,7 @@ public sealed class TetherApiClient : ITetherApi, IDisposable
                 }
                 if (n == 0)
                     break;
+                await DownloadLimit.WaitAsync(n, ct).ConfigureAwait(false);
                 stall.CancelAfter(_stallTimeout);
                 // Local write errors (disk full, ...) propagate as IOException: a per-file failure.
                 await hashing.WriteAsync(buffer.AsMemory(0, n), ct).ConfigureAwait(false);
@@ -205,7 +212,7 @@ public sealed class TetherApiClient : ITetherApi, IDisposable
         var uri = $"api/file?path={Uri.EscapeDataString(path)}&base={Uri.EscapeDataString(baseHash)}&mtime={mtimeMs.ToString(CultureInfo.InvariantCulture)}";
         using var req = new HttpRequestMessage(HttpMethod.Put, uri)
         {
-            Content = new StreamingUploadContent(hashing, stall, _stallTimeout),
+            Content = new StreamingUploadContent(hashing, stall, _stallTimeout, UploadLimit),
         };
         req.Content.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
         // The server answers 400/401/409 before we send a possibly huge body.
@@ -385,7 +392,7 @@ public sealed class TetherApiClient : ITetherApi, IDisposable
     /// Request body that streams from the local file, resets the stall watchdog on every chunk,
     /// and tags local read failures so they are not mistaken for network failures.
     /// </summary>
-    private sealed class StreamingUploadContent(Stream source, CancellationTokenSource stall, TimeSpan stallTimeout) : HttpContent
+    private sealed class StreamingUploadContent(Stream source, CancellationTokenSource stall, TimeSpan stallTimeout, Throttle limit) : HttpContent
     {
         protected override async Task SerializeToStreamAsync(Stream stream, TransportContext? context, CancellationToken cancellationToken)
         {
@@ -403,6 +410,8 @@ public sealed class TetherApiClient : ITetherApi, IDisposable
                 }
                 if (n == 0)
                     break;
+                await limit.WaitAsync(n, cancellationToken).ConfigureAwait(false);
+                stall.CancelAfter(stallTimeout);
                 await stream.WriteAsync(buffer.AsMemory(0, n), cancellationToken).ConfigureAwait(false);
                 stall.CancelAfter(stallTimeout);
             }

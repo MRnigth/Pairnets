@@ -64,8 +64,11 @@ public sealed class SyncEngine
     /// <summary>Raised after a file was uploaded, downloaded or deleted (for activity lists). May be raised concurrently.</summary>
     public event Action<SyncAction, string>? FileSynced;
 
-    /// <summary>Raised once per pass after planning, with the number of uploads (incl. conflicts) and downloads to run.</summary>
-    public event Action<int, int>? ExecutionStarting;
+    /// <summary>Raised once per pass after planning: uploads (incl. conflicts), downloads, and the bytes they will move.</summary>
+    public event Action<int, int, long>? ExecutionStarting;
+
+    /// <summary>Raised when an upload or download (finished, failed or skipped) no longer runs.</summary>
+    public event Action<string>? TransferFinished;
 
     /// <summary>True if the engine itself wrote/deleted this path recently (used to ignore our own watcher events).</summary>
     public bool WasRecentlyTouched(string path, TimeSpan window)
@@ -328,10 +331,22 @@ public sealed class SyncEngine
         }
 
         var ordered = plan.OrderBy(p => Order(p.Action)).ThenBy(p => p.Path, StringComparer.Ordinal).ToList();
+        var ctx = new PassContext(result, cursor, taken, ordered.Count);
+        long plannedBytes = 0;
+        foreach (var item in ordered)
+        {
+            if (item.Action is SyncAction.Upload or SyncAction.Conflict && scan.Files.TryGetValue(item.Path, out var lf))
+                plannedBytes += lf.Size;
+            if (item.Action is SyncAction.Download or SyncAction.Conflict && remote.TryGetValue(item.Path, out var re))
+            {
+                plannedBytes += re.Size;
+                ctx.Sizes[item.Path] = re.Size;
+            }
+        }
         ExecutionStarting?.Invoke(
             ordered.Count(p => p.Action is SyncAction.Upload or SyncAction.Conflict),
-            ordered.Count(p => p.Action == SyncAction.Download));
-        var ctx = new PassContext(result, cursor, taken, ordered.Count);
+            ordered.Count(p => p.Action == SyncAction.Download),
+            plannedBytes);
 
         // Deletes and conflicts one by one (they rename and prune folders), then uploads and
         // downloads several at a time: each small file costs a round trip, so overlap them.
@@ -361,6 +376,11 @@ public sealed class SyncEngine
                 ctx.Result.ErrorMessages.Add($"{item.Path}: {ex.Message}");
             }
             _log.LogWarning("{Action} failed for {Path}: {Error}", item.Action, item.Path, ex.Message);
+        }
+        finally
+        {
+            if (item.Action is SyncAction.Upload or SyncAction.Download or SyncAction.Conflict)
+                TransferFinished?.Invoke(item.Path);
         }
         lock (ctx.Gate)
             ctx.FilesDone++;
@@ -848,7 +868,8 @@ public sealed class SyncEngine
     private void MarkTouched(string path) => _recentlyTouched[path] = _clock.GetUtcNow().UtcTicks;
 
     private void Report(string path, string op, long bytes, long total, PassContext ctx) =>
-        Progress?.Invoke(new SyncProgress(path, op, bytes, total, ctx.FilesDone, ctx.FilesTotal));
+        Progress?.Invoke(new SyncProgress(path, op, bytes,
+            total > 0 ? total : ctx.Sizes.GetValueOrDefault(path), ctx.FilesDone, ctx.FilesTotal));
 
     private sealed record PlannedAction(string Path, SyncAction Action, string? Local, string? Server, string? Base);
 
@@ -858,6 +879,9 @@ public sealed class SyncEngine
         public object Gate { get; } = new();
 
         public PassResult Result { get; } = result;
+
+        /// <summary>Server sizes of planned downloads (the HTTP response may not say), for progress.</summary>
+        public Dictionary<string, long> Sizes { get; } = new(StringComparer.Ordinal);
         public long Cursor { get; } = cursor;
         public HashSet<string> Taken { get; } = taken;
         public int FilesTotal { get; } = filesTotal;

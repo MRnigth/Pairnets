@@ -344,12 +344,13 @@ public class TwoDeviceSyncTests : IAsyncLifetime
             }
         }
         var expected = (await ContentHash.OfFileAsync(_desktop.Full("big.bin"))).Hash;
-        var before = GC.GetTotalMemory(false);
+        // Measure memory still in use (after a full collection), not garbage from tests running in parallel.
+        var before = GC.GetTotalMemory(forceFullCollection: true);
         Assert.Equal(1, (await _desktop.SyncAsync()).Uploaded);
         Assert.Equal(1, (await _laptop.SyncAsync()).Downloaded);
         Assert.Equal(expected, (await ContentHash.OfFileAsync(_laptop.Full("big.bin"))).Hash);
         Assert.Equal(size, new FileInfo(_laptop.Full("big.bin")).Length);
-        Assert.True(GC.GetTotalMemory(false) - before < 64L * 1024 * 1024, "transfer appears to buffer the file in memory");
+        Assert.True(GC.GetTotalMemory(forceFullCollection: true) - before < 64L * 1024 * 1024, "transfer appears to keep the file in memory");
     }
 
     [Fact]

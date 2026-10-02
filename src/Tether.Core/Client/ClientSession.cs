@@ -25,6 +25,45 @@ public sealed class ClientSession : IAsyncDisposable
     private int _passDone;
     private int _passTotal;
     private DateTimeOffset? _lastPassEnd;
+    private readonly Dictionary<string, ActiveTransfer> _active = new(StringComparer.Ordinal);
+    private readonly Queue<(long Ticks, long Bytes)> _samples = new();
+    private long _burstBytesDone;
+    private long _burstBytesTotal;
+    private Timer? _infoTimer;
+
+    private static readonly TimeSpan SpeedWindow = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan ServerInfoInterval = TimeSpan.FromMinutes(5);
+
+    /// <summary>Bytes per second over the last few seconds. Call with <c>_gate</c> held.</summary>
+    private double RateLocked()
+    {
+        var now = _clock.GetTimestamp();
+        while (_samples.Count > 0 && _clock.GetElapsedTime(_samples.Peek().Ticks, now) > SpeedWindow)
+            _samples.Dequeue();
+        if (_samples.Count == 0)
+            return 0;
+        var span = Math.Max(1.0, _clock.GetElapsedTime(_samples.Peek().Ticks, now).TotalSeconds);
+        return _samples.Sum(x => (double)x.Bytes) / span;
+    }
+
+    /// <summary>Raised when the server's version, free space or updater state was (re)read.</summary>
+    public event Action<ServerInfo>? ServerInfoChanged;
+
+    /// <summary>Reads the server's version, free space and updater state; failures are ignored (offline is shown elsewhere).</summary>
+    public async Task<ServerInfo?> RefreshServerInfoAsync()
+    {
+        try
+        {
+            var info = await Api.GetInfoAsync(CancellationToken.None).ConfigureAwait(false);
+            Update(s => s with { Server = info });
+            ServerInfoChanged?.Invoke(info);
+            return info;
+        }
+        catch (Exception ex) when (ex is TetherNetworkException or TetherAuthException or TetherProtocolException or ObjectDisposedException)
+        {
+            return null;
+        }
+    }
 
     private ClientSession(ClientSettings settings, StateDb state, TetherApiClient api, SyncEngine engine, SyncRunner runner, TimeProvider clock)
     {
@@ -78,11 +117,14 @@ public sealed class ClientSession : IAsyncDisposable
         state.SetMeta(StateDb.MetaFolder, Path.GetFullPath(folder));
         var url = new Uri(settings.ServerUrl!);
         var api = new TetherApiClient(url, token, settings.DeviceName!);
+        api.UploadLimit.SetMegabytesPerSecond(settings.UploadLimitMBps);
+        api.DownloadLimit.SetMegabytesPerSecond(settings.DownloadLimitMBps);
         var engine = new SyncEngine(new EngineOptions
         {
             Folder = folder,
             DeviceName = settings.DeviceName!,
             ExtraIgnore = settings.ExtraIgnore,
+            MaxParallelTransfers = settings.EffectiveParallelTransfers,
         }, api, state, trash, loggers.CreateLogger("Tether.Engine"), clock, hooks);
         var options = new RunnerOptions { ServerUrl = url, Token = token, DeviceId = settings.DeviceName! };
         if (runnerOptions is not null)
@@ -91,7 +133,9 @@ public sealed class ClientSession : IAsyncDisposable
 
         var session = new ClientSession(settings, state, api, engine, runner, clock);
         session.Wire();
+        session._status = session._status with { LimitText = settings.LimitText };
         runner.Start();
+        session._infoTimer = new Timer(_ => _ = session.RefreshServerInfoAsync(), null, TimeSpan.Zero, ServerInfoInterval);
         if (settings.Paused)
             runner.Pause();
         return session;
@@ -123,29 +167,65 @@ public sealed class ClientSession : IAsyncDisposable
         // File counts run across back-to-back passes ("Sync now" while files keep arriving): a pass
         // that starts soon after the previous one continues its count, and files that arrive during a
         // pass are added to the total straight away.
-        Engine.ExecutionStarting += (_, _) =>
+        Engine.ExecutionStarting += (_, _, bytes) =>
         {
             lock (_gate)
             {
                 var chained = _lastPassEnd is { } end && _clock.GetUtcNow() - end < BurstGap;
                 _burstOffset = chained ? _burstOffset + _passDone : 0;
+                _burstBytesTotal = chained ? _burstBytesTotal + bytes : bytes;
+                if (!chained)
+                {
+                    _burstBytesDone = 0;
+                    _samples.Clear();
+                }
                 _passDone = 0;
                 _passTotal = 0;
+                _active.Clear();
             }
         };
         Engine.Progress += p =>
         {
             int done, total;
+            IReadOnlyList<ActiveTransfer> active;
+            long bytesDone, bytesTotal;
+            double rate;
             lock (_gate)
             {
                 _passDone = p.FilesDone;
                 _passTotal = p.FilesTotal;
                 done = _burstOffset + p.FilesDone;
                 total = _burstOffset + p.FilesTotal + Runner.PendingChanges;
+                if (p.CurrentPath is not null && p.Operation is "upload" or "download")
+                {
+                    var before = _active.TryGetValue(p.CurrentPath, out var a) ? a.BytesDone : 0;
+                    var delta = p.BytesDone - before;
+                    if (delta > 0)
+                    {
+                        _burstBytesDone += delta;
+                        _samples.Enqueue((_clock.GetTimestamp(), delta));
+                    }
+                    _active[p.CurrentPath] = new ActiveTransfer(p.CurrentPath, p.Operation, p.BytesDone, p.BytesTotal);
+                }
+                active = [.. _active.Values];
+                bytesDone = _burstBytesDone;
+                bytesTotal = Math.Max(_burstBytesTotal, _burstBytesDone);
+                rate = RateLocked();
             }
-            Update(s => p.CurrentPath is null
+            Update(s => (p.CurrentPath is null
                 ? s with { CurrentPath = null, Operation = null, BytesDone = 0, BytesTotal = 0, FilesDone = done, FilesTotal = total }
-                : s with { CurrentPath = p.CurrentPath, Operation = p.Operation, BytesDone = p.BytesDone, BytesTotal = p.BytesTotal, FilesDone = done, FilesTotal = total });
+                : s with { CurrentPath = p.CurrentPath, Operation = p.Operation, BytesDone = p.BytesDone, BytesTotal = p.BytesTotal, FilesDone = done, FilesTotal = total })
+                with { Active = active, PassBytesDone = bytesDone, PassBytesTotal = bytesTotal, BytesPerSecond = rate });
+        };
+        Engine.TransferFinished += path =>
+        {
+            IReadOnlyList<ActiveTransfer> active;
+            lock (_gate)
+            {
+                _active.Remove(path);
+                active = [.. _active.Values];
+            }
+            Update(s => s with { Active = active });
         };
         Runner.PendingChangesChanged += pending =>
         {
@@ -310,6 +390,8 @@ public sealed class ClientSession : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
+        if (_infoTimer is not null)
+            await _infoTimer.DisposeAsync().ConfigureAwait(false);
         await Runner.DisposeAsync().ConfigureAwait(false);
         Api.Dispose();
         State.Dispose();
