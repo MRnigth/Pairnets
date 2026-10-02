@@ -245,7 +245,10 @@ public sealed class SyncRunner : IAsyncDisposable
             return;
         lock (_gate)
             _announced = true;
-        _ = InvokeHubAsync("BatchStarted", uploads);
+        // Wait for the server to pass the announcement on before the first upload: otherwise the
+        // first files can reach the other computer before it knows a batch is coming. Bounded,
+        // so a slow push channel never holds up syncing for long.
+        InvokeHubAsync("BatchStarted", uploads).Wait(TimeSpan.FromSeconds(3));
     }
 
     private async Task InvokeHubAsync(string method, params object[] args)
