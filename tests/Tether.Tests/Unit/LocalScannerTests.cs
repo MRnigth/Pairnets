@@ -101,8 +101,7 @@ public class LocalScannerTests : IDisposable
         // Win32 silently strips a trailing dot; tools using \\?\ paths (or a Linux share) can still
         // create such names, which is exactly what the scanner must refuse to sync.
         var bad = Path.Combine(_root.Path, "trailing.");
-        var createPath = OperatingSystem.IsWindows() ? @"\\?\" + bad : bad;
-        File.WriteAllText(createPath, "x");
+        RawFiles.Write(bad, "x");
         Write("ok.txt", "x");
         try
         {
@@ -112,7 +111,7 @@ public class LocalScannerTests : IDisposable
         }
         finally
         {
-            File.Delete(createPath);
+            RawFiles.Delete(bad);
         }
     }
 

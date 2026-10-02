@@ -132,7 +132,7 @@ public class ServerStoreTests
         File.Delete(Path.Combine(paths.Files, "lost.txt"));
         Directory.CreateDirectory(Path.Combine(paths.Files, "hand"));
         File.WriteAllText(Path.Combine(paths.Files, "hand", "added.txt"), "by hand");
-        File.WriteAllText(Path.Combine(paths.Files, "bad."), "invalid");
+        RawFiles.Write(Path.Combine(paths.Files, "bad."), "invalid");
 
         var drift = store.DetectDrift();
         Assert.Equal(["hand/added.txt"], drift.Unknown);
@@ -145,6 +145,8 @@ public class ServerStoreTests
         await CliCommands.RescanAsync(store, dryRun: false, output);
         Assert.Equal(H("by hand"), store.Manifest.Get("hand/added.txt")!.Hash);
         Assert.Contains("missing: lost.txt", output.ToString());
+        Assert.Contains("invalid name, ignored: bad.", output.ToString());
+        RawFiles.Delete(Path.Combine(paths.Files, "bad."));
         ManifestStore.ReleasePools();
     }
 
