@@ -13,7 +13,7 @@
     <!-- Update banner -->
     <Border x:Name="UpdateBanner" DockPanel.Dock="Top" Classes="banner" Margin="0,0,0,12" IsVisible="False">
       <Grid ColumnDefinitions="Auto,*,Auto,Auto">
-        <v:LineIcon Classes="icon" Width="20" Height="20" Stroke="{DynamicResource T.Accent}" Data="{StaticResource I.Download}"
+        <v:LineIcon Classes="icon bob" Width="20" Height="20" Stroke="{DynamicResource T.Accent}" Data="{StaticResource I.Download}"
                     VerticalAlignment="Center" Margin="0,0,12,0" />
         <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
           <TextBlock x:Name="UpdateTitle" Classes="strong" />
@@ -28,7 +28,7 @@
     <!-- Status card -->
     <Border DockPanel.Dock="Top" Classes="card">
       <Grid ColumnDefinitions="Auto,*,Auto">
-        <Grid Width="52" Height="52" VerticalAlignment="Top" Margin="0,0,16,0">
+        <Grid x:Name="StatusBadgeHost" Width="52" Height="52" VerticalAlignment="Top" Margin="0,0,16,0">
           <Ellipse x:Name="StatusBadge" Fill="{StaticResource S.Grey}" />
           <v:LineIcon x:Name="StatusGlyph" Classes="icon white" Width="24" Height="24" StrokeThickness="2.6"
                 Data="{StaticResource I.CloudOff}" />
@@ -75,7 +75,11 @@
     <Border x:Name="TransferCard" DockPanel.Dock="Top" Classes="card" Margin="0,12,0,0" Padding="18,14,18,16" IsVisible="False">
       <StackPanel Spacing="8">
         <Grid ColumnDefinitions="*,Auto,Auto">
-          <TextBlock x:Name="TransferTitle" Classes="strong" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <v:LineIcon x:Name="TransferArrow" Classes="icon rise" Width="16" Height="16" StrokeThickness="2.4"
+                        Stroke="{StaticResource S.Green}" Data="{StaticResource I.Up}" VerticalAlignment="Center" />
+            <TextBlock x:Name="TransferTitle" Classes="strong" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+          </StackPanel>
           <TextBlock x:Name="TransferSpeed" Grid.Column="1" Classes="muted small" VerticalAlignment="Center" Margin="8,0,0,0" />
           <Border x:Name="LimitPill" Grid.Column="2" Classes="pill" Margin="8,0,0,0" IsVisible="False">
             <TextBlock x:Name="LimitText" FontSize="11.5" />
@@ -92,13 +96,13 @@
           </ItemsControl.ItemsPanel>
           <ItemsControl.ItemTemplate>
             <DataTemplate>
-              <StackPanel Spacing="4" Margin="0,4,16,4">
+              <StackPanel Classes="enter" Spacing="4" Margin="0,4,16,4">
                 <Grid ColumnDefinitions="*,Auto">
                   <TextBlock Text="{Binding FileName}" Classes="strong" FontSize="12.5" TextTrimming="CharacterEllipsis" />
                   <TextBlock Grid.Column="1" Text="{Binding PercentText}" Classes="muted small" Margin="6,0,0,0" />
                 </Grid>
                 <ProgressBar Classes="thin" Classes.up="{Binding IsUpload}" Classes.down="{Binding !IsUpload}"
-                             Minimum="0" Maximum="100" Value="{Binding PercentValue}" IsIndeterminate="{Binding !HasPercent}" />
+                             Minimum="0" Maximum="100" Value="{Binding PercentValue}" />
               </StackPanel>
             </DataTemplate>
           </ItemsControl.ItemTemplate>
@@ -163,7 +167,7 @@
             <ItemsControl x:Name="ActivityList">
               <ItemsControl.ItemTemplate>
                 <DataTemplate>
-                  <Border Classes="row" ToolTip.Tip="{Binding TimeText}">
+                  <Border Classes="row enter" ToolTip.Tip="{Binding TimeText}">
                     <Grid ColumnDefinitions="Auto,*,Auto">
                       <Grid Width="30" Height="30" Margin="0,0,12,0">
                         <Ellipse Fill="{Binding Kind, Converter={StaticResource KindBrush}}" />

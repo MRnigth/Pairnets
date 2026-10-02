@@ -460,6 +460,20 @@ public sealed class ClientSession : IAsyncDisposable
         return new ServerUpdateResult(false, "The server did not finish updating in time. Check it with: sudo journalctl -u tether-update -n 50", before, CanUpdateItself: true);
     }
 
+    /// <summary>
+    /// The "update the server automatically" path: updates without asking and notes the outcome
+    /// in the activity list. Returns the result so the app can still help with a one-time setup.
+    /// </summary>
+    public async Task<ServerUpdateResult> UpdateServerQuietlyAsync(CancellationToken ct)
+    {
+        var from = Status.Server?.ServerVersion;
+        Activity.Add(ActivityKind.Info, null, $"Updating the server from {from}…", _clock);
+        var result = await UpdateServerAsync(null, ct).ConfigureAwait(false);
+        Activity.Add(result.Success ? ActivityKind.Info : ActivityKind.Warning, null,
+            result.Success ? $"Server updated to {result.ServerVersion}" : "Server not updated: " + result.Message, _clock);
+        return result;
+    }
+
     /// <summary>"Download now anyway": stop waiting for another computer's big batch.</summary>
     public void DownloadNow() => Runner.ReleaseHold();
 

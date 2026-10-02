@@ -51,6 +51,53 @@ public class DesktopUiTests
     }
 
     [AvaloniaFact]
+    public void MotionFollowsTheState()
+    {
+        var window = new MainWindow();
+        window.Show();
+        window.ShowStatus(StatusSnapshot.Initial with
+        {
+            Status = RunnerStatus.Syncing, CurrentPath = "a.bin", Operation = "upload", FilesTotal = 3,
+            Active = [new ActiveTransfer("a.bin", "upload", 10, 100), new ActiveTransfer("b.bin", "upload", 50, 100)],
+        }, null);
+        Assert.True(window.GlyphSpins);
+        Assert.Equal("rise", window.ArrowMotion);
+        Assert.Equal(2, window.ActiveRows);
+
+        window.ShowStatus(StatusSnapshot.Initial with
+        {
+            Status = RunnerStatus.Syncing, CurrentPath = "c.bin", Operation = "download", FilesTotal = 3,
+            Active = [new ActiveTransfer("c.bin", "download", 10, 100)],
+        }, null);
+        Assert.Equal("fall", window.ArrowMotion);
+        Assert.Equal(1, window.ActiveRows);
+
+        window.ShowStatus(StatusSnapshot.Initial with { Status = RunnerStatus.Idle, WaitingFor = new PeerWait("DESKTOP", 340, 12) }, null);
+        Assert.False(window.GlyphSpins);
+        Assert.True(window.BadgePulses);
+        window.AllowClose = true;
+        window.Close();
+
+        var dialog = new ServerUpdateWindow(null, "1.0.52", "1.0.58");
+        dialog.Show();
+        Assert.True(dialog.Bobbing);
+        dialog.ShowBusy("Installing");
+        Assert.True(dialog.Spinning);
+        Assert.False(dialog.Bobbing);
+        dialog.ShowResult(new ServerUpdateResult(false, "Old server", "1.0.52", CanUpdateItself: false));
+        Assert.Equal("One-time setup", dialog.HeadingText);
+        Assert.True(dialog.CommandShown);
+        Assert.DoesNotContain("didn't", dialog.HeadingText);
+        dialog.ShowResult(new ServerUpdateResult(false, "The download did not match its checksum.", "1.0.52", CanUpdateItself: true));
+        Assert.Equal("Not updated yet", dialog.HeadingText);
+        Assert.True(dialog.RetryShown);
+        dialog.ShowResult(new ServerUpdateResult(true, "ok", "1.0.58", CanUpdateItself: true));
+        Assert.Equal("Server updated to 1.0.58", dialog.HeadingText);
+        Assert.False(dialog.Spinning);
+        dialog.Close();
+    }
+
+    [AvaloniaFact]
     public void SettingsWindowLoadsInFirstRunAndSettingsModes()
     {
         var first = new SettingsWindow(new ClientSettings(), null, firstRun: true, autoStart: false);
@@ -149,6 +196,10 @@ public class DesktopUiTests
         var serverUpdate = new ServerUpdateWindow(null, "1.0.52", "1.0.58");
         serverUpdate.Show();
         Save(serverUpdate, outDir, $"server-update-{suffix}.png");
+        serverUpdate.ShowBusy("Installing and restarting the server");
+        Save(serverUpdate, outDir, $"server-update-busy-{suffix}.png");
+        serverUpdate.ShowResult(new ServerUpdateResult(true, "ok", "1.0.58", CanUpdateItself: true));
+        Save(serverUpdate, outDir, $"server-update-done-{suffix}.png");
         serverUpdate.ShowResult(new ServerUpdateResult(false, "This server can't update itself yet.", "1.0.52", CanUpdateItself: false));
         Save(serverUpdate, outDir, $"server-update-manual-{suffix}.png");
         serverUpdate.Close();

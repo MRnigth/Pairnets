@@ -21,7 +21,16 @@ public partial class ServerUpdateWindow : Window
         appVersion ??= TetherInfo.ProductVersion;
         Explanation.Text = $"This app is version {appVersion}, but your server runs {serverVersion}. Updating is recommended so both sides have the latest fixes.";
         VersionsText.Text = $"{serverVersion} → {appVersion}";
+        Loaded += (_, _) => Motion.Bob(BadgeHost, AskPanel.Visibility == Visibility.Visible);
+        Closed += (_, _) =>
+        {
+            Motion.Bob(BadgeHost, false);
+            Motion.Spin(Ring, false);
+        };
     }
+
+    /// <summary>Set when the user ticked "From now on, update the server automatically".</summary>
+    public bool AlwaysUpdate => AlwaysBox.IsChecked == true;
 
     public string ServerVersion { get; }
 
@@ -50,7 +59,13 @@ public partial class ServerUpdateWindow : Window
         AskPanel.Visibility = Visibility.Collapsed;
         ResultPanel.Visibility = Visibility.Collapsed;
         BusyPanel.Visibility = Visibility.Visible;
+        Ring.Visibility = Visibility.Visible;
+        Motion.Bob(BadgeHost, false);
+        Motion.Spin(Ring, true);
+        Badge.SetResourceReference(Shape.FillProperty, "S.Blue");
+        BadgeIcon.Data = Visuals.Resource<Geometry>("I.Server");
         Heading.Text = "Updating your server…";
+        Explanation.Text = "It downloads the newest release, checks it, installs it and restarts.";
         StepText.Text = step;
     }
 
@@ -59,12 +74,36 @@ public partial class ServerUpdateWindow : Window
         AskPanel.Visibility = Visibility.Collapsed;
         BusyPanel.Visibility = Visibility.Collapsed;
         ResultPanel.Visibility = Visibility.Visible;
-        Heading.Text = result.Success ? $"Server updated to {result.ServerVersion}" : "The server didn't update";
-        Explanation.Text = result.Success ? "Syncing has resumed." : result.Message
-            + (result.CanUpdateItself ? string.Empty : " Run this once on the server; after that it can update from the app:");
-        Badge.SetResourceReference(Shape.FillProperty, result.Success ? "S.Green" : "S.Orange");
-        BadgeIcon.Data = Visuals.Resource<Geometry>(result.Success ? "I.Check" : "I.Warning");
-        CommandPanel.Visibility = !result.Success && !result.CanUpdateItself ? Visibility.Visible : Visibility.Collapsed;
+        Motion.Spin(Ring, false);
+        Motion.Bob(BadgeHost, false);
+        Ring.Visibility = Visibility.Collapsed;
+        RetryButton.Visibility = Visibility.Collapsed;
+        CommandPanel.Visibility = Visibility.Collapsed;
+        string brush, icon;
+        if (result.Success)
+        {
+            (brush, icon) = ("S.Green", "I.Check");
+            Heading.Text = $"Server updated to {result.ServerVersion}";
+            Explanation.Text = "Syncing has resumed.";
+        }
+        else if (!result.CanUpdateItself)
+        {
+            // An older server: it has no updater yet, so it needs the install command once.
+            (brush, icon) = ("S.Blue", "I.Server");
+            Heading.Text = "One-time setup";
+            Explanation.Text = "Your server was installed before it could update itself. Run this once on the server; from then on every update is one click here.";
+            CommandPanel.Visibility = Visibility.Visible;
+        }
+        else
+        {
+            (brush, icon) = ("S.Orange", "I.Info");
+            Heading.Text = "Not updated yet";
+            Explanation.Text = result.Message + " Nothing on the server was changed.";
+            RetryButton.Visibility = Visibility.Visible;
+        }
+        Badge.SetResourceReference(Shape.FillProperty, brush);
+        BadgeIcon.Data = Visuals.Resource<Geometry>(icon);
+        Motion.Pop(BadgeHost);
     }
 
     private void OnCopy(object sender, RoutedEventArgs e) => Clipboard.SetText(CommandText.Text);

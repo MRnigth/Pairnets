@@ -122,6 +122,9 @@
           <Button x:Name="CheckNowButton" Style="{StaticResource FlatButton}" Padding="6,3" FontSize="12" Margin="6,0,0,0"
                   Foreground="{DynamicResource T.Accent}" Content="Check now" Click="OnCheckNow" />
         </StackPanel>
+        <CheckBox x:Name="AutoServerBox" Style="{StaticResource Switch}" Content="Update the server automatically" Margin="0,12,0,0" />
+        <TextBlock Style="{StaticResource MutedSmall}" TextWrapping="Wrap" Margin="50,4,0,0"
+                   Text="When this app finds the server on an older version, it updates it without asking (about 30 seconds; your files are not touched)." />
         <Border Style="{StaticResource Divider}" Margin="0,12,0,0" />
 
         <CheckBox x:Name="WaitBox" Style="{StaticResource Switch}" Content="Wait while my other computer uploads many files" Margin="0,12,0,0" />

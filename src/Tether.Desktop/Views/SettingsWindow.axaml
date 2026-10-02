@@ -94,6 +94,11 @@
             <Button x:Name="CheckNowButton" Classes="flat" Padding="6,3" FontSize="12" Content="Check now" Foreground="{DynamicResource T.Accent}" Click="OnCheckNow" />
           </StackPanel>
         </StackPanel>
+        <StackPanel Spacing="3">
+          <ToggleSwitch x:Name="AutoServerBox" OnContent="Update the server automatically" OffContent="Update the server automatically" />
+          <TextBlock Classes="muted small" TextWrapping="Wrap"
+                     Text="When this app finds the server on an older version, it updates it without asking (about 30 seconds; your files are not touched)." />
+        </StackPanel>
         <Border Classes="divider" />
 
         <StackPanel Spacing="3">

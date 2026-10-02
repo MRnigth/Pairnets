@@ -109,6 +109,10 @@ public static class Program
         var serverUpdate = new ServerUpdateWindow(null, "1.0.52", "1.0.58");
         Place(serverUpdate);
         Save(serverUpdate, outDir, $"windows-server-update-{suffix}.png", print);
+        serverUpdate.ShowBusy("Installing and restarting the server");
+        Save(serverUpdate, outDir, $"windows-server-update-busy-{suffix}.png", print);
+        serverUpdate.ShowResult(new ServerUpdateResult(true, "ok", "1.0.58", CanUpdateItself: true));
+        Save(serverUpdate, outDir, $"windows-server-update-done-{suffix}.png", print);
         serverUpdate.ShowResult(new ServerUpdateResult(false, "This server can't update itself yet.", "1.0.52", CanUpdateItself: false));
         Save(serverUpdate, outDir, $"windows-server-update-manual-{suffix}.png", print);
         serverUpdate.Close();

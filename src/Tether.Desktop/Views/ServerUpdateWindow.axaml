@@ -6,11 +6,17 @@
         WindowStartupLocation="CenterScreen" Icon="avares://Tether/Assets/tether-icon-256.png">
   <StackPanel Margin="22" Spacing="14">
     <Grid ColumnDefinitions="Auto,*">
-      <Grid Width="44" Height="44" Margin="0,0,14,0" VerticalAlignment="Top">
-        <Ellipse x:Name="Badge" Fill="{StaticResource S.Orange}" />
-        <v:LineIcon x:Name="BadgeIcon" Classes="icon white" Width="22" Height="22" StrokeThickness="2.2" Data="{StaticResource I.Server}" />
+      <Grid Width="60" Height="60" Margin="0,0,12,0" VerticalAlignment="Top">
+        <!-- Spinning ring while the server updates -->
+        <Arc x:Name="Ring" Classes="spin" Width="60" Height="60" StartAngle="0" SweepAngle="110" StrokeThickness="3"
+             Stroke="{DynamicResource T.Accent}" StrokeLineCap="Round" IsVisible="False" />
+        <!-- The server badge: bobs while it waits for an answer, pops when done -->
+        <Grid x:Name="BadgeHost" Classes="bob" Width="44" Height="44">
+          <Ellipse x:Name="Badge" Fill="{StaticResource S.Orange}" />
+          <v:LineIcon x:Name="BadgeIcon" Classes="icon white" Width="22" Height="22" StrokeThickness="2.2" Data="{StaticResource I.Server}" />
+        </Grid>
       </Grid>
-      <StackPanel Grid.Column="1" Spacing="4">
+      <StackPanel Grid.Column="1" Spacing="4" VerticalAlignment="Center">
         <TextBlock x:Name="Heading" Classes="h2" FontSize="18" Text="Your server should be updated" />
         <TextBlock x:Name="Explanation" Classes="muted" TextWrapping="Wrap" />
       </StackPanel>
@@ -28,6 +34,7 @@
           <TextBlock Grid.Row="2" Grid.Column="1" Classes="small" Text="stay as they are; syncing pauses briefly" Margin="0,4,0,0" />
         </Grid>
       </Border>
+      <CheckBox x:Name="AlwaysBox" Content="From now on, update the server automatically" />
       <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
         <Button Classes="flat" Content="Don't ask for this version" Click="OnSkip" />
         <Button Classes="subtle" Content="Later" Click="OnLater" />
@@ -36,13 +43,12 @@
     </StackPanel>
 
     <!-- 2. Updating -->
-    <StackPanel x:Name="BusyPanel" Spacing="8" IsVisible="False">
-      <ProgressBar IsIndeterminate="True" Classes="thin" />
-      <TextBlock x:Name="StepText" Classes="small" />
+    <StackPanel x:Name="BusyPanel" Spacing="6" IsVisible="False">
+      <TextBlock x:Name="StepText" Classes="strong small" />
       <TextBlock Classes="muted small" Text="You can close this window. Tether reconnects by itself." />
     </StackPanel>
 
-    <!-- 3. Done or failed -->
+    <!-- 3. Done, one-time setup, or not updated -->
     <StackPanel x:Name="ResultPanel" Spacing="10" IsVisible="False">
       <StackPanel x:Name="CommandPanel" Spacing="8" IsVisible="False">
         <Border Classes="pill" CornerRadius="8" Padding="10,8">
@@ -51,7 +57,10 @@
         </Border>
         <Button Classes="subtle" Content="Copy command" HorizontalAlignment="Left" Click="OnCopy" />
       </StackPanel>
-      <Button Classes="accent" Content="Close" HorizontalAlignment="Right" Click="OnLater" />
+      <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+        <Button x:Name="RetryButton" Classes="subtle" Content="Try again" Click="OnUpdate" IsVisible="False" />
+        <Button Classes="accent" Content="Close" Click="OnLater" />
+      </StackPanel>
     </StackPanel>
   </StackPanel>
 </Window>

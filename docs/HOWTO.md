@@ -231,7 +231,8 @@ After setup the Tether window opens:
   ! needs a decision, ✕ error, crossed-out cloud for offline), one line for the overall state,
   when it last synced, which folder it syncs, and how much space is left on the server (orange when
   less than 5 GB or 5 % is left).
-* **Transfer card** (only while transferring): how many files are being sent, the speed and the
+* **Transfer card** (only while transferring; the arrow travels up while uploading and down while
+  downloading, and the bars glide): how many files are being sent, the speed and the
   time left ("4.9 MB/s · about 4 min left"), one bar for the whole batch ("37 of 120 files · 412 MB
   of 1.30 GB"), and the files in progress right now, each with its own small bar. Tether sends up
   to four files at the same time. If new files appear while it syncs, the total grows straight away.
@@ -516,11 +517,18 @@ get a notification.
 
 Click **Update server**. The server downloads the newest release, checks it, installs it and
 restarts (about 30 seconds; syncing pauses briefly and your files stay as they are). **Don't ask
-for this version** hides the question until the next version. How this works safely is explained
-in [DEPLOY.md](DEPLOY.md#4b-updating-the-server).
+for this version** hides the question until the next version. Tick **From now on, update the server
+automatically** (also in **Settings → Updates and speed**) and Tether updates the server by itself
+whenever it finds it out of date, with a line in the Activity list and a notification.
 
-A server installed before this feature cannot update itself yet. Tether then shows the command to
-run once on the server:
+This works because the server installer (`install.sh`) also installs a small root-owned updater
+the first time, so no password is needed later. How this stays safe is explained in
+[DEPLOY.md](DEPLOY.md#4b-updating-the-server).
+
+**One-time setup for older servers.** A server installed before this feature has no updater yet,
+and nothing the app sends can give it one (the old server program has no way to get root rights).
+Tether then shows "One-time setup" with this command; run it once on the server and every later
+update is one click (or automatic):
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/MRnigth/Tether/main/deploy/get.sh | sudo bash

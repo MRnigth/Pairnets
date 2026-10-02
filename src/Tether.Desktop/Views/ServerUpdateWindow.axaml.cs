@@ -1,6 +1,7 @@
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Media;
+using Avalonia.Threading;
 using Tether.Core;
 using Tether.Core.Client;
 
@@ -28,8 +29,18 @@ public partial class ServerUpdateWindow : Window
 
     public string ServerVersion { get; }
 
+    // Exposed for the headless UI test.
+    internal bool Bobbing => BadgeHost.Classes.Contains("bob");
+    internal bool Spinning => Ring.IsVisible && Ring.Classes.Contains("spin");
+    internal string HeadingText => Heading.Text ?? string.Empty;
+    internal bool CommandShown => CommandPanel.IsVisible;
+    internal bool RetryShown => RetryButton.IsVisible;
+
     /// <summary>Set when the user chose "Don't ask for this version".</summary>
     public bool Skipped { get; private set; }
+
+    /// <summary>Set when the user ticked "From now on, update the server automatically".</summary>
+    public bool AlwaysUpdate => AlwaysBox.IsChecked == true;
 
     private void OnSkip(object? sender, RoutedEventArgs e)
     {
@@ -53,7 +64,12 @@ public partial class ServerUpdateWindow : Window
         AskPanel.IsVisible = false;
         ResultPanel.IsVisible = false;
         BusyPanel.IsVisible = true;
+        Ring.IsVisible = true;
+        BadgeHost.Classes.Remove("bob");
+        Badge.Fill = Visuals.Resource<IBrush>("S.Blue");
+        BadgeIcon.Data = Visuals.Resource<Geometry>("I.Server");
         Heading.Text = "Updating your server…";
+        Explanation.Text = "It downloads the newest release, checks it, installs it and restarts.";
         StepText.Text = step;
     }
 
@@ -62,12 +78,36 @@ public partial class ServerUpdateWindow : Window
         AskPanel.IsVisible = false;
         BusyPanel.IsVisible = false;
         ResultPanel.IsVisible = true;
-        Heading.Text = result.Success ? $"Server updated to {result.ServerVersion}" : "The server didn't update";
-        Explanation.Text = result.Success ? "Syncing has resumed." : result.Message
-            + (result.CanUpdateItself ? string.Empty : " Run this once on the server; after that it can update from the app:");
-        Badge.Fill = Visuals.Resource<IBrush>(result.Success ? "S.Green" : "S.Orange");
-        BadgeIcon.Data = Visuals.Resource<Geometry>(result.Success ? "I.Check" : "I.Warning");
-        CommandPanel.IsVisible = !result.Success && !result.CanUpdateItself;
+        Ring.IsVisible = false;
+        BadgeHost.Classes.Remove("bob");
+        RetryButton.IsVisible = false;
+        CommandPanel.IsVisible = false;
+        string brush, icon;
+        if (result.Success)
+        {
+            (brush, icon) = ("S.Green", "I.Check");
+            Heading.Text = $"Server updated to {result.ServerVersion}";
+            Explanation.Text = "Syncing has resumed.";
+        }
+        else if (!result.CanUpdateItself)
+        {
+            // An older server: it has no updater yet, so it needs the install command once.
+            (brush, icon) = ("S.Blue", "I.Server");
+            Heading.Text = "One-time setup";
+            Explanation.Text = "Your server was installed before it could update itself. Run this once on the server; from then on every update is one click here.";
+            CommandPanel.IsVisible = true;
+        }
+        else
+        {
+            (brush, icon) = ("S.Orange", "I.Info");
+            Heading.Text = "Not updated yet";
+            Explanation.Text = result.Message + " Nothing on the server was changed.";
+            RetryButton.IsVisible = true;
+        }
+        Badge.Fill = Visuals.Resource<IBrush>(brush);
+        BadgeIcon.Data = Visuals.Resource<Geometry>(icon);
+        BadgeHost.Classes.Remove("pop");
+        Dispatcher.UIThread.Post(() => BadgeHost.Classes.Add("pop"), DispatcherPriority.Background);
     }
 
     private async void OnCopy(object? sender, RoutedEventArgs e)

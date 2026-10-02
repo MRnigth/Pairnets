@@ -163,6 +163,11 @@
 
   <!-- Progress -->
   <Style Selector="ProgressBar">
+    <Setter Property="Transitions">
+      <Transitions>
+        <DoubleTransition Property="Value" Duration="0:0:0.35" Easing="CubicEaseOut" />
+      </Transitions>
+    </Setter>
     <Setter Property="Height" Value="8" />
     <Setter Property="MinHeight" Value="8" />
     <Setter Property="CornerRadius" Value="4" />
@@ -207,5 +212,73 @@
   <Style Selector="TextBox">
     <Setter Property="CornerRadius" Value="8" />
     <Setter Property="Padding" Value="10,7" />
+  </Style>
+
+  <!-- ================= Motion (runs only while a window is shown) ================= -->
+  <!-- Gentle up-and-down bob: the server icon waiting for an update, the update arrow. -->
+  <Style Selector=":is(Control).bob">
+    <Style.Animations>
+      <Animation Duration="0:0:1.6" IterationCount="INFINITE" Easing="SineEaseInOut">
+        <KeyFrame Cue="0%"><Setter Property="TranslateTransform.Y" Value="0" /></KeyFrame>
+        <KeyFrame Cue="50%"><Setter Property="TranslateTransform.Y" Value="-6" /></KeyFrame>
+        <KeyFrame Cue="100%"><Setter Property="TranslateTransform.Y" Value="0" /></KeyFrame>
+      </Animation>
+    </Style.Animations>
+  </Style>
+  <!-- Continuous rotation: the sync glyph while syncing, the ring while the server updates. -->
+  <Style Selector=":is(Control).spin">
+    <Style.Animations>
+      <Animation Duration="0:0:1.4" IterationCount="INFINITE">
+        <KeyFrame Cue="0%"><Setter Property="RotateTransform.Angle" Value="0" /></KeyFrame>
+        <KeyFrame Cue="100%"><Setter Property="RotateTransform.Angle" Value="360" /></KeyFrame>
+      </Animation>
+    </Style.Animations>
+  </Style>
+  <!-- Soft breathing: waiting for the other computer. -->
+  <Style Selector=":is(Control).pulse">
+    <Style.Animations>
+      <Animation Duration="0:0:2" IterationCount="INFINITE" Easing="SineEaseInOut">
+        <KeyFrame Cue="0%"><Setter Property="ScaleTransform.ScaleX" Value="1" /><Setter Property="ScaleTransform.ScaleY" Value="1" /></KeyFrame>
+        <KeyFrame Cue="50%"><Setter Property="ScaleTransform.ScaleX" Value="1.08" /><Setter Property="ScaleTransform.ScaleY" Value="1.08" /></KeyFrame>
+        <KeyFrame Cue="100%"><Setter Property="ScaleTransform.ScaleX" Value="1" /><Setter Property="ScaleTransform.ScaleY" Value="1" /></KeyFrame>
+      </Animation>
+    </Style.Animations>
+  </Style>
+  <!-- One small pop when something changes (status badge, success). -->
+  <Style Selector=":is(Control).pop">
+    <Style.Animations>
+      <Animation Duration="0:0:0.38" Easing="BackEaseOut">
+        <KeyFrame Cue="0%"><Setter Property="ScaleTransform.ScaleX" Value="0.82" /><Setter Property="ScaleTransform.ScaleY" Value="0.82" /></KeyFrame>
+        <KeyFrame Cue="100%"><Setter Property="ScaleTransform.ScaleX" Value="1" /><Setter Property="ScaleTransform.ScaleY" Value="1" /></KeyFrame>
+      </Animation>
+    </Style.Animations>
+  </Style>
+  <!-- Arrows that keep travelling: up while uploading, down while downloading. -->
+  <Style Selector=":is(Control).rise">
+    <Style.Animations>
+      <Animation Duration="0:0:1.1" IterationCount="INFINITE" Easing="QuadraticEaseOut">
+        <KeyFrame Cue="0%"><Setter Property="TranslateTransform.Y" Value="5" /><Setter Property="Opacity" Value="0" /></KeyFrame>
+        <KeyFrame Cue="35%"><Setter Property="Opacity" Value="1" /></KeyFrame>
+        <KeyFrame Cue="100%"><Setter Property="TranslateTransform.Y" Value="-5" /><Setter Property="Opacity" Value="0" /></KeyFrame>
+      </Animation>
+    </Style.Animations>
+  </Style>
+  <Style Selector=":is(Control).fall">
+    <Style.Animations>
+      <Animation Duration="0:0:1.1" IterationCount="INFINITE" Easing="QuadraticEaseOut">
+        <KeyFrame Cue="0%"><Setter Property="TranslateTransform.Y" Value="-5" /><Setter Property="Opacity" Value="0" /></KeyFrame>
+        <KeyFrame Cue="35%"><Setter Property="Opacity" Value="1" /></KeyFrame>
+        <KeyFrame Cue="100%"><Setter Property="TranslateTransform.Y" Value="5" /><Setter Property="Opacity" Value="0" /></KeyFrame>
+      </Animation>
+    </Style.Animations>
+  </Style>
+  <!-- New rows (activity, files in progress) slide in from above. -->
+  <Style Selector=":is(Control).enter">
+    <Style.Animations>
+      <Animation Duration="0:0:0.3" Easing="CubicEaseOut">
+        <KeyFrame Cue="0%"><Setter Property="TranslateTransform.Y" Value="-8" /><Setter Property="Opacity" Value="0" /></KeyFrame>
+        <KeyFrame Cue="100%"><Setter Property="TranslateTransform.Y" Value="0" /><Setter Property="Opacity" Value="1" /></KeyFrame>
+      </Animation>
+    </Style.Animations>
   </Style>
 </Styles>

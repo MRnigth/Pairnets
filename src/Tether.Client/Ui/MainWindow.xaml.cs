@@ -36,6 +36,8 @@ public partial class MainWindow : Window
     private readonly IMainActions? _actions;
     private readonly ObservableCollection<ActivityItem> _activity = [];
     private readonly ObservableCollection<AttentionItem> _attention = [];
+    private readonly ObservableCollection<ActiveFileView> _active = [];
+    private string? _shownState;
 
     public MainWindow(IMainActions? actions)
     {
@@ -44,6 +46,12 @@ public partial class MainWindow : Window
         _actions = actions;
         ActivityList.ItemsSource = _activity;
         AttentionList.ItemsSource = _attention;
+        ActiveList.ItemsSource = _active;
+        IsVisibleChanged += (_, _) =>
+        {
+            if (!IsVisible)
+                StopMotion(); // nothing moves (or costs CPU) while Tether sits in the tray
+        };
         UpdatePanels();
     }
 
@@ -65,6 +73,7 @@ public partial class MainWindow : Window
         var (brush, icon) = s.IsWaiting ? ("S.Grey", "I.Wait") : Visuals.ForStatus(s.Status);
         StatusBadge.SetResourceReference(Shape.FillProperty, brush);
         StatusGlyph.Data = Visuals.Resource<Geometry>(icon);
+        Animate(s);
         Headline.Text = s.Headline;
         Detail.Text = s.DetailText;
         Detail.Visibility = Show(s.DetailText.Length > 0);
@@ -77,18 +86,24 @@ public partial class MainWindow : Window
         FixButton.Content = s.FixLabel;
 
         TransferCard.Visibility = Show(s.IsTransferring);
+        if (!s.IsTransferring)
+            Motion.Travel(TransferArrow, null);
         if (s.IsTransferring)
         {
             TransferTitle.Text = s.BatchTitle;
             TransferSpeed.Text = s.SpeedText;
             LimitPill.Visibility = Show(s.LimitText is not null);
             LimitText.Text = s.LimitText ?? string.Empty;
-            TransferProgress.Value = s.OverallPercent ?? 0;
+            Motion.Glide(TransferProgress, s.OverallPercent ?? 0);
             TransferOverall.Text = s.OverallText;
             var several = s.Active.Count > 1 || s.FilesTotal > 1;
             ActiveDivider.Visibility = Show(several && s.Active.Count > 0);
             ActiveList.Visibility = Show(several);
-            ActiveList.ItemsSource = s.Active;
+            LiveLists.Sync(_active, s.Active);
+            var uploading = s.Active.Count == 0 ? s.Operation != "download" : s.Active.Any(a => a.IsUpload);
+            TransferArrow.Data = Visuals.Resource<Geometry>(uploading ? "I.Up" : "I.Down");
+            TransferArrow.SetResourceReference(LineIcon.StrokeProperty, uploading ? "S.Green" : "S.Blue");
+            Motion.Travel(TransferArrow, uploading);
         }
 
         // Free space on the server; a warning colour when it runs low.
@@ -101,7 +116,7 @@ public partial class MainWindow : Window
         WaitPanel.Visibility = Show(s.IsWaiting);
         if (s.IsWaiting)
         {
-            WaitProgress.Value = s.WaitingPercent ?? 0;
+            Motion.Glide(WaitProgress, s.WaitingPercent ?? 0);
             WaitText.Text = s.WaitingProgressText;
         }
     }
@@ -110,6 +125,7 @@ public partial class MainWindow : Window
     public void ShowUpdate(string? title, string detail, string button, double? progress = null, bool busy = false)
     {
         UpdateBanner.Visibility = Show(title is not null);
+        Motion.Bob(UpdateIcon, title is not null && !busy);
         if (title is null)
             return;
         UpdateTitle.Text = title;
@@ -118,15 +134,42 @@ public partial class MainWindow : Window
         UpdateButton.IsEnabled = !busy;
         UpdateLater.Visibility = Show(!busy);
         UpdateProgress.Visibility = Show(progress is not null);
-        UpdateProgress.Value = progress ?? 0;
+        Motion.Glide(UpdateProgress, progress ?? 0);
     }
 
     public void ShowActivity(IReadOnlyList<ActivityItem> items)
     {
-        _activity.Clear();
-        foreach (var item in items)
-            _activity.Add(item);
+        LiveLists.Sync(_activity, items);
         UpdatePanels();
+    }
+
+    /// <summary>
+    /// Motion for the status badge: the sync glyph turns while syncing, the badge breathes while
+    /// waiting for the other computer, and it pops once whenever the state changes.
+    /// </summary>
+    private void Animate(StatusSnapshot s)
+    {
+        Motion.Spin(StatusGlyph, s.Status == Tether.Core.Sync.RunnerStatus.Syncing && !s.IsWaiting);
+        Motion.Pulse(StatusBadgeHost, s.IsWaiting);
+        var state = s.IsWaiting ? "waiting" : s.Status.ToString();
+        if (_shownState is not null && _shownState != state && !s.IsWaiting)
+            Motion.Pop(StatusBadgeHost);
+        _shownState = state;
+    }
+
+    private void StopMotion()
+    {
+        Motion.Spin(StatusGlyph, false);
+        Motion.Pulse(StatusBadgeHost, false);
+        Motion.Travel(TransferArrow, null);
+        Motion.Bob(UpdateIcon, false);
+        _shownState = null;
+    }
+
+    private void OnRowLoaded(object sender, RoutedEventArgs e)
+    {
+        if (sender is UIElement row)
+            Motion.Enter(row);
     }
 
     public void ShowAttention(IReadOnlyList<AttentionItem> items)

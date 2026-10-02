@@ -39,6 +39,9 @@ public sealed class ClientSettings
     /// <summary>Download speed limit in MB/s; null or 0 = no limit.</summary>
     public double? DownloadLimitMBps { get; set; }
 
+    /// <summary>Update the server without asking whenever this app finds it out of date.</summary>
+    public bool AutoUpdateServer { get; set; }
+
     /// <summary>A server version the user chose not to be reminded about ("Don't ask for this version").</summary>
     public string? SkippedServerVersion { get; set; }
 

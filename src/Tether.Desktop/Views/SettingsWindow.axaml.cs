@@ -44,6 +44,7 @@ public partial class SettingsWindow : Window
         AutoStartBox.IsChecked = autoStart;
         UpdateBox.IsChecked = current.CheckForUpdates;
         WaitBox.IsChecked = current.WaitForPeerBatches;
+        AutoServerBox.IsChecked = current.AutoUpdateServer;
         (current.EffectiveParallelTransfers switch { 1 => Par1, 2 => Par2, 8 => Par8, _ => Par4 }).IsChecked = true;
         UpLimitBox.IsChecked = current.UploadLimitMBps is > 0;
         UpLimitValue.Value = (decimal)(current.UploadLimitMBps is > 0 ? current.UploadLimitMBps.Value : 5);
@@ -207,6 +208,7 @@ public partial class SettingsWindow : Window
                 Paused = _original.Paused,
                 CheckForUpdates = UpdateBox.IsChecked == true,
                 WaitForPeerBatches = WaitBox.IsChecked == true,
+                AutoUpdateServer = AutoServerBox.IsChecked == true,
                 ParallelTransfers = ParallelChoice(),
                 UploadLimitMBps = Limit(UpLimitBox, UpLimitValue),
                 DownloadLimitMBps = Limit(DownLimitBox, DownLimitValue),

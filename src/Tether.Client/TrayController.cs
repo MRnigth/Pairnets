@@ -432,13 +432,37 @@ public sealed class TrayController : IMainActions, IDisposable
         if (!session.ServerNeedsUpdate(info) || _serverPromptShownFor == info.ServerVersion)
             return;
         _serverPromptShownFor = info.ServerVersion;
-        var dialog = new ServerUpdateWindow(session, info.ServerVersion!);
+        if (_settings.AutoUpdateServer)
+        {
+            UpdateServerQuietly(session, info.ServerVersion!);
+            return;
+        }
+        ShowServerUpdate(session, info.ServerVersion!, null);
+    }
+
+    private async void UpdateServerQuietly(ClientSession session, string serverVersion)
+    {
+        var result = await session.UpdateServerQuietlyAsync(CancellationToken.None);
+        _dirty = true;
+        if (result.Success)
+            Toast("server-updated", "Server updated", $"Your server now runs {result.ServerVersion}.", Forms.ToolTipIcon.Info, ShowMainWindow);
+        else if (!result.CanUpdateItself)
+            ShowServerUpdate(session, serverVersion, result); // needs the one-time setup
+    }
+
+    private void ShowServerUpdate(ClientSession session, string serverVersion, ServerUpdateResult? result)
+    {
+        var dialog = new ServerUpdateWindow(session, serverVersion);
+        if (result is not null)
+            dialog.ShowResult(result);
         dialog.Closed += (_, _) =>
         {
-            if (!dialog.Skipped)
-                return;
-            _settings.SkippedServerVersion = dialog.ServerVersion;
-            SettingsStore.Save(SettingsStore.DefaultPath, _settings);
+            if (dialog.Skipped)
+                _settings.SkippedServerVersion = dialog.ServerVersion;
+            if (dialog.AlwaysUpdate)
+                _settings.AutoUpdateServer = true;
+            if (dialog.Skipped || dialog.AlwaysUpdate)
+                SettingsStore.Save(SettingsStore.DefaultPath, _settings);
         };
         dialog.Show();
     }

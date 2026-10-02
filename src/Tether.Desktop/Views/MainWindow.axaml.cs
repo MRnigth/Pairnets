@@ -28,6 +28,8 @@ public partial class MainWindow : Window
     private readonly IMainActions? _actions;
     private readonly ObservableCollection<ActivityItem> _activity = [];
     private readonly ObservableCollection<AttentionItem> _attention = [];
+    private readonly ObservableCollection<ActiveFileView> _active = [];
+    private string? _shownState;
 
     public MainWindow()
         : this(null)
@@ -40,6 +42,7 @@ public partial class MainWindow : Window
         _actions = actions;
         ActivityList.ItemsSource = _activity;
         AttentionList.ItemsSource = _attention;
+        ActiveList.ItemsSource = _active;
         UpdatePanels();
     }
 
@@ -61,6 +64,7 @@ public partial class MainWindow : Window
         var (brush, icon) = s.IsWaiting ? ("S.Grey", "I.Wait") : Visuals.ForStatus(s.Status);
         StatusBadge.Fill = Visuals.Resource<IBrush>(brush);
         StatusGlyph.Data = Visuals.Resource<Geometry>(icon);
+        Animate(s);
         Headline.Text = s.Headline;
         Detail.Text = s.DetailText;
         Detail.IsVisible = s.DetailText.Length > 0;
@@ -85,7 +89,12 @@ public partial class MainWindow : Window
             var several = s.Active.Count > 1 || s.FilesTotal > 1;
             ActiveDivider.IsVisible = several && s.Active.Count > 0;
             ActiveList.IsVisible = several;
-            ActiveList.ItemsSource = s.Active;
+            LiveLists.Sync(_active, s.Active);
+            var uploading = s.Active.Count == 0 ? s.Operation != "download" : s.Active.Any(a => a.IsUpload);
+            TransferArrow.Data = Visuals.Resource<Geometry>(uploading ? "I.Up" : "I.Down");
+            TransferArrow.Stroke = Visuals.Resource<IBrush>(uploading ? "S.Green" : "S.Blue");
+            TransferArrow.Classes.Set("rise", uploading);
+            TransferArrow.Classes.Set("fall", !uploading);
         }
 
         // Free space on the server; a warning colour when it runs low.
@@ -122,10 +131,25 @@ public partial class MainWindow : Window
 
     public void ShowActivity(IReadOnlyList<ActivityItem> items)
     {
-        _activity.Clear();
-        foreach (var item in items)
-            _activity.Add(item);
+        LiveLists.Sync(_activity, items);
         UpdatePanels();
+    }
+
+    /// <summary>
+    /// Motion for the status badge: the sync glyph turns while syncing, the badge breathes while
+    /// waiting for the other computer, and it pops once whenever the state changes.
+    /// </summary>
+    private void Animate(StatusSnapshot s)
+    {
+        StatusGlyph.Classes.Set("spin", s.Status == Tether.Core.Sync.RunnerStatus.Syncing && !s.IsWaiting);
+        StatusBadgeHost.Classes.Set("pulse", s.IsWaiting);
+        var state = s.IsWaiting ? "waiting" : s.Status.ToString();
+        if (_shownState is not null && _shownState != state && !s.IsWaiting)
+        {
+            StatusBadgeHost.Classes.Remove("pop");
+            Avalonia.Threading.Dispatcher.UIThread.Post(() => StatusBadgeHost.Classes.Add("pop"), Avalonia.Threading.DispatcherPriority.Background);
+        }
+        _shownState = state;
     }
 
     public void ShowAttention(IReadOnlyList<AttentionItem> items)
@@ -160,6 +184,10 @@ public partial class MainWindow : Window
     internal bool FixVisible => FixButton.IsVisible;
     internal int ActivityCount => _activity.Count;
     internal bool TransferVisible => TransferCard.IsVisible;
+    internal bool GlyphSpins => StatusGlyph.Classes.Contains("spin");
+    internal bool BadgePulses => StatusBadgeHost.Classes.Contains("pulse");
+    internal string ArrowMotion => TransferArrow.Classes.Contains("rise") ? "rise" : TransferArrow.Classes.Contains("fall") ? "fall" : "none";
+    internal int ActiveRows => _active.Count;
 
     private void OnTabChanged(object? sender, RoutedEventArgs e) => UpdatePanels();
     private void OnFix(object? sender, RoutedEventArgs e) => _actions?.FixBlocked();

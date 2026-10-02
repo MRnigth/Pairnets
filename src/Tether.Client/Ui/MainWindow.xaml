@@ -26,7 +26,7 @@
           <ColumnDefinition Width="Auto" />
           <ColumnDefinition Width="Auto" />
         </Grid.ColumnDefinitions>
-        <ui:LineIcon Width="20" Height="20" Stroke="{DynamicResource T.Accent}" Data="{StaticResource I.Download}" VerticalAlignment="Center" Margin="0,0,12,0" />
+        <ui:LineIcon x:Name="UpdateIcon" Width="20" Height="20" Stroke="{DynamicResource T.Accent}" Data="{StaticResource I.Download}" VerticalAlignment="Center" Margin="0,0,12,0" />
         <StackPanel Grid.Column="1" VerticalAlignment="Center">
           <TextBlock x:Name="UpdateTitle" FontWeight="SemiBold" />
           <TextBlock x:Name="UpdateDetail" Style="{StaticResource MutedSmall}" TextWrapping="Wrap" Margin="0,1,0,0" />
@@ -45,7 +45,7 @@
           <ColumnDefinition Width="*" />
           <ColumnDefinition Width="Auto" />
         </Grid.ColumnDefinitions>
-        <Grid Width="52" Height="52" VerticalAlignment="Top" Margin="0,0,16,0">
+        <Grid x:Name="StatusBadgeHost" Width="52" Height="52" VerticalAlignment="Top" Margin="0,0,16,0">
           <Ellipse x:Name="StatusBadge" Fill="{StaticResource S.Grey}" />
           <ui:LineIcon x:Name="StatusGlyph" Width="24" Height="24" StrokeThickness="2.6" Stroke="White"
                        Data="{StaticResource I.CloudOff}" />
@@ -104,7 +104,11 @@
             <ColumnDefinition Width="Auto" />
             <ColumnDefinition Width="Auto" />
           </Grid.ColumnDefinitions>
-          <TextBlock x:Name="TransferTitle" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+          <StackPanel Orientation="Horizontal">
+            <ui:LineIcon x:Name="TransferArrow" Width="16" Height="16" StrokeThickness="2.4" Margin="0,0,6,0"
+                         Stroke="{StaticResource S.Green}" Data="{StaticResource I.Up}" VerticalAlignment="Center" />
+            <TextBlock x:Name="TransferTitle" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+          </StackPanel>
           <TextBlock x:Name="TransferSpeed" Grid.Column="1" Style="{StaticResource MutedSmall}" VerticalAlignment="Center" Margin="8,0,0,0" />
           <Border x:Name="LimitPill" Grid.Column="2" Style="{StaticResource Pill}" Margin="8,0,0,0" Visibility="Collapsed">
             <TextBlock x:Name="LimitText" FontSize="11.5" />
@@ -121,7 +125,7 @@
           </ItemsControl.ItemsPanel>
           <ItemsControl.ItemTemplate>
             <DataTemplate>
-              <StackPanel Margin="0,6,16,2">
+              <StackPanel Margin="0,6,16,2" Loaded="OnRowLoaded">
                 <Grid>
                   <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
@@ -130,7 +134,7 @@
                   <TextBlock Text="{Binding FileName}" FontWeight="SemiBold" FontSize="12.5" TextTrimming="CharacterEllipsis" />
                   <TextBlock Grid.Column="1" Text="{Binding PercentText}" Style="{StaticResource MutedSmall}" Margin="6,0,0,0" />
                 </Grid>
-                <ProgressBar Style="{StaticResource ThinProgress}" Minimum="0" Maximum="100" Value="{Binding PercentValue, Mode=OneWay}" Margin="0,4,0,0"
+                <ProgressBar Style="{StaticResource ThinProgress}" Minimum="0" Maximum="100" ui:Motion.SmoothValue="{Binding PercentValue, Mode=OneWay}" Margin="0,4,0,0"
                              Foreground="{Binding IsUpload, Converter={StaticResource DirectionBrush}}" />
               </StackPanel>
             </DataTemplate>
@@ -201,7 +205,7 @@
             <ItemsControl x:Name="ActivityList" Style="{StaticResource PlainList}">
               <ItemsControl.ItemTemplate>
                 <DataTemplate>
-                  <Border Style="{StaticResource Row}" ToolTip="{Binding TimeText}">
+                  <Border Style="{StaticResource Row}" ToolTip="{Binding TimeText}" Loaded="OnRowLoaded">
                     <Grid>
                       <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto" />

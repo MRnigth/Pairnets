@@ -10,11 +10,18 @@
         <ColumnDefinition Width="Auto" />
         <ColumnDefinition Width="*" />
       </Grid.ColumnDefinitions>
-      <Grid Width="44" Height="44" Margin="0,0,14,0" VerticalAlignment="Top">
-        <Ellipse x:Name="Badge" Fill="{StaticResource S.Orange}" />
-        <ui:LineIcon x:Name="BadgeIcon" Width="22" Height="22" StrokeThickness="2.2" Stroke="White" Data="{StaticResource I.Server}" />
+      <Grid Width="60" Height="60" Margin="0,0,12,0" VerticalAlignment="Top">
+        <!-- Spinning ring while the server updates -->
+        <Path x:Name="Ring" Width="60" Height="60" Stroke="{DynamicResource T.Accent}" StrokeThickness="3"
+              StrokeStartLineCap="Round" StrokeEndLineCap="Round" Visibility="Collapsed"
+              Data="M 30,1.5 A 28.5,28.5 0 0 1 56.8,20.3" />
+        <!-- The server badge: bobs while it waits for an answer, pops when done -->
+        <Grid x:Name="BadgeHost" Width="44" Height="44">
+          <Ellipse x:Name="Badge" Fill="{StaticResource S.Orange}" />
+          <ui:LineIcon x:Name="BadgeIcon" Width="22" Height="22" StrokeThickness="2.2" Stroke="White" Data="{StaticResource I.Server}" />
+        </Grid>
       </Grid>
-      <StackPanel Grid.Column="1">
+      <StackPanel Grid.Column="1" VerticalAlignment="Center">
         <TextBlock x:Name="Heading" Style="{StaticResource H2}" FontSize="18" Text="Your server should be updated" />
         <TextBlock x:Name="Explanation" Style="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,4,0,0" />
       </StackPanel>
@@ -41,6 +48,7 @@
           <TextBlock Grid.Row="2" Grid.Column="1" FontSize="12" Text="stay as they are; syncing pauses briefly" Margin="0,4,0,0" />
         </Grid>
       </Border>
+      <CheckBox x:Name="AlwaysBox" Style="{StaticResource Switch}" Content="From now on, update the server automatically" Margin="0,14,0,0" />
       <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,14,0,0">
         <Button Style="{StaticResource FlatButton}" Content="Don't ask for this version" Click="OnSkip" />
         <Button Style="{StaticResource SubtleButton}" Content="Later" Margin="8,0,0,0" Click="OnLater" />
@@ -50,8 +58,7 @@
 
     <!-- 2. Updating -->
     <StackPanel x:Name="BusyPanel" Margin="0,14,0,0" Visibility="Collapsed">
-      <ProgressBar Style="{StaticResource ThinProgress}" IsIndeterminate="True" />
-      <TextBlock x:Name="StepText" FontSize="12" Margin="0,8,0,0" />
+      <TextBlock x:Name="StepText" FontSize="12" FontWeight="SemiBold" />
       <TextBlock Style="{StaticResource MutedSmall}" Text="You can close this window. Tether reconnects by itself." Margin="0,4,0,0" />
     </StackPanel>
 
@@ -65,7 +72,10 @@
         </Border>
         <Button Style="{StaticResource SubtleButton}" Content="Copy command" HorizontalAlignment="Left" Margin="0,8,0,0" Click="OnCopy" />
       </StackPanel>
-      <Button Style="{StaticResource AccentButton}" Content="Close" HorizontalAlignment="Right" Margin="0,10,0,0" Click="OnLater" />
+      <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
+        <Button x:Name="RetryButton" Style="{StaticResource SubtleButton}" Content="Try again" Margin="0,0,8,0" Click="OnUpdate" Visibility="Collapsed" />
+        <Button Style="{StaticResource AccentButton}" Content="Close" Click="OnLater" />
+      </StackPanel>
     </StackPanel>
   </StackPanel>
 </Window>
