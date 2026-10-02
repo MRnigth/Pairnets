@@ -1,0 +1,102 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: 1
+  DOTNET_NOLOGO: 1
+
+jobs:
+  server:
+    name: Server (linux-x64)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Version
+        id: v
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"; else echo "version=1.0.0" >> "$GITHUB_OUTPUT"; fi
+      - name: Test
+        run: dotnet test Tether.sln -c Release
+      - name: Publish
+        run: >
+          dotnet publish src/Tether.Server/Tether.Server.csproj -c Release -r linux-x64 --self-contained true
+          -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=false -p:DebugType=none
+          -p:Version=${{ steps.v.outputs.version }} -o dist/tether-server-linux-x64
+      - name: Package
+        run: |
+          cp deploy/install.sh deploy/tether-server.service deploy/tether.env.example deploy/tailscale-acl.hujson dist/tether-server-linux-x64/
+          cp docs/DEPLOY.md dist/tether-server-linux-x64/DEPLOY.md
+          chmod +x dist/tether-server-linux-x64/install.sh dist/tether-server-linux-x64/tether-server
+          tar -C dist -czf dist/tether-server-linux-x64.tar.gz tether-server-linux-x64
+      - uses: actions/upload-artifact@v4
+        with:
+          name: server
+          path: dist/tether-server-linux-x64.tar.gz
+
+  client:
+    name: Client (win-x64)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Version
+        id: v
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"; else echo "version=1.0.0" >> "$GITHUB_OUTPUT"; fi
+      - name: Publish
+        run: >
+          dotnet publish src/Tether.Client/Tether.Client.csproj -c Release -r win-x64 --self-contained true
+          -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none
+          -p:Version=${{ steps.v.outputs.version }} -o publish/client
+      - name: Zip
+        shell: pwsh
+        run: |
+          Copy-Item deploy/README-client.txt publish/client/
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Compress-Archive -Path publish/client/Tether.exe, publish/client/README-client.txt -DestinationPath dist/tether-client-win-x64.zip
+      - name: Installer (optional)
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress | Out-Null }
+          & $iscc "/DAppVersion=${{ steps.v.outputs.version }}" "/DSourceDir=$PWD\publish\client" "/O$PWD\dist" deploy\installer\tether.iss
+          if ($LASTEXITCODE -ne 0) { throw "ISCC failed" }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: client
+          path: dist/*
+
+  release:
+    name: GitHub release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [server, client]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: assets
+          merge-multiple: true
+      - name: Checksums
+        working-directory: assets
+        run: sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" assets/* --repo "$GITHUB_REPOSITORY" --title "Tether $GITHUB_REF_NAME" --generate-notes
