@@ -1,0 +1,58 @@
+<Window x:Class="Tether.Client.Ui.SettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Tether" Width="560" SizeToContent="Height" ResizeMode="NoResize"
+        WindowStartupLocation="CenterScreen" FontSize="13">
+  <StackPanel Margin="16">
+    <TextBlock x:Name="IntroText" TextWrapping="Wrap" Margin="0,0,0,12" Visibility="Collapsed"
+               Text="Welcome to Tether. Enter the server address and token printed by install.sh on your server, pick the folder to keep in sync, then press Start syncing." />
+
+    <Grid>
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="140" />
+        <ColumnDefinition Width="*" />
+        <ColumnDefinition Width="Auto" />
+      </Grid.ColumnDefinitions>
+      <Grid.RowDefinitions>
+        <RowDefinition Height="Auto" />
+        <RowDefinition Height="Auto" />
+        <RowDefinition Height="Auto" />
+        <RowDefinition Height="Auto" />
+        <RowDefinition Height="Auto" />
+      </Grid.RowDefinitions>
+
+      <TextBlock Grid.Row="0" Text="Server URL" VerticalAlignment="Center" />
+      <TextBox x:Name="ServerUrlBox" Grid.Row="0" Grid.Column="1" Grid.ColumnSpan="2" Margin="0,4"
+               ToolTip="For example http://100.x.y.z:5075/ (get the IP on the server with: tailscale ip -4)" />
+
+      <TextBlock Grid.Row="1" Text="Token" VerticalAlignment="Center" />
+      <PasswordBox x:Name="TokenBox" Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" Margin="0,4"
+                   ToolTip="Leave empty to keep the saved token" />
+
+      <TextBlock Grid.Row="2" Text="Folder to sync" VerticalAlignment="Center" />
+      <TextBox x:Name="FolderBox" Grid.Row="2" Grid.Column="1" Margin="0,4" />
+      <Button x:Name="BrowseButton" Grid.Row="2" Grid.Column="2" Content="Browse…" Margin="8,4,0,4" Padding="10,2" Click="OnBrowse" />
+
+      <TextBlock Grid.Row="3" Text="Device name" VerticalAlignment="Center" />
+      <TextBox x:Name="DeviceBox" Grid.Row="3" Grid.Column="1" Grid.ColumnSpan="2" Margin="0,4"
+               ToolTip="Shown in conflict copy names. Must differ between your PCs." />
+
+      <TextBlock Grid.Row="4" Text="Extra ignore patterns" VerticalAlignment="Top" Margin="0,8,0,0" />
+      <TextBox x:Name="IgnoreBox" Grid.Row="4" Grid.Column="1" Grid.ColumnSpan="2" Margin="0,4" Height="70"
+               AcceptsReturn="True" VerticalScrollBarVisibility="Auto"
+               ToolTip="One pattern per line, e.g. *.bak or node_modules/" />
+    </Grid>
+
+    <CheckBox x:Name="AutoStartBox" Content="Start Tether when I sign in to Windows" Margin="140,8,0,0" />
+
+    <StackPanel Orientation="Horizontal" Margin="140,12,0,0">
+      <Button x:Name="TestButton" Content="Test connection" Padding="10,3" Click="OnTest" />
+      <TextBlock x:Name="TestResult" Margin="10,0,0,0" VerticalAlignment="Center" TextWrapping="Wrap" MaxWidth="250" />
+    </StackPanel>
+
+    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
+      <Button x:Name="SaveButton" Content="Save" IsDefault="True" Padding="16,3" Click="OnSave" />
+      <Button Content="Cancel" IsCancel="True" Padding="16,3" Margin="8,0,0,0" />
+    </StackPanel>
+  </StackPanel>
+</Window>
