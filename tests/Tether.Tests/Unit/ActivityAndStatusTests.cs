@@ -38,3 +38,14 @@ public class ActivityAndStatusTests
     public void CaseKeyFoldsUnicodeNormalization() =>
         Assert.Equal(PathRules.CaseKey("Café/X.txt"), PathRules.CaseKey("café/x.txt"));
 }
+
+public class StatusDetailTests
+{
+    [Theory]
+    [InlineData(RunnerStatus.Syncing, "Syncing", "")]
+    [InlineData(RunnerStatus.Idle, "Up to date", "")]
+    [InlineData(RunnerStatus.Offline, "Offline: connection refused", "connection refused")]
+    [InlineData(RunnerStatus.Error, "The server rejected the token", "The server rejected the token")]
+    public void DetailDoesNotRepeatHeadline(RunnerStatus status, string text, string expected) =>
+        Assert.Equal(expected, (StatusSnapshot.Initial with { Status = status, Text = text }).DetailText);
+}

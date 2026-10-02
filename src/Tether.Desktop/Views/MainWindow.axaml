@@ -9,7 +9,7 @@
         <Ellipse x:Name="StatusDot" Width="16" Height="16" Fill="Gray" VerticalAlignment="Top" Margin="0,8,14,0" />
         <StackPanel Grid.Column="1" Spacing="2">
           <TextBlock x:Name="Headline" Text="Starting…" FontSize="22" FontWeight="SemiBold" />
-          <TextBlock x:Name="Detail" Opacity="0.75" TextWrapping="Wrap" />
+          <TextBlock x:Name="Detail" Opacity="0.75" TextWrapping="Wrap" MaxWidth="420" HorizontalAlignment="Left" />
           <TextBlock x:Name="LastSync" Opacity="0.6" />
           <TextBlock x:Name="FolderText" Opacity="0.6" TextTrimming="CharacterEllipsis" />
         </StackPanel>
@@ -39,7 +39,7 @@
     </Border>
 
     <TabControl Margin="8">
-      <TabItem Header="Activity">
+      <TabItem Header="Activity" FontSize="15">
         <Grid>
           <ListBox x:Name="ActivityList" Background="Transparent">
             <ListBox.ItemTemplate>
@@ -56,7 +56,7 @@
                      Opacity="0.6" HorizontalAlignment="Center" VerticalAlignment="Center" />
         </Grid>
       </TabItem>
-      <TabItem x:Name="AttentionTab" Header="Needs attention">
+      <TabItem x:Name="AttentionTab" Header="Needs attention" FontSize="15">
         <Grid>
           <ListBox x:Name="AttentionList" Background="Transparent">
             <ListBox.ItemTemplate>

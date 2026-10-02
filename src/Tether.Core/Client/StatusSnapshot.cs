@@ -39,6 +39,21 @@ public sealed record StatusSnapshot(
         _ => "Problem",
     };
 
+    /// <summary>Extra detail under the headline, without repeating it ("Offline: timeout" → "timeout").</summary>
+    public string DetailText
+    {
+        get
+        {
+            var root = Headline.TrimEnd('…', '.');
+            var text = Text.Trim();
+            if (text.Length == 0 || string.Equals(text.TrimEnd('…', '.'), root, StringComparison.OrdinalIgnoreCase))
+                return string.Empty;
+            if (text.StartsWith(root + ":", StringComparison.OrdinalIgnoreCase))
+                return text[(root.Length + 1)..].Trim();
+            return text;
+        }
+    }
+
     /// <summary>The action the UI should offer for a blocked pass, or null.</summary>
     public string? FixLabel => Status != RunnerStatus.Blocked ? null : BlockReason switch
     {

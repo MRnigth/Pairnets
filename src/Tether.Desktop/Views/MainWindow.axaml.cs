@@ -65,7 +65,8 @@ public partial class MainWindow : Window
             _ => Color.FromRgb(207, 34, 46),
         });
         Headline.Text = s.Headline;
-        Detail.Text = s.Text;
+        Detail.Text = s.DetailText;
+        Detail.IsVisible = s.DetailText.Length > 0;
         LastSync.Text = s.LastSyncText;
         FolderText.Text = folder is null ? string.Empty : "Folder: " + folder;
         PauseButton.Content = s.Paused ? "Resume" : "Pause";
