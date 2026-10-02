@@ -31,9 +31,9 @@ to act when something looks wrong (wrong folder, unplugged drive, many deletions
 | Install on | How |
 |-----------|-----|
 | **Ubuntu server** | `curl -fsSL https://raw.githubusercontent.com/MRnigth/Tether/main/deploy/get.sh \| sudo bash` |
-| **Windows** | `TetherSetup.exe` or `tether-client-win-x64.zip` (`Tether.exe`) from the [latest release](https://github.com/MRnigth/Tether/releases/latest) |
-| **macOS** | `Tether-macos-arm64.dmg` (Apple Silicon) / `Tether-macos-x64.dmg` (Intel), or `curl -fsSL https://raw.githubusercontent.com/MRnigth/Tether/main/deploy/get.sh \| bash -s -- --mac` |
-| **Linux desktop** | `curl -fsSL https://raw.githubusercontent.com/MRnigth/Tether/main/deploy/get.sh \| bash -s -- --desktop` |
+| **Windows** | **[Download TetherSetup.exe](https://github.com/MRnigth/Tether/releases/download/latest/TetherSetup.exe)** (installer) or [tether-client-win-x64.zip](https://github.com/MRnigth/Tether/releases/download/latest/tether-client-win-x64.zip) (just `Tether.exe`) |
+| **macOS** | [Tether-macos-arm64.dmg](https://github.com/MRnigth/Tether/releases/download/latest/Tether-macos-arm64.dmg) (Apple Silicon) / [Tether-macos-x64.dmg](https://github.com/MRnigth/Tether/releases/download/latest/Tether-macos-x64.dmg) (Intel), or `curl -fsSL https://raw.githubusercontent.com/MRnigth/Tether/main/deploy/get.sh \| bash -s -- --mac` |
+| **Linux desktop** | [tether-desktop-linux-x64.tar.gz](https://github.com/MRnigth/Tether/releases/download/latest/tether-desktop-linux-x64.tar.gz) or `curl -fsSL https://raw.githubusercontent.com/MRnigth/Tether/main/deploy/get.sh \| bash -s -- --desktop` |
 
 More detail: [Architecture](docs/ARCHITECTURE.md) · [Deploy](docs/DEPLOY.md) ·
 [Security](docs/SECURITY.md) · [Testing](docs/TESTING.md) · [Decisions](docs/DECISIONS.md)

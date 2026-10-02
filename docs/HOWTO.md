@@ -159,9 +159,9 @@ work laptop…) away from Tether.
 **Windows**: download one of these from the
 [latest release](https://github.com/MRnigth/Tether/releases/latest):
 
-* `TetherSetup.exe`: the installer. It installs for your user only (no admin rights) and adds
+* [`TetherSetup.exe`](https://github.com/MRnigth/Tether/releases/download/latest/TetherSetup.exe): the installer. It installs for your user only (no admin rights) and adds
   Tether to the Start menu.
-* `tether-client-win-x64.zip`: extract `Tether.exe` to a permanent place, for example
+* [`tether-client-win-x64.zip`](https://github.com/MRnigth/Tether/releases/download/latest/tether-client-win-x64.zip): extract `Tether.exe` to a permanent place, for example
   `%LocalAppData%\Programs\Tether\`.
 
 Windows may say "Windows protected your PC" because the program is not code-signed. Click

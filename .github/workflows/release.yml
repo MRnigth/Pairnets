@@ -1,7 +1,8 @@
 name: Release
 
 # Tags (v*) and releases published on GitHub (Releases -> Draft a new release) get the packages
-# attached. Pushes to main only build the packages as a smoke test.
+# attached. Every push to main also replaces the "latest" release ("Latest build"), so the newest
+# packages always have fixed links: https://github.com/<owner>/<repo>/releases/download/latest/<file>
 on:
   push:
     tags: ["v*"]
@@ -170,3 +171,37 @@ jobs:
           else
             gh release create "$GITHUB_REF_NAME" assets/* --repo "$GITHUB_REPOSITORY" --title "Tether $GITHUB_REF_NAME" --generate-notes
           fi
+
+  latest:
+    name: Latest build (main)
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    needs: [server, client, desktop-linux, macos]
+    runs-on: ubuntu-latest
+    concurrency:
+      group: latest-build
+      cancel-in-progress: false
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: assets
+          merge-multiple: true
+      - name: Checksums
+        working-directory: assets
+        run: sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt
+      - name: Replace the "latest" release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete latest --repo "$GITHUB_REPOSITORY" --cleanup-tag --yes || true
+          gh release create latest assets/* --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --latest \
+            --title "Latest build" \
+            --notes "Built automatically from the newest commit on main (${GITHUB_SHA::7}).
+
+          * Windows: TetherSetup.exe (installer) or tether-client-win-x64.zip (just Tether.exe)
+          * Mac: Tether-macos-arm64.dmg (Apple silicon) or Tether-macos-x64.dmg (Intel)
+          * Linux desktop: tether-desktop-linux-x64.tar.gz
+          * Server: tether-server-linux-x64.tar.gz
+
+          Check downloads against SHA256SUMS.txt."

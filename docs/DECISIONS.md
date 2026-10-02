@@ -144,3 +144,8 @@ what cannot lose or silently overwrite data.
   addition to the tray/menu-bar icon. Closing it keeps syncing in the background.
 * **Screenshots** in `docs/images` are rendered by a headless UI test
   (`TETHER_SCREENSHOT_DIR=... dotnet test --filter DesktopUi`).
+* **Rolling "latest" release.** Every push to `main` deletes and recreates one release, tagged
+  `latest` and titled "Latest build", with the packages from that commit. The download links in the
+  README and HOWTO (`releases/download/latest/<file>`) therefore always give the newest build
+  without anyone tagging a version. Versioned `v*` releases are created separately and are never
+  touched by this job.
