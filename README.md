@@ -22,6 +22,7 @@ to act when something looks wrong (wrong folder, unplugged drive, many deletions
 ```
 
 **New here? Start with the step-by-step guide: [How to install Tether, and how it works](docs/HOWTO.md).**
+Or let Claude do it: copy a ready-made prompt from [Set Tether up with Claude](docs/SETUP-WITH-CLAUDE.md).
 
 <p>
   <img src="docs/images/main-window-syncing-light.png" alt="The Tether window, light mode" width="49%">

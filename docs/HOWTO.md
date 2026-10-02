@@ -4,6 +4,9 @@ This guide takes you from nothing to two PCs that keep one folder in sync, step 
 explains in plain language what Tether does and what to do when something needs your attention.
 Allow about 30 minutes.
 
+> Prefer to have it done for you? [Set Tether up with Claude](SETUP-WITH-CLAUDE.md) has two
+> copy-and-paste prompts: one for the server and one for each computer.
+
 **Contents**
 
 1. [What you need](#1-what-you-need)
