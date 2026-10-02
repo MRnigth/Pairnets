@@ -386,4 +386,37 @@ public class TwoDeviceSyncTests : IAsyncLifetime
         Assert.Contains(live, e => e.Path == "Report.txt" && e.Hash == ContentHash.Of(Encoding.UTF8.GetBytes("desktop")));
         Assert.DoesNotContain(live, e => e.Path == "report.txt");
     }
+
+    [Fact]
+    public async Task TransfersRunFourAtATimeAndAllArrive()
+    {
+        await _desktop.SyncAsync();
+        await _laptop.SyncAsync();
+        for (var i = 0; i < 24; i++)
+            _desktop.Write($"batch/f{i:00}.txt", "content " + i);
+
+        int inFlight = 0, peak = 0;
+        async Task Track(SyncAction _, string __)
+        {
+            var now = Interlocked.Increment(ref inFlight);
+            int seen;
+            while ((seen = Volatile.Read(ref peak)) < now && Interlocked.CompareExchange(ref peak, now, seen) != seen)
+            {
+            }
+            await Task.Delay(30);
+            Interlocked.Decrement(ref inFlight);
+        }
+        _desktop.Hooks.BeforeTransfer = Track;
+        var up = await _desktop.SyncAsync();
+        Assert.Equal(24, up.Uploaded);
+        Assert.Equal(4, peak);
+
+        peak = 0;
+        _laptop.Hooks.BeforeTransfer = Track;
+        var down = await _laptop.SyncAsync();
+        Assert.Equal(24, down.Downloaded);
+        Assert.Equal(4, peak);
+        for (var i = 0; i < 24; i++)
+            Assert.Equal("content " + i, _laptop.Read($"batch/f{i:00}.txt"));
+    }
 }

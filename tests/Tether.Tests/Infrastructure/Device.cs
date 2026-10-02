@@ -13,7 +13,7 @@ public sealed class Device : IAsyncDisposable
     private readonly TempDir _stateDir;
 
     public Device(string name, TestServer server, Uri? url = null, string? token = null, TimeSpan? stability = null,
-        IReadOnlyList<string>? extraIgnore = null, TimeProvider? clock = null)
+        IReadOnlyList<string>? extraIgnore = null, TimeProvider? clock = null, int parallel = 4)
     {
         Name = name;
         Server = server;
@@ -29,6 +29,7 @@ public sealed class Device : IAsyncDisposable
             DeviceName = name,
             StabilityWindow = stability ?? TimeSpan.Zero,
             ExtraIgnore = extraIgnore ?? [],
+            MaxParallelTransfers = parallel,
         }, Api, State, clock: clock, hooks: Hooks);
     }
 

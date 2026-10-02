@@ -44,7 +44,11 @@ public enum PassOutcome
 }
 
 /// <summary>Options for one pass.</summary>
-public sealed record PassOptions(string Reason = "manual", bool FullManifest = false);
+/// <param name="DeferDownloads">
+/// Skip downloads this pass (they count as deferred and happen on a later pass). Used while another
+/// computer is still uploading a large batch, so this one fetches it in one go afterwards.
+/// </param>
+public sealed record PassOptions(string Reason = "manual", bool FullManifest = false, bool DeferDownloads = false);
 
 public sealed record ConflictInfo(string Path, string ConflictCopyPath);
 
@@ -109,6 +113,12 @@ public sealed class EngineOptions
 
     /// <summary>...or more than this many files, whichever limit is smaller.</summary>
     public int MassDeleteMax { get; init; } = 50;
+
+    /// <summary>
+    /// Uploads (and downloads) run this many at a time. Each small file costs a network round trip,
+    /// so a few in flight hide the latency; 1 restores strictly one-by-one transfers.
+    /// </summary>
+    public int MaxParallelTransfers { get; init; } = 4;
 }
 
 /// <summary>Test seams. Production code never sets these.</summary>
@@ -117,6 +127,9 @@ public sealed class EngineHooks
     /// <summary>Wraps the stream a download is written to (e.g. to simulate a full disk).</summary>
     public Func<Stream, Stream>? WrapDownloadStream { get; set; }
 
-    /// <summary>Called after each executed action, with the path. May throw or block.</summary>
+    /// <summary>Called after each executed action, with the path. May throw or block. Transfers may call it concurrently.</summary>
     public Func<SyncAction, string, Task>? AfterAction { get; set; }
+
+    /// <summary>Called when an upload or download starts, before any network traffic. May block.</summary>
+    public Func<SyncAction, string, Task>? BeforeTransfer { get; set; }
 }

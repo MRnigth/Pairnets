@@ -113,7 +113,8 @@ public class FaultInjectionTests : IAsyncLifetime
     [Fact]
     public async Task ServerRestartMidPassRecoversOnNextPass()
     {
-        await using var desktop = new Device("desktop", _server);
+        // One transfer at a time, so "the server stops after the first file" is exact.
+        await using var desktop = new Device("desktop", _server, parallel: 1);
         for (var i = 0; i < 6; i++)
             desktop.WriteBytes($"f{i}.bin", Random(256 * 1024, 10 + i));
         var stopped = false;

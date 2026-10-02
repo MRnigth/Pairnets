@@ -61,8 +61,11 @@ public sealed class SyncEngine
 
     public event Action<PathWarningInfo>? PathWarningRaised;
 
-    /// <summary>Raised after a file was uploaded, downloaded or deleted (for activity lists).</summary>
+    /// <summary>Raised after a file was uploaded, downloaded or deleted (for activity lists). May be raised concurrently.</summary>
     public event Action<SyncAction, string>? FileSynced;
+
+    /// <summary>Raised once per pass after planning, with the number of uploads (incl. conflicts) and downloads to run.</summary>
+    public event Action<int, int>? ExecutionStarting;
 
     /// <summary>True if the engine itself wrote/deleted this path recently (used to ignore our own watcher events).</summary>
     public bool WasRecentlyTouched(string path, TimeSpan window)
@@ -316,27 +319,108 @@ public sealed class SyncEngine
                 taken.Add(PathRules.CaseKey(e.Path));
         }
 
-        var ordered = plan.OrderBy(p => Order(p.Action)).ThenBy(p => p.Path, StringComparer.Ordinal).ToList();
-        var ctx = new PassContext(result, cursor, taken, ordered.Count);
-        foreach (var item in ordered)
+        if (options.DeferDownloads)
         {
-            ct.ThrowIfCancellationRequested();
-            try
-            {
-                await ExecuteAsync(item, ctx, ct).ConfigureAwait(false);
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or TetherProtocolException)
-            {
-                // Per-file isolation: one bad file never aborts the pass.
-                result.Errors++;
-                result.ErrorMessages.Add($"{item.Path}: {ex.Message}");
-                _log.LogWarning("{Action} failed for {Path}: {Error}", item.Action, item.Path, ex.Message);
-            }
-            ctx.FilesDone++;
-            if (_hooks.AfterAction is { } hook)
-                await hook(item.Action, item.Path).ConfigureAwait(false);
+            var deferred = plan.RemoveAll(p => p.Action == SyncAction.Download);
+            result.Deferred += deferred;
+            if (deferred > 0)
+                _log.LogInformation("{Count} download(s) deferred until the other computer finishes its batch", deferred);
+        }
+
+        var ordered = plan.OrderBy(p => Order(p.Action)).ThenBy(p => p.Path, StringComparer.Ordinal).ToList();
+        ExecutionStarting?.Invoke(
+            ordered.Count(p => p.Action is SyncAction.Upload or SyncAction.Conflict),
+            ordered.Count(p => p.Action == SyncAction.Download));
+        var ctx = new PassContext(result, cursor, taken, ordered.Count);
+
+        // Deletes and conflicts one by one (they rename and prune folders), then uploads and
+        // downloads several at a time: each small file costs a round trip, so overlap them.
+        foreach (var phase in ordered.GroupBy(p => Order(p.Action)).OrderBy(g => g.Key))
+        {
+            var parallel = phase.Key is 3 or 4 ? Math.Max(1, _options.MaxParallelTransfers) : 1;
+            await RunLimitedAsync(phase.ToList(), parallel, item => ExecuteIsolatedAsync(item, ctx, ct), ct).ConfigureAwait(false);
         }
         Progress?.Invoke(new SyncProgress(null, null, 0, 0, ctx.FilesDone, ctx.FilesTotal));
+    }
+
+    /// <summary>Runs one planned action; a problem with one file never aborts the pass.</summary>
+    private async Task ExecuteIsolatedAsync(PlannedAction item, PassContext ctx, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        try
+        {
+            if (_hooks.BeforeTransfer is { } before && item.Action is SyncAction.Upload or SyncAction.Download)
+                await before(item.Action, item.Path).ConfigureAwait(false);
+            await ExecuteAsync(item, ctx, ct).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or TetherProtocolException)
+        {
+            lock (ctx.Gate)
+            {
+                ctx.Result.Errors++;
+                ctx.Result.ErrorMessages.Add($"{item.Path}: {ex.Message}");
+            }
+            _log.LogWarning("{Action} failed for {Path}: {Error}", item.Action, item.Path, ex.Message);
+        }
+        lock (ctx.Gate)
+            ctx.FilesDone++;
+        if (_hooks.AfterAction is { } hook)
+            await hook(item.Action, item.Path).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Runs <paramref name="body"/> for every item, at most <paramref name="limit"/> at a time. The
+    /// first exception that escapes a body (server unreachable, bad token) stops new work, lets the
+    /// running ones finish or cancel, and is rethrown itself, so the pass ends exactly as it would
+    /// one-by-one.
+    /// </summary>
+    internal static async Task RunLimitedAsync<T>(IReadOnlyList<T> items, int limit, Func<T, Task> body, CancellationToken ct)
+    {
+        if (limit <= 1 || items.Count <= 1)
+        {
+            foreach (var item in items)
+            {
+                ct.ThrowIfCancellationRequested();
+                await body(item).ConfigureAwait(false);
+            }
+            return;
+        }
+
+        using var stop = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        using var slots = new SemaphoreSlim(limit, limit);
+        Exception? first = null;
+        var running = new List<Task>(items.Count);
+        foreach (var item in items)
+        {
+            try
+            {
+                await slots.WaitAsync(stop.Token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                break;
+            }
+            running.Add(Task.Run(async () =>
+            {
+                try
+                {
+                    await body(item).ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    Interlocked.CompareExchange(ref first, ex, null);
+                    await stop.CancelAsync().ConfigureAwait(false);
+                }
+                finally
+                {
+                    slots.Release();
+                }
+            }, CancellationToken.None));
+        }
+        await Task.WhenAll(running).ConfigureAwait(false);
+        if (first is not null)
+            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(first).Throw();
+        ct.ThrowIfCancellationRequested();
     }
 
     private static int Order(SyncAction action) => action switch
@@ -355,7 +439,8 @@ public sealed class SyncEngine
         {
             case SyncAction.RecordBase:
                 _state.SetBase(item.Path, item.Local);
-                ctx.Result.Recorded++;
+                lock (ctx.Gate)
+                    ctx.Result.Recorded++;
                 return Task.CompletedTask;
             case SyncAction.ClearBase:
                 _state.RemoveFile(item.Path);
@@ -388,7 +473,8 @@ public sealed class SyncEngine
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             // Locked, or gone since the scan: unknown this pass, try again soon.
-            ctx.Result.Unstable++;
+            lock (ctx.Gate)
+                ctx.Result.Unstable++;
             _log.LogInformation("Skipping upload of {Path} this pass: {Error}", path, ex.Message);
             return;
         }
@@ -414,12 +500,14 @@ public sealed class SyncEngine
                         unchanged ? sentHash : null, _clock.GetUtcNow().UtcTicks);
                     _state.UpsertRemote(entry);
                     _state.ClearWarning(path);
-                    ctx.Result.Uploaded++;
+                    lock (ctx.Gate)
+                        ctx.Result.Uploaded++;
                     FileSynced?.Invoke(SyncAction.Upload, path);
                     _log.LogInformation("Uploaded {Path} ({Bytes} bytes)", path, sentBytes);
                     break;
                 case ApiOutcome.Conflict:
-                    ctx.Result.Deferred++;
+                    lock (ctx.Gate)
+                        ctx.Result.Deferred++;
                     _log.LogInformation("Upload of {Path} deferred: the server changed meanwhile", path);
                     break;
                 case ApiOutcome.CaseCollision:
@@ -453,7 +541,8 @@ public sealed class SyncEngine
 
             if (!dl.Found)
             {
-                ctx.Result.Deferred++;
+                lock (ctx.Gate)
+                    ctx.Result.Deferred++;
                 _log.LogInformation("Download of {Path} deferred: it disappeared from the server", path);
                 return;
             }
@@ -467,7 +556,8 @@ public sealed class SyncEngine
 
             var info = new FileInfo(full);
             _state.SetSynced(path, dl.Hash, info.Length, info.LastWriteTimeUtc.Ticks, dl.Hash, _clock.GetUtcNow().UtcTicks);
-            ctx.Result.Downloaded++;
+            lock (ctx.Gate)
+                ctx.Result.Downloaded++;
             FileSynced?.Invoke(SyncAction.Download, path);
             _log.LogInformation("Downloaded {Path} ({Bytes} bytes)", path, dl.Size);
         }
@@ -534,7 +624,8 @@ public sealed class SyncEngine
         var (current, _) = await ContentHash.OfFileAsync(full, ct).ConfigureAwait(false);
         if (!string.Equals(current, item.Local, StringComparison.Ordinal))
         {
-            ctx.Result.Deferred++;
+            lock (ctx.Gate)
+                ctx.Result.Deferred++;
             _log.LogWarning("{Path} changed during the pass; not deleting it (it will be uploaded instead)", item.Path);
             return;
         }
@@ -543,7 +634,8 @@ public sealed class SyncEngine
         MarkTouched(item.Path);
         _state.RemoveFile(item.Path);
         PruneEmptyParents(item.Path);
-        ctx.Result.DeletedLocal++;
+        lock (ctx.Gate)
+            ctx.Result.DeletedLocal++;
         FileSynced?.Invoke(SyncAction.DeleteLocal, item.Path);
         _log.LogInformation("Deleted local {Path} (deleted on another device)", item.Path);
     }
@@ -559,12 +651,14 @@ public sealed class SyncEngine
                 _state.RemoveFile(item.Path);
                 if (res.Entry is not null)
                     _state.UpsertRemote(res.Entry);
-                ctx.Result.DeletedRemote++;
+                lock (ctx.Gate)
+                    ctx.Result.DeletedRemote++;
                 FileSynced?.Invoke(SyncAction.DeleteRemote, item.Path);
                 _log.LogInformation("Deleted {Path} on the server (deleted here)", item.Path);
                 break;
             case ApiOutcome.Conflict:
-                ctx.Result.Deferred++;
+                lock (ctx.Gate)
+                    ctx.Result.Deferred++;
                 _log.LogInformation("Delete of {Path} deferred: the server changed meanwhile", item.Path);
                 break;
             default:
@@ -603,7 +697,8 @@ public sealed class SyncEngine
 
     private void RaiseWarning(string path, string code, string? message, string? localHash, PassContext ctx)
     {
-        ctx.Result.Warnings++;
+        lock (ctx.Gate)
+            ctx.Result.Warnings++;
         var text = message ?? (code == ErrorCodes.CaseCollision
             ? "Another file or folder with the same name in different letter case exists on the server."
             : "The server rejected this file name.");
@@ -614,24 +709,30 @@ public sealed class SyncEngine
 
     private void RaiseConflict(string path, string copy, PassContext ctx)
     {
-        ctx.Result.Conflicts++;
         var info = new ConflictInfo(path, copy);
-        ctx.Result.ConflictCopies.Add(info);
-        ctx.Taken.Add(PathRules.CaseKey(copy));
+        lock (ctx.Gate)
+        {
+            ctx.Result.Conflicts++;
+            ctx.Result.ConflictCopies.Add(info);
+            ctx.Taken.Add(PathRules.CaseKey(copy));
+        }
         ConflictCreated?.Invoke(info);
     }
 
     private string MakeConflictName(string path, PassContext ctx)
     {
-        var name = ConflictNames.Make(path, _options.DeviceName, _clock.GetLocalNow().DateTime, candidate =>
+        lock (ctx.Gate)
         {
-            if (ctx.Taken.Contains(PathRules.CaseKey(candidate)))
-                return true;
-            var full = ResolveLocal(candidate);
-            return File.Exists(full) || Directory.Exists(full);
-        });
-        ctx.Taken.Add(PathRules.CaseKey(name));
-        return name;
+            var name = ConflictNames.Make(path, _options.DeviceName, _clock.GetLocalNow().DateTime, candidate =>
+            {
+                if (ctx.Taken.Contains(PathRules.CaseKey(candidate)))
+                    return true;
+                var full = ResolveLocal(candidate);
+                return File.Exists(full) || Directory.Exists(full);
+            });
+            ctx.Taken.Add(PathRules.CaseKey(name));
+            return name;
+        }
     }
 
     private static async Task<string?> TryHashAsync(string full, CancellationToken ct)
@@ -753,6 +854,9 @@ public sealed class SyncEngine
 
     private sealed class PassContext(PassResult result, long cursor, HashSet<string> taken, int filesTotal)
     {
+        /// <summary>Guards <see cref="Result"/>, <see cref="Taken"/> and <see cref="FilesDone"/>: transfers run concurrently.</summary>
+        public object Gate { get; } = new();
+
         public PassResult Result { get; } = result;
         public long Cursor { get; } = cursor;
         public HashSet<string> Taken { get; } = taken;
