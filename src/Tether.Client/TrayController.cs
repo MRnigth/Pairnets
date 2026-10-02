@@ -31,6 +31,7 @@ public sealed class TrayController : IDisposable
     private ClientSettings _settings;
     private Session? _session;
     private Action? _balloonClick;
+    private long _lastProgressTicks;
 
     private readonly Forms.ToolStripMenuItem _statusItem = new("Starting…") { Enabled = false };
     private readonly Forms.ToolStripMenuItem _syncNow = new("Sync now");
@@ -140,6 +141,17 @@ public sealed class TrayController : IDisposable
         engine.PathWarningRaised += w => _app.RunOnUi(() => Toast("warning:" + w.Path, w.Code == ErrorCodes.CaseCollision ? "Name collision" : "File name not allowed",
             $"{w.Path}: {w.Message}", Forms.ToolTipIcon.Warning, ShowWarnings));
         runner.StatusChanged += (status, text) => _app.RunOnUi(() => UpdateStatus(status, text));
+        engine.Progress += p =>
+        {
+            // At most a few updates per second: progress fires for every transferred chunk.
+            var now = Environment.TickCount64;
+            if (p.CurrentPath is null || now - Interlocked.Read(ref _lastProgressTicks) < 500)
+                return;
+            Interlocked.Exchange(ref _lastProgressTicks, now);
+            var percent = p.BytesTotal > 0 ? $" {p.BytesDone * 100 / p.BytesTotal}%" : string.Empty;
+            var text = $"Syncing {p.FilesDone + 1}/{p.FilesTotal}: {PathRules.FileName(p.CurrentPath)}{percent}";
+            _app.RunOnUi(() => UpdateStatus(RunnerStatus.Syncing, text));
+        };
         runner.PassCompleted += report => _app.RunOnUi(() => OnPassCompleted(report.Result));
         runner.CatchUpCompleted += n => _app.RunOnUi(() => Toast("catchup", "Tether is up to date", $"Synced {n} file change(s) made while this PC was away.", Forms.ToolTipIcon.Info, null));
 
