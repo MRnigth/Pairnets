@@ -17,6 +17,7 @@ public sealed class App : Application
     {
         base.OnStartup(e);
         ShutdownMode = ShutdownMode.OnExplicitShutdown;
+        Themes.ThemeManager.Apply(this);
 
         _fileLog = new RollingFileLoggerProvider(TetherPaths.LogsDir, retentionDays: 14);
         _loggerFactory = LoggerFactory.Create(b => b.AddProvider(_fileLog).SetMinimumLevel(LogLevel.Information));

@@ -1,0 +1,295 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <ResourceDictionary.MergedDictionaries>
+    <ResourceDictionary Source="pack://application:,,,/Tether;component/Themes/Icons.xaml" />
+  </ResourceDictionary.MergedDictionaries>
+
+  <!-- Window -->
+  <Style x:Key="TetherWindow" TargetType="Window">
+    <Setter Property="Background" Value="{DynamicResource T.Bg}" />
+    <Setter Property="Foreground" Value="{DynamicResource T.Text}" />
+    <Setter Property="FontFamily" Value="Segoe UI Variable Text, Segoe UI" />
+    <Setter Property="FontSize" Value="13.5" />
+    <Setter Property="TextOptions.TextFormattingMode" Value="Display" />
+  </Style>
+
+  <!-- Text -->
+  <Style x:Key="Muted" TargetType="TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource T.Muted}" />
+  </Style>
+  <Style x:Key="MutedSmall" TargetType="TextBlock" BasedOn="{StaticResource Muted}">
+    <Setter Property="FontSize" Value="12" />
+  </Style>
+  <Style x:Key="H1" TargetType="TextBlock">
+    <Setter Property="FontSize" Value="21" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+  <Style x:Key="H2" TargetType="TextBlock">
+    <Setter Property="FontSize" Value="15" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+  <Style x:Key="Label" TargetType="TextBlock">
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Margin" Value="0,0,0,5" />
+  </Style>
+
+  <!-- Containers -->
+  <Style x:Key="Card" TargetType="Border">
+    <Setter Property="Background" Value="{DynamicResource T.Card}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource T.Border}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="12" />
+    <Setter Property="Padding" Value="18,16" />
+  </Style>
+  <Style x:Key="Pill" TargetType="Border">
+    <Setter Property="Background" Value="{DynamicResource T.Pill}" />
+    <Setter Property="CornerRadius" Value="10" />
+    <Setter Property="Padding" Value="9,3" />
+  </Style>
+  <Style x:Key="Row" TargetType="Border">
+    <Setter Property="CornerRadius" Value="8" />
+    <Setter Property="Padding" Value="8,7" />
+    <Setter Property="Background" Value="Transparent" />
+    <Style.Triggers>
+      <Trigger Property="IsMouseOver" Value="True">
+        <Setter Property="Background" Value="{DynamicResource T.Hover}" />
+      </Trigger>
+    </Style.Triggers>
+  </Style>
+  <Style x:Key="Badge" TargetType="Border">
+    <Setter Property="Background" Value="{StaticResource S.Orange}" />
+    <Setter Property="CornerRadius" Value="9" />
+    <Setter Property="MinWidth" Value="18" />
+    <Setter Property="Height" Value="18" />
+    <Setter Property="Padding" Value="5,0" />
+  </Style>
+
+  <!-- Buttons: one template, three colour styles -->
+  <Style x:Key="ButtonBase" TargetType="Button">
+    <Setter Property="Padding" Value="13,7" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="Button">
+          <Border x:Name="bd" Background="{TemplateBinding Background}" CornerRadius="8" Padding="{TemplateBinding Padding}">
+            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" TextElement.Foreground="{TemplateBinding Foreground}" />
+          </Border>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+              <Setter TargetName="bd" Property="Background" Value="{Binding Tag, RelativeSource={RelativeSource TemplatedParent}}" />
+            </Trigger>
+            <Trigger Property="IsPressed" Value="True">
+              <Setter TargetName="bd" Property="Opacity" Value="0.85" />
+            </Trigger>
+            <Trigger Property="IsEnabled" Value="False">
+              <Setter TargetName="bd" Property="Opacity" Value="0.5" />
+            </Trigger>
+            <Trigger Property="IsKeyboardFocused" Value="True">
+              <Setter TargetName="bd" Property="BorderBrush" Value="{DynamicResource T.Accent}" />
+              <Setter TargetName="bd" Property="BorderThickness" Value="1.5" />
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+  <!-- Tag carries the hover colour. -->
+  <Style x:Key="SubtleButton" TargetType="Button" BasedOn="{StaticResource ButtonBase}">
+    <Setter Property="Background" Value="{DynamicResource T.Subtle}" />
+    <Setter Property="Tag" Value="{DynamicResource T.SubtleHover}" />
+    <Setter Property="Foreground" Value="{DynamicResource T.Text}" />
+  </Style>
+  <Style x:Key="AccentButton" TargetType="Button" BasedOn="{StaticResource ButtonBase}">
+    <Setter Property="Background" Value="{DynamicResource T.Accent}" />
+    <Setter Property="Tag" Value="{DynamicResource T.AccentHover}" />
+    <Setter Property="Foreground" Value="White" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+  <Style x:Key="WarnButton" TargetType="Button" BasedOn="{StaticResource ButtonBase}">
+    <Setter Property="Background" Value="{StaticResource S.Orange}" />
+    <Setter Property="Tag" Value="{StaticResource S.OrangeHover}" />
+    <Setter Property="Foreground" Value="White" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+
+  <!-- Segmented control -->
+  <Style x:Key="Segments" TargetType="Border">
+    <Setter Property="Background" Value="{DynamicResource T.Subtle}" />
+    <Setter Property="CornerRadius" Value="10" />
+    <Setter Property="Padding" Value="3" />
+  </Style>
+  <Style x:Key="Seg" TargetType="RadioButton">
+    <Setter Property="Foreground" Value="{DynamicResource T.Muted}" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="RadioButton">
+          <Border x:Name="bd" Background="Transparent" CornerRadius="8" Padding="14,6">
+            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+          </Border>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsChecked" Value="True">
+              <Setter TargetName="bd" Property="Background" Value="{DynamicResource T.Card}" />
+              <Setter Property="Foreground" Value="{DynamicResource T.Text}" />
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <!-- Rounded progress bar -->
+  <Style x:Key="RoundProgress" TargetType="ProgressBar">
+    <Setter Property="Height" Value="8" />
+    <Setter Property="Foreground" Value="{DynamicResource T.Accent}" />
+    <Setter Property="Background" Value="{DynamicResource T.Track}" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="ProgressBar">
+          <Grid>
+            <Border x:Name="PART_Track" Background="{TemplateBinding Background}" CornerRadius="4" />
+            <Border x:Name="PART_Indicator" Background="{TemplateBinding Foreground}" CornerRadius="4" HorizontalAlignment="Left" />
+          </Grid>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <!-- Inputs -->
+  <Style x:Key="InputBase" TargetType="Control">
+    <Setter Property="Background" Value="{DynamicResource T.Input}" />
+    <Setter Property="Foreground" Value="{DynamicResource T.Text}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource T.InputBorder}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="Padding" Value="8,6" />
+  </Style>
+  <Style x:Key="Input" TargetType="TextBox" BasedOn="{StaticResource InputBase}">
+    <Setter Property="CaretBrush" Value="{DynamicResource T.Text}" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="TextBox">
+          <Border x:Name="bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                  BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="8">
+            <ScrollViewer x:Name="PART_ContentHost" Margin="{TemplateBinding Padding}" />
+          </Border>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsKeyboardFocused" Value="True">
+              <Setter TargetName="bd" Property="BorderBrush" Value="{DynamicResource T.Accent}" />
+              <Setter TargetName="bd" Property="BorderThickness" Value="1.5" />
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+  <Style x:Key="PasswordInput" TargetType="PasswordBox" BasedOn="{StaticResource InputBase}">
+    <Setter Property="CaretBrush" Value="{DynamicResource T.Text}" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="PasswordBox">
+          <Border x:Name="bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                  BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="8">
+            <ScrollViewer x:Name="PART_ContentHost" Margin="{TemplateBinding Padding}" />
+          </Border>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsKeyboardFocused" Value="True">
+              <Setter TargetName="bd" Property="BorderBrush" Value="{DynamicResource T.Accent}" />
+              <Setter TargetName="bd" Property="BorderThickness" Value="1.5" />
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <!-- Toggle switch (CheckBox) -->
+  <Style x:Key="Switch" TargetType="CheckBox">
+    <Setter Property="Foreground" Value="{DynamicResource T.Text}" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="CheckBox">
+          <StackPanel Orientation="Horizontal" Background="Transparent">
+            <Grid Width="40" Height="22" VerticalAlignment="Center">
+              <Border x:Name="track" CornerRadius="11" Background="{DynamicResource T.Subtle}"
+                      BorderBrush="{DynamicResource T.InputBorder}" BorderThickness="1" />
+              <Ellipse x:Name="knob" Width="14" Height="14" Fill="{DynamicResource T.Muted}" HorizontalAlignment="Left" Margin="4,0,0,0" />
+            </Grid>
+            <ContentPresenter Margin="10,0,0,0" VerticalAlignment="Center" />
+          </StackPanel>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsChecked" Value="True">
+              <Setter TargetName="track" Property="Background" Value="{DynamicResource T.Accent}" />
+              <Setter TargetName="track" Property="BorderBrush" Value="{DynamicResource T.Accent}" />
+              <Setter TargetName="knob" Property="Fill" Value="White" />
+              <Setter TargetName="knob" Property="HorizontalAlignment" Value="Right" />
+              <Setter TargetName="knob" Property="Margin" Value="0,0,4,0" />
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <!-- Chips for the connection test -->
+  <Style x:Key="Chip" TargetType="Border">
+    <Setter Property="CornerRadius" Value="8" />
+    <Setter Property="Padding" Value="10,6" />
+    <Setter Property="Background" Value="{DynamicResource T.Pill}" />
+  </Style>
+
+  <!-- Plain scroll viewer look for lists -->
+  <Style x:Key="PlainList" TargetType="ItemsControl">
+    <Setter Property="Focusable" Value="False" />
+  </Style>
+
+  <!-- Expander: a chevron and the header, no system chrome -->
+  <Style x:Key="Disclosure" TargetType="Expander">
+    <Setter Property="Foreground" Value="{DynamicResource T.Text}" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="Expander">
+          <StackPanel>
+            <ToggleButton IsChecked="{Binding IsExpanded, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}"
+                          Cursor="Hand" FocusVisualStyle="{x:Null}" HorizontalAlignment="Left">
+              <ToggleButton.Template>
+                <ControlTemplate TargetType="ToggleButton">
+                  <StackPanel Orientation="Horizontal" Background="Transparent">
+                    <Path x:Name="chev" Data="M2,1 L6,5 L2,9" Stroke="{DynamicResource T.Muted}" StrokeThickness="1.8"
+                          StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
+                          Width="10" Height="10" VerticalAlignment="Center" RenderTransformOrigin="0.5,0.5">
+                      <Path.RenderTransform>
+                        <RotateTransform x:Name="rot" Angle="0" />
+                      </Path.RenderTransform>
+                    </Path>
+                    <ContentPresenter Margin="8,0,0,0" VerticalAlignment="Center" />
+                  </StackPanel>
+                  <ControlTemplate.Triggers>
+                    <Trigger Property="IsChecked" Value="True">
+                      <Setter TargetName="chev" Property="RenderTransform">
+                        <Setter.Value>
+                          <RotateTransform Angle="90" />
+                        </Setter.Value>
+                      </Setter>
+                    </Trigger>
+                  </ControlTemplate.Triggers>
+                </ControlTemplate>
+              </ToggleButton.Template>
+              <ContentPresenter ContentSource="Header" TextElement.FontWeight="SemiBold" />
+            </ToggleButton>
+            <ContentPresenter x:Name="body" Margin="0,10,0,0" Visibility="Collapsed" />
+          </StackPanel>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsExpanded" Value="True">
+              <Setter TargetName="body" Property="Visibility" Value="Visible" />
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+</ResourceDictionary>

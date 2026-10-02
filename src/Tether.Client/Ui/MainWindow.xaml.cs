@@ -1,14 +1,28 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Globalization;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Shapes;
+using Tether.Client.Themes;
 using Tether.Core.Client;
-using Tether.Core.Sync;
 
 namespace Tether.Client.Ui;
 
 /// <summary>An item in the "Needs attention" list with one action button.</summary>
 public sealed record AttentionItem(string Title, string Detail, string ActionLabel, Action Action);
+
+/// <summary>What the main window's buttons do (implemented by <see cref="TrayController"/>).</summary>
+public interface IMainActions
+{
+    void FixBlocked();
+    void SyncNow();
+    void TogglePause();
+    void OpenFolder();
+    void ShowSettings();
+    void ViewLog();
+}
 
 /// <summary>
 /// The main window: status, current transfer, recent activity and things needing attention.
@@ -16,16 +30,18 @@ public sealed record AttentionItem(string Title, string Detail, string ActionLab
 /// </summary>
 public partial class MainWindow : Window
 {
-    private readonly TrayController _controller;
+    private readonly IMainActions? _actions;
     private readonly ObservableCollection<ActivityItem> _activity = [];
     private readonly ObservableCollection<AttentionItem> _attention = [];
 
-    public MainWindow(TrayController controller)
+    public MainWindow(IMainActions? actions)
     {
+        ThemeManager.Attach(this);
         InitializeComponent();
-        _controller = controller;
+        _actions = actions;
         ActivityList.ItemsSource = _activity;
         AttentionList.ItemsSource = _attention;
+        UpdatePanels();
     }
 
     /// <summary>Set when the app exits, so closing really closes instead of hiding.</summary>
@@ -43,36 +59,31 @@ public partial class MainWindow : Window
 
     public void ShowStatus(StatusSnapshot s, string? folder)
     {
-        StatusDot.Fill = new SolidColorBrush(s.Status switch
-        {
-            RunnerStatus.Idle => Color.FromRgb(46, 160, 67),
-            RunnerStatus.Syncing => Color.FromRgb(33, 118, 214),
-            RunnerStatus.Offline => Color.FromRgb(128, 128, 128),
-            RunnerStatus.Paused => Color.FromRgb(214, 160, 33),
-            RunnerStatus.Blocked => Color.FromRgb(230, 110, 20),
-            _ => Color.FromRgb(207, 34, 46),
-        });
+        var (brush, icon) = Visuals.ForStatus(s.Status);
+        StatusBadge.SetResourceReference(Shape.FillProperty, brush);
+        StatusGlyph.Data = Visuals.Resource<Geometry>(icon);
         Headline.Text = s.Headline;
         Detail.Text = s.DetailText;
-        Detail.Visibility = s.DetailText.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+        Detail.Visibility = Show(s.DetailText.Length > 0);
         LastSync.Text = s.LastSyncText;
-        FolderText.Text = folder is null ? string.Empty : "Folder: " + folder;
-        PauseButton.Content = s.Paused ? "Resume" : "Pause";
-
-        FixButton.Visibility = s.FixLabel is null ? Visibility.Collapsed : Visibility.Visible;
+        FolderPill.Visibility = Show(folder is not null);
+        FolderText.Text = folder ?? string.Empty;
+        PauseText.Text = s.Paused ? "Resume" : "Pause";
+        PauseGlyph.Data = Visuals.Resource<Geometry>(s.Paused ? "I.Play" : "I.Pause");
+        FixButton.Visibility = Show(s.FixLabel is not null);
         FixButton.Content = s.FixLabel;
 
+        TransferCard.Visibility = Show(s.IsTransferring);
         if (s.IsTransferring)
         {
-            TransferPanel.Visibility = Visibility.Visible;
-            TransferFile.Text = $"{(s.Operation == "download" ? "Downloading" : s.Operation == "upload" ? "Uploading" : "Working on")} {s.CurrentPath}";
-            TransferCount.Text = s.FilesTotal > 0 ? $"{Math.Min(s.FilesDone + 1, s.FilesTotal)} of {s.FilesTotal}" : string.Empty;
+            TransferGlyph.Data = Visuals.Resource<Geometry>(s.Operation == "download" ? "I.Down" : "I.Up");
+            TransferFile.Text = $"{s.OperationText} {s.CurrentFileName}";
+            TransferFolder.Text = s.CurrentFolder.Length > 0 ? s.CurrentFolder : "Top folder";
+            TransferCount.Text = s.FileCountText;
             TransferProgress.IsIndeterminate = s.Percent is null;
             TransferProgress.Value = s.Percent ?? 0;
-        }
-        else
-        {
-            TransferPanel.Visibility = Visibility.Collapsed;
+            TransferBytes.Text = s.ProgressText;
+            TransferBytes.Visibility = Show(s.ProgressText.Length > 0);
         }
     }
 
@@ -81,7 +92,7 @@ public partial class MainWindow : Window
         _activity.Clear();
         foreach (var item in items)
             _activity.Add(item);
-        ActivityEmpty.Visibility = _activity.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        UpdatePanels();
     }
 
     public void ShowAttention(IReadOnlyList<AttentionItem> items)
@@ -89,20 +100,43 @@ public partial class MainWindow : Window
         _attention.Clear();
         foreach (var item in items)
             _attention.Add(item);
-        AttentionTab.Header = items.Count == 0 ? "Needs attention" : $"Needs attention ({items.Count})";
-        AttentionEmpty.Visibility = items.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        AttentionBadge.Visibility = Show(items.Count > 0);
+        AttentionCount.Text = items.Count.ToString(CultureInfo.InvariantCulture);
+        UpdatePanels();
     }
 
-    private void OnFix(object sender, RoutedEventArgs e) => _controller.FixBlocked();
-    private void OnSyncNow(object sender, RoutedEventArgs e) => _controller.SyncNow();
-    private void OnPause(object sender, RoutedEventArgs e) => _controller.TogglePause();
-    private void OnOpenFolder(object sender, RoutedEventArgs e) => _controller.OpenFolder();
-    private void OnSettings(object sender, RoutedEventArgs e) => _controller.ShowSettings(firstRun: false);
-    private void OnViewLog(object sender, RoutedEventArgs e) => _controller.ViewLog();
+    /// <summary>Switches to the "Needs attention" list (used by notifications and screenshots).</summary>
+    public void ShowAttentionTab(bool attention)
+    {
+        AttentionTab.IsChecked = attention;
+        ActivityTab.IsChecked = !attention;
+        UpdatePanels();
+    }
+
+    private void UpdatePanels()
+    {
+        if (ActivityPanel is null)
+            return; // Checked fires during InitializeComponent
+        var showAttention = AttentionTab.IsChecked == true;
+        ActivityPanel.Visibility = Show(!showAttention && _activity.Count > 0);
+        ActivityEmpty.Visibility = Show(!showAttention && _activity.Count == 0);
+        AttentionPanel.Visibility = Show(showAttention && _attention.Count > 0);
+        AttentionEmpty.Visibility = Show(showAttention && _attention.Count == 0);
+    }
+
+    private static Visibility Show(bool visible) => visible ? Visibility.Visible : Visibility.Collapsed;
+
+    private void OnTabChanged(object sender, RoutedEventArgs e) => UpdatePanels();
+    private void OnFix(object sender, RoutedEventArgs e) => _actions?.FixBlocked();
+    private void OnSyncNow(object sender, RoutedEventArgs e) => _actions?.SyncNow();
+    private void OnPause(object sender, RoutedEventArgs e) => _actions?.TogglePause();
+    private void OnOpenFolder(object sender, RoutedEventArgs e) => _actions?.OpenFolder();
+    private void OnSettings(object sender, RoutedEventArgs e) => _actions?.ShowSettings();
+    private void OnViewLog(object sender, RoutedEventArgs e) => _actions?.ViewLog();
 
     private void OnAttentionAction(object sender, RoutedEventArgs e)
     {
-        if (sender is FrameworkElement { Tag: AttentionItem item })
+        if (sender is Button { CommandParameter: AttentionItem item })
             item.Action();
     }
 }

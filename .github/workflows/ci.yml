@@ -86,6 +86,17 @@ jobs:
           --self-contained true -p:PublishSingleFile=true
           -p:IncludeNativeLibrariesForSelfExtract=true -o publish/client
 
+      - name: Render the Windows UI (loads every window, light and dark)
+        run: |
+          dotnet build tools/RenderScreens.Wpf/RenderScreens.Wpf.csproj -c Release
+          dotnet run --project tools/RenderScreens.Wpf/RenderScreens.Wpf.csproj -c Release --no-build -- screens --print
+
+      - name: Upload Windows UI screenshots
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-ui-screenshots
+          path: screens
+
       - name: Test
         env:
           TETHER_CONVERGENCE_SEEDS: 50

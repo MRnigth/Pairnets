@@ -18,7 +18,7 @@ namespace Tether.Client;
 /// Owns the tray icon, the main window, notifications and the <see cref="ClientSession"/>. All
 /// sync decisions live in Tether.Core; this class reflects state and forwards clicks.
 /// </summary>
-public sealed class TrayController : IDisposable
+public sealed class TrayController : IMainActions, IDisposable
 {
     private readonly App _app;
     private readonly ILoggerFactory _loggers;
@@ -327,6 +327,8 @@ public sealed class TrayController : IDisposable
         if (_settings.Folder is { } f && Directory.Exists(f))
             Shell(f);
     }
+
+    void IMainActions.ShowSettings() => ShowSettings(firstRun: false);
 
     public void ViewLog() => Shell(_fileLog.CurrentFile);
 

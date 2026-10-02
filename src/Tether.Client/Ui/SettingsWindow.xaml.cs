@@ -1,6 +1,9 @@
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using Microsoft.Win32;
+using Tether.Client.Themes;
 using Tether.Core.Api;
 using Tether.Core.Paths;
 using Tether.Core.Settings;
@@ -17,12 +20,15 @@ public partial class SettingsWindow : Window
 
     public SettingsWindow(ClientSettings current, ISecretProtector protector, bool firstRun)
     {
+        ThemeManager.Attach(this);
         InitializeComponent();
         _original = current;
         _protector = protector;
         _firstRun = firstRun;
         Title = firstRun ? "Tether – first-time setup" : "Tether – settings";
-        IntroText.Visibility = firstRun ? Visibility.Visible : Visibility.Collapsed;
+        WelcomeHeader.Visibility = firstRun ? Visibility.Visible : Visibility.Collapsed;
+        SettingsHeader.Visibility = firstRun ? Visibility.Collapsed : Visibility.Visible;
+        AppIcon.Source = LoadAppIcon();
         SaveButton.Content = firstRun ? "Start syncing" : "Save";
         ServerUrlBox.Text = current.ServerUrl ?? string.Empty;
         FolderBox.Text = current.Folder ?? string.Empty;
@@ -65,19 +71,70 @@ public partial class SettingsWindow : Window
     private async void OnTest(object sender, RoutedEventArgs e)
     {
         TestButton.IsEnabled = false;
-        TestResult.Foreground = Brushes.Gray;
-        TestResult.Text = "Testing…";
+        ShowTestResult(null, "Testing…");
         try
         {
             var result = await TetherApiClient.TestConnectionAsync(ServerUrlBox.Text, CurrentToken(), DeviceName());
-            TestResult.Foreground = result.Status == ConnectionTestStatus.Ok ? Brushes.DarkGreen : Brushes.Firebrick;
-            TestResult.Text = result.Message;
+            ShowTestResult(result.Status == ConnectionTestStatus.Ok, result.Message);
         }
         finally
         {
             TestButton.IsEnabled = true;
         }
     }
+
+    /// <summary>Shows the connection test result as a green (ok), red (failed) or grey (busy) chip.</summary>
+    public void ShowTestResult(bool? ok, string text)
+    {
+        TestChip.Visibility = Visibility.Visible;
+        var (fg, bg) = ok switch
+        {
+            true => (Color.FromRgb(46, 160, 67), Color.FromArgb(40, 46, 160, 67)),
+            false => (Color.FromRgb(207, 34, 46), Color.FromArgb(36, 207, 34, 46)),
+            _ => (default(Color?), default(Color?)),
+        };
+        if (fg is { } f && bg is { } b)
+        {
+            TestResult.Foreground = new SolidColorBrush(f);
+            TestChip.Background = new SolidColorBrush(b);
+        }
+        else
+        {
+            TestResult.SetResourceReference(TextBlock.ForegroundProperty, "T.Muted");
+            TestChip.SetResourceReference(Border.BackgroundProperty, "T.Pill");
+        }
+        TestResult.Text = (ok == true ? "✓ " : ok == false ? "✕ " : string.Empty) + text;
+    }
+
+    private static ImageSource? LoadAppIcon()
+    {
+        try
+        {
+            var path = Environment.ProcessPath;
+            if (path is null)
+                return null;
+            using var icon = System.Drawing.Icon.ExtractAssociatedIcon(path);
+            if (icon is null)
+                return null;
+            using var bitmap = icon.ToBitmap();
+            var hbitmap = bitmap.GetHbitmap();
+            try
+            {
+                return System.Windows.Interop.Imaging.CreateBitmapSourceFromHBitmap(hbitmap, IntPtr.Zero, Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions());
+            }
+            finally
+            {
+                DeleteObject(hbitmap);
+            }
+        }
+        catch (Exception ex) when (ex is IOException or ArgumentException or System.ComponentModel.Win32Exception)
+        {
+            return null;
+        }
+    }
+
+    [System.Runtime.InteropServices.DllImport("gdi32.dll")]
+    private static extern bool DeleteObject(IntPtr handle);
 
     private string DeviceName() => string.IsNullOrWhiteSpace(DeviceBox.Text) ? Environment.MachineName : DeviceBox.Text.Trim();
 
