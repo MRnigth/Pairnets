@@ -1,23 +1,22 @@
 using System.Diagnostics;
-using System.Text;
 using System.Windows;
+using System.Windows.Threading;
 using Microsoft.Extensions.Logging;
 using Microsoft.Win32;
 using Tether.Client.Platform;
 using Tether.Client.Ui;
-using Tether.Core.Api;
+using Tether.Core.Client;
 using Tether.Core.Logging;
 using Tether.Core.Paths;
 using Tether.Core.Settings;
-using Tether.Core.State;
 using Tether.Core.Sync;
 using Forms = System.Windows.Forms;
 
 namespace Tether.Client;
 
 /// <summary>
-/// Owns the tray icon, menu, notifications and the sync session (engine + runner). Everything that
-/// decides what to sync lives in Tether.Core; this class only reflects state and forwards clicks.
+/// Owns the tray icon, the main window, notifications and the <see cref="ClientSession"/>. All
+/// sync decisions live in Tether.Core; this class reflects state and forwards clicks.
 /// </summary>
 public sealed class TrayController : IDisposable
 {
@@ -28,17 +27,19 @@ public sealed class TrayController : IDisposable
     private readonly DpapiProtector _protector = new();
     private readonly Forms.NotifyIcon _icon;
     private readonly Dictionary<string, DateTime> _lastToast = [];
+    private readonly DispatcherTimer _refresh;
     private ClientSettings _settings;
-    private Session? _session;
+    private ClientSession? _session;
+    private MainWindow? _window;
     private Action? _balloonClick;
-    private long _lastProgressTicks;
+    private volatile bool _dirty = true;
+    private RunnerStatus? _shownStatus;
 
+    private readonly Forms.ToolStripMenuItem _openApp = new("Open Tether") { Font = new System.Drawing.Font(Forms.Control.DefaultFont, System.Drawing.FontStyle.Bold) };
     private readonly Forms.ToolStripMenuItem _statusItem = new("Starting…") { Enabled = false };
     private readonly Forms.ToolStripMenuItem _syncNow = new("Sync now");
     private readonly Forms.ToolStripMenuItem _openFolder = new("Open folder");
-    private readonly Forms.ToolStripMenuItem _allowDeletes = new("Allow these deletions…") { Visible = false };
     private readonly Forms.ToolStripMenuItem _fixProblem = new("Fix…") { Visible = false };
-    private readonly Forms.ToolStripMenuItem _warnings = new("Files needing attention…") { Visible = false };
     private readonly Forms.ToolStripMenuItem _settingsItem = new("Settings…");
     private readonly Forms.ToolStripMenuItem _viewLog = new("View log");
     private readonly Forms.ToolStripMenuItem _pause = new("Pause syncing");
@@ -54,18 +55,17 @@ public sealed class TrayController : IDisposable
         _settings = SettingsStore.Load(SettingsStore.DefaultPath);
 
         var menu = new Forms.ContextMenuStrip();
-        menu.Items.AddRange([_statusItem, new Forms.ToolStripSeparator(), _syncNow, _openFolder, _allowDeletes, _fixProblem, _warnings,
+        menu.Items.AddRange([_openApp, _statusItem, new Forms.ToolStripSeparator(), _syncNow, _openFolder, _fixProblem,
             new Forms.ToolStripSeparator(), _settingsItem, _viewLog, _pause, _autoStart, new Forms.ToolStripSeparator(), _exit]);
-        _syncNow.Click += (_, _) => _session?.Runner.RequestSync("manual", full: true);
+        _openApp.Click += (_, _) => ShowMainWindow();
+        _syncNow.Click += (_, _) => SyncNow();
         _openFolder.Click += (_, _) => OpenFolder();
-        _allowDeletes.Click += (_, _) => ConfirmDeletions();
         _fixProblem.Click += (_, _) => FixBlocked();
-        _warnings.Click += (_, _) => ShowWarnings();
         _settingsItem.Click += (_, _) => ShowSettings(firstRun: false);
-        _viewLog.Click += (_, _) => Shell(_fileLog.CurrentFile);
+        _viewLog.Click += (_, _) => ViewLog();
         _pause.Click += (_, _) => TogglePause();
         _autoStart.Click += (_, _) => SetAutoStart(_autoStart.Checked);
-        _exit.Click += (_, _) => _app.Shutdown();
+        _exit.Click += (_, _) => Exit();
         menu.Opening += (_, _) => _autoStart.Checked = SafeIsAutoStart();
 
         _icon = new Forms.NotifyIcon
@@ -75,33 +75,32 @@ public sealed class TrayController : IDisposable
             ContextMenuStrip = menu,
             Visible = true,
         };
-        _icon.DoubleClick += (_, _) => OpenFolder();
-        _icon.BalloonTipClicked += (_, _) => _balloonClick?.Invoke();
+        _icon.MouseClick += (_, e) =>
+        {
+            if (e.Button == Forms.MouseButtons.Left)
+                ShowMainWindow();
+        };
+        _icon.BalloonTipClicked += (_, _) => (_balloonClick ?? ShowMainWindow).Invoke();
         SystemEvents.PowerModeChanged += OnPowerModeChanged;
+
+        // Progress events arrive for every transferred chunk: redraw at most 4 times a second.
+        _refresh = new DispatcherTimer(TimeSpan.FromMilliseconds(250), DispatcherPriority.Background, (_, _) => RefreshIfDirty(), _app.Dispatcher);
+        _refresh.Start();
     }
 
     public void Start()
     {
         if (!_settings.IsComplete || !_settings.FirstRunCompleted)
         {
-            UpdateStatus(RunnerStatus.Offline, "Not set up yet");
             ShowSettings(firstRun: true);
             return;
         }
         StartSession(null);
+        if (!Environment.GetCommandLineArgs().Contains("--autostart"))
+            ShowMainWindow();
     }
 
     // ------------------------------------------------------------------ session
-
-    private sealed record Session(StateDb State, TetherApiClient Api, SyncEngine Engine, SyncRunner Runner) : IAsyncDisposable
-    {
-        public async ValueTask DisposeAsync()
-        {
-            await Runner.DisposeAsync();
-            Api.Dispose();
-            State.Dispose();
-        }
-    }
 
     private void StartSession(string? plainToken)
     {
@@ -114,53 +113,22 @@ public sealed class TrayController : IDisposable
         {
             _log.LogWarning("Cannot decrypt the saved token: {Error}", ex.Message);
             Toast("token", "Tether needs the token again", "The saved token cannot be read on this Windows account. Open Settings and enter it.", Forms.ToolTipIcon.Warning, () => ShowSettings(false));
-            UpdateStatus(RunnerStatus.Error, "Token missing");
             return;
         }
 
-        var folder = _settings.Folder!;
-        var stateDir = TetherPaths.StateDirFor(folder);
-        var state = new StateDb(Path.Combine(stateDir, "state.db"));
-        state.SetMeta(StateDb.MetaFolder, Path.GetFullPath(folder));
-        var api = new TetherApiClient(new Uri(_settings.ServerUrl!), plainToken, _settings.DeviceName!);
-        var engine = new SyncEngine(new EngineOptions
-        {
-            Folder = folder,
-            DeviceName = _settings.DeviceName!,
-            ExtraIgnore = _settings.ExtraIgnore,
-        }, api, state, new RecycleBinTrash(_loggers.CreateLogger("Tether.Trash")), _loggers.CreateLogger("Tether.Engine"));
-        var runner = new SyncRunner(engine, new RunnerOptions
-        {
-            ServerUrl = new Uri(_settings.ServerUrl!),
-            Token = plainToken,
-            DeviceId = _settings.DeviceName!,
-        }, _loggers.CreateLogger("Tether.Runner"));
-
-        engine.ConflictCreated += c => _app.RunOnUi(() => Toast("conflict:" + c.Path, "Conflict: both PCs changed a file",
-            $"{c.Path} was changed on both PCs. Your version was kept as \"{PathRules.FileName(c.ConflictCopyPath)}\".", Forms.ToolTipIcon.Warning, OpenFolder));
-        engine.PathWarningRaised += w => _app.RunOnUi(() => Toast("warning:" + w.Path, w.Code == ErrorCodes.CaseCollision ? "Name collision" : "File name not allowed",
-            $"{w.Path}: {w.Message}", Forms.ToolTipIcon.Warning, ShowWarnings));
-        runner.StatusChanged += (status, text) => _app.RunOnUi(() => UpdateStatus(status, text));
-        engine.Progress += p =>
-        {
-            // At most a few updates per second: progress fires for every transferred chunk.
-            var now = Environment.TickCount64;
-            if (p.CurrentPath is null || now - Interlocked.Read(ref _lastProgressTicks) < 500)
-                return;
-            Interlocked.Exchange(ref _lastProgressTicks, now);
-            var percent = p.BytesTotal > 0 ? $" {p.BytesDone * 100 / p.BytesTotal}%" : string.Empty;
-            var text = $"Syncing {p.FilesDone + 1}/{p.FilesTotal}: {PathRules.FileName(p.CurrentPath)}{percent}";
-            _app.RunOnUi(() => UpdateStatus(RunnerStatus.Syncing, text));
-        };
-        runner.PassCompleted += report => _app.RunOnUi(() => OnPassCompleted(report.Result));
-        runner.CatchUpCompleted += n => _app.RunOnUi(() => Toast("catchup", "Tether is up to date", $"Synced {n} file change(s) made while this PC was away.", Forms.ToolTipIcon.Info, null));
-
-        _session = new Session(state, api, engine, runner);
-        runner.Start();
-        if (_settings.Paused)
-            runner.Pause();
-        _pause.Text = _settings.Paused ? "Resume syncing" : "Pause syncing";
-        _log.LogInformation("Syncing {Folder} with {Server} as {Device}", folder, _settings.ServerUrl, _settings.DeviceName);
+        var session = ClientSession.Start(_settings, plainToken, new RecycleBinTrash(_loggers.CreateLogger("Tether.Trash")), _loggers);
+        session.StatusChanged += _ => _dirty = true;
+        session.Activity.Added += _ => _dirty = true;
+        session.ConflictCreated += c => _app.RunOnUi(() => Toast("conflict:" + c.Path, "Conflict: both computers changed a file",
+            $"{c.Path} was changed on both. Your version was kept as \"{PathRules.FileName(c.ConflictCopyPath)}\".", Forms.ToolTipIcon.Warning, ShowMainWindow));
+        session.PathWarningRaised += w => _app.RunOnUi(() => Toast("warning:" + w.Path, w.Code == ErrorCodes.CaseCollision ? "Name collision" : "File name not allowed",
+            $"{w.Path}: {w.Message}", Forms.ToolTipIcon.Warning, ShowMainWindow));
+        session.PassCompleted += r => _app.RunOnUi(() => OnPassCompleted(r));
+        session.CatchUpCompleted += n => _app.RunOnUi(() => Toast("catchup", "Tether is up to date",
+            $"Synced {n} change(s) made while this computer was away.", Forms.ToolTipIcon.Info, ShowMainWindow));
+        _session = session;
+        _dirty = true;
+        _log.LogInformation("Syncing {Folder} with {Server} as {Device}", _settings.Folder, _settings.ServerUrl, _settings.DeviceName);
     }
 
     private void StopSession()
@@ -169,43 +137,72 @@ public sealed class TrayController : IDisposable
             return;
         var s = _session;
         _session = null;
-        // Let the current pass finish its file; never block the UI thread for long.
         Task.Run(async () => await s.DisposeAsync()).Wait(TimeSpan.FromSeconds(30));
+        _dirty = true;
     }
 
-    // ------------------------------------------------------------------ status
+    // ------------------------------------------------------------------ drawing
 
-    private void UpdateStatus(RunnerStatus status, string text)
+    private void RefreshIfDirty()
     {
-        _icon.Icon = TrayIcons.For(status);
-        var when = _session?.Runner.LastSyncAt is { } at ? $" (last sync {at.ToLocalTime():HH:mm})" : string.Empty;
-        var tip = $"Tether: {text}{when}";
+        if (!_dirty)
+            return;
+        _dirty = false;
+        var status = _session?.Status ?? StatusSnapshot.Initial with { Text = "Not set up yet: open Settings" };
+
+        if (_shownStatus != status.Status)
+        {
+            _icon.Icon = TrayIcons.For(status.Status);
+            _shownStatus = status.Status;
+        }
+        var line = status.IsTransferring
+            ? $"{Math.Min(status.FilesDone + 1, Math.Max(status.FilesTotal, 1))}/{status.FilesTotal}: {PathRules.FileName(status.CurrentPath!)}{(status.Percent is { } p ? $" {p}%" : string.Empty)}"
+            : status.Text;
+        var tip = $"Tether: {line} ({status.LastSyncText.ToLowerInvariant()})";
         _icon.Text = tip.Length > 127 ? tip[..124] + "..." : tip;
-        _statusItem.Text = text.Length > 80 ? text[..77] + "..." : text;
+        _statusItem.Text = line.Length > 80 ? line[..77] + "..." : line;
+        _fixProblem.Visible = status.FixLabel is not null;
+        _fixProblem.Text = status.FixLabel ?? "Fix…";
+        _pause.Text = status.Paused ? "Resume syncing" : "Pause syncing";
+
+        if (_window is { IsVisible: true })
+        {
+            _window.ShowStatus(status, _settings.Folder);
+            _window.ShowActivity(_session?.Activity.Items ?? []);
+            _window.ShowAttention(BuildAttention(status));
+        }
+    }
+
+    private List<AttentionItem> BuildAttention(StatusSnapshot status)
+    {
+        var items = new List<AttentionItem>();
+        if (_session is null)
+            return items;
+        if (status.FixLabel is not null)
+            items.Add(new AttentionItem("Syncing is paused until you decide", _session.Status.Text, status.FixLabel, FixBlocked));
+        foreach (var w in _session.Warnings())
+            items.Add(new AttentionItem(w.Path, w.Message ?? w.Code, "Show in folder", () => RevealFile(w.Path)));
+        foreach (var c in _session.Activity.Items.Where(i => i.Kind == Tether.Core.Client.ActivityKind.Conflict && i.Path is not null).Take(20))
+        {
+            if (File.Exists(LocalPath(c.Path!)))
+                items.Add(new AttentionItem("Conflict copy: " + PathRules.FileName(c.Path!), "Both computers changed this file. Compare the two, keep what you want, delete the other.", "Show in folder", () => RevealFile(c.Path!)));
+        }
+        return items;
     }
 
     private void OnPassCompleted(PassResult result)
     {
-        var blocked = result.Outcome == PassOutcome.Blocked;
-        var deletions = blocked && result.BlockReason is BlockReason.MassDelete or BlockReason.FolderEmpty;
-        _allowDeletes.Visible = deletions;
-        _allowDeletes.Text = $"Allow these deletions ({result.BlockedDeletes.Count})…";
-        _fixProblem.Visible = blocked && !deletions;
-        _fixProblem.Text = result.BlockReason switch
+        if (result.Outcome == PassOutcome.Blocked)
         {
-            BlockReason.FolderMissing or BlockReason.MarkerMissing or BlockReason.MarkerMismatch => "Locate the sync folder…",
-            BlockReason.ForeignMarker => "Confirm this folder…",
-            BlockReason.ServerChanged or BlockReason.ServerRolledBack => "Re-link to this server…",
-            _ => "Fix…",
-        };
-        _warnings.Visible = _session?.State.LoadWarnings().Count > 0;
-
-        if (deletions)
-            Toast("massdelete", "Deletions blocked", result.Message ?? "Many files would be deleted. Nothing was deleted.", Forms.ToolTipIcon.Warning, ConfirmDeletions);
-        else if (blocked)
-            Toast("blocked:" + result.BlockReason, "Tether paused syncing", result.Message ?? result.BlockReason.ToString(), Forms.ToolTipIcon.Warning, FixBlocked);
+            var deletions = result.BlockReason is BlockReason.MassDelete or BlockReason.FolderEmpty;
+            Toast("blocked:" + result.BlockReason, deletions ? "Deletions blocked" : "Tether paused syncing",
+                result.Message ?? result.BlockReason.ToString(), Forms.ToolTipIcon.Warning, FixBlocked);
+        }
         else if (result.Outcome == PassOutcome.AuthFailed)
+        {
             Toast("auth", "The server rejected the token", "Open Settings and enter the token printed by install.sh.", Forms.ToolTipIcon.Error, () => ShowSettings(false));
+        }
+        _dirty = true;
     }
 
     /// <summary>Balloon tips render as Windows 10/11 toast notifications. Same key at most once per 10 minutes.</summary>
@@ -219,134 +216,136 @@ public sealed class TrayController : IDisposable
         _icon.ShowBalloonTip(8000, title, text, icon);
     }
 
-    // ------------------------------------------------------------------ actions
+    // ------------------------------------------------------------------ actions (also used by MainWindow)
 
-    private void ConfirmDeletions()
+    public void ShowMainWindow()
+    {
+        if (!_settings.IsComplete)
+        {
+            ShowSettings(firstRun: true);
+            return;
+        }
+        _window ??= new MainWindow(this);
+        _window.Show();
+        if (_window.WindowState == WindowState.Minimized)
+            _window.WindowState = WindowState.Normal;
+        _window.Activate();
+        _dirty = true;
+        RefreshIfDirty();
+    }
+
+    public void SyncNow() => _session?.SyncNow();
+
+    public void TogglePause()
     {
         if (_session is null)
             return;
-        var pending = _session.Engine.PendingDeletes;
-        if (pending.Count == 0)
-            return;
-        var sb = new StringBuilder();
-        var local = pending.Count(p => p.Side == DeleteSide.Local);
-        sb.AppendLine($"Tether stopped because this sync would delete {pending.Count} file(s):");
-        sb.AppendLine($"  {local} on this PC (deleted on the other PC)");
-        sb.AppendLine($"  {pending.Count - local} on the server (deleted on this PC)");
-        sb.AppendLine();
-        foreach (var (side, path) in pending.Take(20))
-            sb.AppendLine($"  {(side == DeleteSide.Local ? "this PC" : "server")}: {path}");
-        if (pending.Count > 20)
-            sb.AppendLine($"  … and {pending.Count - 20} more");
-        sb.AppendLine();
-        sb.AppendLine("If this is unexpected (wrong folder, unplugged drive), press No and check the folder.");
-        sb.AppendLine("Deleted files stay recoverable from the server history for 30 days.");
-        sb.AppendLine();
-        sb.AppendLine("Allow these deletions once?");
-        if (MessageBox.Show(sb.ToString(), "Tether – allow deletions?", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No) == MessageBoxResult.Yes)
-        {
-            _session.Runner.ApproveDeletions();
-            _allowDeletes.Visible = false;
-        }
+        if (_session.Status.Paused || _settings.Paused)
+            _session.Resume();
+        else
+            _session.Pause();
+        _settings.Paused = _session.Settings.Paused;
+        SettingsStore.Save(SettingsStore.DefaultPath, _settings);
     }
 
-    private void FixBlocked()
+    public void FixBlocked()
     {
-        if (_session?.Runner.LastResult is not { Outcome: PassOutcome.Blocked } result)
+        if (_session is null)
             return;
-        switch (result.BlockReason)
+        var status = _session.Status;
+        switch (status.BlockReason)
         {
+            case BlockReason.MassDelete:
+            case BlockReason.FolderEmpty:
+                if (_session.PendingDeletes().Count > 0
+                    && MessageBox.Show(_session.DescribePendingDeletes(), "Tether – allow deletions?", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No) == MessageBoxResult.Yes)
+                    _session.ApproveDeletions();
+                break;
             case BlockReason.ForeignMarker:
-                if (MessageBox.Show($"{_settings.Folder} was synced by Tether before, but this PC has no record of it (for example after reinstalling).\n\n" +
+                if (MessageBox.Show($"{_settings.Folder} was synced by Tether before, but this computer has no record of it (for example after reinstalling).\n\n" +
                         "Continue syncing it? Files are merged: nothing is deleted, differing files become conflict copies.",
                         "Tether", MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes)
-                {
-                    _session.Engine.AdoptExistingMarker();
-                    _session.Runner.RequestSync("adopted", full: true);
-                }
+                    _session.AdoptExistingMarker();
                 break;
             case BlockReason.ServerChanged:
             case BlockReason.ServerRolledBack:
-                if (MessageBox.Show(result.Message + "\n\nRe-link? Tether will merge this folder with the server: nothing is deleted or overwritten, " +
+                if (MessageBox.Show(status.Text + "\n\nRe-link? Tether will merge this folder with the server: nothing is deleted or overwritten, " +
                         "files that differ become conflict copies.", "Tether", MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.Yes)
-                {
-                    _session.Engine.RelinkToServer();
-                    _session.Runner.RequestSync("relinked", full: true);
-                }
+                    _session.RelinkToServer();
                 break;
-            default:
-                LocateFolder(result);
+            case BlockReason.FolderMissing:
+            case BlockReason.MarkerMissing:
+            case BlockReason.MarkerMismatch:
+                LocateFolder(status.Text);
                 break;
         }
+        _dirty = true;
     }
 
-    private void LocateFolder(PassResult result)
+    private void LocateFolder(string message)
     {
-        MessageBox.Show(result.Message + "\n\nIf the drive is unplugged, plug it in and choose Sync now. If you moved or renamed the folder, choose its new location next.",
+        MessageBox.Show(message + "\n\nIf the drive is unplugged, plug it in and choose Sync now. If you moved or renamed the folder, choose its new location next.",
             "Tether", MessageBoxButton.OK, MessageBoxImage.Warning);
         var dialog = new OpenFolderDialog { Title = "Where is your Tether folder now?" };
-        if (dialog.ShowDialog() != true)
+        if (dialog.ShowDialog() != true || _session is null)
             return;
-        var newFolder = dialog.FolderName;
-        var marker = StateLocator.ReadMarker(newFolder);
-        var oldMarker = _session?.State.MarkerId;
-        if (marker is null || !string.Equals(marker, oldMarker, StringComparison.OrdinalIgnoreCase))
+        var error = _session.CheckMovedFolder(dialog.FolderName);
+        if (error is not null)
         {
-            MessageBox.Show("That folder is not your Tether folder (its .tether-marker is missing or different). Nothing was changed.",
-                "Tether", MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show(error, "Tether", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
-        var oldStateDir = Path.GetDirectoryName(_session!.State.DatabasePath)!;
+        var oldStateDir = _session.StateDirectory;
         StopSession();
-        StateLocator.AdoptState(oldStateDir, newFolder);
-        _settings.Folder = newFolder;
+        try
+        {
+            StateLocator.AdoptState(oldStateDir, dialog.FolderName);
+        }
+        catch (IOException ex)
+        {
+            MessageBox.Show(ex.Message, "Tether", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+        _settings.Folder = dialog.FolderName;
         SettingsStore.Save(SettingsStore.DefaultPath, _settings);
         StartSession(null);
     }
 
-    private void ShowWarnings()
-    {
-        var warnings = _session?.State.LoadWarnings().Values.ToList() ?? [];
-        if (warnings.Count == 0)
-        {
-            MessageBox.Show("No files need attention.", "Tether");
-            return;
-        }
-        var sb = new StringBuilder("These files are not synced until you rename them:\n\n");
-        foreach (var w in warnings.Take(30))
-            sb.AppendLine($"• {w.Path}\n   {w.Message}");
-        MessageBox.Show(sb.ToString(), "Tether – files needing attention", MessageBoxButton.OK, MessageBoxImage.Information);
-    }
-
-    private void ShowSettings(bool firstRun)
+    public void ShowSettings(bool firstRun)
     {
         var window = new SettingsWindow(_settings, _protector, firstRun);
         if (window.ShowDialog() != true || window.Result is null)
-        {
-            if (firstRun && !_settings.IsComplete)
-                UpdateStatus(RunnerStatus.Offline, "Not set up yet – open Settings");
             return;
-        }
-        var folderChanged = !string.Equals(_settings.Folder, window.Result.Folder, StringComparison.OrdinalIgnoreCase);
         _settings = window.Result;
         SettingsStore.Save(SettingsStore.DefaultPath, _settings);
         SetAutoStart(_settings.StartWithWindows);
-        if (folderChanged)
-            _log.LogInformation("Sync folder set to {Folder}", _settings.Folder);
         StartSession(window.PlainToken);
+        ShowMainWindow();
     }
 
-    private void TogglePause()
+    public void OpenFolder()
     {
-        if (_session is null)
-            return;
-        _settings.Paused = !_settings.Paused;
-        SettingsStore.Save(SettingsStore.DefaultPath, _settings);
-        if (_settings.Paused)
-            _session.Runner.Pause();
-        else
-            _session.Runner.Resume();
-        _pause.Text = _settings.Paused ? "Resume syncing" : "Pause syncing";
+        if (_settings.Folder is { } f && Directory.Exists(f))
+            Shell(f);
+    }
+
+    public void ViewLog() => Shell(_fileLog.CurrentFile);
+
+    private string LocalPath(string syncPath) => Path.Combine(_settings.Folder ?? string.Empty, PathRules.ToOsRelative(syncPath));
+
+    private void RevealFile(string syncPath)
+    {
+        var full = LocalPath(syncPath);
+        try
+        {
+            if (File.Exists(full))
+                Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{full}\"") { UseShellExecute = false });
+            else
+                OpenFolder();
+        }
+        catch (System.ComponentModel.Win32Exception ex)
+        {
+            _log.LogWarning("Cannot open Explorer: {Error}", ex.Message);
+        }
     }
 
     private void SetAutoStart(bool enabled)
@@ -375,12 +374,6 @@ public sealed class TrayController : IDisposable
         }
     }
 
-    private void OpenFolder()
-    {
-        if (_settings.Folder is { } f && Directory.Exists(f))
-            Shell(f);
-    }
-
     private void Shell(string path)
     {
         try
@@ -402,8 +395,19 @@ public sealed class TrayController : IDisposable
         }
     }
 
+    private void Exit()
+    {
+        if (_window is not null)
+        {
+            _window.AllowClose = true;
+            _window.Close();
+        }
+        _app.Shutdown();
+    }
+
     public void Dispose()
     {
+        _refresh.Stop();
         SystemEvents.PowerModeChanged -= OnPowerModeChanged;
         StopSession();
         _icon.Visible = false;
