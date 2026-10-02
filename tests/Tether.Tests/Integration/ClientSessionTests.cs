@@ -128,7 +128,12 @@ public class ClientSessionTests : IAsyncLifetime
     {
         var hooks = new EngineHooks { BeforeTransfer = (_, _) => Task.Delay(100) };
         for (var i = 0; i < 20; i++)
-            File.WriteAllText(Path.Combine(_folder.Path, $"first{i:00}.txt"), "a" + i);
+        {
+            var path = Path.Combine(_folder.Path, $"first{i:00}.txt");
+            File.WriteAllText(path, "a" + i);
+            // Old enough that the first pass takes all 20 at once, however slowly they were written.
+            File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddMinutes(-1));
+        }
         await using var session = Start(hooks);
         var maxTotal = 0;
         session.StatusChanged += s => { if (s.FilesTotal > Volatile.Read(ref maxTotal)) Volatile.Write(ref maxTotal, s.FilesTotal); };
@@ -151,7 +156,11 @@ public class ClientSessionTests : IAsyncLifetime
     {
         var hooks = new EngineHooks { BeforeTransfer = (_, _) => Task.Delay(150) };
         for (var i = 0; i < 12; i++)
-            File.WriteAllBytes(Path.Combine(_folder.Path, $"f{i:00}.bin"), new byte[200_000]);
+        {
+            var path = Path.Combine(_folder.Path, $"f{i:00}.bin");
+            File.WriteAllBytes(path, new byte[200_000]);
+            File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddMinutes(-1)); // all 12 in one pass
+        }
         await using var session = Start(hooks);
         var sawActive = 0;
         long sawTotal = 0;
