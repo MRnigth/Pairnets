@@ -59,6 +59,8 @@ public sealed class SyncRunner : IAsyncDisposable
     private DateTimeOffset? _firstWatcherRequest;
     private bool _fullRequested;
     private bool _paused;
+    private CancellationTokenSource? _passCts;
+    private readonly HashSet<string> _arrivedDuringPass = new(StringComparer.Ordinal);
     private bool _catchUpArmed = true;
     private int _offlineAttempts;
     private Task? _loop;
@@ -95,6 +97,32 @@ public sealed class SyncRunner : IAsyncDisposable
 
     /// <summary>Raised when a SignalR "Changed" from another device arrives.</summary>
     public event Action<string, string>? RemoteChangeReceived;
+
+    /// <summary>Files changed here or on another device while a pass was running; the next pass syncs them.</summary>
+    public int PendingChanges
+    {
+        get
+        {
+            lock (_gate)
+                return _arrivedDuringPass.Count;
+        }
+    }
+
+    /// <summary>Raised when <see cref="PendingChanges"/> changes.</summary>
+    public event Action<int>? PendingChangesChanged;
+
+    /// <summary>Remembers a change that arrived while a pass is running, so progress can count it.</summary>
+    private void NoteArrival(string path)
+    {
+        int count;
+        lock (_gate)
+        {
+            if (_passCts is null || !_arrivedDuringPass.Add(path))
+                return;
+            count = _arrivedDuringPass.Count;
+        }
+        PendingChangesChanged?.Invoke(count);
+    }
 
     public void Start()
     {
@@ -153,10 +181,25 @@ public sealed class SyncRunner : IAsyncDisposable
         RequestSync("resume", full: true);
     }
 
+    /// <summary>
+    /// Pauses syncing now: a pass that is running is cancelled (half-sent files are discarded on
+    /// both sides and the next pass picks up where this one stopped), and no new pass starts.
+    /// </summary>
     public void Pause()
     {
+        CancellationTokenSource? running;
         lock (_gate)
+        {
             _paused = true;
+            running = _passCts;
+        }
+        try
+        {
+            running?.Cancel();
+        }
+        catch (ObjectDisposedException)
+        {
+        }
         SetStatus(RunnerStatus.Paused, "Paused");
     }
 
@@ -219,14 +262,30 @@ public sealed class SyncRunner : IAsyncDisposable
 
     private async Task RunOnePassAsync(bool full, string[] reasons, CancellationToken ct)
     {
+        using var passCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        lock (_gate)
+        {
+            if (_paused)
+                return;
+            _passCts = passCts;
+            _arrivedDuringPass.Clear(); // this pass picks them up
+        }
+        PendingChangesChanged?.Invoke(0);
         SetStatus(RunnerStatus.Syncing, "Syncing");
         PassResult result;
         try
         {
-            result = await _engine.RunPassAsync(new PassOptions(string.Join(",", reasons), full), ct).ConfigureAwait(false);
+            result = await _engine.RunPassAsync(new PassOptions(string.Join(",", reasons), full), passCts.Token).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
+            return;
+        }
+        catch (OperationCanceledException) when (passCts.IsCancellationRequested)
+        {
+            // Paused mid-pass. Nothing half-done is kept; the next pass (after Resume) finishes the work.
+            _log.LogInformation("Pass stopped because syncing was paused");
+            SetStatus(RunnerStatus.Paused, "Paused");
             return;
         }
         catch (Exception ex)
@@ -234,6 +293,11 @@ public sealed class SyncRunner : IAsyncDisposable
             // Defensive: the engine converts expected failures into results.
             _log.LogError(ex, "Unexpected error in sync pass");
             result = new PassResult { Outcome = PassOutcome.Failed, Message = ex.Message };
+        }
+        finally
+        {
+            lock (_gate)
+                _passCts = null;
         }
 
         LastResult = result;
@@ -358,6 +422,7 @@ public sealed class SyncRunner : IAsyncDisposable
             return;
         if (_engine.WasRecentlyTouched(rel, OwnEventWindow))
             return;
+        NoteArrival(rel);
         RequestDebounced();
     }
 
@@ -379,6 +444,7 @@ public sealed class SyncRunner : IAsyncDisposable
             RemoteChangeReceived?.Invoke(device, path);
             if (string.Equals(device, _options.DeviceId, StringComparison.Ordinal))
                 return; // our own change echoed back
+            NoteArrival(path);
             RequestSync("remote-change", delay: _options.RemoteDebounce);
         });
         _hub.Reconnected += _ =>

@@ -104,4 +104,39 @@ public class RunnerTests : IAsyncLifetime
         runner.CatchUpCompleted += n => Interlocked.Exchange(ref announced, n);
         await WaitUntil(() => Volatile.Read(ref announced) == 12, TimeSpan.FromSeconds(15), "catch-up event");
     }
+
+    [Fact]
+    public async Task PauseStopsARunningPassAndResumeFinishesIt()
+    {
+        var runner = _desktop.StartRunner();
+        await WaitUntil(() => runner.LastSyncAt is not null, TimeSpan.FromSeconds(15), "first pass");
+
+        var started = 0;
+        _desktop.Hooks.BeforeTransfer = async (_, _) =>
+        {
+            Interlocked.Increment(ref started);
+            await Task.Delay(150); // slow link: the pass takes a few seconds
+        };
+        for (var i = 0; i < 60; i++)
+            _desktop.Write($"many/f{i:00}.txt", "file " + i);
+        runner.RequestSync("test");
+        await WaitUntil(() => Volatile.Read(ref started) >= 8, TimeSpan.FromSeconds(15), "uploads to start");
+
+        runner.Pause();
+        Assert.Equal(RunnerStatus.Paused, runner.Status);
+        await Task.Delay(1000); // in-flight requests end; nothing new may start
+        var storedAfterPause = _server.Store.ReadManifest(null).Entries.Count;
+        var startedAfterPause = Volatile.Read(ref started);
+        await Task.Delay(1500);
+        Assert.Equal(startedAfterPause, Volatile.Read(ref started));
+        Assert.Equal(storedAfterPause, _server.Store.ReadManifest(null).Entries.Count);
+        Assert.InRange(storedAfterPause, 1, 59);
+        Assert.Equal(RunnerStatus.Paused, runner.Status);
+        Assert.Empty(Directory.EnumerateFiles(_server.Paths.Tmp));
+
+        _desktop.Hooks.BeforeTransfer = null;
+        runner.Resume();
+        await WaitUntil(() => _server.Store.ReadManifest(null).Entries.Count == 60, TimeSpan.FromSeconds(20), "all uploads after resume");
+        await WaitUntil(() => runner.Status == RunnerStatus.Idle, TimeSpan.FromSeconds(10), "idle status");
+    }
 }

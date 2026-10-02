@@ -19,6 +19,13 @@ public sealed class ClientSession : IAsyncDisposable
     private readonly TimeProvider _clock;
     private StatusSnapshot _status = StatusSnapshot.Initial;
 
+    /// <summary>A pass starting within this time of the previous one continues its file count.</summary>
+    private static readonly TimeSpan BurstGap = TimeSpan.FromSeconds(15);
+    private int _burstOffset;
+    private int _passDone;
+    private int _passTotal;
+    private DateTimeOffset? _lastPassEnd;
+
     private ClientSession(ClientSettings settings, StateDb state, TetherApiClient api, SyncEngine engine, SyncRunner runner, TimeProvider clock)
     {
         Settings = settings;
@@ -58,7 +65,8 @@ public sealed class ClientSession : IAsyncDisposable
 
     /// <summary>Builds and starts a session. <paramref name="runnerOptions"/> overrides timings (tests).</summary>
     public static ClientSession Start(ClientSettings settings, string token, ILocalTrash trash, ILoggerFactory? loggers = null,
-        string? stateBaseDir = null, Func<RunnerOptions, RunnerOptions>? runnerOptions = null, TimeProvider? clock = null)
+        string? stateBaseDir = null, Func<RunnerOptions, RunnerOptions>? runnerOptions = null, TimeProvider? clock = null,
+        EngineHooks? hooks = null)
     {
         if (!settings.IsComplete)
             throw new InvalidOperationException("Settings are incomplete.");
@@ -75,7 +83,7 @@ public sealed class ClientSession : IAsyncDisposable
             Folder = folder,
             DeviceName = settings.DeviceName!,
             ExtraIgnore = settings.ExtraIgnore,
-        }, api, state, trash, loggers.CreateLogger("Tether.Engine"), clock);
+        }, api, state, trash, loggers.CreateLogger("Tether.Engine"), clock, hooks);
         var options = new RunnerOptions { ServerUrl = url, Token = token, DeviceId = settings.DeviceName! };
         if (runnerOptions is not null)
             options = runnerOptions(options);
@@ -112,9 +120,40 @@ public sealed class ClientSession : IAsyncDisposable
             Activity.Add(ActivityKind.Warning, w.Path, $"{w.Path}: {w.Message}", _clock);
             PathWarningRaised?.Invoke(w);
         };
-        Engine.Progress += p => Update(s => p.CurrentPath is null
-            ? s with { CurrentPath = null, Operation = null, BytesDone = 0, BytesTotal = 0, FilesDone = p.FilesDone, FilesTotal = p.FilesTotal }
-            : s with { CurrentPath = p.CurrentPath, Operation = p.Operation, BytesDone = p.BytesDone, BytesTotal = p.BytesTotal, FilesDone = p.FilesDone, FilesTotal = p.FilesTotal });
+        // File counts run across back-to-back passes ("Sync now" while files keep arriving): a pass
+        // that starts soon after the previous one continues its count, and files that arrive during a
+        // pass are added to the total straight away.
+        Engine.ExecutionStarting += (_, _) =>
+        {
+            lock (_gate)
+            {
+                var chained = _lastPassEnd is { } end && _clock.GetUtcNow() - end < BurstGap;
+                _burstOffset = chained ? _burstOffset + _passDone : 0;
+                _passDone = 0;
+                _passTotal = 0;
+            }
+        };
+        Engine.Progress += p =>
+        {
+            int done, total;
+            lock (_gate)
+            {
+                _passDone = p.FilesDone;
+                _passTotal = p.FilesTotal;
+                done = _burstOffset + p.FilesDone;
+                total = _burstOffset + p.FilesTotal + Runner.PendingChanges;
+            }
+            Update(s => p.CurrentPath is null
+                ? s with { CurrentPath = null, Operation = null, BytesDone = 0, BytesTotal = 0, FilesDone = done, FilesTotal = total }
+                : s with { CurrentPath = p.CurrentPath, Operation = p.Operation, BytesDone = p.BytesDone, BytesTotal = p.BytesTotal, FilesDone = done, FilesTotal = total });
+        };
+        Runner.PendingChangesChanged += pending =>
+        {
+            int total;
+            lock (_gate)
+                total = _burstOffset + _passTotal + pending;
+            Update(s => s with { FilesTotal = Math.Max(total, s.FilesDone) });
+        };
         Runner.StatusChanged += (status, text) => Update(s => s with
         {
             Status = status,
@@ -125,6 +164,8 @@ public sealed class ClientSession : IAsyncDisposable
         });
         Runner.PassCompleted += report =>
         {
+            lock (_gate)
+                _lastPassEnd = _clock.GetUtcNow();
             var r = report.Result;
             Update(s => s with
             {

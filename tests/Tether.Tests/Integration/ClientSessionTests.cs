@@ -23,7 +23,7 @@ public class ClientSessionTests : IAsyncLifetime
         _stateBase.Dispose();
     }
 
-    private ClientSession Start() => ClientSession.Start(new ClientSettings
+    private ClientSession Start(EngineHooks? hooks = null) => ClientSession.Start(new ClientSettings
     {
         ServerUrl = _server.Url.ToString(),
         ProtectedToken = "unused-by-session",
@@ -39,7 +39,7 @@ public class ClientSessionTests : IAsyncLifetime
         PeriodicInterval = TimeSpan.FromHours(1),
         UnstableRetry = TimeSpan.FromMilliseconds(300),
         OfflineBackoff = [TimeSpan.FromMilliseconds(200)],
-    });
+    }, hooks: hooks);
 
     private static async Task WaitUntil(Func<bool> condition, string what)
     {
@@ -117,5 +117,28 @@ public class ClientSessionTests : IAsyncLifetime
         var second = await http.PutAsync($"api/file?path={Uri.EscapeDataString(nfd)}&base=none", new StringContent("b", Encoding.UTF8));
         Assert.Equal(HttpStatusCode.Conflict, second.StatusCode);
         Assert.Contains("case-collision", await second.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
+    public async Task FileCountGrowsWhenFilesKeepArrivingDuringASync()
+    {
+        var hooks = new EngineHooks { BeforeTransfer = (_, _) => Task.Delay(100) };
+        for (var i = 0; i < 20; i++)
+            File.WriteAllText(Path.Combine(_folder.Path, $"first{i:00}.txt"), "a" + i);
+        await using var session = Start(hooks);
+        var maxTotal = 0;
+        session.StatusChanged += s => { if (s.FilesTotal > Volatile.Read(ref maxTotal)) Volatile.Write(ref maxTotal, s.FilesTotal); };
+
+        await WaitUntil(() => session.Status.FilesDone >= 4, "first uploads");
+        Assert.Equal(20, session.Status.FilesTotal);
+        for (var i = 0; i < 12; i++)
+            File.WriteAllText(Path.Combine(_folder.Path, $"later{i:00}.txt"), "b" + i);
+
+        // The new files are counted while the first pass is still running...
+        await WaitUntil(() => session.Status.FilesTotal >= 32, "total to include files that arrived");
+        // ...and the next pass continues the same count instead of starting again at 1.
+        await WaitUntil(() => _server.Store.ReadManifest(null).Entries.Count == 32, "all uploads");
+        await WaitUntil(() => session.Status.Status == RunnerStatus.Idle, "idle");
+        Assert.Equal(32, Volatile.Read(ref maxTotal));
     }
 }
