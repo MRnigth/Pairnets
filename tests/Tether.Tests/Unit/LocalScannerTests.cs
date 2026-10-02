@@ -98,11 +98,22 @@ public class LocalScannerTests : IDisposable
     [Fact]
     public async Task ReportsInvalidNames()
     {
-        Write("trailing.", "x");
+        // Win32 silently strips a trailing dot; tools using \\?\ paths (or a Linux share) can still
+        // create such names, which is exactly what the scanner must refuse to sync.
+        var bad = Path.Combine(_root.Path, "trailing.");
+        var createPath = OperatingSystem.IsWindows() ? @"\\?\" + bad : bad;
+        File.WriteAllText(createPath, "x");
         Write("ok.txt", "x");
-        var result = await Scanner().ScanAsync(CancellationToken.None);
-        Assert.Single(result.Files);
-        Assert.Contains(result.InvalidNames, i => i.Path == "trailing." && i.Problem == PathProblem.TrailingDot);
+        try
+        {
+            var result = await Scanner().ScanAsync(CancellationToken.None);
+            Assert.Equal(["ok.txt"], result.Files.Keys);
+            Assert.Contains(result.InvalidNames, i => i.Path == "trailing." && i.Problem == PathProblem.TrailingDot);
+        }
+        finally
+        {
+            File.Delete(createPath);
+        }
     }
 
     [Fact]
