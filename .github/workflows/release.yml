@@ -90,10 +90,66 @@ jobs:
           name: client
           path: dist/*
 
+  desktop-linux:
+    name: Desktop app (linux-x64)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Version
+        id: v
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"; else echo "version=1.0.0" >> "$GITHUB_OUTPUT"; fi
+      - name: Publish
+        run: >
+          dotnet publish src/Tether.Desktop/Tether.Desktop.csproj -c Release -r linux-x64 --self-contained true
+          -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none
+          -p:Version=${{ steps.v.outputs.version }} -o dist/tether-desktop-linux-x64
+      - name: Package
+        run: |
+          cp deploy/linux-desktop/install-desktop.sh dist/tether-desktop-linux-x64/
+          cp assets/tether-icon-256.png dist/tether-desktop-linux-x64/tether.png
+          chmod +x dist/tether-desktop-linux-x64/install-desktop.sh dist/tether-desktop-linux-x64/Tether
+          tar -C dist -czf dist/tether-desktop-linux-x64.tar.gz tether-desktop-linux-x64
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-linux
+          path: dist/tether-desktop-linux-x64.tar.gz
+
+  macos:
+    name: Desktop app (macOS)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Version
+        id: v
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"; else echo "version=1.0.0" >> "$GITHUB_OUTPUT"; fi
+      - name: Publish and bundle
+        run: |
+          mkdir -p dist
+          for arch in arm64 x64; do
+            dotnet publish src/Tether.Desktop/Tether.Desktop.csproj -c Release -r osx-$arch --self-contained true \
+              -p:DebugType=none -p:Version=${{ steps.v.outputs.version }} -o publish/mac-$arch
+            bash deploy/macos/make-app.sh publish/mac-$arch ${{ steps.v.outputs.version }} $arch dist
+          done
+          ls -la dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos
+          path: dist/*
+
   release:
     name: GitHub release
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [server, client]
+    needs: [server, client, desktop-linux, macos]
     runs-on: ubuntu-latest
     permissions:
       contents: write
