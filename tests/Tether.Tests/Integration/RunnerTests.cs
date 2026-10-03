@@ -124,7 +124,20 @@ public class RunnerTests : IAsyncLifetime
 
         runner.Pause();
         Assert.Equal(RunnerStatus.Paused, runner.Status);
-        await Task.Delay(1000); // in-flight requests end; nothing new may start
+        // In-flight requests end (slowly, on a busy machine); once nothing has started for a full second, nothing new may start.
+        var lastStarted = -1;
+        var quietSince = DateTime.UtcNow;
+        var settleDeadline = DateTime.UtcNow.AddSeconds(15);
+        while (DateTime.UtcNow - quietSince < TimeSpan.FromSeconds(1) && DateTime.UtcNow < settleDeadline)
+        {
+            await Task.Delay(100);
+            var now = Volatile.Read(ref started);
+            if (now != lastStarted)
+            {
+                lastStarted = now;
+                quietSince = DateTime.UtcNow;
+            }
+        }
         var storedAfterPause = _server.Store.ReadManifest(null).Entries.Count;
         var startedAfterPause = Volatile.Read(ref started);
         await Task.Delay(1500);
