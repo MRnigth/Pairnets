@@ -50,9 +50,9 @@
       </Border>
       <CheckBox x:Name="AlwaysBox" Style="{StaticResource Switch}" Content="From now on, update the server automatically" Margin="0,14,0,0" />
       <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,14,0,0">
-        <Button Style="{StaticResource FlatButton}" Content="Don't ask for this version" Click="OnSkip" />
+        <Button x:Name="SkipButton" Style="{StaticResource FlatButton}" Content="Don't ask for this version" Click="OnSkip" />
         <Button Style="{StaticResource SubtleButton}" Content="Later" Margin="8,0,0,0" Click="OnLater" />
-        <Button Style="{StaticResource AccentButton}" Content="Update server" Margin="8,0,0,0" Click="OnUpdate" />
+        <Button x:Name="UpdateButton" Style="{StaticResource AccentButton}" Content="Update server" Margin="8,0,0,0" Click="OnUpdate" />
       </StackPanel>
     </StackPanel>
 

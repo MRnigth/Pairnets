@@ -521,6 +521,11 @@ for this version** hides the question until the next version. Tick **From now on
 automatically** (also in **Settings → Updates and speed**) and Tether updates the server by itself
 whenever it finds it out of date, with a line in the Activity list and a notification.
 
+**See the server's version.** The main window shows a **Server 1.0.58** pill next to the free space. It turns
+orange when the server is older than your app. The button beside it opens the same window by hand: **Update
+server…** when the server is older, **Check for update** when it is up to date. It works even if you chose
+*Don't ask for this version*.
+
 This works because the server installer (`install.sh`) also installs a small root-owned updater
 the first time, so no password is needed later. How this stays safe is explained in
 [DEPLOY.md](DEPLOY.md#4b-updating-the-server).

@@ -110,6 +110,15 @@ public sealed record StatusSnapshot(
         : Status == RunnerStatus.Offline && Text.StartsWith("Offline", StringComparison.Ordinal) ? "Not connected"
         : null;
 
+    /// <summary>"Server 1.0.58", or null before the server has answered with its version.</summary>
+    public string? ServerVersionText => Server?.ServerVersion is { Length: > 0 } v ? "Server " + v : null;
+
+    /// <summary>True when the server runs an older release than this app.</summary>
+    public bool ServerIsOlder => Server?.ServerVersion is { Length: > 0 } v && UpdateChecker.ServerIsOlder(v, TetherInfo.ProductVersion);
+
+    /// <summary>The label of the button next to the server version.</summary>
+    public string ServerUpdateButtonText => ServerIsOlder ? "Update server…" : "Check for update";
+
     public string? ServerFreeText => Server?.DiskFreeBytes is { } free ? Format.Bytes(free) + " free on server" : null;
 
     /// <summary>Less than 5 GB or 5 % left on the server's disk.</summary>

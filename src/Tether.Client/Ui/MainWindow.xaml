@@ -72,6 +72,14 @@
                 <TextBlock x:Name="ConnectionText" FontSize="12" />
               </StackPanel>
             </Border>
+            <Border x:Name="VersionPill" Style="{StaticResource Pill}" Margin="0,0,8,4" Visibility="Collapsed">
+              <StackPanel Orientation="Horizontal">
+                <ui:LineIcon Width="15" Height="15" StrokeThickness="2" Margin="0,0,6,0"
+                             Stroke="{DynamicResource T.Muted}" Data="{StaticResource I.Server}" />
+                <TextBlock x:Name="VersionText" FontSize="12" VerticalAlignment="Center" />
+                <Button x:Name="VersionButton" Style="{StaticResource SubtleButton}" Margin="8,0,0,0" Padding="8,1" FontSize="12" Click="OnUpdateServer" />
+              </StackPanel>
+            </Border>
             <Border x:Name="ServerPill" Style="{StaticResource Pill}" Margin="0,0,8,4" Visibility="Collapsed">
               <StackPanel Orientation="Horizontal">
                 <ui:LineIcon x:Name="ServerIcon" Width="15" Height="15" StrokeThickness="2" Margin="0,0,5,0"

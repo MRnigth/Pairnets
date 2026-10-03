@@ -21,6 +21,7 @@ public interface IMainActions
     void UpdateNow();
     void DismissUpdate();
     void DownloadNow();
+    void UpdateServer();
 }
 
 public partial class MainWindow : Window
@@ -103,6 +104,12 @@ public partial class MainWindow : Window
         ConnectionIcon.Data = Visuals.Resource<Geometry>(s.IsConnected ? "I.CloudCheck" : "I.CloudOff");
         ConnectionIcon.Stroke = Visuals.Resource<IBrush>(s.IsConnected ? "S.Green" : "T.WarnText");
         ConnectionPill.Classes.Set("warn", !s.IsConnected);
+
+        // The server's version, with a way to check for an update (a warning colour when it is older than this app).
+        VersionPill.IsVisible = s.ServerVersionText is not null;
+        VersionText.Text = s.ServerVersionText ?? string.Empty;
+        VersionButton.Content = s.ServerUpdateButtonText;
+        VersionPill.Classes.Set("warn", s.ServerIsOlder);
 
         // Free space on the server; a warning colour when it runs low.
         ServerPill.IsVisible = s.ServerFreeText is not null;
@@ -206,6 +213,8 @@ public partial class MainWindow : Window
     private void OnUpdateNow(object? sender, RoutedEventArgs e) => _actions?.UpdateNow();
     private void OnUpdateLater(object? sender, RoutedEventArgs e) => _actions?.DismissUpdate();
     private void OnDownloadNow(object? sender, RoutedEventArgs e) => _actions?.DownloadNow();
+
+    private void OnUpdateServer(object? sender, RoutedEventArgs e) => _actions?.UpdateServer();
 
     private void OnAttentionAction(object? sender, RoutedEventArgs e)
     {

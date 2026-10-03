@@ -420,6 +420,13 @@ public sealed class TrayController : IMainActions, IDisposable
 
     public void DownloadNow() => _session?.DownloadNow();
 
+    /// <summary>The main window's "Update server" / "Check for update" button (works even when the prompt was skipped).</summary>
+    public void UpdateServer()
+    {
+        if (_session is { } session && session.Status.Server?.ServerVersion is { } version)
+            ShowServerUpdate(session, version, null);
+    }
+
     private void OnServerInfo(ClientSession session, Core.ServerInfo info)
     {
         if (!ReferenceEquals(session, _session))

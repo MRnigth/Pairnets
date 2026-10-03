@@ -36,9 +36,9 @@
       </Border>
       <CheckBox x:Name="AlwaysBox" Content="From now on, update the server automatically" />
       <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
-        <Button Classes="flat" Content="Don't ask for this version" Click="OnSkip" />
+        <Button x:Name="SkipButton" Classes="flat" Content="Don't ask for this version" Click="OnSkip" />
         <Button Classes="subtle" Content="Later" Click="OnLater" />
-        <Button Classes="accent" Content="Update server" Click="OnUpdate" />
+        <Button x:Name="UpdateButton" Classes="accent" Content="Update server" Click="OnUpdate" />
       </StackPanel>
     </StackPanel>
 

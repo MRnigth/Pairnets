@@ -19,8 +19,20 @@ public partial class ServerUpdateWindow : Window
         _session = session;
         ServerVersion = serverVersion;
         appVersion ??= TetherInfo.ProductVersion;
-        Explanation.Text = $"This app is version {appVersion}, but your server runs {serverVersion}. Updating is recommended so both sides have the latest fixes.";
-        VersionsText.Text = $"{serverVersion} → {appVersion}";
+        if (UpdateChecker.ServerIsOlder(serverVersion, appVersion))
+        {
+            Explanation.Text = $"This app is version {appVersion}, but your server runs {serverVersion}. Updating is recommended so both sides have the latest fixes.";
+            VersionsText.Text = $"{serverVersion} → {appVersion}";
+        }
+        else
+        {
+            // Opened by hand from the main window: nothing is older, but a newer release may exist.
+            Heading.Text = "Your server is up to date";
+            Explanation.Text = $"Your server runs {serverVersion}, the same as this app ({appVersion}). \"Check for update\" installs a newer release if there is one.";
+            VersionsText.Text = serverVersion;
+            SkipButton.Visibility = Visibility.Collapsed;
+            UpdateButton.Content = "Check for update";
+        }
         Loaded += (_, _) => Motion.Bob(BadgeHost, AskPanel.Visibility == Visibility.Visible);
         Closed += (_, _) =>
         {

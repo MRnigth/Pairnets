@@ -52,6 +52,13 @@
                 <TextBlock x:Name="ConnectionText" Classes="small" />
               </StackPanel>
             </Border>
+            <Border x:Name="VersionPill" Classes="pill" Margin="0,0,8,4" IsVisible="False">
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <v:LineIcon Classes="icon muted" Width="15" Height="15" StrokeThickness="2" Data="{StaticResource I.Server}" />
+                <TextBlock x:Name="VersionText" Classes="small" VerticalAlignment="Center" />
+                <Button x:Name="VersionButton" Classes="subtle" Padding="8,1" FontSize="12" Click="OnUpdateServer" />
+              </StackPanel>
+            </Border>
             <Border x:Name="ServerPill" Classes="pill" Margin="0,0,8,4" IsVisible="False">
               <StackPanel Orientation="Horizontal" Spacing="5">
                 <v:LineIcon x:Name="ServerIcon" Classes="icon muted" Width="15" Height="15" StrokeThickness="2" Data="{StaticResource I.Disk}" />

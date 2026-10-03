@@ -78,8 +78,14 @@ public class DesktopUiTests
         window.AllowClose = true;
         window.Close();
 
+        var upToDate = new ServerUpdateWindow(null, "1.0.58", "1.0.58");
+        upToDate.Show();
+        Assert.Equal("Your server is up to date", upToDate.HeadingText);
+        upToDate.Close();
+
         var dialog = new ServerUpdateWindow(null, "1.0.52", "1.0.58");
         dialog.Show();
+        Assert.Equal("Your server should be updated", dialog.HeadingText);
         Assert.True(dialog.Bobbing);
         dialog.ShowBusy("Installing");
         Assert.True(dialog.Spinning);

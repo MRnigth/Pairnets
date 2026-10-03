@@ -25,6 +25,7 @@ public interface IMainActions
     void UpdateNow();
     void DismissUpdate();
     void DownloadNow();
+    void UpdateServer();
 }
 
 /// <summary>
@@ -113,6 +114,12 @@ public partial class MainWindow : Window
         ConnectionIcon.SetResourceReference(LineIcon.StrokeProperty, s.IsConnected ? "S.Green" : "T.WarnText");
         ConnectionPill.SetResourceReference(Border.BackgroundProperty, s.IsConnected ? "T.Pill" : "T.WarnPill");
         ConnectionText.SetResourceReference(TextBlock.ForegroundProperty, s.IsConnected ? "T.Text" : "T.WarnText");
+
+        // The server's version, with a way to check for an update (a warning colour when it is older than this app).
+        VersionPill.Visibility = Show(s.ServerVersionText is not null);
+        VersionText.Text = s.ServerVersionText ?? string.Empty;
+        VersionButton.Content = s.ServerUpdateButtonText;
+        VersionPill.SetResourceReference(Border.BackgroundProperty, s.ServerIsOlder ? "T.WarnPill" : "T.Pill");
 
         // Free space on the server; a warning colour when it runs low.
         ServerPill.Visibility = Show(s.ServerFreeText is not null);
@@ -221,6 +228,8 @@ public partial class MainWindow : Window
     private void OnUpdateNow(object sender, RoutedEventArgs e) => _actions?.UpdateNow();
     private void OnUpdateLater(object sender, RoutedEventArgs e) => _actions?.DismissUpdate();
     private void OnDownloadNow(object sender, RoutedEventArgs e) => _actions?.DownloadNow();
+
+    private void OnUpdateServer(object sender, RoutedEventArgs e) => _actions?.UpdateServer();
 
     private void OnAttentionAction(object sender, RoutedEventArgs e)
     {
