@@ -78,6 +78,11 @@ public class DesktopUiTests
         window.AllowClose = true;
         window.Close();
 
+        var unknownVersion = new ServerUpdateWindow(null, string.Empty, "1.0.58");
+        unknownVersion.Show();
+        Assert.Equal("Your server should be updated", unknownVersion.HeadingText);
+        unknownVersion.Close();
+
         var upToDate = new ServerUpdateWindow(null, "1.0.58", "1.0.58");
         upToDate.Show();
         Assert.Equal("Your server is up to date", upToDate.HeadingText);

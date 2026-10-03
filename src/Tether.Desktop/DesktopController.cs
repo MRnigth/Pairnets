@@ -379,8 +379,8 @@ public sealed class DesktopController : IMainActions, IDisposable
     /// <summary>The main window's "Update server" / "Check for update" button (works even when the prompt was skipped).</summary>
     public void UpdateServer()
     {
-        if (_session is { } session && session.Status.Server?.ServerVersion is { } version)
-            ShowServerUpdate(session, version, null);
+        if (_session is { } session && session.Status.Server is { } info)
+            ShowServerUpdate(session, info.ServerVersion ?? string.Empty, null);
     }
 
     private void OnServerInfo(ClientSession session, ServerInfo info)
@@ -432,7 +432,7 @@ public sealed class DesktopController : IMainActions, IDisposable
 
     private void ShowSettings(bool firstRun)
     {
-        var window = new SettingsWindow(_settings, _platform.Secrets, firstRun, SafeIsAutoStart(), _updates);
+        var window = new SettingsWindow(_settings, _platform.Secrets, firstRun, SafeIsAutoStart(), _updates, _session?.Status.ServerVersionText);
         window.Closed += (_, _) =>
         {
             if (window.Result is null)

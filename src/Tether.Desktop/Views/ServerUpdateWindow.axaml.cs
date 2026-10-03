@@ -23,7 +23,13 @@ public partial class ServerUpdateWindow : Window
         _session = session;
         ServerVersion = serverVersion;
         appVersion ??= TetherInfo.ProductVersion;
-        if (UpdateChecker.ServerIsOlder(serverVersion, appVersion))
+        if (serverVersion.Length == 0)
+        {
+            // A server too old to report its version (installed before it could say).
+            Explanation.Text = $"Your server is too old to say which version it runs; this app is version {appVersion}. Updating is recommended so both sides have the latest fixes.";
+            VersionsText.Text = $"old version → {appVersion}";
+        }
+        else if (UpdateChecker.ServerIsOlder(serverVersion, appVersion))
         {
             Explanation.Text = $"This app is version {appVersion}, but your server runs {serverVersion}. Updating is recommended so both sides have the latest fixes.";
             VersionsText.Text = $"{serverVersion} → {appVersion}";

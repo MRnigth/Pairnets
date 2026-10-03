@@ -330,7 +330,7 @@ public sealed class TrayController : IMainActions, IDisposable
 
     public void ShowSettings(bool firstRun)
     {
-        var window = new SettingsWindow(_settings, _protector, firstRun, _updates);
+        var window = new SettingsWindow(_settings, _protector, firstRun, _updates, _session?.Status.ServerVersionText);
         if (window.ShowDialog() != true || window.Result is null)
             return;
         _settings = window.Result;
@@ -423,8 +423,8 @@ public sealed class TrayController : IMainActions, IDisposable
     /// <summary>The main window's "Update server" / "Check for update" button (works even when the prompt was skipped).</summary>
     public void UpdateServer()
     {
-        if (_session is { } session && session.Status.Server?.ServerVersion is { } version)
-            ShowServerUpdate(session, version, null);
+        if (_session is { } session && session.Status.Server is { } info)
+            ShowServerUpdate(session, info.ServerVersion ?? string.Empty, null);
     }
 
     private void OnServerInfo(ClientSession session, Core.ServerInfo info)

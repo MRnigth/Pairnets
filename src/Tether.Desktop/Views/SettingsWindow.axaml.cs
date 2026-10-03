@@ -35,7 +35,7 @@ public partial class SettingsWindow : Window
         e.Handled = true;
     }
 
-    public SettingsWindow(ClientSettings current, ISecretProtector? protector, bool firstRun, bool autoStart, UpdateService? updates = null)
+    public SettingsWindow(ClientSettings current, ISecretProtector? protector, bool firstRun, bool autoStart, UpdateService? updates = null, string? serverVersionText = null)
     {
         _updates = updates;
         InitializeComponent();
@@ -55,6 +55,7 @@ public partial class SettingsWindow : Window
         UpdateBox.IsChecked = current.CheckForUpdates;
         WaitBox.IsChecked = current.WaitForPeerBatches;
         AutoServerBox.IsChecked = current.AutoUpdateServer;
+        ServerVersionText.Text = serverVersionText ?? "Server: not connected yet";
         (current.EffectiveParallelTransfers switch { 1 => Par1, 2 => Par2, 8 => Par8, _ => Par4 }).IsChecked = true;
         UpLimitBox.IsChecked = current.UploadLimitMBps is > 0;
         UpLimitValue.Value = (decimal)(current.UploadLimitMBps is > 0 ? current.UploadLimitMBps.Value : 5);

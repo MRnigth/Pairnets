@@ -52,7 +52,9 @@ public class ActivityAndStatusTests
         Assert.Equal("Check for update", current.ServerUpdateButtonText);
 
         var unknown = StatusSnapshot.Initial with { Server = new ServerInfo("id", 1, 1) }; // a server too old to say
-        Assert.Null(unknown.ServerVersionText);
+        Assert.Equal("Server: old version", unknown.ServerVersionText);
+        Assert.True(unknown.ServerIsOlder);
+        Assert.Equal("Update server…", unknown.ServerUpdateButtonText);
     }
 
     [Fact]

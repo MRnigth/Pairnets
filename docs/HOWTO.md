@@ -522,7 +522,8 @@ automatically** (also in **Settings → Updates and speed**) and Tether updates 
 whenever it finds it out of date, with a line in the Activity list and a notification.
 
 **See the server's version.** The main window shows a **Server 1.0.58** pill next to the free space. It turns
-orange when the server is older than your app. The button beside it opens the same window by hand: **Update
+orange when the server is older than your app. A server too old to say which version it runs shows
+**Server: old version**. The same line is in **Settings → Updates and speed**. The button beside it opens the same window by hand: **Update
 server…** when the server is older, **Check for update** when it is up to date. It works even if you chose
 *Don't ask for this version*.
 

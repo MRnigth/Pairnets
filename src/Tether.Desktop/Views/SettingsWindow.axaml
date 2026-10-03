@@ -95,6 +95,7 @@
           </StackPanel>
         </StackPanel>
         <StackPanel Spacing="3">
+          <TextBlock x:Name="ServerVersionText" Classes="muted small" />
           <ToggleSwitch x:Name="AutoServerBox" OnContent="Update the server automatically" OffContent="Update the server automatically" />
           <TextBlock Classes="muted small" TextWrapping="Wrap"
                      Text="When this app finds the server on an older version, it updates it without asking (about 30 seconds; your files are not touched)." />
