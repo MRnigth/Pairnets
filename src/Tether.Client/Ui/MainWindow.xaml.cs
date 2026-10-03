@@ -106,6 +106,14 @@ public partial class MainWindow : Window
             Motion.Travel(TransferArrow, uploading);
         }
 
+        // Connected to the server (or not).
+        ConnectionPill.Visibility = Show(s.ConnectionText is not null);
+        ConnectionText.Text = s.ConnectionText ?? string.Empty;
+        ConnectionIcon.Data = Visuals.Resource<Geometry>(s.IsConnected ? "I.CloudCheck" : "I.CloudOff");
+        ConnectionIcon.SetResourceReference(LineIcon.StrokeProperty, s.IsConnected ? "S.Green" : "T.WarnText");
+        ConnectionPill.SetResourceReference(Border.BackgroundProperty, s.IsConnected ? "T.Pill" : "T.WarnPill");
+        ConnectionText.SetResourceReference(TextBlock.ForegroundProperty, s.IsConnected ? "T.Text" : "T.WarnText");
+
         // Free space on the server; a warning colour when it runs low.
         ServerPill.Visibility = Show(s.ServerFreeText is not null);
         ServerText.Text = s.ServerFreeText ?? string.Empty;

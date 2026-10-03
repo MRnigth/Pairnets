@@ -4,7 +4,7 @@
         x:Class="Tether.Desktop.Views.SettingsWindow"
         Title="Tether" Width="620" Height="780" MinHeight="420" CanResize="True"
         WindowStartupLocation="CenterScreen" Icon="avares://Tether/Assets/tether-icon-256.png">
-  <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+  <ScrollViewer x:Name="Scroller" HorizontalScrollBarVisibility="Disabled" PointerWheelChanged="OnScrollWheel">
   <StackPanel Margin="20" Spacing="12">
     <!-- Welcome header (first run only) -->
     <Grid x:Name="WelcomeHeader" ColumnDefinitions="Auto,*" IsVisible="False" Margin="0,0,0,4">

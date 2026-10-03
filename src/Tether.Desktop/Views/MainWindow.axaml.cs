@@ -97,6 +97,13 @@ public partial class MainWindow : Window
             TransferArrow.Classes.Set("fall", !uploading);
         }
 
+        // Connected to the server (or not).
+        ConnectionPill.IsVisible = s.ConnectionText is not null;
+        ConnectionText.Text = s.ConnectionText ?? string.Empty;
+        ConnectionIcon.Data = Visuals.Resource<Geometry>(s.IsConnected ? "I.CloudCheck" : "I.CloudOff");
+        ConnectionIcon.Stroke = Visuals.Resource<IBrush>(s.IsConnected ? "S.Green" : "T.WarnText");
+        ConnectionPill.Classes.Set("warn", !s.IsConnected);
+
         // Free space on the server; a warning colour when it runs low.
         ServerPill.IsVisible = s.ServerFreeText is not null;
         ServerText.Text = s.ServerFreeText ?? string.Empty;

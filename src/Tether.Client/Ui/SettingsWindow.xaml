@@ -17,7 +17,8 @@
     </Style>
   </Window.Resources>
 
-  <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+  <ScrollViewer x:Name="Scroller" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                PreviewMouseWheel="OnScrollWheel">
   <StackPanel Margin="20">
     <!-- Welcome header (first run only) -->
     <Grid x:Name="WelcomeHeader" Visibility="Collapsed" Margin="0,0,0,16">

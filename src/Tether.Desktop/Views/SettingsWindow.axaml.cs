@@ -25,6 +25,16 @@ public partial class SettingsWindow : Window
 
     private readonly UpdateService? _updates;
 
+    /// <summary>How far one wheel notch scrolls (the default is too fast for this window).</summary>
+    private const double WheelPixelsPerNotch = 16;
+
+    private void OnScrollWheel(object? sender, Avalonia.Input.PointerWheelEventArgs e)
+    {
+        Scroller.Offset = Scroller.Offset.WithY(Math.Clamp(Scroller.Offset.Y - e.Delta.Y * WheelPixelsPerNotch,
+            0, Math.Max(0, Scroller.Extent.Height - Scroller.Viewport.Height)));
+        e.Handled = true;
+    }
+
     public SettingsWindow(ClientSettings current, ISecretProtector? protector, bool firstRun, bool autoStart, UpdateService? updates = null)
     {
         _updates = updates;

@@ -102,6 +102,14 @@ public sealed record StatusSnapshot(
     public ServerInfo? Server { get; init; }
 
     /// <summary>"412 GB free on server" or null when the server does not say.</summary>
+    /// <summary>True once the server has answered and the connection is not currently down.</summary>
+    public bool IsConnected => Status != RunnerStatus.Offline && (Server is not null || LastSyncAt is not null);
+
+    /// <summary>"Connected", "Not connected", or null while the first connection attempt is still running.</summary>
+    public string? ConnectionText => IsConnected ? "Connected"
+        : Status == RunnerStatus.Offline && Text.StartsWith("Offline", StringComparison.Ordinal) ? "Not connected"
+        : null;
+
     public string? ServerFreeText => Server?.DiskFreeBytes is { } free ? Format.Bytes(free) + " free on server" : null;
 
     /// <summary>Less than 5 GB or 5 % left on the server's disk.</summary>

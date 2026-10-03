@@ -23,6 +23,15 @@ public partial class SettingsWindow : Window
 
     private readonly UpdateService? _updates;
 
+    /// <summary>How far one wheel notch scrolls (the Windows default of 3 lines is ~48 px, too fast here).</summary>
+    private const double WheelPixelsPerNotch = 16;
+
+    private void OnScrollWheel(object sender, System.Windows.Input.MouseWheelEventArgs e)
+    {
+        Scroller.ScrollToVerticalOffset(Scroller.VerticalOffset - e.Delta / 120.0 * WheelPixelsPerNotch);
+        e.Handled = true;
+    }
+
     public SettingsWindow(ClientSettings current, ISecretProtector protector, bool firstRun, UpdateService? updates = null)
     {
         _updates = updates;

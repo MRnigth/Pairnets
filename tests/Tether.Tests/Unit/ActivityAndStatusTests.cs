@@ -19,6 +19,22 @@ public class ActivityAndStatusTests
     }
 
     [Fact]
+    public void ConnectionIsShownOnlyOnceKnown()
+    {
+        var starting = StatusSnapshot.Initial;
+        Assert.False(starting.IsConnected);
+        Assert.Null(starting.ConnectionText); // still starting: no "Not connected" flash
+
+        var synced = starting with { Status = RunnerStatus.Idle, Text = "Up to date", LastSyncAt = DateTimeOffset.UtcNow };
+        Assert.True(synced.IsConnected);
+        Assert.Equal("Connected", synced.ConnectionText);
+
+        var down = synced with { Status = RunnerStatus.Offline, Text = "Offline: timeout" };
+        Assert.False(down.IsConnected);
+        Assert.Equal("Not connected", down.ConnectionText);
+    }
+
+    [Fact]
     public void SnapshotComputesPercentHeadlineAndFix()
     {
         var s = StatusSnapshot.Initial with { Status = RunnerStatus.Syncing, CurrentPath = "big.bin", BytesDone = 50, BytesTotal = 200 };

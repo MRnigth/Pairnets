@@ -12,6 +12,7 @@
   <StreamGeometry x:Key="I.Folder">M3,7 C3,5.9 3.9,5 5,5 L9,5 L11,7.5 L19,7.5 C20.1,7.5 21,8.4 21,9.5 L21,17 C21,18.1 20.1,19 19,19 L5,19 C3.9,19 3,18.1 3,17 Z</StreamGeometry>
   <StreamGeometry x:Key="I.Settings">M4,7 L20,7 M4,17 L20,17 M9,4 L9,10 M15,14 L15,20</StreamGeometry>
   <StreamGeometry x:Key="I.Log">M7,3 L14,3 L19,8 L19,21 L7,21 Z M14,3 L14,8 L19,8 M10,13 L16,13 M10,17 L16,17</StreamGeometry>
+  <StreamGeometry x:Key="I.CloudCheck">M7.5,18 C5,18 3,16 3,13.8 C3,11.7 4.6,10 6.7,9.8 C7.4,7.3 9.6,5.5 12.3,5.5 C15.1,5.5 17.4,7.5 17.8,10.2 C19.6,10.6 21,12.2 21,14.1 C21,16.3 19.2,18 17,18 Z M9,12.5 L11.2,14.7 L15.2,10.7</StreamGeometry>
   <StreamGeometry x:Key="I.CloudOff">M7.5,18 C5,18 3,16 3,13.8 C3,11.7 4.6,10 6.7,9.8 C7.4,7.3 9.6,5.5 12.3,5.5 C15.1,5.5 17.4,7.5 17.8,10.2 C19.6,10.6 21,12.2 21,14.1 C21,16.3 19.2,18 17,18 Z M4,4 L20,20</StreamGeometry>
   <StreamGeometry x:Key="I.Warning">M12,4 L21.5,19.5 L2.5,19.5 Z M12,10 L12,14 M12,16.8 L12,16.9</StreamGeometry>
   <StreamGeometry x:Key="I.Info">M12,11 L12,17 M12,7.5 L12,7.6</StreamGeometry>

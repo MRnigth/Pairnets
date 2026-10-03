@@ -65,6 +65,13 @@
                 <TextBlock x:Name="FolderText" FontSize="12" TextTrimming="CharacterEllipsis" MaxWidth="320" />
               </StackPanel>
             </Border>
+            <Border x:Name="ConnectionPill" Style="{StaticResource Pill}" Margin="0,0,8,4" Visibility="Collapsed">
+              <StackPanel Orientation="Horizontal">
+                <ui:LineIcon x:Name="ConnectionIcon" Width="15" Height="15" StrokeThickness="2" Margin="0,0,5,0"
+                             Stroke="{DynamicResource S.Green}" Data="{StaticResource I.CloudCheck}" />
+                <TextBlock x:Name="ConnectionText" FontSize="12" />
+              </StackPanel>
+            </Border>
             <Border x:Name="ServerPill" Style="{StaticResource Pill}" Margin="0,0,8,4" Visibility="Collapsed">
               <StackPanel Orientation="Horizontal">
                 <ui:LineIcon x:Name="ServerIcon" Width="15" Height="15" StrokeThickness="2" Margin="0,0,5,0"

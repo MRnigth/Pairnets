@@ -46,6 +46,12 @@
                 <TextBlock x:Name="FolderText" Classes="small" TextTrimming="CharacterEllipsis" MaxWidth="320" />
               </StackPanel>
             </Border>
+            <Border x:Name="ConnectionPill" Classes="pill" Margin="0,0,8,4" IsVisible="False">
+              <StackPanel Orientation="Horizontal" Spacing="5">
+                <v:LineIcon x:Name="ConnectionIcon" Classes="icon" Width="15" Height="15" StrokeThickness="2" Data="{StaticResource I.CloudCheck}" />
+                <TextBlock x:Name="ConnectionText" Classes="small" />
+              </StackPanel>
+            </Border>
             <Border x:Name="ServerPill" Classes="pill" Margin="0,0,8,4" IsVisible="False">
               <StackPanel Orientation="Horizontal" Spacing="5">
                 <v:LineIcon x:Name="ServerIcon" Classes="icon muted" Width="15" Height="15" StrokeThickness="2" Data="{StaticResource I.Disk}" />
