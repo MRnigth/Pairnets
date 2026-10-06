@@ -259,12 +259,16 @@ public class ServerApiTests : IAsyncLifetime
                 o.Headers[TetherHeaders.DeviceId] = "DESKTOP";
             })
             .Build();
+        async Task<bool> DesktopOnline() => (await laptop.GetDevicesAsync(default))!.Single(d => d.Name == "DESKTOP").Online;
         await hub.StartAsync();
-        Assert.True((await laptop.GetDevicesAsync(default))!.Single(d => d.Name == "DESKTOP").Online);
-        await hub.DisposeAsync();
-        for (var i = 0; i < 50 && (await laptop.GetDevicesAsync(default))!.Single(d => d.Name == "DESKTOP").Online; i++)
+        // The client's StartAsync can return before the server has run OnConnectedAsync.
+        for (var i = 0; i < 50 && !await DesktopOnline(); i++)
             await Task.Delay(100);
-        Assert.False((await laptop.GetDevicesAsync(default))!.Single(d => d.Name == "DESKTOP").Online);
+        Assert.True(await DesktopOnline());
+        await hub.DisposeAsync();
+        for (var i = 0; i < 50 && await DesktopOnline(); i++)
+            await Task.Delay(100);
+        Assert.False(await DesktopOnline());
 
         // "Last seen" survives a restart.
         await _server.RestartAsync();
