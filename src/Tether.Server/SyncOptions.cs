@@ -36,6 +36,13 @@ public sealed class SyncOptions
     /// </summary>
     public string? UpdateDir { get; set; }
 
+    /// <summary>
+    /// The server sits behind a tunnel or reverse proxy on this machine (install.sh --cloudflare-tunnel
+    /// sets it): take the client's address from CF-Connecting-IP / X-Forwarded-For on loopback
+    /// connections. Leave it off when clients connect directly (Tailscale).
+    /// </summary>
+    public bool TrustProxyHeaders { get; set; }
+
     public static SyncOptions FromConfiguration(IConfiguration configuration)
     {
         var options = new SyncOptions();

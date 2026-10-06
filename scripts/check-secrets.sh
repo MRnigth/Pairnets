@@ -28,6 +28,8 @@ patterns=(
   '(?i)[a-z]:\\\\?users\\\\?(?!<|%|\{|public|default)[a-z0-9._-]+'
   # Private keys.
   '-----BEGIN [A-Z ]*PRIVATE KEY-----'
+  # Cloudflare Tunnel tokens: base64 of {"a":"<account>","t":"<tunnel>","s":"<secret>"}.
+  'eyJhIjoi[A-Za-z0-9+/=_-]{20,}'
 )
 
 case "$mode" in

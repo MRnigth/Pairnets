@@ -13,7 +13,7 @@ public sealed class Device : IAsyncDisposable
     private readonly TempDir _stateDir;
 
     public Device(string name, TestServer server, Uri? url = null, string? token = null, TimeSpan? stability = null,
-        IReadOnlyList<string>? extraIgnore = null, TimeProvider? clock = null, int parallel = 4)
+        IReadOnlyList<string>? extraIgnore = null, TimeProvider? clock = null, int parallel = 4, long? pieceSize = null)
     {
         Name = name;
         Server = server;
@@ -22,7 +22,7 @@ public sealed class Device : IAsyncDisposable
         State = new StateDb(Path.Combine(_stateDir.Path, "state.db"));
         Url = url ?? server.Url;
         Token = token ?? server.Token;
-        Api = new TetherApiClient(Url, Token, name, stallTimeout: TimeSpan.FromSeconds(20));
+        Api = new TetherApiClient(Url, Token, name, stallTimeout: TimeSpan.FromSeconds(20), pieceSize: pieceSize);
         Engine = new SyncEngine(new EngineOptions
         {
             Folder = _folder.Path,

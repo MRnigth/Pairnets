@@ -109,7 +109,7 @@ what cannot lose or silently overwrite data.
   because NTFS case-insensitivity and file locking are where the product runs.
 * **Fault injection** uses a real TCP proxy that resets connections, instead of mocks.
 * **Secret scanning** (`scripts/check-secrets.sh`) looks for 64-hex tokens, Tailscale CGNAT IPs,
-  token assignments and personal Windows paths. It runs before each push and in CI over the whole
+  token assignments, Cloudflare Tunnel tokens and personal Windows paths. It runs before each push and in CI over the whole
   history.
 * **Commit attribution.** At your request, commits no longer carry `Co-Authored-By` trailers.
 
@@ -191,3 +191,41 @@ what cannot lose or silently overwrite data.
   OneDrive or Dropbox); double-click opens the window. On macOS Avalonia's menu-bar icon only ever
   shows its menu (it reports no clicks), so the panel opens from "Quick status…" in that menu; on
   Linux a click opens it where the desktop reports clicks.
+
+## Without Tailscale: Cloudflare Tunnel
+
+* **Why a tunnel at all.** When no machine can accept incoming connections (no port forwarding,
+  CGNAT), something with a public address has to sit in the middle; with Tailscale that is its
+  coordination server and DERP relays. Cloudflare Tunnel was chosen as the second option because it
+  is free, needs only outbound connections from the server, carries WebSockets (the push channel),
+  and the PCs need nothing installed. The cost: Cloudflare ends HTTPS at its edge and can see the
+  traffic, and the server is reachable from the internet (the token is the gate). Both are spelled
+  out in SECURITY.md and HOWTO 4b.
+* **Our own `tether-tunnel.service` instead of `cloudflared service install <token>`.** The official
+  command puts the tunnel token in a world-readable unit file and on a command line. Ours reads it
+  from `/etc/tether/tunnel.env` (root, 600) and runs cloudflared as a dynamic unprivileged user.
+  cloudflared comes from Cloudflare's signed apt repository, so it updates with the system.
+* **Uploads in pieces of 50 MiB.** Cloudflare's free and Pro plans refuse request bodies over
+  100 MB (413), and Tether syncs multi-GB files. Pieces of 50 MiB leave room for headers and
+  rounding; the server takes up to 64 MiB per piece. Files up to 50 MiB keep the single PUT (one
+  round trip, the same as before). The pieces also make big uploads resumable: every byte the
+  server takes in is written, hashed and counted together, so after a cut the client continues
+  from the server's count instead of starting again.
+* **Sessions in memory, not in the manifest.** An unfinished upload is not data yet; keeping it out
+  of SQLite keeps the commit path and journal unchanged. A restart (rare) drops sessions and the
+  client sends that file again on its next pass. Idle sessions expire after an hour; at most 64 are
+  open, so a buggy client cannot fill tmp/ without bound.
+* **Old servers keep working.** A client that gets a plain 404 for `POST /api/upload` sends the file
+  in one request, as before, and does not ask again. `ApiVersion` stays 1: "Test connection"
+  requires an exact match, so a bump would have locked new apps out of every existing server.
+* **Real client addresses.** Behind cloudflared every request comes from 127.0.0.1, so one
+  stranger trying tokens would have slowed down everyone through the shared failure counter.
+  `Sync:TrustProxyHeaders` takes `CF-Connecting-IP` (or the last `X-Forwarded-For` entry) instead,
+  only on loopback connections and only when install.sh turned it on for a tunnel.
+* **`Cache-Control: no-store, no-transform` on every response**, so no proxy ever caches a file or
+  manifest, or recompresses a download whose hash the client checks.
+* **No token on the health check.** The apps leave the token off `/api/health`. If the answer comes
+  through Cloudflare on a plain `http://` address, "Test connection" refuses it before the token is
+  ever sent. Cloudflare's own error pages (tunnel down, bot check) are recognised by their HTML body
+  and Cloudflare headers and explained in plain words; Tether's JSON errors relayed by Cloudflare are
+  left alone.

@@ -46,7 +46,7 @@ jobs:
       - name: Package
         run: |
           cp deploy/install.sh deploy/update.sh deploy/tether-server.service deploy/tether-update.service deploy/tether-update.path deploy/tether-update.timer \
-             deploy/tether.env.example deploy/tailscale-acl.hujson dist/tether-server-linux-x64/
+             deploy/tether-tunnel.service deploy/tether.env.example deploy/tailscale-acl.hujson dist/tether-server-linux-x64/
           echo "${{ steps.v.outputs.version }}" > dist/tether-server-linux-x64/VERSION
           cp docs/DEPLOY.md dist/tether-server-linux-x64/DEPLOY.md
           chmod +x dist/tether-server-linux-x64/install.sh dist/tether-server-linux-x64/update.sh dist/tether-server-linux-x64/tether-server

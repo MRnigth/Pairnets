@@ -192,7 +192,7 @@ public partial class SettingsView : UserControl
     {
         if (!TetherApiClient.TryParseServerUrl(ServerUrlBox.Text, out var url) || url is null)
         {
-            Fail("Enter a server URL such as http://100.x.y.z:5075/");
+            Fail("Enter a server URL such as http://100.x.y.z:5075/ or https://tether.example.com/");
             return;
         }
         var token = CurrentToken();

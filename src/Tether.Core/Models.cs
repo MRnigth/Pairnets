@@ -94,6 +94,12 @@ public sealed record DeviceInfo(
 /// <summary>One stored version of a file in the server's history/ folder.</summary>
 public sealed record HistoryVersion(string Id, DateTimeOffset StoredAtUtc, long Size, string Hash8);
 
+/// <summary>
+/// An upload that arrives in pieces (<c>POST /api/upload</c>, <c>PUT /api/upload/{id}</c>): its id and how
+/// many bytes the server has, which is where the next piece starts.
+/// </summary>
+public sealed record UploadStatus(string Id, long Received);
+
 /// <summary>Stable machine-readable error codes used in <see cref="ErrorBody"/>.</summary>
 public static class ErrorCodes
 {
@@ -104,6 +110,17 @@ public static class ErrorCodes
     public const string Unauthorized = "unauthorized";
     public const string BadRequest = "bad-request";
     public const string UpdaterMissing = "updater-missing";
+
+    /// <summary>A piece of an upload did not start where the server's copy ends (ask for the status and go on from there).</summary>
+    public const string UploadOffset = "upload-offset";
+
+    /// <summary>An upload in pieces did not match the hash it was committed with; it was dropped.</summary>
+    public const string UploadMismatch = "upload-mismatch";
+
+    /// <summary>A request body was larger than the server or a proxy in front of it accepts.</summary>
+    public const string TooLarge = "too-large";
+
+    public const string Busy = "busy";
 }
 
 /// <summary>HTTP header names used by Tether.</summary>

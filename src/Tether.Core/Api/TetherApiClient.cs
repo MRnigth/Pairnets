@@ -16,17 +16,31 @@ public sealed class TetherApiClient : ITetherApi, IDisposable
 {
     private const int CopyBufferSize = 256 * 1024;
 
+    /// <summary>
+    /// Files bigger than this are uploaded in pieces of this size. Cloudflare's free plan refuses any
+    /// request body over 100 MB, so a Cloudflare Tunnel needs pieces well below that.
+    /// </summary>
+    public const long DefaultPieceSize = 50L * 1024 * 1024;
+
+    /// <summary>How often one piece may fail in a row before the upload gives up until the next pass.</summary>
+    private const int PieceRetries = 3;
+
     private readonly HttpClient _http;
+    private readonly string _token;
     private readonly TimeSpan _stallTimeout;
     private readonly TimeSpan _metadataTimeout;
+    private readonly long _pieceSize;
+    private volatile bool _piecesUnsupported;
 
     public TetherApiClient(Uri serverUrl, string token, string deviceId, HttpMessageHandler? handler = null,
-        TimeSpan? stallTimeout = null, TimeSpan? metadataTimeout = null)
+        TimeSpan? stallTimeout = null, TimeSpan? metadataTimeout = null, long? pieceSize = null)
     {
         ArgumentNullException.ThrowIfNull(serverUrl);
         BaseAddress = NormalizeBase(serverUrl);
+        _token = token;
         _stallTimeout = stallTimeout ?? TimeSpan.FromSeconds(60);
         _metadataTimeout = metadataTimeout ?? TimeSpan.FromMinutes(5);
+        _pieceSize = pieceSize is > 0 ? pieceSize.Value : DefaultPieceSize;
         handler ??= new SocketsHttpHandler
         {
             ConnectTimeout = TimeSpan.FromSeconds(15),
@@ -39,7 +53,6 @@ public sealed class TetherApiClient : ITetherApi, IDisposable
             BaseAddress = BaseAddress,
             Timeout = Timeout.InfiniteTimeSpan,
         };
-        _http.DefaultRequestHeaders.Add(TetherHeaders.Token, token);
         _http.DefaultRequestHeaders.Add(TetherHeaders.DeviceId, Uri.EscapeDataString(deviceId));
         _http.DefaultRequestHeaders.Add(TetherHeaders.Client, TetherInfo.ClientDescription);
         _http.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("Tether", TetherInfo.ApiVersion.ToString(CultureInfo.InvariantCulture)));
@@ -72,11 +85,16 @@ public sealed class TetherApiClient : ITetherApi, IDisposable
 
     // ------------------------------------------------------------------ health / info
 
-    public async Task<bool> HealthAsync(CancellationToken ct)
+    public async Task<bool> HealthAsync(CancellationToken ct) => (await CheckHealthAsync(ct).ConfigureAwait(false)).Ok;
+
+    /// <summary>The answer of /api/health (sent without the token): whether it is OK, and whether Cloudflare relayed it.</summary>
+    internal sealed record HealthCheck(bool Ok, bool ViaCloudflare, string? Problem);
+
+    internal async Task<HealthCheck> CheckHealthAsync(CancellationToken ct)
     {
         using var timeout = Linked(ct, TimeSpan.FromSeconds(15));
-        using var resp = await SendAsync(new HttpRequestMessage(HttpMethod.Get, "api/health"), HttpCompletionOption.ResponseContentRead, timeout, ct).ConfigureAwait(false);
-        return resp.IsSuccessStatusCode;
+        using var resp = await SendAsync(new HttpRequestMessage(HttpMethod.Get, HealthPath), HttpCompletionOption.ResponseContentRead, timeout, ct).ConfigureAwait(false);
+        return new HealthCheck(resp.IsSuccessStatusCode, IsFromCloudflare(resp), DescribeCloudflareError(resp));
     }
 
     public async Task<ServerInfo> GetInfoAsync(CancellationToken ct)
@@ -137,19 +155,25 @@ public sealed class TetherApiClient : ITetherApi, IDisposable
         HttpMessageHandler? handler = null, CancellationToken ct = default)
     {
         if (!TryParseServerUrl(serverUrl, out var url) || url is null)
-            return new(ConnectionTestStatus.InvalidUrl, "The server URL must look like http://<tailscale-ip>:5075/ (http or https).");
+            return new(ConnectionTestStatus.InvalidUrl, "The server URL must look like http://<tailscale-ip>:5075/ or https://tether.example.com/.");
         if (string.IsNullOrWhiteSpace(token))
             return new(ConnectionTestStatus.BadToken, "Enter the token printed by install.sh on the server.");
 
         using var client = new TetherApiClient(url, token.Trim(), deviceId, handler);
         try
         {
-            if (!await client.HealthAsync(ct).ConfigureAwait(false))
+            var health = await client.CheckHealthAsync(ct).ConfigureAwait(false);
+            // The health check carries no token, so nothing secret went out before this check.
+            if (health.ViaCloudflare && url.Scheme == Uri.UriSchemeHttp)
+                return new(ConnectionTestStatus.InvalidUrl, "This server is reached through Cloudflare. Use https:// in the server URL, so the token is never sent unencrypted.");
+            if (health.Problem is not null)
+                return new(ConnectionTestStatus.Unreachable, health.Problem);
+            if (!health.Ok)
                 return new(ConnectionTestStatus.ServerError, "The server answered, but /api/health did not return OK.");
         }
         catch (TetherNetworkException ex)
         {
-            return new(ConnectionTestStatus.Unreachable, $"Cannot reach the server: {ex.Message}. Is Tailscale connected and the service running?");
+            return new(ConnectionTestStatus.Unreachable, $"Cannot reach the server: {ex.Message}. Is Tailscale (or the Cloudflare Tunnel) connected and the server running?");
         }
 
         try
@@ -253,6 +277,14 @@ public sealed class TetherApiClient : ITetherApi, IDisposable
     public async Task<(ApiResult Result, string SentHash, long SentBytes)> UploadAsync(
         string path, string baseHash, long mtimeMs, Stream content, Action<long>? progress, CancellationToken ct)
     {
+        if (!_piecesUnsupported && content.CanSeek && content.Length - content.Position > _pieceSize)
+        {
+            var inPieces = await UploadInPiecesAsync(path, baseHash, mtimeMs, content, progress, ct).ConfigureAwait(false);
+            if (inPieces is { } done)
+                return done;
+            // A server from before uploads in pieces: send the file in one request, as it always did.
+        }
+
         using var stall = Linked(ct, _stallTimeout);
         var hashing = new HashingStream(content, leaveOpen: true, progress);
         var uri = $"api/file?path={Uri.EscapeDataString(path)}&base={Uri.EscapeDataString(baseHash)}&mtime={mtimeMs.ToString(CultureInfo.InvariantCulture)}";
@@ -268,6 +300,116 @@ public sealed class TetherApiClient : ITetherApi, IDisposable
         var result = await ReadChangeResultAsync(resp, stall, ct).ConfigureAwait(false);
         var sent = result.Outcome == ApiOutcome.Ok ? hashing.GetHash() : string.Empty;
         return (result, sent, hashing.BytesTransferred);
+    }
+
+    /// <summary>
+    /// Uploads a big file in pieces (POST /api/upload, PUT /api/upload/{id}?offset=, POST .../commit),
+    /// so it fits through proxies that cap one request (Cloudflare: 100 MB), and a broken connection
+    /// costs only the piece in flight: the next try continues from what the server has. Null when the
+    /// server is too old to take uploads in pieces.
+    /// </summary>
+    private async Task<(ApiResult Result, string SentHash, long SentBytes)?> UploadInPiecesAsync(
+        string path, string baseHash, long mtimeMs, Stream content, Action<long>? progress, CancellationToken ct)
+    {
+        using var reader = new PieceReader(content, progress);
+        string id;
+        using (var timeout = Linked(ct, _metadataTimeout))
+        {
+            var start = $"api/upload?path={Uri.EscapeDataString(path)}&base={Uri.EscapeDataString(baseHash)}" +
+                $"&size={reader.Size.ToString(CultureInfo.InvariantCulture)}&mtime={mtimeMs.ToString(CultureInfo.InvariantCulture)}";
+            using var resp = await SendAsync(new HttpRequestMessage(HttpMethod.Post, start), HttpCompletionOption.ResponseContentRead, timeout, ct).ConfigureAwait(false);
+            if ((int)resp.StatusCode is 404 or 405 && !IsJson(resp))
+            {
+                _piecesUnsupported = true;
+                return null;
+            }
+            if (resp.StatusCode != HttpStatusCode.Created)
+                return (await ReadChangeResultAsync(resp, timeout, ct).ConfigureAwait(false), string.Empty, 0); // conflict, collision, bad name
+            id = (await ReadJsonAsync<UploadStatus>(resp, timeout, ct).ConfigureAwait(false)).Id;
+        }
+
+        var finished = false;
+        try
+        {
+            long offset = 0;
+            var failures = 0;
+            while (offset < reader.Size)
+            {
+                try
+                {
+                    offset = await SendPieceAsync(id, reader, offset, Math.Min(_pieceSize, reader.Size - offset), ct).ConfigureAwait(false);
+                    failures = 0;
+                }
+                catch (TetherNetworkException) when (failures < PieceRetries && !ct.IsCancellationRequested)
+                {
+                    failures++;
+                    await Task.Delay(TimeSpan.FromSeconds(1 << (failures - 1)), ct).ConfigureAwait(false);
+                    offset = await UploadReceivedAsync(id, ct).ConfigureAwait(false);
+                }
+            }
+
+            var hash = reader.GetHash();
+            using var timeout = Linked(ct, _metadataTimeout);
+            using var resp = await SendAsync(new HttpRequestMessage(HttpMethod.Post, $"api/upload/{id}/commit?hash={hash}"),
+                HttpCompletionOption.ResponseContentRead, timeout, ct).ConfigureAwait(false);
+            if (resp.StatusCode == HttpStatusCode.BadRequest && await TryReadErrorAsync(resp, ct).ConfigureAwait(false) is { Code: ErrorCodes.UploadMismatch })
+            {
+                finished = true; // the server already dropped it
+                throw new TetherProtocolException($"{path} changed while it was being uploaded; it will be sent again.");
+            }
+            var result = await ReadChangeResultAsync(resp, timeout, ct).ConfigureAwait(false);
+            finished = true;
+            return (result, result.Outcome == ApiOutcome.Ok ? hash : string.Empty, reader.Size);
+        }
+        finally
+        {
+            if (!finished)
+                await TryAbortUploadAsync(id).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>Sends one piece; returns how many bytes the server has afterwards.</summary>
+    private async Task<long> SendPieceAsync(string id, PieceReader reader, long offset, long length, CancellationToken ct)
+    {
+        reader.StartPiece(offset, length);
+        using var stall = Linked(ct, _stallTimeout);
+        using var req = new HttpRequestMessage(HttpMethod.Put, $"api/upload/{id}?offset={offset.ToString(CultureInfo.InvariantCulture)}")
+        {
+            Content = new StreamingUploadContent(reader, stall, _stallTimeout, UploadLimit, length),
+        };
+        req.Content.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
+        using var resp = await SendAsync(req, HttpCompletionOption.ResponseContentRead, stall, ct).ConfigureAwait(false);
+        if (resp.StatusCode == HttpStatusCode.OK)
+            return (await ReadJsonAsync<UploadStatus>(resp, stall, ct).ConfigureAwait(false)).Received;
+        if (resp.StatusCode == HttpStatusCode.Conflict)
+            throw new TetherNetworkException("The server has a different part of the upload than expected."); // ask where it is and go on
+        await ThrowForStatusAsync(resp).ConfigureAwait(false);
+        throw new TetherProtocolException($"Unexpected status {(int)resp.StatusCode} for a piece of an upload.");
+    }
+
+    /// <summary>How many bytes of the upload the server has (where the next piece starts).</summary>
+    private async Task<long> UploadReceivedAsync(string id, CancellationToken ct)
+    {
+        using var timeout = Linked(ct, TimeSpan.FromSeconds(30));
+        using var resp = await SendAsync(new HttpRequestMessage(HttpMethod.Get, $"api/upload/{id}"), HttpCompletionOption.ResponseContentRead, timeout, ct).ConfigureAwait(false);
+        if (resp.StatusCode == HttpStatusCode.NotFound)
+            throw new TetherNetworkException("The server no longer has this upload (it restarted?); the file will be sent again.");
+        await ThrowForStatusAsync(resp).ConfigureAwait(false);
+        return (await ReadJsonAsync<UploadStatus>(resp, timeout, ct).ConfigureAwait(false)).Received;
+    }
+
+    /// <summary>Tells the server to drop an unfinished upload. Best effort: it expires on its own anyway.</summary>
+    private async Task TryAbortUploadAsync(string id)
+    {
+        try
+        {
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            using var resp = await SendAsync(new HttpRequestMessage(HttpMethod.Delete, $"api/upload/{id}"), HttpCompletionOption.ResponseContentRead, timeout, CancellationToken.None).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is TetherNetworkException or LocalFileReadException)
+        {
+            // The server drops it after an hour without data.
+        }
     }
 
     // ------------------------------------------------------------------ delete
@@ -331,11 +473,40 @@ public sealed class TetherApiClient : ITetherApi, IDisposable
             return;
         if (resp.StatusCode == HttpStatusCode.Unauthorized)
             throw new TetherAuthException("The server rejected the token (401).");
+        if (DescribeCloudflareError(resp) is { } cloudflare)
+            throw new TetherNetworkException(cloudflare);
+        if (resp.StatusCode == HttpStatusCode.RequestEntityTooLarge)
+            throw new TetherProtocolException("The server, or a proxy in front of it such as Cloudflare, refused a request that was too large (413).");
         if ((int)resp.StatusCode >= 500 || resp.StatusCode == HttpStatusCode.RequestTimeout)
             throw new TetherNetworkException($"Server error {(int)resp.StatusCode} {resp.ReasonPhrase}.");
         var error = await TryReadErrorAsync(resp, CancellationToken.None).ConfigureAwait(false);
         throw new TetherProtocolException($"Server answered {(int)resp.StatusCode}: {error?.Code} {error?.Message}".TrimEnd());
     }
+
+    /// <summary>
+    /// A plain-words explanation when Cloudflare itself (not the Tether server behind it) answered with
+    /// an error page: the tunnel is down, or a bot check blocked the app. Null otherwise.
+    /// </summary>
+    internal static string? DescribeCloudflareError(HttpResponseMessage resp)
+    {
+        if (resp.IsSuccessStatusCode || !IsFromCloudflare(resp) || IsJson(resp))
+            return null; // Tether's own errors are JSON, also when Cloudflare relays them
+        var status = (int)resp.StatusCode;
+        if (status == 403 && resp.Headers.Contains("cf-mitigated"))
+            return "Cloudflare blocked Tether with a browser check. In the Cloudflare dashboard turn off Bot Fight Mode for this domain (Security > Bots), or add a rule that skips it for the Tether address.";
+        if (status == 524)
+            return "Cloudflare gave up waiting for your Tether server (error 524). Check that the server is running: sudo systemctl status tether-server";
+        if (status is 502 or 503 or 504 or 530 or (>= 520 and <= 527))
+            return $"Cloudflare cannot reach your Tether server (error {status}). On the server, check that the tunnel runs (sudo systemctl status tether-tunnel) and that its public hostname points at http://localhost:5075.";
+        return null;
+    }
+
+    private static bool IsFromCloudflare(HttpResponseMessage resp) =>
+        resp.Headers.Contains("CF-RAY")
+        || resp.Headers.Server.Any(p => string.Equals(p.Product?.Name, "cloudflare", StringComparison.OrdinalIgnoreCase));
+
+    private static bool IsJson(HttpResponseMessage resp) =>
+        resp.Content.Headers.ContentType?.MediaType is { } type && type.EndsWith("json", StringComparison.OrdinalIgnoreCase);
 
     private static async Task<ErrorBody?> TryReadErrorAsync(HttpResponseMessage resp, CancellationToken ct)
     {
@@ -370,9 +541,15 @@ public sealed class TetherApiClient : ITetherApi, IDisposable
         }
     }
 
+    private const string HealthPath = "api/health";
+
     private async Task<HttpResponseMessage> SendAsync(HttpRequestMessage req, HttpCompletionOption completion,
         CancellationTokenSource timeout, CancellationToken callerCt)
     {
+        // Every request carries the token except the health check, which needs none (so a URL that
+        // would expose it, plain http through Cloudflare, can be caught before it is ever sent).
+        if (req.RequestUri?.OriginalString != HealthPath)
+            req.Headers.TryAddWithoutValidation(TetherHeaders.Token, _token);
         try
         {
             return await _http.SendAsync(req, completion, timeout.Token).ConfigureAwait(false);
@@ -438,7 +615,7 @@ public sealed class TetherApiClient : ITetherApi, IDisposable
     /// Request body that streams from the local file, resets the stall watchdog on every chunk,
     /// and tags local read failures so they are not mistaken for network failures.
     /// </summary>
-    private sealed class StreamingUploadContent(Stream source, CancellationTokenSource stall, TimeSpan stallTimeout, Throttle limit) : HttpContent
+    private sealed class StreamingUploadContent(Stream source, CancellationTokenSource stall, TimeSpan stallTimeout, Throttle limit, long? length = null) : HttpContent
     {
         protected override async Task SerializeToStreamAsync(Stream stream, TransportContext? context, CancellationToken cancellationToken)
         {
@@ -466,10 +643,10 @@ public sealed class TetherApiClient : ITetherApi, IDisposable
         protected override Task SerializeToStreamAsync(Stream stream, TransportContext? context) =>
             SerializeToStreamAsync(stream, context, CancellationToken.None);
 
-        protected override bool TryComputeLength(out long length)
+        protected override bool TryComputeLength(out long computed)
         {
-            length = 0;
-            return false;
+            computed = length ?? 0;
+            return length is not null;
         }
     }
 }

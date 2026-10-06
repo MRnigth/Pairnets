@@ -173,6 +173,26 @@ public sealed class SyncStore : IDisposable
         }
     }
 
+    /// <summary>A new file in tmp/ for an upload that arrives in pieces (see <see cref="UploadSessions"/>).</summary>
+    public string NewUploadPartPath() => NewTmpPath(".part");
+
+    /// <summary>
+    /// Commits a fully received upload from <paramref name="tmp"/> (in tmp/) if the base still
+    /// matches, exactly like <see cref="PutAsync"/> does after receiving its body.
+    /// </summary>
+    public async Task<ChangeResult> CommitUploadAsync(string path, string? expectedBase, string tmp, string hash, long size, long modifiedMs)
+    {
+        try
+        {
+            return await CommitFileAsync(path, tmp, hash, size, modifiedMs,
+                current => string.Equals(current, expectedBase, StringComparison.Ordinal)).ConfigureAwait(false);
+        }
+        finally
+        {
+            TryDelete(tmp);
+        }
+    }
+
     /// <summary>
     /// Copies the request body, giving up when no data arrives for <see cref="UploadStallTimeout"/>.
     /// Kestrel's own minimum data rate is averaged over the whole body, so after a fast start a dead

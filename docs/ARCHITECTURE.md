@@ -1,8 +1,9 @@
 # Architecture
 
 Tether keeps one folder identical on two Windows PCs (used one at a time) through a small server
-on your Tailscale network. This document explains how, and why it cannot silently overwrite your
-files.
+on your Tailscale network, or reachable through a Cloudflare Tunnel (the server then listens on
+127.0.0.1 and `cloudflared` brings requests in over an outbound connection). This document explains
+how, and why it cannot silently overwrite your files.
 
 ```
  Desktop (Windows)                    Ubuntu server (Tailscale only)                Laptop (Windows)
@@ -118,7 +119,7 @@ Storage under `DataDir` (default `/var/lib/tether`):
 ```
 files/      current version of every file (same relative paths as the clients)
 history/    history/<path>/<yyyyMMddTHHmmssfffZ>-<hash8>: overwritten and deleted versions
-tmp/        in-flight uploads (emptied at startup)
+tmp/        in-flight uploads, including the part files of uploads in pieces (emptied at startup)
 manifest.db files(path, pathLower, hash, size, modifiedMs, deleted, version), meta, journal
 devices.json the computers that use the server: name, first and last seen, app version, system, last change (shown in the apps; not used for syncing)
 .lock       held by the running service; maintenance commands refuse to run while it is held
@@ -134,6 +135,19 @@ mtime → commit manifest row + version + delete journal row in one transaction 
 At startup the journal is replayed: a change whose temp file still exists is rolled back, one whose
 file reached `files/` is completed. `files/` therefore never contains a half-written file.
 
+**Uploads in pieces:** files over 50 MB are sent in pieces, because proxies cap one request
+(Cloudflare's free plan: 100 MB) and because a broken connection should cost one piece, not the
+whole file. `POST /api/upload` runs the same checks as PUT (name, base, case) and opens a session:
+a part file in `tmp/` plus a running SHA-256, kept in memory (`UploadSessions`). Each
+`PUT /api/upload/{id}?offset=` must start exactly where the part file ends; every byte that
+arrives is written, hashed and counted together, so after a cut the client asks
+`GET /api/upload/{id}` and continues from there. The client's `PieceReader` likewise hashes every
+byte once, also when it reads a piece again. `POST /api/upload/{id}/commit?hash=` requires all
+bytes and the matching hash, then commits through the same path as PUT (fsync, lock, base check,
+journal, history, manifest, broadcast). Sessions idle for an hour are dropped, at most 64 are open,
+and a restart drops them all (the client then sends that file again). An older server answers
+`404` to `POST /api/upload` and the client falls back to one PUT.
+
 ### HTTP API
 
 All endpoints except health need the token (`X-Sync-Token`, `Authorization: Bearer`, or
@@ -146,11 +160,19 @@ All endpoints except health need the token (`X-Sync-Token`, `Authorization: Bear
 | `GET /api/manifest[?since=v]` | `[{path,hash,size,modifiedMs,deleted,version}]`; headers `X-Tether-Server-Id`, `X-Tether-Version` |
 | `GET /api/file?path=` | file stream with `ETag`, `X-Tether-Hash`, `X-Tether-Modified-Ms`, Range support; 404 if absent/deleted |
 | `PUT /api/file?path=&base=&mtime=` | 200 entry · 409 `conflict` · 409 `case-collision` · 400 `invalid-name` · 401 |
+| `POST /api/upload?path=&base=&size=&mtime=` | 201 `{id, received: 0}` · the same 400/409 as PUT · 503 `busy` (64 uploads open) |
+| `PUT /api/upload/{id}?offset=` | piece of at most 64 MiB: 200 `{id, received}` · 409 `upload-offset` (offset is not where the server's copy ends) · 413 `too-large` · 404 unknown or expired |
+| `GET /api/upload/{id}` | 200 `{id, received}` (where to continue) · 404 |
+| `POST /api/upload/{id}/commit?hash=` | like PUT: 200 entry · 409 `conflict` / `case-collision` · 409 `upload-offset` (bytes missing) · 400 `upload-mismatch` (hash differs; upload dropped) |
+| `DELETE /api/upload/{id}` | 204, drops the upload and its part file (idempotent) |
 | `DELETE /api/file?path=&base=` | 200 tombstone (idempotent) · 409 `conflict` · 404 never existed |
 | `GET /api/history?path=` | `[{id, storedAtUtc, size, hash8}]` newest first |
 | `POST /api/history/restore?path=&id=` | restores the version as a normal new version |
 | `GET /api/devices` | `[{name, firstSeen, lastSeen, online, appVersion, system, lastChange}]`: every computer that sent an authenticated request (`X-Device-Id`, plus `X-Tether-Client` such as "1.0.38; Windows"); `online` while its push channel is open or it was seen in the last 2 minutes |
 | `/hub` (SignalR) | server → clients: `Changed(deviceId, path)` |
+
+Every response carries `Cache-Control: no-store, no-transform`, so a proxy in between (Cloudflare)
+never caches or rewrites files, manifests or errors.
 
 The apps' **History** page reads the whole manifest (`GET /api/manifest`, tombstones carry the time
 of deletion in `modifiedMs`) and `GET /api/history`, and restores with `POST /api/history/restore`.
@@ -161,6 +183,6 @@ for a sync right after a restore.
 
 * **Rename detection**: the engine plans per path from hashes; a later pass can pair a planned
   "delete A" with an "upload B" of the same hash and send a server-side move instead.
-* **Chunked/resumable transfer**: downloads already use HTTP Range-capable endpoints and stream to a
-  temp file; uploads go through `ITetherApi.UploadAsync`, which can be replaced by a chunked
-  protocol without touching the decision logic.
+* **Resumable transfer**: uploads over 50 MB already go in resumable pieces within one pass;
+  downloads use HTTP Range-capable endpoints and stream to a temp file, so a download that
+  continues where it stopped needs only client work.

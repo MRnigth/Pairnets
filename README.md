@@ -3,6 +3,8 @@
 Tether keeps **one folder identical on your computers** (built for two Windows PCs, also available
 for Mac and Linux desktops) that you use one at a time, through a
 small server you own on your **Tailscale** network. No cloud, no accounts, no telemetry.
+No Tailscale, and no way to open ports? The server can also be reached through a
+**[Cloudflare Tunnel](docs/HOWTO.md#4b-no-tailscale-use-a-cloudflare-tunnel-instead)**.
 
 * Work on the desktop: changes flow to the server within seconds.
 * Switch to the laptop: it catches up on start (new files, edits and deletions), then keeps syncing.
@@ -55,6 +57,16 @@ The script prints the **server URL** (your Tailscale IP, port 5075) and a **toke
 token in your password manager; it is shown only once. Then restrict access to your two PCs with
 the Tailscale ACL in [DEPLOY.md](docs/DEPLOY.md#tailscale-acl-only-your-two-pcs-may-connect).
 
+**Without Tailscale** (nobody can open ports): create a tunnel in the Cloudflare dashboard with a
+public hostname pointing at `HTTP localhost:5075`, then run
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/MRnigth/Tether/main/deploy/get.sh | sudo bash -s -- --cloudflare-tunnel --public-url https://tether.example.com
+```
+
+It asks for the tunnel token and prints `https://tether.example.com/` as the server URL. Step by
+step, and what Cloudflare can see: [HOWTO 4b](docs/HOWTO.md#4b-no-tailscale-use-a-cloudflare-tunnel-instead).
+
 ### Each PC
 
 1. Download `tether-client-win-x64.zip` from the [releases](https://github.com/MRnigth/Tether/releases)
@@ -100,7 +112,8 @@ in the background.
 
 | You see | What to do |
 |---------|-----------|
-| Grey icon, "Offline" | The PC cannot reach the server. Check that Tailscale is connected on both machines and that `sudo systemctl status tether-server` is active. Tether retries by itself. Nothing is lost: local changes sync when it is back. |
+| Grey icon, "Offline" | The PC cannot reach the server. Check that Tailscale is connected on both machines (or, with a Cloudflare Tunnel, that `sudo systemctl status tether-tunnel` is active) and that `sudo systemctl status tether-server` is active. Tether retries by itself. Nothing is lost: local changes sync when it is back. |
+| "Cloudflare cannot reach your Tether server" / "blocked Tether with a browser check" | See [HOWTO 4b](docs/HOWTO.md#4b-no-tailscale-use-a-cloudflare-tunnel-instead): the tunnel is down, or Bot Fight Mode is on for your domain. |
 | "The server rejected the token" | The token in Settings does not match `/etc/tether/tether.env` (it was rotated, or mistyped). Enter it again in **Settings**. Read it on the server with `sudo grep SYNC_TOKEN /etc/tether/tether.env`. |
 | "Deletions blocked" | A sync would delete many files. Right-click → **Allow these deletions…** shows exactly which ones. If that is not what you did, press No and check the folder; files are still on the server and in its history. |
 | "Folder is missing" / "no .tether-marker" | The drive is unplugged or the folder moved. Plug it in and **Sync now**, or use **Locate the sync folder…** to point Tether at its new location. |
@@ -128,7 +141,8 @@ rewrite:
 * syncing empty folders
 * file permissions and ACLs
 * rename and move detection (today: delete + create)
-* delta, chunked and resumable transfers (the download endpoint already supports HTTP Range)
+* delta transfers, and resumable downloads (uploads over 50 MB already go in resumable pieces;
+  the download endpoint already supports HTTP Range)
 * more than two PCs used at the same time
 * end-to-end encryption at rest on the server
 * a web UI and mobile apps

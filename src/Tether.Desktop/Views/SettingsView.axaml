@@ -23,7 +23,7 @@
         </StackPanel>
         <StackPanel>
           <TextBlock Classes="label" Text="Server address" />
-          <TextBox x:Name="ServerUrlBox" Watermark="http://100.x.y.z:5075/" />
+          <TextBox x:Name="ServerUrlBox" Watermark="http://100.x.y.z:5075/ or https://tether.example.com/" />
         </StackPanel>
         <StackPanel>
           <TextBlock Classes="label" Text="Token" />

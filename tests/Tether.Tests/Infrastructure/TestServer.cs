@@ -36,6 +36,8 @@ public sealed class TestServer : IAsyncDisposable
 
     public SyncStore Store => _app!.Services.GetRequiredService<SyncStore>();
 
+    public UploadSessions Uploads => _app!.Services.GetRequiredService<UploadSessions>();
+
     public ServerPaths Paths => new(DataDir);
 
     /// <summary>Log lines captured from the server (for "never logs the token" checks).</summary>

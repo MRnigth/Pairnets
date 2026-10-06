@@ -55,6 +55,38 @@ anything is unexpected. Do this:
 
 ---
 
+## Prompt 1b: install the server without Tailscale (Cloudflare Tunnel)
+
+Use this instead of Prompt 1 when the computers cannot use Tailscale. First create the tunnel and
+its public hostname in the Cloudflare dashboard yourself
+([HOWTO 4b](HOWTO.md#4b-no-tailscale-use-a-cloudflare-tunnel-instead), step 1), and have the
+hostname ready. Keep the tunnel token to yourself: you paste it into the installer, not into Claude.
+
+```text
+Please install the Tether sync server on this Ubuntu machine for me, reachable through a Cloudflare
+Tunnel instead of Tailscale. Tether is in the GitHub repo MRnigth/Tether; the guide is
+docs/HOWTO.md section 4b and the installer is deploy/install.sh inside the release file
+tether-server-linux-x64.tar.gz. My tunnel's public hostname is: <https://tether.example.com>
+
+Work step by step, explain each step in one sentence before you do it, and stop and ask me if
+anything is unexpected. Do this:
+
+1. Check that this is Ubuntu on x86_64 and that I have sudo.
+2. Get the release files and verify them exactly as in docs/SETUP-WITH-CLAUDE.md Prompt 1, steps 3
+   and 4 (stop if the checksum does not say OK).
+3. Unpack the tarball. Then ask me to run this myself in a terminal on the server, from the
+   unpacked folder, because it asks for the tunnel token and I do not want to share it with you:
+   `sudo ./install.sh --cloudflare-tunnel --public-url <my hostname>`.
+   Never ask me for the tunnel token and never put it in a command, file or message.
+4. When I say it is done, check: `systemctl is-active tether-server tether-tunnel` and
+   `curl -fsS <my hostname>/api/health` (must print ok). If the health check fails, help me with
+   the table "If the app cannot connect" in docs/HOWTO.md section 4b.
+5. Remind me to keep the Server URL and token that install.sh printed in my password manager, and
+   tell me the next step on my computers (Prompt 2, using the https:// address).
+```
+
+---
+
 ## Prompt 2: install the app on a computer (Windows, Mac or Linux)
 
 Have the **Server URL** and **token** from the server step ready. Do this on each computer; each one
@@ -68,9 +100,10 @@ Explain each step in one sentence before doing it, and ask me before anything th
 system. Do this:
 
 1. Find out which operating system this is (Windows, macOS Apple silicon / Intel, or Linux x86_64).
-2. Make sure Tailscale is installed and signed in with the same account as my server
-   (tailscale.com/download), and that `tailscale ping <server name>` or a ping to the server's
-   100.x.y.z address works.
+2. If my server URL starts with http://100.: make sure Tailscale is installed and signed in with
+   the same account as my server (tailscale.com/download), and that `tailscale ping <server name>`
+   or a ping to the server's 100.x.y.z address works. If it starts with https:// (a Cloudflare
+   Tunnel), skip Tailscale and check instead that <server URL>api/health shows "ok" in a browser.
 3. Get the right file from https://github.com/MRnigth/Tether/releases/tag/latest (the repo is
    private: use `gh release download latest --repo MRnigth/Tether -p <file>` if gh is signed in,
    otherwise ask me to download it in my browser):

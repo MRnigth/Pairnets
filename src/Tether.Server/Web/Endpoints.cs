@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Net.Http.Headers;
 using Tether.Core;
+using Tether.Core.Hashing;
 using Tether.Server.Services;
 using Tether.Server.Storage;
 
@@ -76,15 +77,8 @@ public static class Endpoints
 
             var path = ctx.Request.Query["path"].ToString();
             var baseValue = ctx.Request.Query["base"].ToString();
-            long? mtime = null;
-            var rawMtime = ctx.Request.Query["mtime"].ToString();
-            if (rawMtime.Length > 0)
-            {
-                if (!long.TryParse(rawMtime, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var parsed)
-                    || parsed < -62_135_596_800_000 || parsed > 253_402_300_799_999)
-                    return Error(StatusCodes.Status400BadRequest, ErrorCodes.BadRequest, "mtime must be Unix milliseconds.");
-                mtime = parsed;
-            }
+            if (!TryReadMtime(ctx, out var mtime))
+                return Error(StatusCodes.Status400BadRequest, ErrorCodes.BadRequest, "mtime must be Unix milliseconds.");
 
             ChangeResult result;
             try
@@ -97,6 +91,78 @@ public static class Endpoints
                 return Error(StatusCodes.Status408RequestTimeout, ErrorCodes.BadRequest, "Upload stalled and was discarded.");
             }
             return await ToResultAsync(result, ctx, path, hub);
+        });
+
+        // Uploads in pieces: big files through proxies that cap one request (Cloudflare: 100 MB), and
+        // an upload cut off half-way continues where it stopped. See UploadSessions.
+        app.MapPost("/api/upload", async (HttpContext ctx, UploadSessions uploads) =>
+        {
+            var path = ctx.Request.Query["path"].ToString();
+            if (!TryReadMtime(ctx, out var mtime))
+                return Error(StatusCodes.Status400BadRequest, ErrorCodes.BadRequest, "mtime must be Unix milliseconds.");
+            if (!long.TryParse(ctx.Request.Query["size"].ToString(), NumberStyles.None, CultureInfo.InvariantCulture, out var size))
+                return Error(StatusCodes.Status400BadRequest, ErrorCodes.BadRequest, "size must be a non-negative integer.");
+            var started = await uploads.StartAsync(path, ctx.Request.Query["base"].ToString(), size, mtime, ctx.RequestAborted);
+            return started.Status switch
+            {
+                UploadSessions.StartStatus.Started => Results.Json(new UploadStatus(started.Id!, 0), TetherJson.Options, statusCode: StatusCodes.Status201Created),
+                UploadSessions.StartStatus.TooMany => Error(StatusCodes.Status503ServiceUnavailable, ErrorCodes.Busy, "Too many uploads are in progress. Try again later."),
+                _ => ErrorFor(started.Rejection!),
+            };
+        });
+
+        app.MapPut("/api/upload/{id}", async (string id, HttpContext ctx, UploadSessions uploads) =>
+        {
+            var bodySize = ctx.Features.Get<IHttpMaxRequestBodySizeFeature>();
+            if (bodySize is { IsReadOnly: false })
+                bodySize.MaxRequestBodySize = UploadSessions.MaxChunkBytes;
+            if (ctx.Request.ContentLength > UploadSessions.MaxChunkBytes)
+                return Error(StatusCodes.Status413PayloadTooLarge, ErrorCodes.TooLarge, $"A piece may be at most {UploadSessions.MaxChunkBytes} bytes.");
+            if (!long.TryParse(ctx.Request.Query["offset"].ToString(), NumberStyles.None, CultureInfo.InvariantCulture, out var offset))
+                return Error(StatusCodes.Status400BadRequest, ErrorCodes.BadRequest, "offset must be a non-negative integer.");
+
+            UploadSessions.ChunkResult result;
+            try
+            {
+                result = await uploads.AppendAsync(id, offset, ctx.Request.Body, ctx.RequestAborted);
+            }
+            catch (BadHttpRequestException ex) when (ex.StatusCode == StatusCodes.Status413PayloadTooLarge)
+            {
+                return Error(StatusCodes.Status413PayloadTooLarge, ErrorCodes.TooLarge, $"A piece may be at most {UploadSessions.MaxChunkBytes} bytes.");
+            }
+            return result.Status switch
+            {
+                UploadSessions.ChunkStatus.Ok => Json(new UploadStatus(id, result.Received)),
+                UploadSessions.ChunkStatus.WrongOffset => Error(StatusCodes.Status409Conflict, ErrorCodes.UploadOffset,
+                    $"The server has {result.Received.ToString(CultureInfo.InvariantCulture)} bytes of this upload; continue from there."),
+                UploadSessions.ChunkStatus.Stalled => Error(StatusCodes.Status408RequestTimeout, ErrorCodes.BadRequest, "The piece stalled; what arrived is kept."),
+                UploadSessions.ChunkStatus.TooMuchData => Error(StatusCodes.Status400BadRequest, ErrorCodes.BadRequest, "More data than the declared size; the upload was dropped."),
+                _ => UploadNotFound(),
+            };
+        });
+
+        app.MapGet("/api/upload/{id}", (string id, UploadSessions uploads) =>
+            uploads.Received(id) is { } received ? Json(new UploadStatus(id, received)) : UploadNotFound());
+
+        app.MapPost("/api/upload/{id}/commit", async (string id, HttpContext ctx, UploadSessions uploads, IHubContext<SyncHub> hub) =>
+        {
+            var hash = ctx.Request.Query["hash"].ToString();
+            if (!ContentHash.IsValid(hash))
+                return Error(StatusCodes.Status400BadRequest, ErrorCodes.BadRequest, "hash must be a SHA-256 hash.");
+            var result = await uploads.CommitAsync(id, hash, ctx.RequestAborted);
+            return result.Status switch
+            {
+                UploadSessions.CommitStatus.Done => await ToResultAsync(result.Change!, ctx, result.Change!.Entry?.Path ?? string.Empty, hub),
+                UploadSessions.CommitStatus.Incomplete => Error(StatusCodes.Status409Conflict, ErrorCodes.UploadOffset, result.Message),
+                UploadSessions.CommitStatus.HashMismatch => Error(StatusCodes.Status400BadRequest, ErrorCodes.UploadMismatch, result.Message),
+                _ => UploadNotFound(),
+            };
+        });
+
+        app.MapDelete("/api/upload/{id}", (string id, UploadSessions uploads) =>
+        {
+            uploads.Abort(id);
+            return Results.NoContent();
         });
 
         app.MapDelete("/api/file", async (HttpContext ctx, SyncStore store, IHubContext<SyncHub> hub) =>
@@ -133,6 +199,16 @@ public static class Endpoints
                 return Json(result.Entry!);
             case ChangeStatus.Unchanged:
                 return Json(result.Entry!);
+            default:
+                return ErrorFor(result);
+        }
+    }
+
+    /// <summary>The error answer for a change the store refused.</summary>
+    private static IResult ErrorFor(ChangeResult result)
+    {
+        switch (result.Status)
+        {
             case ChangeStatus.Conflict:
                 return Error(StatusCodes.Status409Conflict, ErrorCodes.Conflict, result.Message);
             case ChangeStatus.CaseCollision:
@@ -176,6 +252,23 @@ public static class Endpoints
             return "unknown";
         }
     }
+
+    /// <summary>Reads the optional "mtime" (Unix milliseconds). False when it is present but invalid.</summary>
+    private static bool TryReadMtime(HttpContext ctx, out long? mtime)
+    {
+        mtime = null;
+        var raw = ctx.Request.Query["mtime"].ToString();
+        if (raw.Length == 0)
+            return true;
+        if (!long.TryParse(raw, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var parsed)
+            || parsed < -62_135_596_800_000 || parsed > 253_402_300_799_999)
+            return false;
+        mtime = parsed;
+        return true;
+    }
+
+    private static IResult UploadNotFound() =>
+        Error(StatusCodes.Status404NotFound, ErrorCodes.NotFound, "No such upload (it was finished, dropped after an hour without data, or the server restarted).");
 
     private static IResult Json<T>(T value) => Results.Json(value, TetherJson.Options);
 

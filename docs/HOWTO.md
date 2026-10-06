@@ -13,6 +13,7 @@ Allow about 30 minutes.
 2. [Put all three machines on Tailscale](#2-put-all-three-machines-on-tailscale)
 3. [Install the server](#3-install-the-server)
 4. [Lock the server down to your two PCs](#4-lock-the-server-down-to-your-two-pcs)
+   * [No Tailscale? Use a Cloudflare Tunnel instead](#4b-no-tailscale-use-a-cloudflare-tunnel-instead)
 5. [Set up the first PC](#5-set-up-the-first-pc-for-example-the-desktop)
 6. [Set up the second PC](#6-set-up-the-second-pc-for-example-the-laptop)
 7. [Everyday use](#7-everyday-use)
@@ -28,7 +29,7 @@ Allow about 30 minutes.
 |---|---|
 | **A server** | Any always-on Ubuntu machine (22.04 or newer): a mini PC, an old laptop, a Raspberry Pi-class x64 box or a VM. It needs enough disk for your folder **plus history** (old versions are kept 30 days). Rule of thumb: twice the size of your folder. |
 | **Your computers** | Windows 10/11 (64-bit), macOS 11 or newer (Apple Silicon or Intel), or a Linux desktop (64-bit, e.g. Ubuntu). Tether is built for using one at a time. |
-| **A Tailscale account** | Free for personal use: <https://tailscale.com>. This is what connects the three machines privately, wherever they are. |
+| **A Tailscale account** | Free for personal use: <https://tailscale.com>. This is what connects the three machines privately, wherever they are. **Or**, if you cannot install Tailscale on every computer: a free Cloudflare account and your own domain (see [4b](#4b-no-tailscale-use-a-cloudflare-tunnel-instead)). Either way, no ports need to be opened on any router. |
 | **The Tether release** | From <https://github.com/MRnigth/Tether/releases/latest>, or let the one-line commands below fetch it for you. |
 
 Nothing else: no cloud storage, no extra accounts, no .NET installation.
@@ -36,6 +37,9 @@ Nothing else: no cloud storage, no extra accounts, no .NET installation.
 ---
 
 ## 2. Put all three machines on Tailscale
+
+> Using a Cloudflare Tunnel instead? Skip sections 2 to 4 and follow
+> [4b](#4b-no-tailscale-use-a-cloudflare-tunnel-instead).
 
 Tailscale gives each machine a private address (it starts with `100.`) that only your own
 devices can reach. Tether's server will listen **only** on that address, so it is never visible
@@ -152,6 +156,86 @@ work laptop…) away from Tether.
 > If your policy file still contains the default "allow everything" rule
 > (`"src": ["*"], "dst": ["*:*"]`), that rule also lets every device reach Tether.
 > Narrow it or remove it if you want this lock-down to apply.
+
+---
+
+## 4b. No Tailscale? Use a Cloudflare Tunnel instead
+
+Use this **instead of sections 2 to 4** when Tailscale is not an option on every computer, for
+example for people who cannot install a VPN app or open ports on their network. Nothing is opened
+on any router: the server makes an outgoing connection to Cloudflare and keeps it open, and the PCs
+reach the server at an `https://` address on your own domain.
+
+**Good to know first**
+
+* You need a free Cloudflare account and a **domain name that uses Cloudflare** (about $10 a year;
+  buy one at Cloudflare or move an existing one there).
+* **Cloudflare can see the traffic.** It decrypts HTTPS at its edge before passing requests through
+  the tunnel, so in principle Cloudflare could see your token and your files. With Tailscale nobody
+  in between can. If that matters for your files, use Tailscale.
+* The server is now reachable from the internet. The long token is what keeps strangers out: keep
+  it in your password manager and never share it.
+* Cloudflare's free plan refuses any single upload over 100 MB. Tether sends bigger files in
+  pieces of 50 MB automatically, and a piece cut off by a bad connection continues where it
+  stopped. There is nothing to set.
+
+**Step 1: create the tunnel in the Cloudflare dashboard**
+
+1. Sign in at <https://dash.cloudflare.com> and check that your domain is listed.
+2. Open **Zero Trust** → **Networks** → **Tunnels** → **Create a tunnel**, choose **Cloudflared**,
+   and name it `tether`.
+3. On the "Install and run a connector" page, pick **Debian** and copy the command shown
+   (`sudo cloudflared service install eyJ…`). **Do not run it**: Tether's installer does that part
+   in a safer way. The long text starting with `eyJ` is the **tunnel token**; treat it like a
+   password.
+4. Go on to **Public hostnames** and add one: subdomain `tether`, your domain, service **Type**
+   `HTTP`, **URL** `localhost:5075`. Save.
+5. For your domain, open **Security** → **Bots** and make sure **Bot Fight Mode** is off. It
+   answers with browser checks that the Tether app cannot pass.
+
+(Cloudflare moves its menus now and then. If something looks different, look for "Tunnels" under
+Zero Trust → Networks.)
+
+**Step 2: install the server with the tunnel**
+
+On the Ubuntu server, replacing `tether.example.com` with the hostname from step 1.4:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/MRnigth/Tether/main/deploy/get.sh | sudo bash -s -- --cloudflare-tunnel --public-url https://tether.example.com
+```
+
+It asks you to paste the tunnel token (pasting the whole copied command works too; nothing is
+shown while you paste). Then it:
+
+* installs `cloudflared` from Cloudflare's own package repository;
+* makes Tether listen on `127.0.0.1` only, so nothing on your network can reach it directly;
+* keeps the tunnel token in `/etc/tether/tunnel.env` (readable by root only) and starts the
+  background service `tether-tunnel`;
+* checks that `https://tether.example.com/api/health` answers, and prints:
+
+```
+Enter these settings in Tether on both PCs:
+  Server URL:  https://tether.example.com/
+  Token:       3f9c…(64 characters)…a1
+```
+
+Open `https://tether.example.com/api/health` in a browser on any computer: it should show `ok`.
+Then go on with [section 5](#5-set-up-the-first-computer-for-example-the-desktop) and enter the
+`https://` address as the server address. (Always `https://`: the app refuses `http://` for a
+server behind Cloudflare, so the token is never sent unencrypted.)
+
+> **Already running Tether with Tailscale?** Run the same command on the server. It switches the
+> server to the tunnel and keeps your token, files and history. Then change the server address in
+> **Settings** on each computer to the `https://` one.
+
+**If the app cannot connect**
+
+| You see | What to do |
+|---------|-----------|
+| "Cloudflare cannot reach your Tether server (error 530)" (or 502) | On the server: `sudo systemctl status tether-tunnel` and `sudo journalctl -u tether-tunnel -n 50`. In the dashboard, the tunnel should say *Healthy* and its public hostname should point at `HTTP` `localhost:5075`. |
+| "Cloudflare blocked Tether with a browser check" | Turn off Bot Fight Mode (Security → Bots), or add a WAF custom rule that skips it for your Tether hostname. |
+| "This server is reached through Cloudflare. Use https://" | Type the address with `https://`, not `http://`. |
+| A login page instead of `ok` in the browser | Cloudflare Access is protecting the hostname. Remove the Access application for it: the Tether app cannot sign in through it. |
 
 ---
 
@@ -390,7 +474,7 @@ You do not have to do anything. Just work in the folder on whichever PC you are 
   └────────────┘   "something     │ manifest (list of │   "something    └────────────┘
                     changed" ◀──  │  every file)      │  ──▶ changed"
                                   └───────────────────┘
-          all traffic goes through Tailscale (encrypted) and needs the token
+   all traffic is encrypted (Tailscale, or HTTPS through a Cloudflare Tunnel) and needs the token
 ```
 
 The two PCs never talk to each other directly. Each one only compares itself with the server.
@@ -492,7 +576,7 @@ A renamed file is synced as "delete the old name, create the new name". The resu
 
 | You see | What it means and what to do |
 |---------|------------------------------|
-| **Grey icon, "Offline"** | This PC cannot reach the server. Check that Tailscale is connected (its icon) and that the server is on. On the server: `sudo systemctl status tether-server`. Tether keeps retrying; your changes are safe and sync when it is back. |
+| **Grey icon, "Offline"** | This PC cannot reach the server. Check that Tailscale is connected (its icon) and that the server is on. On the server: `sudo systemctl status tether-server` (and `sudo systemctl status tether-tunnel` with a Cloudflare Tunnel). Tether keeps retrying; your changes are safe and sync when it is back. |
 | **"The server rejected the token"** | The token in Settings is wrong, or was changed on the server. Open **Settings…**, paste the token, and click **Test connection**. |
 | **"Deletions blocked"** (orange) | A sync would delete many files. Right-click → **Allow these deletions…** lists them, showing which PC loses what. If that is what you did, click **Yes** (it applies once). If not (wrong folder, unplugged drive), click **No** and investigate. Nothing has been deleted. |
 | **"The folder is missing" / "no .tether-marker"** (orange) | The drive is unplugged, or you moved or renamed the folder. Plug the drive in and choose **Sync now**. If you moved the folder, choose **Locate the sync folder…** and point to its new place; Tether recognizes it by its marker and continues without resyncing. |
@@ -533,7 +617,7 @@ echo "$NEW"
 ```
 
 Enter the new token in **Settings…** on both PCs. If a PC was lost, also remove it from Tailscale
-(admin console → Machines).
+(admin console → Machines). With a Cloudflare Tunnel the new token is all it takes.
 
 ### Logs
 
@@ -641,10 +725,13 @@ state, delete `%AppData%\Tether` and `%LocalAppData%\Tether`.
 
 ```bash
 sudo systemctl disable --now tether-server
-sudo rm /etc/systemd/system/tether-server.service && sudo systemctl daemon-reload
+sudo systemctl disable --now tether-tunnel 2>/dev/null   # only with a Cloudflare Tunnel
+sudo rm -f /etc/systemd/system/tether-server.service /etc/systemd/system/tether-tunnel.service
+sudo systemctl daemon-reload
 sudo rm -rf /opt/tether /etc/tether
 # your files remain in /var/lib/tether until you delete that folder yourself
 ```
+(Delete the tunnel in the Cloudflare dashboard too.)
 
 For backups, the technical design and the security model, see [DEPLOY.md](DEPLOY.md),
 [ARCHITECTURE.md](ARCHITECTURE.md) and [SECURITY.md](SECURITY.md).

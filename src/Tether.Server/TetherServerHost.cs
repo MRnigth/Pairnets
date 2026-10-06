@@ -21,7 +21,8 @@ public static class TetherServerHost
         ConfigureLogging(builder.Logging);
         configure?.Invoke(builder);
 
-        // Default to loopback only. Production sets Urls / ASPNETCORE_URLS to the Tailscale IP.
+        // Default to loopback only. Production sets Urls / ASPNETCORE_URLS to the Tailscale IP, or keeps
+        // 127.0.0.1 behind a Cloudflare Tunnel.
         if (string.IsNullOrWhiteSpace(builder.Configuration["urls"]))
             builder.WebHost.UseUrls(DefaultUrl);
 
@@ -33,6 +34,7 @@ public static class TetherServerHost
         builder.Services.AddSingleton(options);
         builder.Services.AddSingleton(new ServerPaths(options.DataDir));
         builder.Services.AddSingleton<SyncStore>();
+        builder.Services.AddSingleton<UploadSessions>();
         builder.Services.AddSingleton<FailureThrottle>();
         builder.Services.AddSingleton<ServerUpdater>();
         builder.Services.AddSingleton<BatchRegistry>();
@@ -44,6 +46,7 @@ public static class TetherServerHost
             o.ClientTimeoutInterval = TimeSpan.FromSeconds(60);
         });
         builder.Services.AddHostedService<HistoryPurgeService>();
+        builder.Services.AddHostedService<UploadSessionSweeper>();
         builder.Services.Configure<HostOptions>(o => o.ShutdownTimeout = TimeSpan.FromSeconds(60));
         builder.WebHost.ConfigureKestrel(k =>
         {
@@ -59,7 +62,16 @@ public static class TetherServerHost
         ReportDrift(store, app.Logger);
         WarnAboutBinding(app);
 
+        if (options.TrustProxyHeaders)
+            app.UseMiddleware<ProxyClientAddressMiddleware>();
         app.UseMiddleware<RequestLoggingMiddleware>();
+        app.Use((ctx, next) =>
+        {
+            // Nothing here may be cached or rewritten by a proxy in between (Cloudflare): files,
+            // manifests and errors are always fresh and byte-exact.
+            ctx.Response.Headers.CacheControl = "no-store, no-transform";
+            return next(ctx);
+        });
         app.UseWebSockets();
         app.UseMiddleware<TokenAuthMiddleware>();
         var devices = app.Services.GetRequiredService<DeviceRegistry>();
@@ -117,7 +129,7 @@ public static class TetherServerHost
             if (url.Contains("0.0.0.0", StringComparison.Ordinal) || url.Contains("[::]", StringComparison.Ordinal)
                 || url.Contains("://*", StringComparison.Ordinal) || url.Contains("://+", StringComparison.Ordinal))
             {
-                app.Logger.LogWarning("Listening on all interfaces ({Url}). Tether should bind only to the Tailscale IP (tailscale ip -4).", url);
+                app.Logger.LogWarning("Listening on all interfaces ({Url}). Tether should bind only to the Tailscale IP (tailscale ip -4), or to 127.0.0.1 behind a Cloudflare Tunnel.", url);
             }
         }
     }

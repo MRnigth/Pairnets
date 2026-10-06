@@ -4,6 +4,8 @@
 #
 #   Ubuntu server:        curl -fsSL https://raw.githubusercontent.com/MRnigth/Tether/main/deploy/get.sh | sudo bash
 #     (options for install.sh go after "-s --":  ... | sudo bash -s -- --bind 100.x.y.z)
+#     No Tailscale, no open ports (Cloudflare Tunnel, see docs/HOWTO.md):
+#                         ... | sudo bash -s -- --cloudflare-tunnel --public-url https://tether.example.com
 #   Linux desktop app:    curl -fsSL https://raw.githubusercontent.com/MRnigth/Tether/main/deploy/get.sh | bash -s -- --desktop
 #   macOS app:            curl -fsSL https://raw.githubusercontent.com/MRnigth/Tether/main/deploy/get.sh | bash -s -- --mac
 #
