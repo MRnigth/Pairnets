@@ -183,7 +183,8 @@ request that the updater does not pick up within 45 seconds is reported as such,
 shows the state of `tether-update.path` and `tether-update.service`. If the watcher is not
 active, run `sudo systemctl reset-failed tether-update.path tether-update.service && sudo systemctl
 restart tether-update.path`. As a fallback, `tether-update.timer` checks for a waiting request
-every 2 minutes, and installing (or the one-line command) always restarts the watcher. If the self-update itself is broken, update by
+every 2 minutes, and installing (or the one-line command) always restarts the watcher. To check it quickly:
+`systemctl is-active tether-update.path tether-update.timer` should print `active` twice. If the self-update itself is broken, update by
 hand once with the command above.
 
 ## 5. Uninstall
