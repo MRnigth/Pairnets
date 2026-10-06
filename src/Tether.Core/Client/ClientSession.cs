@@ -491,8 +491,18 @@ public sealed class ClientSession : IAsyncDisposable
                 catch (Exception ex) when (ex is TetherNetworkException or TetherProtocolException)
                 {
                 }
-                if (pending?.Updater?.State is not ("requested" or "running"))
-                    return new ServerUpdateResult(false, "An update was just requested. Wait a minute and try again.", before, CanUpdateItself: true);
+                switch (pending?.Updater?.State)
+                {
+                    case "succeeded":
+                        // The last click's update already finished: show its result instead of "too soon".
+                        trace("The update asked for a moment ago has already finished", LogLevel.Information);
+                        return new ServerUpdateResult(true, pending.Updater.Message ?? "Done.", pending.ServerVersion, CanUpdateItself: true,
+                            AlreadyUpToDate: !UpdateChecker.IsNewer(pending.ServerVersion, before));
+                    case "failed":
+                        return new ServerUpdateResult(false, pending.Updater.Message ?? "The update failed. Nothing was changed.", before, CanUpdateItself: true);
+                    case not ("requested" or "running"):
+                        return new ServerUpdateResult(false, "An update was just requested. Wait a minute and try again.", before, CanUpdateItself: true);
+                }
                 trace("An update asked for a moment ago is still under way; following it", LogLevel.Information);
                 break;
         }

@@ -90,7 +90,7 @@ public class DesktopUiTests
         Assert.False(upToDate.Bobbing);
         Assert.False(upToDate.DetailsShown); // only in Debug mode
         upToDate.ShowResult(new ServerUpdateResult(true, "Already up to date (1.0.58).", "1.0.58", CanUpdateItself: true, AlreadyUpToDate: true));
-        Assert.Equal("Your server is already up to date", upToDate.HeadingText);
+        Assert.Equal("Your server is up to date", upToDate.HeadingText);
         Assert.Equal("S.Green", upToDate.BadgeKey);
         upToDate.Close();
 
