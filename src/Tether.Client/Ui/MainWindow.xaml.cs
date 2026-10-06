@@ -83,6 +83,7 @@ public partial class MainWindow : Window
     {
         ThemeManager.Attach(this);
         InitializeComponent();
+        Icon = AppIcons.WindowIcon;
         _actions = actions;
         RecentList.ItemsSource = _recent;
         ActivityList.ItemsSource = _activityRows;

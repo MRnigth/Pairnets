@@ -22,6 +22,7 @@ public partial class ServerUpdateWindow : Window
     {
         ThemeManager.Attach(this);
         InitializeComponent();
+        Icon = AppIcons.WindowIcon;
         _session = session ?? (() => null);
         _debugMode = debug ?? (() => false);
         _debug = _debugMode();

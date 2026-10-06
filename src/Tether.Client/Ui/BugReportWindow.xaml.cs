@@ -21,6 +21,7 @@ public partial class BugReportWindow : Window
     {
         ThemeManager.Attach(this);
         InitializeComponent();
+        Icon = AppIcons.WindowIcon;
         _build = build;
         _open = open;
         if (afterError)

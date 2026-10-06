@@ -46,57 +46,41 @@ public static class Visuals
     }
 }
 
-/// <summary>The app's own icon as an image (taken from Tether.exe), for the windows' headers.</summary>
+/// <summary>
+/// The app's own icon, read from tether.ico built into the app (not from Tether.exe, whose icon
+/// Windows caches per path and keeps showing the old one after an update).
+/// </summary>
 public static class AppIcons
 {
-    private static ImageSource? _large;
-    private static bool _loaded;
+    private static readonly Lazy<System.Windows.Media.Imaging.BitmapFrame?[]> Frames = new(Load);
 
-    public static ImageSource? Large
-    {
-        get
-        {
-            if (!_loaded)
-            {
-                _loaded = true;
-                _large = Load();
-            }
-            return _large;
-        }
-    }
+    /// <summary>For Window.Icon: the whole icon, so the taskbar and title bar pick their own size.</summary>
+    public static ImageSource? WindowIcon => Frames.Value[0];
 
-    private static ImageSource? Load()
+    /// <summary>The largest size, for the sidebar and Settings headers.</summary>
+    public static ImageSource? Large => Frames.Value[1];
+
+    private static System.Windows.Media.Imaging.BitmapFrame?[] Load()
     {
         try
         {
-            var path = Environment.ProcessPath;
-            if (path is null)
-                return null;
-            using var icon = System.Drawing.Icon.ExtractAssociatedIcon(path);
-            if (icon is null)
-                return null;
-            using var bitmap = icon.ToBitmap();
-            var hbitmap = bitmap.GetHbitmap();
-            try
-            {
-                var source = System.Windows.Interop.Imaging.CreateBitmapSourceFromHBitmap(hbitmap, IntPtr.Zero, Int32Rect.Empty,
-                    System.Windows.Media.Imaging.BitmapSizeOptions.FromEmptyOptions());
-                source.Freeze();
-                return source;
-            }
-            finally
-            {
-                DeleteObject(hbitmap);
-            }
+            var info = Application.GetResourceStream(new Uri("pack://application:,,,/tether.ico"));
+            if (info is null)
+                return [null, null];
+            using var stream = info.Stream;
+            var decoder = new System.Windows.Media.Imaging.IconBitmapDecoder(stream,
+                System.Windows.Media.Imaging.BitmapCreateOptions.PreservePixelFormat, System.Windows.Media.Imaging.BitmapCacheOption.OnLoad);
+            var whole = decoder.Frames[0];
+            var largest = decoder.Frames.OrderByDescending(f => f.PixelWidth).First();
+            whole.Freeze();
+            largest.Freeze();
+            return [whole, largest];
         }
-        catch (Exception ex) when (ex is IOException or ArgumentException or System.ComponentModel.Win32Exception or System.Runtime.InteropServices.ExternalException)
+        catch (Exception ex) when (ex is IOException or NotSupportedException or InvalidOperationException or ArgumentException or System.Runtime.InteropServices.ExternalException)
         {
-            return null;
+            return [null, null];
         }
     }
-
-    [System.Runtime.InteropServices.DllImport("gdi32.dll")]
-    private static extern bool DeleteObject(IntPtr handle);
 }
 
 /// <summary>ActivityKind → status brush.</summary>

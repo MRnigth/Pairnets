@@ -22,6 +22,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- The window and header icon (AppIcons): read from here, not from the exe, so an update shows the new logo at once. -->
+    <Resource Include="..\..\assets\tether.ico" Link="tether.ico" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\Tether.Core\Tether.Core.csproj" />
   </ItemGroup>
 
