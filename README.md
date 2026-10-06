@@ -25,8 +25,8 @@ to act when something looks wrong (wrong folder, unplugged drive, many deletions
 Or let Claude do it: copy a ready-made prompt from [Set Tether up with Claude](docs/SETUP-WITH-CLAUDE.md).
 
 <p>
-  <img src="docs/images/main-window-syncing-light.png" alt="The Tether window, light mode" width="49%">
-  <img src="docs/images/main-window-blocked-dark.png" alt="The Tether window, dark mode" width="49%">
+  <img src="docs/images/main-window-syncing-light.png" alt="The Tether window: your computers and the server, the transfer and recent activity" width="49%">
+  <img src="docs/images/main-window-history-dark.png" alt="The History page: get back deleted files and older versions (dark mode)" width="49%">
 </p>
 
 | Install on | How |
@@ -64,9 +64,12 @@ the Tailscale ACL in [DEPLOY.md](docs/DEPLOY.md#tailscale-acl-only-your-two-pcs-
    **Start syncing**.
 3. Optional: tick **Start with Windows**.
 
-Tether has a window (status, current transfer with progress, recent activity, and a "Needs
-attention" list) and an icon in the notification area (Windows), menu bar (Mac) or system tray
-(Linux). The icon is green when up to date, blue while syncing, grey when offline, orange when it
+Tether has a window with a sidebar: **Overview** (status, a picture of this computer, the server
+and your other computer with files moving between them, the current transfer, facts and recent
+activity), **Activity** (by day), **History** (get back deleted files and older versions with one
+click), **Needs attention** and **Settings**. Its icon sits in the notification area (Windows), menu
+bar (Mac) or system tray (Linux); clicking it opens a small quick panel with the same status at a
+glance. The icon is green when up to date, blue while syncing, grey when offline, orange when it
 needs your decision, red on errors, and yellow when paused. Closing the window keeps Tether syncing
 in the background.
 
@@ -82,8 +85,8 @@ in the background.
 * **Deletions.** Deleting a file on one PC deletes it on the other (into the Recycle Bin). If you
   *edited* a file on one PC while it was deleted on the other, the edit wins and the file comes back.
 * **History.** The server keeps every overwritten and deleted version for 30 days (and always the
-  last 5 per file). To get one back, see the maintenance commands in
-  [DEPLOY.md](docs/DEPLOY.md#4-maintenance-commands).
+  last 5 per file). To get one back, open **History** in the Tether window, pick the file and click
+  **Restore** (or use the maintenance commands in [DEPLOY.md](docs/DEPLOY.md#4-maintenance-commands)).
 * **Safety stops.** Tether pauses and asks before:
   * deleting more than 20 % of your files (or more than 50) in one go;
   * syncing a folder that is suddenly empty or missing its hidden `.tether-marker` file (an
@@ -103,7 +106,7 @@ in the background.
 | "Folder is missing" / "no .tether-marker" | The drive is unplugged or the folder moved. Plug it in and **Sync now**, or use **Locate the sync folder…** to point Tether at its new location. |
 | "The server went back in time" / "not the one this folder was synced with" | The server was restored from a backup or reinstalled. Use **Re-link to this server…**: it merges without deleting or overwriting. |
 | A file named `… (conflict PC date time) …` appeared | Both PCs changed that file. Compare the two, keep the right content under the original name, delete the conflict copy. |
-| "Name collision" / "File name not allowed" | Two names differ only in letter case (`Report.txt` vs `report.txt`), a file and a folder have the same name, or a name is not valid on Windows (for example `CON.txt` or a trailing dot). Rename it; **Files needing attention…** lists them. |
+| "Name collision" / "File name not allowed" | Two names differ only in letter case (`Report.txt` vs `report.txt`), a file and a folder have the same name, or a name is not valid on Windows (for example `CON.txt` or a trailing dot). Rename it; the **Needs attention** page lists them. |
 | Anything else | Right-click → **View log** (kept 14 days in `%LocalAppData%\Tether\logs`). Server: `sudo journalctl -u tether-server`. Logs never contain your token. |
 
 ## Building from source

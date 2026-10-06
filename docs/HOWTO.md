@@ -221,31 +221,63 @@ working meanwhile.
 
 ### The Tether window
 
-After setup the Tether window opens:
+After setup the Tether window opens. A sidebar on the left switches between its pages:
+**Overview**, **Activity**, **History**, **Needs attention** (the number shows how many) and
+**Settings**. The buttons at the top right are always there: **Open folder**, **Pause**/**Resume**,
+**Sync now**, and **⋯** for *View log* and *Report a bug*.
 
 ![Tether window while syncing](images/main-window-syncing-light.png)
 
-* **Update banner** (only when there is one): a new Tether version is available. See
-  [Updates](#updates) below.
+**Overview** shows everything at a glance:
+
 * **Status card** (top): a coloured badge with a symbol (✓ up to date, ↻ syncing, ⏸ paused,
-  ! needs a decision, ✕ error, crossed-out cloud for offline), one line for the overall state,
-  when it last synced, which folder it syncs, and how much space is left on the server (orange when
-  less than 5 GB or 5 % is left).
+  ! needs a decision, ✕ error, crossed-out cloud for offline) and one line for the overall state.
+  The top of the card takes on the status colour.
+* **Your computers**: *this computer*, the *server* and your *other computer*, joined by lines. A
+  green dot means online; for the other computer you see **Online**, **Sending changes**,
+  **Uploading 340 files** or **Last seen 3 h ago**. While files move, dots travel along the
+  lines: green towards the server (uploads), blue from the server (downloads). A dashed line means
+  not connected. Hover a computer's name to see which app and version it runs. (An older server
+  says *Update the server to see it*.)
+* **"2 things need your attention"** with a **Review** button, when something waits for you.
 * **Transfer card** (only while transferring; the arrow travels up while uploading and down while
   downloading, and the bars glide): how many files are being sent, the speed and the
   time left ("4.9 MB/s · about 4 min left"), one bar for the whole batch ("37 of 120 files · 412 MB
   of 1.30 GB"), and the files in progress right now, each with its own small bar. Tether sends up
   to four files at the same time. If new files appear while it syncs, the total grows straight away.
   "Limited to 5 MB/s" shows when you set a speed limit.
-* **Activity**: everything that happened recently, newest first: green ↑ uploaded, blue ↓
-  downloaded, red ✕ deleted, orange ⚠ conflict, red ! problem. Hover a row for the exact time.
-* **Needs attention** (the number shows how many): conflict copies and files that cannot be
-  synced, each with a **Show in folder** button.
-* **Buttons**: Sync now, Pause/Resume, Open folder, Settings, Log.
+* **Facts**: the folder (with **Open**), when it last synced, the server's version (with **Check
+  for update** or **Update server…**, orange when the server is older than the app) and the free
+  space on the server (orange when less than 5 GB or 5 % is left).
+* **Recent activity**: the last five changes; **See all** opens the Activity page.
+
+**Activity** lists everything that happened recently, newest first, under *Today*, *Yesterday* and
+so on: green ↑ uploaded, blue ↓ downloaded, red ✕ deleted, orange ⚠ conflict, red ! problem. Hover a
+row for the exact time. Right-click a file for **Show in folder** or **Show versions…** (opens it in
+History).
+
+![The Activity page](images/main-window-activity-light.png)
+
+**History** gets back deleted files and older versions, straight from the server. **Deleted files**
+lists what was deleted in the last 30 days; **All files** lists every file on the server, most
+recently changed first. Type in the search box to find one by name or folder. Choose a file to see
+the versions the server keeps (when each was replaced or deleted, and its size), then click
+**Restore** next to the one you want. It becomes the current version again and reaches all your
+computers within seconds; the version it replaces is kept in history too, so a restore can be undone.
+
+![The History page](images/main-window-history-light.png)
+
+**Needs attention** lists conflict copies and files that cannot be synced, each with a **Show in
+folder** button, and the decision Tether is waiting for, if any.
+
+**Settings** is the same form as the first-time setup. **Save** applies it at once.
+
+**When an update is out**, a small card at the bottom of the sidebar says so, with **Update now**
+(Windows) or **Download** (Mac and Linux). See [Updates](#updates) below.
 
 **Waiting for the other computer.** When your other computer uploads a big batch (more than 100
 files), this one waits and then downloads everything in one go instead of a few files at a time, so
-the two don't fight over the connection. The window shows how far the other computer is:
+the two don't fight over the connection. The status card shows how far the other computer is:
 
 ![Tether waiting for the other computer (dark mode)](images/main-window-waiting-dark.png)
 
@@ -257,13 +289,26 @@ a button in the status card says what to do:
 
 ![Tether window waiting for a decision (dark mode)](images/main-window-blocked-dark.png)
 
-Closing the window does **not** stop Tether. It keeps syncing in the background. Open the window
-again from its icon:
+### The quick panel
 
-* **Windows**: in the notification area next to the clock (click **^** if it is hidden). Left-click
-  opens the window, right-click shows the menu.
-* **Mac**: in the menu bar at the top right of the screen. Click it for the menu.
-* **Linux**: in the system tray or top bar, depending on your desktop.
+Closing the window does **not** stop Tether. It keeps syncing in the background, with an icon:
+
+* **Windows**: in the notification area next to the clock (click **^** if it is hidden). **Click**
+  the icon for the quick panel, **double-click** it for the window, **right-click** it for the menu.
+* **Mac**: in the menu bar at the top right of the screen. Click it for the menu; **Quick status…**
+  opens the quick panel and **Open Tether** the window.
+* **Linux**: in the system tray or top bar, depending on your desktop. Clicking the icon opens the
+  quick panel on most desktops; the menu also has **Quick status…** and **Open Tether**.
+
+The quick panel opens next to the icon and closes when you click elsewhere. It shows the status, your
+computers, the transfer, the last four changes and what needs attention, with **Open Tether**,
+**Folder** and **Pause** buttons, and **⋯** for Sync now, Settings, History, the log, Report a bug
+and Exit.
+
+<p>
+  <img src="images/tray-panel-syncing-light.png" alt="The quick panel while syncing" width="49%">
+  <img src="images/tray-panel-idle-dark.png" alt="The quick panel, dark mode" width="49%">
+</p>
 
 The icon colour always shows the state:
 
@@ -314,14 +359,15 @@ You do not have to do anything. Just work in the folder on whichever PC you are 
 
 | Item | What it does |
 |------|--------------|
+| **Quick status…** (Mac and Linux) | opens the quick panel |
 | **Open Tether** | opens the Tether window |
 | **Sync now** | runs a complete check immediately |
-| **Open folder** | opens the synced folder in Explorer |
+| **Open folder** | opens the synced folder in Explorer, Finder or your file manager |
 | **Allow these deletions (N)…** | only shown when Tether blocked a large deletion (see section 9) |
 | **Locate the sync folder… / Confirm this folder… / Re-link to this server…** | only shown when Tether stopped to ask you something (see section 9) |
-| **Files needing attention…** | lists files that cannot be synced until renamed |
-| **Settings…** | change server, token, folder, device name, ignore patterns |
+| **Settings…** | opens the window on the Settings page: server, token, folder, device name, ignore patterns |
 | **View log** | opens today's log (kept 14 days in `%LocalAppData%\Tether\logs`) |
+| **Report a bug…** | builds a report to send to whoever helps you (see [Updates](#updates)) |
 | **Pause syncing / Resume syncing** | temporarily stop syncing on this PC |
 | **Start with Windows / Start at login** | start Tether automatically when you sign in |
 | **Exit / Quit Tether** | quit Tether. Nothing syncs until you start it again. |
@@ -450,11 +496,16 @@ A renamed file is synced as "delete the old name, create the new name". The resu
 | **"This folder was already synced… Confirm"** | Tether finds a marker but no record of it on this PC (for example after reinstalling Windows). Choose **Confirm this folder…**. Tether then merges and deletes nothing. |
 | **"The server went back in time" / "not the one this folder was synced with"** | The server was restored from a backup or reinstalled. Choose **Re-link to this server…**. Tether merges your folder with the server: nothing is deleted or overwritten, and differences become conflict copies. |
 | **A file named `… (conflict PC date time) …`** | Both PCs changed the same file. Compare the two versions, keep what you want under the original name, and delete the conflict copy. |
-| **"Name collision" / "File name not allowed"** | Two names differ only in upper/lower case (`Report.txt` and `report.txt`), a file and a folder share a name, or the name is not allowed on Windows. **Files needing attention…** lists them. Rename them and they sync. |
+| **"Name collision" / "File name not allowed"** | Two names differ only in upper/lower case (`Report.txt` and `report.txt`), a file and a folder share a name, or the name is not allowed on Windows. The **Needs attention** page lists them. Rename them and they sync. |
 
 ### Getting an old or deleted version back
 
-On the server (the service must be stopped briefly):
+Open the Tether window and choose **History** (see [The Tether window](#the-tether-window)): pick the
+file under **Deleted files** or **All files**, then **Restore** the version you want. It becomes the
+current version and both PCs download it within seconds. The version it replaced also goes to
+history, so a restore can be undone too.
+
+The same works on the server itself (the service must be stopped briefly):
 
 ```bash
 sudo systemctl stop tether-server
@@ -464,9 +515,6 @@ sudo -u tether /opt/tether/tether-server history list "Projects/report.docx" --d
 sudo -u tether /opt/tether/tether-server history restore "Projects/report.docx" 20261002T101500123Z-1a2b3c4d --data-dir /var/lib/tether
 sudo systemctl start tether-server
 ```
-
-The restored version becomes the current version, and both PCs download it on their next sync.
-The version it replaced also goes to history, so a restore can be undone too.
 
 Files deleted on the *other* PC are also in this PC's **Recycle Bin**.
 
@@ -501,8 +549,8 @@ Tether checks for a new version 15 seconds after it starts and then once a day (
 **Settings → Updates and speed**; **Check now** checks right away). This needs the GitHub
 repository to be public.
 
-**Update a computer.** When a new version is out, a banner appears at the top of the window and you
-get a notification.
+**Update a computer.** When a new version is out, a card appears at the bottom of the window's sidebar
+and you get a notification.
 
 * **Windows** (installed with `TetherSetup.exe`): click **Update now**. Tether downloads the new
   installer, checks it against `SHA256SUMS.txt`, installs it and starts again by itself, in about
@@ -521,9 +569,9 @@ for this version** hides the question until the next version. Tick **From now on
 automatically** (also in **Settings → Updates and speed**) and Tether updates the server by itself
 whenever it finds it out of date, with a line in the Activity list and a notification.
 
-**See the server's version.** The main window shows a **Server 1.0.58** pill next to the free space. It turns
+**See the server's version.** The **Server** tile on the Overview shows **Version 1.0.58**. It turns
 orange when the server is older than your app. A server too old to say which version it runs shows
-**Server: old version**. The same line is in **Settings → Updates and speed**. The button beside it opens the same window by hand: **Update
+**Old version**. The same line is in **Settings → Updates and speed**. The link under it opens the same window by hand: **Update
 server…** when the server is older, **Check for update** when it is up to date. It works even if you chose
 *Don't ask for this version*.
 
@@ -532,7 +580,8 @@ mode**. Tether then writes more detail to its log, and the update window gets a 
 step the app takes and, at the end, the server's own update log and settings. **Copy details** puts it
 on the clipboard so you can send it to whoever helps you. Turn it off again when you are done.
 
-**Report a bug.** Click **Report a bug** in the main window (or in the tray / menu-bar menu). Tether
+**Report a bug.** Click **⋯ → Report a bug…** at the top right of the window (or in the quick panel, or the
+tray / menu-bar menu). Tether
 builds a report with its version, your system, your settings (never the token), the sync status, the
 server's update details, recent activity and the last 300 lines of the log. It copies the report to the
 clipboard and saves it as `bug-report-….txt` in the log folder, so you can paste it to whoever helps you;

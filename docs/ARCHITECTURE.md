@@ -120,6 +120,7 @@ files/      current version of every file (same relative paths as the clients)
 history/    history/<path>/<yyyyMMddTHHmmssfffZ>-<hash8>: overwritten and deleted versions
 tmp/        in-flight uploads (emptied at startup)
 manifest.db files(path, pathLower, hash, size, modifiedMs, deleted, version), meta, journal
+devices.json the computers that use the server: name, last seen, app (for the apps' overview; not used for syncing)
 .lock       held by the running service; maintenance commands refuse to run while it is held
 ```
 
@@ -148,7 +149,13 @@ All endpoints except health need the token (`X-Sync-Token`, `Authorization: Bear
 | `DELETE /api/file?path=&base=` | 200 tombstone (idempotent) · 409 `conflict` · 404 never existed |
 | `GET /api/history?path=` | `[{id, storedAtUtc, size, hash8}]` newest first |
 | `POST /api/history/restore?path=&id=` | restores the version as a normal new version |
+| `GET /api/devices` | `[{name, online, lastSeenUtc, app}]`: every computer that sent a request (`X-Device-Id`, plus `X-Tether-App` such as "Windows 1.0.60"); `online` while its push channel is open |
 | `/hub` (SignalR) | server → clients: `Changed(deviceId, path)` |
+
+The apps' **History** page reads the whole manifest (`GET /api/manifest`, tombstones carry the time
+of deletion in `modifiedMs`) and `GET /api/history`, and restores with `POST /api/history/restore`.
+Because a computer ignores the server's `Changed` echo of its own requests, the app asks its runner
+for a sync right after a restore.
 
 ## Designed for later
 

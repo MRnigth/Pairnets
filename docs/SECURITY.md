@@ -15,6 +15,7 @@ Tether is for one person with two PCs and one server on a private Tailscale netw
 | Process | The service runs as the unprivileged `tether` user under systemd hardening: `NoNewPrivileges`, `ProtectSystem=strict` with write access only to `/var/lib/tether`, `ProtectHome`, `PrivateTmp`, `PrivateDevices`, no capabilities, restricted address families and namespaces. |
 | Data loss | The server never destroys data outside the history purge. Every overwritten or deleted file is kept in `history/` for 30 days and at least the last 5 versions. Clients refuse to run when the folder looks wrong (missing marker, empty folder) or a pass would delete many files. |
 | Privacy | No telemetry, analytics, update checks or third-party services. The client only talks to your server. |
+| Computer list | For the apps' overview the server keeps, in `devices.json`, the device name each computer sends, when it was last heard from and which app it runs ("Windows 1.0.60"). Only requests that passed the token check count (the health check never does); names are cut to 64 characters, control characters are dropped, and at most 32 are kept. It is shown, never trusted: syncing does not depend on it. |
 
 **What is not protected**
 
