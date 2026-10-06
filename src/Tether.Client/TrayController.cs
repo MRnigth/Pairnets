@@ -296,6 +296,13 @@ public sealed class TrayController : ITrayActions, IDisposable
 
     public IHistorySource? History => _session;
 
+    /// <summary>The Devices page was opened: ask the server for the current list.</summary>
+    public void RefreshDevices()
+    {
+        if (_session is { } session)
+            _ = session.RefreshDevicesAsync();
+    }
+
     /// <summary>The quick-look panel next to the taskbar; a second click on the icon closes it.</summary>
     private void TogglePanel()
     {

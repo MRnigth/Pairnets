@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Text.Json;
 using Tether.Core;
 using Tether.Server.Storage;
@@ -5,39 +6,25 @@ using Tether.Server.Storage;
 namespace Tether.Server.Services;
 
 /// <summary>
-/// The computers that use this server: when each was last heard from, whether its push channel is
-/// open right now, and which app it runs. The apps draw "this computer ⇄ server ⇄ your other
-/// computer" from it. Kept in memory and saved to devices.json (at most every
-/// <see cref="SaveInterval"/>) so "last seen" survives a restart. Device names are the ones the
-/// apps send in X-Device-Id; nothing here affects syncing.
+/// The computers that use this server ("Devices" tab in the apps): name, app version and system,
+/// when each was first and last seen, whether it is connected right now, and its last change.
+/// Kept in memory and saved to devices.json in the data folder at most every 30 seconds.
 /// </summary>
 public sealed class DeviceRegistry : IDisposable
 {
-    /// <summary>More names than this (renamed computers, test setups) drop the longest-unseen one.</summary>
-    public const int MaxDevices = 32;
-
-    public const int MaxNameLength = 64;
-
     private static readonly TimeSpan SaveInterval = TimeSpan.FromSeconds(30);
 
-    private readonly object _gate = new();
-    private readonly Dictionary<string, Entry> _devices = new(StringComparer.Ordinal);
-    private readonly Dictionary<string, string> _connections = new(StringComparer.Ordinal);
+    /// <summary>A device that asked something this recently counts as online, even without a live connection.</summary>
+    public static readonly TimeSpan OnlineWindow = TimeSpan.FromMinutes(2);
+
     private readonly string _file;
     private readonly TimeProvider _clock;
-    private readonly ILogger _log;
-    private readonly Timer _saveTimer;
+    private readonly ILogger<DeviceRegistry> _log;
+    private readonly object _gate = new();
+    private readonly Dictionary<string, Entry> _devices = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, string> _connections = new(StringComparer.Ordinal);
     private bool _dirty;
-
-    private sealed class Entry(string name)
-    {
-        public string Name { get; } = name;
-        public DateTimeOffset LastSeen { get; set; }
-        public string? App { get; set; }
-        public int Connections { get; set; }
-    }
-
-    private sealed record Saved(string Name, DateTimeOffset LastSeenUtc, string? App);
+    private DateTimeOffset _lastSave;
 
     public DeviceRegistry(ServerPaths paths, ILogger<DeviceRegistry> log, TimeProvider? clock = null)
     {
@@ -45,108 +32,104 @@ public sealed class DeviceRegistry : IDisposable
         _clock = clock ?? TimeProvider.System;
         _log = log;
         Load();
-        _saveTimer = new Timer(_ => Save(), null, SaveInterval, SaveInterval);
     }
 
-    /// <summary>Turns an X-Device-Id header value into a device name, or null when there is none.</summary>
-    public static string? NameFromHeader(string? raw)
+    private sealed class Entry
     {
-        if (string.IsNullOrWhiteSpace(raw))
-            return null;
-        try
-        {
-            return CleanName(Uri.UnescapeDataString(raw));
-        }
-        catch (UriFormatException)
-        {
-            return null;
-        }
+        public string Name { get; set; } = string.Empty;
+        public DateTimeOffset FirstSeen { get; set; }
+        public DateTimeOffset LastSeen { get; set; }
+        public string? AppVersion { get; set; }
+        public string? System { get; set; }
+        public DateTimeOffset? LastChange { get; set; }
     }
 
-    private static string? CleanName(string? name)
+    /// <summary>Called for every authenticated request: <paramref name="client"/> is the "X-Tether-Client" header ("1.0.38; Windows").</summary>
+    public void Seen(string device, string? client)
     {
-        name = new string((name ?? string.Empty).Where(c => !char.IsControl(c)).ToArray()).Trim();
-        if (name.Length == 0)
-            return null;
-        return name.Length > MaxNameLength ? name[..MaxNameLength] : name;
-    }
-
-    private static string? CleanApp(string? raw)
-    {
-        if (string.IsNullOrWhiteSpace(raw))
-            return null;
-        var app = new string(raw.Trim().Where(c => !char.IsControl(c)).ToArray());
-        return app.Length > 40 ? app[..40] : app;
-    }
-
-    /// <summary>A request from <paramref name="device"/> was accepted.</summary>
-    public void Seen(string device, string? app)
-    {
-        lock (_gate)
-            Touch(device, app);
-    }
-
-    /// <summary>A push channel opened.</summary>
-    public void Connected(string connectionId, string device, string? app)
-    {
+        if (!IsName(device))
+            return;
+        var now = _clock.GetUtcNow();
+        var (version, system) = ParseClient(client);
         lock (_gate)
         {
-            if (_connections.ContainsKey(connectionId))
-                return;
-            _connections[connectionId] = device;
-            Touch(device, app).Connections++;
+            if (!_devices.TryGetValue(device, out var entry))
+            {
+                entry = new Entry { Name = device, FirstSeen = now };
+                _devices[device] = entry;
+                _dirty = true;
+                _lastSave = DateTimeOffset.MinValue; // save a new device right away
+            }
+            entry.LastSeen = now;
+            if (version is not null && version != entry.AppVersion)
+            {
+                entry.AppVersion = version;
+                _dirty = true;
+            }
+            if (system is not null && system != entry.System)
+            {
+                entry.System = system;
+                _dirty = true;
+            }
+            if (now - _lastSave >= SaveInterval)
+                _dirty = true;
         }
+        SaveIfDue();
     }
 
-    /// <summary>A push channel closed (the computer went to sleep, quit or lost its connection).</summary>
-    public void Disconnected(string connectionId)
+    /// <summary>The device uploaded, deleted or restored something.</summary>
+    public void Changed(string device)
     {
+        if (!IsName(device))
+            return;
         lock (_gate)
         {
-            if (!_connections.Remove(connectionId, out var device))
-                return;
             if (_devices.TryGetValue(device, out var entry))
             {
-                entry.Connections = Math.Max(0, entry.Connections - 1);
-                entry.LastSeen = _clock.GetUtcNow();
+                entry.LastChange = _clock.GetUtcNow();
                 _dirty = true;
             }
         }
+        SaveIfDue();
     }
 
-    /// <summary>Every known computer, most recently seen first.</summary>
-    public List<DeviceInfo> List()
+    public void Connected(string connectionId, string device)
     {
+        if (IsName(device))
+            _connections[connectionId] = device;
+    }
+
+    public void Disconnected(string connectionId) => _connections.TryRemove(connectionId, out _);
+
+    /// <summary>All devices, most recently seen first.</summary>
+    public IReadOnlyList<DeviceInfo> List()
+    {
+        var now = _clock.GetUtcNow();
+        var connected = new HashSet<string>(_connections.Values, StringComparer.OrdinalIgnoreCase);
         lock (_gate)
         {
             return _devices.Values
-                .OrderByDescending(e => e.Connections > 0)
-                .ThenByDescending(e => e.LastSeen)
-                .Select(e => new DeviceInfo(e.Name, e.Connections > 0, e.LastSeen, e.App))
+                .OrderByDescending(e => e.LastSeen)
+                .Select(e => new DeviceInfo(e.Name, e.FirstSeen, e.LastSeen,
+                    connected.Contains(e.Name) || now - e.LastSeen < OnlineWindow,
+                    e.AppVersion, e.System, e.LastChange))
                 .ToList();
         }
     }
 
-    private Entry Touch(string device, string? app)
+    /// <summary>"1.0.38; Windows" → ("1.0.38", "Windows"); anything odd is ignored.</summary>
+    internal static (string? Version, string? System) ParseClient(string? client)
     {
-        if (!_devices.TryGetValue(device, out var entry))
-        {
-            if (_devices.Count >= MaxDevices)
-            {
-                var oldest = _devices.Values.Where(e => e.Connections == 0).OrderBy(e => e.LastSeen).FirstOrDefault()
-                             ?? _devices.Values.OrderBy(e => e.LastSeen).First();
-                _devices.Remove(oldest.Name);
-            }
-            entry = new Entry(device);
-            _devices[device] = entry;
-            _log.LogInformation("First request from computer {Device}", device);
-        }
-        entry.LastSeen = _clock.GetUtcNow();
-        if (CleanApp(app) is { } a)
-            entry.App = a;
-        _dirty = true;
-        return entry;
+        if (string.IsNullOrWhiteSpace(client) || client.Length > 200)
+            return (null, null);
+        var parts = client.Split(';', 2, StringSplitOptions.TrimEntries);
+        var version = parts[0].Length is > 0 and <= 32 ? parts[0] : null;
+        var system = parts.Length > 1 && parts[1].Length is > 0 and <= 120 ? parts[1] : null;
+        return (version, system);
     }
+
+    private static bool IsName(string device) =>
+        !string.IsNullOrWhiteSpace(device) && device != "unknown" && device != "another computer";
 
     private void Load()
     {
@@ -154,47 +137,55 @@ public sealed class DeviceRegistry : IDisposable
         {
             if (!File.Exists(_file))
                 return;
-            var saved = JsonSerializer.Deserialize<List<Saved>>(File.ReadAllText(_file), TetherJson.Options) ?? [];
-            foreach (var s in saved.Take(MaxDevices))
-            {
-                if (CleanName(s.Name) is { } name)
-                    _devices[name] = new Entry(name) { LastSeen = s.LastSeenUtc, App = CleanApp(s.App) };
-            }
+            var entries = JsonSerializer.Deserialize<List<Entry>>(File.ReadAllText(_file), TetherJson.Options) ?? [];
+            foreach (var entry in entries.Where(e => IsName(e.Name)))
+                _devices[entry.Name] = entry;
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
+        catch (Exception ex) when (ex is IOException or JsonException or UnauthorizedAccessException)
         {
-            _log.LogWarning("Could not read {File}; starting with no known computers: {Error}", _file, ex.Message);
+            _log.LogWarning("Could not read {File}: {Error}; the device list starts empty", _file, ex.Message);
         }
     }
 
-    /// <summary>Writes devices.json if anything changed (atomically: temp file, then rename).</summary>
-    public void Save()
+    private void SaveIfDue()
     {
-        List<Saved> snapshot;
+        string json;
         lock (_gate)
         {
-            if (!_dirty)
+            var now = _clock.GetUtcNow();
+            if (!_dirty || now - _lastSave < SaveInterval)
                 return;
+            json = JsonSerializer.Serialize(_devices.Values.ToList(), TetherJson.Options);
             _dirty = false;
-            snapshot = _devices.Values.Select(e => new Saved(e.Name, e.LastSeen, e.App)).ToList();
+            _lastSave = now;
         }
+        Write(json);
+    }
+
+    private void Write(string json)
+    {
         try
         {
             var tmp = _file + ".tmp";
-            File.WriteAllText(tmp, JsonSerializer.Serialize(snapshot, TetherJson.Options));
+            File.WriteAllText(tmp, json);
             File.Move(tmp, _file, overwrite: true);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            _log.LogDebug("Could not save {File}: {Error}", _file, ex.Message);
-            lock (_gate)
-                _dirty = true;
+            _log.LogWarning("Could not save {File}: {Error}", _file, ex.Message);
         }
     }
 
     public void Dispose()
     {
-        _saveTimer.Dispose();
-        Save();
+        string json;
+        lock (_gate)
+        {
+            if (!_dirty && _lastSave != DateTimeOffset.MinValue)
+                return;
+            json = JsonSerializer.Serialize(_devices.Values.ToList(), TetherJson.Options);
+            _dirty = false;
+        }
+        Write(json);
     }
 }

@@ -75,11 +75,33 @@ public sealed class SampleActions : IMainActions
     public void UpdateServer() => Calls.Add("server");
     public void ReportBug() => Calls.Add("bug");
     public void RevealFile(string syncPath) => Calls.Add("reveal:" + syncPath);
+    public void RefreshDevices() => Calls.Add("devices");
 }
 
 /// <summary>Loads the macOS/Linux windows headlessly: XAML parses, controls bind, states render.</summary>
 public class DesktopUiTests
 {
+    [AvaloniaFact]
+    public void DevicesTabListsTheServersComputers()
+    {
+        var window = new MainWindow(null) { ThisDevice = "MacBook" };
+        window.Show();
+        window.ShowDevicesTab();
+        Assert.False(window.DevicesShown); // nothing from the server yet: the empty text shows
+        window.ShowStatus(StatusSnapshot.Initial with
+        {
+            Devices =
+            [
+                new Tether.Core.DeviceInfo("DESKTOP", DateTimeOffset.UtcNow.AddDays(-2), DateTimeOffset.UtcNow, true, "1.0.38", "Windows"),
+                new Tether.Core.DeviceInfo("MacBook", DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow, true, "1.0.38", "macOS"),
+            ],
+        }, null);
+        Assert.True(window.DevicesShown);
+        Assert.Equal(2, window.DeviceRows);
+        window.AllowClose = true;
+        window.Close();
+    }
+
     [AvaloniaFact]
     public void MainWindowShowsStatusActivityAndFixAction()
     {
@@ -147,7 +169,7 @@ public class DesktopUiTests
         Assert.False(upToDate.Bobbing);
         Assert.False(upToDate.DetailsShown); // only in Debug mode
         upToDate.ShowResult(new ServerUpdateResult(true, "Already up to date (1.0.58).", "1.0.58", CanUpdateItself: true, AlreadyUpToDate: true));
-        Assert.Equal("Your server is already up to date", upToDate.HeadingText);
+        Assert.Equal("Your server is up to date", upToDate.HeadingText);
         Assert.Equal("S.Green", upToDate.BadgeKey);
         upToDate.Close();
 
@@ -256,7 +278,7 @@ public class DesktopUiTests
         {
             Status = RunnerStatus.Syncing, LastSyncAt = DateTimeOffset.Now, Server = server, CurrentPath = "a", Operation = "upload",
             Active = [new ActiveTransfer("a", "upload", 1, 2)],
-            Devices = [new DeviceInfo("mac", true, DateTimeOffset.UtcNow), new DeviceInfo("DESKTOP", true, DateTimeOffset.UtcNow)],
+            Devices = [new DeviceInfo("mac", DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, true), new DeviceInfo("DESKTOP", DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, true)],
         }, "/tmp/x", "mac");
         Assert.Equal("DESKTOP: Online", window.MapOtherText);
         Assert.True(window.MapHereFlowing);
@@ -341,8 +363,8 @@ public class DesktopUiTests
         var utc = DateTimeOffset.UtcNow;
         IReadOnlyList<Tether.Core.DeviceInfo> devices =
         [
-            new("MacBook", true, utc, "macOS 1.0.58"),
-            new("DESKTOP", true, utc, "Windows 1.0.58"),
+            new("MacBook", utc.AddDays(-30), utc, true, "1.0.58", "macOS"),
+            new("DESKTOP", utc.AddDays(-30), utc, true, "1.0.58", "Windows"),
         ];
         window.ShowUpdate("Tether 1.0.58 is available", "You have 1.0.52. Your settings are kept.", "Download");
         window.ShowStatus(StatusSnapshot.Initial with
@@ -386,10 +408,13 @@ public class DesktopUiTests
         window.ShowStatus(StatusSnapshot.Initial with
         {
             Status = RunnerStatus.Idle, Text = "Up to date", LastSyncAt = now.AddMinutes(-1), Server = server,
-            Devices = [new("MacBook", true, utc), new("DESKTOP", false, utc.AddHours(-3), "Windows 1.0.58")],
+            Devices = [new("MacBook", utc.AddDays(-30), utc, true), new("DESKTOP", utc.AddHours(-3).AddDays(-30), utc.AddHours(-3), false, "1.0.58", "Windows")],
         }, "/Users/me/Work", "MacBook");
         window.Navigate(MainPage.Activity);
         Save(window, outDir, $"main-window-activity-{suffix}.png");
+
+        window.Navigate(MainPage.Devices);
+        Save(window, outDir, $"main-window-devices-{suffix}.png");
 
         window.Navigate(MainPage.History);
         Avalonia.Threading.Dispatcher.UIThread.RunJobs();
@@ -420,7 +445,7 @@ public class DesktopUiTests
         panel.ShowStatus(StatusSnapshot.Initial with
         {
             Status = RunnerStatus.Idle, Text = "Up to date", LastSyncAt = now, Server = server,
-            Devices = [new("MacBook", true, utc), new("DESKTOP", false, utc.AddHours(-3), "Windows 1.0.58")],
+            Devices = [new("MacBook", utc.AddDays(-30), utc, true), new("DESKTOP", utc.AddHours(-3).AddDays(-30), utc.AddHours(-3), false, "1.0.58", "Windows")],
         }, "MacBook");
         Save(panel, outDir, $"tray-panel-idle-{suffix}.png");
         panel.Close();

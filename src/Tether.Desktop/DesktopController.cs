@@ -346,6 +346,13 @@ public sealed class DesktopController : ITrayActions, IDisposable
 
     public IHistorySource? History => _session;
 
+    /// <summary>The Devices page was opened: ask the server for the current list.</summary>
+    public void RefreshDevices()
+    {
+        if (_session is { } session)
+            _ = session.RefreshDevicesAsync();
+    }
+
     public void RevealFile(string syncPath) => _platform.Reveal(LocalPath(syncPath));
 
     public void SyncNow() => _session?.SyncNow();

@@ -17,19 +17,19 @@ public class OverviewAndHistoryTests
     [Fact]
     public void MapShowsTheOtherComputerOnlineOrLastSeen()
     {
-        var map = DeviceMap.Build(Connected(new DeviceInfo("MAC", true, Now), new DeviceInfo("DESKTOP", true, Now, "Windows 1.0.58")), "MAC", Now);
+        var map = DeviceMap.Build(Connected(new DeviceInfo("MAC", Now.AddDays(-30), Now, true), new DeviceInfo("DESKTOP", Now.AddDays(-30), Now, true, "1.0.58", "Windows")), "MAC", Now);
         Assert.Equal("MAC", map.Here.Name);
         Assert.Equal(NodeState.Online, map.Server.State);
         Assert.Equal("412 GB free", map.Server.Detail);
         Assert.Equal("DESKTOP", map.Other.Name);
         Assert.Equal("Online", map.Other.Detail);
-        Assert.Equal("Windows 1.0.58", map.Other.Tip);
+        Assert.Equal("Windows · Tether 1.0.58", map.Other.Tip);
         Assert.True(map.HereLinked);
         Assert.True(map.OtherLinked);
         Assert.Equal(LinkFlow.None, map.HereFlow);
         Assert.Equal(0, map.MoreComputers);
 
-        var away = DeviceMap.Build(Connected(new DeviceInfo("DESKTOP", false, Now.AddMinutes(-12))), "MAC", Now);
+        var away = DeviceMap.Build(Connected(new DeviceInfo("DESKTOP", Now.AddMinutes(-12).AddDays(-30), Now.AddMinutes(-12), false)), "MAC", Now);
         Assert.Equal(NodeState.Offline, away.Other.State);
         Assert.Equal("Last seen 12 min ago", away.Other.Detail);
         Assert.False(away.OtherLinked);
@@ -38,7 +38,7 @@ public class OverviewAndHistoryTests
     [Fact]
     public void MapExplainsAMissingOrUnknownOtherComputer()
     {
-        var alone = DeviceMap.Build(Connected(new DeviceInfo("MAC", true, Now)), "MAC", Now);
+        var alone = DeviceMap.Build(Connected(new DeviceInfo("MAC", Now.AddDays(-30), Now, true)), "MAC", Now);
         Assert.Equal("Your other computer", alone.Other.Name);
         Assert.Equal(NodeState.Unknown, alone.Other.State);
 
@@ -51,8 +51,8 @@ public class OverviewAndHistoryTests
         Assert.False(offline.OtherLinked);
 
         // Long-gone names (a renamed computer) are left out; several recent ones are counted.
-        var many = DeviceMap.Build(Connected(new DeviceInfo("OLD", false, Now.AddDays(-90)), new DeviceInfo("A", false, Now.AddHours(-1)),
-            new DeviceInfo("B", true, Now), new DeviceInfo("C", false, Now.AddDays(-2))), "MAC", Now);
+        var many = DeviceMap.Build(Connected(new DeviceInfo("OLD", Now.AddDays(-90).AddDays(-30), Now.AddDays(-90), false), new DeviceInfo("A", Now.AddHours(-1).AddDays(-30), Now.AddHours(-1), false),
+            new DeviceInfo("B", Now.AddDays(-30), Now, true), new DeviceInfo("C", Now.AddDays(-2).AddDays(-30), Now.AddDays(-2), false)), "MAC", Now);
         Assert.Equal("B", many.Other.Name);
         Assert.Equal(2, many.MoreComputers);
         Assert.Equal("+2 more computers", many.MoreText);
@@ -61,7 +61,7 @@ public class OverviewAndHistoryTests
     [Fact]
     public void MapFlowsFollowTransfersAndTheOtherComputer()
     {
-        var uploading = Connected(new DeviceInfo("DESKTOP", true, Now)) with
+        var uploading = Connected(new DeviceInfo("DESKTOP", Now.AddDays(-30), Now, true)) with
         {
             Status = RunnerStatus.Syncing,
             CurrentPath = "a",
@@ -75,7 +75,7 @@ public class OverviewAndHistoryTests
         var mixed = uploading with { Active = [new ActiveTransfer("a", "upload", 1, 2), new ActiveTransfer("b", "download", 1, 2)] };
         Assert.Equal(LinkFlow.Both, DeviceMap.Build(mixed, "MAC", Now).HereFlow);
 
-        var heard = Connected(new DeviceInfo("DESKTOP", false, Now.AddMinutes(-3))) with
+        var heard = Connected(new DeviceInfo("DESKTOP", Now.AddMinutes(-3).AddDays(-30), Now.AddMinutes(-3), false)) with
         {
             HeardFrom = new Dictionary<string, DateTimeOffset> { ["DESKTOP"] = Now.AddSeconds(-2) },
         };
@@ -84,7 +84,7 @@ public class OverviewAndHistoryTests
         Assert.Equal("Sending changes", sending.Other.Detail);
         Assert.Equal(LinkFlow.Up, sending.OtherFlow);
 
-        var batch = Connected(new DeviceInfo("DESKTOP", true, Now)) with { WaitingFor = new PeerWait("DESKTOP", 340, 12) };
+        var batch = Connected(new DeviceInfo("DESKTOP", Now.AddDays(-30), Now, true)) with { WaitingFor = new PeerWait("DESKTOP", 340, 12) };
         Assert.Equal("Uploading 340 files", DeviceMap.Build(batch, "MAC", Now).Other.Detail);
     }
 

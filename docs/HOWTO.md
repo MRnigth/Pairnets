@@ -222,8 +222,8 @@ working meanwhile.
 ### The Tether window
 
 After setup the Tether window opens. A sidebar on the left switches between its pages:
-**Overview**, **Activity**, **History**, **Needs attention** (the number shows how many) and
-**Settings**. The buttons at the top right are always there: **Open folder**, **Pause**/**Resume**,
+**Overview**, **Activity**, **History**, **Devices**, **Needs attention** (the number shows how many)
+and **Settings**. The buttons at the top right are always there: **Open folder**, **Pause**/**Resume**,
 **Sync now**, and **⋯** for *View log* and *Report a bug*.
 
 ![Tether window while syncing](images/main-window-syncing-light.png)
@@ -266,6 +266,9 @@ the versions the server keeps (when each was replaced or deleted, and its size),
 computers within seconds; the version it replaces is kept in history too, so a restore can be undone.
 
 ![The History page](images/main-window-history-light.png)
+
+**Devices** lists every computer that uses your server, online or when it was last seen, with its
+system, Tether version and last change (see [Updates](#updates) for details).
 
 **Needs attention** lists conflict copies and files that cannot be synced, each with a **Show in
 folder** button, and the decision Tether is waiting for, if any.
@@ -574,6 +577,12 @@ orange when the server is older than your app. A server too old to say which ver
 **Old version**. The same line is in **Settings → Updates and speed**. The link under it opens the same window by hand: **Update
 server…** when the server is older, **Check for update** when it is up to date. It works even if you chose
 *Don't ask for this version*.
+
+**Devices.** The **Devices** page in the sidebar lists every computer that uses your server: a
+green dot when it is online, otherwise when it was last seen, plus its system, Tether version, its last
+change and when it was added. This computer is marked "(this computer)". The list needs a server from
+1.0.38 on; computers appear once they have connected to it. The overview's picture of your computers
+uses the same list.
 
 **Debug mode.** If updating the server does not work, turn on **Settings → Updates and speed → Debug
 mode**. Tether then writes more detail to its log, and the update window gets a **Details** box: every

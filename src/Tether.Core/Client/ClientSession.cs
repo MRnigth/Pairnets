@@ -61,6 +61,7 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
             var info = await Api.GetInfoAsync(CancellationToken.None).ConfigureAwait(false);
             Update(s => s with { Server = info });
             ServerInfoChanged?.Invoke(info);
+            await RefreshDevicesAsync().ConfigureAwait(false);
             return info;
         }
         catch (Exception ex) when (ex is TetherNetworkException or TetherAuthException or TetherProtocolException or ObjectDisposedException)
@@ -70,15 +71,15 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
     }
 
     /// <summary>
-    /// Re-reads which computers use the server and which are online (for the "this computer ⇄
-    /// server ⇄ other computer" picture). Failures are ignored; offline is shown elsewhere.
+    /// Reads the computers that use the server and which are online (the Devices page and the
+    /// overview's picture). Failures are ignored; offline is shown elsewhere.
     /// </summary>
     public async Task RefreshDevicesAsync()
     {
         try
         {
             var devices = await Api.GetDevicesAsync(CancellationToken.None).ConfigureAwait(false);
-            Update(s => s with { Devices = devices, DevicesUnsupported = devices is null });
+            Update(s => s with { Devices = devices ?? [], DevicesUnsupported = devices is null });
         }
         catch (Exception ex) when (ex is TetherNetworkException or TetherAuthException or TetherProtocolException or ObjectDisposedException or OperationCanceledException)
         {
@@ -261,10 +262,10 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
         Runner.PeerWaitChanged += wait => Update(s => s with { WaitingFor = wait });
         Runner.RemoteChangeReceived += (device, _) =>
         {
-            if (string.Equals(device, Settings.DeviceName, StringComparison.Ordinal))
+            if (string.Equals(device, Settings.DeviceName, StringComparison.OrdinalIgnoreCase))
                 return; // our own change echoed back
             var at = _clock.GetUtcNow();
-            Update(s => s with { HeardFrom = new Dictionary<string, DateTimeOffset>(s.HeardFrom, StringComparer.Ordinal) { [device] = at } });
+            Update(s => s with { HeardFrom = new Dictionary<string, DateTimeOffset>(s.HeardFrom, StringComparer.OrdinalIgnoreCase) { [device] = at } });
         };
         Runner.StatusChanged += (status, text) => Update(s => s with
         {
@@ -519,8 +520,18 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
                 catch (Exception ex) when (ex is TetherNetworkException or TetherProtocolException)
                 {
                 }
-                if (pending?.Updater?.State is not ("requested" or "running"))
-                    return new ServerUpdateResult(false, "An update was just requested. Wait a minute and try again.", before, CanUpdateItself: true);
+                switch (pending?.Updater?.State)
+                {
+                    case "succeeded":
+                        // The last click's update already finished: show its result instead of "too soon".
+                        trace("The update asked for a moment ago has already finished", LogLevel.Information);
+                        return new ServerUpdateResult(true, pending.Updater.Message ?? "Done.", pending.ServerVersion, CanUpdateItself: true,
+                            AlreadyUpToDate: !UpdateChecker.IsNewer(pending.ServerVersion, before));
+                    case "failed":
+                        return new ServerUpdateResult(false, pending.Updater.Message ?? "The update failed. Nothing was changed.", before, CanUpdateItself: true);
+                    case not ("requested" or "running"):
+                        return new ServerUpdateResult(false, "An update was just requested. Wait a minute and try again.", before, CanUpdateItself: true);
+                }
                 trace("An update asked for a moment ago is still under way; following it", LogLevel.Information);
                 break;
         }

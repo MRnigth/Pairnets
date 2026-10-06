@@ -67,7 +67,7 @@ the Tailscale ACL in [DEPLOY.md](docs/DEPLOY.md#tailscale-acl-only-your-two-pcs-
 Tether has a window with a sidebar: **Overview** (status, a picture of this computer, the server
 and your other computer with files moving between them, the current transfer, facts and recent
 activity), **Activity** (by day), **History** (get back deleted files and older versions with one
-click), **Needs attention** and **Settings**. Its icon sits in the notification area (Windows), menu
+click), **Devices**, **Needs attention** and **Settings**. Its icon sits in the notification area (Windows), menu
 bar (Mac) or system tray (Linux); clicking it opens a small quick panel with the same status at a
 glance. The icon is green when up to date, blue while syncing, grey when offline, orange when it
 needs your decision, red on errors, and yellow when paused. Closing the window keeps Tether syncing

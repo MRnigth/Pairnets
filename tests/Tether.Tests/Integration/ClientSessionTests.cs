@@ -272,6 +272,31 @@ public class ClientSessionTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task ASecondClickAfterTheUpdateFinishedShowsItsResult()
+    {
+        await _server.DisposeAsync();
+        using var dir = new TempDir("updater");
+        var script = Path.Combine(dir.Path, "update.sh");
+        File.WriteAllText(script, "#!/bin/sh\n");
+        _server = await TestServer.StartAsync(config: new() { ["Sync:UpdaterScript"] = script });
+        await using var session = Start();
+        await WaitUntil(() => session.Status.Server is not null, "server info");
+        var updateDir = Path.Combine(_server.Paths.DataDir, "update");
+
+        // The first click's update ran and found nothing newer; the second click is "too soon".
+        using (var http = _server.RawHttp(_server.Token))
+            Assert.Equal(HttpStatusCode.Accepted, (await http.PostAsync("api/update", null)).StatusCode);
+        File.WriteAllText(Path.Combine(updateDir, "status.json"),
+            $"{{\"state\":\"succeeded\",\"message\":\"Already up to date ({TetherInfo.ProductVersion}).\"}}");
+        File.Delete(Path.Combine(updateDir, "request"));
+
+        var result = await session.UpdateServerAsync(null, default, pollInterval: TimeSpan.FromMilliseconds(100), timeout: TimeSpan.FromSeconds(5));
+        Assert.True(result.Success);
+        Assert.True(result.AlreadyUpToDate);
+        Assert.StartsWith("Already up to date", result.Message);
+    }
+
+    [Fact]
     public async Task UpdateServerOnAClosedSessionExplainsInsteadOfThrowing()
     {
         // Saving Settings disposes the session; an update window opened before that used to crash here.

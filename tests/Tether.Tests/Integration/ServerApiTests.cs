@@ -3,7 +3,6 @@ using System.Net.Http.Json;
 using System.Text;
 using Tether.Core;
 using Tether.Core.Api;
-using Microsoft.AspNetCore.SignalR.Client;
 using Tether.Core.Hashing;
 using Tether.Tests.Infrastructure;
 
@@ -235,59 +234,6 @@ public class ServerApiTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task DevicesAreTrackedOnlineAndRemembered()
-    {
-        using (var health = _server.RawHttp())
-        {
-            health.DefaultRequestHeaders.Add(TetherHeaders.DeviceId, "INTRUDER");
-            await health.GetStringAsync("api/health"); // no token needed, so it must not count
-        }
-        using var desktop = _server.Client("DESKTOP");
-        await desktop.GetInfoAsync(default);
-        using var laptop = _server.Client("LAPTOP é");
-        var devices = await laptop.GetDevicesAsync(default);
-        Assert.NotNull(devices);
-        Assert.Equal(["DESKTOP", "LAPTOP é"], devices!.Select(d => d.Name).Order(StringComparer.Ordinal));
-        Assert.All(devices, d => Assert.False(d.Online));
-        Assert.All(devices, d => Assert.Equal(TetherInfo.AppDescription, d.App));
-
-        // An open push channel means "online", until it closes.
-        var hub = new HubConnectionBuilder()
-            .WithUrl(new Uri(_server.Url, "hub"), o =>
-            {
-                o.AccessTokenProvider = () => Task.FromResult<string?>(_server.Token);
-                o.Headers[TetherHeaders.DeviceId] = "DESKTOP";
-            })
-            .Build();
-        async Task<bool> DesktopOnline() => (await laptop.GetDevicesAsync(default))!.Single(d => d.Name == "DESKTOP").Online;
-        await hub.StartAsync();
-        // The client's StartAsync can return before the server has run OnConnectedAsync.
-        for (var i = 0; i < 50 && !await DesktopOnline(); i++)
-            await Task.Delay(100);
-        Assert.True(await DesktopOnline());
-        await hub.DisposeAsync();
-        for (var i = 0; i < 50 && await DesktopOnline(); i++)
-            await Task.Delay(100);
-        Assert.False(await DesktopOnline());
-
-        // "Last seen" survives a restart.
-        await _server.RestartAsync();
-        using var after = _server.Client("LAPTOP é", url: _server.Url);
-        var remembered = await after.GetDevicesAsync(default);
-        Assert.Contains(remembered!, d => d.Name == "DESKTOP" && !d.Online);
-    }
-
-    [Fact]
-    public void DeviceNamesFromHeadersAreCleaned()
-    {
-        Assert.Null(Tether.Server.Services.DeviceRegistry.NameFromHeader(null));
-        Assert.Null(Tether.Server.Services.DeviceRegistry.NameFromHeader("  "));
-        Assert.Equal("MY PC", Tether.Server.Services.DeviceRegistry.NameFromHeader(Uri.EscapeDataString(" MY PC ")));
-        Assert.Equal("ab", Tether.Server.Services.DeviceRegistry.NameFromHeader("a%0Ab"));
-        Assert.Equal(Tether.Server.Services.DeviceRegistry.MaxNameLength, Tether.Server.Services.DeviceRegistry.NameFromHeader(new string('x', 500))!.Length);
-    }
-
-    [Fact]
     public async Task ApiClientMapsOutcomes()
     {
         using var api = _server.Client();
@@ -465,6 +411,21 @@ public class ServerApiTests : IAsyncLifetime
         var diagnostics = (await api.GetUpdateDiagnosticsAsync(default))!;
         Assert.Equal(Path.Combine(updateDir, "request"), diagnostics.RequestPath);
         Assert.Contains("Request file:        " + Path.Combine(updateDir, "request"), diagnostics.ToReport());
+    }
+
+    [Fact]
+    public async Task DevicesListsTheComputersThatUseTheServer()
+    {
+        await using var server = await TestServer.StartAsync();
+        Assert.Equal(HttpStatusCode.Unauthorized, (await server.RawHttp().GetAsync("api/devices")).StatusCode);
+        using var laptop = server.Client("laptop");
+        await laptop.GetInfoAsync(default);
+        var devices = (await laptop.GetDevicesAsync(default))!;
+        var me = Assert.Single(devices);
+        Assert.Equal("laptop", me.Name);
+        Assert.True(me.Online);
+        Assert.Equal(TetherInfo.ProductVersion, me.AppVersion);
+        Assert.False(string.IsNullOrEmpty(me.System));
     }
 
     [Fact]

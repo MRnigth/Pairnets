@@ -116,6 +116,12 @@
               <TextBlock Text="History" VerticalAlignment="Center" />
             </StackPanel>
           </RadioButton>
+          <RadioButton x:Name="NavDevices" Style="{StaticResource Nav}" GroupName="page" Checked="OnNav">
+            <StackPanel Orientation="Horizontal">
+              <ui:LineIcon Data="{StaticResource I.Computer}" Margin="0,0,11,0" />
+              <TextBlock Text="Devices" VerticalAlignment="Center" />
+            </StackPanel>
+          </RadioButton>
           <RadioButton x:Name="NavAttention" Style="{StaticResource Nav}" GroupName="page" Checked="OnNav">
             <Grid>
               <Grid.ColumnDefinitions>
@@ -519,6 +525,52 @@
             </Border>
           </Grid>
         </Grid>
+
+        <!-- ============ Devices: every computer that uses the server ============ -->
+        <Border x:Name="DevicesPage" Style="{StaticResource Card}" Margin="28,18,28,24" Padding="8" Visibility="Collapsed">
+          <Grid>
+            <ScrollViewer x:Name="DevicesPanel" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Visibility="Collapsed">
+              <ItemsControl x:Name="DevicesList" Style="{StaticResource PlainList}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate DataType="{x:Type c:DeviceRow}">
+                    <Border Style="{StaticResource Row}" Padding="10" Loaded="OnRowLoaded">
+                      <Grid>
+                        <Grid.ColumnDefinitions>
+                          <ColumnDefinition Width="Auto" />
+                          <ColumnDefinition Width="*" />
+                          <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <Grid Width="40" Height="40" Margin="0,0,14,0">
+                          <Ellipse Fill="{DynamicResource T.Node}" Stroke="{DynamicResource T.NodeRing}" StrokeThickness="1.5" />
+                          <ui:LineIcon Width="20" Height="20" StrokeThickness="1.9" Stroke="{DynamicResource T.Text}" Data="{StaticResource I.Computer}" />
+                          <Ellipse x:Name="StateDot" Width="12" Height="12" HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                                   Stroke="{DynamicResource T.Card}" StrokeThickness="2.5" Fill="{StaticResource S.Grey}" />
+                        </Grid>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                          <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                          <TextBlock Text="{Binding Detail}" Style="{StaticResource MutedSmall}" TextTrimming="CharacterEllipsis" Margin="0,2,0,0" />
+                        </StackPanel>
+                        <Border Grid.Column="2" Style="{StaticResource Pill}" VerticalAlignment="Center" Margin="12,0,4,0">
+                          <TextBlock Text="{Binding StatusText}" FontSize="12" />
+                        </Border>
+                      </Grid>
+                    </Border>
+                    <DataTemplate.Triggers>
+                      <DataTrigger Binding="{Binding Online}" Value="True">
+                        <Setter TargetName="StateDot" Property="Fill" Value="{StaticResource S.Green}" />
+                      </DataTrigger>
+                    </DataTemplate.Triggers>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </ScrollViewer>
+            <StackPanel x:Name="DevicesEmpty" HorizontalAlignment="Center" VerticalAlignment="Center">
+              <ui:LineIcon Width="30" Height="30" StrokeThickness="1.6" Stroke="{DynamicResource T.Muted}" Data="{StaticResource I.Server}" HorizontalAlignment="Center" />
+              <TextBlock x:Name="DevicesEmptyText" Style="{StaticResource Muted}" TextWrapping="Wrap" TextAlignment="Center" MaxWidth="340" Margin="0,10,0,0"
+                         Text="Loading the computers that use your server…" />
+            </StackPanel>
+          </Grid>
+        </Border>
 
         <!-- ============ Needs attention ============ -->
         <ScrollViewer x:Name="AttentionPage" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Visibility="Collapsed">

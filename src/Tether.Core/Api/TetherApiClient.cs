@@ -41,7 +41,7 @@ public sealed class TetherApiClient : ITetherApi, IDisposable
         };
         _http.DefaultRequestHeaders.Add(TetherHeaders.Token, token);
         _http.DefaultRequestHeaders.Add(TetherHeaders.DeviceId, Uri.EscapeDataString(deviceId));
-        _http.DefaultRequestHeaders.Add(TetherHeaders.App, TetherInfo.AppDescription);
+        _http.DefaultRequestHeaders.Add(TetherHeaders.Client, TetherInfo.ClientDescription);
         _http.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("Tether", TetherInfo.ApiVersion.ToString(CultureInfo.InvariantCulture)));
     }
 
@@ -87,6 +87,17 @@ public sealed class TetherApiClient : ITetherApi, IDisposable
         return await ReadJsonAsync<ServerInfo>(resp, timeout, ct).ConfigureAwait(false);
     }
 
+    /// <summary>The computers that use this server, or null for a server from before the Devices list.</summary>
+    public async Task<IReadOnlyList<DeviceInfo>?> GetDevicesAsync(CancellationToken ct)
+    {
+        using var timeout = Linked(ct, TimeSpan.FromSeconds(30));
+        using var resp = await SendAsync(new HttpRequestMessage(HttpMethod.Get, "api/devices"), HttpCompletionOption.ResponseContentRead, timeout, ct).ConfigureAwait(false);
+        if ((int)resp.StatusCode is 404 or 405)
+            return null;
+        await ThrowForStatusAsync(resp).ConfigureAwait(false);
+        return await ReadJsonAsync<List<DeviceInfo>>(resp, timeout, ct).ConfigureAwait(false);
+    }
+
     /// <summary>The server's updater report (Debug mode), or null for a server from before it existed.</summary>
     public async Task<UpdaterDiagnostics?> GetUpdateDiagnosticsAsync(CancellationToken ct)
     {
@@ -96,17 +107,6 @@ public sealed class TetherApiClient : ITetherApi, IDisposable
             return null;
         await ThrowForStatusAsync(resp).ConfigureAwait(false);
         return await ReadJsonAsync<UpdaterDiagnostics>(resp, timeout, ct).ConfigureAwait(false);
-    }
-
-    /// <summary>The computers that use the server, or null for a server from before it kept track of them.</summary>
-    public async Task<IReadOnlyList<DeviceInfo>?> GetDevicesAsync(CancellationToken ct)
-    {
-        using var timeout = Linked(ct, TimeSpan.FromSeconds(30));
-        using var resp = await SendAsync(new HttpRequestMessage(HttpMethod.Get, "api/devices"), HttpCompletionOption.ResponseContentRead, timeout, ct).ConfigureAwait(false);
-        if ((int)resp.StatusCode is 404 or 405)
-            return null;
-        await ThrowForStatusAsync(resp).ConfigureAwait(false);
-        return await ReadJsonAsync<List<DeviceInfo>>(resp, timeout, ct).ConfigureAwait(false);
     }
 
     public enum ServerUpdateRequest { Requested, UpdaterMissing, TooSoon, NotSupported }

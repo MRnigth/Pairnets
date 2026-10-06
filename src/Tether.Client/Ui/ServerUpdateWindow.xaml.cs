@@ -140,7 +140,7 @@ public partial class ServerUpdateWindow : Window
         if (result.AlreadyUpToDate)
         {
             (brush, icon) = ("S.Green", "I.Check");
-            Heading.Text = "Your server is already up to date";
+            Heading.Text = "Your server is up to date";
             Explanation.Text = $"It runs {result.ServerVersion}, the newest release.";
         }
         else if (result.Success)

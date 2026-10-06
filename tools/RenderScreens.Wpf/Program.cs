@@ -63,6 +63,7 @@ public static class Program
         public void UpdateServer() { }
         public void ReportBug() { }
         public void RevealFile(string syncPath) { }
+        public void RefreshDevices() { }
         public void OpenWindow(MainPage page) { }
         public void Quit() { }
     }
@@ -110,8 +111,8 @@ public static class Program
         var server = new ServerInfo("id", 1, 1, "1.0.58", 412L << 30, 1L << 40);
         IReadOnlyList<DeviceInfo> devices =
         [
-            new("DESKTOP", true, utc, "Windows 1.0.58"),
-            new("LAPTOP", true, utc, "Windows 1.0.58"),
+            new("DESKTOP", utc.AddDays(-30), utc, true, "1.0.58", "Windows"),
+            new("LAPTOP", utc.AddDays(-30), utc, true, "1.0.58", "Windows"),
         ];
         window.ShowUpdate("Tether 1.0.58 is available", "You have 1.0.52. It takes about 10 seconds and Tether restarts by itself.", "Update now");
         window.ShowStatus(StatusSnapshot.Initial with
@@ -157,10 +158,13 @@ public static class Program
         window.ShowStatus(StatusSnapshot.Initial with
         {
             Status = RunnerStatus.Idle, Text = "Up to date", LastSyncAt = now.AddMinutes(-1), Server = server,
-            Devices = [new("DESKTOP", true, utc), new("LAPTOP", false, utc.AddHours(-3), "Windows 1.0.58")],
+            Devices = [new("DESKTOP", utc.AddDays(-30), utc, true), new("LAPTOP", utc.AddHours(-3).AddDays(-30), utc.AddHours(-3), false, "1.0.58", "Windows")],
         }, folder, "DESKTOP");
         window.Navigate(MainPage.Activity);
         Save(window, outDir, $"windows-main-activity-{suffix}.png", print);
+
+        window.Navigate(MainPage.Devices);
+        Save(window, outDir, $"windows-main-devices-{suffix}.png", print);
 
         window.Navigate(MainPage.History);
         window.LoadHistoryAsync().GetAwaiter().GetResult();

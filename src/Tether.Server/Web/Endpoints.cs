@@ -31,11 +31,11 @@ public static class Endpoints
                 "This server cannot update itself yet. Run the install command on the server once."),
         });
 
+        // The apps' Devices page and their "this computer ⇄ server ⇄ other computer" picture.
+        app.MapGet("/api/devices", (DeviceRegistry devices) => Json(devices.List()));
+
         // Debug mode in the apps: why an update did not happen (status, request, path unit, update.log).
         app.MapGet("/api/update/diagnostics", (ServerUpdater updater, SyncOptions options) => Json(updater.GetDiagnostics(options.Token)));
-
-        // The computers that use this server, for the apps' "this computer ⇄ server ⇄ other computer" picture.
-        app.MapGet("/api/devices", (DeviceRegistry devices) => Json(devices.List()));
 
         app.MapGet("/api/manifest", (HttpContext ctx, SyncStore store) =>
         {
@@ -149,6 +149,7 @@ public static class Endpoints
     private static async Task BroadcastAsync(HttpContext ctx, IHubContext<SyncHub> hub, string path)
     {
         var device = DeviceId(ctx);
+        ctx.RequestServices.GetRequiredService<DeviceRegistry>().Changed(device);
         try
         {
             await hub.Clients.All.SendAsync(SyncHub.ChangedMethod, device, path, CancellationToken.None);

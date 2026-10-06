@@ -172,17 +172,17 @@ what cannot lose or silently overwrite data.
 * **Server self-update** runs as root only through a systemd path unit that the unprivileged server
   triggers with an empty file, and only installs the newest official release after checking it.
   The server process never gets root. See SECURITY.md.
-* **New main window (sidebar).** The window has a sidebar (Overview, Activity, History, Needs
-  attention, Settings) instead of two tabs and a row of six equal buttons. Sync now, Pause and Open
+* **New main window (sidebar).** The window has a sidebar (Overview, Activity, History, Devices,
+  Needs attention, Settings) instead of three tabs and a row of six equal buttons. Sync now, Pause and Open
   folder stay at the top right; the log and bug report moved into a "⋯" menu. The app update is a
   card at the bottom of the sidebar instead of a banner over everything. Settings is a page; the
   first-time setup keeps its own window. Both apps (WPF and Avalonia) share the design, and all the
   logic behind it (the map, history lists, activity by day) is in Tether.Core.
-* **"This computer ⇄ server ⇄ other computer".** The server remembers which computers use it (the
-  name each sends, when it was last heard from, whether its push channel is open, and which app it
-  runs) in `devices.json`, so the overview can show the other computer as online or "last seen 3 h
-  ago" and animate files moving. It is display only: nothing in syncing depends on it. Names not
-  seen for 60 days are left out of the picture; the server keeps at most 32.
+* **"This computer ⇄ server ⇄ other computer".** The overview draws the computers from the same
+  list as the Devices page (`GET /api/devices`, kept by the server in `devices.json`), so it can show
+  the other computer as online or "last seen 3 h ago", and animates files moving from this computer's
+  transfers and the other computer's push messages. It is display only: nothing in syncing depends
+  on it. Computers not seen for 60 days are left out of the picture (the Devices page lists them all).
 * **History in the app.** The server already kept versions and had list/restore endpoints; the
   History page uses them, so getting a file back no longer needs SSH. "Deleted files" covers the
   last 30 days (the server's default retention). A restore is an ordinary new version, so it can be

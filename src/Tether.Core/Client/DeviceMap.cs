@@ -54,7 +54,7 @@ public sealed record DeviceMap(
     {
         var connected = s.IsConnected;
         var here = new MapNode(string.IsNullOrWhiteSpace(thisDevice) ? "This computer" : thisDevice, "This computer",
-            NodeState.Online, TetherInfo.AppDescription);
+            NodeState.Online, AppText(ThisSystem, TetherInfo.ProductVersion));
 
         var server = s.Server is null && !connected
             ? new MapNode("Server", s.Status == RunnerStatus.Offline ? "Can't reach it" : "Connecting…", s.Status == RunnerStatus.Offline ? NodeState.Offline : NodeState.Unknown)
@@ -75,7 +75,7 @@ public sealed record DeviceMap(
         var otherFlow = LinkFlow.None;
         if (connected && other.State == NodeState.Online)
         {
-            var sending = s.WaitingFor is { } w && w.Device == other.Name
+            var sending = s.WaitingFor is { } w && string.Equals(w.Device, other.Name, StringComparison.OrdinalIgnoreCase)
                           || s.HeardFrom.TryGetValue(other.Name, out var at) && now - at <= SendingWindow;
             var receiving = hereFlow is LinkFlow.Up or LinkFlow.Both;
             otherFlow = sending && receiving ? LinkFlow.Both : sending ? LinkFlow.Up : receiving ? LinkFlow.Down : LinkFlow.None;
@@ -92,9 +92,9 @@ public sealed record DeviceMap(
             return (new MapNode("Other computer", s.IsConnected ? "Looking…" : "Unknown while offline", NodeState.Unknown), 0);
 
         var others = s.Devices
-            .Where(d => !string.Equals(d.Name, thisDevice, StringComparison.Ordinal) && (d.Online || now - d.LastSeenUtc <= ForgetAfter))
+            .Where(d => !string.Equals(d.Name, thisDevice, StringComparison.OrdinalIgnoreCase) && (d.Online || now - d.LastSeen <= ForgetAfter))
             .OrderByDescending(d => d.Online || s.HeardFrom.ContainsKey(d.Name))
-            .ThenByDescending(d => d.LastSeenUtc)
+            .ThenByDescending(d => d.LastSeen)
             .ToList();
         if (others.Count == 0)
             return (new MapNode("Your other computer", "Not connected yet", NodeState.Unknown, "Install Tether on it and use the same server and token."), 0);
@@ -103,12 +103,24 @@ public sealed record DeviceMap(
         // A change that just arrived from it means it is online, even before the next poll says so.
         var online = d.Online || (s.HeardFrom.TryGetValue(d.Name, out var heard) && now - heard <= TimeSpan.FromMinutes(1));
         string detail;
-        if (s.WaitingFor is { } wait && wait.Device == d.Name)
+        if (s.WaitingFor is { } wait && string.Equals(wait.Device, d.Name, StringComparison.OrdinalIgnoreCase))
             detail = $"Uploading {wait.Count} files";
         else if (online)
             detail = s.HeardFrom.TryGetValue(d.Name, out var at) && now - at <= SendingWindow ? "Sending changes" : "Online";
         else
-            detail = "Last seen " + Format.RelativeTime(d.LastSeenUtc, now);
-        return (new MapNode(d.Name, detail, online ? NodeState.Online : NodeState.Offline, d.App), others.Count - 1);
+            detail = "Last seen " + Format.RelativeTime(d.LastSeen, now);
+        return (new MapNode(d.Name, detail, online ? NodeState.Online : NodeState.Offline, AppText(d.System, d.AppVersion)), others.Count - 1);
     }
+
+    private static string ThisSystem => OperatingSystem.IsWindows() ? "Windows" : OperatingSystem.IsMacOS() ? "macOS" : "Linux";
+
+    /// <summary>"Windows · Tether 1.0.58" (the tooltip on a computer's name), or null when the server does not say.</summary>
+    private static string? AppText(string? system, string? version) =>
+        (system, version) switch
+        {
+            ({ Length: > 0 } sys, { Length: > 0 } v) => $"{sys} · Tether {v}",
+            ({ Length: > 0 } sys, _) => sys,
+            (_, { Length: > 0 } v) => "Tether " + v,
+            _ => null,
+        };
 }

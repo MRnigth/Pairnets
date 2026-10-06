@@ -86,6 +86,12 @@
               <TextBlock Text="History" VerticalAlignment="Center" />
             </StackPanel>
           </RadioButton>
+          <RadioButton x:Name="NavDevices" Classes="nav" GroupName="page" IsCheckedChanged="OnNav">
+            <StackPanel Orientation="Horizontal" Spacing="11">
+              <v:LineIcon Classes="icon" Width="18" Height="18" Data="{StaticResource I.Computer}" />
+              <TextBlock Text="Devices" VerticalAlignment="Center" />
+            </StackPanel>
+          </RadioButton>
           <RadioButton x:Name="NavAttention" Classes="nav" GroupName="page" IsCheckedChanged="OnNav">
             <Grid ColumnDefinitions="Auto,*,Auto">
               <v:LineIcon Classes="icon" Width="18" Height="18" Data="{StaticResource I.Warning}" />
@@ -413,6 +419,44 @@
             </Border>
           </Grid>
         </Grid>
+
+        <!-- ============ Devices: every computer that uses the server ============ -->
+        <Border x:Name="DevicesPage" Classes="card" Margin="28,18,28,24" Padding="8" IsVisible="False">
+          <Grid>
+            <ScrollViewer x:Name="DevicesPanel" IsVisible="False">
+              <ItemsControl x:Name="DevicesList">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate DataType="c:DeviceRow">
+                    <Border Classes="row enter" Padding="10,10">
+                      <Grid ColumnDefinitions="Auto,*,Auto">
+                        <Panel Width="40" Height="40" Margin="0,0,14,0">
+                          <Ellipse Classes="ring" />
+                          <v:LineIcon Classes="icon" Width="20" Height="20" StrokeThickness="1.9" Data="{StaticResource I.Computer}" />
+                          <Ellipse Classes="dot" Width="12" Height="12" HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                                   Fill="{StaticResource S.Green}" IsVisible="{Binding Online}" />
+                          <Ellipse Classes="dot" Width="12" Height="12" HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                                   Fill="{StaticResource S.Grey}" IsVisible="{Binding !Online}" />
+                        </Panel>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                          <TextBlock Text="{Binding Title}" Classes="strong" TextTrimming="CharacterEllipsis" />
+                          <TextBlock Text="{Binding Detail}" Classes="muted small" TextTrimming="CharacterEllipsis" />
+                        </StackPanel>
+                        <Border Grid.Column="2" Classes="pill" VerticalAlignment="Center" Margin="12,0,4,0">
+                          <TextBlock Text="{Binding StatusText}" FontSize="12" />
+                        </Border>
+                      </Grid>
+                    </Border>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </ScrollViewer>
+            <StackPanel x:Name="DevicesEmpty" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="10">
+              <v:LineIcon Classes="icon muted" Width="30" Height="30" StrokeThickness="1.6" Data="{StaticResource I.Server}" HorizontalAlignment="Center" />
+              <TextBlock x:Name="DevicesEmptyText" Classes="muted" TextWrapping="Wrap" TextAlignment="Center" MaxWidth="340"
+                         Text="Loading the computers that use your server…" />
+            </StackPanel>
+          </Grid>
+        </Border>
 
         <!-- ============ Needs attention ============ -->
         <ScrollViewer x:Name="AttentionPage" IsVisible="False">

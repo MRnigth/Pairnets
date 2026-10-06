@@ -19,6 +19,7 @@ public enum MainPage
     Overview,
     Activity,
     History,
+    Devices,
     Attention,
     Settings,
 }
@@ -39,6 +40,9 @@ public interface IMainActions
     void DownloadNow();
     void UpdateServer();
     void ReportBug();
+
+    /// <summary>The Devices page was opened: ask the server for the current list.</summary>
+    void RefreshDevices();
 
     /// <summary>Shows a synced file in Explorer (or the folder, when the file is gone).</summary>
     void RevealFile(string syncPath);
@@ -61,6 +65,8 @@ public partial class MainWindow : Window
     private readonly ObservableCollection<ActiveFileView> _active = [];
     private readonly ObservableCollection<ServerFile> _shownFiles = [];
     private readonly ObservableCollection<VersionRow> _versions = [];
+    private readonly ObservableCollection<DeviceRow> _devices = [];
+    private IReadOnlyList<DeviceInfo>? _shownDevices;
     private IReadOnlyList<ActivityItem> _activityItems = [];
     private IReadOnlyList<ServerFile>? _serverFiles;
     private DateTimeOffset _serverFilesAt;
@@ -84,6 +90,7 @@ public partial class MainWindow : Window
         ActiveList.ItemsSource = _active;
         FileList.ItemsSource = _shownFiles;
         VersionList.ItemsSource = _versions;
+        DevicesList.ItemsSource = _devices;
         AppVersion.Text = "Tether " + TetherInfo.ProductVersion;
         AppIcon.Source = AppIcons.Large;
         IsVisibleChanged += (_, _) =>
@@ -98,6 +105,9 @@ public partial class MainWindow : Window
     public bool AllowClose { get; set; }
 
     public MainPage Page { get; private set; } = MainPage.Overview;
+
+    /// <summary>This computer's name, marked in the Devices list and shown first in the overview's picture.</summary>
+    public string? ThisDevice { get; set; }
 
     protected override void OnClosing(CancelEventArgs e)
     {
@@ -129,6 +139,7 @@ public partial class MainWindow : Window
     {
         MainPage.Activity => NavActivity,
         MainPage.History => NavHistory,
+        MainPage.Devices => NavDevices,
         MainPage.Attention => NavAttention,
         MainPage.Settings => NavSettings,
         _ => NavOverview,
@@ -140,6 +151,7 @@ public partial class MainWindow : Window
             return; // Checked also fires during InitializeComponent
         var page = nav == NavActivity ? MainPage.Activity
             : nav == NavHistory ? MainPage.History
+            : nav == NavDevices ? MainPage.Devices
             : nav == NavAttention ? MainPage.Attention
             : nav == NavSettings ? MainPage.Settings
             : MainPage.Overview;
@@ -160,6 +172,7 @@ public partial class MainWindow : Window
         {
             MainPage.Activity => ("Activity", "What synced recently, newest first. Right-click a file for more."),
             MainPage.History => ("History", "Get back deleted files and older versions. The server keeps them for 30 days."),
+            MainPage.Devices => ("Devices", "Every computer that uses your server: online now, or when it was last seen."),
             MainPage.Attention => ("Needs attention", "Things Tether can't decide for you."),
             MainPage.Settings => ("Settings", "Your server, the folder, and how Tether behaves."),
             _ => ("Overview", string.Empty),
@@ -168,7 +181,7 @@ public partial class MainWindow : Window
         foreach (var (element, shown) in new (FrameworkElement, MainPage)[]
                  {
                      (OverviewPage, MainPage.Overview), (ActivityPage, MainPage.Activity), (HistoryPage, MainPage.History),
-                     (AttentionPage, MainPage.Attention), (SettingsPage, MainPage.Settings),
+                     (DevicesPage, MainPage.Devices), (AttentionPage, MainPage.Attention), (SettingsPage, MainPage.Settings),
                  })
         {
             var visible = shown == page;
@@ -178,6 +191,8 @@ public partial class MainWindow : Window
         }
         if (page == MainPage.Activity)
             LiveLists.Sync(_activityRows, ActivityDays.Rows(_activityItems, DateTimeOffset.Now));
+        if (page == MainPage.Devices)
+            _actions?.RefreshDevices();
         if (page == MainPage.History && (_serverFiles is null || DateTimeOffset.Now - _serverFilesAt > HistoryFreshFor))
             _ = LoadHistoryAsync();
         UpdatePanels();
@@ -197,6 +212,10 @@ public partial class MainWindow : Window
 
     public void ShowStatus(StatusSnapshot s, string? folder, string? device = null)
     {
+        if (device is not null)
+            ThisDevice = device;
+        device ??= ThisDevice;
+        ShowDevices(s);
         var (brush, icon) = s.IsWaiting ? ("S.Grey", "I.Wait") : Visuals.ForStatus(s.Status);
         StatusBadge.SetResourceReference(Shape.FillProperty, brush);
         StatusGlyph.Data = Visuals.Resource<Geometry>(icon);
@@ -253,6 +272,22 @@ public partial class MainWindow : Window
             Motion.Glide(WaitProgress, s.WaitingPercent ?? 0);
             WaitText.Text = s.WaitingProgressText;
         }
+    }
+
+    /// <summary>The Devices page: rebuilt when the server sends a new list.</summary>
+    private void ShowDevices(StatusSnapshot s)
+    {
+        if (s.DevicesUnsupported)
+            DevicesEmptyText.Text = "Update the server to see the computers that use it.";
+        if (ReferenceEquals(s.Devices, _shownDevices) || s.Devices is null)
+            return;
+        _shownDevices = s.Devices;
+        _devices.Clear();
+        foreach (var row in DeviceRow.From(s.Devices, ThisDevice, DateTimeOffset.UtcNow))
+            _devices.Add(row);
+        if (s.Devices.Count == 0 && !s.DevicesUnsupported)
+            DevicesEmptyText.Text = "No computers have used this server yet.";
+        UpdatePanels();
     }
 
     /// <summary>A soft wash of the status colour across the top of the status card.</summary>
@@ -339,6 +374,8 @@ public partial class MainWindow : Window
         RecentEmpty.Visibility = Show(_recent.Count == 0);
         AttentionList.Visibility = Show(_attention.Count > 0);
         AttentionEmpty.Visibility = Show(_attention.Count == 0);
+        DevicesPanel.Visibility = Show(_devices.Count > 0);
+        DevicesEmpty.Visibility = Show(_devices.Count == 0);
     }
 
     private static Visibility Show(bool visible) => visible ? Visibility.Visible : Visibility.Collapsed;

@@ -99,8 +99,8 @@ public sealed record StatusSnapshot(
     // ---- the other computers
 
     /// <summary>
-    /// The computers that use the server (this one included), or null before the first answer and
-    /// from a server too old to say (<see cref="DevicesUnsupported"/>).
+    /// The computers that use the server, this one included (the Devices page and the overview's
+    /// picture), or null before the first answer; empty from a server too old to say (<see cref="DevicesUnsupported"/>).
     /// </summary>
     public IReadOnlyList<DeviceInfo>? Devices { get; init; }
 
@@ -110,7 +110,7 @@ public sealed record StatusSnapshot(
     /// <summary>When a change last arrived from each other computer (by device name).</summary>
     public IReadOnlyDictionary<string, DateTimeOffset> HeardFrom { get; init; } = System.Collections.ObjectModel.ReadOnlyDictionary<string, DateTimeOffset>.Empty;
 
-        // ---- the server
+    // ---- the server
 
     /// <summary>Last known server info (version, free space, updater), or null before the first answer.</summary>
     public ServerInfo? Server { get; init; }
