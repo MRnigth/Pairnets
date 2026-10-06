@@ -404,7 +404,7 @@ public class TwoDeviceSyncTests : IAsyncLifetime
             while ((seen = Volatile.Read(ref peak)) < now && Interlocked.CompareExchange(ref peak, now, seen) != seen)
             {
             }
-            await Task.Delay(30);
+            await Task.Delay(250); // long enough that all four overlap, even on a slow test machine
             Interlocked.Decrement(ref inFlight);
         }
         _desktop.Hooks.BeforeTransfer = Track;
