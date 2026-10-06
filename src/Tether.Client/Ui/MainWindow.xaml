@@ -94,7 +94,20 @@
               </StackPanel>
             </StackPanel>
           </Border>
-          <TextBlock x:Name="AppVersion" Style="{StaticResource MutedSmall}" Margin="10,0,0,0" />
+          <Grid>
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBlock x:Name="AppVersion" Style="{StaticResource MutedSmall}" Margin="10,0,0,0" VerticalAlignment="Center" />
+            <RadioButton x:Name="NavSettings" Grid.Column="1" Style="{StaticResource Nav}" GroupName="page" Margin="0"
+                         ToolTip="Settings" Checked="OnNav">
+              <StackPanel Orientation="Horizontal">
+                <ui:LineIcon Data="{StaticResource I.Settings}" Width="16" Height="16" Margin="0,0,7,0" />
+                <TextBlock Text="Settings" FontSize="12.5" VerticalAlignment="Center" />
+              </StackPanel>
+            </RadioButton>
+          </Grid>
         </StackPanel>
 
         <StackPanel>
@@ -136,12 +149,6 @@
                            HorizontalAlignment="Center" VerticalAlignment="Center" />
               </Border>
             </Grid>
-          </RadioButton>
-          <RadioButton x:Name="NavSettings" Style="{StaticResource Nav}" GroupName="page" Checked="OnNav">
-            <StackPanel Orientation="Horizontal">
-              <ui:LineIcon Data="{StaticResource I.Settings}" Margin="0,0,11,0" />
-              <TextBlock Text="Settings" VerticalAlignment="Center" />
-            </StackPanel>
           </RadioButton>
         </StackPanel>
       </DockPanel>

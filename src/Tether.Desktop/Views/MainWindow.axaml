@@ -64,7 +64,16 @@
               </StackPanel>
             </StackPanel>
           </Border>
-          <TextBlock x:Name="AppVersion" Classes="muted small" Margin="10,0,0,0" />
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBlock x:Name="AppVersion" Classes="muted small" Margin="10,0,0,0" VerticalAlignment="Center" />
+            <RadioButton x:Name="NavSettings" Grid.Column="1" Classes="nav" GroupName="page"
+                         ToolTip.Tip="Settings" IsCheckedChanged="OnNav">
+              <StackPanel Orientation="Horizontal" Spacing="7">
+                <v:LineIcon Classes="icon" Width="16" Height="16" Data="{StaticResource I.Settings}" />
+                <TextBlock Text="Settings" FontSize="12.5" VerticalAlignment="Center" />
+              </StackPanel>
+            </RadioButton>
+          </Grid>
         </StackPanel>
 
         <StackPanel Spacing="3">
@@ -101,12 +110,6 @@
                            HorizontalAlignment="Center" VerticalAlignment="Center" />
               </Border>
             </Grid>
-          </RadioButton>
-          <RadioButton x:Name="NavSettings" Classes="nav" GroupName="page" IsCheckedChanged="OnNav">
-            <StackPanel Orientation="Horizontal" Spacing="11">
-              <v:LineIcon Classes="icon" Width="18" Height="18" Data="{StaticResource I.Settings}" />
-              <TextBlock Text="Settings" VerticalAlignment="Center" />
-            </StackPanel>
           </RadioButton>
         </StackPanel>
       </DockPanel>
