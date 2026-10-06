@@ -11,6 +11,8 @@ public partial class DeviceMapView : UserControl
 {
     public static readonly StyledProperty<bool> CompactProperty = AvaloniaProperty.Register<DeviceMapView, bool>(nameof(Compact));
 
+    private NodeState? _otherState;
+
     public DeviceMapView()
     {
         InitializeComponent();
@@ -46,6 +48,12 @@ public partial class DeviceMapView : UserControl
         HereLine.Flow = map.HereFlow;
         OtherLine.Linked = map.OtherLinked;
         OtherLine.Flow = map.OtherFlow;
+        if (_otherState == NodeState.Offline && map.Other.State == NodeState.Online)
+        {
+            Motion.Once(OtherDot, "pop"); // the other computer just came online
+            Motion.Once(OtherRipple, "ripple");
+        }
+        _otherState = map.Other.State;
     }
 
     private static void ShowNode(MapNode node, Ellipse ring, Ellipse dot, TextBlock name, TextBlock detail)
@@ -63,4 +71,5 @@ public partial class DeviceMapView : UserControl
     internal string OtherText => $"{OtherName.Text}: {OtherDetail.Text}";
     internal bool HereFlowing => HereLine.IsFlowing;
     internal bool OtherFlowing => OtherLine.IsFlowing;
+    internal int OtherArrivals => Motion.Plays(OtherRipple, "ripple");
 }

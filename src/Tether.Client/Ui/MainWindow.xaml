@@ -186,7 +186,7 @@
           </Button>
           <Button Style="{StaticResource AccentButton}" Margin="0,0,8,0" Click="OnSyncNow">
             <StackPanel Orientation="Horizontal">
-              <ui:LineIcon Style="{StaticResource ToolIcon}" Stroke="White" Data="{StaticResource I.Sync}" />
+              <ui:LineIcon x:Name="SyncNowGlyph" Style="{StaticResource ToolIcon}" Stroke="White" Data="{StaticResource I.Sync}" />
               <TextBlock Text="Sync now" />
             </StackPanel>
           </Button>
@@ -217,6 +217,7 @@
                       <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
                     <Grid x:Name="StatusBadgeHost" Width="48" Height="48" VerticalAlignment="Center" Margin="0,0,16,0">
+                      <Ellipse x:Name="StatusRipple" Style="{StaticResource Wave}" />
                       <Ellipse x:Name="StatusBadge" Fill="{StaticResource S.Grey}" />
                       <ui:LineIcon x:Name="StatusGlyph" Width="23" Height="23" StrokeThickness="2.6" Stroke="White" Data="{StaticResource I.CloudOff}" />
                     </Grid>
@@ -247,6 +248,7 @@
                     </StackPanel>
                   </StackPanel>
                 </StackPanel>
+                <ui:Confetti x:Name="Celebration" Origin="46,44" />
               </Grid>
             </Border>
 
@@ -258,7 +260,7 @@
                   <ColumnDefinition Width="*" />
                   <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
-                <ui:LineIcon Width="18" Height="18" Stroke="{DynamicResource T.WarnText}" Data="{StaticResource I.Warning}" Margin="0,0,10,0" VerticalAlignment="Center" />
+                <ui:LineIcon x:Name="AttentionCalloutIcon" Width="18" Height="18" Stroke="{DynamicResource T.WarnText}" Data="{StaticResource I.Warning}" Margin="0,0,10,0" VerticalAlignment="Center" />
                 <TextBlock x:Name="AttentionCalloutText" Grid.Column="1" FontWeight="SemiBold" Foreground="{DynamicResource T.WarnText}" VerticalAlignment="Center" />
                 <Button Grid.Column="2" Style="{StaticResource SubtleButton}" Content="Review" Click="OnReviewAttention" />
               </Grid>

@@ -72,7 +72,9 @@ public partial class MainWindow : Window
     private DateTimeOffset _serverFilesAt;
     private CancellationTokenSource? _versionsCts;
     private string? _selectAfterLoad;
+    private readonly StatusMoments _moments = new();
     private string? _shownState;
+    private int? _attentionCount;
     private string? _tintKey;
     private bool _navigating;
     private bool _deletedMode = true;
@@ -108,6 +110,9 @@ public partial class MainWindow : Window
 
     /// <summary>This computer's name, marked in the Devices list and shown first in the overview's picture.</summary>
     public string? ThisDevice { get; set; }
+
+    /// <summary>Called after first-time setup: confetti when that first sync finishes (if the window is watching).</summary>
+    public void ExpectFirstSync() => _moments.ExpectFirstSync();
 
     protected override void OnClosing(CancelEventArgs e)
     {
@@ -326,7 +331,8 @@ public partial class MainWindow : Window
 
     /// <summary>
     /// Motion for the status badge: the sync glyph turns while syncing, the badge breathes while
-    /// waiting for the other computer, and it pops once whenever the state changes.
+    /// waiting for the other computer, and it pops once whenever the state changes. A ring ripples
+    /// out when a sync that moved files is done, and the first sync after setup gets confetti.
     /// </summary>
     private void Animate(StatusSnapshot s)
     {
@@ -336,6 +342,12 @@ public partial class MainWindow : Window
         if (_shownState is not null && _shownState != state && !s.IsWaiting)
             Motion.Pop(StatusBadgeHost);
         _shownState = state;
+        var moment = _moments.Next(s);
+        if (moment == StatusMoment.None || !IsVisible)
+            return;
+        Motion.Ripple(StatusRipple);
+        if (moment == StatusMoment.FirstSync)
+            Celebration.Burst();
     }
 
     private void StopMotion()
@@ -344,6 +356,8 @@ public partial class MainWindow : Window
         Motion.Pulse(StatusBadgeHost, false);
         Motion.Travel(TransferArrow, null);
         Motion.Bob(UpdateIcon, false);
+        Celebration.Stop();
+        _moments.Reset(); // nothing celebrates late when the window comes back
         _shownState = null;
     }
 
@@ -355,6 +369,12 @@ public partial class MainWindow : Window
 
     public void ShowAttention(IReadOnlyList<AttentionItem> items)
     {
+        if (items.Count > _attentionCount)
+        {
+            Motion.Pop(AttentionBadge); // something new needs you
+            Motion.Wiggle(AttentionCalloutIcon);
+        }
+        _attentionCount = items.Count;
         _attention.Clear();
         foreach (var item in items)
             _attention.Add(item);
@@ -561,6 +581,9 @@ public partial class MainWindow : Window
         RestoreMessage.SetResourceReference(Border.BackgroundProperty, error is null ? "T.OkPill" : "T.BadPill");
         RestoreMessageText.SetResourceReference(TextBlock.ForegroundProperty, error is null ? "T.OkText" : "T.BadText");
         RestoreMessageText.Text = message;
+        Motion.Enter(RestoreMessage);
+        if (error is null)
+            Motion.Pop(DetailStatePill); // "Current version" again
     }
 
     /// <summary>Selects a row in the History list (the screenshot tool).</summary>
@@ -570,7 +593,11 @@ public partial class MainWindow : Window
     public string MapOtherText => Map.OtherText;
 
     private void OnFix(object sender, RoutedEventArgs e) => _actions?.FixBlocked();
-    private void OnSyncNow(object sender, RoutedEventArgs e) => _actions?.SyncNow();
+    private void OnSyncNow(object sender, RoutedEventArgs e)
+    {
+        Motion.TurnOnce(SyncNowGlyph);
+        _actions?.SyncNow();
+    }
     private void OnPause(object sender, RoutedEventArgs e) => _actions?.TogglePause();
     private void OnOpenFolder(object sender, RoutedEventArgs e) => _actions?.OpenFolder();
     private void OnViewLog(object sender, RoutedEventArgs e) => _actions?.ViewLog();

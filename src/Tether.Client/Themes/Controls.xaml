@@ -94,15 +94,21 @@
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="Button">
-          <Border x:Name="bd" Background="{TemplateBinding Background}" CornerRadius="8" Padding="{TemplateBinding Padding}">
+          <Border x:Name="bd" Background="{TemplateBinding Background}" CornerRadius="8" Padding="{TemplateBinding Padding}" RenderTransformOrigin="0.5,0.5">
             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" TextElement.Foreground="{TemplateBinding Foreground}" />
           </Border>
           <ControlTemplate.Triggers>
             <Trigger Property="IsMouseOver" Value="True">
               <Setter TargetName="bd" Property="Background" Value="{Binding Tag, RelativeSource={RelativeSource TemplatedParent}}" />
             </Trigger>
+            <!-- Dips a little while held, like the Mac/Linux app (its Fluent theme does the same). -->
             <Trigger Property="IsPressed" Value="True">
               <Setter TargetName="bd" Property="Opacity" Value="0.85" />
+              <Setter TargetName="bd" Property="RenderTransform">
+                <Setter.Value>
+                  <ScaleTransform ScaleX="0.98" ScaleY="0.98" />
+                </Setter.Value>
+              </Setter>
             </Trigger>
             <Trigger Property="IsEnabled" Value="False">
               <Setter TargetName="bd" Property="Opacity" Value="0.5" />
@@ -402,6 +408,13 @@
     <Setter Property="BorderBrush" Value="{DynamicResource T.Border}" />
     <Setter Property="BorderThickness" Value="1" />
     <Setter Property="CornerRadius" Value="16" />
+  </Style>
+  <!-- Behind a badge or a circle: invisible until Motion.Ripple plays on it. -->
+  <Style x:Key="Wave" TargetType="Ellipse">
+    <Setter Property="Stroke" Value="{StaticResource S.Green}" />
+    <Setter Property="StrokeThickness" Value="2.5" />
+    <Setter Property="Opacity" Value="0" />
+    <Setter Property="IsHitTestVisible" Value="False" />
   </Style>
   <Style x:Key="Tile" TargetType="Border">
     <Setter Property="Background" Value="{DynamicResource T.Card}" />

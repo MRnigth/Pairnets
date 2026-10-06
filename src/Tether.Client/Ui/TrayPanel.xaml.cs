@@ -27,6 +27,7 @@ public partial class TrayPanel : Window
 {
     private readonly ITrayActions? _actions;
     private readonly ObservableCollection<ActivityItem> _recent = [];
+    private readonly StatusMoments _moments = new();
     private string? _tintKey;
     private bool _menuOpen;
 
@@ -53,8 +54,10 @@ public partial class TrayPanel : Window
         };
         IsVisibleChanged += (_, _) =>
         {
-            if (!IsVisible)
-                Motion.Spin(StatusGlyph, false);
+            if (IsVisible)
+                return;
+            Motion.Spin(StatusGlyph, false);
+            _moments.Reset(); // nothing celebrates late when the panel opens again
         };
     }
 
@@ -78,29 +81,35 @@ public partial class TrayPanel : Window
         var w = ActualWidth;
         var h = ActualHeight;
         const double gap = 2;
-        double x, y;
+        const double slide = 10; // it slides in from the taskbar's side
+        double x, y, dx = 0, dy = 0;
         if (workArea.Bottom < bounds.Bottom || (workArea.Top == bounds.Top && workArea.Left == bounds.Left && workArea.Right == bounds.Right))
         {
             x = a.X - w / 2; // taskbar at the bottom (or hidden): above it
             y = area.Bottom - h - gap;
+            dy = slide;
         }
         else if (workArea.Top > bounds.Top)
         {
             x = a.X - w / 2;
             y = area.Top + gap;
+            dy = -slide;
         }
         else if (workArea.Left > bounds.Left)
         {
             x = area.Left + gap;
             y = a.Y - h / 2;
+            dx = -slide;
         }
         else
         {
             x = area.Right - w - gap;
             y = a.Y - h / 2;
+            dx = slide;
         }
         Left = Math.Clamp(x, area.Left, Math.Max(area.Left, area.Right - w));
         Top = Math.Clamp(y, area.Top, Math.Max(area.Top, area.Bottom - h));
+        Motion.Arrive(Card, dx, dy);
         Activate();
     }
 
@@ -110,6 +119,8 @@ public partial class TrayPanel : Window
         StatusBadge.SetResourceReference(Shape.FillProperty, brush);
         StatusGlyph.Data = Visuals.Resource<Geometry>(icon);
         Motion.Spin(StatusGlyph, IsVisible && s.Status == Tether.Core.Sync.RunnerStatus.Syncing && !s.IsWaiting);
+        if (_moments.Next(s) != StatusMoment.None && IsVisible)
+            Motion.Ripple(StatusRipple); // a sync that moved files is done
         if (_tintKey != brush)
         {
             _tintKey = brush;

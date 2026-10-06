@@ -12,7 +12,7 @@
   </Window.Resources>
 
   <!-- The quick look that opens from the tray icon. The margin leaves room for the shadow. -->
-  <Border Style="{StaticResource Panel}" Margin="10">
+  <Border x:Name="Card" Style="{StaticResource Panel}" Margin="10">
     <Border.Effect>
       <DropShadowEffect BlurRadius="24" ShadowDepth="6" Direction="270" Opacity="0.22" />
     </Border.Effect>
@@ -26,6 +26,7 @@
             <ColumnDefinition Width="Auto" />
           </Grid.ColumnDefinitions>
           <Grid x:Name="StatusBadgeHost" Width="38" Height="38" VerticalAlignment="Top" Margin="0,0,12,0">
+            <Ellipse x:Name="StatusRipple" Style="{StaticResource Wave}" />
             <Ellipse x:Name="StatusBadge" Fill="{StaticResource S.Grey}" />
             <ui:LineIcon x:Name="StatusGlyph" Width="19" Height="19" StrokeThickness="2.6" Stroke="White" Data="{StaticResource I.CloudOff}" />
           </Grid>

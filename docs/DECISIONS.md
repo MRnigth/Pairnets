@@ -191,3 +191,11 @@ what cannot lose or silently overwrite data.
   OneDrive or Dropbox); double-click opens the window. On macOS Avalonia's menu-bar icon only ever
   shows its menu (it reports no clicks), so the panel opens from "Quick status…" in that menu; on
   Linux a click opens it where the desktop reports clicks.
+* **Celebrate moments, don't add motion.** Tether sits in the tray all day, so the only new
+  animations are short and play once, at moments that matter: a ring ripples out of the status
+  badge when a sync that moved files is done (a pass that moved nothing is not a moment), the
+  other computer's dot pops in when it comes online, the warning wiggles when more things need
+  attention, a restored file's status pops, and confetti marks the first sync after setup (only
+  then, and only if the window is open to see it). When these play is decided in
+  `StatusMoments` (Tether.Core), so both apps behave the same. On Windows they follow the
+  "show animations" setting like the rest.

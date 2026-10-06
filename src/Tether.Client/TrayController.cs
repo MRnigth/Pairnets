@@ -417,6 +417,7 @@ public sealed class TrayController : ITrayActions, IDisposable
             return;
         ApplySettings(window.Result, window.PlainToken);
         ShowMainWindow();
+        _window?.ExpectFirstSync(); // confetti when the first sync is done
     }
 
     private void ShowSettingsPage()

@@ -220,8 +220,8 @@ public static class Program
         window.Show();
     }
 
-    /// <summary>Runs the dispatcher (and so the animations) for a moment: pages and rows fade in.</summary>
-    private static void Settle(Window window, int milliseconds = 450)
+    /// <summary>Runs the dispatcher (and so the animations) for a moment: pages and rows fade in, ripples fade out.</summary>
+    private static void Settle(Window window, int milliseconds = 700)
     {
         var frame = new System.Windows.Threading.DispatcherFrame();
         var timer = new System.Windows.Threading.DispatcherTimer(TimeSpan.FromMilliseconds(milliseconds),

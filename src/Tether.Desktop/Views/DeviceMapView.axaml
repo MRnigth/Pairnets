@@ -103,6 +103,7 @@
 
     <StackPanel Grid.Column="4" HorizontalAlignment="Stretch">
       <Panel Classes="node" HorizontalAlignment="Center">
+        <Ellipse x:Name="OtherRipple" Classes="wave" />
         <Ellipse x:Name="OtherRing" Classes="ring" />
         <v:LineIcon x:Name="OtherIcon" Classes="icon glyph" Data="{StaticResource I.Computer}" />
         <Ellipse x:Name="OtherDot" Classes="dot" Fill="{StaticResource S.Green}" HorizontalAlignment="Right" VerticalAlignment="Bottom" />

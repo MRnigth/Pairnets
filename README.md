@@ -71,7 +71,8 @@ click), **Devices**, **Needs attention** and **Settings**. Its icon sits in the 
 bar (Mac) or system tray (Linux); clicking it opens a small quick panel with the same status at a
 glance. The icon is green when up to date, blue while syncing, grey when offline, orange when it
 needs your decision, red on errors, and yellow when paused. Closing the window keeps Tether syncing
-in the background.
+in the background. Small animations mark the moments that matter: a ripple when a sync finishes,
+confetti after the very first one, and a nudge when something new needs you.
 
 ## How it works, in plain words
 

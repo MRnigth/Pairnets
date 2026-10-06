@@ -9,6 +9,7 @@ namespace Tether.Client.Ui;
 public partial class DeviceMapView : UserControl
 {
     private bool _compact;
+    private NodeState? _otherState;
 
     public DeviceMapView()
     {
@@ -56,6 +57,12 @@ public partial class DeviceMapView : UserControl
         HereLine.Flow = map.HereFlow;
         OtherLine.Linked = map.OtherLinked;
         OtherLine.Flow = map.OtherFlow;
+        if (_otherState == NodeState.Offline && map.Other.State == NodeState.Online)
+        {
+            Motion.Pop(OtherDot); // the other computer just came online
+            Motion.Ripple(OtherRipple);
+        }
+        _otherState = map.Other.State;
     }
 
     /// <summary>Only the server's ring turns green when connected; the computers show a coloured dot.</summary>

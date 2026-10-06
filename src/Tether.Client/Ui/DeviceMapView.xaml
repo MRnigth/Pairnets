@@ -71,6 +71,7 @@
 
     <StackPanel Grid.Column="4">
       <Grid x:Name="OtherNode" Width="60" Height="60" HorizontalAlignment="Center">
+        <Ellipse x:Name="OtherRipple" Style="{StaticResource Wave}" />
         <Ellipse x:Name="OtherRing" Style="{StaticResource Ring}" />
         <ui:LineIcon x:Name="OtherIcon" Style="{StaticResource Glyph}" Width="26" Height="26" Data="{StaticResource I.Computer}" />
         <Ellipse x:Name="OtherDot" Style="{StaticResource Dot}" Width="15" Height="15" Fill="{StaticResource S.Green}" />

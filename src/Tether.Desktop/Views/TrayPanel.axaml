@@ -13,12 +13,13 @@
   </Window.Resources>
 
   <!-- The quick look that opens from the tray / menu bar icon. The margin leaves room for the shadow. -->
-  <Border Classes="panel" Margin="10" BoxShadow="0 8 28 0 #38000000">
+  <Border x:Name="Card" Classes="panel" Margin="10" BoxShadow="0 8 28 0 #38000000">
     <StackPanel>
       <!-- Status -->
       <Border x:Name="Head" CornerRadius="14,14,0,0" Padding="16,16,10,8">
         <Grid ColumnDefinitions="Auto,*,Auto">
           <Grid x:Name="StatusBadgeHost" Width="38" Height="38" VerticalAlignment="Top" Margin="0,0,12,0">
+            <Ellipse x:Name="StatusRipple" Classes="wave" />
             <Ellipse x:Name="StatusBadge" Fill="{StaticResource S.Grey}" />
             <v:LineIcon x:Name="StatusGlyph" Classes="icon white" Width="19" Height="19" StrokeThickness="2.6" Data="{StaticResource I.CloudOff}" />
           </Grid>

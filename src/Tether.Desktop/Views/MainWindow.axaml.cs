@@ -64,7 +64,9 @@ public partial class MainWindow : Window
     private DateTimeOffset _serverFilesAt;
     private CancellationTokenSource? _versionsCts;
     private string? _selectAfterLoad;
+    private readonly StatusMoments _moments = new();
     private string? _shownState;
+    private int? _attentionCount;
     private string? _tintKey;
     private bool _navigating;
     private bool _deletedMode = true;
@@ -108,6 +110,19 @@ public partial class MainWindow : Window
         }
         base.OnClosing(e);
     }
+
+    protected override void OnPropertyChanged(Avalonia.AvaloniaPropertyChangedEventArgs change)
+    {
+        base.OnPropertyChanged(change);
+        if (change.Property == IsVisibleProperty && !IsVisible)
+        {
+            _moments.Reset(); // nothing celebrates late when the window comes back
+            _shownState = null;
+        }
+    }
+
+    /// <summary>Called after first-time setup: confetti when that first sync finishes (if the window is watching).</summary>
+    public void ExpectFirstSync() => _moments.ExpectFirstSync();
 
     // ------------------------------------------------------------------ navigation
 
@@ -327,7 +342,8 @@ public partial class MainWindow : Window
 
     /// <summary>
     /// Motion for the status badge: the sync glyph turns while syncing, the badge breathes while
-    /// waiting for the other computer, and it pops once whenever the state changes.
+    /// waiting for the other computer, and it pops once whenever the state changes. A ring ripples
+    /// out when a sync that moved files is done, and the first sync after setup gets confetti.
     /// </summary>
     private void Animate(StatusSnapshot s)
     {
@@ -335,15 +351,24 @@ public partial class MainWindow : Window
         StatusBadgeHost.Classes.Set("pulse", s.IsWaiting);
         var state = s.IsWaiting ? "waiting" : s.Status.ToString();
         if (_shownState is not null && _shownState != state && !s.IsWaiting)
-        {
-            StatusBadgeHost.Classes.Remove("pop");
-            Avalonia.Threading.Dispatcher.UIThread.Post(() => StatusBadgeHost.Classes.Add("pop"), Avalonia.Threading.DispatcherPriority.Background);
-        }
+            Motion.Once(StatusBadgeHost, "pop");
         _shownState = state;
+        var moment = _moments.Next(s);
+        if (moment == StatusMoment.None || !IsVisible)
+            return;
+        Motion.Once(StatusRipple, "ripple");
+        if (moment == StatusMoment.FirstSync)
+            Celebration.Burst();
     }
 
     public void ShowAttention(IReadOnlyList<AttentionItem> items)
     {
+        if (items.Count > _attentionCount)
+        {
+            Motion.Once(AttentionBadge, "pop"); // something new needs you
+            Motion.Once(AttentionCalloutIcon, "wiggle");
+        }
+        _attentionCount = items.Count;
         _attention.Clear();
         foreach (var item in items)
             _attention.Add(item);
@@ -546,6 +571,9 @@ public partial class MainWindow : Window
         RestoreMessage.Classes.Set("ok", error is null);
         RestoreMessage.Classes.Set("bad", error is not null);
         RestoreMessageText.Text = message;
+        Motion.Once(RestoreMessage, "enter");
+        if (error is null)
+            Motion.Once(DetailStatePill, "pop"); // "Current version" again
     }
 
     // Exposed for the headless UI test.
@@ -556,6 +584,11 @@ public partial class MainWindow : Window
     internal bool TransferVisible => TransferCard.IsVisible;
     internal bool GlyphSpins => StatusGlyph.Classes.Contains("spin");
     internal bool BadgePulses => StatusBadgeHost.Classes.Contains("pulse");
+    internal int Ripples => Motion.Plays(StatusRipple, "ripple");
+    internal int ConfettiBursts => Motion.Plays(Celebration, "burst");
+    internal int AttentionWiggles => Motion.Plays(AttentionCalloutIcon, "wiggle");
+    internal int RestorePops => Motion.Plays(DetailStatePill, "pop");
+    internal int OtherArrivals => Map.OtherArrivals;
     internal string ArrowMotion => TransferArrow.Classes.Contains("rise") ? "rise" : TransferArrow.Classes.Contains("fall") ? "fall" : "none";
     internal int ActiveRows => _active.Count;
     internal string MapOtherText => Map.OtherText;
@@ -584,7 +617,11 @@ public partial class MainWindow : Window
     internal bool SettingsShown => SettingsPage.Content is not null;
 
     private void OnFix(object? sender, RoutedEventArgs e) => _actions?.FixBlocked();
-    private void OnSyncNow(object? sender, RoutedEventArgs e) => _actions?.SyncNow();
+    private void OnSyncNow(object? sender, RoutedEventArgs e)
+    {
+        Motion.Once(SyncNowGlyph, "turn");
+        _actions?.SyncNow();
+    }
     private void OnPause(object? sender, RoutedEventArgs e) => _actions?.TogglePause();
     private void OnOpenFolder(object? sender, RoutedEventArgs e) => _actions?.OpenFolder();
     private void OnViewLog(object? sender, RoutedEventArgs e) => _actions?.ViewLog();

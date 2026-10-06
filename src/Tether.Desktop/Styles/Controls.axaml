@@ -390,6 +390,13 @@
     <Setter Property="StrokeDashArray" Value="3,3" />
     <Setter Property="Fill" Value="Transparent" />
   </Style>
+  <!-- Behind a badge or a circle: invisible until a "ripple" plays on it. -->
+  <Style Selector="Ellipse.wave">
+    <Setter Property="Stroke" Value="{StaticResource S.Green}" />
+    <Setter Property="StrokeThickness" Value="2.5" />
+    <Setter Property="Opacity" Value="0" />
+    <Setter Property="IsHitTestVisible" Value="False" />
+  </Style>
   <Style Selector="Ellipse.dot">
     <Setter Property="Stroke" Value="{DynamicResource T.Card}" />
     <Setter Property="StrokeThickness" Value="2.5" />
@@ -480,6 +487,65 @@
       <Animation Duration="0:0:0.3" Easing="CubicEaseOut">
         <KeyFrame Cue="0%"><Setter Property="TranslateTransform.Y" Value="-8" /><Setter Property="Opacity" Value="0" /></KeyFrame>
         <KeyFrame Cue="100%"><Setter Property="TranslateTransform.Y" Value="0" /><Setter Property="Opacity" Value="1" /></KeyFrame>
+      </Animation>
+    </Style.Animations>
+  </Style>
+
+  <!-- One-time moments, played with Motion.Once. -->
+  <!-- A ring that grows out of a circle and fades: a sync finished, the other computer came online. -->
+  <Style Selector=":is(Control).ripple">
+    <Style.Animations>
+      <Animation Duration="0:0:0.6" Easing="CubicEaseOut">
+        <KeyFrame Cue="0%"><Setter Property="ScaleTransform.ScaleX" Value="1" /><Setter Property="ScaleTransform.ScaleY" Value="1" /><Setter Property="Opacity" Value="0.7" /></KeyFrame>
+        <KeyFrame Cue="100%"><Setter Property="ScaleTransform.ScaleX" Value="1.8" /><Setter Property="ScaleTransform.ScaleY" Value="1.8" /><Setter Property="Opacity" Value="0" /></KeyFrame>
+      </Animation>
+    </Style.Animations>
+  </Style>
+  <!-- A small shake: something new needs your attention. -->
+  <Style Selector=":is(Control).wiggle">
+    <Style.Animations>
+      <Animation Duration="0:0:0.5">
+        <KeyFrame Cue="0%"><Setter Property="RotateTransform.Angle" Value="0" /></KeyFrame>
+        <KeyFrame Cue="15%"><Setter Property="RotateTransform.Angle" Value="-10" /></KeyFrame>
+        <KeyFrame Cue="35%"><Setter Property="RotateTransform.Angle" Value="9" /></KeyFrame>
+        <KeyFrame Cue="55%"><Setter Property="RotateTransform.Angle" Value="-6" /></KeyFrame>
+        <KeyFrame Cue="75%"><Setter Property="RotateTransform.Angle" Value="3" /></KeyFrame>
+        <KeyFrame Cue="100%"><Setter Property="RotateTransform.Angle" Value="0" /></KeyFrame>
+      </Animation>
+    </Style.Animations>
+  </Style>
+  <!-- One full turn: the Sync now icon when it is clicked. -->
+  <Style Selector=":is(Control).turn">
+    <Style.Animations>
+      <Animation Duration="0:0:0.55" Easing="CubicEaseInOut">
+        <KeyFrame Cue="0%"><Setter Property="RotateTransform.Angle" Value="0" /></KeyFrame>
+        <KeyFrame Cue="100%"><Setter Property="RotateTransform.Angle" Value="360" /></KeyFrame>
+      </Animation>
+    </Style.Animations>
+  </Style>
+  <!-- The tray panel slides in from the menu bar (down) or the taskbar (up) and fades in. -->
+  <Style Selector=":is(Control).arrive-up">
+    <Style.Animations>
+      <Animation Duration="0:0:0.22" Easing="CubicEaseOut">
+        <KeyFrame Cue="0%"><Setter Property="TranslateTransform.Y" Value="10" /><Setter Property="Opacity" Value="0" /></KeyFrame>
+        <KeyFrame Cue="100%"><Setter Property="TranslateTransform.Y" Value="0" /><Setter Property="Opacity" Value="1" /></KeyFrame>
+      </Animation>
+    </Style.Animations>
+  </Style>
+  <Style Selector=":is(Control).arrive-down">
+    <Style.Animations>
+      <Animation Duration="0:0:0.22" Easing="CubicEaseOut">
+        <KeyFrame Cue="0%"><Setter Property="TranslateTransform.Y" Value="-10" /><Setter Property="Opacity" Value="0" /></KeyFrame>
+        <KeyFrame Cue="100%"><Setter Property="TranslateTransform.Y" Value="0" /><Setter Property="Opacity" Value="1" /></KeyFrame>
+      </Animation>
+    </Style.Animations>
+  </Style>
+  <!-- Confetti for the first sync after setup (ConfettiBurst.Duration). -->
+  <Style Selector="v|Confetti.burst">
+    <Style.Animations>
+      <Animation Duration="0:0:1.5">
+        <KeyFrame Cue="0%"><Setter Property="Progress" Value="0" /></KeyFrame>
+        <KeyFrame Cue="100%"><Setter Property="Progress" Value="1" /></KeyFrame>
       </Animation>
     </Style.Animations>
   </Style>

@@ -535,6 +535,8 @@ public sealed class DesktopController : ITrayActions, IDisposable
                 return;
             ApplySettings(window.Result, window.PlainToken);
             ShowMainWindow();
+            if (firstRun)
+                _window?.ExpectFirstSync(); // confetti when the first sync is done
         };
         window.Show();
         window.Activate();

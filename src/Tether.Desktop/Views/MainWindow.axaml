@@ -135,7 +135,7 @@
           </Button>
           <Button Classes="accent" Click="OnSyncNow">
             <StackPanel Orientation="Horizontal" Spacing="7">
-              <v:LineIcon Classes="icon white" Width="17" Height="17" Data="{StaticResource I.Sync}" />
+              <v:LineIcon x:Name="SyncNowGlyph" Classes="icon white" Width="17" Height="17" Data="{StaticResource I.Sync}" />
               <TextBlock Text="Sync now" />
             </StackPanel>
           </Button>
@@ -161,6 +161,7 @@
                 <StackPanel Margin="22,20,22,22" Spacing="22">
                   <Grid ColumnDefinitions="Auto,*,Auto">
                     <Grid x:Name="StatusBadgeHost" Width="48" Height="48" VerticalAlignment="Center" Margin="0,0,16,0">
+                      <Ellipse x:Name="StatusRipple" Classes="wave" />
                       <Ellipse x:Name="StatusBadge" Fill="{StaticResource S.Grey}" />
                       <v:LineIcon x:Name="StatusGlyph" Classes="icon white" Width="23" Height="23" StrokeThickness="2.6"
                                   Data="{StaticResource I.CloudOff}" />
@@ -189,13 +190,14 @@
                     </StackPanel>
                   </StackPanel>
                 </StackPanel>
+                <v:Confetti x:Name="Celebration" Origin="46,44" />
               </Panel>
             </Border>
 
             <!-- Something needs a decision -->
             <Border x:Name="AttentionCallout" Classes="callout" IsVisible="False">
               <Grid ColumnDefinitions="Auto,*,Auto">
-                <v:LineIcon Classes="icon" Width="18" Height="18" Stroke="{DynamicResource T.WarnText}" Data="{StaticResource I.Warning}" Margin="0,0,10,0" VerticalAlignment="Center" />
+                <v:LineIcon x:Name="AttentionCalloutIcon" Classes="icon" Width="18" Height="18" Stroke="{DynamicResource T.WarnText}" Data="{StaticResource I.Warning}" Margin="0,0,10,0" VerticalAlignment="Center" />
                 <TextBlock x:Name="AttentionCalloutText" Grid.Column="1" Classes="strong" VerticalAlignment="Center" />
                 <Button Grid.Column="2" Classes="subtle" Content="Review" Click="OnReviewAttention" />
               </Grid>

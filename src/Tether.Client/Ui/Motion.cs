@@ -8,9 +8,10 @@ namespace Tether.Client.Ui;
 
 /// <summary>
 /// Small, friendly animations (same as the Mac/Linux app): bob, spin, pulse, pop, travelling
-/// arrows, rows sliding in and bars gliding to new values. Each looping animation is started
-/// once and kept running until it is switched off, so the 4-times-a-second refresh does not
-/// restart it. Everything stays still when Windows is set to show fewer animations.
+/// arrows, rows sliding in and bars gliding to new values, plus one-time moments: a ripple, a
+/// wiggle, one turn and a panel arriving. Each looping animation is started once and kept running
+/// until it is switched off, so the 4-times-a-second refresh does not restart it. Everything
+/// stays still when Windows is set to show fewer animations.
 /// </summary>
 public static class Motion
 {
@@ -124,14 +125,55 @@ public static class Motion
     }
 
     /// <summary>A new row slides in from above.</summary>
-    public static void Enter(UIElement e)
+    public static void Enter(UIElement e) => SlideIn(e, 0, -8, 0.3);
+
+    /// <summary>The tray panel slides in from the taskbar's side (<paramref name="dx"/>, <paramref name="dy"/>) and fades in.</summary>
+    public static void Arrive(UIElement e, double dx, double dy) => SlideIn(e, dx, dy, 0.22);
+
+    private static void SlideIn(UIElement e, double dx, double dy, double seconds)
     {
         if (!Enabled)
             return;
-        var duration = TimeSpan.FromSeconds(0.3);
+        var duration = TimeSpan.FromSeconds(seconds);
         var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
-        Transforms(e).Move.BeginAnimation(TranslateTransform.YProperty, new DoubleAnimation(-8, 0, duration) { EasingFunction = ease });
+        var move = Transforms(e).Move;
+        move.BeginAnimation(TranslateTransform.XProperty, new DoubleAnimation(dx, 0, duration) { EasingFunction = ease });
+        move.BeginAnimation(TranslateTransform.YProperty, new DoubleAnimation(dy, 0, duration) { EasingFunction = ease });
         e.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(0, 1, duration) { EasingFunction = ease });
+    }
+
+    /// <summary>A ring that grows out of a circle and fades (a sync finished, the other computer came online).</summary>
+    public static void Ripple(UIElement ring)
+    {
+        if (!Enabled)
+            return;
+        var duration = TimeSpan.FromSeconds(0.6);
+        var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
+        var s = Transforms(ring).Scale;
+        var grow = new DoubleAnimation(1, 1.8, duration) { EasingFunction = ease };
+        s.BeginAnimation(ScaleTransform.ScaleXProperty, grow);
+        s.BeginAnimation(ScaleTransform.ScaleYProperty, grow);
+        ring.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(0.7, 0, duration) { EasingFunction = ease });
+    }
+
+    /// <summary>A small shake (something new needs your attention).</summary>
+    public static void Wiggle(UIElement e)
+    {
+        if (!Enabled)
+            return;
+        var wiggle = new DoubleAnimationUsingKeyFrames { Duration = TimeSpan.FromSeconds(0.5) };
+        foreach (var (angle, at) in new[] { (0.0, 0.0), (-10.0, 0.15), (9.0, 0.35), (-6.0, 0.55), (3.0, 0.75), (0.0, 1.0) })
+            wiggle.KeyFrames.Add(new LinearDoubleKeyFrame(angle, KeyTime.FromPercent(at)));
+        Transforms(e).Rotate.BeginAnimation(RotateTransform.AngleProperty, wiggle);
+    }
+
+    /// <summary>One full turn (the Sync now icon when it is clicked).</summary>
+    public static void TurnOnce(UIElement e)
+    {
+        if (!Enabled)
+            return;
+        Transforms(e).Rotate.BeginAnimation(RotateTransform.AngleProperty,
+            new DoubleAnimation(0, 360, TimeSpan.FromSeconds(0.55)) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseInOut } });
     }
 
     /// <summary>Moves a progress bar smoothly to <paramref name="value"/> instead of jumping.</summary>

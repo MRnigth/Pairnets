@@ -222,6 +222,53 @@ public class DesktopUiTests
     }
 
     [AvaloniaFact]
+    public void MomentsPlayOnceWhenTheyHappen()
+    {
+        var window = new MainWindow { ThisDevice = "MacBook" };
+        window.Show();
+        var now = DateTimeOffset.UtcNow;
+        DeviceInfo[] Devices(bool desktopOnline) =>
+            [new("MacBook", now.AddDays(-1), now, true), new("DESKTOP", now.AddDays(-1), desktopOnline ? now : now.AddHours(-3), desktopOnline)];
+        var idle = StatusSnapshot.Initial with { Status = RunnerStatus.Idle, Text = "Up to date", LastSyncAt = now, Devices = Devices(false) };
+        window.ShowStatus(idle, null);
+        Assert.Equal(0, window.Ripples); // opening the window shows the state, it doesn't celebrate it
+
+        // A sync that moved files ripples once when it is done; one that moved nothing doesn't.
+        window.ShowStatus(idle with { Status = RunnerStatus.Syncing, CurrentPath = "a.bin", Operation = "upload", FilesTotal = 1 }, null);
+        window.ShowStatus(idle, null);
+        window.ShowStatus(idle, null);
+        Assert.Equal(1, window.Ripples);
+        window.ShowStatus(idle with { Status = RunnerStatus.Syncing }, null);
+        window.ShowStatus(idle, null);
+        Assert.Equal(1, window.Ripples);
+        Assert.Equal(0, window.ConfettiBursts); // only for the first sync after setup
+
+        // The other computer coming online.
+        window.ShowStatus(idle with { Devices = Devices(true) }, null);
+        window.ShowStatus(idle with { Devices = Devices(true) }, null);
+        Assert.Equal(1, window.OtherArrivals);
+
+        // Only more things needing attention wiggle, not the first look or fewer.
+        var item = new AttentionItem("x", "y", "Show in folder", () => { });
+        window.ShowAttention([item]);
+        window.ShowAttention([item, item]);
+        window.ShowAttention([item]);
+        Assert.Equal(1, window.AttentionWiggles);
+
+        // First-time setup: confetti when its first sync is done, once.
+        window.Hide();
+        window.Show();
+        window.ExpectFirstSync();
+        window.ShowStatus(idle with { Status = RunnerStatus.Syncing, LastSyncAt = null }, null);
+        window.ShowStatus(idle, null);
+        window.ShowStatus(idle, null);
+        Assert.Equal(1, window.ConfettiBursts);
+        Assert.Equal(2, window.Ripples);
+        window.AllowClose = true;
+        window.Close();
+    }
+
+    [AvaloniaFact]
     public async Task HistoryPageListsDeletedFilesAndRestoresAVersion()
     {
         var actions = new SampleActions();
@@ -241,6 +288,7 @@ public class DesktopUiTests
         await window.RestoreFirstVersionAsync();
         Assert.Equal(("Projects/report.docx", "20261006T100000000Z-c0ffee00"), Assert.Single(actions.Samples.Restored));
         Assert.StartsWith("Restored.", window.RestoreText);
+        Assert.Equal(1, window.RestorePops); // "Current version" again
 
         // "Show versions…" on an activity row opens History on that file.
         window.ShowVersionsFor("Notes/old-ideas.md");
@@ -295,6 +343,13 @@ public class DesktopUiTests
         panel.Show();
         panel.ShowStatus(StatusSnapshot.Initial with { Status = RunnerStatus.Idle, Text = "Up to date", LastSyncAt = DateTimeOffset.Now }, "mac");
         Assert.Equal("Up to date", panel.HeadlineText);
+        panel.ShowStatus(StatusSnapshot.Initial with { Status = RunnerStatus.Syncing, CurrentPath = "a.txt", Operation = "upload", FilesTotal = 1 }, "mac");
+        panel.ShowStatus(StatusSnapshot.Initial with { Status = RunnerStatus.Idle, Text = "Up to date", LastSyncAt = DateTimeOffset.Now }, "mac");
+        Assert.Equal(1, panel.Ripples); // a sync that moved files is done
+        panel.Hide();
+        Assert.False(panel.Arriving);
+        panel.Open();
+        Assert.True(panel.Arriving); // slides in from the menu bar or taskbar
         var feed = new ActivityFeed();
         for (var i = 0; i < 6; i++)
             feed.Add(ActivityKind.Uploaded, $"f{i}.txt", "Uploaded");
@@ -470,9 +525,9 @@ public class DesktopUiTests
 
     private static void Save(Avalonia.Controls.Window window, string? outDir, string name)
     {
-        // Let pages and rows finish fading in: animations follow the real clock, even headless.
+        // Let pages and rows finish fading in and ripples fade out: animations follow the real clock, even headless.
         Avalonia.Threading.Dispatcher.UIThread.RunJobs();
-        Thread.Sleep(420);
+        Thread.Sleep(700);
         AvaloniaHeadlessPlatform.ForceRenderTimerTick(2);
         var frame = window.CaptureRenderedFrame();
         Assert.NotNull(frame);

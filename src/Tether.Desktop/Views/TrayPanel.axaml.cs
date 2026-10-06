@@ -25,6 +25,7 @@ public partial class TrayPanel : Window
 {
     private readonly ITrayActions? _actions;
     private readonly ObservableCollection<ActivityItem> _recent = [];
+    private readonly StatusMoments _moments = new();
     private string? _tintKey;
     private bool _menuOpen;
 
@@ -58,13 +59,28 @@ public partial class TrayPanel : Window
     /// <summary>When it last hid itself (a click on the tray icon right after should not reopen it).</summary>
     public DateTime HiddenAt { get; private set; }
 
-    /// <summary>Shows the panel in the corner next to the tray or menu bar.</summary>
+    /// <summary>Shows the panel in the corner next to the tray or menu bar, sliding in from its edge.</summary>
     public void Open()
     {
+        // Added right away (not on the next tick like Motion.Once), so the first frame is already the start of the slide.
+        Card.Classes.Add(Screens.Primary is { } screen && AtTop(screen) ? "arrive-down" : "arrive-up");
         Show();
         Place();
         Activate();
     }
+
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+    {
+        base.OnPropertyChanged(change);
+        if (change.Property != IsVisibleProperty || IsVisible)
+            return;
+        _moments.Reset(); // nothing celebrates late when the panel opens again
+        Card.Classes.Remove("arrive-up");
+        Card.Classes.Remove("arrive-down");
+    }
+
+    /// <summary>The menu bar (macOS) or a Linux panel is at the top of the screen.</summary>
+    private static bool AtTop(Screen screen) => OperatingSystem.IsMacOS() || screen.WorkingArea.Y > screen.Bounds.Y;
 
     /// <summary>
     /// Top right under the menu bar (macOS, or a Linux panel at the top), otherwise bottom right
@@ -79,7 +95,7 @@ public partial class TrayPanel : Window
         var w = (int)Math.Ceiling(Bounds.Width * scale);
         var h = (int)Math.Ceiling(Bounds.Height * scale);
         var gap = (int)(4 * scale);
-        var top = OperatingSystem.IsMacOS() || area.Y > screen.Bounds.Y;
+        var top = AtTop(screen);
         var x = area.Right - w - gap;
         var y = top ? area.Y + gap : area.Bottom - h - gap;
         Position = new PixelPoint(Math.Max(area.X, x), Math.Max(area.Y, y));
@@ -92,6 +108,8 @@ public partial class TrayPanel : Window
         StatusGlyph.Data = Visuals.Resource<Geometry>(icon);
         StatusGlyph.Classes.Set("spin", s.Status == Tether.Core.Sync.RunnerStatus.Syncing && !s.IsWaiting);
         StatusBadgeHost.Classes.Set("pulse", s.IsWaiting);
+        if (_moments.Next(s) != StatusMoment.None && IsVisible)
+            Motion.Once(StatusRipple, "ripple"); // a sync that moved files is done
         Tint(brush);
         Headline.Text = s.Headline;
         Detail.Text = s.DetailText.Length > 0 ? s.DetailText : s.LastSyncText;
@@ -151,6 +169,8 @@ public partial class TrayPanel : Window
     internal string HeadlineText => Headline.Text ?? string.Empty;
     internal int RecentRows => _recent.Count;
     internal bool AttentionShown => AttentionButton.IsVisible;
+    internal int Ripples => Motion.Plays(StatusRipple, "ripple");
+    internal bool Arriving => Card.Classes.Contains("arrive-up") || Card.Classes.Contains("arrive-down");
 
     private void Run(Action<ITrayActions> action)
     {
