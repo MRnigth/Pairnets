@@ -175,9 +175,11 @@ reach the server at an `https://` address on your own domain.
   in between can. If that matters for your files, use Tailscale.
 * The server is now reachable from the internet. The long token is what keeps strangers out: keep
   it in your password manager and never share it.
-* Cloudflare's free plan refuses any single upload over 100 MB. Tether sends bigger files in
-  pieces of 50 MB automatically, and a piece cut off by a bad connection continues where it
-  stopped. There is nothing to set.
+* Cloudflare's free plan refuses any single upload over 100 MB. Tether sends big files in pieces
+  automatically: between 4 and 50 MB each, sized so one piece takes about 30 seconds on your
+  connection (smaller on a slow or busy network) and halved after a dropped connection, so a bad
+  connection loses little. An interrupted upload continues where it stopped. There is nothing to
+  set.
 
 **Step 1: create the tunnel in the Cloudflare dashboard**
 

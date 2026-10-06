@@ -25,28 +25,59 @@ public class UploadInPiecesClientTests : IAsyncLifetime
         return data;
     }
 
-    /// <summary>Records every request ("PUT api/upload/…") and can answer some itself.</summary>
+    /// <summary>Records every request ("PUT api/upload/…") with its body length, and can answer some itself.</summary>
     private sealed class Recorder(Func<HttpRequestMessage, HttpResponseMessage?>? answer = null) : DelegatingHandler(new SocketsHttpHandler())
     {
-        public List<string> Requests { get; } = [];
+        private const string PutPiece = "PUT api/upload/";
+        private readonly List<(string Request, long? Length)> _entries = [];
+
+        public List<string> Requests
+        {
+            get
+            {
+                lock (_entries)
+                    return _entries.Select(e => e.Request).ToList();
+            }
+        }
+
+        /// <summary>The length of every piece sent, in order.</summary>
+        public List<long> PieceLengths => Lengths(_entries);
+
+        /// <summary>The pieces sent after the first status check, that is after a broken connection.</summary>
+        public List<long> PieceLengthsAfterResume
+        {
+            get
+            {
+                lock (_entries)
+                    return Lengths(_entries.SkipWhile(e => e.Request != "GET api/upload/").ToList());
+            }
+        }
+
+        private List<long> Lengths(List<(string Request, long? Length)> entries)
+        {
+            lock (_entries)
+                return entries.Where(e => e.Request == PutPiece).Select(e => e.Length ?? -1).ToList();
+        }
 
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             var path = request.RequestUri!.AbsolutePath.TrimStart('/');
-            lock (Requests)
-                Requests.Add($"{request.Method} {(path.StartsWith("api/upload/", StringComparison.Ordinal) ? "api/upload/" + path.Split('/').Skip(3).FirstOrDefault() : path)}");
+            var name = $"{request.Method} {(path.StartsWith("api/upload/", StringComparison.Ordinal) ? "api/upload/" + path.Split('/').Skip(3).FirstOrDefault() : path)}";
+            lock (_entries)
+                _entries.Add((name, request.Content?.Headers.ContentLength));
             return answer?.Invoke(request) ?? await base.SendAsync(request, cancellationToken);
         }
 
         public int Count(string request)
         {
-            lock (Requests)
-                return Requests.Count(r => r == request);
+            lock (_entries)
+                return _entries.Count(e => e.Request == request);
         }
     }
 
-    private TetherApiClient Client(HttpMessageHandler handler, Uri? url = null) =>
-        new(url ?? _server.Url, _server.Token, "pc", handler, stallTimeout: TimeSpan.FromSeconds(20), pieceSize: Piece);
+    /// <summary>A client with fixed pieces of <see cref="Piece"/> bytes, or growing from a quarter of it with <paramref name="minPiece"/>.</summary>
+    private TetherApiClient Client(HttpMessageHandler handler, Uri? url = null, long minPiece = Piece) =>
+        new(url ?? _server.Url, _server.Token, "pc", handler, stallTimeout: TimeSpan.FromSeconds(20), pieceSize: Piece, minPieceSize: minPiece);
 
     [Fact]
     public async Task ABigFileGoesInPiecesAndArrivesWhole()
@@ -134,6 +165,56 @@ public class UploadInPiecesClientTests : IAsyncLifetime
         Assert.True(recorder.Count("GET api/upload/") >= 1, string.Join(", ", recorder.Requests));
         // Only the broken piece was sent again, not the file from the start.
         Assert.InRange(recorder.Count("PUT api/upload/"), 9, 10);
+        Assert.Equal(data, await File.ReadAllBytesAsync(Path.Combine(_server.Paths.Files, "a.bin")));
+    }
+
+    [Fact]
+    public async Task PiecesGrowOnAFastConnection()
+    {
+        var recorder = new Recorder();
+        using var api = Client(recorder, minPiece: Piece / 8);
+        var data = Data((int)(Piece * 5 - 100));
+
+        var (result, sentHash, _) = await api.UploadAsync("a.bin", ContentHash.NoneBase, 0, new MemoryStream(data), null, default);
+
+        Assert.Equal(ApiOutcome.Ok, result.Outcome);
+        Assert.Equal(ContentHash.Of(data), sentHash);
+        var pieces = recorder.PieceLengths;
+        // A quarter of the largest piece first, then twice as big after each fast piece, up to the largest.
+        Assert.Equal([Piece / 4, Piece / 2, Piece], pieces.Take(3));
+        Assert.All(pieces, length => Assert.InRange(length, 1, Piece));
+        Assert.Equal(data.Length, pieces.Sum());
+        Assert.Equal(Piece, api.Pieces.Next);
+        Assert.Equal(data, await File.ReadAllBytesAsync(Path.Combine(_server.Paths.Files, "a.bin")));
+    }
+
+    [Fact]
+    public async Task AfterACutThePiecesGetSmaller()
+    {
+        await using var proxy = new ChaosProxy(_server.Port);
+        var recorder = new Recorder();
+        using var api = Client(recorder, proxy.Url, minPiece: Piece / 8);
+        var data = Data((int)(Piece * 8));
+        // Pieces of 16, 32, 64 and 64 KiB get through; the cut comes in the fifth one.
+        proxy.CutAfterUpstreamBytes = Piece * 3;
+        using var heal = new CancellationTokenSource();
+        var healer = Task.Run(async () =>
+        {
+            while (Volatile.Read(ref proxy.Cuts) == 0 && !heal.IsCancellationRequested)
+                await Task.Delay(10);
+            proxy.CutAfterUpstreamBytes = null;
+        });
+
+        var (result, sentHash, _) = await api.UploadAsync("a.bin", ContentHash.NoneBase, 0, new MemoryStream(data), null, default);
+        heal.Cancel();
+        await healer;
+
+        Assert.Equal(ApiOutcome.Ok, result.Outcome);
+        Assert.Equal(ContentHash.Of(data), sentHash);
+        Assert.True(proxy.Cuts > 0);
+        Assert.Equal([Piece / 4, Piece / 2, Piece, Piece], recorder.PieceLengths.Take(4));
+        // The first piece after the cut is half the size the cut one had.
+        Assert.InRange(recorder.PieceLengthsAfterResume[0], 1, Piece / 2);
         Assert.Equal(data, await File.ReadAllBytesAsync(Path.Combine(_server.Paths.Files, "a.bin")));
     }
 

@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Globalization;
 using System.Net;
 using System.Net.Http.Headers;
@@ -17,8 +18,9 @@ public sealed class TetherApiClient : ITetherApi, IDisposable
     private const int CopyBufferSize = 256 * 1024;
 
     /// <summary>
-    /// Files bigger than this are uploaded in pieces of this size. Cloudflare's free plan refuses any
-    /// request body over 100 MB, so a Cloudflare Tunnel needs pieces well below that.
+    /// The largest piece of an upload, and above this size a file always goes in pieces. Cloudflare's
+    /// free plan refuses any request body over 100 MB, so a Cloudflare Tunnel needs pieces well below
+    /// that. Smaller pieces are used on slow connections (see <see cref="PieceSizer"/>).
     /// </summary>
     public const long DefaultPieceSize = 50L * 1024 * 1024;
 
@@ -29,18 +31,17 @@ public sealed class TetherApiClient : ITetherApi, IDisposable
     private readonly string _token;
     private readonly TimeSpan _stallTimeout;
     private readonly TimeSpan _metadataTimeout;
-    private readonly long _pieceSize;
     private volatile bool _piecesUnsupported;
 
     public TetherApiClient(Uri serverUrl, string token, string deviceId, HttpMessageHandler? handler = null,
-        TimeSpan? stallTimeout = null, TimeSpan? metadataTimeout = null, long? pieceSize = null)
+        TimeSpan? stallTimeout = null, TimeSpan? metadataTimeout = null, long? pieceSize = null, long? minPieceSize = null)
     {
         ArgumentNullException.ThrowIfNull(serverUrl);
         BaseAddress = NormalizeBase(serverUrl);
         _token = token;
         _stallTimeout = stallTimeout ?? TimeSpan.FromSeconds(60);
         _metadataTimeout = metadataTimeout ?? TimeSpan.FromMinutes(5);
-        _pieceSize = pieceSize is > 0 ? pieceSize.Value : DefaultPieceSize;
+        Pieces = new PieceSizer(minPieceSize ?? PieceSizer.DefaultMin, pieceSize is > 0 ? pieceSize.Value : DefaultPieceSize);
         handler ??= new SocketsHttpHandler
         {
             ConnectTimeout = TimeSpan.FromSeconds(15),
@@ -59,6 +60,9 @@ public sealed class TetherApiClient : ITetherApi, IDisposable
     }
 
     public Uri BaseAddress { get; }
+
+    /// <summary>How big the pieces of uploads are, learned from how fast the last ones went.</summary>
+    internal PieceSizer Pieces { get; }
 
     /// <summary>Ensures the base URL ends with '/', so relative API paths resolve under it.</summary>
     public static Uri NormalizeBase(Uri url)
@@ -277,7 +281,7 @@ public sealed class TetherApiClient : ITetherApi, IDisposable
     public async Task<(ApiResult Result, string SentHash, long SentBytes)> UploadAsync(
         string path, string baseHash, long mtimeMs, Stream content, Action<long>? progress, CancellationToken ct)
     {
-        if (!_piecesUnsupported && content.CanSeek && content.Length - content.Position > _pieceSize)
+        if (!_piecesUnsupported && content.CanSeek && Pieces.ShouldSplit(content.Length - content.Position))
         {
             var inPieces = await UploadInPiecesAsync(path, baseHash, mtimeMs, content, progress, ct).ConfigureAwait(false);
             if (inPieces is { } done)
@@ -337,12 +341,13 @@ public sealed class TetherApiClient : ITetherApi, IDisposable
             {
                 try
                 {
-                    offset = await SendPieceAsync(id, reader, offset, Math.Min(_pieceSize, reader.Size - offset), ct).ConfigureAwait(false);
+                    offset = await SendPieceAsync(id, reader, offset, Math.Min(Pieces.Next, reader.Size - offset), ct).ConfigureAwait(false);
                     failures = 0;
                 }
                 catch (TetherNetworkException) when (failures < PieceRetries && !ct.IsCancellationRequested)
                 {
                     failures++;
+                    Pieces.Failed();
                     await Task.Delay(TimeSpan.FromSeconds(1 << (failures - 1)), ct).ConfigureAwait(false);
                     offset = await UploadReceivedAsync(id, ct).ConfigureAwait(false);
                 }
@@ -378,9 +383,14 @@ public sealed class TetherApiClient : ITetherApi, IDisposable
             Content = new StreamingUploadContent(reader, stall, _stallTimeout, UploadLimit, length),
         };
         req.Content.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
+        var started = Stopwatch.GetTimestamp();
         using var resp = await SendAsync(req, HttpCompletionOption.ResponseContentRead, stall, ct).ConfigureAwait(false);
         if (resp.StatusCode == HttpStatusCode.OK)
-            return (await ReadJsonAsync<UploadStatus>(resp, stall, ct).ConfigureAwait(false)).Received;
+        {
+            var received = (await ReadJsonAsync<UploadStatus>(resp, stall, ct).ConfigureAwait(false)).Received;
+            Pieces.Succeeded(received - offset, Stopwatch.GetElapsedTime(started));
+            return received;
+        }
         if (resp.StatusCode == HttpStatusCode.Conflict)
             throw new TetherNetworkException("The server has a different part of the upload than expected."); // ask where it is and go on
         await ThrowForStatusAsync(resp).ConfigureAwait(false);

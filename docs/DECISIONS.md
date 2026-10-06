@@ -205,12 +205,18 @@ what cannot lose or silently overwrite data.
   command puts the tunnel token in a world-readable unit file and on a command line. Ours reads it
   from `/etc/tether/tunnel.env` (root, 600) and runs cloudflared as a dynamic unprivileged user.
   cloudflared comes from Cloudflare's signed apt repository, so it updates with the system.
-* **Uploads in pieces of 50 MiB.** Cloudflare's free and Pro plans refuse request bodies over
-  100 MB (413), and Tether syncs multi-GB files. Pieces of 50 MiB leave room for headers and
-  rounding; the server takes up to 64 MiB per piece. Files up to 50 MiB keep the single PUT (one
-  round trip, the same as before). The pieces also make big uploads resumable: every byte the
-  server takes in is written, hashed and counted together, so after a cut the client continues
+* **Uploads in pieces of at most 50 MiB.** Cloudflare's free and Pro plans refuse request bodies
+  over 100 MB (413), and Tether syncs multi-GB files. 50 MiB leaves room for headers and rounding;
+  the server takes up to 64 MiB per piece. The pieces also make big uploads resumable: every byte
+  the server takes in is written, hashed and counted together, so after a cut the client continues
   from the server's count instead of starting again.
+* **Piece size follows the connection.** Cloudflare takes in a whole piece before passing it on, so
+  a cut costs the piece in flight, and on a slow or crowded upload (2 Mbit/s) one 50 MB piece takes
+  minutes. The client aims at about 30 seconds per piece from the measured speed (4 to 50 MiB,
+  growing at most twofold per piece so one fast moment cannot overshoot) and halves it after a cut.
+  Until the speed is known, only files over 50 MiB are split, so a fast network sends small files
+  in one round trip as before; on a slow one, any file that would take longer than one piece is
+  split too. Only the client decides this: the server takes any piece size at any offset.
 * **Sessions in memory, not in the manifest.** An unfinished upload is not data yet; keeping it out
   of SQLite keeps the commit path and journal unchanged. A restart (rare) drops sessions and the
   client sends that file again on its next pass. Idle sessions expire after an hour; at most 64 are

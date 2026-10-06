@@ -141,7 +141,7 @@ rewrite:
 * syncing empty folders
 * file permissions and ACLs
 * rename and move detection (today: delete + create)
-* delta transfers, and resumable downloads (uploads over 50 MB already go in resumable pieces;
+* delta transfers, and resumable downloads (big uploads already go in resumable pieces;
   the download endpoint already supports HTTP Range)
 * more than two PCs used at the same time
 * end-to-end encryption at rest on the server

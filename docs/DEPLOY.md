@@ -111,7 +111,8 @@ sudo journalctl -u tether-tunnel -f
 curl https://tether.example.com/api/health
 ```
 
-Uploads over 50 MB are sent in pieces (Cloudflare's free plan refuses request bodies over 100 MB);
+Big uploads are sent in pieces of 4 to 50 MB, sized to the connection (Cloudflare's free plan
+refuses request bodies over 100 MB);
 older apps that send a big file in one request get `413` through the tunnel, so update the apps
 along with the server. See [SECURITY.md](SECURITY.md) for what Cloudflare can see.
 

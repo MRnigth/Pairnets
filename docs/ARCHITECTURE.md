@@ -135,9 +135,12 @@ mtime → commit manifest row + version + delete journal row in one transaction 
 At startup the journal is replayed: a change whose temp file still exists is rolled back, one whose
 file reached `files/` is completed. `files/` therefore never contains a half-written file.
 
-**Uploads in pieces:** files over 50 MB are sent in pieces, because proxies cap one request
+**Uploads in pieces:** big files are sent in pieces, because proxies cap one request
 (Cloudflare's free plan: 100 MB) and because a broken connection should cost one piece, not the
-whole file. `POST /api/upload` runs the same checks as PUT (name, base, case) and opens a session:
+whole file. `PieceSizer` picks the size: between 4 and 50 MiB, aiming at about 30 seconds per piece
+at the speed the last pieces went (growing at most twofold per piece), and halved after a broken
+connection. A file goes in pieces when it is over 50 MiB, or, once the speed is known, when it
+would take longer than one piece. `POST /api/upload` runs the same checks as PUT (name, base, case) and opens a session:
 a part file in `tmp/` plus a running SHA-256, kept in memory (`UploadSessions`). Each
 `PUT /api/upload/{id}?offset=` must start exactly where the part file ends; every byte that
 arrives is written, hashed and counted together, so after a cut the client asks
@@ -183,6 +186,6 @@ for a sync right after a restore.
 
 * **Rename detection**: the engine plans per path from hashes; a later pass can pair a planned
   "delete A" with an "upload B" of the same hash and send a server-side move instead.
-* **Resumable transfer**: uploads over 50 MB already go in resumable pieces within one pass;
+* **Resumable transfer**: big uploads already go in resumable pieces within one pass;
   downloads use HTTP Range-capable endpoints and stream to a temp file, so a download that
   continues where it stopped needs only client work.
