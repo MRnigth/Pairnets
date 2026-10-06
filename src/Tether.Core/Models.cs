@@ -49,7 +49,9 @@ public sealed record UpdaterDiagnostics(
     DateTimeOffset? LastAttemptAt,
     string? StatusJson,
     DateTimeOffset? StatusWrittenAt,
-    IReadOnlyList<string> LogTail)
+    IReadOnlyList<string> LogTail,
+    string? PathUnitState = null,
+    string? ServiceState = null)
 {
     /// <summary>A plain-text report for the details box and the log.</summary>
     public string ToReport()
@@ -60,6 +62,10 @@ public sealed record UpdaterDiagnostics(
         sb.AppendLine($"Updater state:       {Status.State}{(Status.Message is { } m ? " - " + m : string.Empty)}");
         sb.AppendLine($"update.sh present:   {(UpdaterInstalled ? "yes" : "no")} ({UpdaterScript})");
         sb.AppendLine($"Path unit enabled:   {(PathUnitEnabled is { } on ? on ? "yes" : "NO (run: sudo systemctl enable --now tether-update.path)" : "unknown")}");
+        sb.AppendLine($"Path unit state:     {PathUnitState ?? "unknown"}");
+        if (PathUnitState is { } state && !state.StartsWith("active", StringComparison.Ordinal))
+            sb.AppendLine("  -> the updater is not watching for requests. On the server run: sudo systemctl reset-failed tether-update.path tether-update.service && sudo systemctl restart tether-update.path");
+        sb.AppendLine($"Update service:      {ServiceState ?? "unknown"}");
         sb.AppendLine($"Request waiting:     {(RequestPending ? "yes, since " + Time(RequestedAt) : "no")}");
         sb.AppendLine($"Last request (app):  {Time(LastRequestAt)}");
         sb.AppendLine($"Last updater run:    {Time(LastAttemptAt)}");

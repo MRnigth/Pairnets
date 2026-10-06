@@ -380,7 +380,7 @@ public class ServerApiTests : IAsyncLifetime
         File.SetLastWriteTimeUtc(request, DateTime.UtcNow.AddMinutes(-2));
         var stuck = (await api.GetInfoAsync(default)).Updater!;
         Assert.Equal("failed", stuck.State);
-        Assert.Contains("systemctl enable --now tether-update.path", stuck.Message);
+        Assert.Contains("systemctl reset-failed tether-update.path", stuck.Message);
 
         // The request is gone but no new status was written: the updater stopped without a word.
         File.Delete(request);
@@ -415,6 +415,8 @@ public class ServerApiTests : IAsyncLifetime
 
         var report = diagnostics.ToReport();
         Assert.Contains("update.sh present:   yes", report);
+        Assert.Contains("Path unit state:", report);
+        Assert.Contains("Update service:", report);
         Assert.Contains("=== update.sh started", report);
     }
 }

@@ -179,8 +179,11 @@ then shows every step the app takes and, at the end, what the server reports: wh
 is installed, whether `tether-update.path` is enabled, whether a request is waiting, the last
 `status.json` and the last lines of `update.log`. The token is never shown. **Copy details** puts
 it all on the clipboard; the same report is `GET /api/update/diagnostics` (with the token). A
-request that the updater does not pick up within 45 seconds is reported as such; then run
-`sudo systemctl enable --now tether-update.path`. If the self-update itself is broken, update by
+request that the updater does not pick up within 45 seconds is reported as such, and the report
+shows the state of `tether-update.path` and `tether-update.service`. If the watcher is not
+active, run `sudo systemctl reset-failed tether-update.path tether-update.service && sudo systemctl
+restart tether-update.path`. As a fallback, `tether-update.timer` checks for a waiting request
+every 2 minutes, and installing (or the one-line command) always restarts the watcher. If the self-update itself is broken, update by
 hand once with the command above.
 
 ## 5. Uninstall

@@ -482,7 +482,19 @@ public sealed class ClientSession : IAsyncDisposable
             case TetherApiClient.ServerUpdateRequest.UpdaterMissing or TetherApiClient.ServerUpdateRequest.NotSupported:
                 return new ServerUpdateResult(false, "This server can't update itself yet. Run the install command on the server once.", before, CanUpdateItself: false);
             case TetherApiClient.ServerUpdateRequest.TooSoon:
-                return new ServerUpdateResult(false, "An update was just requested. Wait a minute and try again.", before, CanUpdateItself: true);
+                // A click a moment ago already asked; follow that request if it is still under way.
+                ServerInfo? pending = null;
+                try
+                {
+                    pending = await Api.GetInfoAsync(ct).ConfigureAwait(false);
+                }
+                catch (Exception ex) when (ex is TetherNetworkException or TetherProtocolException)
+                {
+                }
+                if (pending?.Updater?.State is not ("requested" or "running"))
+                    return new ServerUpdateResult(false, "An update was just requested. Wait a minute and try again.", before, CanUpdateItself: true);
+                trace("An update asked for a moment ago is still under way; following it", LogLevel.Information);
+                break;
         }
 
         progress?.Report("Downloading and checking the new version");

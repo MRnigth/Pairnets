@@ -1,9 +1,12 @@
 [Unit]
 Description=Watch for an update request from the Tether server
+# Never give up watching, however often the updater ran.
+StartLimitIntervalSec=0
 
 [Path]
 PathExists=/var/lib/tether/update/request
 Unit=tether-update.service
+TriggerLimitIntervalSec=0
 
 [Install]
 WantedBy=multi-user.target

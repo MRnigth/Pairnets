@@ -110,10 +110,19 @@ if [[ -f "$SRC_DIR/tether-update.service" && -f "$SRC_DIR/tether-update.path" ]]
   install -m 0644 -o root -g root "$SRC_DIR/tether-update.service" /etc/systemd/system/tether-update.service
   install -m 0644 -o root -g root "$SRC_DIR/tether-update.path" /etc/systemd/system/tether-update.path
 fi
+if [[ -f "$SRC_DIR/tether-update.timer" ]]; then
+  install -m 0644 -o root -g root "$SRC_DIR/tether-update.timer" /etc/systemd/system/tether-update.timer
+fi
 systemctl daemon-reload
 systemctl enable --now "$SERVICE"
 if [[ -f /etc/systemd/system/tether-update.path ]]; then
-  systemctl enable --now tether-update.path
+  # Clear any "failed" state (e.g. a start limit hit) and make sure the watcher really runs.
+  systemctl reset-failed tether-update.path tether-update.service 2>/dev/null || true
+  systemctl enable tether-update.path
+  systemctl restart tether-update.path
+fi
+if [[ -f /etc/systemd/system/tether-update.timer ]]; then
+  systemctl enable --now tether-update.timer
 fi
 
 # 5. Wait for health.
@@ -127,11 +136,14 @@ if [[ -z "$ok" ]]; then
   echo "         Check: sudo journalctl -u $SERVICE -n 50" >&2
 fi
 
+UPDATER_STATE="$(systemctl is-active tether-update.path 2>/dev/null || true)"
+
 echo
 echo "Tether server is installed."
 echo "  Data:    $DATA_DIR"
 echo "  Config:  $ENV_FILE (root only)"
 echo "  Logs:    sudo journalctl -u $SERVICE -f"
+echo "  Updater: tether-update.path is ${UPDATER_STATE:-unknown} (should be: active)"
 echo
 echo "Enter these settings in Tether on both PCs:"
 echo "  Server URL:  http://$BIND:$PORT/"

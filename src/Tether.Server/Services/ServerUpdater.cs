@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.Json;
 using Tether.Core;
 using Tether.Server.Storage;
@@ -52,7 +53,7 @@ public sealed class ServerUpdater(ServerPaths paths, SyncOptions options, TimePr
                 return status;
             if (_clock.GetUtcNow() - asked > StartTimeout)
                 return new UpdaterStatus(true, "failed",
-                    $"The updater did not start within {StartTimeout.TotalSeconds:0} seconds. On the server run: sudo systemctl enable --now tether-update.path", asked);
+                    $"The updater did not start within {StartTimeout.TotalSeconds:0} seconds. On the server run: sudo systemctl reset-failed tether-update.path tether-update.service && sudo systemctl restart tether-update.path", asked);
             return new UpdaterStatus(true, "requested", "Waiting for the updater to start.", asked);
         }
         if (status is not null && (_lastRequest is not { } last || writtenAt >= last - TimeSpan.FromSeconds(1)))
@@ -101,7 +102,53 @@ public sealed class ServerUpdater(ServerPaths paths, SyncOptions options, TimePr
             lastAttempt,
             statusJson,
             writtenAt,
-            ReadLogTail(hide));
+            ReadLogTail(hide),
+            UnitState("tether-update.path"),
+            UnitState("tether-update.service"));
+    }
+
+    /// <summary>
+    /// "active (waiting)", "failed (failed), result unit-start-limit-hit", … for one of the updater's
+    /// systemd units (a read-only query the unprivileged server may make), or null without systemd.
+    /// </summary>
+    private static string? UnitState(string unit)
+    {
+        if (!OperatingSystem.IsLinux())
+            return null;
+        try
+        {
+            var start = new ProcessStartInfo("systemctl") { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
+            start.ArgumentList.Add("show");
+            start.ArgumentList.Add(unit);
+            start.ArgumentList.Add("--property=ActiveState,SubState,Result,ExecMainStatus");
+            using var process = Process.Start(start);
+            if (process is null)
+                return null;
+            var output = process.StandardOutput.ReadToEndAsync();
+            if (!process.WaitForExit(3000))
+            {
+                process.Kill();
+                return "unknown (systemctl did not answer)";
+            }
+            if (process.ExitCode != 0)
+                return null;
+            var props = output.Result.Split('\n', StringSplitOptions.RemoveEmptyEntries)
+                .Select(l => l.Trim().Split('=', 2))
+                .Where(p => p.Length == 2)
+                .ToDictionary(p => p[0], p => p[1]);
+            if (!props.TryGetValue("ActiveState", out var active) || active.Length == 0)
+                return null;
+            var text = props.TryGetValue("SubState", out var sub) && sub.Length > 0 ? $"{active} ({sub})" : active;
+            if (props.TryGetValue("Result", out var result) && result.Length > 0 && result != "success")
+                text += ", result " + result;
+            if (props.TryGetValue("ExecMainStatus", out var status) && status.Length > 0 && status != "0")
+                text += ", last exit code " + status;
+            return text;
+        }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException or IOException)
+        {
+            return null; // no systemctl here
+        }
     }
 
     private (UpdaterStatus? Status, DateTimeOffset? WrittenAt) ReadStatusFile()

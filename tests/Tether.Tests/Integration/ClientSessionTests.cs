@@ -247,6 +247,31 @@ public class ClientSessionTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task ASecondClickFollowsTheRequestStillUnderWay()
+    {
+        await _server.DisposeAsync();
+        using var dir = new TempDir("updater");
+        var script = Path.Combine(dir.Path, "update.sh");
+        File.WriteAllText(script, "#!/bin/sh\n");
+        _server = await TestServer.StartAsync(config: new() { ["Sync:UpdaterScript"] = script });
+        await using var session = Start();
+        var updateDir = Path.Combine(_server.Paths.DataDir, "update");
+
+        // The first click's request is waiting; the second click is "too soon" but follows it.
+        using (var http = _server.RawHttp(_server.Token))
+            Assert.Equal(HttpStatusCode.Accepted, (await http.PostAsync("api/update", null)).StatusCode);
+        _ = Task.Run(async () =>
+        {
+            await Task.Delay(500);
+            File.WriteAllText(Path.Combine(updateDir, "status.json"), "{\"state\":\"failed\",\"message\":\"Could not download the release.\"}");
+            File.Delete(Path.Combine(updateDir, "request"));
+        });
+        var result = await session.UpdateServerAsync(null, default, pollInterval: TimeSpan.FromMilliseconds(100), timeout: TimeSpan.FromSeconds(10));
+        Assert.False(result.Success);
+        Assert.Equal("Could not download the release.", result.Message);
+    }
+
+    [Fact]
     public async Task UpdateServerOnAClosedSessionExplainsInsteadOfThrowing()
     {
         // Saving Settings disposes the session; an update window opened before that used to crash here.
