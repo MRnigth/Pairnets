@@ -11,17 +11,21 @@ namespace Tether.Client.Ui;
 /// <summary>"Your server should be updated": asks, runs the update and shows how it went.</summary>
 public partial class ServerUpdateWindow : Window
 {
-    private readonly ClientSession? _session;
-    private readonly bool _debug;
+    private readonly Func<ClientSession?> _session;
+    private readonly Func<bool> _debugMode;
     private readonly bool _upToDate;
+    private bool _debug;
 
-    public ServerUpdateWindow(ClientSession? session, string serverVersion, string? appVersion = null, bool debug = false)
+    /// <param name="session">The current session, looked up on every click: saving Settings replaces it.</param>
+    /// <param name="debug">Whether Debug mode is on, also looked up on every click.</param>
+    public ServerUpdateWindow(Func<ClientSession?>? session, string serverVersion, string? appVersion = null, Func<bool>? debug = null)
     {
         ThemeManager.Attach(this);
         InitializeComponent();
-        _session = session;
-        _debug = debug;
-        DetailsPanel.Visibility = debug ? Visibility.Visible : Visibility.Collapsed;
+        _session = session ?? (() => null);
+        _debugMode = debug ?? (() => false);
+        _debug = _debugMode();
+        DetailsPanel.Visibility = _debug ? Visibility.Visible : Visibility.Collapsed;
         ServerVersion = serverVersion;
         appVersion ??= TetherInfo.ProductVersion;
         if (serverVersion.Length == 0)
@@ -71,15 +75,31 @@ public partial class ServerUpdateWindow : Window
 
     private void OnLater(object sender, RoutedEventArgs e) => Close();
 
-    private async void OnUpdate(object sender, RoutedEventArgs e)
+    private async void OnUpdate(object sender, RoutedEventArgs e) => await RunUpdateAsync();
+
+    /// <summary>"Update server": runs the update with the session of this moment and shows how it went (never throws).</summary>
+    internal async Task RunUpdateAsync()
     {
-        if (_session is null)
+        _debug = _debugMode();
+        DetailsPanel.Visibility = _debug ? Visibility.Visible : Visibility.Collapsed;
+        if (_session() is not { } session)
+        {
+            ShowResult(new ServerUpdateResult(false, "Not connected to the server. Check Settings and try again.", ServerVersion, CanUpdateItself: true));
             return;
+        }
         ShowBusy("Asking the server to update");
         if (_debug)
             DetailsText.Clear();
         var trace = _debug ? new Progress<string>(AppendDetail) : null;
-        var result = await _session.UpdateServerAsync(new Progress<string>(ShowBusy), CancellationToken.None, trace: trace);
+        ServerUpdateResult result;
+        try
+        {
+            result = await session.UpdateServerAsync(new Progress<string>(ShowBusy), CancellationToken.None, trace: trace);
+        }
+        catch (Exception ex)
+        {
+            result = new ServerUpdateResult(false, $"Unexpected error: {ex.GetType().Name}: {ex.Message}", ServerVersion, CanUpdateItself: true);
+        }
         ShowResult(result);
     }
 

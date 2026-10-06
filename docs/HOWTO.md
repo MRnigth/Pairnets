@@ -532,6 +532,13 @@ mode**. Tether then writes more detail to its log, and the update window gets a 
 step the app takes and, at the end, the server's own update log and settings. **Copy details** puts it
 on the clipboard so you can send it to whoever helps you. Turn it off again when you are done.
 
+**Report a bug.** Click **Report a bug** in the main window (or in the tray / menu-bar menu). Tether
+builds a report with its version, your system, your settings (never the token), the sync status, the
+server's update details, recent activity and the last 300 lines of the log. It copies the report to the
+clipboard and saves it as `bug-report-….txt` in the log folder, so you can paste it to whoever helps you;
+nothing is sent anywhere. After an unexpected error, Tether keeps running and offers the same report with
+that error in it.
+
 This works because the server installer (`install.sh`) also installs a small root-owned updater
 the first time, so no password is needed later. How this stays safe is explained in
 [DEPLOY.md](DEPLOY.md#4b-updating-the-server).

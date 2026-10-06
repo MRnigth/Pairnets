@@ -246,6 +246,35 @@ public class ClientSessionTests : IAsyncLifetime
         Assert.Contains(trace, l => l.Contains("accepted"));
     }
 
+    [Fact]
+    public async Task UpdateServerOnAClosedSessionExplainsInsteadOfThrowing()
+    {
+        // Saving Settings disposes the session; an update window opened before that used to crash here.
+        var session = Start();
+        await session.DisposeAsync();
+        var result = await session.UpdateServerAsync(null, default, pollInterval: TimeSpan.FromMilliseconds(100), timeout: TimeSpan.FromSeconds(2));
+        Assert.False(result.Success);
+        Assert.Contains("connection to the server was restarted", result.Message);
+        Assert.Contains("Could not read the server's updater details", result.Details);
+    }
+
+    [Fact]
+    public async Task BugReportCarriesStatusActivityAndServerDetailsButNotTheToken()
+    {
+        await using var session = Start();
+        await WaitUntil(() => session.Status.Server is not null, "server info");
+        session.Activity.Add(ActivityKind.Info, null, "Something happened");
+        var report = await BugReport.BuildAsync(session.Settings, session, null, null, "Test app");
+
+        Assert.Contains("App:       Test app " + TetherInfo.ProductVersion, report);
+        Assert.Contains("Server:       " + TetherInfo.ProductVersion, report);
+        Assert.Contains("update.sh present:   no", report); // the server's updater report came along
+        Assert.Contains("Something happened", report);
+        Assert.Contains("(no log file yet)", report);
+        Assert.DoesNotContain(_server.Token, report);
+        Assert.DoesNotContain("unused-by-session", report); // the protected token from the settings
+    }
+
     /// <summary>Acts like update.sh: waits for the request, writes the log and status, then removes the request.</summary>
     private static void PlayUpdater(string updateDir, string statusJson, string? log) => _ = Task.Run(async () =>
     {

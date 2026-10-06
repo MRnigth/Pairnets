@@ -50,6 +50,7 @@ public sealed class TrayController : IMainActions, IDisposable
     private readonly Forms.ToolStripMenuItem _fixProblem = new("Fix…") { Visible = false };
     private readonly Forms.ToolStripMenuItem _settingsItem = new("Settings…");
     private readonly Forms.ToolStripMenuItem _viewLog = new("View log");
+    private readonly Forms.ToolStripMenuItem _reportBug = new("Report a bug…");
     private readonly Forms.ToolStripMenuItem _pause = new("Pause syncing");
     private readonly Forms.ToolStripMenuItem _autoStart = new("Start with Windows") { CheckOnClick = true };
     private readonly Forms.ToolStripMenuItem _exit = new("Exit");
@@ -65,13 +66,14 @@ public sealed class TrayController : IMainActions, IDisposable
 
         var menu = new Forms.ContextMenuStrip();
         menu.Items.AddRange([_openApp, _statusItem, new Forms.ToolStripSeparator(), _syncNow, _openFolder, _fixProblem,
-            new Forms.ToolStripSeparator(), _settingsItem, _viewLog, _pause, _autoStart, new Forms.ToolStripSeparator(), _exit]);
+            new Forms.ToolStripSeparator(), _settingsItem, _viewLog, _reportBug, _pause, _autoStart, new Forms.ToolStripSeparator(), _exit]);
         _openApp.Click += (_, _) => ShowMainWindow();
         _syncNow.Click += (_, _) => SyncNow();
         _openFolder.Click += (_, _) => OpenFolder();
         _fixProblem.Click += (_, _) => FixBlocked();
         _settingsItem.Click += (_, _) => ShowSettings(firstRun: false);
         _viewLog.Click += (_, _) => ViewLog();
+        _reportBug.Click += (_, _) => ReportBug();
         _pause.Click += (_, _) => TogglePause();
         _autoStart.Click += (_, _) => SetAutoStart(_autoStart.Checked);
         _exit.Click += (_, _) => Exit();
@@ -426,7 +428,7 @@ public sealed class TrayController : IMainActions, IDisposable
     public void UpdateServer()
     {
         if (_session is { } session && session.Status.Server is { } info)
-            ShowServerUpdate(session, info.ServerVersion ?? string.Empty, null);
+            ShowServerUpdate(info.ServerVersion ?? string.Empty, null);
     }
 
     private void OnServerInfo(ClientSession session, Core.ServerInfo info)
@@ -446,22 +448,31 @@ public sealed class TrayController : IMainActions, IDisposable
             UpdateServerQuietly(session, info.ServerVersion!);
             return;
         }
-        ShowServerUpdate(session, info.ServerVersion!, null);
+        ShowServerUpdate(info.ServerVersion!, null);
     }
 
     private async void UpdateServerQuietly(ClientSession session, string serverVersion)
     {
-        var result = await session.UpdateServerQuietlyAsync(CancellationToken.None);
+        ServerUpdateResult result;
+        try
+        {
+            result = await session.UpdateServerQuietlyAsync(CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            _log.LogError(ex, "Automatic server update failed");
+            return;
+        }
         _dirty = true;
         if (result.Success && !result.AlreadyUpToDate)
             Toast("server-updated", "Server updated", $"Your server now runs {result.ServerVersion}.", Forms.ToolTipIcon.Info, ShowMainWindow);
         else if (!result.CanUpdateItself)
-            ShowServerUpdate(session, serverVersion, result); // needs the one-time setup
+            ShowServerUpdate(serverVersion, result); // needs the one-time setup
     }
 
-    private void ShowServerUpdate(ClientSession session, string serverVersion, ServerUpdateResult? result)
+    private void ShowServerUpdate(string serverVersion, ServerUpdateResult? result)
     {
-        var dialog = new ServerUpdateWindow(session, serverVersion, debug: _settings.DebugMode);
+        var dialog = new ServerUpdateWindow(() => _session, serverVersion, debug: () => _settings.DebugMode); // saving Settings replaces the session
         if (result is not null)
             dialog.ShowResult(result);
         dialog.Closed += (_, _) =>
@@ -485,6 +496,21 @@ public sealed class TrayController : IMainActions, IDisposable
     void IMainActions.ShowSettings() => ShowSettings(firstRun: false);
 
     public void ViewLog() => Shell(_fileLog.CurrentFile);
+
+    /// <summary>"Report a bug": a report to paste to whoever helps (copied and saved; nothing is sent).</summary>
+    public void ReportBug() => ShowBugReport(null);
+
+    /// <summary>Offered after an unexpected error: the same report, with that error in it.</summary>
+    public void ReportBug(Exception error) => ShowBugReport(error);
+
+    private void ShowBugReport(Exception? error)
+    {
+        var settings = _settings;
+        var session = _session;
+        var window = new BugReportWindow(() => BugReport.BuildAsync(settings, session, _fileLog.CurrentFile, error, "Windows app"), Shell, afterError: error is not null);
+        window.Show();
+        window.Activate();
+    }
 
     private string LocalPath(string syncPath) => Path.Combine(_settings.Folder ?? string.Empty, PathRules.ToOsRelative(syncPath));
 

@@ -27,6 +27,7 @@ public sealed class DesktopController : IMainActions, IDisposable
     private readonly IClassicDesktopStyleApplicationLifetime _lifetime;
     private readonly IPlatformServices _platform;
     private readonly RollingFileLoggerProvider _fileLog;
+    private bool _reportingError;
     private readonly ILoggerFactory _loggers;
     private readonly ILogger _log;
     private readonly Dictionary<RunnerStatus, WindowIcon> _icons = [];
@@ -56,6 +57,7 @@ public sealed class DesktopController : IMainActions, IDisposable
         _loggers = LoggerFactory.Create(b => b.AddProvider(_fileLog).SetMinimumLevel(LogLevel.Debug));
         _log = _loggers.CreateLogger("Tether.Desktop");
         _settings = SettingsStore.Load(SettingsStore.DefaultPath);
+        Dispatcher.UIThread.UnhandledException += OnUnhandledException;
         _fileLog.Minimum = _settings.DebugMode ? LogLevel.Debug : LogLevel.Information; // Debug mode: more detail in the log
         _refresh = new DispatcherTimer(TimeSpan.FromMilliseconds(250), DispatcherPriority.Background, (_, _) => RefreshIfDirty());
         _updates = new UpdateService(new UpdateChecker(new HttpClient()), TetherInfo.ProductVersion, UpdateChecker.AssetForThisPlatform());
@@ -101,6 +103,8 @@ public sealed class DesktopController : IMainActions, IDisposable
         settings.Click += (_, _) => ShowSettings();
         var log = new NativeMenuItem("View log");
         log.Click += (_, _) => ViewLog();
+        var report = new NativeMenuItem("Report a bug…");
+        report.Click += (_, _) => ReportBug();
         _pauseItem = new NativeMenuItem("Pause syncing");
         _pauseItem.Click += (_, _) => TogglePause();
         _autoStartItem = new NativeMenuItem("Start at login") { ToggleType = NativeMenuItemToggleType.CheckBox, IsChecked = SafeIsAutoStart() };
@@ -108,7 +112,7 @@ public sealed class DesktopController : IMainActions, IDisposable
         var quit = new NativeMenuItem("Quit Tether");
         quit.Click += (_, _) => Quit();
         foreach (var item in new NativeMenuItemBase[] { open, _statusItem, new NativeMenuItemSeparator(), sync, folder, _fixItem,
-                     new NativeMenuItemSeparator(), settings, log, _pauseItem, _autoStartItem, new NativeMenuItemSeparator(), quit })
+                     new NativeMenuItemSeparator(), settings, log, report, _pauseItem, _autoStartItem, new NativeMenuItemSeparator(), quit })
             menu.Items.Add(item);
 
         _tray = new TrayIcon
@@ -381,7 +385,7 @@ public sealed class DesktopController : IMainActions, IDisposable
     public void UpdateServer()
     {
         if (_session is { } session && session.Status.Server is { } info)
-            ShowServerUpdate(session, info.ServerVersion ?? string.Empty, null);
+            ShowServerUpdate(info.ServerVersion ?? string.Empty, null);
     }
 
     private void OnServerInfo(ClientSession session, ServerInfo info)
@@ -401,22 +405,31 @@ public sealed class DesktopController : IMainActions, IDisposable
             _ = UpdateServerQuietlyAsync(session, info.ServerVersion!);
             return;
         }
-        ShowServerUpdate(session, info.ServerVersion!, null);
+        ShowServerUpdate(info.ServerVersion!, null);
     }
 
     private async Task UpdateServerQuietlyAsync(ClientSession session, string serverVersion)
     {
-        var result = await session.UpdateServerQuietlyAsync(CancellationToken.None);
+        ServerUpdateResult result;
+        try
+        {
+            result = await session.UpdateServerQuietlyAsync(CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            _log.LogError(ex, "Automatic server update failed");
+            return;
+        }
         _dirty = true;
         if (result.Success && !result.AlreadyUpToDate)
             Notify("server-updated", "Server updated", $"Your server now runs {result.ServerVersion}.");
         else if (!result.CanUpdateItself)
-            Dispatcher.UIThread.Post(() => ShowServerUpdate(session, serverVersion, result)); // needs the one-time setup
+            Dispatcher.UIThread.Post(() => ShowServerUpdate(serverVersion, result)); // needs the one-time setup
     }
 
-    private void ShowServerUpdate(ClientSession session, string serverVersion, ServerUpdateResult? result)
+    private void ShowServerUpdate(string serverVersion, ServerUpdateResult? result)
     {
-        var dialog = new ServerUpdateWindow(session, serverVersion, debug: _settings.DebugMode);
+        var dialog = new ServerUpdateWindow(() => _session, serverVersion, debug: () => _settings.DebugMode); // saving Settings replaces the session
         if (result is not null)
             dialog.ShowResult(result);
         dialog.Closed += (_, _) =>
@@ -457,6 +470,41 @@ public sealed class DesktopController : IMainActions, IDisposable
     }
 
     public void ViewLog() => _platform.Open(_fileLog.CurrentFile);
+
+    /// <summary>"Report a bug": a report to paste to whoever helps (copied and saved; nothing is sent).</summary>
+    public void ReportBug() => ShowBugReport(null);
+
+    private void ShowBugReport(Exception? error)
+    {
+        var settings = _settings;
+        var session = _session;
+        var app = OperatingSystem.IsMacOS() ? "Mac app" : "Linux app";
+        var window = new BugReportWindow(() => BugReport.BuildAsync(settings, session, _fileLog.CurrentFile, error, app), _platform.Open, afterError: error is not null);
+        window.Show();
+        window.Activate();
+    }
+
+    /// <summary>An error nothing else caught: log it, keep running, and offer a bug report with it.</summary>
+    private void OnUnhandledException(object? sender, DispatcherUnhandledExceptionEventArgs e)
+    {
+        _log.LogError(e.Exception, "Unhandled UI exception");
+        e.Handled = true;
+        if (_reportingError)
+            return; // the report window itself failed; do not loop
+        _reportingError = true;
+        try
+        {
+            ShowBugReport(e.Exception);
+        }
+        catch (Exception ex)
+        {
+            _log.LogError(ex, "Could not open the bug report");
+        }
+        finally
+        {
+            _reportingError = false;
+        }
+    }
 
     private bool SafeIsAutoStart()
     {

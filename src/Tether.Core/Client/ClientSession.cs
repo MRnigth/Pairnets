@@ -416,7 +416,23 @@ public sealed class ClientSession : IAsyncDisposable
             trace?.Report($"[{(_clock.GetUtcNow() - started).TotalSeconds,3:0}s] {line}");
         }
 
-        var result = await RunServerUpdateAsync(progress, Trace, ct, pollInterval, timeout).ConfigureAwait(false);
+        ServerUpdateResult result;
+        try
+        {
+            result = await RunServerUpdateAsync(progress, Trace, ct, pollInterval, timeout).ConfigureAwait(false);
+        }
+        catch (ObjectDisposedException)
+        {
+            // Saving Settings restarts the session; a window still holding the old one ends up here.
+            result = new ServerUpdateResult(false, "The connection to the server was restarted (settings were saved). Try again.",
+                Status.Server?.ServerVersion, CanUpdateItself: true);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _log.LogError(ex, "Server update failed unexpectedly");
+            result = new ServerUpdateResult(false, $"Unexpected error: {ex.GetType().Name}: {ex.Message}",
+                Status.Server?.ServerVersion, CanUpdateItself: true);
+        }
         Trace((result.Success ? "Done: " : "Not updated: ") + result.Message, result.Success ? LogLevel.Information : LogLevel.Warning);
         if (result.Success && trace is null)
             return result;
@@ -434,7 +450,7 @@ public sealed class ClientSession : IAsyncDisposable
             return diagnostics?.ToReport()
                 ?? "This server is too old to report updater details. Update it once by hand: curl -fsSL https://raw.githubusercontent.com/MRnigth/Tether/main/deploy/get.sh | sudo bash";
         }
-        catch (Exception ex) when (ex is TetherNetworkException or TetherAuthException or TetherProtocolException)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             return "Could not read the server's updater details: " + ex.Message;
         }
@@ -547,7 +563,9 @@ public sealed class ClientSession : IAsyncDisposable
     }
 }
 
-/// <summary>How "Update server" ended. <see cref="CanUpdateItself"/> false: show the one-time install command.</summary>
-/// <summary>How "Update server" ended. <paramref name="Details"/> is the server's updater report (failures, and Debug mode).</summary>
+/// <summary>
+/// How "Update server" ended. <see cref="CanUpdateItself"/> false: show the one-time install command.
+/// <see cref="Details"/> is the server's updater report (failures, and Debug mode).
+/// </summary>
 public sealed record ServerUpdateResult(bool Success, string Message, string? ServerVersion, bool CanUpdateItself,
     bool AlreadyUpToDate = false, string? Details = null);

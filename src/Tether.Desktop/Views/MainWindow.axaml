@@ -155,6 +155,12 @@
           <TextBlock Text="Log" />
         </StackPanel>
       </Button>
+      <Button Classes="subtle" Click="OnReportBug" ToolTip.Tip="Copies a report for troubleshooting (never the token)">
+        <StackPanel Orientation="Horizontal" Spacing="7">
+          <v:LineIcon Classes="icon" Width="17" Height="17" Data="{StaticResource I.Warning}" />
+          <TextBlock Text="Report a bug" />
+        </StackPanel>
+      </Button>
     </StackPanel>
 
     <!-- Activity / Needs attention -->

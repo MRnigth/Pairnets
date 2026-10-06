@@ -94,7 +94,7 @@ public class DesktopUiTests
         Assert.Equal("S.Green", upToDate.BadgeKey);
         upToDate.Close();
 
-        var debug = new ServerUpdateWindow(null, "1.0.52", "1.0.58", debug: true);
+        var debug = new ServerUpdateWindow(null, "1.0.52", "1.0.58", debug: () => true);
         debug.Show();
         Assert.True(debug.DetailsShown);
         Assert.Equal("S.Orange", debug.BadgeKey);
@@ -106,6 +106,21 @@ public class DesktopUiTests
         Assert.Contains("--- What the server reports ---", debug.DetailsValue);
         Assert.Contains("Path unit enabled:   NO", debug.DetailsValue);
         debug.Close();
+
+        // No session (or settings were just saved): the button explains instead of throwing.
+        var noSession = new ServerUpdateWindow(() => null, "1.0.52", "1.0.58");
+        noSession.Show();
+        Assert.True(noSession.RunUpdateAsync().IsCompleted);
+        Assert.Equal("Not updated yet", noSession.HeadingText);
+        Assert.Contains("Not connected to the server", noSession.ExplanationText);
+        noSession.Close();
+
+        using var reports = new TempDir("bug-reports");
+        var bug = new BugReportWindow(() => Task.FromResult("Tether bug report\nline two"), _ => { }, afterError: true, saveDirectory: reports.Path);
+        Assert.True(bug.BuildAsync().IsCompleted);
+        Assert.Equal("Tether bug report\nline two", bug.ReportValue);
+        Assert.NotNull(bug.SavedPath);
+        Assert.Equal("Tether bug report\nline two", File.ReadAllText(bug.SavedPath!));
 
         var dialog = new ServerUpdateWindow(null, "1.0.52", "1.0.58");
         dialog.Show();

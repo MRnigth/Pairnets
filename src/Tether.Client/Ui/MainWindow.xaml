@@ -184,10 +184,16 @@
           <TextBlock Text="Settings" />
         </StackPanel>
       </Button>
-      <Button Style="{StaticResource SubtleButton}" Click="OnViewLog">
+      <Button Style="{StaticResource SubtleButton}" Margin="0,0,8,0" Click="OnViewLog">
         <StackPanel Orientation="Horizontal">
           <ui:LineIcon Style="{StaticResource ToolIcon}" Data="{StaticResource I.Log}" />
           <TextBlock Text="Log" />
+        </StackPanel>
+      </Button>
+      <Button Style="{StaticResource SubtleButton}" Click="OnReportBug" ToolTip="Copies a report for troubleshooting (never the token)">
+        <StackPanel Orientation="Horizontal">
+          <ui:LineIcon Style="{StaticResource ToolIcon}" Data="{StaticResource I.Warning}" />
+          <TextBlock Text="Report a bug" />
         </StackPanel>
       </Button>
     </StackPanel>

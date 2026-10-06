@@ -26,6 +26,7 @@ public interface IMainActions
     void DismissUpdate();
     void DownloadNow();
     void UpdateServer();
+    void ReportBug();
 }
 
 /// <summary>
@@ -225,6 +226,8 @@ public partial class MainWindow : Window
     private void OnOpenFolder(object sender, RoutedEventArgs e) => _actions?.OpenFolder();
     private void OnSettings(object sender, RoutedEventArgs e) => _actions?.ShowSettings();
     private void OnViewLog(object sender, RoutedEventArgs e) => _actions?.ViewLog();
+
+    private void OnReportBug(object sender, RoutedEventArgs e) => _actions?.ReportBug();
     private void OnUpdateNow(object sender, RoutedEventArgs e) => _actions?.UpdateNow();
     private void OnUpdateLater(object sender, RoutedEventArgs e) => _actions?.DismissUpdate();
     private void OnDownloadNow(object sender, RoutedEventArgs e) => _actions?.DownloadNow();

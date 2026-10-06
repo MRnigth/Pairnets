@@ -27,8 +27,21 @@ public sealed class App : Application
         DispatcherUnhandledException += (_, args) =>
         {
             log.LogError(args.Exception, "Unhandled UI exception");
-            MessageBox.Show("Tether hit an unexpected error and will keep running:\n" + args.Exception.Message, "Tether", MessageBoxButton.OK, MessageBoxImage.Error);
             args.Handled = true;
+            var answer = MessageBox.Show("Tether hit an unexpected error and will keep running:\n" + args.Exception.Message
+                + "\n\nCreate a bug report? It is copied to the clipboard so you can paste it to whoever helps you; nothing is sent anywhere.",
+                "Tether", MessageBoxButton.YesNo, MessageBoxImage.Error);
+            if (answer == MessageBoxResult.Yes)
+            {
+                try
+                {
+                    _tray?.ReportBug(args.Exception);
+                }
+                catch (Exception ex)
+                {
+                    log.LogError(ex, "Could not open the bug report");
+                }
+            }
         };
         AppDomain.CurrentDomain.UnhandledException += (_, args) => log.LogCritical(args.ExceptionObject as Exception, "Unhandled exception");
         TaskScheduler.UnobservedTaskException += (_, args) =>
