@@ -390,6 +390,30 @@ public class ServerApiTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task UpdateRequestsGoToTheConfiguredUpdaterFolderEvenWithAnotherDataDir()
+    {
+        using var dir = new TempDir("updater");
+        var script = Path.Combine(dir.Path, "update.sh");
+        File.WriteAllText(script, "#!/bin/sh\n");
+        var updateDir = Path.Combine(dir.Path, "watched", "update");
+        Directory.CreateDirectory(updateDir);
+        await using var server = await TestServer.StartAsync(config: new()
+        {
+            ["Sync:UpdaterScript"] = script,
+            ["Sync:UpdateDir"] = updateDir,
+        });
+        using var http = server.RawHttp(server.Token);
+        Assert.Equal(HttpStatusCode.Accepted, (await http.PostAsync("api/update", null)).StatusCode);
+        Assert.True(File.Exists(Path.Combine(updateDir, "request")));
+        Assert.False(File.Exists(Path.Combine(server.Paths.DataDir, "update", "request")));
+
+        using var api = server.Client();
+        var diagnostics = (await api.GetUpdateDiagnosticsAsync(default))!;
+        Assert.Equal(Path.Combine(updateDir, "request"), diagnostics.RequestPath);
+        Assert.Contains("Request file:        " + Path.Combine(updateDir, "request"), diagnostics.ToReport());
+    }
+
+    [Fact]
     public async Task UpdaterDiagnosticsNeedTheTokenAndNeverShowIt()
     {
         using var dir = new TempDir("updater");

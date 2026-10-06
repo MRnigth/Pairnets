@@ -48,6 +48,7 @@ curl http://$(tailscale ip -4):5075/api/health
 | `SYNC_TOKEN` | – (required, ≥ 16 chars) | shared secret |
 | `ASPNETCORE_URLS` | `http://127.0.0.1:5075` | listen address: use `http://<tailscale-ip>:5075` |
 | `Sync__DataDir` | `/var/lib/tether` | data directory |
+| `Sync__UpdateDir` | `/var/lib/tether/update` (set by install.sh) | where update requests go; must be the folder the root updater watches |
 | `Sync__HistoryRetentionDays` | 30 | delete history versions older than this... |
 | `Sync__HistoryMinVersions` | 5 | ...but always keep this many per file |
 

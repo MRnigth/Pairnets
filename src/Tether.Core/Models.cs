@@ -51,7 +51,8 @@ public sealed record UpdaterDiagnostics(
     DateTimeOffset? StatusWrittenAt,
     IReadOnlyList<string> LogTail,
     string? PathUnitState = null,
-    string? ServiceState = null)
+    string? ServiceState = null,
+    string? RequestPath = null)
 {
     /// <summary>A plain-text report for the details box and the log.</summary>
     public string ToReport()
@@ -66,6 +67,9 @@ public sealed record UpdaterDiagnostics(
         if (PathUnitState is { } state && !state.StartsWith("active", StringComparison.Ordinal))
             sb.AppendLine("  -> the updater is not watching for requests. On the server run: sudo systemctl reset-failed tether-update.path tether-update.service && sudo systemctl restart tether-update.path");
         sb.AppendLine($"Update service:      {ServiceState ?? "unknown"}");
+        sb.AppendLine($"Request file:        {RequestPath ?? "unknown"}");
+        if (RequestPath is { } path && path.StartsWith('/') && path != "/var/lib/tether/update/request")
+            sb.AppendLine("  -> the updater only watches /var/lib/tether/update/request. Re-run the install command on the server to fix this.");
         sb.AppendLine($"Request waiting:     {(RequestPending ? "yes, since " + Time(RequestedAt) : "no")}");
         sb.AppendLine($"Last request (app):  {Time(LastRequestAt)}");
         sb.AppendLine($"Last updater run:    {Time(LastAttemptAt)}");

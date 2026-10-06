@@ -88,14 +88,17 @@ fi
 umask 077
 if [[ -f "$ENV_FILE" && -z "$NEW_TOKEN" ]]; then
   # Upgrade: keep every setting, only (re)write the address in case --bind/--port was given.
-  sed -e "s#^ASPNETCORE_URLS=.*#ASPNETCORE_URLS=http://$BIND:$PORT#" "$ENV_FILE" > "$ENV_FILE.tmp"
+  sed -e "s#^ASPNETCORE_URLS=.*#ASPNETCORE_URLS=http://$BIND:$PORT#" -e "s#^Sync__UpdateDir=.*#Sync__UpdateDir=$DATA_DIR/update#" "$ENV_FILE" > "$ENV_FILE.tmp"
   grep -q '^ASPNETCORE_URLS=' "$ENV_FILE.tmp" || echo "ASPNETCORE_URLS=http://$BIND:$PORT" >> "$ENV_FILE.tmp"
+  # The root updater only watches $DATA_DIR/update, whatever data folder the server uses.
+  grep -q '^Sync__UpdateDir=' "$ENV_FILE.tmp" || echo "Sync__UpdateDir=$DATA_DIR/update" >> "$ENV_FILE.tmp"
 else
   cat > "$ENV_FILE.tmp" <<ENV
 # Written by install.sh. Keep this file private (root only, mode 600).
 SYNC_TOKEN=$TOKEN
 ASPNETCORE_URLS=http://$BIND:$PORT
 Sync__DataDir=$DATA_DIR
+Sync__UpdateDir=$DATA_DIR/update
 Sync__HistoryRetentionDays=30
 Sync__HistoryMinVersions=5
 ENV

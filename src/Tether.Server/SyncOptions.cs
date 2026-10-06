@@ -29,6 +29,13 @@ public sealed class SyncOptions
     /// <summary>The root-run self-update script install.sh puts next to the binary (see ServerUpdater).</summary>
     public string UpdaterScript { get; set; } = Path.Combine(AppContext.BaseDirectory, "update.sh");
 
+    /// <summary>
+    /// Where update requests go and update.sh reports back. It must be the folder the root updater
+    /// watches (/var/lib/tether/update, set by install.sh), even when DataDir is elsewhere.
+    /// Unset: DataDir/update.
+    /// </summary>
+    public string? UpdateDir { get; set; }
+
     public static SyncOptions FromConfiguration(IConfiguration configuration)
     {
         var options = new SyncOptions();

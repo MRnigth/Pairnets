@@ -23,7 +23,7 @@ public sealed class ServerUpdater(ServerPaths paths, SyncOptions options, TimePr
     private readonly object _gate = new();
     private DateTimeOffset? _lastRequest;
 
-    public string UpdateDir => Path.Combine(paths.DataDir, "update");
+    public string UpdateDir => string.IsNullOrWhiteSpace(options.UpdateDir) ? Path.Combine(paths.DataDir, "update") : options.UpdateDir;
 
     public string RequestFile => Path.Combine(UpdateDir, "request");
 
@@ -104,7 +104,8 @@ public sealed class ServerUpdater(ServerPaths paths, SyncOptions options, TimePr
             writtenAt,
             ReadLogTail(hide),
             UnitState("tether-update.path"),
-            UnitState("tether-update.service"));
+            UnitState("tether-update.service"),
+            RequestFile);
     }
 
     /// <summary>
