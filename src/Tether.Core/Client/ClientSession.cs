@@ -57,11 +57,25 @@ public sealed class ClientSession : IAsyncDisposable
             var info = await Api.GetInfoAsync(CancellationToken.None).ConfigureAwait(false);
             Update(s => s with { Server = info });
             ServerInfoChanged?.Invoke(info);
+            await RefreshDevicesAsync().ConfigureAwait(false);
             return info;
         }
         catch (Exception ex) when (ex is TetherNetworkException or TetherAuthException or TetherProtocolException or ObjectDisposedException)
         {
             return null;
+        }
+    }
+
+    /// <summary>Reads the computers that use the server (Devices tab); failures are ignored.</summary>
+    public async Task RefreshDevicesAsync()
+    {
+        try
+        {
+            var devices = await Api.GetDevicesAsync(CancellationToken.None).ConfigureAwait(false);
+            Update(s => s with { Devices = devices ?? [], DevicesUnsupported = devices is null });
+        }
+        catch (Exception ex) when (ex is TetherNetworkException or TetherAuthException or TetherProtocolException or ObjectDisposedException)
+        {
         }
     }
 

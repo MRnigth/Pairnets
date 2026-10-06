@@ -24,6 +24,27 @@ public static class HeadlessApp
 public class DesktopUiTests
 {
     [AvaloniaFact]
+    public void DevicesTabListsTheServersComputers()
+    {
+        var window = new MainWindow(null) { ThisDevice = "MacBook" };
+        window.Show();
+        window.ShowDevicesTab();
+        Assert.False(window.DevicesShown); // nothing from the server yet: the empty text shows
+        window.ShowStatus(StatusSnapshot.Initial with
+        {
+            Devices =
+            [
+                new Tether.Core.DeviceInfo("DESKTOP", DateTimeOffset.UtcNow.AddDays(-2), DateTimeOffset.UtcNow, true, "1.0.38", "Windows"),
+                new Tether.Core.DeviceInfo("MacBook", DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow, true, "1.0.38", "macOS"),
+            ],
+        }, null);
+        Assert.True(window.DevicesShown);
+        Assert.Equal(2, window.DeviceRows);
+        window.AllowClose = true;
+        window.Close();
+    }
+
+    [AvaloniaFact]
     public void MainWindowShowsStatusActivityAndFixAction()
     {
         var window = new MainWindow();

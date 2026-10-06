@@ -27,6 +27,7 @@ public interface IMainActions
     void DownloadNow();
     void UpdateServer();
     void ReportBug();
+    void RefreshDevices();
 }
 
 /// <summary>
@@ -39,6 +40,8 @@ public partial class MainWindow : Window
     private readonly ObservableCollection<ActivityItem> _activity = [];
     private readonly ObservableCollection<AttentionItem> _attention = [];
     private readonly ObservableCollection<ActiveFileView> _active = [];
+    private readonly ObservableCollection<DeviceRow> _devices = [];
+    private IReadOnlyList<Tether.Core.DeviceInfo>? _shownDevices;
     private string? _shownState;
 
     public MainWindow(IMainActions? actions)
@@ -49,6 +52,7 @@ public partial class MainWindow : Window
         ActivityList.ItemsSource = _activity;
         AttentionList.ItemsSource = _attention;
         ActiveList.ItemsSource = _active;
+        DevicesList.ItemsSource = _devices;
         IsVisibleChanged += (_, _) =>
         {
             if (!IsVisible)
@@ -59,6 +63,9 @@ public partial class MainWindow : Window
 
     /// <summary>Set when the app exits, so closing really closes instead of hiding.</summary>
     public bool AllowClose { get; set; }
+
+    /// <summary>This computer's name, marked in the Devices tab.</summary>
+    public string? ThisDevice { get; set; }
 
     protected override void OnClosing(CancelEventArgs e)
     {
@@ -72,6 +79,7 @@ public partial class MainWindow : Window
 
     public void ShowStatus(StatusSnapshot s, string? folder)
     {
+        ShowDevices(s);
         var (brush, icon) = s.IsWaiting ? ("S.Grey", "I.Wait") : Visuals.ForStatus(s.Status);
         StatusBadge.SetResourceReference(Shape.FillProperty, brush);
         StatusGlyph.Data = Visuals.Resource<Geometry>(icon);
@@ -208,18 +216,43 @@ public partial class MainWindow : Window
 
     private void UpdatePanels()
     {
-        if (ActivityPanel is null)
+        if (ActivityPanel is null || DevicesPanel is null)
             return; // Checked fires during InitializeComponent
         var showAttention = AttentionTab.IsChecked == true;
-        ActivityPanel.Visibility = Show(!showAttention && _activity.Count > 0);
-        ActivityEmpty.Visibility = Show(!showAttention && _activity.Count == 0);
+        var showDevices = DevicesTab.IsChecked == true;
+        var showActivity = !showAttention && !showDevices;
+        ActivityPanel.Visibility = Show(showActivity && _activity.Count > 0);
+        ActivityEmpty.Visibility = Show(showActivity && _activity.Count == 0);
         AttentionPanel.Visibility = Show(showAttention && _attention.Count > 0);
         AttentionEmpty.Visibility = Show(showAttention && _attention.Count == 0);
+        DevicesPanel.Visibility = Show(showDevices && _devices.Count > 0);
+        DevicesEmpty.Visibility = Show(showDevices && _devices.Count == 0);
+    }
+
+    /// <summary>The Devices tab: rebuilt when the server sends a new list.</summary>
+    private void ShowDevices(StatusSnapshot s)
+    {
+        if (s.DevicesUnsupported)
+            DevicesEmptyText.Text = "Update the server to see the computers that use it.";
+        if (ReferenceEquals(s.Devices, _shownDevices) || s.Devices is null)
+            return;
+        _shownDevices = s.Devices;
+        _devices.Clear();
+        foreach (var row in DeviceRow.From(s.Devices, ThisDevice, DateTimeOffset.UtcNow))
+            _devices.Add(row);
+        if (s.Devices.Count == 0 && !s.DevicesUnsupported)
+            DevicesEmptyText.Text = "No computers have used this server yet.";
+        UpdatePanels();
     }
 
     private static Visibility Show(bool visible) => visible ? Visibility.Visible : Visibility.Collapsed;
 
-    private void OnTabChanged(object sender, RoutedEventArgs e) => UpdatePanels();
+    private void OnTabChanged(object sender, RoutedEventArgs e)
+    {
+        UpdatePanels();
+        if (ReferenceEquals(sender, DevicesTab))
+            _actions?.RefreshDevices();
+    }
     private void OnFix(object sender, RoutedEventArgs e) => _actions?.FixBlocked();
     private void OnSyncNow(object sender, RoutedEventArgs e) => _actions?.SyncNow();
     private void OnPause(object sender, RoutedEventArgs e) => _actions?.TogglePause();

@@ -188,6 +188,7 @@ public sealed class TrayController : IMainActions, IDisposable
         if (_window is { IsVisible: true })
         {
             DrawUpdateBanner();
+            _window.ThisDevice = _settings.DeviceName;
             _window.ShowStatus(status, _settings.Folder);
             _window.ShowActivity(_session?.Activity.Items ?? []);
             _window.ShowAttention(BuildAttention(status));
@@ -423,6 +424,13 @@ public sealed class TrayController : IMainActions, IDisposable
     }
 
     public void DownloadNow() => _session?.DownloadNow();
+
+    /// <summary>The Devices tab was opened: ask the server for the current list.</summary>
+    public void RefreshDevices()
+    {
+        if (_session is { } session)
+            _ = session.RefreshDevicesAsync();
+    }
 
     /// <summary>The main window's "Update server" / "Check for update" button (works even when the prompt was skipped).</summary>
     public void UpdateServer()

@@ -1,3 +1,4 @@
+using Tether.Core;
 using Microsoft.Extensions.Logging.Console;
 using Tether.Server.Services;
 using Tether.Server.Storage;
@@ -35,6 +36,7 @@ public static class TetherServerHost
         builder.Services.AddSingleton<FailureThrottle>();
         builder.Services.AddSingleton<ServerUpdater>();
         builder.Services.AddSingleton<BatchRegistry>();
+        builder.Services.AddSingleton<DeviceRegistry>();
         builder.Services.AddSignalR(o =>
         {
             o.EnableDetailedErrors = false;
@@ -60,6 +62,14 @@ public static class TetherServerHost
         app.UseMiddleware<RequestLoggingMiddleware>();
         app.UseWebSockets();
         app.UseMiddleware<TokenAuthMiddleware>();
+        var devices = app.Services.GetRequiredService<DeviceRegistry>();
+        app.Use(async (ctx, next) =>
+        {
+            // Authenticated requests only (the auth middleware above answers the rest).
+            if (!ctx.Request.Path.Equals("/api/health", StringComparison.OrdinalIgnoreCase))
+                devices.Seen(Endpoints.DeviceId(ctx), ctx.Request.Headers[TetherHeaders.Client].ToString());
+            await next();
+        });
         Endpoints.Map(app);
         app.Lifetime.ApplicationStopped.Register(store.Dispose);
         return app;

@@ -414,6 +414,21 @@ public class ServerApiTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task DevicesListsTheComputersThatUseTheServer()
+    {
+        await using var server = await TestServer.StartAsync();
+        Assert.Equal(HttpStatusCode.Unauthorized, (await server.RawHttp().GetAsync("api/devices")).StatusCode);
+        using var laptop = server.Client("laptop");
+        await laptop.GetInfoAsync(default);
+        var devices = (await laptop.GetDevicesAsync(default))!;
+        var me = Assert.Single(devices);
+        Assert.Equal("laptop", me.Name);
+        Assert.True(me.Online);
+        Assert.Equal(TetherInfo.ProductVersion, me.AppVersion);
+        Assert.False(string.IsNullOrEmpty(me.System));
+    }
+
+    [Fact]
     public async Task UpdaterDiagnosticsNeedTheTokenAndNeverShowIt()
     {
         using var dir = new TempDir("updater");

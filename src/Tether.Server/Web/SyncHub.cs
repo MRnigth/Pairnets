@@ -10,7 +10,7 @@ namespace Tether.Server.Web;
 /// BatchFinished(), and the others get "PeerBatch"(deviceId, count, active) so they can wait and
 /// download the batch in one go. A batch ends by itself when its device disconnects.
 /// </summary>
-public sealed class SyncHub(BatchRegistry batches) : Hub
+public sealed class SyncHub(BatchRegistry batches, Services.DeviceRegistry devices) : Hub
 {
     public const string Path = "/hub";
     public const string ChangedMethod = "Changed";
@@ -41,6 +41,7 @@ public sealed class SyncHub(BatchRegistry batches) : Hub
 
     public override async Task OnConnectedAsync()
     {
+        devices.Connected(Context.ConnectionId, DeviceId);
         foreach (var (connection, batch) in batches.Active())
         {
             if (connection != Context.ConnectionId)
@@ -51,6 +52,7 @@ public sealed class SyncHub(BatchRegistry batches) : Hub
 
     public override async Task OnDisconnectedAsync(Exception? exception)
     {
+        devices.Disconnected(Context.ConnectionId);
         if (batches.Remove(Context.ConnectionId) is { } batch)
             await Clients.Others.SendAsync(PeerBatchMethod, batch.Device, 0, false);
         await base.OnDisconnectedAsync(exception);

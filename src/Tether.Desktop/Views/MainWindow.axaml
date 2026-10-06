@@ -163,7 +163,7 @@
       </Button>
     </StackPanel>
 
-    <!-- Activity / Needs attention -->
+    <!-- Activity / Needs attention / Devices -->
     <Grid RowDefinitions="Auto,*" Margin="0,16,0,0">
       <Border Classes="segments" HorizontalAlignment="Left">
         <StackPanel Orientation="Horizontal">
@@ -177,6 +177,7 @@
               </Border>
             </StackPanel>
           </RadioButton>
+          <RadioButton x:Name="DevicesTab" Classes="seg" GroupName="view" Content="Devices" IsCheckedChanged="OnTabChanged" />
         </StackPanel>
       </Border>
 
@@ -231,6 +232,33 @@
           <StackPanel x:Name="AttentionEmpty" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="8" IsVisible="False">
             <v:LineIcon Classes="icon" Width="30" Height="30" StrokeThickness="1.8" Stroke="{StaticResource S.Green}" Data="{StaticResource I.Check}" HorizontalAlignment="Center" />
             <TextBlock Classes="muted" Text="Nothing needs your attention." />
+          </StackPanel>
+
+          <ScrollViewer x:Name="DevicesPanel" IsVisible="False">
+            <ItemsControl x:Name="DevicesList">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                  <Border Classes="row">
+                    <Grid ColumnDefinitions="Auto,*,Auto">
+                      <Grid Width="10" Height="10" Margin="6,0,16,0" VerticalAlignment="Center">
+                        <Ellipse Fill="{StaticResource S.Green}" IsVisible="{Binding Online}" />
+                        <Ellipse Fill="{DynamicResource T.Muted}" IsVisible="{Binding !Online}" />
+                      </Grid>
+                      <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
+                        <TextBlock Text="{Binding Title}" Classes="strong" TextTrimming="CharacterEllipsis" />
+                        <TextBlock Text="{Binding Detail}" Classes="muted small" TextTrimming="CharacterEllipsis" />
+                      </StackPanel>
+                      <TextBlock Grid.Column="2" Text="{Binding StatusText}" Classes="muted small" VerticalAlignment="Center" Margin="12,0,4,0" />
+                    </Grid>
+                  </Border>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </ScrollViewer>
+          <StackPanel x:Name="DevicesEmpty" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="8" IsVisible="False">
+            <v:LineIcon Classes="icon muted" Width="30" Height="30" StrokeThickness="1.6" Data="{StaticResource I.Server}" HorizontalAlignment="Center" />
+            <TextBlock x:Name="DevicesEmptyText" Classes="muted" TextWrapping="Wrap" TextAlignment="Center"
+                       Text="Loading the computers that use your server…" />
           </StackPanel>
         </Grid>
       </Border>

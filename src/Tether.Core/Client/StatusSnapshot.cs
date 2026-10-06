@@ -101,6 +101,12 @@ public sealed record StatusSnapshot(
     /// <summary>Last known server info (version, free space, updater), or null before the first answer.</summary>
     public ServerInfo? Server { get; init; }
 
+    /// <summary>The computers that use the server (Devices tab), or null before the first answer.</summary>
+    public IReadOnlyList<DeviceInfo>? Devices { get; init; }
+
+    /// <summary>True when the server is too old to list its devices.</summary>
+    public bool DevicesUnsupported { get; init; }
+
     /// <summary>"412 GB free on server" or null when the server does not say.</summary>
     /// <summary>True once the server has answered and the connection is not currently down.</summary>
     public bool IsConnected => Status != RunnerStatus.Offline && (Server is not null || LastSyncAt is not null);

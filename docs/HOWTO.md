@@ -527,6 +527,11 @@ orange when the server is older than your app. A server too old to say which ver
 server…** when the server is older, **Check for update** when it is up to date. It works even if you chose
 *Don't ask for this version*.
 
+**Devices.** The **Devices** tab next to **Activity** lists every computer that uses your server: a
+green dot when it is online, otherwise when it was last seen, plus its system, Tether version, its last
+change and when it was added. This computer is marked "(this computer)". The list needs a server from
+1.0.38 on; computers appear once they have connected to it.
+
 **Debug mode.** If updating the server does not work, turn on **Settings → Updates and speed → Debug
 mode**. Tether then writes more detail to its log, and the update window gets a **Details** box: every
 step the app takes and, at the end, the server's own update log and settings. **Copy details** puts it

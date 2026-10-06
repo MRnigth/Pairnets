@@ -81,6 +81,16 @@ public sealed record UpdaterDiagnostics(
     }
 }
 
+/// <summary>A computer that uses this server (<c>GET /api/devices</c>, the apps' Devices tab).</summary>
+public sealed record DeviceInfo(
+    string Name,
+    DateTimeOffset FirstSeen,
+    DateTimeOffset LastSeen,
+    bool Online,
+    string? AppVersion = null,
+    string? System = null,
+    DateTimeOffset? LastChange = null);
+
 /// <summary>One stored version of a file in the server's history/ folder.</summary>
 public sealed record HistoryVersion(string Id, DateTimeOffset StoredAtUtc, long Size, string Hash8);
 
@@ -104,6 +114,9 @@ public static class TetherHeaders
     public const string ServerId = "X-Tether-Server-Id";
     public const string Version = "X-Tether-Version";
     public const string Hash = "X-Tether-Hash";
+
+    /// <summary>The app's version and system ("1.0.38; Windows"), shown in the Devices tab.</summary>
+    public const string Client = "X-Tether-Client";
 }
 
 /// <summary>Shared JSON settings: camelCase, as used on the wire.</summary>

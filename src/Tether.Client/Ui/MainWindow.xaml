@@ -198,7 +198,7 @@
       </Button>
     </StackPanel>
 
-    <!-- Activity / Needs attention -->
+    <!-- Activity / Needs attention / Devices -->
     <Grid Margin="0,16,0,0">
       <Grid.RowDefinitions>
         <RowDefinition Height="Auto" />
@@ -217,6 +217,7 @@
               </Border>
             </StackPanel>
           </RadioButton>
+          <RadioButton x:Name="DevicesTab" Style="{StaticResource Seg}" GroupName="view" Content="Devices" Checked="OnTabChanged" />
         </StackPanel>
       </Border>
 
@@ -284,6 +285,48 @@
             <ui:LineIcon Width="30" Height="30" StrokeThickness="1.8" Stroke="{StaticResource S.Green}"
                          Data="{StaticResource I.Check}" HorizontalAlignment="Center" Margin="0,0,0,8" />
             <TextBlock Style="{StaticResource Muted}" Text="Nothing needs your attention." />
+          </StackPanel>
+
+          <ScrollViewer x:Name="DevicesPanel" Visibility="Collapsed" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <ItemsControl x:Name="DevicesList" Style="{StaticResource PlainList}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                  <Border Style="{StaticResource Row}">
+                    <Grid>
+                      <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                      </Grid.ColumnDefinitions>
+                      <Ellipse Width="10" Height="10" Margin="6,0,16,0" VerticalAlignment="Center">
+                        <Ellipse.Style>
+                          <Style TargetType="Ellipse">
+                            <Setter Property="Fill" Value="{DynamicResource T.Muted}" />
+                            <Style.Triggers>
+                              <DataTrigger Binding="{Binding Online}" Value="True">
+                                <Setter Property="Fill" Value="{StaticResource S.Green}" />
+                              </DataTrigger>
+                            </Style.Triggers>
+                          </Style>
+                        </Ellipse.Style>
+                      </Ellipse>
+                      <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                        <TextBlock Text="{Binding Detail}" Style="{StaticResource MutedSmall}" TextTrimming="CharacterEllipsis" Margin="0,1,0,0" />
+                      </StackPanel>
+                      <TextBlock Grid.Column="2" Text="{Binding StatusText}" Style="{StaticResource MutedSmall}"
+                                 VerticalAlignment="Center" Margin="12,0,4,0" />
+                    </Grid>
+                  </Border>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </ScrollViewer>
+          <StackPanel x:Name="DevicesEmpty" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed">
+            <ui:LineIcon Width="30" Height="30" StrokeThickness="1.6" Stroke="{DynamicResource T.Muted}"
+                         Data="{StaticResource I.Server}" HorizontalAlignment="Center" Margin="0,0,0,8" />
+            <TextBlock x:Name="DevicesEmptyText" Style="{StaticResource Muted}" TextWrapping="Wrap" TextAlignment="Center"
+                       Text="Loading the computers that use your server…" />
           </StackPanel>
         </Grid>
       </Border>
