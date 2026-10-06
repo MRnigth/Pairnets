@@ -1,0 +1,147 @@
+<Window x:Class="Tether.Client.Ui.TrayPanel"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ui="clr-namespace:Tether.Client.Ui"
+        xmlns:c="clr-namespace:Tether.Core.Client;assembly=Tether.Core"
+        Title="Tether" Width="392" SizeToContent="Height" ResizeMode="NoResize"
+        WindowStyle="None" AllowsTransparency="True" Background="Transparent"
+        ShowInTaskbar="False" Topmost="True" WindowStartupLocation="Manual">
+  <Window.Resources>
+    <ui:ActivityBrushConverter x:Key="KindBrush" />
+    <ui:ActivityIconConverter x:Key="KindIcon" />
+  </Window.Resources>
+
+  <!-- The quick look that opens from the tray icon. The margin leaves room for the shadow. -->
+  <Border Style="{StaticResource Panel}" Margin="10">
+    <Border.Effect>
+      <DropShadowEffect BlurRadius="24" ShadowDepth="6" Direction="270" Opacity="0.22" />
+    </Border.Effect>
+    <StackPanel>
+      <!-- Status -->
+      <Border x:Name="Head" CornerRadius="13,13,0,0" Padding="16,16,10,8">
+        <Grid>
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="Auto" />
+          </Grid.ColumnDefinitions>
+          <Grid x:Name="StatusBadgeHost" Width="38" Height="38" VerticalAlignment="Top" Margin="0,0,12,0">
+            <Ellipse x:Name="StatusBadge" Fill="{StaticResource S.Grey}" />
+            <ui:LineIcon x:Name="StatusGlyph" Width="19" Height="19" StrokeThickness="2.6" Stroke="White" Data="{StaticResource I.CloudOff}" />
+          </Grid>
+          <StackPanel Grid.Column="1" VerticalAlignment="Center">
+            <TextBlock x:Name="Headline" Style="{StaticResource H2}" FontSize="16" Text="Starting…" />
+            <TextBlock x:Name="Detail" Style="{StaticResource MutedSmall}" TextWrapping="Wrap" MaxHeight="48" Margin="0,1,0,0" />
+          </StackPanel>
+          <Button x:Name="MoreButton" Grid.Column="2" Style="{StaticResource GhostButton}" VerticalAlignment="Top" ToolTip="More" Click="OnMore">
+            <ui:LineIcon Width="18" Height="18" StrokeThickness="3.2" Stroke="{DynamicResource T.Text}" Data="{StaticResource I.More}" />
+            <Button.ContextMenu>
+              <ContextMenu Placement="Bottom" Closed="OnMenuClosed">
+                <MenuItem Header="Sync now" Click="OnSyncNow" />
+                <MenuItem Header="Settings…" Click="OnSettings" />
+                <MenuItem Header="History…" Click="OnHistory" />
+                <Separator />
+                <MenuItem Header="View log" Click="OnViewLog" />
+                <MenuItem Header="Report a bug…" Click="OnReportBug" />
+                <Separator />
+                <MenuItem Header="Exit Tether" Click="OnQuit" />
+              </ContextMenu>
+            </Button.ContextMenu>
+          </Button>
+        </Grid>
+      </Border>
+
+      <StackPanel Margin="14,4,14,14">
+        <ui:DeviceMapView x:Name="Map" Margin="0,6,0,0" />
+
+        <Button x:Name="FixButton" Style="{StaticResource WarnButton}" HorizontalAlignment="Stretch" Margin="0,12,0,0" Visibility="Collapsed" Click="OnFix" />
+
+        <!-- Transfer in progress -->
+        <Border x:Name="TransferCard" Style="{StaticResource Card}" Padding="12,10" Margin="0,12,0,0" Visibility="Collapsed">
+          <StackPanel>
+            <Grid>
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+              </Grid.ColumnDefinitions>
+              <StackPanel Orientation="Horizontal">
+                <ui:LineIcon x:Name="TransferArrow" Width="14" Height="14" StrokeThickness="2.4" Margin="0,0,5,0"
+                             Stroke="{StaticResource S.Green}" Data="{StaticResource I.Up}" VerticalAlignment="Center" />
+                <TextBlock x:Name="TransferTitle" FontWeight="SemiBold" FontSize="12" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+              </StackPanel>
+              <TextBlock x:Name="TransferSpeed" Grid.Column="1" Style="{StaticResource MutedSmall}" Margin="8,0,0,0" />
+            </Grid>
+            <ProgressBar x:Name="TransferProgress" Style="{StaticResource ThinProgress}" Minimum="0" Maximum="100" Margin="0,7,0,0" />
+            <TextBlock x:Name="TransferOverall" Style="{StaticResource MutedSmall}" FontSize="11.5" Margin="0,6,0,0" />
+          </StackPanel>
+        </Border>
+
+        <!-- Something needs a decision -->
+        <Border x:Name="AttentionButton" Style="{StaticResource Callout}" Padding="12,9" Margin="0,12,0,0" Cursor="Hand"
+                Visibility="Collapsed" MouseLeftButtonUp="OnAttention">
+          <Grid>
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="Auto" />
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <ui:LineIcon Width="16" Height="16" Stroke="{DynamicResource T.WarnText}" Data="{StaticResource I.Warning}" Margin="0,0,9,0" />
+            <TextBlock x:Name="AttentionText" Grid.Column="1" FontWeight="SemiBold" FontSize="12" Foreground="{DynamicResource T.WarnText}" VerticalAlignment="Center" />
+            <ui:LineIcon Grid.Column="2" Width="14" Height="14" Stroke="{DynamicResource T.WarnText}" Data="{StaticResource I.Chevron}" />
+          </Grid>
+        </Border>
+
+        <!-- Recent activity -->
+        <Border Style="{StaticResource Card}" Padding="6,8,6,6" Margin="0,12,0,0">
+          <StackPanel>
+            <TextBlock Style="{StaticResource Caps}" Text="RECENT" Margin="8,0,0,4" />
+            <ItemsControl x:Name="RecentList" Style="{StaticResource PlainList}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate DataType="{x:Type c:ActivityItem}">
+                  <Border Style="{StaticResource Row}" Padding="6,5">
+                    <Grid>
+                      <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                      </Grid.ColumnDefinitions>
+                      <Grid Width="24" Height="24" Margin="0,0,10,0">
+                        <Ellipse Fill="{Binding Kind, Converter={StaticResource KindBrush}}" />
+                        <ui:LineIcon Width="15" Height="15" StrokeThickness="2.6" Stroke="White" Data="{Binding Kind, Converter={StaticResource KindIcon}}" />
+                      </Grid>
+                      <TextBlock Grid.Column="1" Text="{Binding Primary}" FontSize="12" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                      <TextBlock Grid.Column="2" Text="{Binding WhenText}" Style="{StaticResource MutedSmall}" FontSize="11.5" VerticalAlignment="Center" Margin="8,0,2,0" />
+                    </Grid>
+                  </Border>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <TextBlock x:Name="RecentEmpty" Style="{StaticResource MutedSmall}" Margin="8,2,8,4" Text="Nothing has synced yet." />
+          </StackPanel>
+        </Border>
+
+        <!-- Actions -->
+        <Grid Margin="0,12,0,0">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="Auto" />
+          </Grid.ColumnDefinitions>
+          <Button Style="{StaticResource AccentButton}" Content="Open Tether" Click="OnOpenApp" />
+          <Button Grid.Column="1" Style="{StaticResource SubtleButton}" Margin="8,0,0,0" Click="OnOpenFolder" ToolTip="Open the synced folder">
+            <StackPanel Orientation="Horizontal">
+              <ui:LineIcon Width="16" Height="16" Margin="0,0,6,0" Stroke="{DynamicResource T.Text}" Data="{StaticResource I.Folder}" />
+              <TextBlock Text="Folder" />
+            </StackPanel>
+          </Button>
+          <Button Grid.Column="2" Style="{StaticResource SubtleButton}" Margin="8,0,0,0" Click="OnPause">
+            <StackPanel Orientation="Horizontal">
+              <ui:LineIcon x:Name="PauseGlyph" Width="16" Height="16" Margin="0,0,6,0" Stroke="{DynamicResource T.Text}" Data="{StaticResource I.Pause}" />
+              <TextBlock x:Name="PauseText" Text="Pause" />
+            </StackPanel>
+          </Button>
+        </Grid>
+      </StackPanel>
+    </StackPanel>
+  </Border>
+</Window>

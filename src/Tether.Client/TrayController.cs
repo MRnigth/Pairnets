@@ -20,7 +20,7 @@ namespace Tether.Client;
 /// Owns the tray icon, the main window, notifications and the <see cref="ClientSession"/>. All
 /// sync decisions live in Tether.Core; this class reflects state and forwards clicks.
 /// </summary>
-public sealed class TrayController : IMainActions, IDisposable
+public sealed class TrayController : ITrayActions, IDisposable
 {
     private readonly App _app;
     private readonly ILoggerFactory _loggers;
@@ -33,6 +33,7 @@ public sealed class TrayController : IMainActions, IDisposable
     private ClientSettings _settings;
     private ClientSession? _session;
     private MainWindow? _window;
+    private TrayPanel? _panel;
     private Action? _balloonClick;
     private volatile bool _dirty = true;
     private RunnerStatus? _shownStatus;
@@ -71,7 +72,7 @@ public sealed class TrayController : IMainActions, IDisposable
         _syncNow.Click += (_, _) => SyncNow();
         _openFolder.Click += (_, _) => OpenFolder();
         _fixProblem.Click += (_, _) => FixBlocked();
-        _settingsItem.Click += (_, _) => ShowSettings(firstRun: false);
+        _settingsItem.Click += (_, _) => ShowMainWindow(MainPage.Settings);
         _viewLog.Click += (_, _) => ViewLog();
         _reportBug.Click += (_, _) => ReportBug();
         _pause.Click += (_, _) => TogglePause();
@@ -86,10 +87,20 @@ public sealed class TrayController : IMainActions, IDisposable
             ContextMenuStrip = menu,
             Visible = true,
         };
+        // A click opens the quick-look panel next to the taskbar (like OneDrive); "Open Tether" in it,
+        // a double-click or the menu opens the full window.
         _icon.MouseClick += (_, e) =>
         {
             if (e.Button == Forms.MouseButtons.Left)
+                TogglePanel();
+        };
+        _icon.MouseDoubleClick += (_, e) =>
+        {
+            if (e.Button == Forms.MouseButtons.Left)
+            {
+                _panel?.Hide();
                 ShowMainWindow();
+            }
         };
         _icon.BalloonTipClicked += (_, _) => (_balloonClick ?? ShowMainWindow).Invoke();
         SystemEvents.PowerModeChanged += OnPowerModeChanged;
@@ -163,8 +174,13 @@ public sealed class TrayController : IMainActions, IDisposable
 
     // ------------------------------------------------------------------ drawing
 
+    private int _ticks;
+
     private void RefreshIfDirty()
     {
+        // Redraw every 2 seconds while a window shows, so "2 min ago" and the map's moving dots stay current.
+        if (++_ticks % 8 == 0 && (_window is { IsVisible: true } || _panel is { IsVisible: true }))
+            _dirty = true;
         if (!_dirty)
             return;
         _dirty = false;
@@ -188,9 +204,15 @@ public sealed class TrayController : IMainActions, IDisposable
         if (_window is { IsVisible: true })
         {
             DrawUpdateBanner();
-            _window.ShowStatus(status, _settings.Folder);
+            _window.ShowStatus(status, _settings.Folder, _settings.DeviceName);
             _window.ShowActivity(_session?.Activity.Items ?? []);
             _window.ShowAttention(BuildAttention(status));
+        }
+        if (_panel is { IsVisible: true })
+        {
+            _panel.ShowStatus(status, _settings.DeviceName);
+            _panel.ShowActivity(_session?.Activity.Items ?? []);
+            _panel.ShowAttention(BuildAttention(status).Count);
         }
     }
 
@@ -246,13 +268,57 @@ public sealed class TrayController : IMainActions, IDisposable
             ShowSettings(firstRun: true);
             return;
         }
+        var opening = _window is not { IsVisible: true };
         _window ??= new MainWindow(this);
         _window.Show();
         if (_window.WindowState == WindowState.Minimized)
             _window.WindowState = WindowState.Normal;
         _window.Activate();
+        if (opening && _session is { } session)
+            _ = session.RefreshDevicesAsync(); // the other computer's state, fresh
         _dirty = true;
         RefreshIfDirty();
+    }
+
+    /// <summary>Opens the main window on one page.</summary>
+    public void ShowMainWindow(MainPage page)
+    {
+        ShowMainWindow();
+        if (page == MainPage.Settings)
+            ShowSettingsPage();
+        else
+            _window?.Navigate(page);
+    }
+
+    public void OpenWindow(MainPage page) => ShowMainWindow(page);
+
+    public void Quit() => Exit();
+
+    public IHistorySource? History => _session;
+
+    /// <summary>The quick-look panel next to the taskbar; a second click on the icon closes it.</summary>
+    private void TogglePanel()
+    {
+        if (!_settings.IsComplete || !_settings.FirstRunCompleted)
+        {
+            ShowSettings(firstRun: true);
+            return;
+        }
+        _panel ??= new TrayPanel(this);
+        if (_panel.IsVisible || DateTime.UtcNow - _panel.HiddenAt < TimeSpan.FromMilliseconds(300))
+        {
+            _panel.Hide();
+            return;
+        }
+        if (_session is { } session)
+            _ = session.RefreshDevicesAsync();
+        var cursor = Forms.Cursor.Position;
+        var screen = Forms.Screen.FromPoint(cursor);
+        _panel.ShowStatus(_session?.Status ?? StatusSnapshot.Initial, _settings.DeviceName);
+        _panel.ShowActivity(_session?.Activity.Items ?? []);
+        _panel.ShowAttention(BuildAttention(_session?.Status ?? StatusSnapshot.Initial).Count);
+        _panel.Open(cursor, screen.Bounds, screen.WorkingArea);
+        _dirty = true;
     }
 
     public void SyncNow() => _session?.SyncNow();
@@ -331,18 +397,43 @@ public sealed class TrayController : IMainActions, IDisposable
         StartSession(null);
     }
 
+    /// <summary>First-time setup is a window of its own; later, Settings is a page of the main window.</summary>
     public void ShowSettings(bool firstRun)
     {
-        var window = new SettingsWindow(_settings, _protector, firstRun, _updates, _session?.Status.ServerVersionText);
+        if (!firstRun && _settings.IsComplete && _settings.FirstRunCompleted)
+        {
+            ShowMainWindow(MainPage.Settings);
+            return;
+        }
+        var window = new SettingsWindow(_settings, _protector, firstRun: true, _updates, _session?.Status.ServerVersionText);
         if (window.ShowDialog() != true || window.Result is null)
             return;
-        _settings = window.Result;
+        ApplySettings(window.Result, window.PlainToken);
+        ShowMainWindow();
+    }
+
+    private void ShowSettingsPage()
+    {
+        if (_window is null)
+            return;
+        var view = new SettingsView(_settings, _protector, firstRun: false, _updates, _session?.Status.ServerVersionText);
+        view.Saved += v =>
+        {
+            ApplySettings(v.Result!, v.PlainToken);
+            _window?.Navigate(MainPage.Overview);
+        };
+        view.Cancelled += () => _window?.Navigate(MainPage.Overview);
+        _window.ShowSettingsPage(view);
+    }
+
+    private void ApplySettings(ClientSettings settings, string? plainToken)
+    {
+        _settings = settings;
         _fileLog.Minimum = _settings.DebugMode ? LogLevel.Debug : LogLevel.Information;
         SettingsStore.Save(SettingsStore.DefaultPath, _settings);
         SetAutoStart(_settings.StartWithWindows);
         _updates.SetEnabled(_settings.CheckForUpdates);
-        StartSession(window.PlainToken);
-        ShowMainWindow();
+        StartSession(plainToken);
     }
 
     // ------------------------------------------------------------------ updates and the server
@@ -493,7 +584,13 @@ public sealed class TrayController : IMainActions, IDisposable
             Shell(f);
     }
 
-    void IMainActions.ShowSettings() => ShowSettings(firstRun: false);
+    void IMainActions.ShowSettings()
+    {
+        if (!_settings.IsComplete || !_settings.FirstRunCompleted)
+            ShowSettings(firstRun: true);
+        else
+            ShowSettingsPage();
+    }
 
     public void ViewLog() => Shell(_fileLog.CurrentFile);
 
@@ -514,7 +611,7 @@ public sealed class TrayController : IMainActions, IDisposable
 
     private string LocalPath(string syncPath) => Path.Combine(_settings.Folder ?? string.Empty, PathRules.ToOsRelative(syncPath));
 
-    private void RevealFile(string syncPath)
+    public void RevealFile(string syncPath)
     {
         var full = LocalPath(syncPath);
         try
@@ -579,6 +676,7 @@ public sealed class TrayController : IMainActions, IDisposable
 
     private void Exit()
     {
+        _panel?.Close();
         if (_window is not null)
         {
             _window.AllowClose = true;

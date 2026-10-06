@@ -33,6 +33,70 @@ public static class Visuals
     };
 
     public static T? Resource<T>(string key) where T : class => Application.Current?.TryFindResource(key) as T;
+
+    /// <summary>A soft wash of a status colour from the top, fading out by <paramref name="end"/> (0–1).</summary>
+    public static Brush Wash(string brushKey, byte alpha, double end)
+    {
+        var color = (Resource<SolidColorBrush>(brushKey))?.Color ?? Colors.Gray;
+        var brush = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(0, 1) };
+        brush.GradientStops.Add(new GradientStop(Color.FromArgb(alpha, color.R, color.G, color.B), 0));
+        brush.GradientStops.Add(new GradientStop(Color.FromArgb(0, color.R, color.G, color.B), end));
+        brush.Freeze();
+        return brush;
+    }
+}
+
+/// <summary>The app's own icon as an image (taken from Tether.exe), for the windows' headers.</summary>
+public static class AppIcons
+{
+    private static ImageSource? _large;
+    private static bool _loaded;
+
+    public static ImageSource? Large
+    {
+        get
+        {
+            if (!_loaded)
+            {
+                _loaded = true;
+                _large = Load();
+            }
+            return _large;
+        }
+    }
+
+    private static ImageSource? Load()
+    {
+        try
+        {
+            var path = Environment.ProcessPath;
+            if (path is null)
+                return null;
+            using var icon = System.Drawing.Icon.ExtractAssociatedIcon(path);
+            if (icon is null)
+                return null;
+            using var bitmap = icon.ToBitmap();
+            var hbitmap = bitmap.GetHbitmap();
+            try
+            {
+                var source = System.Windows.Interop.Imaging.CreateBitmapSourceFromHBitmap(hbitmap, IntPtr.Zero, Int32Rect.Empty,
+                    System.Windows.Media.Imaging.BitmapSizeOptions.FromEmptyOptions());
+                source.Freeze();
+                return source;
+            }
+            finally
+            {
+                DeleteObject(hbitmap);
+            }
+        }
+        catch (Exception ex) when (ex is IOException or ArgumentException or System.ComponentModel.Win32Exception or System.Runtime.InteropServices.ExternalException)
+        {
+            return null;
+        }
+    }
+
+    [System.Runtime.InteropServices.DllImport("gdi32.dll")]
+    private static extern bool DeleteObject(IntPtr handle);
 }
 
 /// <summary>ActivityKind → status brush.</summary>

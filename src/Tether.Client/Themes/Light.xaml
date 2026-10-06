@@ -18,4 +18,15 @@
   <SolidColorBrush x:Key="T.BannerBorder" Color="#C9DAFB" />
   <SolidColorBrush x:Key="T.WarnPill" Color="#FFF1DE" />
   <SolidColorBrush x:Key="T.WarnText" Color="#9A4A0B" />
+  <SolidColorBrush x:Key="T.Sidebar" Color="#E9EDF2" />
+  <SolidColorBrush x:Key="T.NavHover" Color="#DFE4EB" />
+  <SolidColorBrush x:Key="T.NavSelected" Color="#FFFFFF" />
+  <SolidColorBrush x:Key="T.Node" Color="#F4F6F9" />
+  <SolidColorBrush x:Key="T.NodeRing" Color="#D5DBE3" />
+  <SolidColorBrush x:Key="T.Line" Color="#C7CFDA" />
+  <SolidColorBrush x:Key="T.Selected" Color="#E8F0FE" />
+  <SolidColorBrush x:Key="T.OkPill" Color="#E3F4E7" />
+  <SolidColorBrush x:Key="T.OkText" Color="#1F7A35" />
+  <SolidColorBrush x:Key="T.BadPill" Color="#FBE4E6" />
+  <SolidColorBrush x:Key="T.BadText" Color="#A61B25" />
 </ResourceDictionary>
