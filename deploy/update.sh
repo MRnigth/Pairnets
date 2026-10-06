@@ -5,11 +5,12 @@
 # It only ever installs the newest official release from the fixed GitHub address below,
 # verifies it against SHA256SUMS.txt, refuses the same or an older version, and then runs that
 # release's install.sh (which keeps the token, address and data). The request file's content is
-# never read. Progress goes to /var/lib/tether/update/status.json for the apps to show.
+# never read. Progress goes to /var/lib/tether/update/status.json for the apps to show, and every
+# run is logged to /var/lib/tether/update/update.log, which the apps show in Debug mode.
 #
 # Testing: TETHER_BASE_URL=<folder or url> TETHER_UPDATE_DIR=<dir> TETHER_INSTALL_DIR=<dir>
 #          TETHER_UPDATE_DRY_RUN=1 skips running install.sh.
-set -euo pipefail
+set -Eeuo pipefail
 
 BASE_URL="${TETHER_BASE_URL:-https://github.com/MRnigth/Tether/releases/latest/download}"
 UPDATE_DIR="${TETHER_UPDATE_DIR:-/var/lib/tether/update}"
@@ -20,6 +21,13 @@ MIN_INTERVAL=600 # seconds between attempts
 REQUEST="$UPDATE_DIR/request"
 STATUS="$UPDATE_DIR/status.json"
 LAST="$UPDATE_DIR/last-attempt"
+LOG="$UPDATE_DIR/update.log"
+LOG_MAX=262144 # bytes; the previous log is kept as update.log.1
+
+log() { printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*"; }
+
+# The sync token never reaches the log (install.sh prints it only on a first install, but be sure).
+redact() { sed -E 's/(Token:[[:space:]]*)[^[:space:]]+/\1(hidden)/; s/(SYNC_TOKEN=)[^[:space:]]+/\1(hidden)/'; }
 
 json_escape() { local s=${1//\\/\\\\}; s=${s//\"/\\\"}; printf '%s' "${s//$'\n'/ }"; }
 
@@ -29,15 +37,35 @@ status() { # status <state> <message>
   chmod 0644 "$tmp"
   if id tether >/dev/null 2>&1; then chown tether:tether "$tmp" 2>/dev/null || true; fi
   mv -f "$tmp" "$STATUS"
+  log "status: $1 - $2"
 }
 
-finish() { rm -f "$REQUEST"; }
+finish() {
+  rm -f "$REQUEST"
+  log "=== update.sh finished"
+}
 trap finish EXIT
 
+# Anything that fails unexpectedly is reported to the apps instead of leaving them waiting.
+on_error() {
+  trap - ERR
+  status failed "update.sh stopped unexpectedly at line $1 ($2). Nothing more was changed; turn on Debug mode in the app to see the update log."
+}
+trap 'on_error "$LINENO" "$BASH_COMMAND"' ERR
+
 mkdir -p "$UPDATE_DIR"
+if [[ -f "$LOG" ]] && (( $(wc -c < "$LOG") > LOG_MAX )); then mv -f "$LOG" "$LOG.1"; fi
+touch "$LOG"
+chmod 0644 "$LOG"
+if id tether >/dev/null 2>&1; then chown tether:tether "$LOG" 2>/dev/null || true; fi
+exec >>"$LOG" 2>&1
+
+installed="$(tr -d '[:space:]' < "$INSTALL_DIR/VERSION" 2>/dev/null || echo unknown)"
+log "=== update.sh started: installed version $installed, source $BASE_URL"
 
 now=$(date +%s)
 if [[ -f "$LAST" ]] && last=$(cat "$LAST" 2>/dev/null) && [[ "$last" =~ ^[0-9]+$ ]] && (( now - last < MIN_INTERVAL )); then
+  log "the last attempt was $(( now - last )) s ago (minimum $MIN_INTERVAL s)"
   status failed "An update was tried less than 10 minutes ago. Try again later."
   exit 0
 fi
@@ -48,8 +76,10 @@ WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"; finish' EXIT
 
 fetch() {
-  if [[ -d "$BASE_URL" ]]; then cp "$BASE_URL/$1" "$WORK/$1"
-  else curl -fsSL --retry 3 -o "$WORK/$1" "$BASE_URL/$1"; fi
+  log "downloading $BASE_URL/$1"
+  if [[ -d "$BASE_URL" ]]; then cp "$BASE_URL/$1" "$WORK/$1" || return 1
+  else curl -fsSL --retry 3 --connect-timeout 30 -o "$WORK/$1" "$BASE_URL/$1" || return 1; fi
+  log "downloaded $1 ($(wc -c < "$WORK/$1") bytes)"
 }
 
 if ! fetch SHA256SUMS.txt || ! fetch "$ASSET"; then
@@ -59,14 +89,17 @@ fi
 
 line="$(grep -E "[[:space:]]\*?$ASSET\$" "$WORK/SHA256SUMS.txt" || true)"
 if [[ -z "$line" ]] || ! (cd "$WORK" && echo "$line" | sha256sum --check --status); then
+  log "checksum line: ${line:-<missing>}"
   status failed "The download did not match its checksum. Nothing was changed."
   exit 0
 fi
+log "checksum OK"
 
 tar -xzf "$WORK/$ASSET" -C "$WORK"
 SRC="$WORK/tether-server-linux-x64"
 new="$(tr -d '[:space:]' < "$SRC/VERSION" 2>/dev/null || true)"
 old="$(tr -d '[:space:]' < "$INSTALL_DIR/VERSION" 2>/dev/null || echo 0)"
+log "installed version $old, newest release ${new:-<none>}"
 if [[ ! "$new" =~ ^[0-9]+(\.[0-9]+)*$ ]]; then
   status failed "The release has no valid version number. Nothing was changed."
   exit 0
@@ -81,9 +114,9 @@ if [[ -n "${TETHER_UPDATE_DRY_RUN:-}" ]]; then
   status succeeded "Would install $new (dry run)."
   exit 0
 fi
-if "$SRC/install.sh" >"$WORK/install.log" 2>&1; then
+log "running install.sh from the new release"
+if "$SRC/install.sh" 2>&1 | redact; then
   status succeeded "Updated from $old to $new."
 else
-  status failed "install.sh failed; see: sudo journalctl -u tether-update -n 50"
-  cat "$WORK/install.log" >&2
+  status failed "install.sh failed. Nothing more was changed; turn on Debug mode in the app to see the update log."
 fi

@@ -348,4 +348,73 @@ public class ServerApiTests : IAsyncLifetime
         Assert.Equal("succeeded", status.State);
         Assert.Equal("Updated from 1.0.1 to 1.0.2.", status.Message);
     }
+
+    [Fact]
+    public async Task UpdaterStatusShowsProgressAndExplainsAStuckOrSilentUpdater()
+    {
+        using var dir = new TempDir("updater");
+        var script = Path.Combine(dir.Path, "update.sh");
+        File.WriteAllText(script, "#!/bin/sh\n");
+        await using var server = await TestServer.StartAsync(config: new() { ["Sync:UpdaterScript"] = script });
+        using var http = server.RawHttp(server.Token);
+        using var api = server.Client();
+        var updateDir = Path.Combine(server.Paths.DataDir, "update");
+        var request = Path.Combine(updateDir, "request");
+        var status = Path.Combine(updateDir, "status.json");
+        Directory.CreateDirectory(updateDir);
+
+        // A result from an earlier run stays on disk; it must not be taken for the new request's.
+        File.WriteAllText(status, "{\"state\":\"succeeded\",\"message\":\"Updated from 1.0.1 to 1.0.2.\"}");
+        File.SetLastWriteTimeUtc(status, DateTime.UtcNow.AddHours(-1));
+        Assert.Equal(HttpStatusCode.Accepted, (await http.PostAsync("api/update", null)).StatusCode);
+        Assert.Equal("requested", (await api.GetInfoAsync(default)).Updater!.State);
+
+        // While update.sh runs (the request file stays until it ends), its progress is passed on.
+        File.WriteAllText(status, "{\"state\":\"running\",\"message\":\"Downloading the newest release\"}");
+        var running = (await api.GetInfoAsync(default)).Updater!;
+        Assert.Equal("running", running.State);
+        Assert.Equal("Downloading the newest release", running.Message);
+
+        // A request nobody picks up is reported instead of waited on forever.
+        File.SetLastWriteTimeUtc(status, DateTime.UtcNow.AddHours(-1));
+        File.SetLastWriteTimeUtc(request, DateTime.UtcNow.AddMinutes(-2));
+        var stuck = (await api.GetInfoAsync(default)).Updater!;
+        Assert.Equal("failed", stuck.State);
+        Assert.Contains("systemctl enable --now tether-update.path", stuck.Message);
+
+        // The request is gone but no new status was written: the updater stopped without a word.
+        File.Delete(request);
+        var silent = (await api.GetInfoAsync(default)).Updater!;
+        Assert.Equal("failed", silent.State);
+        Assert.Contains("without reporting", silent.Message);
+    }
+
+    [Fact]
+    public async Task UpdaterDiagnosticsNeedTheTokenAndNeverShowIt()
+    {
+        using var dir = new TempDir("updater");
+        var script = Path.Combine(dir.Path, "update.sh");
+        File.WriteAllText(script, "#!/bin/sh\n");
+        await using var server = await TestServer.StartAsync(config: new() { ["Sync:UpdaterScript"] = script });
+        var updateDir = Path.Combine(server.Paths.DataDir, "update");
+        Directory.CreateDirectory(updateDir);
+        File.WriteAllText(Path.Combine(updateDir, "update.log"),
+            $"2026-10-06T09:00:00Z === update.sh started\n  Token:       {server.Token}\nraw {server.Token} here\nSYNC_TOKEN=fake.token.value\n");
+        File.WriteAllText(Path.Combine(updateDir, "last-attempt"), "1790000000\n");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, (await server.RawHttp().GetAsync("api/update/diagnostics")).StatusCode);
+        using var api = server.Client();
+        var diagnostics = (await api.GetUpdateDiagnosticsAsync(default))!;
+        Assert.True(diagnostics.UpdaterInstalled);
+        Assert.False(diagnostics.RequestPending);
+        Assert.Equal("idle", diagnostics.Status.State);
+        Assert.Equal(DateTimeOffset.FromUnixTimeSeconds(1790000000), diagnostics.LastAttemptAt);
+        Assert.Equal(4, diagnostics.LogTail.Count);
+        Assert.DoesNotContain(diagnostics.LogTail, l => l.Contains(server.Token) || l.Contains("fake.token"));
+        Assert.Equal("  Token:       (hidden)", diagnostics.LogTail[1]);
+
+        var report = diagnostics.ToReport();
+        Assert.Contains("update.sh present:   yes", report);
+        Assert.Contains("=== update.sh started", report);
+    }
 }

@@ -77,5 +77,16 @@
         <Button Style="{StaticResource AccentButton}" Content="Close" Click="OnLater" />
       </StackPanel>
     </StackPanel>
+
+    <!-- Debug mode: every step of the app and what the server's updater reports -->
+    <StackPanel x:Name="DetailsPanel" Margin="0,14,0,0" Visibility="Collapsed">
+      <TextBlock Style="{StaticResource MutedSmall}" Text="Details (Debug mode)" />
+      <Border Style="{StaticResource CodeBox}" Margin="0,4,0,0">
+        <TextBox x:Name="DetailsText" IsReadOnly="True" BorderThickness="0" Background="Transparent" Foreground="{DynamicResource T.Text}"
+                 FontFamily="Cascadia Mono, Consolas" FontSize="11" TextWrapping="NoWrap" MaxHeight="220"
+                 VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" />
+      </Border>
+      <Button Style="{StaticResource SubtleButton}" Content="Copy details" HorizontalAlignment="Left" Margin="0,8,0,0" Click="OnCopyDetails" />
+    </StackPanel>
   </StackPanel>
 </Window>

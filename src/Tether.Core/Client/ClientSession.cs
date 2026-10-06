@@ -65,8 +65,11 @@ public sealed class ClientSession : IAsyncDisposable
         }
     }
 
-    private ClientSession(ClientSettings settings, StateDb state, TetherApiClient api, SyncEngine engine, SyncRunner runner, TimeProvider clock)
+    private readonly ILogger _log;
+
+    private ClientSession(ClientSettings settings, StateDb state, TetherApiClient api, SyncEngine engine, SyncRunner runner, TimeProvider clock, ILogger log)
     {
+        _log = log;
         Settings = settings;
         State = state;
         Api = api;
@@ -131,7 +134,7 @@ public sealed class ClientSession : IAsyncDisposable
             options = runnerOptions(options);
         var runner = new SyncRunner(engine, options, loggers.CreateLogger("Tether.Runner"));
 
-        var session = new ClientSession(settings, state, api, engine, runner, clock);
+        var session = new ClientSession(settings, state, api, engine, runner, clock, loggers.CreateLogger("Tether.ServerUpdate"));
         session.Wire();
         session._status = session._status with { LimitText = settings.LimitText };
         runner.Start();
@@ -399,12 +402,49 @@ public sealed class ClientSession : IAsyncDisposable
 
     /// <summary>
     /// "Update server": asks the server to update itself, then follows it (it restarts on the way)
-    /// until it reports a newer version, the updater reports a failure, or <paramref name="timeout"/> passes.
+    /// until it reports a newer version, the updater reports a result, or <paramref name="timeout"/> passes.
+    /// Every step is logged (Debug mode shows the polls too) and sent to <paramref name="trace"/>; a failure,
+    /// or any run with a trace, also carries what the server knows about its updater in <see cref="ServerUpdateResult.Details"/>.
     /// </summary>
     public async Task<ServerUpdateResult> UpdateServerAsync(IProgress<string>? progress, CancellationToken ct,
-        TimeSpan? pollInterval = null, TimeSpan? timeout = null)
+        TimeSpan? pollInterval = null, TimeSpan? timeout = null, IProgress<string>? trace = null)
+    {
+        var started = _clock.GetUtcNow();
+        void Trace(string line, LogLevel level)
+        {
+            _log.Log(level, "Server update: {Step}", line);
+            trace?.Report($"[{(_clock.GetUtcNow() - started).TotalSeconds,3:0}s] {line}");
+        }
+
+        var result = await RunServerUpdateAsync(progress, Trace, ct, pollInterval, timeout).ConfigureAwait(false);
+        Trace((result.Success ? "Done: " : "Not updated: ") + result.Message, result.Success ? LogLevel.Information : LogLevel.Warning);
+        if (result.Success && trace is null)
+            return result;
+        var details = await GetUpdaterDiagnosticsTextAsync(ct).ConfigureAwait(false);
+        _log.Log(result.Success ? LogLevel.Debug : LogLevel.Warning, "Server updater diagnostics:{NewLine}{Details}", Environment.NewLine, details);
+        return result with { Details = details };
+    }
+
+    /// <summary>What the server knows about its self-updater, as text (never throws for network problems).</summary>
+    public async Task<string> GetUpdaterDiagnosticsTextAsync(CancellationToken ct)
+    {
+        try
+        {
+            var diagnostics = await Api.GetUpdateDiagnosticsAsync(ct).ConfigureAwait(false);
+            return diagnostics?.ToReport()
+                ?? "This server is too old to report updater details. Update it once by hand: curl -fsSL https://raw.githubusercontent.com/MRnigth/Tether/main/deploy/get.sh | sudo bash";
+        }
+        catch (Exception ex) when (ex is TetherNetworkException or TetherAuthException or TetherProtocolException)
+        {
+            return "Could not read the server's updater details: " + ex.Message;
+        }
+    }
+
+    private async Task<ServerUpdateResult> RunServerUpdateAsync(IProgress<string>? progress, Action<string, LogLevel> trace,
+        CancellationToken ct, TimeSpan? pollInterval, TimeSpan? timeout)
     {
         var before = Status.Server?.ServerVersion;
+        trace($"Asking the server to update (it runs {before ?? "an unknown version"}, this app is {TetherInfo.ProductVersion})", LogLevel.Information);
         TetherApiClient.ServerUpdateRequest request;
         try
         {
@@ -414,6 +454,13 @@ public sealed class ClientSession : IAsyncDisposable
         {
             return new ServerUpdateResult(false, "Could not reach the server: " + ex.Message, before, CanUpdateItself: true);
         }
+        trace("The server answered the request: " + request switch
+        {
+            TetherApiClient.ServerUpdateRequest.Requested => "accepted, the updater should start now",
+            TetherApiClient.ServerUpdateRequest.TooSoon => "too soon after the last request",
+            TetherApiClient.ServerUpdateRequest.UpdaterMissing => "this server has no self-updater",
+            _ => "this server does not know about updates",
+        }, LogLevel.Information);
         switch (request)
         {
             case TetherApiClient.ServerUpdateRequest.UpdaterMissing or TetherApiClient.ServerUpdateRequest.NotSupported:
@@ -425,6 +472,7 @@ public sealed class ClientSession : IAsyncDisposable
         progress?.Report("Downloading and checking the new version");
         var deadline = _clock.GetUtcNow() + (timeout ?? TimeSpan.FromMinutes(3));
         var restarting = false;
+        string? lastSeen = null;
         while (_clock.GetUtcNow() < deadline)
         {
             await Task.Delay(pollInterval ?? TimeSpan.FromSeconds(3), _clock, ct).ConfigureAwait(false);
@@ -436,10 +484,18 @@ public sealed class ClientSession : IAsyncDisposable
             catch (Exception ex) when (ex is TetherNetworkException or TetherProtocolException)
             {
                 if (!restarting)
+                {
                     progress?.Report("Installing and restarting the server");
+                    trace("The server stopped answering (restarting?): " + ex.Message, LogLevel.Information);
+                }
                 restarting = true;
                 continue;
             }
+            var seen = $"server {info.ServerVersion ?? "?"}, updater {info.Updater?.State ?? "?"}{(info.Updater?.Message is { } m ? ": " + m : string.Empty)}";
+            if (seen != lastSeen)
+                trace(seen, LogLevel.Debug);
+            lastSeen = seen;
+            restarting = false;
             Update(s => s with { Server = info });
             if (info.ServerVersion is { } now && UpdateChecker.IsNewer(now, before))
             {
@@ -451,13 +507,15 @@ public sealed class ClientSession : IAsyncDisposable
                 case "failed":
                     return new ServerUpdateResult(false, info.Updater.Message ?? "The update failed. Nothing was changed.", before, CanUpdateItself: true);
                 case "succeeded":
-                    return new ServerUpdateResult(info.ServerVersion != before, info.Updater.Message ?? "Done.", info.ServerVersion, CanUpdateItself: true);
+                    // Succeeded without a newer version: the newest release is the one the server already runs.
+                    return new ServerUpdateResult(true, info.Updater.Message ?? "Done.", info.ServerVersion, CanUpdateItself: true,
+                        AlreadyUpToDate: info.ServerVersion == before);
                 case "running":
                     progress?.Report(info.Updater.Message ?? "Installing");
                     break;
             }
         }
-        return new ServerUpdateResult(false, "The server did not finish updating in time. Check it with: sudo journalctl -u tether-update -n 50", before, CanUpdateItself: true);
+        return new ServerUpdateResult(false, "The server did not finish updating in time. Turn on Debug mode in Settings and try again to see the server's update log.", before, CanUpdateItself: true);
     }
 
     /// <summary>
@@ -470,7 +528,9 @@ public sealed class ClientSession : IAsyncDisposable
         Activity.Add(ActivityKind.Info, null, $"Updating the server from {from}…", _clock);
         var result = await UpdateServerAsync(null, ct).ConfigureAwait(false);
         Activity.Add(result.Success ? ActivityKind.Info : ActivityKind.Warning, null,
-            result.Success ? $"Server updated to {result.ServerVersion}" : "Server not updated: " + result.Message, _clock);
+            result.AlreadyUpToDate ? $"The server is already up to date ({result.ServerVersion})"
+            : result.Success ? $"Server updated to {result.ServerVersion}"
+            : "Server not updated: " + result.Message, _clock);
         return result;
     }
 
@@ -488,4 +548,6 @@ public sealed class ClientSession : IAsyncDisposable
 }
 
 /// <summary>How "Update server" ended. <see cref="CanUpdateItself"/> false: show the one-time install command.</summary>
-public sealed record ServerUpdateResult(bool Success, string Message, string? ServerVersion, bool CanUpdateItself);
+/// <summary>How "Update server" ended. <paramref name="Details"/> is the server's updater report (failures, and Debug mode).</summary>
+public sealed record ServerUpdateResult(bool Success, string Message, string? ServerVersion, bool CanUpdateItself,
+    bool AlreadyUpToDate = false, string? Details = null);

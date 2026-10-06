@@ -61,6 +61,7 @@ public sealed class TrayController : IMainActions, IDisposable
         _fileLog = fileLog;
         _log = loggers.CreateLogger("Tether.Tray");
         _settings = SettingsStore.Load(SettingsStore.DefaultPath);
+        _fileLog.Minimum = _settings.DebugMode ? LogLevel.Debug : LogLevel.Information; // Debug mode: more detail in the log
 
         var menu = new Forms.ContextMenuStrip();
         menu.Items.AddRange([_openApp, _statusItem, new Forms.ToolStripSeparator(), _syncNow, _openFolder, _fixProblem,
@@ -334,6 +335,7 @@ public sealed class TrayController : IMainActions, IDisposable
         if (window.ShowDialog() != true || window.Result is null)
             return;
         _settings = window.Result;
+        _fileLog.Minimum = _settings.DebugMode ? LogLevel.Debug : LogLevel.Information;
         SettingsStore.Save(SettingsStore.DefaultPath, _settings);
         SetAutoStart(_settings.StartWithWindows);
         _updates.SetEnabled(_settings.CheckForUpdates);
@@ -451,7 +453,7 @@ public sealed class TrayController : IMainActions, IDisposable
     {
         var result = await session.UpdateServerQuietlyAsync(CancellationToken.None);
         _dirty = true;
-        if (result.Success)
+        if (result.Success && !result.AlreadyUpToDate)
             Toast("server-updated", "Server updated", $"Your server now runs {result.ServerVersion}.", Forms.ToolTipIcon.Info, ShowMainWindow);
         else if (!result.CanUpdateItself)
             ShowServerUpdate(session, serverVersion, result); // needs the one-time setup
@@ -459,7 +461,7 @@ public sealed class TrayController : IMainActions, IDisposable
 
     private void ShowServerUpdate(ClientSession session, string serverVersion, ServerUpdateResult? result)
     {
-        var dialog = new ServerUpdateWindow(session, serverVersion);
+        var dialog = new ServerUpdateWindow(session, serverVersion, debug: _settings.DebugMode);
         if (result is not null)
             dialog.ShowResult(result);
         dialog.Closed += (_, _) =>

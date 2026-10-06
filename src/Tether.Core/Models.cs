@@ -32,6 +32,45 @@ public sealed record ServerInfo(
 /// <summary>The server's self-updater. <see cref="State"/>: missing, idle, requested, running, succeeded or failed.</summary>
 public sealed record UpdaterStatus(bool Installed, string State, string? Message = null, DateTimeOffset? At = null);
 
+/// <summary>
+/// What the server knows about its self-updater (<c>GET /api/update/diagnostics</c>), shown in the apps'
+/// Debug mode to explain an "Update server" that did not work.
+/// </summary>
+public sealed record UpdaterDiagnostics(
+    string? ServerVersion,
+    DateTimeOffset ServerTimeUtc,
+    UpdaterStatus Status,
+    bool UpdaterInstalled,
+    string UpdaterScript,
+    bool? PathUnitEnabled,
+    bool RequestPending,
+    DateTimeOffset? RequestedAt,
+    DateTimeOffset? LastRequestAt,
+    DateTimeOffset? LastAttemptAt,
+    string? StatusJson,
+    DateTimeOffset? StatusWrittenAt,
+    IReadOnlyList<string> LogTail)
+{
+    /// <summary>A plain-text report for the details box and the log.</summary>
+    public string ToReport()
+    {
+        static string Time(DateTimeOffset? t) => t?.ToString("yyyy-MM-dd HH:mm:ss 'UTC'", System.Globalization.CultureInfo.InvariantCulture) ?? "never";
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine($"Server version:      {ServerVersion ?? "unknown"} (server clock {Time(ServerTimeUtc)})");
+        sb.AppendLine($"Updater state:       {Status.State}{(Status.Message is { } m ? " - " + m : string.Empty)}");
+        sb.AppendLine($"update.sh present:   {(UpdaterInstalled ? "yes" : "no")} ({UpdaterScript})");
+        sb.AppendLine($"Path unit enabled:   {(PathUnitEnabled is { } on ? on ? "yes" : "NO (run: sudo systemctl enable --now tether-update.path)" : "unknown")}");
+        sb.AppendLine($"Request waiting:     {(RequestPending ? "yes, since " + Time(RequestedAt) : "no")}");
+        sb.AppendLine($"Last request (app):  {Time(LastRequestAt)}");
+        sb.AppendLine($"Last updater run:    {Time(LastAttemptAt)}");
+        sb.AppendLine($"status.json:         {StatusJson ?? "(none)"} (written {Time(StatusWrittenAt)})");
+        sb.AppendLine(LogTail.Count == 0 ? "update.log:          (empty or missing; the updater has not run since Debug logging was added)" : "update.log (last lines):");
+        foreach (var line in LogTail)
+            sb.AppendLine("  " + line);
+        return sb.ToString().TrimEnd();
+    }
+}
+
 /// <summary>One stored version of a file in the server's history/ folder.</summary>
 public sealed record HistoryVersion(string Id, DateTimeOffset StoredAtUtc, long Size, string Hash8);
 

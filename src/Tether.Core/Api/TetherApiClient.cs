@@ -86,6 +86,17 @@ public sealed class TetherApiClient : ITetherApi, IDisposable
         return await ReadJsonAsync<ServerInfo>(resp, timeout, ct).ConfigureAwait(false);
     }
 
+    /// <summary>The server's updater report (Debug mode), or null for a server from before it existed.</summary>
+    public async Task<UpdaterDiagnostics?> GetUpdateDiagnosticsAsync(CancellationToken ct)
+    {
+        using var timeout = Linked(ct, TimeSpan.FromSeconds(30));
+        using var resp = await SendAsync(new HttpRequestMessage(HttpMethod.Get, "api/update/diagnostics"), HttpCompletionOption.ResponseContentRead, timeout, ct).ConfigureAwait(false);
+        if ((int)resp.StatusCode is 404 or 405)
+            return null;
+        await ThrowForStatusAsync(resp).ConfigureAwait(false);
+        return await ReadJsonAsync<UpdaterDiagnostics>(resp, timeout, ct).ConfigureAwait(false);
+    }
+
     public enum ServerUpdateRequest { Requested, UpdaterMissing, TooSoon, NotSupported }
 
     /// <summary>Asks the server to update itself to the newest release (POST /api/update).</summary>

@@ -527,6 +527,11 @@ orange when the server is older than your app. A server too old to say which ver
 server…** when the server is older, **Check for update** when it is up to date. It works even if you chose
 *Don't ask for this version*.
 
+**Debug mode.** If updating the server does not work, turn on **Settings → Updates and speed → Debug
+mode**. Tether then writes more detail to its log, and the update window gets a **Details** box: every
+step the app takes and, at the end, the server's own update log and settings. **Copy details** puts it
+on the clipboard so you can send it to whoever helps you. Turn it off again when you are done.
+
 This works because the server installer (`install.sh`) also installs a small root-owned updater
 the first time, so no password is needed later. How this stays safe is explained in
 [DEPLOY.md](DEPLOY.md#4b-updating-the-server).

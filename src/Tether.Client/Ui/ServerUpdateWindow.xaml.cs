@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Shapes;
+using System.Windows.Threading;
 using Tether.Client.Themes;
 using Tether.Core;
 using Tether.Core.Client;
@@ -11,12 +12,16 @@ namespace Tether.Client.Ui;
 public partial class ServerUpdateWindow : Window
 {
     private readonly ClientSession? _session;
+    private readonly bool _debug;
+    private readonly bool _upToDate;
 
-    public ServerUpdateWindow(ClientSession? session, string serverVersion, string? appVersion = null)
+    public ServerUpdateWindow(ClientSession? session, string serverVersion, string? appVersion = null, bool debug = false)
     {
         ThemeManager.Attach(this);
         InitializeComponent();
         _session = session;
+        _debug = debug;
+        DetailsPanel.Visibility = debug ? Visibility.Visible : Visibility.Collapsed;
         ServerVersion = serverVersion;
         appVersion ??= TetherInfo.ProductVersion;
         if (serverVersion.Length == 0)
@@ -38,8 +43,11 @@ public partial class ServerUpdateWindow : Window
             VersionsText.Text = serverVersion;
             SkipButton.Visibility = Visibility.Collapsed;
             UpdateButton.Content = "Check for update";
+            Badge.SetResourceReference(Shape.FillProperty, "S.Green"); // nothing is wrong: no warning colour
+            BadgeIcon.Data = Visuals.Resource<Geometry>("I.Check");
+            _upToDate = true;
         }
-        Loaded += (_, _) => Motion.Bob(BadgeHost, AskPanel.Visibility == Visibility.Visible);
+        Loaded += (_, _) => Motion.Bob(BadgeHost, !_upToDate && AskPanel.Visibility == Visibility.Visible);
         Closed += (_, _) =>
         {
             Motion.Bob(BadgeHost, false);
@@ -68,9 +76,20 @@ public partial class ServerUpdateWindow : Window
         if (_session is null)
             return;
         ShowBusy("Asking the server to update");
-        var result = await _session.UpdateServerAsync(new Progress<string>(ShowBusy), CancellationToken.None);
+        if (_debug)
+            DetailsText.Clear();
+        var trace = _debug ? new Progress<string>(AppendDetail) : null;
+        var result = await _session.UpdateServerAsync(new Progress<string>(ShowBusy), CancellationToken.None, trace: trace);
         ShowResult(result);
     }
+
+    private void AppendDetail(string line)
+    {
+        DetailsText.AppendText(line + Environment.NewLine);
+        DetailsText.ScrollToEnd();
+    }
+
+    private void OnCopyDetails(object sender, RoutedEventArgs e) => Clipboard.SetText(DetailsText.Text);
 
     public void ShowBusy(string step)
     {
@@ -98,7 +117,13 @@ public partial class ServerUpdateWindow : Window
         RetryButton.Visibility = Visibility.Collapsed;
         CommandPanel.Visibility = Visibility.Collapsed;
         string brush, icon;
-        if (result.Success)
+        if (result.AlreadyUpToDate)
+        {
+            (brush, icon) = ("S.Green", "I.Check");
+            Heading.Text = "Your server is already up to date";
+            Explanation.Text = $"It runs {result.ServerVersion}, the newest release.";
+        }
+        else if (result.Success)
         {
             (brush, icon) = ("S.Green", "I.Check");
             Heading.Text = $"Server updated to {result.ServerVersion}";
@@ -122,6 +147,8 @@ public partial class ServerUpdateWindow : Window
         Badge.SetResourceReference(Shape.FillProperty, brush);
         BadgeIcon.Data = Visuals.Resource<Geometry>(icon);
         Motion.Pop(BadgeHost);
+        if (_debug && result.Details is { } details) // after the trace lines still queued for the window
+            Dispatcher.InvokeAsync(() => AppendDetail("--- What the server reports ---" + Environment.NewLine + details), DispatcherPriority.Background);
     }
 
     private void OnCopy(object sender, RoutedEventArgs e) => Clipboard.SetText(CommandText.Text);

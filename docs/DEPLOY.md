@@ -168,8 +168,20 @@ curl -fsSL https://raw.githubusercontent.com/MRnigth/Tether/main/deploy/get.sh |
 
 Upgrades keep the address the server listens on and every line of `/etc/tether/tether.env`; pass
 `--bind`/`--port` only to change the address. Check the updater with
-`systemctl status tether-update.path` and `sudo journalctl -u tether-update -n 50`. To turn
+`systemctl status tether-update.path` and `sudo tail -n 50 /var/lib/tether/update/update.log`. To turn
 self-updates off: `sudo systemctl disable --now tether-update.path`.
+
+**When an update from the app does not work.** Every run of `update.sh` is logged to
+`/var/lib/tether/update/update.log` (the previous log is kept as `update.log.1`), and anything that
+fails unexpectedly is reported to the app instead of leaving it waiting. In the app, turn on
+**Settings → Debug mode** and click **Update server** (or **Check for update**). The update window
+then shows every step the app takes and, at the end, what the server reports: whether `update.sh`
+is installed, whether `tether-update.path` is enabled, whether a request is waiting, the last
+`status.json` and the last lines of `update.log`. The token is never shown. **Copy details** puts
+it all on the clipboard; the same report is `GET /api/update/diagnostics` (with the token). A
+request that the updater does not pick up within 45 seconds is reported as such; then run
+`sudo systemctl enable --now tether-update.path`. If the self-update itself is broken, update by
+hand once with the command above.
 
 ## 5. Uninstall
 

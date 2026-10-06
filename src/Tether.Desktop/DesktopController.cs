@@ -53,9 +53,10 @@ public sealed class DesktopController : IMainActions, IDisposable
         _lifetime = lifetime;
         _platform = platform;
         _fileLog = new RollingFileLoggerProvider(TetherPaths.LogsDir, retentionDays: 14);
-        _loggers = LoggerFactory.Create(b => b.AddProvider(_fileLog).SetMinimumLevel(LogLevel.Information));
+        _loggers = LoggerFactory.Create(b => b.AddProvider(_fileLog).SetMinimumLevel(LogLevel.Debug));
         _log = _loggers.CreateLogger("Tether.Desktop");
         _settings = SettingsStore.Load(SettingsStore.DefaultPath);
+        _fileLog.Minimum = _settings.DebugMode ? LogLevel.Debug : LogLevel.Information; // Debug mode: more detail in the log
         _refresh = new DispatcherTimer(TimeSpan.FromMilliseconds(250), DispatcherPriority.Background, (_, _) => RefreshIfDirty());
         _updates = new UpdateService(new UpdateChecker(new HttpClient()), TetherInfo.ProductVersion, UpdateChecker.AssetForThisPlatform());
         _updates.UpdateAvailable += u =>
@@ -407,7 +408,7 @@ public sealed class DesktopController : IMainActions, IDisposable
     {
         var result = await session.UpdateServerQuietlyAsync(CancellationToken.None);
         _dirty = true;
-        if (result.Success)
+        if (result.Success && !result.AlreadyUpToDate)
             Notify("server-updated", "Server updated", $"Your server now runs {result.ServerVersion}.");
         else if (!result.CanUpdateItself)
             Dispatcher.UIThread.Post(() => ShowServerUpdate(session, serverVersion, result)); // needs the one-time setup
@@ -415,7 +416,7 @@ public sealed class DesktopController : IMainActions, IDisposable
 
     private void ShowServerUpdate(ClientSession session, string serverVersion, ServerUpdateResult? result)
     {
-        var dialog = new ServerUpdateWindow(session, serverVersion);
+        var dialog = new ServerUpdateWindow(session, serverVersion, debug: _settings.DebugMode);
         if (result is not null)
             dialog.ShowResult(result);
         dialog.Closed += (_, _) =>
@@ -438,6 +439,7 @@ public sealed class DesktopController : IMainActions, IDisposable
             if (window.Result is null)
                 return;
             _settings = window.Result;
+            _fileLog.Minimum = _settings.DebugMode ? LogLevel.Debug : LogLevel.Information;
             SettingsStore.Save(SettingsStore.DefaultPath, _settings);
             SetAutoStart(_settings.StartWithWindows);
             _updates.SetEnabled(_settings.CheckForUpdates);

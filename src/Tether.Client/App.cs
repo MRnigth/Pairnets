@@ -20,7 +20,7 @@ public sealed class App : Application
         Themes.ThemeManager.Apply(this);
 
         _fileLog = new RollingFileLoggerProvider(TetherPaths.LogsDir, retentionDays: 14);
-        _loggerFactory = LoggerFactory.Create(b => b.AddProvider(_fileLog).SetMinimumLevel(LogLevel.Information));
+        _loggerFactory = LoggerFactory.Create(b => b.AddProvider(_fileLog).SetMinimumLevel(LogLevel.Debug));
         var log = _loggerFactory.CreateLogger("Tether.Client");
         log.LogInformation("Tether {Version} starting", typeof(App).Assembly.GetName().Version);
 

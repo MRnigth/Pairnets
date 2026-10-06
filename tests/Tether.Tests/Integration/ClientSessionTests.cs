@@ -203,19 +203,57 @@ public class ClientSessionTests : IAsyncLifetime
         await using var session = Start();
         var steps = new List<string>();
 
-        // Play the root updater: pick up the request and report a failure.
+        // Play the root updater: pick up the request and report a failure (status first, as update.sh does).
         var updateDir = Path.Combine(_server.Paths.DataDir, "update");
-        _ = Task.Run(async () =>
-        {
-            while (!File.Exists(Path.Combine(updateDir, "request")))
-                await Task.Delay(50);
-            File.Delete(Path.Combine(updateDir, "request"));
-            File.WriteAllText(Path.Combine(updateDir, "status.json"),
-                "{\"state\":\"failed\",\"message\":\"The download did not match its checksum. Nothing was changed.\"}");
-        });
+        PlayUpdater(updateDir, "{\"state\":\"failed\",\"message\":\"The download did not match its checksum. Nothing was changed.\"}",
+            $"2026-10-06T09:00:00Z checksum line: <missing>\n  Token:       {_server.Token}\n");
         var result = await session.UpdateServerAsync(new Progress<string>(steps.Add), default, pollInterval: TimeSpan.FromMilliseconds(100), timeout: TimeSpan.FromSeconds(10));
         Assert.False(result.Success);
         Assert.True(result.CanUpdateItself);
         Assert.Contains("checksum", result.Message);
+
+        // A failure always carries the server's updater report, with the token hidden.
+        Assert.NotNull(result.Details);
+        Assert.Contains("update.sh present:   yes", result.Details);
+        Assert.Contains("checksum line: <missing>", result.Details);
+        Assert.Contains("Token:       (hidden)", result.Details);
+        Assert.DoesNotContain(_server.Token, result.Details);
     }
+
+    [Fact]
+    public async Task UpdateServerSaysAlreadyUpToDateAndTracesEachStep()
+    {
+        await _server.DisposeAsync();
+        using var dir = new TempDir("updater");
+        var script = Path.Combine(dir.Path, "update.sh");
+        File.WriteAllText(script, "#!/bin/sh\n");
+        _server = await TestServer.StartAsync(config: new() { ["Sync:UpdaterScript"] = script });
+        await using var session = Start();
+        await WaitUntil(() => session.Status.Server is not null, "server info");
+
+        PlayUpdater(Path.Combine(_server.Paths.DataDir, "update"),
+            $"{{\"state\":\"succeeded\",\"message\":\"Already up to date ({TetherInfo.ProductVersion}).\"}}", null);
+        var trace = new System.Collections.Concurrent.ConcurrentQueue<string>();
+        var result = await session.UpdateServerAsync(null, default, pollInterval: TimeSpan.FromMilliseconds(100), timeout: TimeSpan.FromSeconds(10),
+            trace: new Progress<string>(trace.Enqueue));
+
+        Assert.True(result.Success);
+        Assert.True(result.AlreadyUpToDate);
+        Assert.Equal(TetherInfo.ProductVersion, result.ServerVersion);
+        Assert.Contains("update.sh present", result.Details); // with a trace (Debug mode) the report comes along on success too
+        await WaitUntil(() => trace.Any(l => l.Contains("Done: Already up to date")), "trace of the result");
+        Assert.Contains(trace, l => l.Contains("Asking the server to update"));
+        Assert.Contains(trace, l => l.Contains("accepted"));
+    }
+
+    /// <summary>Acts like update.sh: waits for the request, writes the log and status, then removes the request.</summary>
+    private static void PlayUpdater(string updateDir, string statusJson, string? log) => _ = Task.Run(async () =>
+    {
+        while (!File.Exists(Path.Combine(updateDir, "request")))
+            await Task.Delay(50);
+        if (log is not null)
+            File.WriteAllText(Path.Combine(updateDir, "update.log"), log);
+        File.WriteAllText(Path.Combine(updateDir, "status.json"), statusJson);
+        File.Delete(Path.Combine(updateDir, "request"));
+    });
 }

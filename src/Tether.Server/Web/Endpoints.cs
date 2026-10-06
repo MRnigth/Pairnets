@@ -31,6 +31,9 @@ public static class Endpoints
                 "This server cannot update itself yet. Run the install command on the server once."),
         });
 
+        // Debug mode in the apps: why an update did not happen (status, request, path unit, update.log).
+        app.MapGet("/api/update/diagnostics", (ServerUpdater updater, SyncOptions options) => Json(updater.GetDiagnostics(options.Token)));
+
         app.MapGet("/api/manifest", (HttpContext ctx, SyncStore store) =>
         {
             long? since = null;

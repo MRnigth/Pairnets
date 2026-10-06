@@ -55,6 +55,7 @@ public partial class SettingsWindow : Window
         UpdateBox.IsChecked = current.CheckForUpdates;
         WaitBox.IsChecked = current.WaitForPeerBatches;
         AutoServerBox.IsChecked = current.AutoUpdateServer;
+        DebugBox.IsChecked = current.DebugMode;
         ServerVersionText.Text = serverVersionText ?? "Server: not connected yet";
         (current.EffectiveParallelTransfers switch { 1 => Par1, 2 => Par2, 8 => Par8, _ => Par4 }).IsChecked = true;
         UpLimitBox.IsChecked = current.UploadLimitMBps is > 0;
@@ -220,6 +221,7 @@ public partial class SettingsWindow : Window
                 CheckForUpdates = UpdateBox.IsChecked == true,
                 WaitForPeerBatches = WaitBox.IsChecked == true,
                 AutoUpdateServer = AutoServerBox.IsChecked == true,
+                DebugMode = DebugBox.IsChecked == true,
                 ParallelTransfers = ParallelChoice(),
                 UploadLimitMBps = Limit(UpLimitBox, UpLimitValue),
                 DownloadLimitMBps = Limit(DownLimitBox, DownLimitValue),

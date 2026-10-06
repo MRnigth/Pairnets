@@ -45,6 +45,9 @@ public sealed class ClientSettings
     /// <summary>A server version the user chose not to be reminded about ("Don't ask for this version").</summary>
     public string? SkippedServerVersion { get; set; }
 
+    /// <summary>Debug mode: more detail in the log, and the server's update log in the update window.</summary>
+    public bool DebugMode { get; set; }
+
     /// <summary><see cref="ParallelTransfers"/> limited to the offered choices.</summary>
     public int EffectiveParallelTransfers => ParallelTransfers is 1 or 2 or 4 or 8 ? ParallelTransfers : 4;
 

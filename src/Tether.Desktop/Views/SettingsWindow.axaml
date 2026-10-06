@@ -100,6 +100,11 @@
           <TextBlock Classes="muted small" TextWrapping="Wrap"
                      Text="When this app finds the server on an older version, it updates it without asking (about 30 seconds; your files are not touched)." />
         </StackPanel>
+        <StackPanel Spacing="3">
+          <ToggleSwitch x:Name="DebugBox" OnContent="Debug mode" OffContent="Debug mode" />
+          <TextBlock Classes="muted small" TextWrapping="Wrap"
+                     Text="Writes more detail to the log and shows the server's update log in the update window. Turn it on when updating the server does not work." />
+        </StackPanel>
         <Border Classes="divider" />
 
         <StackPanel Spacing="3">

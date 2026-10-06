@@ -11,16 +11,20 @@ namespace Tether.Desktop.Views;
 public partial class ServerUpdateWindow : Window
 {
     private readonly ClientSession? _session;
+    private readonly bool _debug;
+    private readonly System.Text.StringBuilder _details = new();
 
     public ServerUpdateWindow()
         : this(null, "1.0.52")
     {
     }
 
-    public ServerUpdateWindow(ClientSession? session, string serverVersion, string? appVersion = null)
+    public ServerUpdateWindow(ClientSession? session, string serverVersion, string? appVersion = null, bool debug = false)
     {
         InitializeComponent();
         _session = session;
+        _debug = debug;
+        DetailsPanel.IsVisible = debug;
         ServerVersion = serverVersion;
         appVersion ??= TetherInfo.ProductVersion;
         if (serverVersion.Length == 0)
@@ -42,6 +46,10 @@ public partial class ServerUpdateWindow : Window
             VersionsText.Text = serverVersion;
             SkipButton.IsVisible = false;
             UpdateButton.Content = "Check for update";
+            Badge.Fill = Visuals.Resource<IBrush>("S.Green"); // nothing is wrong: no warning colour
+            BadgeIcon.Data = Visuals.Resource<Geometry>("I.Check");
+            BadgeHost.Classes.Remove("bob");
+            BadgeKey = "S.Green";
         }
     }
 
@@ -53,6 +61,11 @@ public partial class ServerUpdateWindow : Window
     internal string HeadingText => Heading.Text ?? string.Empty;
     internal bool CommandShown => CommandPanel.IsVisible;
     internal bool RetryShown => RetryButton.IsVisible;
+    internal bool DetailsShown => DetailsPanel.IsVisible;
+    internal string DetailsValue => _details.ToString();
+
+    /// <summary>The badge colour (a brush key), for the headless UI test.</summary>
+    internal string BadgeKey { get; private set; } = "S.Orange";
 
     /// <summary>Set when the user chose "Don't ask for this version".</summary>
     public bool Skipped { get; private set; }
@@ -73,8 +86,27 @@ public partial class ServerUpdateWindow : Window
         if (_session is null)
             return;
         ShowBusy("Asking the server to update");
-        var result = await _session.UpdateServerAsync(new Progress<string>(ShowBusy), CancellationToken.None);
+        if (_debug)
+        {
+            _details.Clear();
+            DetailsText.Text = string.Empty;
+        }
+        var trace = _debug ? new Progress<string>(AppendDetail) : null;
+        var result = await _session.UpdateServerAsync(new Progress<string>(ShowBusy), CancellationToken.None, trace: trace);
         ShowResult(result);
+    }
+
+    internal void AppendDetail(string line)
+    {
+        _details.AppendLine(line);
+        DetailsText.Text = _details.ToString();
+        DetailsScroller.ScrollToEnd();
+    }
+
+    private async void OnCopyDetails(object? sender, RoutedEventArgs e)
+    {
+        if (Clipboard is { } clipboard)
+            await clipboard.SetTextAsync(_details.ToString());
     }
 
     internal void ShowBusy(string step)
@@ -85,6 +117,7 @@ public partial class ServerUpdateWindow : Window
         Ring.IsVisible = true;
         BadgeHost.Classes.Remove("bob");
         Badge.Fill = Visuals.Resource<IBrush>("S.Blue");
+        BadgeKey = "S.Blue";
         BadgeIcon.Data = Visuals.Resource<Geometry>("I.Server");
         Heading.Text = "Updating your server…";
         Explanation.Text = "It downloads the newest release, checks it, installs it and restarts.";
@@ -101,7 +134,13 @@ public partial class ServerUpdateWindow : Window
         RetryButton.IsVisible = false;
         CommandPanel.IsVisible = false;
         string brush, icon;
-        if (result.Success)
+        if (result.AlreadyUpToDate)
+        {
+            (brush, icon) = ("S.Green", "I.Check");
+            Heading.Text = "Your server is already up to date";
+            Explanation.Text = $"It runs {result.ServerVersion}, the newest release.";
+        }
+        else if (result.Success)
         {
             (brush, icon) = ("S.Green", "I.Check");
             Heading.Text = $"Server updated to {result.ServerVersion}";
@@ -123,9 +162,12 @@ public partial class ServerUpdateWindow : Window
             RetryButton.IsVisible = true;
         }
         Badge.Fill = Visuals.Resource<IBrush>(brush);
+        BadgeKey = brush;
         BadgeIcon.Data = Visuals.Resource<Geometry>(icon);
         BadgeHost.Classes.Remove("pop");
         Dispatcher.UIThread.Post(() => BadgeHost.Classes.Add("pop"), DispatcherPriority.Background);
+        if (_debug && result.Details is { } details) // after the trace lines still queued for the window
+            Dispatcher.UIThread.Post(() => AppendDetail("--- What the server reports ---" + Environment.NewLine + details), DispatcherPriority.Background);
     }
 
     private async void OnCopy(object? sender, RoutedEventArgs e)

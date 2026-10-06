@@ -11,7 +11,7 @@ public sealed class RollingFileLoggerProvider : ILoggerProvider
 {
     private readonly string _directory;
     private readonly int _retentionDays;
-    private readonly LogLevel _minimum;
+    private volatile int _minimum;
     private readonly TimeProvider _clock;
     private readonly object _gate = new();
     private StreamWriter? _writer;
@@ -21,9 +21,16 @@ public sealed class RollingFileLoggerProvider : ILoggerProvider
     {
         _directory = directory;
         _retentionDays = retentionDays;
-        _minimum = minimum;
+        _minimum = (int)minimum;
         _clock = clock ?? TimeProvider.System;
         Directory.CreateDirectory(directory);
+    }
+
+    /// <summary>The lowest level written; Debug mode lowers it to <see cref="LogLevel.Debug"/> while the app runs.</summary>
+    public LogLevel Minimum
+    {
+        get => (LogLevel)_minimum;
+        set => _minimum = (int)value;
     }
 
     public string CurrentFile => FileFor(DateOnly.FromDateTime(_clock.GetLocalNow().DateTime));
@@ -102,7 +109,7 @@ public sealed class RollingFileLoggerProvider : ILoggerProvider
     {
         public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
 
-        public bool IsEnabled(LogLevel logLevel) => logLevel >= owner._minimum && logLevel != LogLevel.None;
+        public bool IsEnabled(LogLevel logLevel) => logLevel >= owner.Minimum && logLevel != LogLevel.None;
 
         public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
         {

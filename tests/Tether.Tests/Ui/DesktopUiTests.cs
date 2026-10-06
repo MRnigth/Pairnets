@@ -86,7 +86,26 @@ public class DesktopUiTests
         var upToDate = new ServerUpdateWindow(null, "1.0.58", "1.0.58");
         upToDate.Show();
         Assert.Equal("Your server is up to date", upToDate.HeadingText);
+        Assert.Equal("S.Green", upToDate.BadgeKey); // nothing is wrong: no orange warning badge
+        Assert.False(upToDate.Bobbing);
+        Assert.False(upToDate.DetailsShown); // only in Debug mode
+        upToDate.ShowResult(new ServerUpdateResult(true, "Already up to date (1.0.58).", "1.0.58", CanUpdateItself: true, AlreadyUpToDate: true));
+        Assert.Equal("Your server is already up to date", upToDate.HeadingText);
+        Assert.Equal("S.Green", upToDate.BadgeKey);
         upToDate.Close();
+
+        var debug = new ServerUpdateWindow(null, "1.0.52", "1.0.58", debug: true);
+        debug.Show();
+        Assert.True(debug.DetailsShown);
+        Assert.Equal("S.Orange", debug.BadgeKey);
+        debug.AppendDetail("[  0s] Asking the server to update");
+        debug.ShowResult(new ServerUpdateResult(false, "The updater did not start.", "1.0.52", CanUpdateItself: true,
+            Details: "Path unit enabled:   NO"));
+        Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        Assert.Contains("Asking the server to update", debug.DetailsValue);
+        Assert.Contains("--- What the server reports ---", debug.DetailsValue);
+        Assert.Contains("Path unit enabled:   NO", debug.DetailsValue);
+        debug.Close();
 
         var dialog = new ServerUpdateWindow(null, "1.0.52", "1.0.58");
         dialog.Show();

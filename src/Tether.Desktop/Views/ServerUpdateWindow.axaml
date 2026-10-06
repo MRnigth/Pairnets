@@ -62,5 +62,16 @@
         <Button Classes="accent" Content="Close" Click="OnLater" />
       </StackPanel>
     </StackPanel>
+
+    <!-- Debug mode: every step of the app and what the server's updater reports -->
+    <StackPanel x:Name="DetailsPanel" Spacing="6" IsVisible="False">
+      <TextBlock Classes="muted small" Text="Details (Debug mode)" />
+      <Border Classes="pill" CornerRadius="8" Padding="10,8">
+        <ScrollViewer x:Name="DetailsScroller" MaxHeight="220" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
+          <SelectableTextBlock x:Name="DetailsText" FontFamily="Menlo, Consolas, DejaVu Sans Mono, monospace" FontSize="11" />
+        </ScrollViewer>
+      </Border>
+      <Button Classes="subtle" Content="Copy details" HorizontalAlignment="Left" Click="OnCopyDetails" />
+    </StackPanel>
   </StackPanel>
 </Window>
