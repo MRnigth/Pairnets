@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
+using Tether.Core;
 using Tether.Core.Client;
 using Tether.Core.Settings;
 using Tether.Core.Sync;
@@ -18,6 +19,62 @@ public static class HeadlessApp
         AppBuilder.Configure<Tether.Desktop.App>()
             .UseSkia()
             .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false });
+}
+
+/// <summary>Sample files and versions for the History page (screenshots and tests).</summary>
+public sealed class SampleHistory : IHistorySource
+{
+    private readonly DateTimeOffset _now = DateTimeOffset.UtcNow;
+
+    public List<(string Path, string Id)> Restored { get; } = [];
+
+    public Task<IReadOnlyList<ServerFile>> GetServerFilesAsync(CancellationToken ct) => Task.FromResult<IReadOnlyList<ServerFile>>(
+    [
+        new("Projects/2026/budget-draft.xlsx", true, _now.AddHours(-2), 0),
+        new("Photos/summer/IMG_2041.jpg", true, _now.AddDays(-1).AddHours(-3), 0),
+        new("Notes/old-ideas.md", true, _now.AddDays(-5), 0),
+        new("Archive/2024/taxes.pdf", true, _now.AddDays(-12), 0),
+        new("Archive/2023/ancient.txt", true, _now.AddDays(-50), 0),
+        new("Projects/report.docx", false, _now.AddMinutes(-20), 482_304, new string('a', 64)),
+        new("Notes/meeting-notes.md", false, _now.AddMinutes(-47), 6_210),
+        new("Projects/2026/plan.xlsx", false, _now.AddHours(-3), 91_022),
+    ]);
+
+    public Task<IReadOnlyList<HistoryVersion>> GetVersionsAsync(string path, CancellationToken ct) => Task.FromResult<IReadOnlyList<HistoryVersion>>(
+    [
+        new("20261006T100000000Z-c0ffee00", _now.AddHours(-2), 48_220, "c0ffee00"),
+        new("20261004T100000000Z-be5eda7a", _now.AddDays(-2).AddHours(-4), 47_100, "be5eda7a"),
+        new("20260929T100000000Z-0ddba11a", _now.AddDays(-7), 39_870, "0ddba11a"),
+    ]);
+
+    public Task<string?> RestoreVersionAsync(string path, HistoryVersion version, CancellationToken ct)
+    {
+        Restored.Add((path, version.Id));
+        return Task.FromResult<string?>(null);
+    }
+}
+
+/// <summary>Records what the windows asked for; the History page reads <see cref="SampleHistory"/>.</summary>
+public sealed class SampleActions : IMainActions
+{
+    public List<string> Calls { get; } = [];
+
+    public SampleHistory Samples { get; } = new();
+
+    public IHistorySource? History => Samples;
+
+    public void FixBlocked() => Calls.Add("fix");
+    public void SyncNow() => Calls.Add("sync");
+    public void TogglePause() => Calls.Add("pause");
+    public void OpenFolder() => Calls.Add("folder");
+    public void ShowSettings() => Calls.Add("settings");
+    public void ViewLog() => Calls.Add("log");
+    public void UpdateNow() => Calls.Add("update");
+    public void DismissUpdate() => Calls.Add("dismiss");
+    public void DownloadNow() => Calls.Add("download");
+    public void UpdateServer() => Calls.Add("server");
+    public void ReportBug() => Calls.Add("bug");
+    public void RevealFile(string syncPath) => Calls.Add("reveal:" + syncPath);
 }
 
 /// <summary>Loads the macOS/Linux windows headlessly: XAML parses, controls bind, states render.</summary>
@@ -143,6 +200,91 @@ public class DesktopUiTests
     }
 
     [AvaloniaFact]
+    public async Task HistoryPageListsDeletedFilesAndRestoresAVersion()
+    {
+        var actions = new SampleActions();
+        var window = new MainWindow(actions);
+        window.Show();
+        window.Navigate(MainPage.History);
+        await window.LoadHistoryAsync();
+        Assert.Equal(4, window.HistoryRows); // the fifth deletion is older than 30 days
+        window.ShowAllFiles();
+        Assert.Equal(3, window.HistoryRows);
+        window.SearchHistory("REPORT");
+        Avalonia.Threading.Dispatcher.UIThread.RunJobs(); // TextChanged arrives through the dispatcher
+        Assert.Equal(1, window.HistoryRows);
+        window.SelectHistoryRow(0);
+        Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        Assert.Equal(3, window.VersionRows);
+        await window.RestoreFirstVersionAsync();
+        Assert.Equal(("Projects/report.docx", "20261006T100000000Z-c0ffee00"), Assert.Single(actions.Samples.Restored));
+        Assert.StartsWith("Restored.", window.RestoreText);
+
+        // "Show versions…" on an activity row opens History on that file.
+        window.ShowVersionsFor("Notes/old-ideas.md");
+        Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        Assert.Equal(MainPage.History, window.Page);
+        Assert.Equal(1, window.HistoryRows);
+        Assert.Equal(3, window.VersionRows);
+        window.AllowClose = true;
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public void SidebarPagesSettingsAndTheMap()
+    {
+        var actions = new SampleActions();
+        var window = new MainWindow(actions);
+        window.Show();
+        window.ClickNav(MainPage.Settings);
+        Assert.Equal(["settings"], actions.Calls); // the controller hands over a fresh form
+        window.ShowSettingsPage(new SettingsView(new ClientSettings { ServerUrl = "http://example.invalid:5075/", Folder = "/tmp/x", DeviceName = "mac" }, null, firstRun: false, autoStart: false));
+        Assert.Equal(MainPage.Settings, window.Page);
+        Assert.True(window.SettingsShown);
+        window.ClickNav(MainPage.Activity);
+        Assert.Equal(MainPage.Activity, window.Page);
+        Assert.False(window.SettingsShown); // next time it starts again from the saved settings
+
+        var feed = new ActivityFeed();
+        feed.Add(new ActivityItem(DateTimeOffset.Now.AddDays(-1), ActivityKind.Uploaded, "a.txt", "Uploaded"));
+        feed.Add(ActivityKind.Downloaded, "b.txt", "Downloaded");
+        window.ShowActivity(feed.Items);
+        Assert.Equal(4, window.ActivityRowCount); // two day headings and two rows
+
+        var server = new ServerInfo("id", 1, 1, "1.0.58", 412L << 30, 1L << 40);
+        window.ShowStatus(StatusSnapshot.Initial with
+        {
+            Status = RunnerStatus.Syncing, LastSyncAt = DateTimeOffset.Now, Server = server, CurrentPath = "a", Operation = "upload",
+            Active = [new ActiveTransfer("a", "upload", 1, 2)],
+            Devices = [new DeviceInfo("mac", true, DateTimeOffset.UtcNow), new DeviceInfo("DESKTOP", true, DateTimeOffset.UtcNow)],
+        }, "/tmp/x", "mac");
+        Assert.Equal("DESKTOP: Online", window.MapOtherText);
+        Assert.True(window.MapHereFlowing);
+        window.ShowAttention([new AttentionItem("x", "y", "Show in folder", () => { })]);
+        Assert.True(window.CalloutVisible);
+        window.AllowClose = true;
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public void TrayPanelShowsStatusRecentChangesAndAttention()
+    {
+        var panel = new TrayPanel(null);
+        panel.Show();
+        panel.ShowStatus(StatusSnapshot.Initial with { Status = RunnerStatus.Idle, Text = "Up to date", LastSyncAt = DateTimeOffset.Now }, "mac");
+        Assert.Equal("Up to date", panel.HeadlineText);
+        var feed = new ActivityFeed();
+        for (var i = 0; i < 6; i++)
+            feed.Add(ActivityKind.Uploaded, $"f{i}.txt", "Uploaded");
+        panel.ShowActivity(feed.Items);
+        Assert.Equal(4, panel.RecentRows);
+        Assert.False(panel.AttentionShown);
+        panel.ShowAttention(3);
+        Assert.True(panel.AttentionShown);
+        panel.Close();
+    }
+
+    [AvaloniaFact]
     public void SettingsWindowLoadsInFirstRunAndSettingsModes()
     {
         var first = new SettingsWindow(new ClientSettings(), null, firstRun: true, autoStart: false);
@@ -174,9 +316,12 @@ public class DesktopUiTests
     private static void RenderAll(string? outDir, string suffix)
     {
         var now = DateTimeOffset.Now;
-        var window = new MainWindow { Width = 720, Height = 700 };
+        var actions = new SampleActions();
+        var window = new MainWindow(actions) { Width = 980, Height = 700 };
         window.Show();
         var feed = new ActivityFeed();
+        feed.Add(new ActivityItem(now.AddDays(-1).AddHours(-2), ActivityKind.Uploaded, "Projects/2026/budget.xlsx", "Uploaded"));
+        feed.Add(new ActivityItem(now.AddDays(-1), ActivityKind.Downloaded, "Notes/ideas.md", "Downloaded"));
         feed.Add(new ActivityItem(now.AddHours(-3), ActivityKind.Downloaded, "Projects/2026/plan.xlsx", "Downloaded"));
         feed.Add(new ActivityItem(now.AddMinutes(-47), ActivityKind.Uploaded, "Notes/meeting-notes.md", "Uploaded"));
         feed.Add(new ActivityItem(now.AddMinutes(-12), ActivityKind.DeletedOnServer, "Archive/old-draft.txt", "Deleted"));
@@ -193,13 +338,19 @@ public class DesktopUiTests
         window.ShowAttention(attention);
 
         var server = new Tether.Core.ServerInfo("id", 1, 1, "1.0.58", 412L << 30, 1L << 40);
-        window.ShowUpdate("Tether 1.0.58 is available", "You have 1.0.52. Download it and replace the app (your settings are kept).", "Download");
+        var utc = DateTimeOffset.UtcNow;
+        IReadOnlyList<Tether.Core.DeviceInfo> devices =
+        [
+            new("MacBook", true, utc, "macOS 1.0.58"),
+            new("DESKTOP", true, utc, "Windows 1.0.58"),
+        ];
+        window.ShowUpdate("Tether 1.0.58 is available", "You have 1.0.52. Your settings are kept.", "Download");
         window.ShowStatus(StatusSnapshot.Initial with
         {
             Status = RunnerStatus.Syncing, Text = "Syncing", LastSyncAt = now.AddMinutes(-1),
             CurrentPath = "Videos/presentation-final.mp4", Operation = "upload", BytesDone = 67_108_864, BytesTotal = 104_857_600,
             FilesDone = 37, FilesTotal = 120, PassBytesDone = 412L << 20, PassBytesTotal = 1331L << 20, BytesPerSecond = 4.9 * (1 << 20),
-            LimitText = "Limited to 5 MB/s", Server = server,
+            LimitText = "Limited to 5 MB/s", Server = server, Devices = devices,
             Active =
             [
                 new ActiveTransfer("Photos/summer/holiday-0412.jpg", "upload", 78, 100),
@@ -207,30 +358,72 @@ public class DesktopUiTests
                 new ActiveTransfer("Videos/presentation-final.mp4", "upload", 12, 100),
                 new ActiveTransfer("Notes/meeting-2026-10-02.md", "upload", 95, 100),
             ],
-        }, "/Users/me/Work");
+        }, "/Users/me/Work", "MacBook");
         Save(window, outDir, $"main-window-syncing-{suffix}.png");
 
         window.ShowStatus(StatusSnapshot.Initial with
         {
             Status = RunnerStatus.Blocked, BlockReason = BlockReason.MassDelete, PendingDeletes = 37, LastSyncAt = now.AddMinutes(-3),
-            Text = "This sync would delete 37 files on the server (out of 120). Nothing was deleted.",
-        }, "/Users/me/Work");
-        window.ShowAttentionTab(true);
+            Text = "This sync would delete 37 files on the server (out of 120). Nothing was deleted.", Server = server, Devices = devices,
+        }, "/Users/me/Work", "MacBook");
         Save(window, outDir, $"main-window-blocked-{suffix}.png");
+        window.ShowAttentionTab(true);
+        Save(window, outDir, $"main-window-attention-{suffix}.png");
 
         window.ShowUpdate(null, string.Empty, string.Empty);
+        window.ShowAttention([]);
         window.ShowAttentionTab(false);
-        window.ShowStatus(StatusSnapshot.Initial with { Status = RunnerStatus.Idle, Text = "Up to date", LastSyncAt = now, Server = server }, "/Users/me/Work");
+        window.ShowStatus(StatusSnapshot.Initial with { Status = RunnerStatus.Idle, Text = "Up to date", LastSyncAt = now, Server = server, Devices = devices }, "/Users/me/Work", "MacBook");
         Save(window, outDir, $"main-window-idle-{suffix}.png");
 
         window.ShowStatus(StatusSnapshot.Initial with
         {
-            Status = RunnerStatus.Idle, Text = "Up to date", LastSyncAt = now.AddMinutes(-4), Server = server,
+            Status = RunnerStatus.Idle, Text = "Up to date", LastSyncAt = now.AddMinutes(-4), Server = server, Devices = devices,
             WaitingFor = new Tether.Core.Sync.PeerWait("DESKTOP", 340, 212),
-        }, "/Users/me/Work");
+        }, "/Users/me/Work", "MacBook");
         Save(window, outDir, $"main-window-waiting-{suffix}.png");
+
+        window.ShowStatus(StatusSnapshot.Initial with
+        {
+            Status = RunnerStatus.Idle, Text = "Up to date", LastSyncAt = now.AddMinutes(-1), Server = server,
+            Devices = [new("MacBook", true, utc), new("DESKTOP", false, utc.AddHours(-3), "Windows 1.0.58")],
+        }, "/Users/me/Work", "MacBook");
+        window.Navigate(MainPage.Activity);
+        Save(window, outDir, $"main-window-activity-{suffix}.png");
+
+        window.Navigate(MainPage.History);
+        Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        window.SelectHistoryRow(0);
+        Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        Save(window, outDir, $"main-window-history-{suffix}.png");
+
+        window.ShowSettingsPage(new SettingsView(new ClientSettings { ServerUrl = "http://100.x.y.z:5075/", Folder = "/Users/me/Work", DeviceName = "MacBook" },
+            null, firstRun: false, autoStart: true, serverVersionText: "Server 1.0.58"));
+        Save(window, outDir, $"main-window-settings-{suffix}.png");
         window.AllowClose = true;
         window.Close();
+
+        var panel = new TrayPanel(null);
+        panel.Show();
+        panel.ShowActivity(feed.Items);
+        panel.ShowAttention(2);
+        panel.ShowStatus(StatusSnapshot.Initial with
+        {
+            Status = RunnerStatus.Syncing, Text = "Syncing", LastSyncAt = now.AddMinutes(-1), Server = server, Devices = devices,
+            CurrentPath = "Photos/summer/holiday-0412.jpg", Operation = "download", FilesDone = 12, FilesTotal = 30,
+            PassBytesDone = 96L << 20, PassBytesTotal = 240L << 20, BytesPerSecond = 8.2 * (1 << 20),
+            Active = [new ActiveTransfer("Photos/summer/holiday-0412.jpg", "download", 50, 100)],
+            HeardFrom = new Dictionary<string, DateTimeOffset> { ["DESKTOP"] = utc },
+        }, "MacBook");
+        Save(panel, outDir, $"tray-panel-syncing-{suffix}.png");
+        panel.ShowAttention(0);
+        panel.ShowStatus(StatusSnapshot.Initial with
+        {
+            Status = RunnerStatus.Idle, Text = "Up to date", LastSyncAt = now, Server = server,
+            Devices = [new("MacBook", true, utc), new("DESKTOP", false, utc.AddHours(-3), "Windows 1.0.58")],
+        }, "MacBook");
+        Save(panel, outDir, $"tray-panel-idle-{suffix}.png");
+        panel.Close();
 
         var settings = new SettingsWindow(new ClientSettings { DeviceName = "MacBook" }, null, firstRun: true, autoStart: true);
         settings.Show();
@@ -252,6 +445,10 @@ public class DesktopUiTests
 
     private static void Save(Avalonia.Controls.Window window, string? outDir, string name)
     {
+        // Let pages and rows finish fading in: animations follow the real clock, even headless.
+        Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        Thread.Sleep(420);
+        AvaloniaHeadlessPlatform.ForceRenderTimerTick(2);
         var frame = window.CaptureRenderedFrame();
         Assert.NotNull(frame);
         if (outDir is null)

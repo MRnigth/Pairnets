@@ -21,7 +21,7 @@ namespace Tether.Desktop;
 /// Menu-bar (macOS) / system-tray (Linux) icon, main window and notifications around a
 /// <see cref="ClientSession"/>. Mirrors the Windows TrayController; all sync logic is in Tether.Core.
 /// </summary>
-public sealed class DesktopController : IMainActions, IDisposable
+public sealed class DesktopController : ITrayActions, IDisposable
 {
     private readonly Application _app;
     private readonly IClassicDesktopStyleApplicationLifetime _lifetime;
@@ -36,6 +36,7 @@ public sealed class DesktopController : IMainActions, IDisposable
     private ClientSettings _settings;
     private ClientSession? _session;
     private MainWindow? _window;
+    private TrayPanel? _panel;
     private TrayIcon? _tray;
     private NativeMenuItem? _statusItem;
     private NativeMenuItem? _fixItem;
@@ -90,6 +91,8 @@ public sealed class DesktopController : IMainActions, IDisposable
     private void CreateTray()
     {
         var menu = new NativeMenu();
+        var quick = new NativeMenuItem("Quick status…");
+        quick.Click += (_, _) => TogglePanel();
         var open = new NativeMenuItem("Open Tether");
         open.Click += (_, _) => ShowMainWindow();
         _statusItem = new NativeMenuItem("Starting…") { IsEnabled = false };
@@ -111,7 +114,7 @@ public sealed class DesktopController : IMainActions, IDisposable
         _autoStartItem.Click += (_, _) => SetAutoStart(!SafeIsAutoStart());
         var quit = new NativeMenuItem("Quit Tether");
         quit.Click += (_, _) => Quit();
-        foreach (var item in new NativeMenuItemBase[] { open, _statusItem, new NativeMenuItemSeparator(), sync, folder, _fixItem,
+        foreach (var item in new NativeMenuItemBase[] { quick, open, _statusItem, new NativeMenuItemSeparator(), sync, folder, _fixItem,
                      new NativeMenuItemSeparator(), settings, log, report, _pauseItem, _autoStartItem, new NativeMenuItemSeparator(), quit })
             menu.Items.Add(item);
 
@@ -122,9 +125,35 @@ public sealed class DesktopController : IMainActions, IDisposable
             Menu = menu,
             IsVisible = true,
         };
-        _tray.Clicked += (_, _) => ShowMainWindow();
+        // A click opens the quick-look panel where the desktop reports clicks (most Linux trays;
+        // the macOS menu bar always shows the menu, which starts with "Quick status…").
+        _tray.Clicked += (_, _) => TogglePanel();
         TrayIcon.SetIcons(_app, [_tray]);
     }
+
+    private void TogglePanel()
+    {
+        if (!_settings.IsComplete || !_settings.FirstRunCompleted)
+        {
+            ShowSettings(firstRun: true);
+            return;
+        }
+        _panel ??= new TrayPanel(this);
+        if (_panel.IsVisible || DateTime.UtcNow - _panel.HiddenAt < TimeSpan.FromMilliseconds(300))
+        {
+            _panel.Hide(); // a second click on the icon closes it
+            return;
+        }
+        if (_session is { } session)
+            _ = session.RefreshDevicesAsync();
+        _dirty = true;
+        RefreshIfDirty();
+        _panel.Open();
+        _dirty = true;
+        RefreshIfDirty();
+    }
+
+    public void OpenWindow(MainPage page) => ShowMainWindow(page);
 
     private WindowIcon IconFor(RunnerStatus status)
     {
@@ -220,8 +249,13 @@ public sealed class DesktopController : IMainActions, IDisposable
 
     // ------------------------------------------------------------------ drawing
 
+    private int _ticks;
+
     private void RefreshIfDirty()
     {
+        // Redraw every 2 seconds while a window shows, so "2 min ago" and the map's moving dots stay current.
+        if (++_ticks % 8 == 0 && (_window is { IsVisible: true } || _panel is { IsVisible: true }))
+            _dirty = true;
         if (!_dirty)
             return;
         _dirty = false;
@@ -249,9 +283,15 @@ public sealed class DesktopController : IMainActions, IDisposable
                     $"You have {TetherInfo.ProductVersion}. Download it and replace the app (your settings are kept).", "Download");
             else
                 _window.ShowUpdate(null, string.Empty, string.Empty);
-            _window.ShowStatus(status, _settings.Folder);
+            _window.ShowStatus(status, _settings.Folder, _settings.DeviceName);
             _window.ShowActivity(_session?.Activity.Items ?? []);
             _window.ShowAttention(BuildAttention(status));
+        }
+        if (_panel is { IsVisible: true })
+        {
+            _panel.ShowStatus(status, _settings.DeviceName);
+            _panel.ShowActivity(_session?.Activity.Items ?? []);
+            _panel.ShowAttention(BuildAttention(status).Count);
         }
     }
 
@@ -283,13 +323,30 @@ public sealed class DesktopController : IMainActions, IDisposable
             ShowSettings(firstRun: true);
             return;
         }
+        var opening = _window is not { IsVisible: true };
         _window ??= new MainWindow(this);
         _window.Show();
         _window.WindowState = WindowState.Normal;
         _window.Activate();
+        if (opening && _session is { } session)
+            _ = session.RefreshDevicesAsync(); // the other computer's state, fresh
         _dirty = true;
         RefreshIfDirty();
     }
+
+    /// <summary>Opens the main window on one page.</summary>
+    public void ShowMainWindow(MainPage page)
+    {
+        ShowMainWindow();
+        if (page == MainPage.Settings)
+            ShowSettings();
+        else
+            _window?.Navigate(page);
+    }
+
+    public IHistorySource? History => _session;
+
+    public void RevealFile(string syncPath) => _platform.Reveal(LocalPath(syncPath));
 
     public void SyncNow() => _session?.SyncNow();
 
@@ -364,7 +421,25 @@ public sealed class DesktopController : IMainActions, IDisposable
         StartSession(null);
     }
 
-    public void ShowSettings() => ShowSettings(firstRun: false);
+    /// <summary>Settings is a page of the main window (first-time setup has a window of its own).</summary>
+    public void ShowSettings()
+    {
+        if (!_settings.IsComplete || !_settings.FirstRunCompleted)
+        {
+            ShowSettings(firstRun: true);
+            return;
+        }
+        if (_window is not { IsVisible: true })
+            ShowMainWindow();
+        var view = new SettingsView(_settings, _platform.Secrets, firstRun: false, SafeIsAutoStart(), _updates, _session?.Status.ServerVersionText);
+        view.Saved += v =>
+        {
+            ApplySettings(v.Result!, v.PlainToken);
+            _window?.Navigate(MainPage.Overview);
+        };
+        view.Cancelled += () => _window?.Navigate(MainPage.Overview);
+        _window!.ShowSettingsPage(view);
+    }
 
     /// <summary>The app is unsigned on Mac and Linux, so it does not replace itself: open the download page.</summary>
     public void UpdateNow()
@@ -451,16 +526,21 @@ public sealed class DesktopController : IMainActions, IDisposable
         {
             if (window.Result is null)
                 return;
-            _settings = window.Result;
-            _fileLog.Minimum = _settings.DebugMode ? LogLevel.Debug : LogLevel.Information;
-            SettingsStore.Save(SettingsStore.DefaultPath, _settings);
-            SetAutoStart(_settings.StartWithWindows);
-            _updates.SetEnabled(_settings.CheckForUpdates);
-            StartSession(window.PlainToken);
+            ApplySettings(window.Result, window.PlainToken);
             ShowMainWindow();
         };
         window.Show();
         window.Activate();
+    }
+
+    private void ApplySettings(ClientSettings settings, string? plainToken)
+    {
+        _settings = settings;
+        _fileLog.Minimum = _settings.DebugMode ? LogLevel.Debug : LogLevel.Information;
+        SettingsStore.Save(SettingsStore.DefaultPath, _settings);
+        SetAutoStart(_settings.StartWithWindows);
+        _updates.SetEnabled(_settings.CheckForUpdates);
+        StartSession(plainToken);
     }
 
     public void OpenFolder()
@@ -534,8 +614,9 @@ public sealed class DesktopController : IMainActions, IDisposable
             _autoStartItem.IsChecked = SafeIsAutoStart();
     }
 
-    private void Quit()
+    public void Quit()
     {
+        _panel?.Close();
         if (_window is not null)
         {
             _window.AllowClose = true;

@@ -13,7 +13,7 @@ namespace Tether.Core.Client;
 /// client, engine and runner, plus an activity feed and a status snapshot for the UI. All UI
 /// frameworks share this class so the apps only draw and forward clicks.
 /// </summary>
-public sealed class ClientSession : IAsyncDisposable
+public sealed class ClientSession : IAsyncDisposable, IHistorySource
 {
     private readonly object _gate = new();
     private readonly TimeProvider _clock;

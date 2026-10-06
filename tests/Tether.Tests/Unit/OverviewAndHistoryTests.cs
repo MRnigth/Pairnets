@@ -20,7 +20,7 @@ public class OverviewAndHistoryTests
         var map = DeviceMap.Build(Connected(new DeviceInfo("MAC", true, Now), new DeviceInfo("DESKTOP", true, Now, "Windows 1.0.58")), "MAC", Now);
         Assert.Equal("MAC", map.Here.Name);
         Assert.Equal(NodeState.Online, map.Server.State);
-        Assert.Equal("412 GB free on server", map.Server.Detail);
+        Assert.Equal("412 GB free", map.Server.Detail);
         Assert.Equal("DESKTOP", map.Other.Name);
         Assert.Equal("Online", map.Other.Detail);
         Assert.Equal("Windows 1.0.58", map.Other.Tip);
@@ -119,10 +119,10 @@ public class OverviewAndHistoryTests
             new HistoryVersion("20261001T110000000Z-bbbbbbbb", Now.AddDays(-5), 1900, "bbbbbbbb"),
         };
         var rows = VersionRow.For(files[0], versions, Now);
-        Assert.StartsWith("Replaced ", rows[0].Title);
-        Assert.Equal("2 KB · same content as now", rows[0].Detail);
-        Assert.Equal("1.86 KB", rows[1].Detail);
-        Assert.StartsWith("Deleted ", VersionRow.For(files[2], versions, Now)[0].Title);
+        Assert.StartsWith("Today ", rows[0].Title);
+        Assert.Equal("Replaced · 2 KB · same content as now", rows[0].Detail);
+        Assert.Equal("Replaced · 1.86 KB", rows[1].Detail);
+        Assert.StartsWith("Deleted · ", VersionRow.For(files[2], versions, Now)[0].Detail);
     }
 
     [Fact]

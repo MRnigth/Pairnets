@@ -214,6 +214,208 @@
     <Setter Property="Padding" Value="10,7" />
   </Style>
 
+  <!-- ================= Main window: sidebar, pages, tiles ================= -->
+  <Style Selector="TextBlock.title">
+    <Setter Property="FontSize" Value="24" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+  <Style Selector="TextBlock.caps">
+    <Setter Property="FontSize" Value="11" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="LetterSpacing" Value="0.6" />
+    <Setter Property="Foreground" Value="{DynamicResource T.Muted}" />
+  </Style>
+  <Style Selector="Border.sidebar">
+    <Setter Property="Background" Value="{DynamicResource T.Sidebar}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource T.Border}" />
+    <Setter Property="BorderThickness" Value="0,0,1,0" />
+  </Style>
+
+  <!-- Sidebar navigation (RadioButtons) -->
+  <Style Selector="RadioButton.nav">
+    <Setter Property="Foreground" Value="{DynamicResource T.Muted}" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Border x:Name="bd" Background="Transparent" CornerRadius="9" Padding="11,9">
+          <ContentPresenter Content="{TemplateBinding Content}" Foreground="{TemplateBinding Foreground}" />
+        </Border>
+      </ControlTemplate>
+    </Setter>
+  </Style>
+  <Style Selector="RadioButton.nav:pointerover /template/ Border#bd">
+    <Setter Property="Background" Value="{DynamicResource T.NavHover}" />
+  </Style>
+  <Style Selector="RadioButton.nav:checked">
+    <Setter Property="Foreground" Value="{DynamicResource T.Text}" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+  <Style Selector="RadioButton.nav:checked /template/ Border#bd">
+    <Setter Property="Background" Value="{DynamicResource T.NavSelected}" />
+    <Setter Property="BoxShadow" Value="0 1 3 0 #14000000" />
+  </Style>
+  <Style Selector="RadioButton.nav v|LineIcon">
+    <Setter Property="Stroke" Value="{DynamicResource T.Muted}" />
+  </Style>
+  <Style Selector="RadioButton.nav:checked v|LineIcon">
+    <Setter Property="Stroke" Value="{DynamicResource T.Accent}" />
+  </Style>
+
+  <!-- Status card on the overview: a soft tint of the status colour at the top -->
+  <Style Selector="Border.hero">
+    <Setter Property="Background" Value="{DynamicResource T.Card}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource T.Border}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="16" />
+    <Setter Property="ClipToBounds" Value="True" />
+  </Style>
+
+  <!-- Small fact tiles (folder, last synced, server, free space) -->
+  <Style Selector="Border.tile">
+    <Setter Property="Background" Value="{DynamicResource T.Card}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource T.Border}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="12" />
+    <Setter Property="Padding" Value="14,12" />
+  </Style>
+  <Style Selector="Border.tile.warn">
+    <Setter Property="Background" Value="{DynamicResource T.WarnPill}" />
+  </Style>
+  <Style Selector="Border.tile.warn TextBlock.value">
+    <Setter Property="Foreground" Value="{DynamicResource T.WarnText}" />
+  </Style>
+  <Style Selector="TextBlock.value">
+    <Setter Property="FontSize" Value="14.5" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+
+  <!-- "2 things need your attention" -->
+  <Style Selector="Border.callout">
+    <Setter Property="Background" Value="{DynamicResource T.WarnPill}" />
+    <Setter Property="CornerRadius" Value="12" />
+    <Setter Property="Padding" Value="14,10,10,10" />
+  </Style>
+  <Style Selector="Border.callout TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource T.WarnText}" />
+  </Style>
+
+  <!-- Buttons that look like links, and round icon-only buttons -->
+  <Style Selector="Button.link">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Foreground" Value="{DynamicResource T.Accent}" />
+    <Setter Property="Padding" Value="6,3" />
+    <Setter Property="FontSize" Value="12.5" />
+    <Setter Property="Cursor" Value="Hand" />
+  </Style>
+  <Style Selector="Button.link:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource T.Hover}" />
+    <Setter Property="Foreground" Value="{DynamicResource T.AccentHover}" />
+  </Style>
+  <Style Selector="Button.icon">
+    <Setter Property="Background" Value="{DynamicResource T.Subtle}" />
+    <Setter Property="Padding" Value="8" />
+    <Setter Property="CornerRadius" Value="8" />
+  </Style>
+  <Style Selector="Button.icon:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource T.SubtleHover}" />
+  </Style>
+  <Style Selector="Button.ghost">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Padding" Value="6" />
+    <Setter Property="CornerRadius" Value="8" />
+  </Style>
+  <Style Selector="Button.ghost:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource T.Hover}" />
+  </Style>
+
+  <!-- Coloured message chips (History: restored / failed) -->
+  <Style Selector="Border.ok">
+    <Setter Property="Background" Value="{DynamicResource T.OkPill}" />
+    <Setter Property="CornerRadius" Value="8" />
+    <Setter Property="Padding" Value="10,7" />
+  </Style>
+  <Style Selector="Border.ok TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource T.OkText}" />
+  </Style>
+  <Style Selector="Border.bad">
+    <Setter Property="Background" Value="{DynamicResource T.BadPill}" />
+    <Setter Property="CornerRadius" Value="8" />
+    <Setter Property="Padding" Value="10,7" />
+  </Style>
+  <Style Selector="Border.bad TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource T.BadText}" />
+  </Style>
+
+  <!-- Selectable lists (History) -->
+  <Style Selector="ListBox.rows">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Padding" Value="0" />
+  </Style>
+  <Style Selector="ListBox.rows ListBoxItem">
+    <Setter Property="Padding" Value="8,7" />
+    <Setter Property="Margin" Value="0,1" />
+    <Setter Property="CornerRadius" Value="8" />
+    <Setter Property="Cursor" Value="Hand" />
+  </Style>
+  <Style Selector="ListBox.rows ListBoxItem:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource T.Hover}" />
+  </Style>
+  <Style Selector="ListBox.rows ListBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource T.Selected}" />
+  </Style>
+  <Style Selector="ListBox.rows ListBoxItem:selected:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource T.Selected}" />
+  </Style>
+
+  <!-- Day headings in the activity list -->
+  <Style Selector="TextBlock.day">
+    <Setter Property="FontSize" Value="11.5" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Foreground" Value="{DynamicResource T.Muted}" />
+    <Setter Property="Margin" Value="8,12,0,4" />
+  </Style>
+
+  <!-- The "this computer ⇄ server ⇄ other computer" picture -->
+  <Style Selector="Ellipse.ring">
+    <Setter Property="Fill" Value="{DynamicResource T.Node}" />
+    <Setter Property="Stroke" Value="{DynamicResource T.NodeRing}" />
+    <Setter Property="StrokeThickness" Value="1.5" />
+  </Style>
+  <Style Selector="Ellipse.ring.online">
+    <Setter Property="Stroke" Value="{StaticResource S.Green}" />
+    <Setter Property="StrokeThickness" Value="2" />
+  </Style>
+  <Style Selector="Ellipse.ring.unknown">
+    <Setter Property="StrokeDashArray" Value="3,3" />
+    <Setter Property="Fill" Value="Transparent" />
+  </Style>
+  <Style Selector="Ellipse.dot">
+    <Setter Property="Stroke" Value="{DynamicResource T.Card}" />
+    <Setter Property="StrokeThickness" Value="2.5" />
+  </Style>
+  <Style Selector="v|FlowLine">
+    <Setter Property="LineBrush" Value="{DynamicResource T.Line}" />
+    <Setter Property="UpBrush" Value="{StaticResource S.Green}" />
+    <Setter Property="DownBrush" Value="{StaticResource S.Blue}" />
+  </Style>
+  <Style Selector="v|FlowLine.flowing">
+    <Style.Animations>
+      <Animation Duration="0:0:1.3" IterationCount="INFINITE">
+        <KeyFrame Cue="0%"><Setter Property="Phase" Value="0" /></KeyFrame>
+        <KeyFrame Cue="100%"><Setter Property="Phase" Value="1" /></KeyFrame>
+      </Animation>
+    </Style.Animations>
+  </Style>
+
+  <!-- The tray panel: a card that floats next to the tray / menu bar -->
+  <Style Selector="Border.panel">
+    <Setter Property="Background" Value="{DynamicResource T.Bg}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource T.Border}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="14" />
+  </Style>
+
   <!-- ================= Motion (runs only while a window is shown) ================= -->
   <!-- Gentle up-and-down bob: the server icon waiting for an update, the update arrow. -->
   <Style Selector=":is(Control).bob">

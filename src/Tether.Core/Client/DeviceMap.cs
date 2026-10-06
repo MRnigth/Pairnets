@@ -59,7 +59,7 @@ public sealed record DeviceMap(
         var server = s.Server is null && !connected
             ? new MapNode("Server", s.Status == RunnerStatus.Offline ? "Can't reach it" : "Connecting…", s.Status == RunnerStatus.Offline ? NodeState.Offline : NodeState.Unknown)
             : connected
-                ? new MapNode("Server", s.ServerFreeText ?? "Online", NodeState.Online, s.ServerVersionText)
+                ? new MapNode("Server", s.Server?.DiskFreeBytes is { } free ? Format.Bytes(free) + " free" : "Online", NodeState.Online, s.ServerVersionText)
                 : new MapNode("Server", "Can't reach it", NodeState.Offline, s.ServerVersionText);
 
         var (other, more) = OtherComputer(s, thisDevice, now);

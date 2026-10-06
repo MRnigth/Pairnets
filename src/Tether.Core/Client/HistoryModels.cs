@@ -32,7 +32,8 @@ public sealed record VersionRow(string Path, HistoryVersion Version, string Titl
 {
     /// <summary>
     /// History keeps a version from the moment something replaced it (or deleted it), so that is
-    /// the time shown: "Replaced today 14:02", or for a deleted file's newest copy "Deleted today 14:02".
+    /// the time shown: "Today 14:02" with "Replaced · 1.2 MB", or for a deleted file's newest
+    /// copy "Deleted · 1.2 MB".
     /// </summary>
     public static IReadOnlyList<VersionRow> For(ServerFile file, IReadOnlyList<HistoryVersion> versions, DateTimeOffset now)
     {
@@ -40,12 +41,25 @@ public sealed record VersionRow(string Path, HistoryVersion Version, string Titl
         for (var i = 0; i < versions.Count; i++)
         {
             var v = versions[i];
+            var moment = Format.Moment(v.StoredAtUtc, now);
             var verb = file.Deleted && i == 0 ? "Deleted" : "Replaced";
             var same = file.Hash is { } h && Hashing.ContentHash.Short(h) == v.Hash8;
-            rows.Add(new VersionRow(file.Path, v, $"{verb} {Format.Moment(v.StoredAtUtc, now)}", Format.Bytes(v.Size) + (same ? " · same content as now" : string.Empty)));
+            rows.Add(new VersionRow(file.Path, v, char.ToUpperInvariant(moment[0]) + moment[1..],
+                $"{verb} · {Format.Bytes(v.Size)}" + (same ? " · same content as now" : string.Empty)));
         }
         return rows;
     }
+}
+
+/// <summary>Where the History page gets its data: the running session (or sample data in tests).</summary>
+public interface IHistorySource
+{
+    Task<IReadOnlyList<ServerFile>> GetServerFilesAsync(CancellationToken ct);
+
+    Task<IReadOnlyList<HistoryVersion>> GetVersionsAsync(string path, CancellationToken ct);
+
+    /// <summary>Null on success, otherwise what went wrong (for the page to show).</summary>
+    Task<string?> RestoreVersionAsync(string path, HistoryVersion version, CancellationToken ct);
 }
 
 /// <summary>Which files the History page lists.</summary>
