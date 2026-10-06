@@ -96,7 +96,21 @@ public sealed record StatusSnapshot(
 
     public int? WaitingPercent => WaitingFor is { Count: > 0 } w ? (int)Math.Clamp(w.Seen * 100L / w.Count, 0, 100) : null;
 
-    // ---- the server
+    // ---- the other computers
+
+    /// <summary>
+    /// The computers that use the server (this one included), or null before the first answer and
+    /// from a server too old to say (<see cref="DevicesUnsupported"/>).
+    /// </summary>
+    public IReadOnlyList<DeviceInfo>? Devices { get; init; }
+
+    /// <summary>True when the server answered but is too old to list the computers that use it.</summary>
+    public bool DevicesUnsupported { get; init; }
+
+    /// <summary>When a change last arrived from each other computer (by device name).</summary>
+    public IReadOnlyDictionary<string, DateTimeOffset> HeardFrom { get; init; } = System.Collections.ObjectModel.ReadOnlyDictionary<string, DateTimeOffset>.Empty;
+
+        // ---- the server
 
     /// <summary>Last known server info (version, free space, updater), or null before the first answer.</summary>
     public ServerInfo? Server { get; init; }

@@ -42,6 +42,32 @@ public static class Format
         return local.ToString("d MMM HH:mm", CultureInfo.InvariantCulture);
     }
 
+    /// <summary>A point in time people can place: "today 14:02", "yesterday 18:30", "Mon 5 Oct 09:12", "5 Oct 2025 09:12".</summary>
+    public static string Moment(DateTimeOffset time, DateTimeOffset now)
+    {
+        var local = time.ToLocalTime();
+        var today = now.ToLocalTime().Date;
+        var clock = local.ToString("HH:mm", CultureInfo.InvariantCulture);
+        if (local.Date == today)
+            return "today " + clock;
+        if (local.Date == today.AddDays(-1))
+            return "yesterday " + clock;
+        if (local.Date > today.AddDays(-7) && local.Date < today)
+            return local.ToString("ddd d MMM ", CultureInfo.InvariantCulture) + clock;
+        return local.ToString(local.Year == today.Year ? "d MMM " : "d MMM yyyy ", CultureInfo.InvariantCulture) + clock;
+    }
+
+    /// <summary>A heading for one day of activity: "Today", "Yesterday", "Monday 5 October", "5 October 2025".</summary>
+    public static string Day(DateTime localDay, DateTimeOffset now)
+    {
+        var today = now.ToLocalTime().Date;
+        if (localDay.Date == today)
+            return "Today";
+        if (localDay.Date == today.AddDays(-1))
+            return "Yesterday";
+        return localDay.ToString(localDay.Year == today.Year ? "dddd d MMMM" : "d MMMM yyyy", CultureInfo.InvariantCulture);
+    }
+
     /// <summary>"12.4 MB/s", "820 KB/s".</summary>
     public static string Speed(double bytesPerSecond) => Bytes((long)Math.Max(0, bytesPerSecond)) + "/s";
 

@@ -35,6 +35,7 @@ public static class TetherServerHost
         builder.Services.AddSingleton<FailureThrottle>();
         builder.Services.AddSingleton<ServerUpdater>();
         builder.Services.AddSingleton<BatchRegistry>();
+        builder.Services.AddSingleton<DeviceRegistry>();
         builder.Services.AddSignalR(o =>
         {
             o.EnableDetailedErrors = false;
@@ -60,8 +61,10 @@ public static class TetherServerHost
         app.UseMiddleware<RequestLoggingMiddleware>();
         app.UseWebSockets();
         app.UseMiddleware<TokenAuthMiddleware>();
+        app.UseMiddleware<DeviceSeenMiddleware>();
         Endpoints.Map(app);
         app.Lifetime.ApplicationStopped.Register(store.Dispose);
+        app.Lifetime.ApplicationStopped.Register(app.Services.GetRequiredService<DeviceRegistry>().Dispose);
         return app;
     }
 

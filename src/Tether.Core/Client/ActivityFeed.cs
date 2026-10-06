@@ -101,3 +101,27 @@ public sealed class ActivityFeed(int capacity = 200)
         }
     }
 }
+
+/// <summary>A day heading in the full activity list ("Today", "Yesterday", "Monday 5 October").</summary>
+public sealed record ActivityDay(string Text, DateTime Day);
+
+/// <summary>The Activity page's rows: newest first, with a heading before each day.</summary>
+public static class ActivityDays
+{
+    public static IReadOnlyList<object> Rows(IReadOnlyList<ActivityItem> items, DateTimeOffset now)
+    {
+        var rows = new List<object>(items.Count + 4);
+        DateTime? day = null;
+        foreach (var item in items)
+        {
+            var d = item.Time.ToLocalTime().Date;
+            if (d != day)
+            {
+                rows.Add(new ActivityDay(Format.Day(d, now), d));
+                day = d;
+            }
+            rows.Add(item);
+        }
+        return rows;
+    }
+}

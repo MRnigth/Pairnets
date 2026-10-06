@@ -600,6 +600,7 @@ public sealed class SyncRunner : IAsyncDisposable
             {
                 o.AccessTokenProvider = () => Task.FromResult<string?>(_options.Token);
                 o.Headers[TetherHeaders.DeviceId] = Uri.EscapeDataString(_options.DeviceId);
+                o.Headers[TetherHeaders.App] = TetherInfo.AppDescription;
             })
             .WithAutomaticReconnect(new ForeverRetryPolicy())
             .Build();

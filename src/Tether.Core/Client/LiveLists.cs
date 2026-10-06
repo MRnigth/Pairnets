@@ -97,6 +97,52 @@ public static class LiveLists
             shown.RemoveAt(shown.Count - 1);
     }
 
+    /// <summary>
+    /// Brings a list of rows (activity items by identity, headings by value) to <paramref name="wanted"/>
+    /// with the fewest changes, so existing rows stay put and only new ones animate in.
+    /// </summary>
+    public static void Sync(ObservableCollection<object> shown, IReadOnlyList<object> wanted)
+    {
+        var keep = new HashSet<object>(wanted, RowComparer.Instance);
+        for (var i = shown.Count - 1; i >= 0; i--)
+        {
+            if (!keep.Contains(shown[i]))
+                shown.RemoveAt(i);
+        }
+        for (var i = 0; i < wanted.Count; i++)
+        {
+            if (i < shown.Count && RowComparer.Instance.Equals(shown[i], wanted[i]))
+                continue;
+            var at = -1;
+            for (var j = i + 1; j < shown.Count; j++)
+            {
+                if (RowComparer.Instance.Equals(shown[j], wanted[i]))
+                {
+                    at = j;
+                    break;
+                }
+            }
+            if (at >= 0)
+                shown.Move(at, i);
+            else
+                shown.Insert(i, wanted[i]);
+        }
+        while (shown.Count > wanted.Count)
+            shown.RemoveAt(shown.Count - 1);
+    }
+
+    /// <summary>Activity items are the same row only if they are the same object; anything else compares by value.</summary>
+    private sealed class RowComparer : IEqualityComparer<object>
+    {
+        public static readonly RowComparer Instance = new();
+
+        public new bool Equals(object? x, object? y) =>
+            x is ActivityItem || y is ActivityItem ? ReferenceEquals(x, y) : object.Equals(x, y);
+
+        public int GetHashCode(object obj) =>
+            obj is ActivityItem ? System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(obj) : obj.GetHashCode();
+    }
+
     private static int IndexOf(IReadOnlyList<ActivityItem> list, ActivityItem item)
     {
         for (var i = 0; i < list.Count; i++)

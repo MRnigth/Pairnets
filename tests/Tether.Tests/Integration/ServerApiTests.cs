@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Text;
 using Tether.Core;
 using Tether.Core.Api;
+using Microsoft.AspNetCore.SignalR.Client;
 using Tether.Core.Hashing;
 using Tether.Tests.Infrastructure;
 
@@ -231,6 +232,55 @@ public class ServerApiTests : IAsyncLifetime
         Assert.Equal("old", await File.ReadAllTextAsync(Path.Combine(_server.Paths.Files, "h.txt")));
         Assert.Equal(2, (await api.GetHistoryAsync("h.txt", default)).Count); // "new" is kept too
         Assert.Equal(ApiOutcome.NotFound, (await api.RestoreAsync("h.txt", "20200101T000000000Z-deadbeef", default)).Outcome);
+    }
+
+    [Fact]
+    public async Task DevicesAreTrackedOnlineAndRemembered()
+    {
+        using (var health = _server.RawHttp())
+        {
+            health.DefaultRequestHeaders.Add(TetherHeaders.DeviceId, "INTRUDER");
+            await health.GetStringAsync("api/health"); // no token needed, so it must not count
+        }
+        using var desktop = _server.Client("DESKTOP");
+        await desktop.GetInfoAsync(default);
+        using var laptop = _server.Client("LAPTOP é");
+        var devices = await laptop.GetDevicesAsync(default);
+        Assert.NotNull(devices);
+        Assert.Equal(["DESKTOP", "LAPTOP é"], devices!.Select(d => d.Name).Order(StringComparer.Ordinal));
+        Assert.All(devices, d => Assert.False(d.Online));
+        Assert.All(devices, d => Assert.Equal(TetherInfo.AppDescription, d.App));
+
+        // An open push channel means "online", until it closes.
+        var hub = new HubConnectionBuilder()
+            .WithUrl(new Uri(_server.Url, "hub"), o =>
+            {
+                o.AccessTokenProvider = () => Task.FromResult<string?>(_server.Token);
+                o.Headers[TetherHeaders.DeviceId] = "DESKTOP";
+            })
+            .Build();
+        await hub.StartAsync();
+        Assert.True((await laptop.GetDevicesAsync(default))!.Single(d => d.Name == "DESKTOP").Online);
+        await hub.DisposeAsync();
+        for (var i = 0; i < 50 && (await laptop.GetDevicesAsync(default))!.Single(d => d.Name == "DESKTOP").Online; i++)
+            await Task.Delay(100);
+        Assert.False((await laptop.GetDevicesAsync(default))!.Single(d => d.Name == "DESKTOP").Online);
+
+        // "Last seen" survives a restart.
+        await _server.RestartAsync();
+        using var after = _server.Client("LAPTOP é", url: _server.Url);
+        var remembered = await after.GetDevicesAsync(default);
+        Assert.Contains(remembered!, d => d.Name == "DESKTOP" && !d.Online);
+    }
+
+    [Fact]
+    public void DeviceNamesFromHeadersAreCleaned()
+    {
+        Assert.Null(Tether.Server.Services.DeviceRegistry.NameFromHeader(null));
+        Assert.Null(Tether.Server.Services.DeviceRegistry.NameFromHeader("  "));
+        Assert.Equal("MY PC", Tether.Server.Services.DeviceRegistry.NameFromHeader(Uri.EscapeDataString(" MY PC ")));
+        Assert.Equal("ab", Tether.Server.Services.DeviceRegistry.NameFromHeader("a%0Ab"));
+        Assert.Equal(Tether.Server.Services.DeviceRegistry.MaxNameLength, Tether.Server.Services.DeviceRegistry.NameFromHeader(new string('x', 500))!.Length);
     }
 
     [Fact]

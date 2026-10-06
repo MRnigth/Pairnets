@@ -30,9 +30,13 @@ public sealed class ClientSession : IAsyncDisposable
     private long _burstBytesDone;
     private long _burstBytesTotal;
     private Timer? _infoTimer;
+    private Timer? _devicesTimer;
 
     private static readonly TimeSpan SpeedWindow = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan ServerInfoInterval = TimeSpan.FromMinutes(5);
+
+    /// <summary>How often the list of computers (online or not) is re-read.</summary>
+    private static readonly TimeSpan DevicesInterval = TimeSpan.FromSeconds(30);
 
     /// <summary>Bytes per second over the last few seconds. Call with <c>_gate</c> held.</summary>
     private double RateLocked()
@@ -62,6 +66,22 @@ public sealed class ClientSession : IAsyncDisposable
         catch (Exception ex) when (ex is TetherNetworkException or TetherAuthException or TetherProtocolException or ObjectDisposedException)
         {
             return null;
+        }
+    }
+
+    /// <summary>
+    /// Re-reads which computers use the server and which are online (for the "this computer ⇄
+    /// server ⇄ other computer" picture). Failures are ignored; offline is shown elsewhere.
+    /// </summary>
+    public async Task RefreshDevicesAsync()
+    {
+        try
+        {
+            var devices = await Api.GetDevicesAsync(CancellationToken.None).ConfigureAwait(false);
+            Update(s => s with { Devices = devices, DevicesUnsupported = devices is null });
+        }
+        catch (Exception ex) when (ex is TetherNetworkException or TetherAuthException or TetherProtocolException or ObjectDisposedException or OperationCanceledException)
+        {
         }
     }
 
@@ -139,6 +159,7 @@ public sealed class ClientSession : IAsyncDisposable
         session._status = session._status with { LimitText = settings.LimitText };
         runner.Start();
         session._infoTimer = new Timer(_ => _ = session.RefreshServerInfoAsync(), null, TimeSpan.Zero, ServerInfoInterval);
+        session._devicesTimer = new Timer(_ => _ = session.RefreshDevicesAsync(), null, TimeSpan.Zero, DevicesInterval);
         if (settings.Paused)
             runner.Pause();
         return session;
@@ -238,6 +259,13 @@ public sealed class ClientSession : IAsyncDisposable
             Update(s => s with { FilesTotal = Math.Max(total, s.FilesDone) });
         };
         Runner.PeerWaitChanged += wait => Update(s => s with { WaitingFor = wait });
+        Runner.RemoteChangeReceived += (device, _) =>
+        {
+            if (string.Equals(device, Settings.DeviceName, StringComparison.Ordinal))
+                return; // our own change echoed back
+            var at = _clock.GetUtcNow();
+            Update(s => s with { HeardFrom = new Dictionary<string, DateTimeOffset>(s.HeardFrom, StringComparer.Ordinal) { [device] = at } });
+        };
         Runner.StatusChanged += (status, text) => Update(s => s with
         {
             Status = status,
@@ -565,10 +593,50 @@ public sealed class ClientSession : IAsyncDisposable
     /// <summary>"Download now anyway": stop waiting for another computer's big batch.</summary>
     public void DownloadNow() => Runner.ReleaseHold();
 
+    // ------------------------------------------------------------------ history (the History page)
+
+    /// <summary>Every file the server knows, deleted ones included, read in one request.</summary>
+    public async Task<IReadOnlyList<ServerFile>> GetServerFilesAsync(CancellationToken ct)
+    {
+        var manifest = await Api.GetManifestAsync(null, ct).ConfigureAwait(false);
+        return manifest.Entries.Select(ServerFile.From).ToList();
+    }
+
+    /// <summary>The older versions of <paramref name="path"/> the server keeps, newest first.</summary>
+    public async Task<IReadOnlyList<HistoryVersion>> GetVersionsAsync(string path, CancellationToken ct) =>
+        (await Api.GetHistoryAsync(path, ct).ConfigureAwait(false)).OrderByDescending(v => v.StoredAtUtc).ToList();
+
+    /// <summary>
+    /// Makes a stored version the current one again (the version it replaces is kept in history
+    /// too). The server tells the other computers; this one fetches it straight away, because it
+    /// ignores the server's announcement of its own requests. Returns null on success, or what went wrong.
+    /// </summary>
+    public async Task<string?> RestoreVersionAsync(string path, HistoryVersion version, CancellationToken ct)
+    {
+        ApiResult result;
+        try
+        {
+            result = await Api.RestoreAsync(path, version.Id, ct).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is TetherNetworkException or TetherAuthException or TetherProtocolException)
+        {
+            return "Could not reach the server: " + ex.Message;
+        }
+        if (result.Outcome != ApiOutcome.Ok)
+            return result.Outcome == ApiOutcome.NotFound
+                ? "That version is no longer on the server (it was older than the server keeps)."
+                : "The server did not restore it: " + (result.Message ?? result.Outcome.ToString());
+        Activity.Add(ActivityKind.Info, path, $"Restored {PathRules.FileName(path)} (the version from {Format.Moment(version.StoredAtUtc, _clock.GetUtcNow())})", _clock);
+        Runner.RequestSync("restored", full: true);
+        return null;
+    }
+
     public async ValueTask DisposeAsync()
     {
         if (_infoTimer is not null)
             await _infoTimer.DisposeAsync().ConfigureAwait(false);
+        if (_devicesTimer is not null)
+            await _devicesTimer.DisposeAsync().ConfigureAwait(false);
         await Runner.DisposeAsync().ConfigureAwait(false);
         Api.Dispose();
         State.Dispose();

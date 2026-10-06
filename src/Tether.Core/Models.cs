@@ -84,6 +84,13 @@ public sealed record UpdaterDiagnostics(
 /// <summary>One stored version of a file in the server's history/ folder.</summary>
 public sealed record HistoryVersion(string Id, DateTimeOffset StoredAtUtc, long Size, string Hash8);
 
+/// <summary>
+/// A computer that uses the server (<c>GET /api/devices</c>): its device name, whether its push
+/// channel is open right now, when the server last heard from it, and which app it runs
+/// ("Windows 1.0.60"; null for apps from before they said).
+/// </summary>
+public sealed record DeviceInfo(string Name, bool Online, DateTimeOffset LastSeenUtc, string? App = null);
+
 /// <summary>Stable machine-readable error codes used in <see cref="ErrorBody"/>.</summary>
 public static class ErrorCodes
 {
@@ -104,6 +111,9 @@ public static class TetherHeaders
     public const string ServerId = "X-Tether-Server-Id";
     public const string Version = "X-Tether-Version";
     public const string Hash = "X-Tether-Hash";
+
+    /// <summary>The app and its version, e.g. "Windows 1.0.60" (shown to the other computers).</summary>
+    public const string App = "X-Tether-App";
 }
 
 /// <summary>Shared JSON settings: camelCase, as used on the wire.</summary>

@@ -19,7 +19,9 @@ public sealed class RequestLoggingMiddleware(RequestDelegate next, ILogger<Reque
         {
             var elapsed = Stopwatch.GetElapsedTime(started).TotalMilliseconds;
             var route = context.Request.Path.Value ?? "/";
-            var level = route.Equals("/api/health", StringComparison.OrdinalIgnoreCase) ? LogLevel.Debug : LogLevel.Information;
+            // The apps poll these two; one line each every few seconds would drown the useful ones.
+            var level = route.Equals("/api/health", StringComparison.OrdinalIgnoreCase) || route.Equals("/api/devices", StringComparison.OrdinalIgnoreCase)
+                ? LogLevel.Debug : LogLevel.Information;
             if (log.IsEnabled(level))
             {
                 string? file = context.Request.Query["path"];
