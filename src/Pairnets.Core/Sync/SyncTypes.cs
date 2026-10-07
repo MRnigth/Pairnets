@@ -30,6 +30,9 @@ public enum BlockReason
 
     /// <summary>The server's version went backwards (restored from an older backup).</summary>
     ServerRolledBack,
+
+    /// <summary>This computer was removed from the nest, or the shared token it uses was turned off: sign in again.</summary>
+    SignedOut,
 }
 
 public enum PassOutcome

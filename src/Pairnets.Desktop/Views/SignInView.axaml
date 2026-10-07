@@ -1,0 +1,88 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:v="using:Pairnets.Desktop.Views"
+             x:Class="Pairnets.Desktop.Views.SignInView">
+  <!-- "Sign in with your browser": welcome → waiting for approval → choose the folder. -->
+  <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+    <Panel Margin="28,26,28,24">
+
+      <!-- 1. Welcome: which nest, and this computer's name -->
+      <StackPanel x:Name="WelcomeStep" Spacing="14" MaxWidth="470">
+        <Image Source="avares://Pairnets/Assets/pairnets-icon-256.png" Width="64" Height="64" HorizontalAlignment="Center" />
+        <StackPanel Spacing="4">
+          <TextBlock Classes="h1" Text="Welcome to Pairnets" HorizontalAlignment="Center" />
+          <TextBlock Classes="muted" Text="Keep one folder the same on all your computers." HorizontalAlignment="Center" TextWrapping="Wrap" />
+        </StackPanel>
+        <Border Classes="card">
+          <StackPanel Spacing="14">
+            <StackPanel Spacing="6">
+              <TextBlock Classes="label" Text="Your nest" />
+              <TextBox x:Name="AddressBox" Watermark="nest.example.com" />
+              <StackPanel x:Name="CheckRow" Orientation="Horizontal" Spacing="6" IsVisible="False">
+                <v:LineIcon x:Name="CheckIcon" Classes="icon" Width="14" Height="14" VerticalAlignment="Top" Margin="0,2,0,0" />
+                <TextBlock x:Name="CheckText" Classes="small" TextWrapping="Wrap" MaxWidth="380" />
+              </StackPanel>
+            </StackPanel>
+            <StackPanel Spacing="6">
+              <TextBlock Classes="label" Text="This computer's name" />
+              <TextBox x:Name="NameBox" MaxLength="64" />
+              <TextBlock Classes="muted small" Text="Each computer needs its own name." />
+            </StackPanel>
+            <Button x:Name="SignInButton" Classes="accent" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                    Padding="13,10" Content="Sign in with your browser" Click="OnSignIn" IsEnabled="False" />
+          </StackPanel>
+        </Border>
+        <TextBlock Classes="muted small" TextWrapping="Wrap" TextAlignment="Center"
+                   Text="Your nest is your own server. Only devices on your Tailscale network can reach it." />
+        <Button x:Name="AdvancedButton" Classes="link" HorizontalAlignment="Center" Content="Connect with server address and token instead" Click="OnAdvanced" />
+      </StackPanel>
+
+      <!-- 2. Waiting: the code to compare, until it is approved on the nest -->
+      <StackPanel x:Name="WaitStep" Spacing="14" MaxWidth="470" IsVisible="False">
+        <TextBlock Classes="h1" Text="Approve this computer" />
+        <TextBlock x:Name="WaitIntro" TextWrapping="Wrap"
+                   Text="Your browser opened your nest. Sign in there and check that it shows this code:" />
+        <Border Classes="card" Padding="12,18">
+          <TextBlock x:Name="CodeText" FontFamily="Menlo, Consolas, DejaVu Sans Mono, monospace" FontSize="34" FontWeight="SemiBold"
+                     LetterSpacing="6" HorizontalAlignment="Center" />
+        </Border>
+        <StackPanel x:Name="WaitRow" Orientation="Horizontal" Spacing="8">
+          <v:LineIcon x:Name="WaitIcon" Classes="icon muted spin" Width="16" Height="16" Data="{StaticResource I.Sync}" />
+          <TextBlock x:Name="WaitText" Classes="muted" />
+        </StackPanel>
+        <TextBlock x:Name="WaitHint" Classes="muted small" TextWrapping="Wrap"
+                   Text="Your other computers show a “wants to join” notice too; it leads to the same page." />
+        <Border x:Name="OutcomeBox" Classes="callout" IsVisible="False">
+          <TextBlock x:Name="OutcomeText" TextWrapping="Wrap" />
+        </Border>
+        <WrapPanel x:Name="WaitButtons">
+          <Button x:Name="OpenAgainButton" Classes="subtle" Content="Open the browser again" Margin="0,0,8,8" Click="OnOpenAgain" />
+          <Button x:Name="CopyButton" Classes="subtle" Content="Copy link" Margin="0,0,8,8" Click="OnCopy" />
+          <Button x:Name="RetryButton" Classes="accent" Content="Get a new code" Margin="0,0,8,8" Click="OnRetry" IsVisible="False" />
+          <Button x:Name="BackButton" Classes="flat" Content="Cancel" Margin="0,0,8,8" Click="OnBack" />
+        </WrapPanel>
+      </StackPanel>
+
+      <!-- 3. Signed in: which folder to keep in sync -->
+      <StackPanel x:Name="FolderStep" Spacing="14" MaxWidth="470" IsVisible="False">
+        <Border Classes="ok" HorizontalAlignment="Left" Padding="12,6" CornerRadius="10">
+          <TextBlock x:Name="SignedInText" TextWrapping="Wrap" />
+        </Border>
+        <TextBlock Classes="h1" Text="Choose the folder to keep in sync" TextWrapping="Wrap" />
+        <Border Classes="card">
+          <StackPanel Spacing="12">
+            <Grid ColumnDefinitions="*,Auto">
+              <TextBox x:Name="FolderBox" Watermark="Choose a folder…" />
+              <Button Grid.Column="1" Classes="subtle" Content="Browse…" Margin="8,0,0,0" Click="OnBrowse" />
+            </Grid>
+            <TextBlock Classes="muted small" TextWrapping="Wrap"
+                       Text="Files on your nest are copied here. Files already in this folder are kept and merged, never replaced." />
+            <ToggleSwitch x:Name="AutoStartBox" OnContent="Start Pairnets when I log in" OffContent="Start Pairnets when I log in" />
+          </StackPanel>
+        </Border>
+        <Button x:Name="StartButton" Classes="accent" HorizontalAlignment="Right" Padding="18,10" Content="Start syncing" Click="OnStart" />
+      </StackPanel>
+
+    </Panel>
+  </ScrollViewer>
+</UserControl>

@@ -62,7 +62,13 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
             Update(s => s with { Server = info });
             ServerInfoChanged?.Invoke(info);
             await RefreshDevicesAsync().ConfigureAwait(false);
+            await CheckAccountAsync(info).ConfigureAwait(false);
             return info;
+        }
+        catch (PairnetsAuthException ex) when (ex.NeedsSignIn)
+        {
+            NoticeSignedOut();
+            return null;
         }
         catch (Exception ex) when (ex is PairnetsNetworkException or PairnetsAuthException or PairnetsProtocolException or ObjectDisposedException)
         {
@@ -81,16 +87,132 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
             var devices = await Api.GetDevicesAsync(CancellationToken.None).ConfigureAwait(false);
             Update(s => s with { Devices = devices ?? [], DevicesUnsupported = devices is null });
         }
+        catch (PairnetsAuthException ex) when (ex.NeedsSignIn)
+        {
+            NoticeSignedOut();
+        }
         catch (Exception ex) when (ex is PairnetsNetworkException or PairnetsAuthException or PairnetsProtocolException or ObjectDisposedException or OperationCanceledException)
         {
         }
     }
 
-    private readonly ILogger _log;
+    // ------------------------------------------------------------------ this computer's key and name
 
-    private ClientSession(ClientSettings settings, StateDb state, PairnetsApiClient api, SyncEngine engine, SyncRunner runner, TimeProvider clock, ILogger log)
+    /// <summary>
+    /// Raised when the app should save these settings (with the given token or key, protected) and start a new
+    /// session: this computer got its own key in place of the shared token, moved to the nest's HTTPS name, or
+    /// was renamed on the nest.
+    /// </summary>
+    public event Action<ClientSettings, string>? AccountChanged;
+
+    /// <summary>Raised when another computer asks to join the nest (for a notification).</summary>
+    public event Action<JoinRequest>? JoinRequested;
+
+    /// <summary>How long a join request is shown: as long as its code works.</summary>
+    private static readonly TimeSpan JoinRequestLifetime = TimeSpan.FromMinutes(10);
+
+    private int _accountCheckRunning;
+    private bool _ownKeyTried;
+    private bool _moveTried;
+
+    /// <summary>
+    /// Brings this computer's sign-in up to date with what the nest offers. Silent and safe to repeat:
+    /// <list type="bullet">
+    /// <item>On the shared token, it asks for its own key (once per session).</item>
+    /// <item>With its own key, it adopts a name changed on the nest.</item>
+    /// <item>When the nest has an HTTPS name, it moves there, but only if that address is the same server.</item>
+    /// </list>
+    /// </summary>
+    public async Task CheckAccountAsync(ServerInfo info, CancellationToken ct = default)
+    {
+        if (Interlocked.Exchange(ref _accountCheckRunning, 1) == 1)
+            return;
+        try
+        {
+            var hello = await Api.GetHelloAsync(ct).ConfigureAwait(false);
+            if (hello is null)
+                return; // a server from before per-computer keys
+            var nestUrl = hello.SignIn ? Nest.SafeOrigin(hello.PublicUrl) : null; // opened in the browser: see Nest.SafeOrigin
+            if (hello.SignIn && nestUrl != Status.NestUrl)
+                Update(s => s with { NestUrl = nestUrl });
+            var next = Settings.Clone();
+            var token = _token;
+            var changed = false;
+            if (!Settings.HasOwnKey && hello.DeviceKeys && !_ownKeyTried)
+            {
+                _ownKeyTried = true;
+                var grant = await Api.GetOwnKeyAsync(Settings.DeviceName!, ct).ConfigureAwait(false);
+                (next.DeviceId, next.DeviceName, token, changed) = (grant.Id, grant.Name, grant.Key, true);
+                _log.LogInformation("This computer now has its own key on the nest (as {Name})", grant.Name);
+                Activity.Add(ActivityKind.Info, null, "This computer now has its own key on your nest", _clock);
+            }
+            else if (Settings.HasOwnKey && await Api.GetMeAsync(ct).ConfigureAwait(false) is { } me
+                && me.Id == Settings.DeviceId && !string.Equals(me.Name, Settings.DeviceName, StringComparison.Ordinal))
+            {
+                (next.DeviceName, changed) = (me.Name, true);
+                Activity.Add(ActivityKind.Info, null, $"This computer is now called {me.Name}", _clock);
+            }
+            if (!_moveTried && PairnetsApiClient.TryParseServerUrl(hello.PublicUrl, out var publicUrl) && publicUrl is not null
+                && !SameAddress(publicUrl, Settings.ServerUrl))
+            {
+                _moveTried = true;
+                if (await IsSameServerAsync(publicUrl, token, next.DeviceName!, info.ServerId, ct).ConfigureAwait(false))
+                {
+                    (next.ServerUrl, changed) = (publicUrl.ToString(), true);
+                    _log.LogInformation("Moving to the nest's own address {Url}", publicUrl);
+                }
+            }
+            if (changed)
+                AccountChanged?.Invoke(next, token);
+        }
+        catch (Exception ex) when (ex is PairnetsNetworkException or PairnetsAuthException or PairnetsProtocolException or ObjectDisposedException or OperationCanceledException)
+        {
+            _log.LogDebug("Account check skipped: {Error}", ex.Message);
+        }
+        finally
+        {
+            Interlocked.Exchange(ref _accountCheckRunning, 0);
+        }
+    }
+
+    private static async Task<bool> IsSameServerAsync(Uri url, string token, string deviceName, string serverId, CancellationToken ct)
+    {
+        try
+        {
+            using var probe = new PairnetsApiClient(url, token, deviceName);
+            return (await probe.GetInfoAsync(ct).ConfigureAwait(false)).ServerId == serverId;
+        }
+        catch (Exception ex) when (ex is PairnetsNetworkException or PairnetsAuthException or PairnetsProtocolException)
+        {
+            return false; // e.g. the name does not resolve on this network: stay on the address that works
+        }
+    }
+
+    private static bool SameAddress(Uri a, string? b) =>
+        PairnetsApiClient.TryParseServerUrl(b, out var other) && other is not null
+        && Uri.Compare(a, other, UriComponents.SchemeAndServer | UriComponents.Path, UriFormat.Unescaped, StringComparison.OrdinalIgnoreCase) == 0;
+
+    /// <summary>The nest no longer lets this computer in: a pass finds out why and stops with "Sign in again".</summary>
+    private void NoticeSignedOut()
+    {
+        if (Status.BlockReason != BlockReason.SignedOut)
+            Runner.RequestSync("signed-out");
+    }
+
+    /// <summary>
+    /// "Sign out of this computer": removes this computer's key on the nest. Returns false when it has no key of its
+    /// own (shared token) or the nest no longer knew it. The app then stops the session and forgets the key.
+    /// </summary>
+    public async Task<bool> SignOutAsync(CancellationToken ct = default) =>
+        Settings.HasOwnKey && await Api.RemoveDeviceAsync(Settings.DeviceId!, ct).ConfigureAwait(false);
+
+    private readonly ILogger _log;
+    private readonly string _token;
+
+    private ClientSession(ClientSettings settings, string token, StateDb state, PairnetsApiClient api, SyncEngine engine, SyncRunner runner, TimeProvider clock, ILogger log)
     {
         _log = log;
+        _token = token;
         Settings = settings;
         State = state;
         Api = api;
@@ -155,7 +277,7 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
             options = runnerOptions(options);
         var runner = new SyncRunner(engine, options, loggers.CreateLogger("Pairnets.Runner"));
 
-        var session = new ClientSession(settings, state, api, engine, runner, clock, loggers.CreateLogger("Pairnets.ServerUpdate"));
+        var session = new ClientSession(settings, token, state, api, engine, runner, clock, loggers.CreateLogger("Pairnets.Session"));
         session.Wire();
         session._status = session._status with { LimitText = settings.LimitText };
         runner.Start();
@@ -260,6 +382,21 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
             Update(s => s with { FilesTotal = Math.Max(total, s.FilesDone) });
         };
         Runner.PeerWaitChanged += wait => Update(s => s with { WaitingFor = wait });
+        Runner.JoinRequested += (code, name, system) =>
+        {
+            var request = new JoinRequest(code, name, system, _clock.GetUtcNow());
+            Update(s => s with { JoinRequests = [request, .. LiveJoinRequests(s).Where(r => r.Code != code)] });
+            JoinRequested?.Invoke(request);
+        };
+        Runner.JoinDecided += code => Update(s => s with { JoinRequests = LiveJoinRequests(s).Where(r => r.Code != code).ToList() });
+        Runner.DeviceListChanged += (id, name, removed) =>
+        {
+            if (id == Settings.DeviceId && removed)
+                Runner.RequestSync("this-computer-removed"); // the pass learns why and stops with "Sign in again"
+            else if (id == Settings.DeviceId && Status.Server is { } info)
+                _ = CheckAccountAsync(info);
+            _ = RefreshDevicesAsync();
+        };
         Runner.RemoteChangeReceived += (device, _) =>
         {
             if (string.Equals(device, Settings.DeviceName, StringComparison.OrdinalIgnoreCase))
@@ -314,6 +451,21 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
             Activity.Add(ActivityKind.Info, null, $"Caught up: {n} change(s) synced", _clock);
             CatchUpCompleted?.Invoke(n);
         };
+    }
+
+    /// <summary>The join requests whose code still works.</summary>
+    private IEnumerable<JoinRequest> LiveJoinRequests(StatusSnapshot s)
+    {
+        var now = _clock.GetUtcNow();
+        return s.JoinRequests.Where(r => now - r.At < JoinRequestLifetime);
+    }
+
+    /// <summary>Forgets join requests that have expired (the window calls this when it redraws).</summary>
+    public void PruneJoinRequests()
+    {
+        var status = Status;
+        if (status.JoinRequests.Count > 0 && LiveJoinRequests(status).Count() != status.JoinRequests.Count)
+            Update(s => s with { JoinRequests = LiveJoinRequests(s).ToList() });
     }
 
     private int SafeWarningCount()

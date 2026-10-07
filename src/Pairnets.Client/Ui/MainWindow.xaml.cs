@@ -44,6 +44,12 @@ public interface IMainActions
     /// <summary>The Devices page was opened: ask the server for the current list.</summary>
     void RefreshDevices();
 
+    /// <summary>"+ Add a computer…": how to add one (it signs in on the new computer).</summary>
+    void AddComputer();
+
+    /// <summary>Opens the nest's Devices page (rename, remove, approve).</summary>
+    void ManageDevices();
+
     /// <summary>Shows a synced file in Explorer (or the folder, when the file is gone).</summary>
     void RevealFile(string syncPath);
 
@@ -353,6 +359,10 @@ public partial class MainWindow : Window
         if (sender is UIElement row)
             Motion.Enter(row);
     }
+
+    private void OnAddComputer(object sender, RoutedEventArgs e) => _actions?.AddComputer();
+
+    private void OnManageDevices(object sender, RoutedEventArgs e) => _actions?.ManageDevices();
 
     public void ShowAttention(IReadOnlyList<AttentionItem> items)
     {

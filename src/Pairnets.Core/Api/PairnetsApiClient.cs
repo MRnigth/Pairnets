@@ -132,6 +132,91 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
         return await ReadJsonAsync<UpdaterDiagnostics>(resp, timeout, ct).ConfigureAwait(false);
     }
 
+    /// <summary>"Is this a Pairnets server?" (no sign-in needed), or null for a server from before per-computer keys.</summary>
+    public async Task<ServerHello?> GetHelloAsync(CancellationToken ct)
+    {
+        using var timeout = Linked(ct, TimeSpan.FromSeconds(15));
+        using var resp = await SendAsync(new HttpRequestMessage(HttpMethod.Get, "api/hello"), HttpCompletionOption.ResponseContentRead, timeout, ct).ConfigureAwait(false);
+        if ((int)resp.StatusCode is 401 or 404 or 405)
+            return null; // older servers have no such endpoint (and ask for the token first)
+        await ThrowForStatusAsync(resp).ConfigureAwait(false);
+        return await ReadJsonAsync<ServerHello>(resp, timeout, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>Who the server thinks this computer is, or null for a server from before per-computer keys.</summary>
+    public async Task<DeviceMe?> GetMeAsync(CancellationToken ct)
+    {
+        using var timeout = Linked(ct, TimeSpan.FromSeconds(30));
+        using var resp = await SendAsync(new HttpRequestMessage(HttpMethod.Get, "api/me"), HttpCompletionOption.ResponseContentRead, timeout, ct).ConfigureAwait(false);
+        if ((int)resp.StatusCode is 404 or 405)
+            return null;
+        await ThrowForStatusAsync(resp).ConfigureAwait(false);
+        return await ReadJsonAsync<DeviceMe>(resp, timeout, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>Trades the shared token this client uses for this computer's own key.</summary>
+    public async Task<DeviceKeyGrant> GetOwnKeyAsync(string name, CancellationToken ct)
+    {
+        using var timeout = Linked(ct, TimeSpan.FromSeconds(30));
+        using var resp = await SendAsync(new HttpRequestMessage(HttpMethod.Post, "api/devices/upgrade") { Content = JsonContent.Create(new DeviceNameRequest(name), options: PairnetsJson.Options) },
+            HttpCompletionOption.ResponseContentRead, timeout, ct).ConfigureAwait(false);
+        await ThrowForStatusAsync(resp).ConfigureAwait(false);
+        return await ReadJsonAsync<DeviceKeyGrant>(resp, timeout, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>Removes a computer from the nest (this one too: "Sign out of this computer"). False when it was already gone.</summary>
+    public async Task<bool> RemoveDeviceAsync(string id, CancellationToken ct)
+    {
+        using var timeout = Linked(ct, TimeSpan.FromSeconds(30));
+        using var resp = await SendAsync(new HttpRequestMessage(HttpMethod.Delete, "api/devices/" + Uri.EscapeDataString(id)), HttpCompletionOption.ResponseContentRead, timeout, ct).ConfigureAwait(false);
+        if (resp.StatusCode == HttpStatusCode.NotFound)
+            return false;
+        await ThrowForStatusAsync(resp).ConfigureAwait(false);
+        return true;
+    }
+
+    /// <summary>Renames this computer; returns the name the server settled on (it may add " (2)").</summary>
+    public async Task<DeviceMe> RenameThisDeviceAsync(string name, CancellationToken ct)
+    {
+        using var timeout = Linked(ct, TimeSpan.FromSeconds(30));
+        using var resp = await SendAsync(new HttpRequestMessage(HttpMethod.Patch, "api/devices/me") { Content = JsonContent.Create(new DeviceNameRequest(name), options: PairnetsJson.Options) },
+            HttpCompletionOption.ResponseContentRead, timeout, ct).ConfigureAwait(false);
+        await ThrowForStatusAsync(resp).ConfigureAwait(false);
+        return await ReadJsonAsync<DeviceMe>(resp, timeout, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>Asks the nest to let this computer join (no key needed). Null for a server without sign-in.</summary>
+    public async Task<PairStartResponse?> StartPairingAsync(PairStartRequest request, CancellationToken ct)
+    {
+        using var timeout = Linked(ct, TimeSpan.FromSeconds(30));
+        using var resp = await SendAsync(new HttpRequestMessage(HttpMethod.Post, "api/pair/start") { Content = JsonContent.Create(request, options: PairnetsJson.Options) },
+            HttpCompletionOption.ResponseContentRead, timeout, ct).ConfigureAwait(false);
+        if ((int)resp.StatusCode is 401 or 404 or 405)
+            return null;
+        if ((int)resp.StatusCode is 400 or 409 or 429)
+        {
+            // The nest's own words ("too many waiting", "no website yet") are meant for people.
+            var refusal = await TryReadErrorAsync(resp, ct).ConfigureAwait(false);
+            throw new PairnetsProtocolException(refusal?.Message ?? (resp.StatusCode == HttpStatusCode.TooManyRequests
+                ? "Too many sign-ins are waiting on your nest. Approve them or let them expire, then try again."
+                : $"Your nest refused the request ({(int)resp.StatusCode})."));
+        }
+        await ThrowForStatusAsync(resp).ConfigureAwait(false);
+        return await ReadJsonAsync<PairStartResponse>(resp, timeout, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>Asks whether the request was approved; on approval the answer carries this computer's own key (once).</summary>
+    public async Task<PairPollResponse> PollPairingAsync(string pollToken, CancellationToken ct)
+    {
+        using var timeout = Linked(ct, TimeSpan.FromSeconds(30));
+        using var resp = await SendAsync(new HttpRequestMessage(HttpMethod.Post, "api/pair/poll") { Content = JsonContent.Create(new PairPollRequest(pollToken), options: PairnetsJson.Options) },
+            HttpCompletionOption.ResponseContentRead, timeout, ct).ConfigureAwait(false);
+        if (resp.StatusCode == HttpStatusCode.NotFound)
+            return new PairPollResponse(PairPollResponse.Expired);
+        await ThrowForStatusAsync(resp).ConfigureAwait(false);
+        return await ReadJsonAsync<PairPollResponse>(resp, timeout, ct).ConfigureAwait(false);
+    }
+
     public enum ServerUpdateRequest { Requested, UpdaterMissing, TooSoon, NotSupported }
 
     /// <summary>Asks the server to update itself to the newest release (POST /api/update).</summary>
@@ -187,6 +272,10 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
             if (info.ApiVersion != PairnetsInfo.ApiVersion)
                 return new(ConnectionTestStatus.ServerError, $"Server API version {info.ApiVersion} does not match this client ({PairnetsInfo.ApiVersion}). Update both to the same release.", info);
             return new(ConnectionTestStatus.Ok, "Connected. Server and token are OK.", info);
+        }
+        catch (PairnetsAuthException ex) when (ex.NeedsSignIn)
+        {
+            return new(ConnectionTestStatus.BadToken, ex.Message);
         }
         catch (PairnetsAuthException)
         {
@@ -483,7 +572,12 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
         if (resp.IsSuccessStatusCode)
             return;
         if (resp.StatusCode == HttpStatusCode.Unauthorized)
-            throw new PairnetsAuthException("The server rejected the token (401).");
+        {
+            var reason = await TryReadErrorAsync(resp, CancellationToken.None).ConfigureAwait(false);
+            throw new PairnetsAuthException(reason?.Code is ErrorCodes.DeviceRemoved or ErrorCodes.SharedTokenOff && reason.Message is { } m
+                ? m
+                : "The server rejected the token (401).", reason?.Code);
+        }
         if (DescribeCloudflareError(resp) is { } cloudflare)
             throw new PairnetsNetworkException(cloudflare);
         if (resp.StatusCode == HttpStatusCode.RequestEntityTooLarge)

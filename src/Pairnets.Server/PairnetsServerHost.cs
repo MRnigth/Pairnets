@@ -1,7 +1,15 @@
-using Pairnets.Core;
+using System.Net;
+using System.Net.Security;
+using System.Threading.RateLimiting;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.AspNetCore.Server.Kestrel.Core;
+using Microsoft.AspNetCore.Server.Kestrel.Https;
 using Microsoft.Extensions.Logging.Console;
+using Pairnets.Core;
 using Pairnets.Server.Services;
 using Pairnets.Server.Storage;
+using Pairnets.Server.Auth;
+using Pairnets.Server.Tls;
 using Pairnets.Server.Web;
 
 namespace Pairnets.Server;
@@ -24,11 +32,14 @@ public static class PairnetsServerHost
         // Loopback only: in production the Cloudflare Tunnel on this machine brings the requests in.
         if (string.IsNullOrWhiteSpace(builder.Configuration["urls"]))
             builder.WebHost.UseUrls(DefaultUrl);
+        var httpUrls = builder.Configuration["urls"]!.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
         var options = SyncOptions.FromConfiguration(builder.Configuration);
         var error = options.ValidateForServe();
         if (error is not null)
             throw new InvalidOperationException(error);
+        if (options.HttpsUrl is not null)
+            ListenInCode(builder, httpUrls, options.HttpsUrl);
 
         builder.Services.AddSingleton(options);
         builder.Services.AddSingleton(new ServerPaths(options.DataDir));
@@ -38,6 +49,22 @@ public static class PairnetsServerHost
         builder.Services.AddSingleton<ServerUpdater>();
         builder.Services.AddSingleton<BatchRegistry>();
         builder.Services.AddSingleton<DeviceRegistry>();
+        builder.Services.AddSingleton<TlsCertificateStore>();
+        builder.Services.AddSingleton(sp => new AuthStore(sp.GetRequiredService<ServerPaths>()));
+        builder.Services.AddSingleton<DeviceKeys>();
+        builder.Services.AddSingleton<OwnerAuth>();
+        builder.Services.AddSingleton<Pairnets.Server.Auth.WebAuthn.WebAuthnChallenges>();
+        builder.Services.AddSingleton(sp => new GoogleSignIn(sp.GetRequiredService<SyncOptions>()));
+        builder.Services.TryAddSingleton<IEmailSender, SmtpEmailSender>(); // a test can register its own first
+        builder.Services.AddSingleton<WebUi>();
+        builder.Services.AddRateLimiter(o =>
+        {
+            o.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+            // Joining and signing in work without a key, so one address gets a fair share and no more.
+            o.AddPolicy(PairingEndpoints.RateLimitPolicy, ctx => RateLimitPartition.GetFixedWindowLimiter(
+                ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                _ => new FixedWindowRateLimiterOptions { PermitLimit = 120, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
+        });
         builder.Services.AddSignalR(o =>
         {
             o.EnableDetailedErrors = false;
@@ -46,6 +73,7 @@ public static class PairnetsServerHost
         });
         builder.Services.AddHostedService<HistoryPurgeService>();
         builder.Services.AddHostedService<UploadSessionSweeper>();
+        builder.Services.AddHostedService<ConnectionGuardService>();
         builder.Services.Configure<HostOptions>(o => o.ShutdownTimeout = TimeSpan.FromSeconds(60));
         builder.WebHost.ConfigureKestrel(k =>
         {
@@ -58,8 +86,16 @@ public static class PairnetsServerHost
         var store = app.Services.GetRequiredService<SyncStore>();
         store.UploadStallTimeout = options.UploadStallTimeout;
         store.Initialize();
+        var auth = app.Services.GetRequiredService<AuthStore>(); // opens (or creates) auth.db now, so a problem stops the start
+        // "tether-server owner-link" runs without the service's environment; it reads the nest's address from here.
+        if (options.PublicUrl is { } publicUrl)
+            auth.SetSetting(AuthStore.SettingPublicUrl, publicUrl);
+        else
+            auth.DeleteSetting(AuthStore.SettingPublicUrl);
         ReportDrift(store, app.Logger);
-        WarnAboutBinding(app);
+        WarnAboutBinding(app, options.HttpsUrl is null ? httpUrls : [.. httpUrls, options.HttpsUrl]);
+        if (options.HttpsUrl is not null)
+            app.Services.GetRequiredService<TlsCertificateStore>().Refresh();
 
         if (options.TrustProxyHeaders)
             app.UseMiddleware<ProxyClientAddressMiddleware>();
@@ -77,11 +113,15 @@ public static class PairnetsServerHost
         app.Use(async (ctx, next) =>
         {
             // Authenticated requests only (the auth middleware above answers the rest).
-            if (!ctx.Request.Path.Equals("/api/health", StringComparison.OrdinalIgnoreCase))
-                devices.Seen(Endpoints.DeviceId(ctx), ClientDescription(ctx.Request));
+            if (DeviceIdentity.Of(ctx) is { } identity)
+                devices.Seen(identity.RegistryKey, identity.Name, ClientDescription(ctx.Request));
             await next();
         });
+        app.UseRateLimiter();
         Endpoints.Map(app);
+        PairingEndpoints.Map(app);
+        WebUi.Map(app);
+        WebEndpoints.Map(app);
         app.Lifetime.ApplicationStopped.Register(store.Dispose);
         return app;
     }
@@ -127,10 +167,46 @@ public static class PairnetsServerHost
         }
     }
 
-    private static void WarnAboutBinding(WebApplication app)
+    /// <summary>
+    /// With a direct HTTPS listener the listeners are set up in code (Kestrel then ignores Urls), so the HTTP
+    /// addresses from Urls / ASPNETCORE_URLS are bound here too, followed by the HTTPS one with the renewable
+    /// certificate. Behind the Cloudflare Tunnel HttpsUrl is unset and this is not used.
+    /// </summary>
+    private static void ListenInCode(WebApplicationBuilder builder, IReadOnlyList<string> httpUrls, string httpsUrl)
     {
-        var urls = app.Configuration["urls"] ?? app.Configuration["ASPNETCORE_URLS"] ?? string.Empty;
-        foreach (var url in urls.Split(';', StringSplitOptions.RemoveEmptyEntries))
+        builder.WebHost.UseSetting(WebHostDefaults.ServerUrlsKey, string.Empty);
+        builder.WebHost.ConfigureKestrel(kestrel =>
+        {
+            foreach (var url in httpUrls)
+                Listen(kestrel, url, _ => { });
+            Listen(kestrel, httpsUrl, listen => listen.UseHttps(new TlsHandshakeCallbackOptions
+            {
+                HandshakeTimeout = TimeSpan.FromSeconds(10),
+                OnConnection = _ =>
+                {
+                    var certificate = kestrel.ApplicationServices.GetRequiredService<TlsCertificateStore>().Current
+                        ?? throw new InvalidOperationException("No HTTPS certificate installed yet.");
+                    return ValueTask.FromResult(new SslServerAuthenticationOptions { ServerCertificateContext = certificate });
+                },
+            }));
+        });
+    }
+
+    private static void Listen(KestrelServerOptions kestrel, string url, Action<ListenOptions> configure)
+    {
+        if (!SyncOptions.TryParseBinding(url, out var host, out var port))
+            throw new InvalidOperationException($"Cannot listen on {url}: expected something like http://127.0.0.1:5075");
+        if (host.Equals("localhost", StringComparison.OrdinalIgnoreCase))
+            kestrel.ListenLocalhost(port, configure);
+        else if (IPAddress.TryParse(host, out var ip))
+            kestrel.Listen(ip, port, configure);
+        else
+            kestrel.ListenAnyIP(port, configure); // "*", "+" or a host name: Kestrel's own rule for Urls
+    }
+
+    private static void WarnAboutBinding(WebApplication app, IEnumerable<string> urls)
+    {
+        foreach (var url in urls)
         {
             if (url.Contains("0.0.0.0", StringComparison.Ordinal) || url.Contains("[::]", StringComparison.Ordinal)
                 || url.Contains("://*", StringComparison.Ordinal) || url.Contains("://+", StringComparison.Ordinal))

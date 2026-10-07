@@ -63,7 +63,7 @@ public partial class BugReportWindow : Window
         CopyButton.IsEnabled = true;
         Heading.Text = copied ? "Bug report copied" : "Bug report ready";
         Explanation.Text = (copied ? "It is on the clipboard" : "Copy it with \"Copy again\"")
-            + (_path is null ? "" : $" and saved as {Path.GetFileName(_path)} in Pairnets's log folder")
+            + (_path is null ? "" : $" and saved as {Path.GetFileName(_path)} in the Pairnets log folder")
             + ". Paste it to whoever helps you; nothing was sent anywhere.";
     }
 

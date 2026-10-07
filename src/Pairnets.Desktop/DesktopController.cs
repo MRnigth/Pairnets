@@ -76,6 +76,18 @@ public sealed class DesktopController : ITrayActions, IDisposable
         CreateTray();
         _refresh.Start();
         _updates.SetEnabled(_settings.CheckForUpdates);
+        // Rewrite the login item so it follows the app (Tether.app became Pairnets.app; the app may have moved).
+        if (SafeIsAutoStart())
+        {
+            try
+            {
+                _platform.SetAutoStart(true);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                _log.LogWarning("Could not refresh start-at-login: {Error}", ex.Message);
+            }
+        }
         if (!_settings.IsComplete || !_settings.FirstRunCompleted)
         {
             ShowSettings(firstRun: true);
@@ -214,15 +226,99 @@ public sealed class DesktopController : ITrayActions, IDisposable
         session.PassCompleted += r =>
         {
             if (r.Outcome == PassOutcome.Blocked)
-                Notify("blocked:" + r.BlockReason, r.BlockReason is BlockReason.MassDelete or BlockReason.FolderEmpty ? "Deletions blocked" : "Pairnets paused syncing", r.Message ?? r.BlockReason.ToString());
+                Notify("blocked:" + r.BlockReason, r.BlockReason is BlockReason.MassDelete or BlockReason.FolderEmpty ? "Deletions blocked"
+                    : r.BlockReason == BlockReason.SignedOut ? "Signed out of your nest" : "Pairnets paused syncing", r.Message ?? r.BlockReason.ToString());
             else if (r.Outcome == PassOutcome.AuthFailed)
                 Notify("auth", "The server rejected the token", "Open Settings and enter the token printed by install.sh.");
         };
         session.ServerInfoChanged += info => Dispatcher.UIThread.Post(() => OnServerInfo(session, info));
+        session.AccountChanged += (next, token) => Dispatcher.UIThread.Post(() => OnAccountChanged(session, next, token));
+        session.JoinRequested += r => Notify("join:" + r.Code, r.Title, $"Code {r.Code}. Review it on your nest (Pairnets → Needs attention).");
         session.CatchUpCompleted += n => Notify("catchup", "Pairnets is up to date", $"Synced {n} change(s) made while this computer was away.");
         _session = session;
         _dirty = true;
         _log.LogInformation("Syncing {Folder} with {Server} as {Device}", _settings.Folder, _settings.ServerUrl, _settings.DeviceName);
+    }
+
+    /// <summary>Opens the nest's page where a computer asking to join is allowed or turned away.</summary>
+    private void ReviewJoin(JoinRequest request)
+    {
+        if (_session?.Status.ReviewUrl(request) is { } url)
+            _platform.Open(url);
+        else
+            ShowMainWindow(MainPage.Attention);
+    }
+
+    // ------------------------------------------------------------------ the nest: devices and signing out
+
+    public async void AddComputer() => await Dialogs.InfoAsync(_window, "Pairnets – add a computer", AddComputerSteps(_session?.Status.NestUrl ?? NestFromSettings()));
+
+    /// <summary>The three steps, with this nest's name filled in.</summary>
+    public static string AddComputerSteps(string? nestUrl) =>
+        "On the computer you want to add:\n\n" +
+        "1. Turn on Tailscale, signed in with the same account as this one.\n" +
+        "2. Install Pairnets (pairnets.app/add).\n" +
+        $"3. Open Pairnets, type {(Uri.TryCreate(nestUrl, UriKind.Absolute, out var u) ? u.Authority : "your nest's name")} and press \"Sign in with your browser\".\n\n" +
+        "Its request then pops up here and on your nest, where you allow it.";
+
+    public async void ManageDevices()
+    {
+        if ((_session?.Status.NestUrl ?? NestFromSettings()) is { } url)
+            _platform.Open(url + "/devices");
+        else
+            await Dialogs.InfoAsync(_window, "Pairnets", "Your nest has no website yet. On the server, give it its own name with: sudo ./install.sh --domain nest.example.com");
+    }
+
+    /// <summary>The nest's website when this computer already talks to it over HTTPS.</summary>
+    private string? NestFromSettings() =>
+        Uri.TryCreate(_settings.ServerUrl, UriKind.Absolute, out var url) && url.Scheme == Uri.UriSchemeHttps ? url.GetLeftPart(UriPartial.Authority) : null;
+
+    /// <summary>
+    /// "Sign out of this computer": removes its key on the nest (best effort), stops syncing, forgets the key,
+    /// and offers to sign in again. The files in the folder stay.
+    /// </summary>
+    public async void SignOut()
+    {
+        if (!await Dialogs.ConfirmAsync(_window, "Pairnets – sign out",
+                $"Sign out of this computer?\n\nSyncing stops. Your files in {_settings.Folder} stay here. Sign in again to continue.", "Sign out", "Cancel"))
+            return;
+        var removed = false;
+        try
+        {
+            removed = _session is not null && await _session.SignOutAsync();
+        }
+        catch (Exception ex) when (ex is Pairnets.Core.Api.PairnetsNetworkException or Pairnets.Core.Api.PairnetsAuthException or Pairnets.Core.Api.PairnetsProtocolException)
+        {
+            _log.LogWarning("Could not remove this computer on the nest: {Error}", ex.Message);
+        }
+        StopSession();
+        _settings.ProtectedToken = null;
+        _settings.DeviceId = null;
+        _settings.FirstRunCompleted = false;
+        SettingsStore.Save(SettingsStore.DefaultPath, _settings);
+        _dirty = true;
+        if (!removed)
+            await Dialogs.InfoAsync(_window, "Pairnets", "Signed out here, but your nest could not be told. Remove this computer on your nest's Devices page so its key stops working there too.");
+        _window?.Navigate(MainPage.Overview);
+        ShowSettings(firstRun: true);
+    }
+
+    /// <summary>This computer got its own key, moved to the nest's HTTPS name or was renamed: save and reconnect.</summary>
+    private void OnAccountChanged(ClientSession from, ClientSettings next, string token)
+    {
+        if (!ReferenceEquals(_session, from))
+            return; // settings were saved meanwhile; the new session checks again
+        try
+        {
+            next.ProtectedToken = _platform.Secrets.Protect(token);
+        }
+        catch (Exception ex)
+        {
+            _log.LogWarning("Could not store this computer's new key: {Error}", ex.Message);
+            return;
+        }
+        _log.LogInformation("Saving this computer's sign-in: {Server} as {Device} ({Kind})", next.ServerUrl, next.DeviceName, next.HasOwnKey ? "own key" : "shared token");
+        ApplySettings(next, token);
     }
 
     private void StopSession()
@@ -253,6 +349,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
 
     private void RefreshIfDirty()
     {
+        _session?.PruneJoinRequests();
         // Redraw every 2 seconds while a window shows, so "2 min ago" and the map's moving dots stay current.
         if (++_ticks % 8 == 0 && (_window is { IsVisible: true } || _panel is { IsVisible: true }))
             _dirty = true;
@@ -300,6 +397,11 @@ public sealed class DesktopController : ITrayActions, IDisposable
         var items = new List<AttentionItem>();
         if (_session is null)
             return items;
+        foreach (var join in status.JoinRequests)
+        {
+            items.Add(new AttentionItem(join.Title, $"Code {join.Code}. Check that it matches the code on that computer, then allow or deny it on your nest.",
+                "Review in browser", () => ReviewJoin(join)));
+        }
         if (status.FixLabel is not null)
             items.Add(new AttentionItem("Syncing is paused until you decide", status.Text, status.FixLabel, FixBlocked));
         foreach (var w in _session.Warnings())
@@ -396,6 +498,9 @@ public sealed class DesktopController : ITrayActions, IDisposable
             case BlockReason.MarkerMismatch:
                 await LocateFolderAsync(status.Text);
                 break;
+            case BlockReason.SignedOut:
+                ShowSettings(firstRun: true);
+                break;
         }
         _dirty = true;
     }
@@ -444,6 +549,8 @@ public sealed class DesktopController : ITrayActions, IDisposable
             ApplySettings(v.Result!, v.PlainToken);
             _window?.Navigate(MainPage.Overview);
         };
+        view.SignOutRequested += SignOut;
+        view.ManageDevicesRequested += ManageDevices;
         view.Cancelled += () => _window?.Navigate(MainPage.Overview);
         _window!.ShowSettingsPage(view);
     }
@@ -528,7 +635,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
 
     private void ShowSettings(bool firstRun)
     {
-        var window = new SettingsWindow(_settings, _platform.Secrets, firstRun, SafeIsAutoStart(), _updates, _session?.Status.ServerVersionText);
+        var window = new SettingsWindow(_settings, _platform.Secrets, firstRun, SafeIsAutoStart(), _updates, _session?.Status.ServerVersionText, _platform.Open);
         window.Closed += (_, _) =>
         {
             if (window.Result is null)

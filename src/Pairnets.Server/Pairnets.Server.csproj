@@ -15,6 +15,14 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="Pairnets.Tests" />
+    <!-- Passkeys (WebAuthn): reads the authenticator's CBOR. Microsoft's own package, like every other dependency here. -->
+    <PackageReference Include="System.Formats.Cbor" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The nest's website, built into the program (served by Web/WebUi.cs). -->
+    <EmbeddedResource Include="WebUi\**\*" LogicalName="WebUi/%(RecursiveDir)%(Filename)%(Extension)" />
+    <EmbeddedResource Include="..\..\assets\pairnets-logo.svg" LogicalName="WebUi/assets/logo.svg" />
   </ItemGroup>
 
 </Project>

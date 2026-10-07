@@ -32,8 +32,8 @@ public class TetherMigrationTests
         Assert.Equal("X-Tether-Hash", TetherNames.HashHeader);
         Assert.Equal("X-Tether-Modified-Ms", TetherNames.ModifiedMsHeader);
         Assert.Equal("X-Tether-Client", TetherNames.ClientHeader);
-        Assert.Equal("Tether.Client.Token.v1", TetherNames.DpapiEntropy);
-        Assert.Equal(@"Local\Tether.Client.SingleInstance", TetherNames.WindowsMutex);
+        Assert.Equal("Pairnets.Client.Token.v1", TetherNames.DpapiEntropy);
+        Assert.Equal(@"Local\Pairnets.Client.SingleInstance", TetherNames.WindowsMutex);
         Assert.Equal("Tether", TetherNames.KeychainService);
         Assert.Equal("tether", TetherNames.SecretToolService);
         Assert.Equal("Tether", TetherNames.WindowsRunValue);

@@ -10,6 +10,7 @@ public sealed class ServerPaths
         History = Path.Combine(DataDir, "history");
         Tmp = Path.Combine(DataDir, "tmp");
         Database = Path.Combine(DataDir, "manifest.db");
+        AuthDatabase = Path.Combine(DataDir, "auth.db");
         LockFile = Path.Combine(DataDir, ".lock");
     }
 
@@ -25,6 +26,9 @@ public sealed class ServerPaths
     public string Tmp { get; }
 
     public string Database { get; }
+
+    /// <summary>Computer keys and, later, sign-in data; kept apart from the file manifest.</summary>
+    public string AuthDatabase { get; }
 
     public string LockFile { get; }
 

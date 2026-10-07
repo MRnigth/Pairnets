@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Add a computer · Pairnets</title>
+<meta name="description" content="Add a computer to your Pairnets nest in three steps, without copying any token.">
+<meta name="referrer" content="no-referrer">
+<link rel="icon" href="/assets/logo.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/assets/icon-256.png">
+<link rel="stylesheet" href="/assets/site.css">
+<script src="/assets/site.js" defer></script>
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="/"><img src="/assets/logo.svg" alt=""><span>Pairnets</span></a>
+    <nav class="main" aria-label="Main">
+      <a href="/#download">Download</a>
+      <a href="/add/" aria-current="page">Add a computer</a>
+      <a href="/help/">Help</a>
+    </nav>
+    <span class="grow"></span>
+    <a class="button accent" href="https://nest.pairnets.app">Sign in →</a>
+  </div>
+</header>
+<main>
+  <div class="wrap narrow">
+    <div class="hero tight">
+      <h1>Add a computer</h1>
+      <p class="lead">Three steps, on the computer you want to add. No server address or token to type.</p>
+    </div>
+    <ol class="steps">
+      <li>
+        <h3>Turn on Tailscale on it</h3>
+        <p>Sign in with the <strong>same account</strong> as your other computers and your server. Your nest only answers devices on your Tailscale network.</p>
+        <p><a class="button" href="https://tailscale.com/download" rel="noopener">Get Tailscale</a></p>
+      </li>
+      <li>
+        <h3>Install Pairnets</h3>
+        <div class="row"><a class="button accent" href="/download/windows">Windows</a><a class="button accent" href="/download/mac-apple-silicon">Mac</a><a class="button accent" href="/download/linux">Linux</a></div>
+        <p class="muted small gap">Intel Mac? <a href="/download/mac-intel">Use this one</a>.</p>
+      </li>
+      <li>
+        <h3>Open Pairnets and sign in</h3>
+        <p>Type your nest's name, <code>nest.pairnets.app</code>, and press <strong>Sign in with your browser</strong>. Your browser opens your nest, where you check that the code matches and press <strong>Allow</strong>. Then pick the folder to keep in sync.</p>
+        <p class="muted small">Your other computers also show a "wants to join" notice that leads to the same page.</p>
+      </li>
+    </ol>
+    <div class="callout">
+      <p><strong>Browser says it can't reach <code>nest.pairnets.app</code>?</strong> That means Tailscale is off on this device. <a href="/help/">Here's what to check.</a></p>
+    </div>
+    <p class="muted small gap-lg">No server yet? <a href="/docs">The guide</a> walks through setting one up (about 15 minutes).</p>
+  </div>
+</main>
+<footer>
+  <div class="wrap">
+    <p>pairnets.app only serves these pages. It has no accounts and never sees your files or your sign-in: your nest is your own server, reachable only from your own Tailscale devices.</p>
+    <p><a href="/source">Source code</a> · <a href="/docs">Guide</a> · MIT licence</p>
+  </div>
+</footer>
+</body>
+</html>

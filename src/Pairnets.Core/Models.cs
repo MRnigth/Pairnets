@@ -81,7 +81,10 @@ public sealed record UpdaterDiagnostics(
     }
 }
 
-/// <summary>A computer that uses this server (<c>GET /api/devices</c>, the apps' Devices tab).</summary>
+/// <summary>
+/// A computer that uses this server (<c>GET /api/devices</c>, the apps' Devices tab). <see cref="Id"/> is set
+/// for computers with their own key (they can be removed); computers still on the shared token have none.
+/// </summary>
 public sealed record DeviceInfo(
     string Name,
     DateTimeOffset FirstSeen,
@@ -89,7 +92,54 @@ public sealed record DeviceInfo(
     bool Online,
     string? AppVersion = null,
     string? System = null,
-    DateTimeOffset? LastChange = null);
+    DateTimeOffset? LastChange = null,
+    string? Id = null);
+
+/// <summary>
+/// Answer of <c>GET /api/hello</c> (no sign-in needed): "this is a Pairnets server". <see cref="PublicUrl"/> is
+/// the nest's own HTTPS name when it has one; <see cref="DeviceKeys"/> says computers can get their own key.
+/// </summary>
+/// <remarks><see cref="SignIn"/>: new computers can ask to join and be approved on the nest's website.</remarks>
+public sealed record ServerHello(string Product, int ApiVersion, string? ServerVersion, string? PublicUrl, bool DeviceKeys, bool SignIn);
+
+/// <summary>Answer of <c>GET /api/me</c>: who the server thinks this computer is.</summary>
+public sealed record DeviceMe(string? Id, string Name, string Kind)
+{
+    public const string KindDeviceKey = "device-key";
+    public const string KindSharedToken = "shared-token";
+}
+
+/// <summary>A computer's own key, returned once (POST /api/devices/upgrade, and pairing later).</summary>
+public sealed record DeviceKeyGrant(string Id, string Name, string Key);
+
+/// <summary>Body of POST /api/devices/upgrade and PATCH /api/devices/me.</summary>
+public sealed record DeviceNameRequest(string? Name);
+
+/// <summary>POST /api/pair/start: a new computer asks to join (no sign-in needed; the owner approves it).</summary>
+public sealed record PairStartRequest(string? Name, string? System = null, string? AppVersion = null);
+
+/// <summary>
+/// The answer to <see cref="PairStartRequest"/>. <see cref="Code"/> ("KQ7M-4PXD") is shown on the computer and on
+/// the approval page; <see cref="PollToken"/> is secret and only used to ask for the outcome. <see cref="VerifyUrl"/>
+/// is the nest's approval page (null when the nest has no website yet).
+/// </summary>
+public sealed record PairStartResponse(string PollToken, string Code, string? VerifyUrl, int ExpiresInSeconds, int IntervalSeconds);
+
+/// <summary>POST /api/pair/poll.</summary>
+public sealed record PairPollRequest(string? PollToken);
+
+/// <summary>
+/// The outcome so far: <see cref="Status"/> is "pending", "approved" (with this computer's own key, handed out
+/// once), "denied", "expired" or "used" (the key was already collected).
+/// </summary>
+public sealed record PairPollResponse(string Status, string? Id = null, string? Name = null, string? Key = null)
+{
+    public const string Pending = "pending";
+    public const string Approved = "approved";
+    public const string Denied = "denied";
+    public const string Expired = "expired";
+    public const string Used = "used";
+}
 
 /// <summary>One stored version of a file in the server's history/ folder.</summary>
 public sealed record HistoryVersion(string Id, DateTimeOffset StoredAtUtc, long Size, string Hash8);
@@ -121,6 +171,15 @@ public static class ErrorCodes
     public const string TooLarge = "too-large";
 
     public const string Busy = "busy";
+
+    /// <summary>The computer's own key was removed on the nest (or by "Sign out of this computer").</summary>
+    public const string DeviceRemoved = "device-removed";
+
+    /// <summary>The shared token is turned off on the nest; only computers with their own key may sync.</summary>
+    public const string SharedTokenOff = "shared-token-off";
+
+    /// <summary>The request needs the shared token, but this computer already has its own key (or the other way round).</summary>
+    public const string WrongCredential = "wrong-credential";
 }
 
 /// <summary>HTTP header names used by Pairnets.</summary>

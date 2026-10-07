@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>Devices · Pairnets</title>
+<link rel="icon" href="/assets/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/assets/nest.css">
+<script src="/assets/nest.js" defer></script>
+</head>
+<body data-page="devices">
+<header class="bar">
+  <a class="brand" href="/devices"><img src="/assets/logo.svg" alt=""><span>Pairnets <span class="where">· nest</span></span></a>
+  <nav class="nav">
+    <a href="/devices" data-nav="devices">Devices</a>
+    <a href="/security" data-nav="security">Security</a>
+  </nav>
+  <span class="spacer"></span>
+  <button class="flat" id="signout" type="button">Sign out</button>
+</header>
+<main>
+  <div class="head">
+    <div class="grow">
+      <h1>Devices</h1>
+      <p class="muted">The computers that keep your folder in sync through this nest.</p>
+    </div>
+    <button class="accent" type="button" id="add">+ Add a computer</button>
+  </div>
+  <div id="error" class="message error" role="alert" hidden></div>
+  <div class="card"><ul class="list" id="devices"><li class="empty"><span class="spinner"></span></li></ul></div>
+  <div class="section" id="pending-section" hidden>
+    <h2>Waiting for approval</h2>
+    <div class="card"><ul class="list" id="pending"></ul></div>
+  </div>
+</main>
+
+<dialog id="add-dialog">
+  <h2>Add a computer</h2>
+  <ol class="steps">
+    <li><strong>Turn on Tailscale on it.</strong> <span class="muted">Sign in with the same account as your other computers.</span></li>
+    <li><strong>Install Pairnets.</strong> <span class="muted">From <a href="https://pairnets.app/add" target="_blank" rel="noopener">pairnets.app/add</a>.</span></li>
+    <li><strong>Open Pairnets, type <code id="add-host"></code> and press Sign in.</strong> <span class="muted">Its request appears on this page; you approve it here.</span></li>
+  </ol>
+  <div class="row end"><button type="button" class="accent" data-close>OK</button></div>
+</dialog>
+
+<dialog id="remove-dialog">
+  <h2>Remove <span id="remove-name"></span>?</h2>
+  <p>It stops syncing right away. Its files stay on it, and nothing on your nest is deleted. To add it back, sign in on it again.</p>
+  <div class="row end"><button type="button" data-close>Cancel</button><button type="button" class="danger" id="remove-confirm">Remove</button></div>
+</dialog>
+
+<dialog id="rename-dialog">
+  <h2>Rename this computer</h2>
+  <form id="rename-form">
+    <label class="field"><span>Name</span><input type="text" id="rename-input" maxlength="64" required></label>
+    <div class="row end"><button type="button" data-close>Cancel</button><button type="submit" class="accent">Rename</button></div>
+  </form>
+</dialog>
+</body>
+</html>

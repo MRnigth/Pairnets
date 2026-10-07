@@ -1,0 +1,11 @@
+# The apps' download files on GitHub (the names the apps update themselves with, so they always exist).
+/download/windows            https://github.com/MRnigth/Pairnets/releases/download/latest/PairnetsSetup.exe                302
+/download/windows-portable   https://github.com/MRnigth/Pairnets/releases/download/latest/pairnets-client-win-x64.zip      302
+/download/mac-apple-silicon  https://github.com/MRnigth/Pairnets/releases/download/latest/Pairnets-macos-arm64.dmg         302
+/download/mac-intel          https://github.com/MRnigth/Pairnets/releases/download/latest/Pairnets-macos-x64.dmg           302
+/download/linux              https://github.com/MRnigth/Pairnets/releases/download/latest/pairnets-desktop-linux-x64.tar.gz 302
+/download/server             https://github.com/MRnigth/Pairnets/releases/download/latest/pairnets-server-linux-x64.tar.gz  302
+/get.sh                      https://raw.githubusercontent.com/MRnigth/Pairnets/main/deploy/get.sh                       302
+/docs                        https://github.com/MRnigth/Pairnets/blob/main/docs/HOWTO.md                                  302
+/source                      https://github.com/MRnigth/Pairnets                                                          302
+/nest                        https://nest.pairnets.app                                                                  302

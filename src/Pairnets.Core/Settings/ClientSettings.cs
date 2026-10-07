@@ -9,8 +9,20 @@ public sealed class ClientSettings
 {
     public string? ServerUrl { get; set; }
 
-    /// <summary>The token, encrypted by an <see cref="ISecretProtector"/> (DPAPI on Windows). Never plain text.</summary>
+    /// <summary>
+    /// The token, encrypted by an <see cref="ISecretProtector"/> (DPAPI on Windows). Never plain text. It is this
+    /// computer's own key when <see cref="DeviceId"/> is set, otherwise the shared token typed in Settings.
+    /// </summary>
     public string? ProtectedToken { get; set; }
+
+    /// <summary>
+    /// The nest's id for this computer once it has its own key (signed in, or switched over from the
+    /// shared token); null while it uses the shared token.
+    /// </summary>
+    public string? DeviceId { get; set; }
+
+    /// <summary>True when this computer has its own key (it can sign out, and can be removed on the nest).</summary>
+    public bool HasOwnKey => !string.IsNullOrEmpty(DeviceId);
 
     public string? Folder { get; set; }
 
@@ -74,6 +86,14 @@ public sealed class ClientSettings
     public bool IsComplete =>
         !string.IsNullOrWhiteSpace(ServerUrl) && !string.IsNullOrWhiteSpace(ProtectedToken)
         && !string.IsNullOrWhiteSpace(Folder) && !string.IsNullOrWhiteSpace(DeviceName);
+
+    /// <summary>A copy to change without touching the settings a running session uses.</summary>
+    public ClientSettings Clone()
+    {
+        var copy = (ClientSettings)MemberwiseClone();
+        copy.ExtraIgnore = [.. ExtraIgnore];
+        return copy;
+    }
 }
 
 /// <summary>Encrypts secrets at rest. The Windows client implements this with DPAPI (current user).</summary>

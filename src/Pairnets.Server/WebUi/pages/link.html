@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>Approve a computer · Pairnets</title>
+<link rel="icon" href="/assets/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/assets/nest.css">
+<script src="/assets/nest.js" defer></script>
+</head>
+<body data-page="link">
+<header class="bar">
+  <a class="brand" href="/devices"><img src="/assets/logo.svg" alt=""><span>Pairnets <span class="where">· nest</span></span></a>
+  <nav class="nav">
+    <a href="/devices" data-nav="devices">Devices</a>
+    <a href="/security" data-nav="security">Security</a>
+  </nav>
+  <span class="spacer"></span>
+  <button class="flat" id="signout" type="button">Sign out</button>
+</header>
+<main class="narrow">
+  <div class="card" id="enter-code" hidden>
+    <h1>Approve a computer</h1>
+    <p class="muted">Type the code shown on the computer you are setting up.</p>
+    <form id="code-form" class="stack">
+      <input type="text" id="code" class="code" inputmode="text" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="9" placeholder="XXXX-XXXX" required>
+      <button class="accent wide" type="submit">Continue</button>
+    </form>
+  </div>
+
+  <div class="card" id="request" hidden>
+    <h1 id="request-title">A computer wants to join</h1>
+    <div class="computer">
+      <div class="ring" id="request-icon"></div>
+      <div>
+        <div class="title" id="request-name"></div>
+        <div class="muted small" id="request-detail"></div>
+        <div class="muted small" id="request-from"></div>
+        <div class="same" id="request-same" hidden>✓ That's the computer you're using now</div>
+      </div>
+    </div>
+    <div id="ask">
+      <p>Does this code match the one on that computer?</p>
+      <div class="bigcode" id="request-code"></div>
+      <p class="muted small" id="request-warning"></p>
+      <div class="row end">
+        <button type="button" id="deny">Deny</button>
+        <button type="button" class="accent" id="allow"></button>
+      </div>
+    </div>
+    <div id="outcome" class="message" role="status" hidden></div>
+    <p class="row end" id="outcome-links" hidden><a class="button" href="/devices">See your devices</a></p>
+  </div>
+
+  <div id="error" class="message error" role="alert" hidden></div>
+</main>
+</body>
+</html>

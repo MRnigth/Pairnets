@@ -9,21 +9,22 @@ namespace Pairnets.Server.Web;
 /// "big batch" announcements: a device about to upload many files calls BatchStarted(count) and
 /// BatchFinished(), and the others get "PeerBatch"(deviceId, count, active) so they can wait and
 /// download the batch in one go. A batch ends by itself when its device disconnects.
+/// "DeviceRemoved"(id, name) and "DeviceRenamed"(id, name) tell the apps about changes to the list of
+/// computers; a removed computer's connections are closed right after. Messages keep their argument
+/// lists forever (older apps fail on a mismatch); new information gets a new message name.
 /// </summary>
-public sealed class SyncHub(BatchRegistry batches, Services.DeviceRegistry devices) : Hub
+public sealed class SyncHub(BatchRegistry batches, Services.DeviceRegistry devices, Storage.AuthStore auth, Auth.DeviceKeys keys) : Hub
 {
     public const string Path = "/hub";
     public const string ChangedMethod = "Changed";
     public const string PeerBatchMethod = "PeerBatch";
+    public const string DeviceRemovedMethod = "DeviceRemoved";
+    public const string DeviceRenamedMethod = "DeviceRenamed";
 
-    private string DeviceId
-    {
-        get
-        {
-            var raw = Context.GetHttpContext()?.Request.Headers[PairnetsHeaders.DeviceId].ToString();
-            return string.IsNullOrWhiteSpace(raw) ? "another computer" : Uri.UnescapeDataString(raw);
-        }
-    }
+    /// <summary>The computer behind this connection, from the key or token it connected with.</summary>
+    private DeviceIdentity? Identity => DeviceIdentity.Of(Context.User);
+
+    private string DeviceId => Identity?.Name ?? "another computer";
 
     public async Task BatchStarted(int count)
     {
@@ -41,13 +42,36 @@ public sealed class SyncHub(BatchRegistry batches, Services.DeviceRegistry devic
 
     public override async Task OnConnectedAsync()
     {
-        devices.Connected(Context.ConnectionId, DeviceId);
+        if (Identity is { } identity)
+        {
+            devices.Connected(Context.ConnectionId, identity.RegistryKey, Context.Abort, () => StillAllowed(identity));
+            // Removed while this connection was being set up: the removal may have looked for connections just
+            // before this one was registered, so check again now that it is.
+            if (identity.Id is { } id && auth.GetDevice(id) is not { IsActive: true })
+            {
+                devices.Disconnected(Context.ConnectionId);
+                Context.Abort();
+                return;
+            }
+        }
         foreach (var (connection, batch) in batches.Active())
         {
             if (connection != Context.ConnectionId)
                 await Clients.Caller.SendAsync(PeerBatchMethod, batch.Device, batch.Count, true);
         }
         await base.OnConnectedAsync();
+    }
+
+    /// <summary>Whether the computer behind a live connection may still be connected (asked every few seconds).</summary>
+    private bool StillAllowed(DeviceIdentity identity)
+    {
+        if (identity.Kind == DeviceAuthKind.SharedToken)
+            return auth.AllowSharedToken;
+        if (identity.Id is { } id && auth.GetDevice(id) is { IsActive: true })
+            return true;
+        if (identity.Id is { } removed)
+            keys.Forget(removed); // HTTP with its key stops now too, not up to 30 s later
+        return false;
     }
 
     public override async Task OnDisconnectedAsync(Exception? exception)

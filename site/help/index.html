@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Help · Pairnets</title>
+<meta name="description" content="What to check when your Pairnets nest can't be reached, or a computer was removed.">
+<meta name="referrer" content="no-referrer">
+<link rel="icon" href="/assets/logo.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/assets/icon-256.png">
+<link rel="stylesheet" href="/assets/site.css">
+<script src="/assets/site.js" defer></script>
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="/"><img src="/assets/logo.svg" alt=""><span>Pairnets</span></a>
+    <nav class="main" aria-label="Main">
+      <a href="/#download">Download</a>
+      <a href="/add/">Add a computer</a>
+      <a href="/help/" aria-current="page">Help</a>
+    </nav>
+    <span class="grow"></span>
+    <a class="button accent" href="https://nest.pairnets.app">Sign in →</a>
+  </div>
+</header>
+<main>
+  <div class="wrap narrow">
+    <div class="hero tight">
+      <h1>Help</h1>
+      <p class="lead">Most problems are Tailscale being off. Start here.</p>
+    </div>
+
+    <div class="callout warn spaced">
+      <h3>Can't open nest.pairnets.app?</h3>
+      <p>Your nest only answers devices on your Tailscale network, so a browser that isn't on it simply can't reach it.</p>
+      <ol>
+        <li>Open Tailscale on this computer or phone and make sure it is <strong>on</strong>.</li>
+        <li>Check it is signed in with the <strong>same account</strong> as your nest.</li>
+        <li>Reload the page.</li>
+      </ol>
+      <p>Still stuck? On the server: <code>sudo systemctl status tether-server</code>.</p>
+    </div>
+
+    <details>
+      <summary>"Can't reach it" under "Your nest" in the app</summary>
+      <p>Same cause: Tailscale is off on this computer, or the name is mistyped. Fix Tailscale, then change the name slightly and back, or press Sign in again; the line under the box checks the address as you type.</p>
+    </details>
+    <details>
+      <summary>The code expired, or my nest said no</summary>
+      <p>Codes last 10 minutes. Press <strong>Get a new code</strong> (or <strong>Start over</strong>) in the app and approve the new one. Always check that the code on your nest matches the code in the app before pressing Allow.</p>
+    </details>
+    <details>
+      <summary>"Signed out of your nest"</summary>
+      <p>This computer was removed on your nest, or you pressed <em>Sign out of this computer</em>. Nothing is lost: your files are untouched. Press <strong>Sign in again…</strong> and approve it on your nest.</p>
+    </details>
+    <details>
+      <summary>I lost my passkey or password</summary>
+      <p>On the server, make a new one-time sign-in link and open it on a device with Tailscale on:</p>
+      <pre><code>sudo -u tether /opt/tether/tether-server owner-link</code></pre>
+    </details>
+    <details>
+      <summary>A computer was lost or stolen</summary>
+      <p>Open your nest, go to <strong>Devices</strong>, and remove it from the <strong>⋯</strong> menu. Its key stops working at once and nothing else changes. Also remove it from your Tailscale machines.</p>
+    </details>
+    <details>
+      <summary>Which of my data does pairnets.app see?</summary>
+      <p>None. This website is static pages with no accounts and no scripts that talk to anyone. Your nest is your own server; signing in and approving computers happens there, never here.</p>
+    </details>
+    <details>
+      <summary>More</summary>
+      <p>The <a href="/docs">full guide</a> covers installing the server, how syncing and conflicts work, restoring old versions, and updates.</p>
+    </details>
+  </div>
+</main>
+<footer>
+  <div class="wrap">
+    <p>pairnets.app only serves these pages. It has no accounts and never sees your files or your sign-in: your nest is your own server, reachable only from your own Tailscale devices.</p>
+    <p><a href="/source">Source code</a> · <a href="/docs">Guide</a> · MIT licence</p>
+  </div>
+</footer>
+</body>
+</html>

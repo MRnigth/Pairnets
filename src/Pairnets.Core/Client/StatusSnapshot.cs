@@ -18,6 +18,13 @@ public sealed record ActiveTransfer(string Path, string Operation, long BytesDon
     public double PercentValue => Percent ?? 0;
 }
 
+/// <summary>A computer asking to join the nest, as the other computers hear about it.</summary>
+public sealed record JoinRequest(string Code, string Name, string System, DateTimeOffset At)
+{
+    /// <summary>"LAPTOP-2 (Windows) wants to join".</summary>
+    public string Title => System.Length > 0 ? $"{Name} ({System}) wants to join" : $"{Name} wants to join";
+}
+
 /// <summary>Everything a UI needs to draw the current state, as one immutable value.</summary>
 public sealed record StatusSnapshot(
     RunnerStatus Status,
@@ -110,6 +117,17 @@ public sealed record StatusSnapshot(
     /// <summary>When a change last arrived from each other computer (by device name).</summary>
     public IReadOnlyDictionary<string, DateTimeOffset> HeardFrom { get; init; } = System.Collections.ObjectModel.ReadOnlyDictionary<string, DateTimeOffset>.Empty;
 
+    // ---- the nest's website and computers asking to join
+
+    /// <summary>The nest's website ("https://nest.pairnets.app"), or null when it has none (or before it answered).</summary>
+    public string? NestUrl { get; init; }
+
+    /// <summary>Computers waiting to be approved on the nest (heard on the push channel, newest first).</summary>
+    public IReadOnlyList<JoinRequest> JoinRequests { get; init; } = [];
+
+    /// <summary>The page where a join request is approved, or null without a website.</summary>
+    public string? ReviewUrl(JoinRequest request) => NestUrl is { } url ? $"{url}/link?code={Uri.EscapeDataString(request.Code)}" : null;
+
     // ---- the server
 
     /// <summary>Last known server info (version, free space, updater), or null before the first answer.</summary>
@@ -182,6 +200,7 @@ public sealed record StatusSnapshot(
         RunnerStatus.Syncing => "Syncing…",
         RunnerStatus.Offline => "Offline",
         RunnerStatus.Paused => "Paused",
+        RunnerStatus.Blocked when BlockReason == BlockReason.SignedOut => "Signed out of your nest",
         RunnerStatus.Blocked => "Needs your decision",
         _ => "Problem",
     };
@@ -210,6 +229,7 @@ public sealed record StatusSnapshot(
         BlockReason.FolderMissing or BlockReason.MarkerMissing or BlockReason.MarkerMismatch => "Locate the sync folder…",
         BlockReason.ForeignMarker => "Confirm this folder…",
         BlockReason.ServerChanged or BlockReason.ServerRolledBack => "Re-link to this server…",
+        BlockReason.SignedOut => "Sign in again…",
         _ => null,
     };
 }

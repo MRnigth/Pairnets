@@ -76,6 +76,10 @@ public sealed class SampleActions : IMainActions
     public void ReportBug() => Calls.Add("bug");
     public void RevealFile(string syncPath) => Calls.Add("reveal:" + syncPath);
     public void RefreshDevices() => Calls.Add("devices");
+
+    public void AddComputer() => Calls.Add("add-computer");
+
+    public void ManageDevices() => Calls.Add("manage-devices");
 }
 
 /// <summary>Loads the macOS/Linux windows headlessly: XAML parses, controls bind, states render.</summary>
@@ -311,7 +315,10 @@ public class DesktopUiTests
     {
         var first = new SettingsWindow(new ClientSettings(), null, firstRun: true, autoStart: false);
         first.Show();
-        Assert.Contains("first-time", first.Title);
+        Assert.Contains("set up this computer", first.Title);
+        Assert.NotNull(first.SignIn);
+        first.ShowForm(firstRun: true); // "Connect with server address and token instead"
+        Assert.NotNull(first.View);
         first.Close();
         var later = new SettingsWindow(new ClientSettings { ServerUrl = "http://example.invalid:5075/", Folder = "/tmp/x", DeviceName = "mac" }, null, firstRun: false, autoStart: true);
         later.Show();
@@ -353,6 +360,8 @@ public class DesktopUiTests
         window.ShowActivity(feed.Items);
         var attention = new List<AttentionItem>
         {
+            new("LAPTOP-2 (Windows) wants to join", "Code KQ7M-4PXD. Check that it matches the code on that computer, then allow or deny it on your nest.",
+                "Review in browser", () => { }),
             new("Conflict copy: report (conflict LAPTOP 2026-10-02 141509).docx",
                 "Both computers changed this file. Compare the two, keep what you want, delete the other.", "Show in folder", () => { }),
             new("Docs/Report.TXT", "Another file with the same name in different letter case exists on the server.", "Show in folder", () => { }),
@@ -422,7 +431,7 @@ public class DesktopUiTests
         Avalonia.Threading.Dispatcher.UIThread.RunJobs();
         Save(window, outDir, $"main-window-history-{suffix}.png");
 
-        window.ShowSettingsPage(new SettingsView(new ClientSettings { ServerUrl = "https://sync.example.com/", Folder = "/Users/me/Work", DeviceName = "MacBook" },
+        window.ShowSettingsPage(new SettingsView(new ClientSettings { ServerUrl = "https://sync.example.com/", Folder = "/Users/me/Work", DeviceName = "MacBook", DeviceId = "id" },
             null, firstRun: false, autoStart: true, serverVersionText: "Server 1.0.58"));
         Save(window, outDir, $"main-window-settings-{suffix}.png");
         window.AllowClose = true;
@@ -450,8 +459,25 @@ public class DesktopUiTests
         Save(panel, outDir, $"tray-panel-idle-{suffix}.png");
         panel.Close();
 
+        var signIn = new SettingsWindow(new ClientSettings { DeviceName = "MacBook" }, null, firstRun: true, autoStart: true);
+        signIn.Show();
+        signIn.SignIn!.ShowAddress("nest.pairnets.app", new NestCheck(NestCheckStatus.Found, new Uri("https://nest.pairnets.app/"), null, "Found it (Pairnets server 1.0.80)"));
+        Save(signIn, outDir, $"sign-in-welcome-{suffix}.png");
+        signIn.SignIn.ShowAddress("nest.pairnets.app", new NestCheck(NestCheckStatus.Unreachable, new Uri("https://nest.pairnets.app/"), null, "Can't reach it. Make sure Tailscale is on, and check the name."));
+        Save(signIn, outDir, $"sign-in-unreachable-{suffix}.png");
+        signIn.SignIn.ShowPairing(new PairingState(PairingStage.Waiting, "KQ7M-4PXD", "https://nest.pairnets.app/link?code=KQ7M-4PXD",
+            DateTimeOffset.UtcNow.AddMinutes(9).AddSeconds(41)), openBrowser: false);
+        Save(signIn, outDir, $"sign-in-waiting-{suffix}.png");
+        signIn.SignIn.ShowPairing(new PairingState(PairingStage.Denied, "KQ7M-4PXD", "https://nest.pairnets.app/link?code=KQ7M-4PXD"), openBrowser: false);
+        Save(signIn, outDir, $"sign-in-denied-{suffix}.png");
+        signIn.SignIn.ShowFolderStep(new DeviceKeyGrant("id", "MacBook", "unused"), new Uri("https://nest.pairnets.app/"));
+        signIn.SignIn.Folder = "/Users/me/Work";
+        Save(signIn, outDir, $"sign-in-folder-{suffix}.png");
+        signIn.Close();
+
         var settings = new SettingsWindow(new ClientSettings { DeviceName = "MacBook" }, null, firstRun: true, autoStart: true);
         settings.Show();
+        settings.ShowForm(firstRun: true);
         settings.ShowTestResult(true, "Connected. Server and token are OK.");
         Save(settings, outDir, $"settings-first-run-{suffix}.png");
         settings.Close();

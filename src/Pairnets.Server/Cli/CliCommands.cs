@@ -5,8 +5,9 @@ using Pairnets.Server.Storage;
 namespace Pairnets.Server.Cli;
 
 /// <summary>
-/// Maintenance commands: "rescan", "history list|restore|purge". They require the service to be
-/// stopped (the data directory lock enforces this) and never need the token.
+/// Maintenance commands: "rescan", "history list|restore|purge" require the service to be stopped (the
+/// data directory lock enforces this); "devices list|remove" work while it runs (auth.db is shared
+/// safely; the service notices a removal within 30 seconds). None of them needs the token.
 /// </summary>
 public static class CliCommands
 {
@@ -19,19 +20,27 @@ public static class CliCommands
                                                   restore a version as the new current version
           pairnets-server history purge [--dry-run]
                                                   apply the retention policy now
+          pairnets-server devices list            the computers with their own key
+          pairnets-server devices remove <name or id>
+                                                  remove a computer: its key stops working
+          pairnets-server owner-link [--if-new]   print a one-time link to set up (or get back into)
+                                                  the nest's website; --if-new: only if no way to
+                                                  sign in is set up yet
           pairnets-server --version
 
         Options:
           --data-dir <dir>                        data directory (default: Sync:DataDir or /var/lib/pairnets)
 
-        Stop the service before running maintenance commands:
+        Stop the service before running rescan and history commands:
           sudo systemctl stop pairnets-server
           sudo -u pairnets /opt/pairnets/pairnets-server rescan --data-dir /var/lib/pairnets
           sudo systemctl start pairnets-server
+        The devices and owner-link commands work while it runs (always as the pairnets user):
+          sudo -u pairnets /opt/pairnets/pairnets-server devices list
         """;
 
     public static bool IsCliCommand(string[] args) =>
-        args.Length > 0 && args[0] is "rescan" or "history" or "--help" or "-h" or "help" or "--version";
+        args.Length > 0 && args[0] is "rescan" or "history" or "devices" or "owner-link" or "--help" or "-h" or "help" or "--version";
 
     public static async Task<int> RunAsync(string[] args, TextWriter output, TextWriter error)
     {
@@ -48,6 +57,7 @@ public static class CliCommands
 
         var positional = new List<string>();
         var dryRun = false;
+        var ifNew = false;
         string? dataDir = null;
         for (var i = 0; i < args.Length; i++)
         {
@@ -55,6 +65,9 @@ public static class CliCommands
             {
                 case "--dry-run":
                     dryRun = true;
+                    break;
+                case "--if-new":
+                    ifNew = true;
                     break;
                 case "--data-dir" when i + 1 < args.Length:
                     dataDir = args[++i];
@@ -82,6 +95,10 @@ public static class CliCommands
 
         using var loggerFactory = LoggerFactory.Create(b => b.AddSimpleConsole(o => o.SingleLine = true).SetMinimumLevel(LogLevel.Warning));
         var paths = new ServerPaths(options.DataDir);
+        if (positional is ["devices", ..])
+            return await DevicesAsync(paths, positional, output, error);
+        if (positional is ["owner-link"])
+            return await OwnerLinkAsync(paths, ifNew, output, error);
         FileStream dataLock;
         try
         {
@@ -113,6 +130,77 @@ public static class CliCommands
             {
                 ManifestStore.ReleasePools();
             }
+        }
+    }
+
+    private static async Task<int> DevicesAsync(ServerPaths paths, List<string> positional, TextWriter output, TextWriter error)
+    {
+        if (!File.Exists(paths.AuthDatabase))
+        {
+            await output.WriteLineAsync("No computer has its own key yet.");
+            return 0;
+        }
+        var auth = new AuthStore(paths);
+        try
+        {
+            switch (positional)
+            {
+                case ["devices", "list"]:
+                    var all = auth.ListDevices();
+                    if (all.Count == 0)
+                        await output.WriteLineAsync("No computer has its own key yet.");
+                    foreach (var d in all)
+                        await output.WriteLineAsync($"{d.Id}  {d.Name,-24} {d.System ?? "-",-10} added {d.Created:yyyy-MM-dd} ({d.ApprovedBy})");
+                    await output.WriteLineAsync($"Shared token: {(auth.AllowSharedToken ? "still accepted" : "turned off")}");
+                    return 0;
+                case ["devices", "remove", var which]:
+                    var device = auth.GetDevice(which) is { IsActive: true } byId ? byId : auth.FindActiveByName(which);
+                    if (device is null)
+                    {
+                        await error.WriteLineAsync($"No computer called '{which}'. See: tether-server devices list");
+                        return 1;
+                    }
+                    auth.RemoveDevice(device.Id);
+                    await output.WriteLineAsync($"Removed {device.Name}. Its key stops working within 30 seconds; its files stay on it.");
+                    return 0;
+                default:
+                    return await UsageErrorAsync(error);
+            }
+        }
+        finally
+        {
+            Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+        }
+    }
+
+    /// <summary>
+    /// Prints a link that signs a browser in to the nest's website once, within 24 hours: for the first visit,
+    /// and to get back in after losing every way to sign in. The code is in the part after "#", which browsers
+    /// never send to a server, so it cannot end up in any log.
+    /// </summary>
+    private static async Task<int> OwnerLinkAsync(ServerPaths paths, bool ifNew, TextWriter output, TextWriter error)
+    {
+        if (!Directory.Exists(paths.DataDir))
+        {
+            await error.WriteLineAsync($"No data folder at {paths.DataDir}. Is the server installed?");
+            return 1;
+        }
+        var auth = new AuthStore(paths);
+        try
+        {
+            if (ifNew && auth.HasSignInMethod)
+                return 0;
+            if (auth.GetSetting(AuthStore.SettingPublicUrl) is not { Length: > 0 } url)
+            {
+                await error.WriteLineAsync("This nest has no website yet: give it its own name first with  sudo ./install.sh --domain nest.example.com");
+                return 1;
+            }
+            await output.WriteLineAsync($"{url}/setup#code={auth.CreateSetupCode()}");
+            return 0;
+        }
+        finally
+        {
+            Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
         }
     }
 

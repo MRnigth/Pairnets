@@ -26,8 +26,13 @@ LOG_MAX=262144 # bytes; the previous log is kept as update.log.1
 
 log() { printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*"; }
 
-# The sync token never reaches the log (install.sh prints it only on a first install, but be sure).
-redact() { sed -E 's/(Token:[[:space:]]*)[^[:space:]]+/\1(hidden)/; s/(SYNC_TOKEN=)[^[:space:]]+/\1(hidden)/'; }
+# Secrets never reach the log: the sync token (install.sh prints it only on a first install, but be
+# sure), setup links, and the Cloudflare, mail and Google credentials install.sh may handle.
+redact() {
+  sed -E 's/(Token:[[:space:]]*)[^[:space:]]+/\1(hidden)/I; s/(SYNC_TOKEN=)[^[:space:]]+/\1(hidden)/; s/(api_token[[:space:]]*=[[:space:]]*)[^[:space:]]+/\1(hidden)/I;
+    s/(CLOUDFLARE_API_TOKEN=)[^[:space:]]+/\1(hidden)/; s/(Bearer[[:space:]]+)[^[:space:]"]+/\1(hidden)/I; s/((SECRET|PASSWORD|API_KEY)[A-Za-z_]*=)[^[:space:]]+/\1(hidden)/I;
+    s/([?&#](code|token)=)[^[:space:]&]+/\1(hidden)/I'
+}
 
 json_escape() { local s=${1//\\/\\\\}; s=${s//\"/\\\"}; printf '%s' "${s//$'\n'/ }"; }
 

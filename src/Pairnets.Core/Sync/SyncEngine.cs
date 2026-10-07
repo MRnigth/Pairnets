@@ -137,6 +137,14 @@ public sealed class SyncEngine
             result.Message = ex.Message;
             _log.LogWarning("Pass aborted, server unreachable: {Error}", ex.Message);
         }
+        catch (PairnetsAuthException ex) when (ex.NeedsSignIn)
+        {
+            // Not a typo in Settings: the nest no longer lets this computer in. Nothing is retried until it signs in again.
+            result.Outcome = PassOutcome.Blocked;
+            result.BlockReason = BlockReason.SignedOut;
+            result.Message = ex.Message;
+            _log.LogWarning("Pass stopped: {Error}", ex.Message);
+        }
         catch (PairnetsAuthException ex)
         {
             result.Outcome = PassOutcome.AuthFailed;

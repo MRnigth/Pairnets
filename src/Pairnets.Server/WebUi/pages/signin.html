@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>Sign in · Pairnets</title>
+<link rel="icon" href="/assets/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/assets/nest.css">
+<script src="/assets/nest.js" defer></script>
+</head>
+<body data-page="signin">
+<main class="narrow">
+  <div class="card">
+    <img class="logo-big" src="/assets/logo.svg" alt="">
+    <div class="center">
+      <h1>Sign in to your nest</h1>
+      <p class="muted" id="nest-name"></p>
+    </div>
+    <div id="error" class="message error" role="alert" hidden></div>
+    <div id="top-methods" class="stack" hidden>
+      <button class="accent wide" type="button" id="passkey-signin" hidden>Sign in with a passkey</button>
+      <a class="button wide" id="google-signin" href="/auth/google/start" hidden>Sign in with Google</a>
+      <button class="wide" type="button" id="email-signin" hidden>Email me a sign-in link</button>
+      <div class="divider" id="passkey-divider">or</div>
+    </div>
+    <div id="notice" class="message ok" role="status" hidden></div>
+    <form id="password-form" class="stack">
+      <label class="field"><span>Password</span>
+        <input type="password" id="password" autocomplete="current-password" required autofocus>
+      </label>
+      <button class="accent wide" type="submit" id="password-submit">Sign in with password</button>
+    </form>
+    <p class="muted small center" id="no-password" hidden>This nest has no password. Sign in another way, or make a setup link on the server: <code>sudo -u tether /opt/tether/tether-server owner-link</code></p>
+  </div>
+  <p class="muted small center">Forgot how to get in? On the server, run <code>sudo -u tether /opt/tether/tether-server owner-link</code> and open the link it prints.</p>
+</main>
+</body>
+</html>

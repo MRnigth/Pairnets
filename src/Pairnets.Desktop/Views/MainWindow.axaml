@@ -425,7 +425,7 @@
 
         <!-- ============ Devices: every computer that uses the server ============ -->
         <Border x:Name="DevicesPage" Classes="card" Margin="28,18,28,24" Padding="8" IsVisible="False">
-          <Grid>
+          <Grid RowDefinitions="*,Auto">
             <ScrollViewer x:Name="DevicesPanel" IsVisible="False">
               <ItemsControl x:Name="DevicesList">
                 <ItemsControl.ItemTemplate>
@@ -458,6 +458,13 @@
               <TextBlock x:Name="DevicesEmptyText" Classes="muted" TextWrapping="Wrap" TextAlignment="Center" MaxWidth="340"
                          Text="Loading the computers that use your server…" />
             </StackPanel>
+            <!-- Adding happens on the new computer (it signs in); removing and renaming on the nest's website. -->
+            <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource T.Border}" Padding="6,12,6,4" Margin="0,6,0,0">
+              <StackPanel Orientation="Horizontal" Spacing="14">
+                <Button Classes="subtle" Content="+ Add a computer…" Click="OnAddComputer" />
+                <Button Classes="link" Content="Manage devices on your nest" VerticalAlignment="Center" Click="OnManageDevices" />
+              </StackPanel>
+            </Border>
           </Grid>
         </Border>
 

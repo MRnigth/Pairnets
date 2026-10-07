@@ -58,6 +58,14 @@ public partial class SettingsView : UserControl
         if (!firstRun)
             Form.Margin = new Avalonia.Thickness(0, 0, 14, 16); // inside the main window, which has its own margins
         SaveButton.Content = firstRun ? "Start syncing" : "Save";
+        if (!firstRun && current.HasOwnKey)
+        {
+            // Signed in with its own key: show who it is; the address and token stay one click away.
+            ServerHeading.Text = "Your nest";
+            SignedInPanel.IsVisible = true;
+            AddressFields.IsVisible = false;
+            SignedInText.Text = $"{(Uri.TryCreate(current.ServerUrl, UriKind.Absolute, out var nest) ? nest.Authority : current.ServerUrl)} · signed in as {current.DeviceName}";
+        }
         ServerUrlBox.Text = current.ServerUrl ?? string.Empty;
         TokenBox.Watermark = current.ProtectedToken is null ? "printed by install.sh" : "(saved – leave empty to keep)";
         FolderBox.Text = current.Folder ?? string.Empty;
@@ -173,6 +181,22 @@ public partial class SettingsView : UserControl
 
     private void OnCancel(object? sender, RoutedEventArgs e) => Cancelled?.Invoke();
 
+    /// <summary>"Sign out of this computer" (the controller asks first).</summary>
+    public event Action? SignOutRequested;
+
+    /// <summary>"Manage devices on the web".</summary>
+    public event Action? ManageDevicesRequested;
+
+    private void OnSignOut(object? sender, RoutedEventArgs e) => SignOutRequested?.Invoke();
+
+    private void OnManageDevices(object? sender, RoutedEventArgs e) => ManageDevicesRequested?.Invoke();
+
+    private void OnShowAddress(object? sender, RoutedEventArgs e)
+    {
+        AddressFields.IsVisible = true;
+        ShowAddressButton.IsVisible = false;
+    }
+
     private async void OnSave(object? sender, RoutedEventArgs e)
     {
         if (!PairnetsApiClient.TryParseServerUrl(ServerUrlBox.Text, out var url) || url is null)
@@ -222,12 +246,14 @@ public partial class SettingsView : UserControl
 
             if (_protector is null)
                 throw new InvalidOperationException("No secret store available.");
+            var (deviceId, deviceName) = await OwnKey.CarryOverAsync(_original, url, token, tokenTyped: !string.IsNullOrWhiteSpace(TokenBox.Text), DeviceName());
             Result = new ClientSettings
             {
                 ServerUrl = url.ToString(),
                 ProtectedToken = _protector.Protect(token),
                 Folder = folder,
-                DeviceName = DeviceName(),
+                DeviceName = deviceName,
+                DeviceId = deviceId,
                 ExtraIgnore = Patterns(),
                 StartWithWindows = AutoStartBox.IsChecked == true,
                 FirstRunCompleted = true,

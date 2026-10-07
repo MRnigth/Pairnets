@@ -64,6 +64,8 @@ public static class Program
         public void ReportBug() { }
         public void RevealFile(string syncPath) { }
         public void RefreshDevices() { }
+        public void AddComputer() { }
+        public void ManageDevices() { }
         public void OpenWindow(MainPage page) { }
         public void Quit() { }
     }
@@ -192,7 +194,20 @@ public static class Program
         Save(panel, outDir, $"windows-tray-panel-{suffix}.png", print);
         panel.Close();
 
+        var signIn = new SettingsWindow(new ClientSettings { DeviceName = "DESKTOP" }, new NoProtector(), firstRun: true);
+        Place(signIn);
+        signIn.SignIn!.ShowAddress("nest.pairnets.app", new NestCheck(NestCheckStatus.Found, new Uri("https://nest.pairnets.app/"), null, "Found it (Pairnets server 1.0.80)"));
+        Save(signIn, outDir, $"windows-sign-in-welcome-{suffix}.png", print);
+        signIn.SignIn.ShowPairing(new PairingState(PairingStage.Waiting, "KQ7M-4PXD", "https://nest.pairnets.app/link?code=KQ7M-4PXD",
+            DateTimeOffset.UtcNow.AddMinutes(9).AddSeconds(41)), openBrowser: false);
+        Save(signIn, outDir, $"windows-sign-in-waiting-{suffix}.png", print);
+        signIn.SignIn.ShowFolderStep(new DeviceKeyGrant("id", "DESKTOP", "unused"), new Uri("https://nest.pairnets.app/"));
+        signIn.SignIn.Folder = @"D:\Work";
+        Save(signIn, outDir, $"windows-sign-in-folder-{suffix}.png", print);
+        signIn.Close();
+
         var settings = new SettingsWindow(new ClientSettings { DeviceName = "DESKTOP", UploadLimitMBps = 5 }, new NoProtector(), firstRun: true) { Height = 1320 };
+        settings.ShowForm(firstRun: true);
         Place(settings);
         settings.ShowTestResult(true, "Connected. Server and token are OK.");
         Save(settings, outDir, $"windows-settings-first-run-{suffix}.png", print);

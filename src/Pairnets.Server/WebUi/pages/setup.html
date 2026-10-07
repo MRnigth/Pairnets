@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>Set up your nest · Pairnets</title>
+<link rel="icon" href="/assets/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/assets/nest.css">
+<script src="/assets/nest.js" defer></script>
+</head>
+<body data-page="setup">
+<main class="narrow">
+  <div class="card" id="step-claim">
+    <img class="logo-big" src="/assets/logo.svg" alt="">
+    <div class="center">
+      <h1>Set up your nest</h1>
+      <p class="muted">Step 1 of 2 · Prove it's yours</p>
+    </div>
+    <p id="claim-checking" hidden><span class="spinner"></span> Checking your setup link…</p>
+    <div id="claim-missing" hidden>
+      <p>Open the setup link your server printed when you installed it. It works once, for 24 hours.</p>
+      <p class="muted small">Lost it? Make a new one on the server:</p>
+      <p><code>sudo -u tether /opt/tether/tether-server owner-link</code></p>
+    </div>
+    <div id="error" class="message error" role="alert" hidden></div>
+  </div>
+
+  <div class="card" id="step-method" hidden>
+    <div class="center">
+      <h1>How will you sign in?</h1>
+      <p class="muted">Step 2 of 2 · <span class="pill ok" id="claimed-ok">✓ Setup link accepted</span></p>
+    </div>
+    <p id="has-methods" class="message info" hidden>You already have a way to sign in. You can set a new password here, or manage everything under Security.</p>
+    <div id="passkey-block" hidden>
+      <button class="accent wide" type="button" id="add-passkey">Add a passkey</button>
+      <p class="muted small center">Windows Hello, Face ID, Touch ID, your phone or a security key. No password to remember or leak. Recommended.</p>
+      <div class="divider">or</div>
+    </div>
+    <div id="passkey-error" class="message error" role="alert" hidden></div>
+    <form id="new-password-form">
+      <label class="field"><span>Choose a password</span>
+        <input type="password" id="new-password" autocomplete="new-password" minlength="10" required>
+      </label>
+      <label class="field"><span>Type it again</span>
+        <input type="password" id="new-password-2" autocomplete="new-password" minlength="10" required>
+      </label>
+      <p class="muted small">At least 10 characters. A passphrase of a few words is easy to remember.</p>
+      <div id="method-error" class="message error" role="alert" hidden></div>
+      <button class="accent wide" type="submit">Set password and continue</button>
+    </form>
+    <p class="center small"><a href="/devices" id="skip" hidden>Skip, go to my devices →</a></p>
+  </div>
+</main>
+</body>
+</html>

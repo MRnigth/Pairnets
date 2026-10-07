@@ -55,6 +55,14 @@ public partial class SettingsView : UserControl
         if (!firstRun)
             Form.Margin = new Thickness(0, 0, 14, 16); // inside the main window, which has its own margins
         AppIcon.Source = AppIcons.Large;
+        if (!firstRun && current.HasOwnKey)
+        {
+            // Signed in with its own key: show who it is; the address and token stay one click away.
+            ServerHeading.Text = "Your nest";
+            SignedInPanel.Visibility = Visibility.Visible;
+            AddressFields.Visibility = Visibility.Collapsed;
+            SignedInText.Text = $"{(Uri.TryCreate(current.ServerUrl, UriKind.Absolute, out var nest) ? nest.Authority : current.ServerUrl)} · signed in as {current.DeviceName}";
+        }
         SaveButton.Content = firstRun ? "Start syncing" : "Save";
         ServerUrlBox.Text = current.ServerUrl ?? string.Empty;
         FolderBox.Text = current.Folder ?? string.Empty;
@@ -239,12 +247,14 @@ public partial class SettingsView : UserControl
                     return;
             }
 
+            var (deviceId, deviceName) = await OwnKey.CarryOverAsync(_original, url, token, tokenTyped: TokenBox.Password.Length > 0, DeviceName());
             Result = new ClientSettings
             {
                 ServerUrl = url.ToString(),
                 ProtectedToken = _protector.Protect(token),
                 Folder = folder,
-                DeviceName = DeviceName(),
+                DeviceName = deviceName,
+                DeviceId = deviceId,
                 ExtraIgnore = SplitPatterns(),
                 StartWithWindows = AutoStartBox.IsChecked == true,
                 FirstRunCompleted = true,
@@ -280,4 +290,20 @@ public partial class SettingsView : UserControl
         Owner is { } owner ? MessageBox.Show(owner, text, title, buttons, image) : MessageBox.Show(text, title, buttons, image);
 
     private void OnCancel(object sender, RoutedEventArgs e) => Cancelled?.Invoke();
+
+    /// <summary>"Sign out of this computer" (the controller asks first).</summary>
+    public event Action? SignOutRequested;
+
+    /// <summary>"Manage devices on the web".</summary>
+    public event Action? ManageDevicesRequested;
+
+    private void OnSignOut(object sender, RoutedEventArgs e) => SignOutRequested?.Invoke();
+
+    private void OnManageDevices(object sender, RoutedEventArgs e) => ManageDevicesRequested?.Invoke();
+
+    private void OnShowAddress(object sender, RoutedEventArgs e)
+    {
+        AddressFields.Visibility = Visibility.Visible;
+        ShowAddressButton.Visibility = Visibility.Collapsed;
+    }
 }

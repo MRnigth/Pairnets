@@ -41,6 +41,12 @@ public interface IMainActions
     /// <summary>The Devices page was opened: ask the server for the current list.</summary>
     void RefreshDevices();
 
+    /// <summary>"+ Add a computer…": how to add one (it signs in on the new computer).</summary>
+    void AddComputer();
+
+    /// <summary>Opens the nest's Devices page (rename, remove, approve).</summary>
+    void ManageDevices();
+
     /// <summary>Shows a synced file in the file manager (or the folder, when the file is gone).</summary>
     void RevealFile(string syncPath);
 
@@ -341,6 +347,10 @@ public partial class MainWindow : Window
         }
         _shownState = state;
     }
+
+    private void OnAddComputer(object? sender, Avalonia.Interactivity.RoutedEventArgs e) => _actions?.AddComputer();
+
+    private void OnManageDevices(object? sender, Avalonia.Interactivity.RoutedEventArgs e) => _actions?.ManageDevices();
 
     public void ShowAttention(IReadOnlyList<AttentionItem> items)
     {

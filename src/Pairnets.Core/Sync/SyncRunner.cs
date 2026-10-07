@@ -128,6 +128,18 @@ public sealed class SyncRunner : IAsyncDisposable
     /// <summary>Raised when a SignalR "Changed" from another device arrives.</summary>
     public event Action<string, string>? RemoteChangeReceived;
 
+    /// <summary>
+    /// A computer was removed from the nest or renamed ("DeviceRemoved"/"DeviceRenamed" on the push channel):
+    /// its id, its (new) name, and true when it was removed.
+    /// </summary>
+    public event Action<string, string, bool>? DeviceListChanged;
+
+    /// <summary>A computer asks to join the nest ("PairRequested"): its code, name and system.</summary>
+    public event Action<string, string, string>? JoinRequested;
+
+    /// <summary>A join request was allowed or turned away on the nest ("PairDecided"): its code.</summary>
+    public event Action<string>? JoinDecided;
+
     /// <summary>Files changed here or on another device while a pass was running; the next pass syncs them.</summary>
     public int PendingChanges
     {
@@ -619,6 +631,10 @@ public sealed class SyncRunner : IAsyncDisposable
             RequestSync("remote-change", delay: _options.RemoteDebounce);
         });
         _hub.On<string, int, bool>("PeerBatch", OnPeerBatch);
+        _hub.On<string, string>("DeviceRemoved", (id, name) => DeviceListChanged?.Invoke(id, name, true));
+        _hub.On<string, string>("DeviceRenamed", (id, name) => DeviceListChanged?.Invoke(id, name, false));
+        _hub.On<string, string, string>("PairRequested", (code, name, system) => JoinRequested?.Invoke(code, name, system));
+        _hub.On<string, bool>("PairDecided", (code, _) => JoinDecided?.Invoke(code));
         _hub.Reconnecting += _ =>
         {
             ClearHolds(); // the server re-sends active batches when we are back
@@ -656,6 +672,13 @@ public sealed class SyncRunner : IAsyncDisposable
             {
                 return;
             }
+            catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+            {
+                // Removed from the nest, or the token changed: a pass finds out which and shows it; no point retrying.
+                _log.LogWarning("Push channel refused: the server did not accept this computer's key or token");
+                RequestSync("hub-unauthorized");
+                return;
+            }
             catch (Exception ex)
             {
                 _log.LogDebug("Push channel connect failed: {Error}", ex.Message);
@@ -672,13 +695,18 @@ public sealed class SyncRunner : IAsyncDisposable
         }
     }
 
-    /// <summary>Reconnect forever: 0, 2, 5, 10, then every 30 seconds.</summary>
+    /// <summary>
+    /// Reconnect forever: 0, 2, 5, 10, then every 30 seconds; but not when the server refused the key or
+    /// token (the connection then closes and the Closed handler stops, see <see cref="StartHubWithRetryAsync"/>).
+    /// </summary>
     public sealed class ForeverRetryPolicy : IRetryPolicy
     {
         private static readonly TimeSpan[] Delays = [TimeSpan.Zero, TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(30)];
 
         public TimeSpan? NextRetryDelay(RetryContext retryContext) =>
-            Delays[(int)Math.Min(retryContext.PreviousRetryCount, Delays.Length - 1)];
+            retryContext.RetryReason is HttpRequestException { StatusCode: System.Net.HttpStatusCode.Unauthorized }
+                ? null
+                : Delays[(int)Math.Min(retryContext.PreviousRetryCount, Delays.Length - 1)];
     }
 
     // ------------------------------------------------------------------ shutdown

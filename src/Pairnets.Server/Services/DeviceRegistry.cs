@@ -9,6 +9,8 @@ namespace Pairnets.Server.Services;
 /// The computers that use this server ("Devices" tab in the apps): name, app version and system,
 /// when each was first and last seen, whether it is connected right now, and its last change.
 /// Kept in memory and saved to devices.json in the data folder at most every 30 seconds.
+/// A computer with its own key is listed under "id:&lt;its id&gt;" (see <see cref="Web.DeviceIdentity.RegistryKey"/>),
+/// one still on the shared token under the name it sends.
 /// </summary>
 public sealed class DeviceRegistry : IDisposable
 {
@@ -22,7 +24,7 @@ public sealed class DeviceRegistry : IDisposable
     private readonly ILogger<DeviceRegistry> _log;
     private readonly object _gate = new();
     private readonly Dictionary<string, Entry> _devices = new(StringComparer.OrdinalIgnoreCase);
-    private readonly ConcurrentDictionary<string, string> _connections = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, (string Key, Action? Abort, Func<bool>? StillAllowed)> _connections = new(StringComparer.Ordinal);
     private bool _dirty;
     private DateTimeOffset _lastSave;
 
@@ -36,6 +38,8 @@ public sealed class DeviceRegistry : IDisposable
 
     private sealed class Entry
     {
+        public string? Id { get; set; }
+
         public string Name { get; set; } = string.Empty;
         public DateTimeOffset FirstSeen { get; set; }
         public DateTimeOffset LastSeen { get; set; }
@@ -44,21 +48,47 @@ public sealed class DeviceRegistry : IDisposable
         public DateTimeOffset? LastChange { get; set; }
     }
 
-    /// <summary>Called for every authenticated request: <paramref name="client"/> is the "X-Pairnets-Client" header ("1.0.38; Windows").</summary>
-    public void Seen(string device, string? client)
+    /// <summary>
+    /// Closes the push connections whose computer is no longer allowed in: removed from the command line (another
+    /// process), or the shared token turned off. Returns how many were closed.
+    /// </summary>
+    public int CloseDisallowed()
     {
-        if (!IsName(device))
+        var closed = 0;
+        foreach (var (connectionId, connection) in _connections)
+        {
+            if (connection.StillAllowed is { } allowed && !allowed() && _connections.TryRemove(connectionId, out _))
+            {
+                connection.Abort?.Invoke();
+                closed++;
+            }
+        }
+        return closed;
+    }
+
+    /// <summary>A computer on the shared token, known only by its name.</summary>
+    public void Seen(string device, string? client) => Seen(device, device, client);
+
+    /// <summary>Called for every authenticated request: <paramref name="client"/> is the "X-Tether-Client" header ("1.0.38; Windows").</summary>
+    public void Seen(string key, string name, string? client)
+    {
+        if (!IsName(name))
             return;
         var now = _clock.GetUtcNow();
         var (version, system) = ParseClient(client);
         lock (_gate)
         {
-            if (!_devices.TryGetValue(device, out var entry))
+            if (!_devices.TryGetValue(key, out var entry))
             {
-                entry = new Entry { Name = device, FirstSeen = now };
-                _devices[device] = entry;
+                entry = new Entry { Id = IdOf(key), Name = name, FirstSeen = now };
+                _devices[key] = entry;
                 _dirty = true;
                 _lastSave = DateTimeOffset.MinValue; // save a new device right away
+            }
+            if (entry.Name != name)
+            {
+                entry.Name = name; // renamed on the nest
+                _dirty = true;
             }
             entry.LastSeen = now;
             if (version is not null && version != entry.AppVersion)
@@ -78,13 +108,13 @@ public sealed class DeviceRegistry : IDisposable
     }
 
     /// <summary>The device uploaded, deleted or restored something.</summary>
-    public void Changed(string device)
+    public void Changed(string key)
     {
-        if (!IsName(device))
+        if (!IsName(key))
             return;
         lock (_gate)
         {
-            if (_devices.TryGetValue(device, out var entry))
+            if (_devices.TryGetValue(key, out var entry))
             {
                 entry.LastChange = _clock.GetUtcNow();
                 _dirty = true;
@@ -93,29 +123,71 @@ public sealed class DeviceRegistry : IDisposable
         SaveIfDue();
     }
 
-    public void Connected(string connectionId, string device)
+    /// <summary>
+    /// A push-channel connection opened; <paramref name="abort"/> closes it when the computer is removed, and
+    /// <paramref name="stillAllowed"/> is asked now and then (see <see cref="CloseDisallowed"/>) for removals this process never saw.
+    /// </summary>
+    public void Connected(string connectionId, string key, Action? abort = null, Func<bool>? stillAllowed = null)
     {
-        if (IsName(device))
-            _connections[connectionId] = device;
+        // Even one that sent no name is tracked: it must still be closable (a computer can leave its name out).
+        if (!string.IsNullOrWhiteSpace(key))
+            _connections[connectionId] = (key, abort, stillAllowed);
     }
 
     public void Disconnected(string connectionId) => _connections.TryRemove(connectionId, out _);
+
+    /// <summary>A removed computer leaves the list and its push connections are closed.</summary>
+    public void Remove(string key)
+    {
+        lock (_gate)
+        {
+            if (_devices.Remove(key))
+            {
+                _dirty = true;
+                _lastSave = DateTimeOffset.MinValue;
+            }
+        }
+        foreach (var (connectionId, connection) in _connections)
+        {
+            if (string.Equals(connection.Key, key, StringComparison.OrdinalIgnoreCase) && _connections.TryRemove(connectionId, out _))
+                connection.Abort?.Invoke();
+        }
+        SaveIfDue();
+    }
+
+    /// <summary>A computer that used the shared token as <paramref name="name"/> now has its own key: keep its history.</summary>
+    public void Adopt(string name, string newKey, string newName)
+    {
+        lock (_gate)
+        {
+            if (!_devices.Remove(name, out var old))
+                return;
+            old.Id = IdOf(newKey);
+            old.Name = newName;
+            _devices[newKey] = old;
+            _dirty = true;
+            _lastSave = DateTimeOffset.MinValue;
+        }
+        SaveIfDue();
+    }
 
     /// <summary>All devices, most recently seen first.</summary>
     public IReadOnlyList<DeviceInfo> List()
     {
         var now = _clock.GetUtcNow();
-        var connected = new HashSet<string>(_connections.Values, StringComparer.OrdinalIgnoreCase);
+        var connected = new HashSet<string>(_connections.Values.Select(c => c.Key), StringComparer.OrdinalIgnoreCase);
         lock (_gate)
         {
-            return _devices.Values
-                .OrderByDescending(e => e.LastSeen)
-                .Select(e => new DeviceInfo(e.Name, e.FirstSeen, e.LastSeen,
-                    connected.Contains(e.Name) || now - e.LastSeen < OnlineWindow,
-                    e.AppVersion, e.System, e.LastChange))
+            return _devices
+                .OrderByDescending(d => d.Value.LastSeen)
+                .Select(d => new DeviceInfo(d.Value.Name, d.Value.FirstSeen, d.Value.LastSeen,
+                    connected.Contains(d.Key) || now - d.Value.LastSeen < OnlineWindow,
+                    d.Value.AppVersion, d.Value.System, d.Value.LastChange, d.Value.Id))
                 .ToList();
         }
     }
+
+    private static string? IdOf(string key) => key.StartsWith("id:", StringComparison.Ordinal) ? key[3..] : null;
 
     /// <summary>"1.0.38; Windows" → ("1.0.38", "Windows"); anything odd is ignored.</summary>
     internal static (string? Version, string? System) ParseClient(string? client)
@@ -139,7 +211,7 @@ public sealed class DeviceRegistry : IDisposable
                 return;
             var entries = JsonSerializer.Deserialize<List<Entry>>(File.ReadAllText(_file), PairnetsJson.Options) ?? [];
             foreach (var entry in entries.Where(e => IsName(e.Name)))
-                _devices[entry.Name] = entry;
+                _devices[entry.Id is { Length: > 0 } id ? "id:" + id : entry.Name] = entry;
         }
         catch (Exception ex) when (ex is IOException or JsonException or UnauthorizedAccessException)
         {

@@ -2,12 +2,18 @@
 
 Pairnets keeps **one folder identical on your computers** (built for two Windows PCs, also available
 for Mac and Linux desktops) that you use one at a time, through a
+<<<<<<< HEAD
 small server you own, reached from anywhere through a **Cloudflare Tunnel** on your own domain.
 No ports to open, no cloud storage, no telemetry.
 
 > **Pairnets used to be called Tether.** Installing Pairnets takes over a Tether server and Tether
 > apps with everything they had (files, history, token, settings). Tether apps can't update
 > themselves into Pairnets, so install it by hand once: [Moving from Tether to Pairnets](docs/HOWTO.md#moving-from-tether-to-pairnets).
+=======
+small server you own on your **Tailscale** network. Your files never leave your own devices and
+your own server: no cloud storage, no telemetry. New computers join by signing in with your
+browser (a code you approve on **your own** server's website), not by copying secrets.
+>>>>>>> origin/claude/charming-johnson-fucgin
 
 * Work on the desktop: changes flow to the server within seconds.
 * Switch to the laptop: it catches up on start (new files, edits and deletions), then keeps syncing.
@@ -18,12 +24,21 @@ file it keeps both. Every overwritten or deleted file stays on the server for 30
 to act when something looks wrong (wrong folder, unplugged drive, many deletions at once).
 
 ```
+<<<<<<< HEAD
    Desktop PC                                  Ubuntu server (at home)                              Laptop PC
  ┌───────────────┐  HTTPS through Cloudflare   ┌──────────────────────┐  HTTPS through Cloudflare   ┌───────────────┐
  │ Pairnets tray │ ──────── + token ─────────▶ │ pairnets-server      │ ◀──────── + token ───────── │ Pairnets tray │
  │  D:\Work      │ ◀───── push "Changed" ───── │  files/  history/    │ ───── push "Changed" ─────▶ │  D:\Work      │
  └───────────────┘                             │  manifest.db         │                             └───────────────┘
                                                └──────────────────────┘
+=======
+   Desktop PC                         Ubuntu server                        Laptop PC
+ ┌─────────────┐   Tailscale (WireGuard)   ┌──────────────────────┐   Tailscale   ┌─────────────┐
+ │ Pairnets tray │ ────── HTTP + token ────▶ │ tether-server        │ ◀──────────── │ Pairnets tray │
+ │  D:\Work    │ ◀── push "Changed" ────── │  files/  history/    │ ────────────▶ │  D:\Work    │
+ └─────────────┘                           │  manifest.db         │               └─────────────┘
+                                           └──────────────────────┘
+>>>>>>> origin/claude/charming-johnson-fucgin
 ```
 
 **New here? Start with the step-by-step guide: [How to install Pairnets, and how it works](docs/HOWTO.md).**
@@ -61,8 +76,21 @@ It asks for the tunnel token and prints the **server URL** (`https://sync.exampl
 **token**. Save the token in your password manager; it is shown only once. Step by step, and what
 Cloudflare can see: [HOWTO sections 2 to 4](docs/HOWTO.md#2-create-a-cloudflare-tunnel).
 
+### Give the server a name (once, recommended)
+
+With a domain on Cloudflare, for example `pairnets.app`, the server becomes your **nest**,
+`nest.pairnets.app`, reachable only from your own Tailscale devices:
+
+```bash
+sudo ./install.sh --domain nest.pairnets.app
+```
+
+It prints a one-time link to set up the nest's website, where you approve new computers, see them
+and remove them. See [DEPLOY.md](docs/DEPLOY.md#your-nests-own-name-https).
+
 ### Each PC
 
+<<<<<<< HEAD
 1. Download `pairnets-client-win-x64.zip` from the [releases](https://github.com/MRnigth/Pairnets/releases)
    and extract `Pairnets.exe` to a permanent place, for example `%LocalAppData%\Programs\Pairnets`.
 2. Run it. In the setup window enter the server URL and token, choose the folder (for example
@@ -70,6 +98,17 @@ Cloudflare can see: [HOWTO sections 2 to 4](docs/HOWTO.md#2-create-a-cloudflare-
    **Start syncing**.
 3. Optional: tick **Start with Windows**.
 
+=======
+1. Turn on Tailscale and install Pairnets (see the table above).
+2. Open it, type your nest's name (`nest.pairnets.app`) and press **Sign in with your browser**.
+   Check that the code matches and press **Allow** on your nest's website.
+3. Choose the folder (for example `D:\Work`) and press **Start syncing**.
+
+No nest yet? Choose *Connect with server address and token instead*, enter the server URL and token
+printed by `install.sh`, and keep the device name (each PC must have its own). A computer set up
+that way switches to its own key by itself once your server has a nest.
+
+>>>>>>> origin/claude/charming-johnson-fucgin
 Pairnets has a window with a sidebar: **Overview** (status, a picture of this computer, the server
 and your other computer with files moving between them, the current transfer, facts and recent
 activity), **Activity** (by day), **History** (get back deleted files and older versions with one
@@ -106,11 +145,19 @@ in the background.
 
 | You see | What to do |
 |---------|-----------|
+<<<<<<< HEAD
 | Grey icon, "Offline" | The PC cannot reach the server. Check that the computer is online and that `sudo systemctl status pairnets-server pairnets-tunnel` shows both active. Pairnets retries by itself. Nothing is lost: local changes sync when it is back. |
 | "Cloudflare cannot reach your Pairnets server" / "blocked Pairnets with a browser check" | See [HOWTO section 4](docs/HOWTO.md#4-check-it-from-outside): the tunnel is down, or Bot Fight Mode is on for your domain. |
 | "The server rejected the token" | The token in Settings does not match `/etc/pairnets/pairnets.env` (it was rotated, or mistyped). Enter it again in **Settings**. Read it on the server with `sudo grep SYNC_TOKEN /etc/pairnets/pairnets.env`. |
 | "Deletions blocked" | A sync would delete many files. Right-click → **Allow these deletions…** shows exactly which ones. If that is not what you did, press No and check the folder; files are still on the server and in its history. |
 | "Folder is missing" / "no .pairnets-marker" | The drive is unplugged or the folder moved. Plug it in and **Sync now**, or use **Locate the sync folder…** to point Pairnets at its new location. |
+=======
+| Grey icon, "Offline" | The PC cannot reach the server. Check that Tailscale is connected on both machines and that `sudo systemctl status tether-server` is active. Pairnets retries by itself. Nothing is lost: local changes sync when it is back. |
+| "Signed out of your nest" | This computer was removed on your nest (or you pressed *Sign out of this computer*). Its files are untouched. Press **Sign in again…** (it opens the sign-in window) to continue. |
+| "The server rejected the token" | The token in Settings does not match `/etc/tether/tether.env` (it was rotated, or mistyped). Enter it again in **Settings**. Read it on the server with `sudo grep SYNC_TOKEN /etc/tether/tether.env`. |
+| "Deletions blocked" | A sync would delete many files. Right-click → **Allow these deletions…** shows exactly which ones. If that is not what you did, press No and check the folder; files are still on the server and in its history. |
+| "Folder is missing" / "no .tether-marker" | The drive is unplugged or the folder moved. Plug it in and **Sync now**, or use **Locate the sync folder…** to point Pairnets at its new location. |
+>>>>>>> origin/claude/charming-johnson-fucgin
 | "The server went back in time" / "not the one this folder was synced with" | The server was restored from a backup or reinstalled. Use **Re-link to this server…**: it merges without deleting or overwriting. |
 | A file named `… (conflict PC date time) …` appeared | Both PCs changed that file. Compare the two, keep the right content under the original name, delete the conflict copy. |
 | "Name collision" / "File name not allowed" | Two names differ only in letter case (`Report.txt` vs `report.txt`), a file and a folder have the same name, or a name is not valid on Windows (for example `CON.txt` or a trailing dot). Rename it; the **Needs attention** page lists them. |
@@ -139,7 +186,7 @@ rewrite:
   the download endpoint already supports HTTP Range)
 * more than two PCs used at the same time
 * end-to-end encryption at rest on the server
-* a web UI and mobile apps
+* a phone app (it will use the same sign-in as the computers: code, approve on the nest)
 
 ## License
 

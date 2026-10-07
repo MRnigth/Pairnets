@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>Security · Pairnets</title>
+<link rel="icon" href="/assets/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/assets/nest.css">
+<script src="/assets/nest.js" defer></script>
+</head>
+<body data-page="security">
+<header class="bar">
+  <a class="brand" href="/devices"><img src="/assets/logo.svg" alt=""><span>Pairnets <span class="where">· nest</span></span></a>
+  <nav class="nav">
+    <a href="/devices" data-nav="devices">Devices</a>
+    <a href="/security" data-nav="security">Security</a>
+  </nav>
+  <span class="spacer"></span>
+  <button class="flat" id="signout" type="button">Sign out</button>
+</header>
+<main>
+  <div class="head"><div class="grow"><h1>Security</h1><p class="muted">How you sign in to this nest, and who may sync.</p></div></div>
+  <div id="error" class="message error" role="alert" hidden></div>
+  <div id="notice" class="message ok" role="status" hidden></div>
+
+  <div class="section">
+    <h2>Sign-in methods</h2>
+    <div class="card">
+      <div class="row end"><button type="button" id="add-passkey" hidden>+ Add a passkey</button></div>
+      <ul class="list" id="methods">
+        <li id="password-row">
+          <div class="ring" data-icon="key"></div>
+          <div class="grow"><div class="title">Password</div><div class="detail" id="password-state">…</div></div>
+          <button type="button" id="password-change">Change</button>
+          <button type="button" class="flat" id="password-remove" hidden>Remove</button>
+        </li>
+        <li id="email-row">
+          <div class="ring" data-icon="mail"></div>
+          <div class="grow">
+            <div class="title">Email sign-in link</div>
+            <div class="detail" id="email-state">…</div>
+            <form id="email-form" class="row" hidden>
+              <input type="email" id="email-input" autocomplete="email" placeholder="you@example.com" required>
+              <button type="submit" class="accent" id="email-send">Send a confirmation link</button>
+            </form>
+          </div>
+          <button type="button" id="email-change" hidden>Change</button>
+          <button type="button" class="flat" id="email-remove" hidden>Turn off</button>
+        </li>
+        <li id="google-row">
+          <div class="ring" data-icon="globe"></div>
+          <div class="grow"><div class="title">Google</div><div class="detail" id="google-state">…</div></div>
+          <a class="button" id="google-connect" href="/auth/google/start?purpose=connect" hidden>Connect Google</a>
+          <button type="button" class="flat" id="google-remove" hidden>Disconnect</button>
+        </li>
+      </ul>
+      <p class="muted small">You can't remove the last way to sign in.</p>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>Where you're signed in</h2>
+    <div class="card"><ul class="list" id="sessions"></ul></div>
+  </div>
+
+  <div class="section">
+    <h2>Old shared token</h2>
+    <div class="card">
+      <label class="switch"><input type="checkbox" id="shared-token"><span class="track"></span><span>Computers can still connect with the old shared token</span></label>
+      <p class="muted small" id="shared-token-detail"></p>
+    </div>
+  </div>
+</main>
+
+<dialog id="password-dialog">
+  <h2 id="password-dialog-title">Change password</h2>
+  <form id="password-form">
+    <label class="field" id="current-field"><span>Current password</span><input type="password" id="current-password" autocomplete="current-password"></label>
+    <label class="field"><span>New password</span><input type="password" id="new-password" autocomplete="new-password" minlength="10" required></label>
+    <label class="field"><span>Type it again</span><input type="password" id="new-password-2" autocomplete="new-password" minlength="10" required></label>
+    <div id="password-error" class="message error" role="alert" hidden></div>
+    <div class="row end"><button type="button" data-close>Cancel</button><button type="submit" class="accent">Save</button></div>
+  </form>
+</dialog>
+</body>
+</html>

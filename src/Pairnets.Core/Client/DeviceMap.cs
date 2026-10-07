@@ -97,7 +97,7 @@ public sealed record DeviceMap(
             .ThenByDescending(d => d.LastSeen)
             .ToList();
         if (others.Count == 0)
-            return (new MapNode("Your other computer", "Not connected yet", NodeState.Unknown, "Install Pairnets on it and use the same server and token."), 0);
+            return (new MapNode("Your other computer", "Not connected yet", NodeState.Unknown, "Install Pairnets on it, type your nest's name and press Sign in. You approve it on your nest."), 0);
 
         var d = others[0];
         // A change that just arrived from it means it is online, even before the next poll says so.
