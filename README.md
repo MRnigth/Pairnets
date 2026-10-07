@@ -44,6 +44,9 @@ Or let Claude do it: copy a ready-made prompt from [Set Pairnets up with Claude]
 More detail: [Architecture](docs/ARCHITECTURE.md) · [Deploy](docs/DEPLOY.md) ·
 [Security](docs/SECURITY.md) · [Testing](docs/TESTING.md) · [Decisions](docs/DECISIONS.md)
 
+Contributing or picking up the project? Start with the [developer handbook](docs/dev/README.md)
+(current status, branch map, how it was built) and the [changelog](CHANGELOG.md).
+
 ## Quick start
 
 ### Server (once)
