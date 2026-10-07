@@ -1,26 +1,26 @@
 # Architecture
 
-Tether keeps one folder identical on two Windows PCs (used one at a time) through a small server
+Pairnets keeps one folder identical on two Windows PCs (used one at a time) through a small server
 on your Tailscale network, or reachable through a Cloudflare Tunnel (the server then listens on
 127.0.0.1 and `cloudflared` brings requests in over an outbound connection). This document explains
 how, and why it cannot silently overwrite your files.
 
 ```
- Desktop (Windows)                    Ubuntu server (Tailscale only)                Laptop (Windows)
- ┌───────────────────┐   HTTP + token   ┌──────────────────────────────┐   HTTP + token   ┌───────────────────┐
- │ Tether.Client     │ ───────────────▶ │ tether-server (ASP.NET Core) │ ◀─────────────── │ Tether.Client     │
- │  tray UI (thin)   │                  │  /api/*  + SignalR /hub      │                  │  tray UI (thin)   │
- │ Tether.Core       │ ◀── "Changed" ── │  manifest.db (SQLite)        │ ── "Changed" ──▶ │ Tether.Core       │
- │  engine, runner,  │    push          │  files/   current versions   │    push          │  engine, runner,  │
- │  state.db         │                  │  history/ old + deleted      │                  │  state.db         │
- └───────────────────┘                  └──────────────────────────────┘                  └───────────────────┘
+ Desktop (Windows)                      Ubuntu server (Tailscale or tunnel)                 Laptop (Windows)
+ ┌───────────────────┐   HTTP + token   ┌────────────────────────────────┐   HTTP + token   ┌───────────────────┐
+ │ Pairnets.Client   │ ───────────────▶ │ pairnets-server (ASP.NET Core) │ ◀─────────────── │ Pairnets.Client   │
+ │  tray UI (thin)   │                  │  /api/*  + SignalR /hub        │                  │  tray UI (thin)   │
+ │ Pairnets.Core     │ ◀── "Changed" ── │  manifest.db (SQLite)          │ ── "Changed" ──▶ │ Pairnets.Core     │
+ │  engine, runner,  │    push          │  files/   current versions     │    push          │  engine, runner,  │
+ │  state.db         │                  │  history/ old + deleted        │                  │  state.db         │
+ └───────────────────┘                  └────────────────────────────────┘                  └───────────────────┘
 ```
 
-* **Tether.Core** (net8.0, no UI): path rules, ignore list, hashing, the decision function, the
+* **Pairnets.Core** (net8.0, no UI): path rules, ignore list, hashing, the decision function, the
   client state database, the scanner, the HTTP client, the sync engine and the runner. Everything
   here runs and is tested on Linux.
-* **Tether.Server**: ASP.NET Core minimal API + SignalR, SQLite manifest, files on disk, systemd.
-* **Tether.Client**: WPF/WinForms tray app that only shows state and forwards clicks.
+* **Pairnets.Server**: ASP.NET Core minimal API + SignalR, SQLite manifest, files on disk, systemd.
+* **Pairnets.Client**: WPF/WinForms tray app that only shows state and forwards clicks.
 
 ## The three-hash algorithm
 
@@ -34,7 +34,7 @@ For every path the engine computes three SHA-256 hashes (null = absent or delete
 
 `SyncDecision.Decide(L, S, B)` is a pure function. Every reachable case
 (15 equality patterns, covering all 64 combinations of null/a/b/c) is listed here and tested
-exhaustively in `tests/Tether.Tests/Unit/DecideTableTests.cs`:
+exhaustively in `tests/Pairnets.Tests/Unit/DecideTableTests.cs`:
 
 | L | S | B | Action | Why |
 |---|---|---|--------|-----|
@@ -71,7 +71,7 @@ Mtimes never decide anything; they only let the scanner skip re-hashing unchange
 
 ## Client state database
 
-`%LocalAppData%\Tether\<hash of folder path>\state.db` (SQLite, WAL, `synchronous=FULL`):
+`%LocalAppData%\Pairnets\<hash of folder path>\state.db` (SQLite, WAL, `synchronous=FULL`):
 
 | Table | Content |
 |-------|---------|
@@ -83,7 +83,7 @@ Mtimes never decide anything; they only let the scanner skip re-hashing unchange
 
 ## A sync pass
 
-1. **Preflight** (nothing is touched if any check fails): folder exists; `.tether-marker` exists and
+1. **Preflight** (nothing is touched if any check fails): folder exists; `.pairnets-marker` exists and
    matches the state; the folder is not empty while state tracks files; the server id is the one
    this folder was synced with and its version did not go backwards (restored backup).
 2. **Server manifest**: full on startup, manual and periodic passes; delta (`since`) otherwise.
@@ -97,7 +97,7 @@ Mtimes never decide anything; they only let the scanner skip re-hashing unchange
 6. **Execute** (deletes first, then conflicts, uploads, downloads). Per-file errors are isolated;
    network or auth errors abort the pass and the runner retries with backoff.
 
-Downloads stream to `.tether-tmp\<guid>.part`, are verified against the server hash and length,
+Downloads stream to `.pairnets-tmp\<guid>.part`, are verified against the server hash and length,
 get the server's mtime and then atomically replace the target. The recorded base is the hash of
 what was actually downloaded. Uploads stream from a `FileShare.ReadWrite|Delete` handle; the base
 becomes the hash the server returns.
@@ -114,7 +114,7 @@ retry after 2, 5, 10, 30, 60 s; SignalR reconnects forever (0, 2, 5, 10, 30 s).
 
 ## Server
 
-Storage under `DataDir` (default `/var/lib/tether`):
+Storage under `DataDir` (default `/var/lib/pairnets`):
 
 ```
 files/      current version of every file (same relative paths as the clients)
@@ -160,8 +160,8 @@ All endpoints except health need the token (`X-Sync-Token`, `Authorization: Bear
 |---------------|--------|
 | `GET /api/health` | `200 ok` (no auth) |
 | `GET /api/info` | `{serverId, version, apiVersion}` (used by "Test connection") |
-| `GET /api/manifest[?since=v]` | `[{path,hash,size,modifiedMs,deleted,version}]`; headers `X-Tether-Server-Id`, `X-Tether-Version` |
-| `GET /api/file?path=` | file stream with `ETag`, `X-Tether-Hash`, `X-Tether-Modified-Ms`, Range support; 404 if absent/deleted |
+| `GET /api/manifest[?since=v]` | `[{path,hash,size,modifiedMs,deleted,version}]`; headers `X-Pairnets-Server-Id`, `X-Pairnets-Version` |
+| `GET /api/file?path=` | file stream with `ETag`, `X-Pairnets-Hash`, `X-Pairnets-Modified-Ms`, Range support; 404 if absent/deleted |
 | `PUT /api/file?path=&base=&mtime=` | 200 entry · 409 `conflict` · 409 `case-collision` · 400 `invalid-name` · 401 |
 | `POST /api/upload?path=&base=&size=&mtime=` | 201 `{id, received: 0}` · the same 400/409 as PUT · 503 `busy` (64 uploads open) |
 | `PUT /api/upload/{id}?offset=` | piece of at most 64 MiB: 200 `{id, received}` · 409 `upload-offset` (offset is not where the server's copy ends) · 413 `too-large` · 404 unknown or expired |
@@ -171,7 +171,7 @@ All endpoints except health need the token (`X-Sync-Token`, `Authorization: Bear
 | `DELETE /api/file?path=&base=` | 200 tombstone (idempotent) · 409 `conflict` · 404 never existed |
 | `GET /api/history?path=` | `[{id, storedAtUtc, size, hash8}]` newest first |
 | `POST /api/history/restore?path=&id=` | restores the version as a normal new version |
-| `GET /api/devices` | `[{name, firstSeen, lastSeen, online, appVersion, system, lastChange}]`: every computer that sent an authenticated request (`X-Device-Id`, plus `X-Tether-Client` such as "1.0.38; Windows"); `online` while its push channel is open or it was seen in the last 2 minutes |
+| `GET /api/devices` | `[{name, firstSeen, lastSeen, online, appVersion, system, lastChange}]`: every computer that sent an authenticated request (`X-Device-Id`, plus `X-Pairnets-Client` such as "1.0.38; Windows"); `online` while its push channel is open or it was seen in the last 2 minutes |
 | `/hub` (SignalR) | server → clients: `Changed(deviceId, path)` |
 
 Every response carries `Cache-Control: no-store, no-transform`, so a proxy in between (Cloudflare)

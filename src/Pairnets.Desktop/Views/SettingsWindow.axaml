@@ -1,0 +1,9 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:v="using:Pairnets.Desktop.Views"
+        x:Class="Pairnets.Desktop.Views.SettingsWindow"
+        Title="Pairnets" Width="620" Height="780" MinHeight="420" CanResize="True"
+        WindowStartupLocation="CenterScreen" Icon="avares://Pairnets/Assets/pairnets-icon-256.png">
+  <!-- First-time setup (later, Settings is a page of the main window). The form is SettingsView. -->
+  <ContentControl x:Name="Host" />
+</Window>

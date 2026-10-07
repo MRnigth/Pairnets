@@ -1,6 +1,6 @@
 # Testing
 
-All tests are xunit tests in `tests/Tether.Tests`. The real server runs **in-process** on a
+All tests are xunit tests in `tests/Pairnets.Tests`. The real server runs **in-process** on a
 random localhost port with temporary directories. No network, Tailscale or Windows machine is
 needed, except for the Windows CI job, which runs the same suite on NTFS.
 
@@ -9,11 +9,11 @@ dotnet test                                    # everything (30 convergence seed
 dotnet test --filter "FullyQualifiedName~Unit"
 dotnet test --filter "FullyQualifiedName~Integration"
 dotnet test --filter "FullyQualifiedName~Faults"
-TETHER_CONVERGENCE_SEEDS=250 dotnet test --filter "FullyQualifiedName~Convergence"
+PAIRNETS_CONVERGENCE_SEEDS=250 dotnet test --filter "FullyQualifiedName~Convergence"
 ```
 
 The Windows client (`net8.0-windows`) builds on Linux because its project sets
-`EnableWindowsTargeting=true`. Its logic lives in Tether.Core and is tested there. The tray UI
+`EnableWindowsTargeting=true`. Its logic lives in Pairnets.Core and is tested there. The tray UI
 itself only runs on Windows.
 
 ## What is covered

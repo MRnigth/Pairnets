@@ -1,8 +1,8 @@
-Tether for Windows
+Pairnets for Windows
 ==================
 
-1. Put Tether.exe in a permanent place, for example
-   %LocalAppData%\Programs\Tether\Tether.exe
+1. Put Pairnets.exe in a permanent place, for example
+   %LocalAppData%\Programs\Pairnets\Pairnets.exe
 2. Run it. Enter:
    - Server URL: http://<server-tailscale-ip>:5075/  (printed by install.sh on the server)
    - Token:      printed by install.sh on the server
@@ -11,7 +11,7 @@ Tether for Windows
    Press "Test connection", then "Start syncing".
 3. Optional: right-click the tray icon and tick "Start with Windows".
 
-Tether runs in the notification area. Logs: %LocalAppData%\Tether\logs
-Settings: %AppData%\Tether\settings.json (the token is encrypted with Windows DPAPI).
+Pairnets runs in the notification area. Logs: %LocalAppData%\Pairnets\logs
+Settings: %AppData%\Pairnets\settings.json (the token is encrypted with Windows DPAPI).
 
-Full documentation: https://github.com/MRnigth/Tether#readme
+Full documentation: https://github.com/MRnigth/Pairnets#readme

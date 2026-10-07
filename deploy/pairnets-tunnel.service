@@ -1,0 +1,44 @@
+[Unit]
+Description=Cloudflare Tunnel for Pairnets (reach the server without Tailscale or open ports)
+Documentation=https://github.com/MRnigth/Pairnets/blob/main/docs/DEPLOY.md
+After=network-online.target pairnets-server.service
+Wants=network-online.target
+
+[Service]
+# cloudflared only makes outbound connections to Cloudflare and forwards what arrives for the tunnel's
+# public hostname to http://localhost:5075. The tunnel token is read from /etc/pairnets/tunnel.env
+# (root only), not from this file, which every local user can read.
+Type=notify
+EnvironmentFile=/etc/pairnets/tunnel.env
+ExecStart=/usr/bin/cloudflared --no-autoupdate tunnel run
+Restart=on-failure
+RestartSec=5
+
+# --- Hardening ---
+DynamicUser=yes
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=invisible
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+RestrictNamespaces=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+RemoveIPC=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

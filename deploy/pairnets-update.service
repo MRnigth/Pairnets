@@ -1,0 +1,14 @@
+[Unit]
+Description=Pairnets server self-update (started by pairnets-update.path)
+Documentation=https://github.com/MRnigth/Pairnets/blob/main/docs/DEPLOY.md
+After=network-online.target
+Wants=network-online.target
+# Runs only for a waiting request (the timer fallback starts it every 2 minutes), and is never
+# disabled by systemd's start limit, however often it ran.
+ConditionPathExists=/var/lib/pairnets/update/request
+StartLimitIntervalSec=0
+
+[Service]
+Type=oneshot
+ExecStart=/opt/pairnets/update.sh
+TimeoutStartSec=15min

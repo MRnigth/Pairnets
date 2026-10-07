@@ -10,7 +10,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\Tether.Client\Tether.Client.csproj" />
+    <ProjectReference Include="..\..\src\Pairnets.Client\Pairnets.Client.csproj" />
   </ItemGroup>
 
 </Project>

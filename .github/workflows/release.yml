@@ -37,24 +37,24 @@ jobs:
         run: |
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"; else echo "version=1.0.${{ github.run_number }}" >> "$GITHUB_OUTPUT"; fi
       - name: Test
-        run: dotnet test Tether.sln -c Release
+        run: dotnet test Pairnets.sln -c Release
       - name: Publish
         run: >
-          dotnet publish src/Tether.Server/Tether.Server.csproj -c Release -r linux-x64 --self-contained true
+          dotnet publish src/Pairnets.Server/Pairnets.Server.csproj -c Release -r linux-x64 --self-contained true
           -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=false -p:DebugType=none
-          -p:Version=${{ steps.v.outputs.version }} -o dist/tether-server-linux-x64
+          -p:Version=${{ steps.v.outputs.version }} -o dist/pairnets-server-linux-x64
       - name: Package
         run: |
-          cp deploy/install.sh deploy/update.sh deploy/tether-server.service deploy/tether-update.service deploy/tether-update.path deploy/tether-update.timer \
-             deploy/tether-tunnel.service deploy/tether.env.example deploy/tailscale-acl.hujson dist/tether-server-linux-x64/
-          echo "${{ steps.v.outputs.version }}" > dist/tether-server-linux-x64/VERSION
-          cp docs/DEPLOY.md dist/tether-server-linux-x64/DEPLOY.md
-          chmod +x dist/tether-server-linux-x64/install.sh dist/tether-server-linux-x64/update.sh dist/tether-server-linux-x64/tether-server
-          tar -C dist -czf dist/tether-server-linux-x64.tar.gz tether-server-linux-x64
+          cp deploy/install.sh deploy/update.sh deploy/pairnets-server.service deploy/pairnets-update.service deploy/pairnets-update.path deploy/pairnets-update.timer \
+             deploy/pairnets-tunnel.service deploy/pairnets.env.example deploy/tailscale-acl.hujson dist/pairnets-server-linux-x64/
+          echo "${{ steps.v.outputs.version }}" > dist/pairnets-server-linux-x64/VERSION
+          cp docs/DEPLOY.md dist/pairnets-server-linux-x64/DEPLOY.md
+          chmod +x dist/pairnets-server-linux-x64/install.sh dist/pairnets-server-linux-x64/update.sh dist/pairnets-server-linux-x64/pairnets-server
+          tar -C dist -czf dist/pairnets-server-linux-x64.tar.gz pairnets-server-linux-x64
       - uses: actions/upload-artifact@v4
         with:
           name: server
-          path: dist/tether-server-linux-x64.tar.gz
+          path: dist/pairnets-server-linux-x64.tar.gz
 
   client:
     name: Client (win-x64)
@@ -71,7 +71,7 @@ jobs:
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"; else echo "version=1.0.${{ github.run_number }}" >> "$GITHUB_OUTPUT"; fi
       - name: Publish
         run: >
-          dotnet publish src/Tether.Client/Tether.Client.csproj -c Release -r win-x64 --self-contained true
+          dotnet publish src/Pairnets.Client/Pairnets.Client.csproj -c Release -r win-x64 --self-contained true
           -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none
           -p:Version=${{ steps.v.outputs.version }} -o publish/client
       - name: Zip
@@ -79,14 +79,14 @@ jobs:
         run: |
           Copy-Item deploy/README-client.txt publish/client/
           New-Item -ItemType Directory -Force dist | Out-Null
-          Compress-Archive -Path publish/client/Tether.exe, publish/client/README-client.txt -DestinationPath dist/tether-client-win-x64.zip
+          Compress-Archive -Path publish/client/Pairnets.exe, publish/client/README-client.txt -DestinationPath dist/pairnets-client-win-x64.zip
       - name: Installer (optional)
         continue-on-error: true
         shell: pwsh
         run: |
           $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
           if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress | Out-Null }
-          & $iscc "/DAppVersion=${{ steps.v.outputs.version }}" "/DSourceDir=$PWD\publish\client" "/O$PWD\dist" deploy\installer\tether.iss
+          & $iscc "/DAppVersion=${{ steps.v.outputs.version }}" "/DSourceDir=$PWD\publish\client" "/O$PWD\dist" deploy\installer\pairnets.iss
           if ($LASTEXITCODE -ne 0) { throw "ISCC failed" }
       - uses: actions/upload-artifact@v4
         with:
@@ -108,19 +108,19 @@ jobs:
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"; else echo "version=1.0.${{ github.run_number }}" >> "$GITHUB_OUTPUT"; fi
       - name: Publish
         run: >
-          dotnet publish src/Tether.Desktop/Tether.Desktop.csproj -c Release -r linux-x64 --self-contained true
+          dotnet publish src/Pairnets.Desktop/Pairnets.Desktop.csproj -c Release -r linux-x64 --self-contained true
           -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none
-          -p:Version=${{ steps.v.outputs.version }} -o dist/tether-desktop-linux-x64
+          -p:Version=${{ steps.v.outputs.version }} -o dist/pairnets-desktop-linux-x64
       - name: Package
         run: |
-          cp deploy/linux-desktop/install-desktop.sh dist/tether-desktop-linux-x64/
-          cp assets/tether-icon-256.png dist/tether-desktop-linux-x64/tether.png
-          chmod +x dist/tether-desktop-linux-x64/install-desktop.sh dist/tether-desktop-linux-x64/Tether
-          tar -C dist -czf dist/tether-desktop-linux-x64.tar.gz tether-desktop-linux-x64
+          cp deploy/linux-desktop/install-desktop.sh dist/pairnets-desktop-linux-x64/
+          cp assets/pairnets-icon-256.png dist/pairnets-desktop-linux-x64/pairnets.png
+          chmod +x dist/pairnets-desktop-linux-x64/install-desktop.sh dist/pairnets-desktop-linux-x64/Pairnets
+          tar -C dist -czf dist/pairnets-desktop-linux-x64.tar.gz pairnets-desktop-linux-x64
       - uses: actions/upload-artifact@v4
         with:
           name: desktop-linux
-          path: dist/tether-desktop-linux-x64.tar.gz
+          path: dist/pairnets-desktop-linux-x64.tar.gz
 
   macos:
     name: Desktop app (macOS)
@@ -139,7 +139,7 @@ jobs:
         run: |
           mkdir -p dist
           for arch in arm64 x64; do
-            dotnet publish src/Tether.Desktop/Tether.Desktop.csproj -c Release -r osx-$arch --self-contained true \
+            dotnet publish src/Pairnets.Desktop/Pairnets.Desktop.csproj -c Release -r osx-$arch --self-contained true \
               -p:DebugType=none -p:Version=${{ steps.v.outputs.version }} -o publish/mac-$arch
             bash deploy/macos/make-app.sh publish/mac-$arch ${{ steps.v.outputs.version }} $arch dist
           done
@@ -177,7 +177,7 @@ jobs:
           if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release upload "$GITHUB_REF_NAME" assets/* --repo "$GITHUB_REPOSITORY" --clobber
           else
-            gh release create "$GITHUB_REF_NAME" assets/* --repo "$GITHUB_REPOSITORY" --title "Tether $GITHUB_REF_NAME" --generate-notes
+            gh release create "$GITHUB_REF_NAME" assets/* --repo "$GITHUB_REPOSITORY" --title "Pairnets $GITHUB_REF_NAME" --generate-notes
           fi
 
   latest:
@@ -213,9 +213,9 @@ jobs:
             --title "Latest build" \
             --notes "Built automatically from the newest commit on main (${GITHUB_SHA::7}).
 
-          * Windows: TetherSetup.exe (installer) or tether-client-win-x64.zip (just Tether.exe)
-          * Mac: Tether-macos-arm64.dmg (Apple silicon) or Tether-macos-x64.dmg (Intel)
-          * Linux desktop: tether-desktop-linux-x64.tar.gz
-          * Server: tether-server-linux-x64.tar.gz
+          * Windows: PairnetsSetup.exe (installer) or pairnets-client-win-x64.zip (just Pairnets.exe)
+          * Mac: Pairnets-macos-arm64.dmg (Apple silicon) or Pairnets-macos-x64.dmg (Intel)
+          * Linux desktop: pairnets-desktop-linux-x64.tar.gz
+          * Server: pairnets-server-linux-x64.tar.gz
 
           Check downloads against SHA256SUMS.txt."

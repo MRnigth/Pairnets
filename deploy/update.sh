@@ -1,21 +1,21 @@
 #!/usr/bin/env bash
-# Tether server self-update, run as root by tether-update.service when the server (which has no
-# root rights) creates /var/lib/tether/update/request after an app asked for an update.
+# Pairnets server self-update, run as root by pairnets-update.service when the server (which has no
+# root rights) creates /var/lib/pairnets/update/request after an app asked for an update.
 #
 # It only ever installs the newest official release from the fixed GitHub address below,
 # verifies it against SHA256SUMS.txt, refuses the same or an older version, and then runs that
 # release's install.sh (which keeps the token, address and data). The request file's content is
-# never read. Progress goes to /var/lib/tether/update/status.json for the apps to show, and every
-# run is logged to /var/lib/tether/update/update.log, which the apps show in Debug mode.
+# never read. Progress goes to /var/lib/pairnets/update/status.json for the apps to show, and every
+# run is logged to /var/lib/pairnets/update/update.log, which the apps show in Debug mode.
 #
-# Testing: TETHER_BASE_URL=<folder or url> TETHER_UPDATE_DIR=<dir> TETHER_INSTALL_DIR=<dir>
-#          TETHER_UPDATE_DRY_RUN=1 skips running install.sh.
+# Testing: PAIRNETS_BASE_URL=<folder or url> PAIRNETS_UPDATE_DIR=<dir> PAIRNETS_INSTALL_DIR=<dir>
+#          PAIRNETS_UPDATE_DRY_RUN=1 skips running install.sh.
 set -Eeuo pipefail
 
-BASE_URL="${TETHER_BASE_URL:-https://github.com/MRnigth/Tether/releases/latest/download}"
-UPDATE_DIR="${TETHER_UPDATE_DIR:-/var/lib/tether/update}"
-INSTALL_DIR="${TETHER_INSTALL_DIR:-/opt/tether}"
-ASSET=tether-server-linux-x64.tar.gz
+BASE_URL="${PAIRNETS_BASE_URL:-https://github.com/MRnigth/Pairnets/releases/latest/download}"
+UPDATE_DIR="${PAIRNETS_UPDATE_DIR:-/var/lib/pairnets/update}"
+INSTALL_DIR="${PAIRNETS_INSTALL_DIR:-/opt/pairnets}"
+ASSET=pairnets-server-linux-x64.tar.gz
 MIN_INTERVAL=600 # seconds between attempts
 
 REQUEST="$UPDATE_DIR/request"
@@ -35,7 +35,7 @@ status() { # status <state> <message>
   local tmp="$STATUS.tmp"
   printf '{"state":"%s","message":"%s","at":"%s"}\n' "$1" "$(json_escape "$2")" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$tmp"
   chmod 0644 "$tmp"
-  if id tether >/dev/null 2>&1; then chown tether:tether "$tmp" 2>/dev/null || true; fi
+  if id pairnets >/dev/null 2>&1; then chown pairnets:pairnets "$tmp" 2>/dev/null || true; fi
   mv -f "$tmp" "$STATUS"
   log "status: $1 - $2"
 }
@@ -57,7 +57,7 @@ mkdir -p "$UPDATE_DIR"
 if [[ -f "$LOG" ]] && (( $(wc -c < "$LOG") > LOG_MAX )); then mv -f "$LOG" "$LOG.1"; fi
 touch "$LOG"
 chmod 0644 "$LOG"
-if id tether >/dev/null 2>&1; then chown tether:tether "$LOG" 2>/dev/null || true; fi
+if id pairnets >/dev/null 2>&1; then chown pairnets:pairnets "$LOG" 2>/dev/null || true; fi
 exec >>"$LOG" 2>&1
 
 installed="$(tr -d '[:space:]' < "$INSTALL_DIR/VERSION" 2>/dev/null || echo unknown)"
@@ -96,7 +96,7 @@ fi
 log "checksum OK"
 
 tar -xzf "$WORK/$ASSET" -C "$WORK"
-SRC="$WORK/tether-server-linux-x64"
+SRC="$WORK/pairnets-server-linux-x64"
 new="$(tr -d '[:space:]' < "$SRC/VERSION" 2>/dev/null || true)"
 old="$(tr -d '[:space:]' < "$INSTALL_DIR/VERSION" 2>/dev/null || echo 0)"
 log "installed version $old, newest release ${new:-<none>}"
@@ -110,7 +110,7 @@ if [[ "$new" == "$old" ]] || [[ "$(printf '%s\n%s\n' "$old" "$new" | sort -V | t
 fi
 
 status running "Installing $new"
-if [[ -n "${TETHER_UPDATE_DRY_RUN:-}" ]]; then
+if [[ -n "${PAIRNETS_UPDATE_DRY_RUN:-}" ]]; then
   status succeeded "Would install $new (dry run)."
   exit 0
 fi

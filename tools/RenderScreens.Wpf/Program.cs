@@ -2,14 +2,14 @@ using System.IO;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
-using Tether.Client.Themes;
-using Tether.Client.Ui;
-using Tether.Core;
-using Tether.Core.Client;
-using Tether.Core.Settings;
-using Tether.Core.Sync;
+using Pairnets.Client.Themes;
+using Pairnets.Client.Ui;
+using Pairnets.Core;
+using Pairnets.Core.Client;
+using Pairnets.Core.Settings;
+using Pairnets.Core.Sync;
 
-namespace Tether.Tools;
+namespace Pairnets.Tools;
 
 /// <summary>
 /// Renders the Windows main and settings windows (light and dark) with sample data to PNG files.
@@ -114,7 +114,7 @@ public static class Program
             new("DESKTOP", utc.AddDays(-30), utc, true, "1.0.58", "Windows"),
             new("LAPTOP", utc.AddDays(-30), utc, true, "1.0.58", "Windows"),
         ];
-        window.ShowUpdate("Tether 1.0.58 is available", "You have 1.0.52. It takes about 10 seconds and Tether restarts by itself.", "Update now");
+        window.ShowUpdate("Pairnets 1.0.58 is available", "You have 1.0.52. It takes about 10 seconds and Pairnets restarts by itself.", "Update now");
         window.ShowStatus(StatusSnapshot.Initial with
         {
             Status = RunnerStatus.Syncing, Text = "Syncing", LastSyncAt = now.AddMinutes(-1),

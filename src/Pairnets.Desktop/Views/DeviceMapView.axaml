@@ -1,0 +1,115 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:v="using:Pairnets.Desktop.Views"
+             x:Class="Pairnets.Desktop.Views.DeviceMapView">
+  <!-- This computer ⇄ server ⇄ the other computer. Compact (tray panel) shrinks everything. -->
+  <UserControl.Styles>
+    <Style Selector="Panel.node">
+      <Setter Property="Width" Value="60" />
+      <Setter Property="Height" Value="60" />
+    </Style>
+    <Style Selector="Grid#Root.compact Panel.node">
+      <Setter Property="Width" Value="42" />
+      <Setter Property="Height" Value="42" />
+    </Style>
+    <Style Selector="Panel.node.hub">
+      <Setter Property="Width" Value="68" />
+      <Setter Property="Height" Value="68" />
+    </Style>
+    <Style Selector="Grid#Root.compact Panel.node.hub">
+      <Setter Property="Width" Value="46" />
+      <Setter Property="Height" Value="46" />
+    </Style>
+    <Style Selector="v|LineIcon.glyph">
+      <Setter Property="Width" Value="26" />
+      <Setter Property="Height" Value="26" />
+      <Setter Property="StrokeThickness" Value="1.9" />
+    </Style>
+    <Style Selector="Grid#Root.compact v|LineIcon.glyph">
+      <Setter Property="Width" Value="19" />
+      <Setter Property="Height" Value="19" />
+    </Style>
+    <Style Selector="Ellipse.dot">
+      <Setter Property="Width" Value="15" />
+      <Setter Property="Height" Value="15" />
+    </Style>
+    <Style Selector="Grid#Root.compact Ellipse.dot">
+      <Setter Property="Width" Value="12" />
+      <Setter Property="Height" Value="12" />
+    </Style>
+    <Style Selector="v|FlowLine">
+      <Setter Property="Height" Value="14" />
+      <Setter Property="Margin" Value="-38,23,-38,0" />
+      <Setter Property="VerticalAlignment" Value="Top" />
+    </Style>
+    <Style Selector="v|FlowLine.mid">
+      <Setter Property="Margin" Value="-34,27,-34,0" />
+    </Style>
+    <Style Selector="Grid#Root.compact v|FlowLine">
+      <Setter Property="Margin" Value="-22,14,-22,0" />
+    </Style>
+    <Style Selector="Grid#Root.compact v|FlowLine.mid">
+      <Setter Property="Margin" Value="-20,16,-20,0" />
+    </Style>
+    <Style Selector="TextBlock.name">
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="HorizontalAlignment" Value="Center" />
+      <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+      <Setter Property="Margin" Value="0,8,0,0" />
+    </Style>
+    <Style Selector="Grid#Root.compact TextBlock.name">
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Margin" Value="0,5,0,0" />
+    </Style>
+    <Style Selector="TextBlock.detail">
+      <Setter Property="Foreground" Value="{DynamicResource T.Muted}" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="HorizontalAlignment" Value="Center" />
+      <Setter Property="TextAlignment" Value="Center" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+      <Setter Property="MaxHeight" Value="34" />
+      <Setter Property="Margin" Value="4,1,4,0" />
+    </Style>
+    <Style Selector="Grid#Root.compact TextBlock.detail">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="MaxHeight" Value="30" />
+    </Style>
+  </UserControl.Styles>
+
+  <Grid x:Name="Root" ColumnDefinitions="150,*,150,*,150">
+    <!-- Lines first, so the circles sit on top of their ends. -->
+    <v:FlowLine x:Name="HereLine" Grid.Column="1" />
+    <v:FlowLine x:Name="OtherLine" Grid.Column="3" ServerOnLeft="True" />
+
+    <StackPanel Grid.Column="0" HorizontalAlignment="Stretch">
+      <Panel Classes="node" HorizontalAlignment="Center">
+        <Ellipse x:Name="HereRing" Classes="ring" />
+        <v:LineIcon x:Name="HereIcon" Classes="icon glyph" Data="{StaticResource I.Laptop}" />
+        <Ellipse x:Name="HereDot" Classes="dot" Fill="{StaticResource S.Green}" HorizontalAlignment="Right" VerticalAlignment="Bottom" />
+      </Panel>
+      <TextBlock x:Name="HereName" Classes="name" />
+      <TextBlock x:Name="HereDetail" Classes="detail" />
+    </StackPanel>
+
+    <StackPanel Grid.Column="2" HorizontalAlignment="Stretch">
+      <Panel Classes="node hub" HorizontalAlignment="Center">
+        <Ellipse x:Name="ServerRing" Classes="ring" />
+        <v:LineIcon x:Name="ServerIcon" Classes="icon glyph" Data="{StaticResource I.Server}" />
+        <Ellipse x:Name="ServerDot" Classes="dot" Fill="{StaticResource S.Green}" HorizontalAlignment="Right" VerticalAlignment="Bottom" />
+      </Panel>
+      <TextBlock x:Name="ServerName" Classes="name" />
+      <TextBlock x:Name="ServerDetail" Classes="detail" />
+    </StackPanel>
+
+    <StackPanel Grid.Column="4" HorizontalAlignment="Stretch">
+      <Panel Classes="node" HorizontalAlignment="Center">
+        <Ellipse x:Name="OtherRing" Classes="ring" />
+        <v:LineIcon x:Name="OtherIcon" Classes="icon glyph" Data="{StaticResource I.Computer}" />
+        <Ellipse x:Name="OtherDot" Classes="dot" Fill="{StaticResource S.Green}" HorizontalAlignment="Right" VerticalAlignment="Bottom" />
+      </Panel>
+      <TextBlock x:Name="OtherName" Classes="name" />
+      <TextBlock x:Name="OtherDetail" Classes="detail" />
+      <TextBlock x:Name="OtherMore" Classes="detail" IsVisible="False" />
+    </StackPanel>
+  </Grid>
+</UserControl>

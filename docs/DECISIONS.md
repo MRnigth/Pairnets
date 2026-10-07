@@ -1,6 +1,6 @@
 # Decisions
 
-Judgment calls made while building Tether v1, and why. The guiding rule: when in doubt, choose
+Judgment calls made while building Pairnets v1, and why. The guiding rule: when in doubt, choose
 what cannot lose or silently overwrite data.
 
 ## Setup and placeholders
@@ -10,7 +10,7 @@ what cannot lose or silently overwrite data.
   design assumes about 20 GB with single files of several GB, so everything is streamed and never
   buffered in memory.
 * **Missing `.gitignore`.** The repo contained only `LICENSE`, so the standard Visual Studio
-  `.gitignore` (`dotnet new gitignore`) was added along with Tether's exclusions.
+  `.gitignore` (`dotnet new gitignore`) was added along with Pairnets's exclusions.
 * **Branches.** Work is committed on a feature branch and each milestone is pushed to `main`, as
   requested.
 * **.NET SDK on the build machine.** Ubuntu's own `dotnet-sdk-8.0` package lacks the WindowsDesktop
@@ -32,7 +32,7 @@ what cannot lose or silently overwrite data.
   offers "Re-link". Re-link forgets all bases, so the next pass merges like a first sync, which
   never deletes or overwrites. This was not in the spec but closes a real overwrite path
   (stale server content would otherwise look like "only the server changed").
-* **Foreign marker.** A folder with a `.tether-marker` but no matching state is blocked until the
+* **Foreign marker.** A folder with a `.pairnets-marker` but no matching state is blocked until the
   user confirms (folder moved, or state reset), instead of silently resyncing.
 * **Locked or fresh files** are "unknown" for the pass, never "deleted". The same applies to
   folders that cannot be listed.
@@ -115,10 +115,10 @@ what cannot lose or silently overwrite data.
 
 ## Mac and Linux desktop apps (added after v1 scope)
 
-* **Separate Avalonia app (`src/Tether.Desktop`) for macOS and Linux; Windows keeps the WPF app.**
+* **Separate Avalonia app (`src/Pairnets.Desktop`) for macOS and Linux; Windows keeps the WPF app.**
   This was your choice. WPF only runs on Windows, and Avalonia (MIT, a mature .NET cross-platform UI)
   is the closest equivalent. Avalonia is the only third-party runtime dependency. All sync logic
-  and the window state (`ClientSession`, `ActivityFeed`, `StatusSnapshot`) live in Tether.Core, so
+  and the window state (`ClientSession`, `ActivityFeed`, `StatusSnapshot`) live in Pairnets.Core, so
   both UIs stay thin and behave the same.
 * **Token storage per OS.** Windows: DPAPI. macOS: the login Keychain through the Security framework
   (the token never appears on a command line). Linux: the desktop keyring through `secret-tool`
@@ -143,7 +143,7 @@ what cannot lose or silently overwrite data.
 * **Main window.** The apps now open a window (status, progress, activity, needs attention) in
   addition to the tray/menu-bar icon. Closing it keeps syncing in the background.
 * **Screenshots** in `docs/images` are rendered by a headless UI test
-  (`TETHER_SCREENSHOT_DIR=... dotnet test --filter DesktopUi`).
+  (`PAIRNETS_SCREENSHOT_DIR=... dotnet test --filter DesktopUi`).
 * **Rolling "latest" release.** Every push to `main` deletes and recreates one release, tagged
   `latest` and titled "Latest build", with the packages from that commit. The download links in the
   README and HOWTO (`releases/download/latest/<file>`) therefore always give the newest build
@@ -177,7 +177,7 @@ what cannot lose or silently overwrite data.
   folder stay at the top right; the log and bug report moved into a "⋯" menu. The app update is a
   card at the bottom of the sidebar instead of a banner over everything. Settings is a page; the
   first-time setup keeps its own window. Both apps (WPF and Avalonia) share the design, and all the
-  logic behind it (the map, history lists, activity by day) is in Tether.Core.
+  logic behind it (the map, history lists, activity by day) is in Pairnets.Core.
 * **"This computer ⇄ server ⇄ other computer".** The overview draws the computers from the same
   list as the Devices page (`GET /api/devices`, kept by the server in `devices.json`), so it can show
   the other computer as online or "last seen 3 h ago", and animates files moving from this computer's
@@ -201,12 +201,12 @@ what cannot lose or silently overwrite data.
   and the PCs need nothing installed. The cost: Cloudflare ends HTTPS at its edge and can see the
   traffic, and the server is reachable from the internet (the token is the gate). Both are spelled
   out in SECURITY.md and HOWTO 4b.
-* **Our own `tether-tunnel.service` instead of `cloudflared service install <token>`.** The official
+* **Our own `pairnets-tunnel.service` instead of `cloudflared service install <token>`.** The official
   command puts the tunnel token in a world-readable unit file and on a command line. Ours reads it
-  from `/etc/tether/tunnel.env` (root, 600) and runs cloudflared as a dynamic unprivileged user.
+  from `/etc/pairnets/tunnel.env` (root, 600) and runs cloudflared as a dynamic unprivileged user.
   cloudflared comes from Cloudflare's signed apt repository, so it updates with the system.
 * **Uploads in pieces of at most 50 MiB.** Cloudflare's free and Pro plans refuse request bodies
-  over 100 MB (413), and Tether syncs multi-GB files. 50 MiB leaves room for headers and rounding;
+  over 100 MB (413), and Pairnets syncs multi-GB files. 50 MiB leaves room for headers and rounding;
   the server takes up to 64 MiB per piece. The pieces also make big uploads resumable: every byte
   the server takes in is written, hashed and counted together, so after a cut the client continues
   from the server's count instead of starting again.
@@ -233,5 +233,32 @@ what cannot lose or silently overwrite data.
 * **No token on the health check.** The apps leave the token off `/api/health`. If the answer comes
   through Cloudflare on a plain `http://` address, "Test connection" refuses it before the token is
   ever sent. Cloudflare's own error pages (tunnel down, bot check) are recognised by their HTML body
-  and Cloudflare headers and explained in plain words; Tether's JSON errors relayed by Cloudflare are
+  and Cloudflare headers and explained in plain words; Pairnets's JSON errors relayed by Cloudflare are
   left alone.
+
+## Renamed from Tether to Pairnets
+
+* **Why.** "Tether" is also the name of a large crypto company, and the matching domains were taken.
+  The app, code, binaries, services, folders and repository are now **Pairnets**
+  (`MRnigth/Pairnets`; GitHub redirects the old address).
+* **Old names live in one place**, `Pairnets.Core/Legacy/TetherNames.cs`, used only by the migration
+  and compatibility code, so no rename sweep can drop them by accident. Tests pin them.
+* **One machine at a time.** The server reads `X-Tether-Client` and sends every response header
+  under both names (`X-Pairnets-*` and `X-Tether-*`), and the apps read the new names first and then
+  the old ones. Tether apps and a Pairnets server, or the other way round, keep syncing.
+* **The apps take over Tether's data on first start.** `%AppData%\Tether` and `%LocalAppData%\Tether`
+  (settings, sync state, logs, the Linux token file) are moved to the Pairnets folders. Nothing moves
+  while Tether is running (its single-instance mutex or lock file is held): Pairnets asks to quit it
+  first. The token is read with Tether's DPAPI entropy, Keychain service or secret-tool attributes when
+  Pairnets has none yet, and stored again under Pairnets' name; the old entry is left in place. The
+  start-at-login entry is replaced. In each synced folder `.tether-marker` is renamed to
+  `.pairnets-marker` (same folder id, so nothing is blocked) and `.tether-tmp` is removed; both old
+  names stay reserved and ignored, so they can never sync.
+* **The installers take over the old programs.** The Windows installer has a new AppId and folder and
+  runs Tether's uninstaller silently (it removes only the program, never `%AppData%`). The Linux
+  installer stops and removes the old program files. `install.sh` moves a Tether server
+  (`/var/lib/tether`, `/etc/tether`, the `tether` user, renamed in place so file owners stay, and
+  the units including the tunnel) on its first run; it only moves data and never deletes it.
+* **No old file names in releases** (your choice). Tether apps and servers look for `TetherSetup.exe`,
+  `tether-server-linux-x64.tar.gz` and so on, so they can't update themselves into Pairnets. Each
+  machine gets Pairnets by hand once, and the migration then happens on its own.

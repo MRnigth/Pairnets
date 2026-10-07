@@ -1,0 +1,12 @@
+[Unit]
+Description=Watch for an update request from the Pairnets server
+# Never give up watching, however often the updater ran.
+StartLimitIntervalSec=0
+
+[Path]
+PathExists=/var/lib/pairnets/update/request
+Unit=pairnets-update.service
+TriggerLimitIntervalSec=0
+
+[Install]
+WantedBy=multi-user.target

@@ -40,16 +40,16 @@ jobs:
           dotnet-version: 8.0.x
 
       - name: Restore
-        run: dotnet restore Tether.sln
+        run: dotnet restore Pairnets.sln
 
       - name: Build (client included via EnableWindowsTargeting)
-        run: dotnet build Tether.sln -c Release --no-restore
+        run: dotnet build Pairnets.sln -c Release --no-restore
 
       - name: Test
         env:
-          TETHER_CONVERGENCE_SEEDS: 250
+          PAIRNETS_CONVERGENCE_SEEDS: 250
         run: >
-          dotnet test Tether.sln -c Release --no-build
+          dotnet test Pairnets.sln -c Release --no-build
           --logger "trx;LogFileName=linux.trx"
           --logger "console;verbosity=normal"
           --results-directory TestResults
@@ -75,14 +75,14 @@ jobs:
           dotnet-version: 8.0.x
 
       - name: Restore
-        run: dotnet restore Tether.sln
+        run: dotnet restore Pairnets.sln
 
       - name: Build
-        run: dotnet build Tether.sln -c Release --no-restore
+        run: dotnet build Pairnets.sln -c Release --no-restore
 
       - name: Publish client (single-file smoke test)
         run: >
-          dotnet publish src/Tether.Client/Tether.Client.csproj -c Release -r win-x64
+          dotnet publish src/Pairnets.Client/Pairnets.Client.csproj -c Release -r win-x64
           --self-contained true -p:PublishSingleFile=true
           -p:IncludeNativeLibrariesForSelfExtract=true -o publish/client
 
@@ -99,9 +99,9 @@ jobs:
 
       - name: Test
         env:
-          TETHER_CONVERGENCE_SEEDS: 50
+          PAIRNETS_CONVERGENCE_SEEDS: 50
         run: >
-          dotnet test Tether.sln -c Release --no-build
+          dotnet test Pairnets.sln -c Release --no-build
           --logger "trx;LogFileName=windows.trx"
           --logger "console;verbosity=normal"
           --results-directory TestResults
@@ -128,21 +128,21 @@ jobs:
 
       - name: Build
         run: |
-          dotnet build src/Tether.Desktop/Tether.Desktop.csproj -c Release
-          dotnet build tests/Tether.Tests/Tether.Tests.csproj -c Release
+          dotnet build src/Pairnets.Desktop/Pairnets.Desktop.csproj -c Release
+          dotnet build tests/Pairnets.Tests/Pairnets.Tests.csproj -c Release
 
-      - name: Build Tether.app (smoke test)
+      - name: Build Pairnets.app (smoke test)
         run: |
-          dotnet publish src/Tether.Desktop/Tether.Desktop.csproj -c Release -r osx-arm64 --self-contained true -p:DebugType=none -o publish/mac-arm64
+          dotnet publish src/Pairnets.Desktop/Pairnets.Desktop.csproj -c Release -r osx-arm64 --self-contained true -p:DebugType=none -o publish/mac-arm64
           mkdir -p dist
           bash deploy/macos/make-app.sh publish/mac-arm64 1.0.0 arm64 dist
           ls -la dist
 
       - name: Test (case-insensitive APFS)
         env:
-          TETHER_CONVERGENCE_SEEDS: 50
+          PAIRNETS_CONVERGENCE_SEEDS: 50
         run: >
-          dotnet test tests/Tether.Tests/Tether.Tests.csproj -c Release --no-build
+          dotnet test tests/Pairnets.Tests/Pairnets.Tests.csproj -c Release --no-build
           --logger "trx;LogFileName=macos.trx"
           --logger "console;verbosity=normal"
           --results-directory TestResults

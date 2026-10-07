@@ -1,0 +1,10 @@
+[Unit]
+Description=Fallback check for a waiting Pairnets update request (in case the path unit is not watching)
+
+[Timer]
+OnCalendar=*:0/2
+AccuracySec=10s
+Unit=pairnets-update.service
+
+[Install]
+WantedBy=timers.target

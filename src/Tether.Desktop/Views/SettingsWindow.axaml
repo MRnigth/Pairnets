@@ -1,9 +1,0 @@
-<Window xmlns="https://github.com/avaloniaui"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:v="using:Tether.Desktop.Views"
-        x:Class="Tether.Desktop.Views.SettingsWindow"
-        Title="Tether" Width="620" Height="780" MinHeight="420" CanResize="True"
-        WindowStartupLocation="CenterScreen" Icon="avares://Tether/Assets/tether-icon-256.png">
-  <!-- First-time setup (later, Settings is a page of the main window). The form is SettingsView. -->
-  <ContentControl x:Name="Host" />
-</Window>

@@ -1,0 +1,47 @@
+[Unit]
+Description=Pairnets file sync server
+Documentation=https://github.com/MRnigth/Pairnets/blob/main/docs/DEPLOY.md
+After=network-online.target tailscaled.service
+Wants=network-online.target tailscaled.service
+
+[Service]
+Type=exec
+User=pairnets
+Group=pairnets
+EnvironmentFile=/etc/pairnets/pairnets.env
+WorkingDirectory=/opt/pairnets
+ExecStart=/opt/pairnets/pairnets-server
+Restart=always
+RestartSec=5
+# Let in-flight uploads finish (the app waits up to 60 s) before systemd kills it.
+TimeoutStopSec=90
+KillSignal=SIGTERM
+
+# --- Hardening ---
+NoNewPrivileges=yes
+ProtectSystem=strict
+ReadWritePaths=/var/lib/pairnets
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=invisible
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+RestrictNamespaces=yes
+LockPersonality=yes
+RemoveIPC=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+UMask=0077
+# MemoryDenyWriteExecute is intentionally NOT set: the .NET JIT needs writable+executable memory.
+
+[Install]
+WantedBy=multi-user.target
