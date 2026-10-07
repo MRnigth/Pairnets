@@ -33,6 +33,14 @@ Source: "{#SourceDir}\README-client.txt"; DestDir: "{app}"; Flags: ignoreversion
 [Icons]
 Name: "{userprograms}\Pairnets"; Filename: "{app}\Pairnets.exe"
 
+[Registry]
+; The nest's website opens pairnets:// after approving this computer, to bring Pairnets back to the
+; front. The link carries nothing: the app fetches its key through its own secret poll.
+Root: HKCU; Subkey: "Software\Classes\pairnets"; ValueType: string; ValueData: "URL:Pairnets"; Flags: uninsdeletekey
+Root: HKCU; Subkey: "Software\Classes\pairnets"; ValueType: string; ValueName: "URL Protocol"; ValueData: ""
+Root: HKCU; Subkey: "Software\Classes\pairnets\DefaultIcon"; ValueType: string; ValueData: "{app}\Pairnets.exe,0"
+Root: HKCU; Subkey: "Software\Classes\pairnets\shell\open\command"; ValueType: string; ValueData: """{app}\Pairnets.exe"" ""%1"""
+
 [Run]
 ; Windows 10/11 keep icons in a cache keyed by the exe path; refresh it so a replaced Pairnets.exe shows its new icon.
 Filename: "{sys}\ie4uinit.exe"; Parameters: "-show"; Flags: runhidden nowait skipifdoesntexist

@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Threading;
 using Microsoft.Extensions.Logging;
+using Pairnets.Core.Client;
 using Pairnets.Core.Logging;
 using Pairnets.Core.Settings;
 
@@ -12,6 +13,7 @@ public sealed class App : Application
     private TrayController? _tray;
     private ILoggerFactory? _loggerFactory;
     private RollingFileLoggerProvider? _fileLog;
+    private IDisposable? _activation;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -52,10 +54,14 @@ public sealed class App : Application
 
         _tray = new TrayController(this, _loggerFactory, _fileLog);
         _tray.Start();
+        // A pairnets:// link (the nest's website after approving this computer) starts a second
+        // Pairnets, which pokes this one through the pipe and quits; come to the front for it.
+        _activation = AppActivation.Listen(() => RunOnUi(() => _tray?.ComeToFront()));
     }
 
     protected override void OnExit(ExitEventArgs e)
     {
+        _activation?.Dispose();
         _tray?.Dispose();
         _loggerFactory?.Dispose();
         _fileLog?.Dispose();

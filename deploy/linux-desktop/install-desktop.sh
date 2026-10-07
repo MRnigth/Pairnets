@@ -33,10 +33,13 @@ cat > "$PREFIX/applications/pairnets.desktop" <<DESKTOP
 Type=Application
 Name=Pairnets
 Comment=Keep a folder in sync through your own server
-Exec="$OPT/Pairnets"
+Exec="$OPT/Pairnets" %u
 Icon=pairnets
 Terminal=false
 Categories=Utility;FileTools;
+# The nest's website opens pairnets:// after approving this computer, to bring Pairnets back
+# to the front. The link carries nothing: the app fetches its key through its own secret poll.
+MimeType=x-scheme-handler/pairnets;
 StartupNotify=false
 DESKTOP
 if command -v update-desktop-database >/dev/null; then

@@ -1,4 +1,5 @@
 using Avalonia;
+using Pairnets.Core.Client;
 using Pairnets.Core.Legacy;
 using Pairnets.Core.Settings;
 
@@ -21,6 +22,13 @@ internal static class Program
         }
         catch (IOException)
         {
+            // Started for a pairnets:// link (the nest's website sending you back after approving
+            // this computer): poke the running Pairnets to the front and leave quietly.
+            if (args.Any(AppActivation.IsActivationUrl))
+            {
+                AppActivation.TrySignalRunning();
+                return 0;
+            }
             Console.Error.WriteLine("Pairnets is already running (look for its icon in the menu bar / system tray).");
             return 1;
         }

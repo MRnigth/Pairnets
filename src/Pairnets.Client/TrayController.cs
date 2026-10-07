@@ -384,6 +384,23 @@ public sealed class TrayController : ITrayActions, IDisposable
             _window?.Navigate(page);
     }
 
+    /// <summary>
+    /// A pairnets:// link from the nest's website: bring whatever Pairnets is showing to the front.
+    /// During first-time setup that is the sign-in dialog, which is just about to finish on its own.
+    /// </summary>
+    public void ComeToFront()
+    {
+        foreach (Window window in Application.Current.Windows)
+        {
+            if (window is SettingsWindow { IsVisible: true })
+            {
+                window.Activate();
+                return;
+            }
+        }
+        ShowMainWindow();
+    }
+
     public void OpenWindow(MainPage page) => ShowMainWindow(page);
 
     public void Quit() => Exit();

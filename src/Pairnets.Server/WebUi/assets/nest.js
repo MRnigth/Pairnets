@@ -424,21 +424,31 @@
     $("request-warning").textContent = `${request.name} will be able to read, change and delete the files in your synced folder.`;
     $("allow").textContent = "Allow " + request.name;
 
-    const show = (status, name) => {
+    // The way back to the app on this computer. The link carries nothing: the app fetches its key
+    // through its own secret poll, so declining the browser's "Open Pairnets?" changes nothing.
+    const backLink = "pairnets://signed-in";
+    const show = (status, name, sameComputer, fresh) => {
       const outcome = $("outcome");
       $("ask").hidden = true;
       outcome.hidden = false;
       outcome.className = "message " + (status === "approved" || status === "delivered" ? "ok" : status === "denied" ? "info" : "error");
+      const back = status === "approved" && sameComputer;
       outcome.textContent = {
-        approved: `✓ ${name} is let in. Go back to it: it finishes signing in by itself, then asks which folder to sync.`,
+        approved: back
+          ? `✓ ${name} is let in. Sending you back to Pairnets, where it asks which folder to sync…`
+          : `✓ ${name} is let in. Go back to it: it finishes signing in by itself, then asks which folder to sync.`,
         delivered: `✓ ${name} is connected.`,
         denied: `${name} was not let in.`,
         expired: "This code has expired (codes last 10 minutes). Press Sign in on the computer again.",
       }[status] || status;
       $("outcome-links").hidden = false;
+      if (back) {
+        $("outcome-links").prepend(h("a", { class: "button accent", href: backLink }, "Open Pairnets"));
+        if (fresh) location.assign(backLink); // only right after Allow, never again on a reload
+      }
       $("request-title").textContent = status === "pending" ? "A computer wants to join" : "Approve a computer";
     };
-    if (request.status !== "pending") return show(request.status, request.name);
+    if (request.status !== "pending") return show(request.status, request.name, request.sameComputer, false);
 
     const decide = async (approve) => {
       setBusy($("allow"), true);
@@ -446,7 +456,7 @@
       showError(null);
       try {
         const result = await api("POST", `/pair/${encodeURIComponent(request.code)}/${approve ? "approve" : "deny"}`);
-        show(result.status, result.name);
+        show(result.status, result.name, result.sameComputer, true);
       } catch (error) {
         showError(error);
         setBusy($("allow"), false);

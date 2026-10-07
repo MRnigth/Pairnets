@@ -13,6 +13,15 @@
   <key>LSMinimumSystemVersion</key><string>11.0</string>
   <!-- Menu-bar app: no Dock icon. -->
   <key>LSUIElement</key><true/>
+  <!-- The nest's website opens pairnets:// after approving this computer, to bring Pairnets back
+       to the front. The link carries nothing: the app fetches its key through its own secret poll. -->
+  <key>CFBundleURLTypes</key>
+  <array>
+    <dict>
+      <key>CFBundleURLName</key><string>app.pairnets.client</string>
+      <key>CFBundleURLSchemes</key><array><string>pairnets</string></array>
+    </dict>
+  </array>
   <key>NSHighResolutionCapable</key><true/>
   <key>NSHumanReadableCopyright</key><string>MIT License</string>
 </dict>

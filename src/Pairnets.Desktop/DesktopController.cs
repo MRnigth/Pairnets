@@ -48,6 +48,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
     private bool _updateDismissed;
     private string? _serverPromptShownFor;
     private bool _lowSpaceNoticed;
+    private IDisposable? _activation;
 
     public DesktopController(Application app, IClassicDesktopStyleApplicationLifetime lifetime, IPlatformServices platform)
     {
@@ -73,6 +74,9 @@ public sealed class DesktopController : ITrayActions, IDisposable
     public void Start(string[] args)
     {
         _log.LogInformation("Pairnets {Version} starting on {Platform}", typeof(DesktopController).Assembly.GetName().Version, _platform.Name);
+        // A pairnets:// link (the nest's website after approving this computer) starts a second
+        // Pairnets, which pokes this one through the pipe and quits; come to the front for it.
+        _activation = AppActivation.Listen(() => Dispatcher.UIThread.Post(ComeToFront));
         CreateTray();
         _refresh.Start();
         _updates.SetEnabled(_settings.CheckForUpdates);
@@ -446,6 +450,23 @@ public sealed class DesktopController : ITrayActions, IDisposable
             _window?.Navigate(page);
     }
 
+    /// <summary>
+    /// A pairnets:// link from the nest's website: bring whatever Pairnets is showing to the front.
+    /// During first-time setup that is the sign-in window, which is just about to finish on its own.
+    /// </summary>
+    public void ComeToFront()
+    {
+        foreach (var window in _lifetime.Windows)
+        {
+            if (window is SettingsWindow { IsVisible: true })
+            {
+                window.Activate();
+                return;
+            }
+        }
+        ShowMainWindow();
+    }
+
     public IHistorySource? History => _session;
 
     /// <summary>The Devices page was opened: ask the server for the current list.</summary>
@@ -741,6 +762,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
 
     public void Dispose()
     {
+        _activation?.Dispose();
         _updates.Dispose();
         _refresh.Stop();
         StopSession();

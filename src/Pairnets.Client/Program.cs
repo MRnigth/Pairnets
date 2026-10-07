@@ -1,4 +1,5 @@
 using System.Windows;
+using Pairnets.Core.Client;
 using Pairnets.Core.Legacy;
 
 namespace Pairnets.Client;
@@ -13,6 +14,13 @@ internal static class Program
         using var mutex = new Mutex(initiallyOwned: true, MutexName, out var createdNew);
         if (!createdNew)
         {
+            // Started for a pairnets:// link (the nest's website sending you back after approving
+            // this computer): poke the running Pairnets to the front and leave quietly.
+            if (args.Any(AppActivation.IsActivationUrl))
+            {
+                AppActivation.TrySignalRunning();
+                return 0;
+            }
             MessageBox.Show("Pairnets is already running. Look for its icon in the notification area.", "Pairnets",
                 MessageBoxButton.OK, MessageBoxImage.Information);
             return 1;

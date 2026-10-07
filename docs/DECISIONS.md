@@ -100,6 +100,16 @@ what cannot lose or silently overwrite data.
   location only if its marker matches; the state database is then copied to the new location's
   state directory.
 * **First sync** with files on both sides shows an explanation of the merge before starting.
+* **The way back from the browser is a `pairnets://` link that carries nothing.** After Allow, the
+  nest's website opens `pairnets://signed-in` (only on the computer that is signing in, which the
+  server knows by its address). The installers register the scheme; the started second instance
+  pokes the running app through a per-user named pipe (`Pairnets.Core/Client/AppActivation.cs`) and
+  quits, and the app just comes to the front — the key still arrives only through the app's secret
+  poll. So if another program grabs the scheme, or anyone opens the link, nothing is exposed and
+  nothing is approved. On Windows the poking instance passes its foreground right along
+  (`AllowSetForegroundWindow`), otherwise the window would only flash in the taskbar. A poke can
+  land between creating the pipe and waiting on it; Windows then fails the wait instead of
+  completing it, and the listener counts that as a knock so no poke is ever lost.
 
 ## Tooling and tests
 

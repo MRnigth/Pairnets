@@ -173,6 +173,17 @@ public sealed class NestWebsiteTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task TheApprovalPageSendsYouBackToTheApp()
+    {
+        using var web = _server.WebBrowser();
+        var js = await web.GetStringAsync("assets/nest.js");
+        // After Allow on the computer that is signing in, the page opens pairnets:// to bring the
+        // app back to the front. The link carries nothing: the key travels only through the poll.
+        Assert.Contains("pairnets://signed-in", js);
+        Assert.Contains("sameComputer", js);
+    }
+
+    [Fact]
     public async Task TheFrontDoorSendsYouWhereYouBelong()
     {
         using var web = _server.WebBrowser();
