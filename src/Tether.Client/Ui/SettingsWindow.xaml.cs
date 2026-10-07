@@ -12,6 +12,7 @@ public partial class SettingsWindow : Window
     {
         ThemeManager.Attach(this);
         InitializeComponent();
+        Icon = AppIcons.WindowIcon;
         Title = firstRun ? "Tether – first-time setup" : "Tether – settings";
         View = new SettingsView(current, protector, firstRun, updates, serverVersionText);
         View.Saved += v =>

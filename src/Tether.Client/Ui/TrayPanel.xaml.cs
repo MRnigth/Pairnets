@@ -34,6 +34,7 @@ public partial class TrayPanel : Window
     {
         ThemeManager.Attach(this);
         InitializeComponent();
+        Icon = AppIcons.WindowIcon;
         _actions = actions;
         Map.Compact = true;
         RecentList.ItemsSource = _recent;
