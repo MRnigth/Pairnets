@@ -1,12 +1,15 @@
 # Deploying Pairnets
 
-## 1. Server (Ubuntu, Tailscale)
+## 1. Server (Ubuntu, behind a Cloudflare Tunnel)
 
-(Without Tailscale: see [1b](#1b-server-without-tailscale-cloudflare-tunnel).)
+The server listens only on `127.0.0.1:5075`. `cloudflared` keeps an outbound connection to
+Cloudflare and carries requests for your public hostname (`https://sync.example.com`) to it, so no
+port is opened anywhere. Step by step with the dashboard: [HOWTO sections 2 to 4](HOWTO.md#2-create-a-cloudflare-tunnel).
 
-Prerequisites: Ubuntu 22.04 or newer, Tailscale installed and logged in (`tailscale up`),
-`curl` and `openssl` (`sudo apt install curl openssl`). No .NET runtime is needed: the server is
-self-contained.
+Prerequisites: Ubuntu 22.04 or newer, `curl` and `openssl` (`sudo apt install curl openssl`), a
+domain on Cloudflare, and a tunnel created in the dashboard (Zero Trust → Networks → Tunnels →
+*Cloudflared*) with its token copied and a public hostname → `HTTP` `localhost:5075`. Turn off Bot
+Fight Mode for the domain. No .NET runtime is needed: the server is self-contained.
 
 ```bash
 # Download the release (replace vX.Y.Z) and check its checksum
@@ -16,30 +19,42 @@ sha256sum --check --ignore-missing SHA256SUMS.txt
 
 tar xzf pairnets-server-linux-x64.tar.gz
 cd pairnets-server-linux-x64
-sudo ./install.sh
+sudo ./install.sh --public-url https://sync.example.com
+# or, without the prompt: TUNNEL_TOKEN=<token> sudo -E ./install.sh --public-url https://sync.example.com
 ```
 
 `install.sh` does the following:
 
-1. Finds the Tailscale IPv4 address (`tailscale ip -4`) and binds to it only. Pass
-   `--bind 100.x.y.z` to choose it yourself. It never binds to `0.0.0.0`.
+1. Asks for the tunnel token (it is never shown or put in your shell history) and installs
+   `cloudflared` from `pkg.cloudflare.com` (signed apt repository) if `/usr/bin/cloudflared` is missing.
 2. Creates the system user `pairnets`, `/opt/pairnets` (program), `/var/lib/pairnets` (data, mode 700)
    and `/etc/pairnets` (config, root only).
 3. Generates a token with `openssl rand -hex 32` the first time and writes `/etc/pairnets/pairnets.env`
-   with mode 600. Upgrades keep the existing token.
-4. Installs and starts `pairnets-server.service`, waits for `/api/health`, and **prints the server
-   URL and token** to enter on both PCs. The token is printed only once; store it in a password
-   manager.
+   with mode 600, listening on `127.0.0.1` with `Sync__TrustProxyHeaders=true`. Upgrades keep the
+   existing token and settings. It never listens on `0.0.0.0`.
+4. Writes the tunnel token to `/etc/pairnets/tunnel.env` (root, mode 600) and installs
+   `pairnets-tunnel.service`, which runs `cloudflared tunnel run` as a dynamic, unprivileged user.
+   The token is not put in the unit file or on a command line, where other local users could read
+   it (`cloudflared service install <token>` would do both).
+5. Installs and starts `pairnets-server.service`, waits for `/api/health` locally and then through
+   `https://sync.example.com`, and **prints the server URL and token** to enter on both PCs. The
+   token is printed only once; store it in a password manager.
 
-To upgrade, extract the new release and run `sudo ./install.sh` again.
+To upgrade, run `sudo ./install.sh` again from a new release (or let the self-updater do it): the
+token, settings and tunnel stay as they are. Running it with `--public-url` again asks for a new
+tunnel token and replaces it.
 
 Useful commands:
 
 ```bash
-sudo systemctl status pairnets-server
+sudo systemctl status pairnets-server pairnets-tunnel
 sudo journalctl -u pairnets-server -f          # logs (never contain the token)
-curl http://$(tailscale ip -4):5075/api/health
+sudo journalctl -u pairnets-tunnel -f
+curl https://sync.example.com/api/health
 ```
+
+Big uploads are sent in pieces of 4 to 50 MB, sized to the connection (Cloudflare's free plan
+refuses request bodies over 100 MB). See [SECURITY.md](SECURITY.md) for what Cloudflare can see.
 
 ### Configuration
 
@@ -48,73 +63,13 @@ curl http://$(tailscale ip -4):5075/api/health
 | Variable | Default | Meaning |
 |----------|---------|---------|
 | `SYNC_TOKEN` | – (required, ≥ 16 chars) | shared secret |
-| `ASPNETCORE_URLS` | `http://127.0.0.1:5075` | listen address: use `http://<tailscale-ip>:5075` |
+| `ASPNETCORE_URLS` | `http://127.0.0.1:5075` | listen address: keep it on `127.0.0.1`, the tunnel brings the PCs in |
 | `Sync__DataDir` | `/var/lib/pairnets` | data directory |
 | `Sync__UpdateDir` | `/var/lib/pairnets/update` (set by install.sh) | where update requests go; must be the folder the root updater watches |
 | `Sync__HistoryRetentionDays` | 30 | delete history versions older than this... |
 | `Sync__HistoryMinVersions` | 5 | ...but always keep this many per file |
-| `Sync__TrustProxyHeaders` | `false` | `true` behind a tunnel or reverse proxy on the same machine: the client address comes from `CF-Connecting-IP` (or the last `X-Forwarded-For` entry), believed only on loopback connections. Set by `--cloudflare-tunnel`. |
-| `PAIRNETS_PUBLIC_URL` | – | the `https://` address the PCs use behind a tunnel; only shown by `install.sh` |
-
-If Tailscale is not up yet at boot, binding fails and systemd retries every 5 seconds
-(`Restart=always`).
-
-### Tailscale ACL: only your two PCs may connect
-
-In the Tailscale admin console (Access controls), make sure only your PCs can reach port 5075 on
-the server. Starting point (also in `deploy/tailscale-acl.hujson`):
-
-```hujson
-{
-  "hosts": { "pairnets-server": "100.x.y.z" },
-  "acls": [
-    { "action": "accept", "src": ["<desktop-device-name>", "<laptop-device-name>"], "dst": ["pairnets-server:5075"] }
-    // ...your other rules. Anything not allowed is denied.
-  ]
-}
-```
-
-Check from another tailnet device that `curl http://100.x.y.z:5075/api/health` times out.
-
-## 1b. Server without Tailscale (Cloudflare Tunnel)
-
-For people who cannot use Tailscale or open ports. The server listens on `127.0.0.1:5075` and
-`cloudflared` carries requests for a public hostname (`https://sync.example.com`) to it over an
-outbound connection. Step-by-step with the dashboard: [HOWTO 4b](HOWTO.md#4b-no-tailscale-use-a-cloudflare-tunnel-instead).
-
-1. In the Cloudflare dashboard (Zero Trust → Networks → Tunnels) create a *Cloudflared* tunnel,
-   copy its token, and add a public hostname → `HTTP` `localhost:5075`. Turn off Bot Fight Mode for
-   the domain.
-2. On the server:
-
-   ```bash
-   sudo ./install.sh --cloudflare-tunnel --public-url https://sync.example.com
-   # or: TUNNEL_TOKEN=<token> sudo -E ./install.sh --cloudflare-tunnel --public-url ...
-   ```
-
-   `install.sh` then also:
-   * installs `cloudflared` from `pkg.cloudflare.com` (signed apt repository) if `/usr/bin/cloudflared` is missing;
-   * binds to `127.0.0.1` (keeping the port of an earlier install) and sets `Sync__TrustProxyHeaders=true`;
-   * writes the token to `/etc/pairnets/tunnel.env` (root, mode 600) and installs
-     `pairnets-tunnel.service`, which runs `cloudflared tunnel run` as a dynamic, unprivileged user.
-     The token is not put in the unit file or on a command line, where other local users could
-     read it (`cloudflared service install <token>` would do both);
-   * waits for `https://sync.example.com/api/health` and prints that URL.
-
-Running it again with a new token replaces the token. Upgrades (`sudo ./install.sh` without options,
-or the self-updater) keep the tunnel as it is. To go back to Tailscale:
-`sudo ./install.sh --bind 100.x.y.z` and `sudo systemctl disable --now pairnets-tunnel`.
-
-```bash
-sudo systemctl status pairnets-tunnel
-sudo journalctl -u pairnets-tunnel -f
-curl https://sync.example.com/api/health
-```
-
-Big uploads are sent in pieces of 4 to 50 MB, sized to the connection (Cloudflare's free plan
-refuses request bodies over 100 MB);
-older apps that send a big file in one request get `413` through the tunnel, so update the apps
-along with the server. See [SECURITY.md](SECURITY.md) for what Cloudflare can see.
+| `Sync__TrustProxyHeaders` | `false` (`true` set by install.sh) | the client address comes from `CF-Connecting-IP` (or the last `X-Forwarded-For` entry), believed only on loopback connections |
+| `PAIRNETS_PUBLIC_URL` | – | the `https://` address the PCs use; only shown by `install.sh` |
 
 ## 2. Windows PCs
 
@@ -123,7 +78,7 @@ along with the server. See [SECURITY.md](SECURITY.md) for what Cloudflare can se
    needed. An optional installer (`PairnetsSetup.exe`) is attached when the release workflow could
    build it.
 2. Start `Pairnets.exe`. The first-run window asks for:
-   * **Server URL**: `http://<server-tailscale-ip>:5075/` as printed by `install.sh`;
+   * **Server URL**: `https://sync.example.com/` as printed by `install.sh`;
    * **Token**: as printed by `install.sh`;
    * **Folder to sync**, for example `D:\Work`;
    * **Device name**: defaults to the computer name. It must differ between your PCs.

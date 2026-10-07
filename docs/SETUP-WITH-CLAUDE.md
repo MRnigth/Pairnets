@@ -20,69 +20,39 @@ asks you to download the files in your browser and copy them over.
 
 ## Prompt 1: install the server (paste into Claude Code on the Ubuntu server)
 
-```text
-Please install the Pairnets sync server on this Ubuntu machine for me. Pairnets is in the GitHub repo
-MRnigth/Pairnets; its install guide is docs/HOWTO.md (sections 2-4) and the installer is
-deploy/install.sh inside the release file pairnets-server-linux-x64.tar.gz.
-
-Work step by step, explain each step in one sentence before you do it, and stop and ask me if
-anything is unexpected. Do this:
-
-1. Check that this is Ubuntu on x86_64 and that I have sudo.
-2. Tailscale: check whether `tailscale` is installed and logged in (`tailscale status`,
-   `tailscale ip -4`). If not, install it with the official script from tailscale.com, run
-   `sudo tailscale up`, show me the login link, and wait until I say I have signed in.
-3. Get the release files into a new temporary folder:
-   - If `gh` is installed and `gh auth status` succeeds, run
-     `gh release download latest --repo MRnigth/Pairnets -p pairnets-server-linux-x64.tar.gz -p SHA256SUMS.txt`.
-   - Otherwise tell me to download pairnets-server-linux-x64.tar.gz and SHA256SUMS.txt from
-     https://github.com/MRnigth/Pairnets/releases/tag/latest in my browser and copy them here with
-     `scp`, and give me the exact scp command for this machine (user name and Tailscale IP).
-     Wait until the files are there.
-4. Verify them with `sha256sum --check --ignore-missing SHA256SUMS.txt`. If it does not say OK,
-   stop and tell me; do not install.
-5. Unpack the tarball and run `sudo ./install.sh` from the unpacked folder. Do not use
-   --bind 0.0.0.0 and do not open any firewall ports to the internet; the server must only be
-   reachable over Tailscale.
-6. Check that it works: `systemctl is-active pairnets-server` and
-   `curl -fsS http://<tailscale-ip>:5075/api/health`.
-7. Show me the Server URL and the token that install.sh printed, and tell me to save them in my
-   password manager. Do not write the token into any other file, log or note.
-8. Finally, explain in plain words how to restrict access to my own PCs with the Tailscale ACL from
-   docs/HOWTO.md section 4 (deploy/tailscale-acl.hujson in the release), and what the next step is
-   on my computers.
-```
-
----
-
-## Prompt 1b: install the server without Tailscale (Cloudflare Tunnel)
-
-Use this instead of Prompt 1 when the computers cannot use Tailscale. First create the tunnel and
-its public hostname in the Cloudflare dashboard yourself
-([HOWTO 4b](HOWTO.md#4b-no-tailscale-use-a-cloudflare-tunnel-instead), step 1), and have the
-hostname ready. Keep the tunnel token to yourself: you paste it into the installer, not into Claude.
+First create the tunnel and its public hostname in the Cloudflare dashboard yourself
+([HOWTO section 2](HOWTO.md#2-create-a-cloudflare-tunnel)), and have the hostname ready. Keep the
+tunnel token to yourself: you paste it into the installer, not into Claude.
 
 ```text
-Please install the Pairnets sync server on this Ubuntu machine for me, reachable through a Cloudflare
-Tunnel instead of Tailscale. Pairnets is in the GitHub repo MRnigth/Pairnets; the guide is
-docs/HOWTO.md section 4b and the installer is deploy/install.sh inside the release file
+Please install the Pairnets sync server on this Ubuntu machine for me. It is reached through a
+Cloudflare Tunnel. Pairnets is in the GitHub repo MRnigth/Pairnets; its install guide is
+docs/HOWTO.md (sections 2-4) and the installer is deploy/install.sh inside the release file
 pairnets-server-linux-x64.tar.gz. My tunnel's public hostname is: <https://sync.example.com>
 
 Work step by step, explain each step in one sentence before you do it, and stop and ask me if
 anything is unexpected. Do this:
 
 1. Check that this is Ubuntu on x86_64 and that I have sudo.
-2. Get the release files and verify them exactly as in docs/SETUP-WITH-CLAUDE.md Prompt 1, steps 3
-   and 4 (stop if the checksum does not say OK).
-3. Unpack the tarball. Then ask me to run this myself in a terminal on the server, from the
+2. Get the release files into a new temporary folder:
+   - If `gh` is installed and `gh auth status` succeeds, run
+     `gh release download latest --repo MRnigth/Pairnets -p pairnets-server-linux-x64.tar.gz -p SHA256SUMS.txt`.
+   - Otherwise tell me to download pairnets-server-linux-x64.tar.gz and SHA256SUMS.txt from
+     https://github.com/MRnigth/Pairnets/releases/tag/latest in my browser and copy them here with
+     `scp`, and give me the exact scp command for this machine. Wait until the files are there.
+3. Verify them with `sha256sum --check --ignore-missing SHA256SUMS.txt`. If it does not say OK,
+   stop and tell me; do not install.
+4. Unpack the tarball. Then ask me to run this myself in a terminal on the server, from the
    unpacked folder, because it asks for the tunnel token and I do not want to share it with you:
-   `sudo ./install.sh --cloudflare-tunnel --public-url <my hostname>`.
-   Never ask me for the tunnel token and never put it in a command, file or message.
-4. When I say it is done, check: `systemctl is-active pairnets-server pairnets-tunnel` and
+   `sudo ./install.sh --public-url <my hostname>`.
+   Never ask me for the tunnel token and never put it in a command, file or message. Do not open
+   any firewall ports and do not use --bind.
+5. When I say it is done, check: `systemctl is-active pairnets-server pairnets-tunnel` and
    `curl -fsS <my hostname>/api/health` (must print ok). If the health check fails, help me with
-   the table "If the app cannot connect" in docs/HOWTO.md section 4b.
-5. Remind me to keep the Server URL and token that install.sh printed in my password manager, and
-   tell me the next step on my computers (Prompt 2, using the https:// address).
+   the table "If the app cannot connect" in docs/HOWTO.md section 4.
+6. Remind me to keep the Server URL and token that install.sh printed in my password manager (do
+   not write the token into any other file, log or note), and tell me the next step on my
+   computers (Prompt 2).
 ```
 
 ---
@@ -94,16 +64,13 @@ needs its own device name.
 
 ```text
 Please help me install the Pairnets sync app on this computer and connect it to my Pairnets server.
-Pairnets is in the GitHub repo MRnigth/Pairnets; the guide is docs/HOWTO.md sections 2, 5 and 6.
+Pairnets is in the GitHub repo MRnigth/Pairnets; the guide is docs/HOWTO.md sections 5 and 6.
 
 Explain each step in one sentence before doing it, and ask me before anything that changes my
 system. Do this:
 
 1. Find out which operating system this is (Windows, macOS Apple silicon / Intel, or Linux x86_64).
-2. If my server URL starts with http://100.: make sure Tailscale is installed and signed in with
-   the same account as my server (tailscale.com/download), and that `tailscale ping <server name>`
-   or a ping to the server's 100.x.y.z address works. If it starts with https:// (a Cloudflare
-   Tunnel), skip Tailscale and check instead that <server URL>api/health shows "ok" in a browser.
+2. Check that <server URL>api/health shows "ok" in a browser on this computer.
 3. Get the right file from https://github.com/MRnigth/Pairnets/releases/tag/latest (the repo is
    private: use `gh release download latest --repo MRnigth/Pairnets -p <file>` if gh is signed in,
    otherwise ask me to download it in my browser):

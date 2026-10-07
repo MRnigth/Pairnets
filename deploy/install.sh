@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
 # Pairnets server installer for Ubuntu. Idempotent: run it again to upgrade.
 #
-#   sudo ./install.sh                # first install: bind to this machine's Tailscale IPv4 address
-#                                    # upgrade: keep the address, token and settings already configured
-#   sudo ./install.sh --bind 100.x.y.z [--port 5075]
-#   sudo ./install.sh --cloudflare-tunnel --public-url https://sync.example.com
-#                                    # no Tailscale, no open ports: listen on 127.0.0.1 and let a
-#                                    # Cloudflare Tunnel bring the PCs in (asks for the tunnel token,
+#   sudo ./install.sh --public-url https://sync.example.com
+#                                    # first install: listen on 127.0.0.1 and let a Cloudflare Tunnel
+#                                    # bring the PCs in, with no open ports (asks for the tunnel token,
 #                                    # or reads it from TUNNEL_TOKEN; see docs/HOWTO.md)
+#   sudo ./install.sh                # upgrade: keep the token, settings and tunnel already configured
+#
+# --cloudflare-tunnel (implied by --public-url) is still accepted. Advanced: --bind <ip> [--port 5075]
+# listens on another address instead of the tunnel.
 #
 # Run it from the extracted release folder (it must contain pairnets-server).
 set -euo pipefail
@@ -34,7 +35,7 @@ while [[ $# -gt 0 ]]; do
     --port) PORT="${2:-}"; PORT_GIVEN=1; shift 2 ;;
     --cloudflare-tunnel) TUNNEL=1; shift ;;
     --public-url) PUBLIC_URL="${2:-}"; shift 2 ;;
-    -h|--help) sed -n '2,12p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,13p' "$0"; exit 0 ;;
     *) die "unknown option: $1" ;;
   esac
 done
@@ -86,7 +87,7 @@ if [[ -n "$PUBLIC_URL" ]]; then
   [[ "$PUBLIC_URL" =~ ^https://[A-Za-z0-9.-]+(:[0-9]+)?$ ]] || die "--public-url must look like https://sync.example.com (https, no path)"
 fi
 
-# cloudflared, from Cloudflare's signed package repository (for --cloudflare-tunnel).
+# cloudflared, from Cloudflare's signed package repository (for the tunnel).
 install_cloudflared() {
   [[ -x /usr/bin/cloudflared ]] && return 0
   command -v apt-get >/dev/null || die "cloudflared is missing and this is not an apt system; install it (https://pkg.cloudflare.com/) and run this again"
@@ -102,6 +103,10 @@ install_cloudflared() {
 }
 
 TUNNEL_TOKEN="${TUNNEL_TOKEN:-}"
+# The Cloudflare Tunnel is the way in: a new public address, or a first install, sets it up.
+if [[ -n "$PUBLIC_URL" ]] || [[ -z "$BIND" && -z "$EXISTING_URL" ]]; then
+  TUNNEL=1
+fi
 if [[ -n "$TUNNEL" ]]; then
   # The tunnel delivers requests to localhost, so the server listens there only.
   [[ -z "$BIND" || "$BIND" == 127.0.0.1 ]] || die "--cloudflare-tunnel listens on 127.0.0.1; leave out --bind"
@@ -129,16 +134,8 @@ if [[ -z "$BIND" && "$EXISTING_URL" =~ ^http://([^/:]+):([0-9]+)/?$ ]]; then
   PORT="${BASH_REMATCH[2]}"
   echo "Keeping the configured address $BIND:$PORT"
 fi
-if [[ -z "$BIND" ]]; then
-  if command -v tailscale >/dev/null && BIND="$(tailscale ip -4 2>/dev/null | head -n1)" && [[ -n "$BIND" ]]; then
-    echo "Using Tailscale address $BIND"
-  else
-    BIND=127.0.0.1
-    echo "WARNING: could not determine the Tailscale IP (is tailscale up?)." >&2
-    echo "WARNING: binding to 127.0.0.1 only; your PCs cannot connect until you re-run with --bind <tailscale-ip>." >&2
-  fi
-fi
-[[ "$BIND" != "0.0.0.0" && "$BIND" != "::" ]] || die "refusing to bind to all interfaces; use the Tailscale IP, or --cloudflare-tunnel"
+[[ -n "$BIND" ]] || die "nothing to listen on: run with --public-url https://<the public hostname of your Cloudflare Tunnel> (see docs/HOWTO.md)"
+[[ "$BIND" != "0.0.0.0" && "$BIND" != "::" ]] || die "refusing to listen on all interfaces; use the Cloudflare Tunnel (--public-url)"
 
 # 1. Service account and directories.
 if ! id pairnets >/dev/null 2>&1; then

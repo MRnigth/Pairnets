@@ -1,13 +1,13 @@
 # Architecture
 
 Pairnets keeps one folder identical on two Windows PCs (used one at a time) through a small server
-on your Tailscale network, or reachable through a Cloudflare Tunnel (the server then listens on
-127.0.0.1 and `cloudflared` brings requests in over an outbound connection). This document explains
-how, and why it cannot silently overwrite your files.
+reached through a Cloudflare Tunnel: the server listens on 127.0.0.1 and `cloudflared` brings
+requests in over an outbound connection. This document explains how, and why it cannot silently
+overwrite your files.
 
 ```
- Desktop (Windows)                      Ubuntu server (Tailscale or tunnel)                 Laptop (Windows)
- ┌───────────────────┐   HTTP + token   ┌────────────────────────────────┐   HTTP + token   ┌───────────────────┐
+ Desktop (Windows)                      Ubuntu server (behind the tunnel)                   Laptop (Windows)
+ ┌───────────────────┐  HTTPS + token   ┌────────────────────────────────┐  HTTPS + token   ┌───────────────────┐
  │ Pairnets.Client   │ ───────────────▶ │ pairnets-server (ASP.NET Core) │ ◀─────────────── │ Pairnets.Client   │
  │  tray UI (thin)   │                  │  /api/*  + SignalR /hub        │                  │  tray UI (thin)   │
  │ Pairnets.Core     │ ◀── "Changed" ── │  manifest.db (SQLite)          │ ── "Changed" ──▶ │ Pairnets.Core     │

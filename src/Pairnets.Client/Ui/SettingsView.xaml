@@ -42,7 +42,7 @@
         <StackPanel Style="{StaticResource Field}">
           <TextBlock Style="{StaticResource Label}" Text="Server address" />
           <TextBox x:Name="ServerUrlBox" Style="{StaticResource Input}"
-                   ToolTip="For example http://100.x.y.z:5075/ with Tailscale (get the IP on the server with: tailscale ip -4), or https://sync.example.com/ with a Cloudflare Tunnel" />
+                   ToolTip="For example https://sync.example.com/: the address the install command printed on the server" />
         </StackPanel>
         <StackPanel Style="{StaticResource Field}">
           <TextBlock Style="{StaticResource Label}" Text="Token" />

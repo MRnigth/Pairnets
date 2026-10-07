@@ -2,10 +2,9 @@
 # One-line installer for Pairnets. Downloads the latest release from GitHub, verifies its SHA-256
 # checksum, and installs it.
 #
-#   Ubuntu server:        curl -fsSL https://raw.githubusercontent.com/MRnigth/Pairnets/main/deploy/get.sh | sudo bash
-#     (options for install.sh go after "-s --":  ... | sudo bash -s -- --bind 100.x.y.z)
-#     No Tailscale, no open ports (Cloudflare Tunnel, see docs/HOWTO.md):
-#                         ... | sudo bash -s -- --cloudflare-tunnel --public-url https://sync.example.com
+#   Ubuntu server:        curl -fsSL https://raw.githubusercontent.com/MRnigth/Pairnets/main/deploy/get.sh | sudo bash -s -- --public-url https://sync.example.com
+#     (options for install.sh go after "-s --"; the server is reached through a Cloudflare Tunnel, see docs/HOWTO.md;
+#      to upgrade, run it without options)
 #   Linux desktop app:    curl -fsSL https://raw.githubusercontent.com/MRnigth/Pairnets/main/deploy/get.sh | bash -s -- --desktop
 #   macOS app:            curl -fsSL https://raw.githubusercontent.com/MRnigth/Pairnets/main/deploy/get.sh | bash -s -- --mac
 #

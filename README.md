@@ -2,9 +2,8 @@
 
 Pairnets keeps **one folder identical on your computers** (built for two Windows PCs, also available
 for Mac and Linux desktops) that you use one at a time, through a
-small server you own on your **Tailscale** network. No cloud, no accounts, no telemetry.
-No Tailscale, and no way to open ports? The server can also be reached through a
-**[Cloudflare Tunnel](docs/HOWTO.md#4b-no-tailscale-use-a-cloudflare-tunnel-instead)**.
+small server you own, reached from anywhere through a **Cloudflare Tunnel** on your own domain.
+No ports to open, no cloud storage, no telemetry.
 
 > **Pairnets used to be called Tether.** Installing Pairnets takes over a Tether server and Tether
 > apps with everything they had (files, history, token, settings). Tether apps can't update
@@ -19,12 +18,12 @@ file it keeps both. Every overwritten or deleted file stays on the server for 30
 to act when something looks wrong (wrong folder, unplugged drive, many deletions at once).
 
 ```
-   Desktop PC                                    Ubuntu server                          Laptop PC
- ┌───────────────┐   Tailscale (WireGuard)   ┌──────────────────────┐   Tailscale   ┌───────────────┐
- │ Pairnets tray │ ────── HTTP + token ────▶ │ pairnets-server      │ ◀──────────── │ Pairnets tray │
- │  D:\Work      │ ◀── push "Changed" ────── │  files/  history/    │ ────────────▶ │  D:\Work      │
- └───────────────┘                           │  manifest.db         │               └───────────────┘
-                                             └──────────────────────┘
+   Desktop PC                                  Ubuntu server (at home)                              Laptop PC
+ ┌───────────────┐  HTTPS through Cloudflare   ┌──────────────────────┐  HTTPS through Cloudflare   ┌───────────────┐
+ │ Pairnets tray │ ──────── + token ─────────▶ │ pairnets-server      │ ◀──────── + token ───────── │ Pairnets tray │
+ │  D:\Work      │ ◀───── push "Changed" ───── │  files/  history/    │ ───── push "Changed" ─────▶ │  D:\Work      │
+ └───────────────┘                             │  manifest.db         │                             └───────────────┘
+                                               └──────────────────────┘
 ```
 
 **New here? Start with the step-by-step guide: [How to install Pairnets, and how it works](docs/HOWTO.md).**
@@ -37,7 +36,7 @@ Or let Claude do it: copy a ready-made prompt from [Set Pairnets up with Claude]
 
 | Install on | How |
 |-----------|-----|
-| **Ubuntu server** | `curl -fsSL https://raw.githubusercontent.com/MRnigth/Pairnets/main/deploy/get.sh \| sudo bash` |
+| **Ubuntu server** | `curl -fsSL https://raw.githubusercontent.com/MRnigth/Pairnets/main/deploy/get.sh \| sudo bash -s -- --public-url https://sync.example.com` |
 | **Windows** | **[Download PairnetsSetup.exe](https://github.com/MRnigth/Pairnets/releases/download/latest/PairnetsSetup.exe)** (installer) or [pairnets-client-win-x64.zip](https://github.com/MRnigth/Pairnets/releases/download/latest/pairnets-client-win-x64.zip) (just `Pairnets.exe`) |
 | **macOS** | [Pairnets-macos-arm64.dmg](https://github.com/MRnigth/Pairnets/releases/download/latest/Pairnets-macos-arm64.dmg) (Apple Silicon) / [Pairnets-macos-x64.dmg](https://github.com/MRnigth/Pairnets/releases/download/latest/Pairnets-macos-x64.dmg) (Intel), or `curl -fsSL https://raw.githubusercontent.com/MRnigth/Pairnets/main/deploy/get.sh \| bash -s -- --mac` |
 | **Linux desktop** | [pairnets-desktop-linux-x64.tar.gz](https://github.com/MRnigth/Pairnets/releases/download/latest/pairnets-desktop-linux-x64.tar.gz) or `curl -fsSL https://raw.githubusercontent.com/MRnigth/Pairnets/main/deploy/get.sh \| bash -s -- --desktop` |
@@ -49,27 +48,18 @@ More detail: [Architecture](docs/ARCHITECTURE.md) · [Deploy](docs/DEPLOY.md) ·
 
 ### Server (once)
 
-On the Ubuntu machine, with Tailscale running:
+1. In the Cloudflare dashboard create a tunnel (Zero Trust → Networks → Tunnels → *Cloudflared*),
+   copy its token, and give it a public hostname such as `sync.example.com` pointing at
+   `HTTP localhost:5075`. Turn off Bot Fight Mode for the domain.
+2. On the Ubuntu machine:
 
-```bash
-curl -LO https://github.com/MRnigth/Pairnets/releases/latest/download/pairnets-server-linux-x64.tar.gz
-tar xzf pairnets-server-linux-x64.tar.gz && cd pairnets-server-linux-x64
-sudo ./install.sh
-```
+   ```bash
+   curl -fsSL https://raw.githubusercontent.com/MRnigth/Pairnets/main/deploy/get.sh | sudo bash -s -- --public-url https://sync.example.com
+   ```
 
-The script prints the **server URL** (your Tailscale IP, port 5075) and a **token**. Save the
-token in your password manager; it is shown only once. Then restrict access to your two PCs with
-the Tailscale ACL in [DEPLOY.md](docs/DEPLOY.md#tailscale-acl-only-your-two-pcs-may-connect).
-
-**Without Tailscale** (nobody can open ports): create a tunnel in the Cloudflare dashboard with a
-public hostname pointing at `HTTP localhost:5075`, then run
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/MRnigth/Pairnets/main/deploy/get.sh | sudo bash -s -- --cloudflare-tunnel --public-url https://sync.example.com
-```
-
-It asks for the tunnel token and prints `https://sync.example.com/` as the server URL. Step by
-step, and what Cloudflare can see: [HOWTO 4b](docs/HOWTO.md#4b-no-tailscale-use-a-cloudflare-tunnel-instead).
+It asks for the tunnel token and prints the **server URL** (`https://sync.example.com/`) and a
+**token**. Save the token in your password manager; it is shown only once. Step by step, and what
+Cloudflare can see: [HOWTO sections 2 to 4](docs/HOWTO.md#2-create-a-cloudflare-tunnel).
 
 ### Each PC
 
@@ -116,8 +106,8 @@ in the background.
 
 | You see | What to do |
 |---------|-----------|
-| Grey icon, "Offline" | The PC cannot reach the server. Check that Tailscale is connected on both machines (or, with a Cloudflare Tunnel, that `sudo systemctl status pairnets-tunnel` is active) and that `sudo systemctl status pairnets-server` is active. Pairnets retries by itself. Nothing is lost: local changes sync when it is back. |
-| "Cloudflare cannot reach your Pairnets server" / "blocked Pairnets with a browser check" | See [HOWTO 4b](docs/HOWTO.md#4b-no-tailscale-use-a-cloudflare-tunnel-instead): the tunnel is down, or Bot Fight Mode is on for your domain. |
+| Grey icon, "Offline" | The PC cannot reach the server. Check that the computer is online and that `sudo systemctl status pairnets-server pairnets-tunnel` shows both active. Pairnets retries by itself. Nothing is lost: local changes sync when it is back. |
+| "Cloudflare cannot reach your Pairnets server" / "blocked Pairnets with a browser check" | See [HOWTO section 4](docs/HOWTO.md#4-check-it-from-outside): the tunnel is down, or Bot Fight Mode is on for your domain. |
 | "The server rejected the token" | The token in Settings does not match `/etc/pairnets/pairnets.env` (it was rotated, or mistyped). Enter it again in **Settings**. Read it on the server with `sudo grep SYNC_TOKEN /etc/pairnets/pairnets.env`. |
 | "Deletions blocked" | A sync would delete many files. Right-click → **Allow these deletions…** shows exactly which ones. If that is not what you did, press No and check the folder; files are still on the server and in its history. |
 | "Folder is missing" / "no .pairnets-marker" | The drive is unplugged or the folder moved. Plug it in and **Sync now**, or use **Locate the sync folder…** to point Pairnets at its new location. |

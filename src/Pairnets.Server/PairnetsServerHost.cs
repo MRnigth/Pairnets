@@ -21,8 +21,7 @@ public static class PairnetsServerHost
         ConfigureLogging(builder.Logging);
         configure?.Invoke(builder);
 
-        // Default to loopback only. Production sets Urls / ASPNETCORE_URLS to the Tailscale IP, or keeps
-        // 127.0.0.1 behind a Cloudflare Tunnel.
+        // Loopback only: in production the Cloudflare Tunnel on this machine brings the requests in.
         if (string.IsNullOrWhiteSpace(builder.Configuration["urls"]))
             builder.WebHost.UseUrls(DefaultUrl);
 
@@ -136,7 +135,7 @@ public static class PairnetsServerHost
             if (url.Contains("0.0.0.0", StringComparison.Ordinal) || url.Contains("[::]", StringComparison.Ordinal)
                 || url.Contains("://*", StringComparison.Ordinal) || url.Contains("://+", StringComparison.Ordinal))
             {
-                app.Logger.LogWarning("Listening on all interfaces ({Url}). Pairnets should bind only to the Tailscale IP (tailscale ip -4), or to 127.0.0.1 behind a Cloudflare Tunnel.", url);
+                app.Logger.LogWarning("Listening on all interfaces ({Url}). Pairnets should listen only on 127.0.0.1, behind its Cloudflare Tunnel.", url);
             }
         }
     }

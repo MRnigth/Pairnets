@@ -1,5 +1,5 @@
 [Unit]
-Description=Cloudflare Tunnel for Pairnets (reach the server without Tailscale or open ports)
+Description=Cloudflare Tunnel for Pairnets (the way the PCs reach the server, with no open ports)
 Documentation=https://github.com/MRnigth/Pairnets/blob/main/docs/DEPLOY.md
 After=network-online.target pairnets-server.service
 Wants=network-online.target

@@ -422,7 +422,7 @@ public class DesktopUiTests
         Avalonia.Threading.Dispatcher.UIThread.RunJobs();
         Save(window, outDir, $"main-window-history-{suffix}.png");
 
-        window.ShowSettingsPage(new SettingsView(new ClientSettings { ServerUrl = "http://100.x.y.z:5075/", Folder = "/Users/me/Work", DeviceName = "MacBook" },
+        window.ShowSettingsPage(new SettingsView(new ClientSettings { ServerUrl = "https://sync.example.com/", Folder = "/Users/me/Work", DeviceName = "MacBook" },
             null, firstRun: false, autoStart: true, serverVersionText: "Server 1.0.58"));
         Save(window, outDir, $"main-window-settings-{suffix}.png");
         window.AllowClose = true;

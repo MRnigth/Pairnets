@@ -160,7 +160,7 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
         HttpMessageHandler? handler = null, CancellationToken ct = default)
     {
         if (!TryParseServerUrl(serverUrl, out var url) || url is null)
-            return new(ConnectionTestStatus.InvalidUrl, "The server URL must look like http://<tailscale-ip>:5075/ or https://sync.example.com/.");
+            return new(ConnectionTestStatus.InvalidUrl, "The server URL must look like https://sync.example.com/.");
         if (string.IsNullOrWhiteSpace(token))
             return new(ConnectionTestStatus.BadToken, "Enter the token printed by install.sh on the server.");
 
@@ -178,7 +178,7 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
         }
         catch (PairnetsNetworkException ex)
         {
-            return new(ConnectionTestStatus.Unreachable, $"Cannot reach the server: {ex.Message}. Is Tailscale (or the Cloudflare Tunnel) connected and the server running?");
+            return new(ConnectionTestStatus.Unreachable, $"Cannot reach the server: {ex.Message}. Is the server running, and its Cloudflare Tunnel connected?");
         }
 
         try

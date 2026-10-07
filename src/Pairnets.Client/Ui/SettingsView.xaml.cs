@@ -192,7 +192,7 @@ public partial class SettingsView : UserControl
     {
         if (!PairnetsApiClient.TryParseServerUrl(ServerUrlBox.Text, out var url) || url is null)
         {
-            Fail("Enter a server URL such as http://100.x.y.z:5075/ or https://sync.example.com/");
+            Fail("Enter a server URL such as https://sync.example.com/");
             return;
         }
         var token = CurrentToken();

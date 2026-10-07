@@ -13,12 +13,11 @@ Allow about 30 minutes.
 **Contents**
 
 1. [What you need](#1-what-you-need)
-2. [Put all three machines on Tailscale](#2-put-all-three-machines-on-tailscale)
+2. [Create a Cloudflare Tunnel](#2-create-a-cloudflare-tunnel)
 3. [Install the server](#3-install-the-server)
-4. [Lock the server down to your two PCs](#4-lock-the-server-down-to-your-two-pcs)
-   * [No Tailscale? Use a Cloudflare Tunnel instead](#4b-no-tailscale-use-a-cloudflare-tunnel-instead)
-5. [Set up the first PC](#5-set-up-the-first-pc-for-example-the-desktop)
-6. [Set up the second PC](#6-set-up-the-second-pc-for-example-the-laptop)
+4. [Check it from outside](#4-check-it-from-outside)
+5. [Set up the first PC](#5-set-up-the-first-computer-for-example-the-desktop)
+6. [Set up the second PC](#6-set-up-the-second-computer-for-example-the-laptop)
 7. [Everyday use](#7-everyday-use)
 8. [How it works](#8-how-it-works)
 9. [When something needs your attention](#9-when-something-needs-your-attention)
@@ -32,57 +31,63 @@ Allow about 30 minutes.
 |---|---|
 | **A server** | Any always-on Ubuntu machine (22.04 or newer): a mini PC, an old laptop, a Raspberry Pi-class x64 box or a VM. It needs enough disk for your folder **plus history** (old versions are kept 30 days). Rule of thumb: twice the size of your folder. |
 | **Your computers** | Windows 10/11 (64-bit), macOS 11 or newer (Apple Silicon or Intel), or a Linux desktop (64-bit, e.g. Ubuntu). Pairnets is built for using one at a time. |
-| **A Tailscale account** | Free for personal use: <https://tailscale.com>. This is what connects the three machines privately, wherever they are. **Or**, if you cannot install Tailscale on every computer: a free Cloudflare account and your own domain (see [4b](#4b-no-tailscale-use-a-cloudflare-tunnel-instead)). Either way, no ports need to be opened on any router. |
+| **A Cloudflare account and a domain** | The account is free: <https://dash.cloudflare.com>. The domain costs about $10 to $15 a year (buy it at Cloudflare, or move one you have there). Your computers reach the server at an address on it, such as `https://sync.example.com`, from anywhere. No ports are opened on any router. |
 | **The Pairnets release** | From <https://github.com/MRnigth/Pairnets/releases/latest>, or let the one-line commands below fetch it for you. |
 
 Nothing else: no cloud storage, no extra accounts, no .NET installation.
 
 ---
 
-## 2. Put all three machines on Tailscale
+## 2. Create a Cloudflare Tunnel
 
-> Using a Cloudflare Tunnel instead? Skip sections 2 to 4 and follow
-> [4b](#4b-no-tailscale-use-a-cloudflare-tunnel-instead).
+The server never accepts connections from the internet itself. It keeps one outgoing connection
+open to Cloudflare (a *tunnel*), and Cloudflare passes your computers' requests for your address,
+for example `https://sync.example.com`, through it. That is why nothing has to be opened on any
+router, at home or wherever your computers are.
 
-Tailscale gives each machine a private address (it starts with `100.`) that only your own
-devices can reach. Pairnets's server will listen **only** on that address, so it is never visible
-on the internet or even on your home network.
+**Good to know first**
 
-**On the Ubuntu server**
+* **Cloudflare can see the traffic.** It decrypts HTTPS at its edge before passing requests through
+  the tunnel, so in principle Cloudflare could see your token and your files. See
+  [SECURITY.md](SECURITY.md).
+* The address is reachable from the internet. The long token is what keeps strangers out: keep it
+  in your password manager and never share it.
+* Cloudflare's free plan refuses any single upload over 100 MB. Pairnets sends big files in pieces
+  automatically: between 4 and 50 MB each, sized so one piece takes about 30 seconds on your
+  connection (smaller on a slow or busy network) and halved after a dropped connection, so a bad
+  connection loses little. An interrupted upload continues where it stopped. There is nothing to
+  set.
 
-```bash
-curl -fsSL https://tailscale.com/install.sh | sh
-sudo tailscale up            # opens a login link; sign in with your Tailscale account
-tailscale ip -4              # prints the server's Tailscale address, e.g. 100.x.y.z
-```
+**In the Cloudflare dashboard:**
 
-Write that address down; this guide calls it **`100.x.y.z`**.
+1. Sign in at <https://dash.cloudflare.com> and check that your domain is listed.
+2. Open **Zero Trust** → **Networks** → **Tunnels** → **Create a tunnel**, choose **Cloudflared**,
+   and name it `pairnets`.
+3. On the "Install and run a connector" page, pick **Debian** and copy the command shown
+   (`sudo cloudflared service install eyJ…`). **Do not run it**: Pairnets' installer does that part
+   in a safer way. The long text starting with `eyJ` is the **tunnel token**; treat it like a
+   password.
+4. Go on to **Public hostnames** and add one: subdomain `sync`, your domain, service **Type**
+   `HTTP`, **URL** `localhost:5075`. Save. This guide calls the result **`https://sync.example.com`**.
+5. For your domain, open **Security** → **Bots** and make sure **Bot Fight Mode** is off. It
+   answers with browser checks that the Pairnets app cannot pass.
 
-**On each computer**
-
-1. Install Tailscale from <https://tailscale.com/download>: the Windows installer, the Mac app
-   (Mac App Store or the standalone download), or for Linux
-   `curl -fsSL https://tailscale.com/install.sh | sh` followed by `sudo tailscale up`.
-2. Log in with the same account (Tailscale icon → **Log in**).
-3. Check that the computer can reach the server: run `ping 100.x.y.z` in *Command Prompt* (Windows)
-   or *Terminal* (Mac/Linux).
-
-> Tip: also enable Tailscale's "Run unattended" option on the PCs (Tailscale menu → Preferences)
-> so it connects before you sign in to Windows.
+(Cloudflare moves its menus now and then. If something looks different, look for "Tunnels" under
+Zero Trust → Networks.)
 
 ---
 
 ## 3. Install the server
 
-**The quick way: one command.** On the Ubuntu server:
+**The quick way: one command.** On the Ubuntu server, with your address from step 2.4:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/MRnigth/Pairnets/main/deploy/get.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/MRnigth/Pairnets/main/deploy/get.sh | sudo bash -s -- --public-url https://sync.example.com
 ```
 
 It downloads the latest release, checks its SHA-256 checksum (it refuses a damaged or altered
-download), and runs `install.sh`, which is described below. To pick the address yourself, add
-options after `-s --`, e.g. `... | sudo bash -s -- --bind 100.x.y.z`.
+download), and runs `install.sh`, which is described below. It asks you to paste the tunnel token
+(pasting the whole copied command works too; nothing is shown while you paste).
 
 **Or step by step**, if you prefer to see each file:
 
@@ -98,22 +103,26 @@ sha256sum --check --ignore-missing SHA256SUMS.txt
 # 3. Unpack and install
 tar xzf pairnets-server-linux-x64.tar.gz
 cd pairnets-server-linux-x64
-sudo ./install.sh
+sudo ./install.sh --public-url https://sync.example.com
 ```
 
 `install.sh` does everything for you:
 
-* finds the Tailscale address and makes the server listen **only** there (port 5075);
+* makes the server listen **only** on `127.0.0.1` (port 5075), so nothing on your network can
+  reach it directly;
+* installs `cloudflared` from Cloudflare's own package repository, keeps the tunnel token in
+  `/etc/pairnets/tunnel.env` (readable by root only) and starts the background service
+  `pairnets-tunnel`;
 * creates a dedicated system user `pairnets` and the folders
   `/opt/pairnets` (program), `/var/lib/pairnets` (your data) and `/etc/pairnets` (settings);
 * creates a random **token**, a long password that the PCs must present;
-* installs and starts the background service `pairnets-server`, which also starts at boot.
+* installs and starts the background service `pairnets-server`; both services also start at boot.
 
-At the end it prints something like:
+At the end it checks that `https://sync.example.com/api/health` answers, and prints something like:
 
 ```
 Enter these settings in Pairnets on both PCs:
-  Server URL:  http://100.x.y.z:5075/
+  Server URL:  https://sync.example.com/
   Token:       3f9c…(64 characters)…a1
 
 The token is shown only this once. Store it in your password manager.
@@ -122,116 +131,20 @@ The token is shown only this once. Store it in your password manager.
 **Copy both into your password manager now.** You need them on both PCs. If you lose the token
 you can read it again on the server with `sudo grep SYNC_TOKEN /etc/pairnets/pairnets.env`.
 
-Check that the server is running:
+Check that both services are running:
 
 ```bash
-sudo systemctl status pairnets-server           # should say "active (running)"
-curl http://100.x.y.z:5075/api/health         # should print: ok
+sudo systemctl status pairnets-server pairnets-tunnel    # both should say "active (running)"
 ```
-
-> If `install.sh` warns that it could not find the Tailscale address, Tailscale was not up yet.
-> Run `sudo tailscale up`, then run `sudo ./install.sh` again (it is safe to repeat).
 
 ---
 
-## 4. Lock the server down to your two PCs
-
-Tailscale already keeps strangers out. This step also keeps *your other devices* (phone, TV,
-work laptop…) away from Pairnets.
-
-1. On any machine, run `tailscale status` and note the **names** of your two PCs (first column).
-2. Open the Tailscale admin console → **Access controls**.
-3. Add this rule, replacing the names and the address:
-
-```hujson
-{
-  "hosts": { "pairnets-server": "100.x.y.z" },
-  "acls": [
-    { "action": "accept", "src": ["my-desktop", "my-laptop"], "dst": ["pairnets-server:5075"] }
-    // keep your existing rules below
-  ]
-}
-```
-
-4. Save. From a device that is *not* one of the two PCs,
-   `curl http://100.x.y.z:5075/api/health` should now time out.
-
-> If your policy file still contains the default "allow everything" rule
-> (`"src": ["*"], "dst": ["*:*"]`), that rule also lets every device reach Pairnets.
-> Narrow it or remove it if you want this lock-down to apply.
-
----
-
-## 4b. No Tailscale? Use a Cloudflare Tunnel instead
-
-Use this **instead of sections 2 to 4** when Tailscale is not an option on every computer, for
-example for people who cannot install a VPN app or open ports on their network. Nothing is opened
-on any router: the server makes an outgoing connection to Cloudflare and keeps it open, and the PCs
-reach the server at an `https://` address on your own domain.
-
-**Good to know first**
-
-* You need a free Cloudflare account and a **domain name that uses Cloudflare** (about $10 a year;
-  buy one at Cloudflare or move an existing one there).
-* **Cloudflare can see the traffic.** It decrypts HTTPS at its edge before passing requests through
-  the tunnel, so in principle Cloudflare could see your token and your files. With Tailscale nobody
-  in between can. If that matters for your files, use Tailscale.
-* The server is now reachable from the internet. The long token is what keeps strangers out: keep
-  it in your password manager and never share it.
-* Cloudflare's free plan refuses any single upload over 100 MB. Pairnets sends big files in pieces
-  automatically: between 4 and 50 MB each, sized so one piece takes about 30 seconds on your
-  connection (smaller on a slow or busy network) and halved after a dropped connection, so a bad
-  connection loses little. An interrupted upload continues where it stopped. There is nothing to
-  set.
-
-**Step 1: create the tunnel in the Cloudflare dashboard**
-
-1. Sign in at <https://dash.cloudflare.com> and check that your domain is listed.
-2. Open **Zero Trust** → **Networks** → **Tunnels** → **Create a tunnel**, choose **Cloudflared**,
-   and name it `pairnets`.
-3. On the "Install and run a connector" page, pick **Debian** and copy the command shown
-   (`sudo cloudflared service install eyJ…`). **Do not run it**: Pairnets's installer does that part
-   in a safer way. The long text starting with `eyJ` is the **tunnel token**; treat it like a
-   password.
-4. Go on to **Public hostnames** and add one: subdomain `sync`, your domain, service **Type**
-   `HTTP`, **URL** `localhost:5075`. Save.
-5. For your domain, open **Security** → **Bots** and make sure **Bot Fight Mode** is off. It
-   answers with browser checks that the Pairnets app cannot pass.
-
-(Cloudflare moves its menus now and then. If something looks different, look for "Tunnels" under
-Zero Trust → Networks.)
-
-**Step 2: install the server with the tunnel**
-
-On the Ubuntu server, replacing `sync.example.com` with the hostname from step 1.4:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/MRnigth/Pairnets/main/deploy/get.sh | sudo bash -s -- --cloudflare-tunnel --public-url https://sync.example.com
-```
-
-It asks you to paste the tunnel token (pasting the whole copied command works too; nothing is
-shown while you paste). Then it:
-
-* installs `cloudflared` from Cloudflare's own package repository;
-* makes Pairnets listen on `127.0.0.1` only, so nothing on your network can reach it directly;
-* keeps the tunnel token in `/etc/pairnets/tunnel.env` (readable by root only) and starts the
-  background service `pairnets-tunnel`;
-* checks that `https://sync.example.com/api/health` answers, and prints:
-
-```
-Enter these settings in Pairnets on both PCs:
-  Server URL:  https://sync.example.com/
-  Token:       3f9c…(64 characters)…a1
-```
+## 4. Check it from outside
 
 Open `https://sync.example.com/api/health` in a browser on any computer: it should show `ok`.
 Then go on with [section 5](#5-set-up-the-first-computer-for-example-the-desktop) and enter the
 `https://` address as the server address. (Always `https://`: the app refuses `http://` for a
 server behind Cloudflare, so the token is never sent unencrypted.)
-
-> **Already running Pairnets with Tailscale?** Run the same command on the server. It switches the
-> server to the tunnel and keeps your token, files and history. Then change the server address in
-> **Settings** on each computer to the `https://` one.
 
 **If the app cannot connect**
 
@@ -241,6 +154,11 @@ server behind Cloudflare, so the token is never sent unencrypted.)
 | "Cloudflare blocked Pairnets with a browser check" | Turn off Bot Fight Mode (Security → Bots), or add a WAF custom rule that skips it for your Pairnets hostname. |
 | "This server is reached through Cloudflare. Use https://" | Type the address with `https://`, not `http://`. |
 | A login page instead of `ok` in the browser | Cloudflare Access is protecting the hostname. Remove the Access application for it: the Pairnets app cannot sign in through it. |
+
+> **A server that was set up with Tailscale** (older versions)? Pairnets no longer uses Tailscale.
+> Create the tunnel (section 2), then run the install command from section 3 on the server. It
+> switches the server to the tunnel and keeps your token, files and history. Change the server
+> address in **Settings** on each computer to the `https://` one.
 
 ---
 
@@ -294,7 +212,7 @@ Windows, Mac and Linux, and follows your system's light or dark mode:
 
 | Field | What to enter |
 |-------|---------------|
-| **Server URL** | `http://100.x.y.z:5075/` exactly as printed by `install.sh` |
+| **Server URL** | `https://sync.example.com/` exactly as printed by `install.sh` |
 | **Token** | the token printed by `install.sh` |
 | **Folder to sync** | click **Browse…** and pick the folder, e.g. `D:\Work`. It may already contain your files. |
 | **Device name** | pre-filled with the computer name. Leave it, but **each PC needs a different name**. It appears in conflict file names. |
@@ -479,7 +397,7 @@ You do not have to do anything. Just work in the folder on whichever PC you are 
   └────────────┘   "something     │ manifest (list of │   "something    └────────────┘
                     changed" ◀──  │  every file)      │  ──▶ changed"
                                   └───────────────────┘
-   all traffic is encrypted (Tailscale, or HTTPS through a Cloudflare Tunnel) and needs the token
+   all traffic goes over HTTPS through your Cloudflare Tunnel and needs the token
 ```
 
 The two PCs never talk to each other directly. Each one only compares itself with the server.
@@ -581,7 +499,7 @@ A renamed file is synced as "delete the old name, create the new name". The resu
 
 | You see | What it means and what to do |
 |---------|------------------------------|
-| **Grey icon, "Offline"** | This PC cannot reach the server. Check that Tailscale is connected (its icon) and that the server is on. On the server: `sudo systemctl status pairnets-server` (and `sudo systemctl status pairnets-tunnel` with a Cloudflare Tunnel). Pairnets keeps retrying; your changes are safe and sync when it is back. |
+| **Grey icon, "Offline"** | This PC cannot reach the server. Check that the computer is online and the server is on. On the server: `sudo systemctl status pairnets-server pairnets-tunnel`. Pairnets keeps retrying; your changes are safe and sync when it is back. |
 | **"The server rejected the token"** | The token in Settings is wrong, or was changed on the server. Open **Settings…**, paste the token, and click **Test connection**. |
 | **"Deletions blocked"** (orange) | A sync would delete many files. Right-click → **Allow these deletions…** lists them, showing which PC loses what. If that is what you did, click **Yes** (it applies once). If not (wrong folder, unplugged drive), click **No** and investigate. Nothing has been deleted. |
 | **"The folder is missing" / "no .pairnets-marker"** (orange) | The drive is unplugged, or you moved or renamed the folder. Plug the drive in and choose **Sync now**. If you moved the folder, choose **Locate the sync folder…** and point to its new place; Pairnets recognizes it by its marker and continues without resyncing. |
@@ -621,8 +539,8 @@ sudo systemctl restart pairnets-server
 echo "$NEW"
 ```
 
-Enter the new token in **Settings…** on both PCs. If a PC was lost, also remove it from Tailscale
-(admin console → Machines). With a Cloudflare Tunnel the new token is all it takes.
+Enter the new token in **Settings…** on both PCs. If a PC was lost, the new token is all it takes:
+the lost PC can no longer connect.
 
 ### Logs
 

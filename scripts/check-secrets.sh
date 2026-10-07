@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Scans for things that must never be committed: sync tokens, Tailscale IPs,
-# personal Windows paths. Run before every push (and in CI).
+# Scans for things that must never be committed: sync tokens, tunnel tokens, private
+# (carrier-grade NAT / VPN) IPs, personal Windows paths. Run before every push (and in CI).
 #
 #   scripts/check-secrets.sh            # staged changes + working tree diff
 #   scripts/check-secrets.sh --tree     # every tracked file
@@ -14,13 +14,13 @@ mode="${1:---diff}"
 cd "$(git rev-parse --show-toplevel)"
 
 # Known public test vectors (SHA-256 of "abc" and of the empty string).
-# Plus the Tailscale network address itself, which is public documentation.
+# Plus the 100.64.0.0/10 range itself, which is public documentation.
 allowlist='ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad|e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855|100\.64\.0\.0/10'
 
 patterns=(
   # 64 hex chars: the shape of "openssl rand -hex 32" tokens.
   '(?<![0-9a-fA-F])[0-9a-fA-F]{64}(?![0-9a-fA-F])'
-  # Tailscale CGNAT range 100.64.0.0/10.
+  # Carrier-grade NAT range 100.64.0.0/10 (also used by VPNs): a real address of someone's machine.
   '(?<![0-9.])100\.(6[4-9]|[7-9][0-9]|1[01][0-9]|12[0-7])\.[0-9]{1,3}\.[0-9]{1,3}(?![0-9])'
   # Token assignments with a concrete-looking value (not a placeholder).
   '(?i)(sync_token|sync__token|x-sync-token|"token")\s*[:=]\s*"?[A-Za-z0-9+/_\-]{16,}'

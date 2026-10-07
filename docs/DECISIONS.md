@@ -6,7 +6,7 @@ what cannot lose or silently overwrite data.
 ## Setup and placeholders
 
 * **Unfilled placeholders.** Server IP, folders and sizes were not provided. Docs use
-  `http://<tailscale-ip>:5075` / `100.x.y.z`; the folder is chosen in the first-run window; the
+  `https://sync.example.com`; the folder is chosen in the first-run window; the
   design assumes about 20 GB with single files of several GB, so everything is streamed and never
   buffered in memory.
 * **Missing `.gitignore`.** The repo contained only `LICENSE`, so the standard Visual Studio
@@ -71,7 +71,7 @@ what cannot lose or silently overwrite data.
 * **Data-dir lock.** The service holds `DataDir/.lock`; the maintenance CLI refuses to run
   concurrently.
 * **Default bind** is `127.0.0.1:5075`, set in code so `ASPNETCORE_URLS` and `--urls` override it
-  cleanly. `install.sh` binds to the Tailscale IP and refuses `0.0.0.0`.
+  cleanly. `install.sh` keeps it there (the Cloudflare Tunnel brings requests in) and refuses `0.0.0.0`.
 * **Logging under systemd** uses the systemd console formatter (journald priorities). ASP.NET's own
   request-URL logging is at Warning, so `access_token` never reaches the logs.
 * **`MemoryDenyWriteExecute`** is not set in the unit, because the .NET JIT needs W+X memory.
@@ -108,7 +108,7 @@ what cannot lose or silently overwrite data.
 * **Windows CI runs the full test suite** (with 50 convergence seeds), not just the client build,
   because NTFS case-insensitivity and file locking are where the product runs.
 * **Fault injection** uses a real TCP proxy that resets connections, instead of mocks.
-* **Secret scanning** (`scripts/check-secrets.sh`) looks for 64-hex tokens, Tailscale CGNAT IPs,
+* **Secret scanning** (`scripts/check-secrets.sh`) looks for 64-hex tokens, carrier-grade NAT/VPN IPs,
   token assignments, Cloudflare Tunnel tokens and personal Windows paths. It runs before each push and in CI over the whole
   history.
 * **Commit attribution.** At your request, commits no longer carry `Co-Authored-By` trailers.
@@ -192,15 +192,19 @@ what cannot lose or silently overwrite data.
   shows its menu (it reports no clicks), so the panel opens from "Quick status…" in that menu; on
   Linux a click opens it where the desktop reports clicks.
 
-## Without Tailscale: Cloudflare Tunnel
+## Cloudflare Tunnel
 
 * **Why a tunnel at all.** When no machine can accept incoming connections (no port forwarding,
-  CGNAT), something with a public address has to sit in the middle; with Tailscale that is its
-  coordination server and DERP relays. Cloudflare Tunnel was chosen as the second option because it
-  is free, needs only outbound connections from the server, carries WebSockets (the push channel),
-  and the PCs need nothing installed. The cost: Cloudflare ends HTTPS at its edge and can see the
-  traffic, and the server is reachable from the internet (the token is the gate). Both are spelled
-  out in SECURITY.md and HOWTO 4b.
+  CGNAT), something with a public address has to sit in the middle. Cloudflare Tunnel was chosen
+  because it is free, needs only outbound connections from the server, carries WebSockets (the push
+  channel), and the PCs need nothing installed. The cost: Cloudflare ends HTTPS at its edge and can
+  see the traffic, and the server is reachable from the internet (the token is the gate). Both are
+  spelled out in SECURITY.md and HOWTO section 2.
+* **The only way in.** Pairnets first ran inside a Tailscale network, with the tunnel as a second
+  option. Tailscale was removed: one way to set up and explain, and nothing to install on the
+  computers. A first `install.sh` needs `--public-url` and sets up the tunnel; there is no Tailscale
+  lookup, ACL file or `tailscaled` dependency any more. A server set up the old way keeps its listen
+  address on upgrade; running `install.sh --public-url …` once moves it to the tunnel.
 * **Our own `pairnets-tunnel.service` instead of `cloudflared service install <token>`.** The official
   command puts the tunnel token in a world-readable unit file and on a command line. Ours reads it
   from `/etc/pairnets/tunnel.env` (root, 600) and runs cloudflared as a dynamic unprivileged user.

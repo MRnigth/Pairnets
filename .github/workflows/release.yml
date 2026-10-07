@@ -46,7 +46,7 @@ jobs:
       - name: Package
         run: |
           cp deploy/install.sh deploy/update.sh deploy/pairnets-server.service deploy/pairnets-update.service deploy/pairnets-update.path deploy/pairnets-update.timer \
-             deploy/pairnets-tunnel.service deploy/pairnets.env.example deploy/tailscale-acl.hujson dist/pairnets-server-linux-x64/
+             deploy/pairnets-tunnel.service deploy/pairnets.env.example dist/pairnets-server-linux-x64/
           echo "${{ steps.v.outputs.version }}" > dist/pairnets-server-linux-x64/VERSION
           cp docs/DEPLOY.md dist/pairnets-server-linux-x64/DEPLOY.md
           chmod +x dist/pairnets-server-linux-x64/install.sh dist/pairnets-server-linux-x64/update.sh dist/pairnets-server-linux-x64/pairnets-server

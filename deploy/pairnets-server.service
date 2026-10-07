@@ -1,8 +1,8 @@
 [Unit]
 Description=Pairnets file sync server
 Documentation=https://github.com/MRnigth/Pairnets/blob/main/docs/DEPLOY.md
-After=network-online.target tailscaled.service
-Wants=network-online.target tailscaled.service
+After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=exec

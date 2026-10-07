@@ -1,7 +1,7 @@
 # Testing
 
 All tests are xunit tests in `tests/Pairnets.Tests`. The real server runs **in-process** on a
-random localhost port with temporary directories. No network, Tailscale or Windows machine is
+random localhost port with temporary directories. No network, Cloudflare account or Windows machine is
 needed, except for the Windows CI job, which runs the same suite on NTFS.
 
 ```bash
@@ -34,7 +34,7 @@ test report lost content within the first few seeds.
 
 * The tray UI on real Windows hardware: icon colors, menus, toasts, DPAPI under a real user
   profile, Recycle Bin, sleep/resume events, the HKCU Run key.
-* Tailscale ACL enforcement and the systemd unit on a real Ubuntu host (`install.sh` is checked
+* The Cloudflare Tunnel and the systemd units on a real Ubuntu host (`install.sh` is checked
   with shellcheck and the unit with `systemd-analyze verify` in development).
 * Very large trees (100k+ files) and multi-gigabyte files over a slow link.
 

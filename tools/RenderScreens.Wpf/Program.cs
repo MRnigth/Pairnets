@@ -171,7 +171,7 @@ public static class Program
         window.SelectHistoryRow(0);
         Save(window, outDir, $"windows-main-history-{suffix}.png", print);
 
-        window.ShowSettingsPage(new SettingsView(new ClientSettings { ServerUrl = "http://100.x.y.z:5075/", Folder = folder, DeviceName = "DESKTOP" },
+        window.ShowSettingsPage(new SettingsView(new ClientSettings { ServerUrl = "https://sync.example.com/", Folder = folder, DeviceName = "DESKTOP" },
             new NoProtector(), firstRun: false, serverVersionText: "Server 1.0.58"));
         Save(window, outDir, $"windows-main-settings-{suffix}.png", print);
         window.AllowClose = true;
