@@ -15,8 +15,9 @@ data, nothing secret: the person's own server (their *nest*, `nest.pairnets.app`
 `/download/...` at the files of the latest GitHub release (they keep the names the apps update
 themselves with, so the links never break) and `/get.sh` at the server installer.
 
-The nest's own name, `nest.pairnets.app`, is **not** served from here: it is a DNS-only record that
-points at your server's Tailscale address (`install.sh --domain` creates it).
+The nest's own name, `nest.pairnets.app`, is **not** served from here: it is a public hostname on
+your server's Cloudflare Tunnel (Zero Trust → Networks → Tunnels → public hostname `nest` →
+`HTTP` `localhost:5075`), so requests for it go straight through the tunnel to your server.
 
 ## Changing it
 

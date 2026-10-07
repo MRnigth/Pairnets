@@ -54,7 +54,7 @@
     <section aria-labelledby="why">
       <h2 id="why">Built to keep your files safe</h2>
       <div class="cards">
-        <div class="card"><h3>Yours, not ours</h3><p>The server is a small program on a machine you own. It only answers your own devices, over Tailscale. This website never sees your files.</p></div>
+        <div class="card"><h3>Yours, not ours</h3><p>The server is a small program on a machine you own, reached through a Cloudflare Tunnel — no ports to open. Only computers you have approved get in. This website never sees your files.</p></div>
         <div class="card"><h3>Never overwrites silently</h3><p>If two computers change the same file, both versions are kept. Every overwritten or deleted file stays on your server for 30 days.</p></div>
         <div class="card"><h3>One key per computer</h3><p>Lost a laptop? Remove just that computer from your nest and its key stops working at once. Nothing else changes.</p></div>
       </div>
@@ -66,14 +66,14 @@
         <div class="card"><h3>Windows</h3><p class="muted small">Windows 10 and 11, 64-bit.</p><div class="row"><a class="button accent" href="/download/windows">Installer</a><a class="button" href="/download/windows-portable">No installer (.zip)</a></div></div>
         <div class="card"><h3>Mac</h3><p class="muted small">macOS 11 or newer. Not notarised yet: right-click → Open the first time, or use the one-line install.</p><div class="row"><a class="button accent" href="/download/mac-apple-silicon">Apple silicon</a><a class="button" href="/download/mac-intel">Intel</a></div></div>
         <div class="card"><h3>Linux desktop</h3><p class="muted small">64-bit, with a system tray.</p><div class="row"><a class="button accent" href="/download/linux">Download (.tar.gz)</a></div></div>
-        <div class="card"><h3>Your server (your nest)</h3><p class="muted small">Any always-on Ubuntu machine with Tailscale. One command:</p><pre><code>curl -fsSL https://pairnets.app/get.sh | sudo bash</code></pre><p class="small">Then give it a name: <code>sudo ./install.sh --domain nest.pairnets.app</code>. <a href="/docs">Read the guide</a>.</p></div>
+        <div class="card"><h3>Your server (your nest)</h3><p class="muted small">Any always-on Ubuntu machine. Make a free Cloudflare Tunnel for its name, then one command:</p><pre><code>curl -fsSL https://pairnets.app/get.sh | sudo bash -s -- --public-url https://nest.pairnets.app</code></pre><p class="small"><a href="/docs">The guide</a> walks through the tunnel step (about 15 minutes in all).</p></div>
       </div>
     </section>
   </div>
 </main>
 <footer>
   <div class="wrap">
-    <p>pairnets.app only serves these pages. It has no accounts and never sees your files or your sign-in: your nest is your own server, reachable only from your own Tailscale devices.</p>
+    <p>pairnets.app only serves these pages. It has no accounts and never sees your files or your sign-in: your nest is your own server, and only computers you have approved can get in.</p>
     <p><a href="/source">Source code</a> · <a href="/docs">Guide</a> · MIT licence</p>
   </div>
 </footer>
