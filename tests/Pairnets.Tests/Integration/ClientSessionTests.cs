@@ -136,7 +136,14 @@ public class ClientSessionTests : IAsyncLifetime
         }
         await using var session = Start(hooks);
         var maxTotal = 0;
-        session.StatusChanged += s => { if (s.FilesTotal > Volatile.Read(ref maxTotal)) Volatile.Write(ref maxTotal, s.FilesTotal); };
+        var maxBatch = 0;
+        session.StatusChanged += s =>
+        {
+            if (s.FilesTotal > Volatile.Read(ref maxTotal))
+                Volatile.Write(ref maxTotal, s.FilesTotal);
+            if (s.Batch.Count > Volatile.Read(ref maxBatch))
+                Volatile.Write(ref maxBatch, s.Batch.Count);
+        };
 
         await WaitUntil(() => session.Status.FilesDone >= 4, "first uploads");
         Assert.Equal(20, session.Status.FilesTotal);
@@ -149,6 +156,7 @@ public class ClientSessionTests : IAsyncLifetime
         await WaitUntil(() => _server.Store.ReadManifest(null).Entries.Count == 32, "all uploads");
         await WaitUntil(() => session.Status.Status == RunnerStatus.Idle, "idle");
         Assert.Equal(32, Volatile.Read(ref maxTotal));
+        Assert.Equal(32, Volatile.Read(ref maxBatch)); // the file list carries on across the passes too
     }
 
     [Fact]
@@ -181,6 +189,43 @@ public class ClientSessionTests : IAsyncLifetime
         await WaitUntil(() => session.Status.Server is not null, "server info");
         Assert.NotNull(session.Status.ServerFreeText);
         Assert.Equal(PairnetsInfo.ProductVersion, session.Status.Server!.ServerVersion);
+    }
+
+    [Fact]
+    public async Task SessionListsEveryFileOfTheSyncWithWhereItIs()
+    {
+        var hooks = new EngineHooks { BeforeTransfer = (_, _) => Task.Delay(100) };
+        Directory.CreateDirectory(Path.Combine(_folder.Path, "Photos"));
+        for (var i = 0; i < 8; i++)
+        {
+            var path = Path.Combine(_folder.Path, "Photos", $"p{i}.jpg");
+            File.WriteAllBytes(path, new byte[100_000]);
+            File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddMinutes(-1)); // all 8 in one pass
+        }
+        await using var session = Start(hooks);
+        var seen = new List<StatusSnapshot>();
+        session.StatusChanged += s => { lock (seen) seen.Add(s); };
+
+        await WaitUntil(() => _server.Store.ReadManifest(null).Entries.Count == 8, "uploads");
+        await WaitUntil(() => session.Status.Status == RunnerStatus.Idle, "idle");
+
+        Assert.Empty(session.Status.Batch); // only shown while syncing
+        List<StatusSnapshot> all;
+        lock (seen)
+            all = [.. seen];
+        var planned = all.First(s => s.Batch.Count > 0).Batch;
+        Assert.Equal(Enumerable.Range(0, 8).Select(i => $"Photos/p{i}.jpg"), planned.Select(f => f.Path)); // in run order
+        Assert.All(planned, f => Assert.Equal(("upload", BatchFileState.Waiting), (f.Operation, f.State)));
+        Assert.All(all.Where(s => s.Batch.Count > 0), s => Assert.Equal(RunnerStatus.Syncing, s.Status));
+        Assert.Contains(all, s => s.Batch.Any(f => f.IsMoving && f.Percent is not null) && s.Batch.Any(f => f.IsWaiting));
+        Assert.Contains(all, s => s.Batch.Any(f => f.IsDone) && s.Batch.Any(f => !f.IsDone));
+        Assert.Contains(all, s => s.Batch.Count == 8 && s.Batch.All(f => f.IsDone));
+
+        // The "In progress" list shows the folder as one row while it syncs.
+        var row = Assert.Single(TransferGroups.Build(all.First(s => s.Batch.Any(f => f.IsDone) && s.Batch.Any(f => !f.IsDone))));
+        Assert.True(row.IsFolder);
+        Assert.Equal("Photos", row.Title);
+        Assert.Matches("^[1-7] of 8 files$", row.Detail);
     }
 
     [Fact]

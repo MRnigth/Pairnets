@@ -29,6 +29,10 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
     private readonly Queue<(long Ticks, long Bytes)> _samples = new();
     private long _burstBytesDone;
     private long _burstBytesTotal;
+
+    /// <summary>The burst's uploads and downloads, file by file (<see cref="StatusSnapshot.Batch"/>). Guarded by <c>_gate</c>.</summary>
+    private readonly SyncBatch _batch = new();
+
     private Timer? _infoTimer;
     private Timer? _devicesTimer;
 
@@ -303,6 +307,9 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
         return session;
     }
 
+    /// <summary>The sync's file list for a snapshot: empty unless a sync is running. Call with <c>_gate</c> held.</summary>
+    private IReadOnlyList<BatchFile> BatchFor(StatusSnapshot s) => s.Status == RunnerStatus.Syncing ? _batch.View : [];
+
     private void Wire()
     {
         Engine.FileSynced += (action, path) =>
@@ -315,6 +322,12 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
                 _ => (ActivityKind.DeletedOnServer, "Deleted on the server"),
             };
             Activity.Add(kind, path, $"{verb}: {path}", _clock);
+            if (action is SyncAction.Upload or SyncAction.Download)
+            {
+                lock (_gate)
+                    _batch.Done(path, action == SyncAction.Upload ? "upload" : "download");
+                Update(s => s with { Batch = BatchFor(s) });
+            }
         };
         Engine.ConflictCreated += c =>
         {
@@ -340,11 +353,24 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
                 {
                     _burstBytesDone = 0;
                     _samples.Clear();
+                    _batch.Clear();
+                }
+                else
+                {
+                    _batch.StopMoving();
                 }
                 _passDone = 0;
                 _passTotal = 0;
                 _active.Clear();
             }
+        };
+        // The pass's uploads and downloads, in run order: they wait until they move, then are done. Files of
+        // an earlier pass of the same burst stay in the list.
+        Engine.ExecutionPlanned += planned =>
+        {
+            lock (_gate)
+                _batch.Plan(planned);
+            Update(s => s with { Batch = BatchFor(s) });
         };
         Engine.Progress += p =>
         {
@@ -367,7 +393,9 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
                         _burstBytesDone += delta;
                         _samples.Enqueue((_clock.GetTimestamp(), delta));
                     }
-                    _active[p.CurrentPath] = new ActiveTransfer(p.CurrentPath, p.Operation, p.BytesDone, p.BytesTotal);
+                    var transfer = new ActiveTransfer(p.CurrentPath, p.Operation, p.BytesDone, p.BytesTotal);
+                    _active[p.CurrentPath] = transfer;
+                    _batch.Moving(p.CurrentPath, p.Operation, transfer.Percent);
                 }
                 active = [.. _active.Values];
                 bytesDone = _burstBytesDone;
@@ -377,7 +405,7 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
             Update(s => (p.CurrentPath is null
                 ? s with { CurrentPath = null, Operation = null, BytesDone = 0, BytesTotal = 0, FilesDone = done, FilesTotal = total }
                 : s with { CurrentPath = p.CurrentPath, Operation = p.Operation, BytesDone = p.BytesDone, BytesTotal = p.BytesTotal, FilesDone = done, FilesTotal = total })
-                with { Active = active, PassBytesDone = bytesDone, PassBytesTotal = bytesTotal, BytesPerSecond = rate });
+                with { Active = active, Batch = BatchFor(s), PassBytesDone = bytesDone, PassBytesTotal = bytesTotal, BytesPerSecond = rate });
         };
         Engine.TransferFinished += path =>
         {
@@ -385,9 +413,10 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
             lock (_gate)
             {
                 _active.Remove(path);
+                _batch.Stopped(path); // a file that synced is already done
                 active = [.. _active.Values];
             }
-            Update(s => s with { Active = active });
+            Update(s => s with { Active = active, Batch = BatchFor(s) });
         };
         Runner.PendingChangesChanged += pending =>
         {
@@ -425,6 +454,7 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
             Text = text,
             LastSyncAt = Runner.LastSyncAt,
             CurrentPath = status == RunnerStatus.Syncing ? s.CurrentPath : null,
+            Batch = status == RunnerStatus.Syncing ? s.Batch : [], // a pass of the same burst shows it again
             Paused = status == RunnerStatus.Paused,
         });
         Runner.PassCompleted += report =>

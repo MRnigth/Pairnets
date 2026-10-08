@@ -80,6 +80,13 @@ public sealed class SyncEngine
     /// <summary>Raised once per pass after planning: uploads (incl. conflicts), downloads, and the bytes they will move.</summary>
     public event Action<int, int, long>? ExecutionStarting;
 
+    /// <summary>
+    /// Raised once per pass right after <see cref="ExecutionStarting"/>: the uploads and downloads of the pass in
+    /// the order they run, each as its path and "upload" or "download". Deletions and conflicts are left out (a
+    /// conflict's copy and download show up in <see cref="Progress"/> when they start).
+    /// </summary>
+    public event Action<IReadOnlyList<(string Path, string Operation)>>? ExecutionPlanned;
+
     /// <summary>Raised when an upload or download (finished, failed or skipped) no longer runs.</summary>
     public event Action<string>? TransferFinished;
 
@@ -377,6 +384,10 @@ public sealed class SyncEngine
             ordered.Count(p => p.Action is SyncAction.Upload or SyncAction.Conflict),
             ordered.Count(p => p.Action == SyncAction.Download),
             plannedBytes);
+        ExecutionPlanned?.Invoke(ordered
+            .Where(p => p.Action is SyncAction.Upload or SyncAction.Download)
+            .Select(p => (p.Path, p.Action == SyncAction.Upload ? "upload" : "download"))
+            .ToList());
 
         // Deletes and conflicts one by one (they rename and prune folders), then uploads and
         // downloads several at a time: each small file costs a round trip, so overlap them.
