@@ -246,13 +246,138 @@ public class UploadSessionStoreTests
         clock.Advance(TimeSpan.FromMinutes(50));
         var busy = await sessions.StartAsync("busy.bin", "none", 10, null, default);
         Assert.Equal(UploadSessions.ChunkStatus.Ok, (await sessions.AppendAsync(busy.Id!, 0, new MemoryStream(new byte[5]), default)).Status);
-        Assert.Equal(2, Directory.GetFiles(store.Paths.Tmp).Length);
+        Assert.Equal(2, Directory.GetFiles(store.Paths.Tmp, "*.part").Length);
+        Assert.Equal(2, Directory.GetFiles(store.Paths.Tmp, "*.session").Length);
 
         clock.Advance(TimeSpan.FromMinutes(20));
         Assert.Equal(1, sessions.ExpireIdle());
         Assert.Null(sessions.Received(idle.Id!));
         Assert.Equal(5, sessions.Received(busy.Id!));
-        Assert.Single(Directory.GetFiles(store.Paths.Tmp));
+        Assert.Equal([busy.Id + ".part", busy.Id + ".session"], Directory.GetFiles(store.Paths.Tmp).Select(Path.GetFileName).Order(StringComparer.Ordinal));
+    }
+
+    private static async Task<UploadSessions> RestartAsync(TempDir dir, List<IDisposable> owned)
+    {
+        foreach (var d in owned)
+            d.Dispose();
+        owned.Clear();
+        var store = new SyncStore(new ServerPaths(dir.Path), NullLogger<SyncStore>.Instance);
+        store.Initialize();
+        var sessions = new UploadSessions(store, NullLogger<UploadSessions>.Instance);
+        owned.Add(sessions);
+        owned.Add(store);
+        await Task.CompletedTask;
+        return sessions;
+    }
+
+    private static async Task WaitUntilReady(UploadSessions sessions, string id)
+    {
+        for (var i = 0; i < 500 && sessions.Status(id) is { Busy: true }; i++)
+            await Task.Delay(10);
+        Assert.False(sessions.Status(id)!.Busy);
+    }
+
+    [Fact]
+    public async Task AnUploadIsKeptOverAServerRestartAndItsPartHashedAgain()
+    {
+        using var dir = new TempDir("sessions");
+        var owned = new List<IDisposable>();
+        try
+        {
+            var sessions = await RestartAsync(dir, owned);
+            var data = Encoding.UTF8.GetBytes("0123456789abcdefghij");
+            var id = (await sessions.StartAsync("a.txt", "none", data.Length, 1700000000000, default)).Id!;
+            Assert.Equal(UploadSessions.ChunkStatus.Ok, (await sessions.AppendAsync(id, 0, new MemoryStream(data[..12]), default)).Status);
+
+            sessions = await RestartAsync(dir, owned);
+            await WaitUntilReady(sessions, id);
+            Assert.Equal(12, sessions.Received(id));
+            Assert.Equal(UploadSessions.ChunkStatus.Ok, (await sessions.AppendAsync(id, 12, new MemoryStream(data[12..]), default)).Status);
+            var done = await sessions.CommitAsync(id, ContentHash.Of(data), default);
+
+            Assert.Equal(UploadSessions.CommitStatus.Done, done.Status);
+            Assert.Equal(ChangeStatus.Ok, done.Change!.Status);
+            Assert.Equal(1700000000000, done.Change.Entry!.ModifiedMs);
+            Assert.Equal(data, await File.ReadAllBytesAsync(Path.Combine(dir.Path, "files", "a.txt")));
+            Assert.Empty(Directory.GetFiles(Path.Combine(dir.Path, "tmp")));
+        }
+        finally
+        {
+            foreach (var d in owned)
+                d.Dispose();
+        }
+    }
+
+    [Fact]
+    public async Task APartThatChangedOverARestartIsRefusedAtTheCommit()
+    {
+        using var dir = new TempDir("sessions");
+        var owned = new List<IDisposable>();
+        try
+        {
+            var sessions = await RestartAsync(dir, owned);
+            var data = Encoding.UTF8.GetBytes("0123456789abcdefghij");
+            var id = (await sessions.StartAsync("a.txt", "none", data.Length, null, default)).Id!;
+            await sessions.AppendAsync(id, 0, new MemoryStream(data[..12]), default);
+            foreach (var d in owned)
+                d.Dispose();
+            owned.Clear();
+            var part = Path.Combine(dir.Path, "tmp", id + ".part");
+            var bytes = await File.ReadAllBytesAsync(part);
+            bytes[3] ^= 0xFF; // a bad sector, or a crash in the middle of a write
+            await File.WriteAllBytesAsync(part, bytes);
+
+            sessions = await RestartAsync(dir, owned);
+            await WaitUntilReady(sessions, id);
+            await sessions.AppendAsync(id, 12, new MemoryStream(data[12..]), default);
+            var done = await sessions.CommitAsync(id, ContentHash.Of(data), default);
+
+            Assert.Equal(UploadSessions.CommitStatus.HashMismatch, done.Status);
+            Assert.False(File.Exists(Path.Combine(dir.Path, "files", "a.txt")));
+            Assert.Null(sessions.Status(id));
+            Assert.Empty(Directory.GetFiles(Path.Combine(dir.Path, "tmp")));
+        }
+        finally
+        {
+            foreach (var d in owned)
+                d.Dispose();
+        }
+    }
+
+    [Fact]
+    public async Task OnlyRecentWholeUploadsAreKeptAtStart()
+    {
+        using var dir = new TempDir("sessions");
+        var owned = new List<IDisposable>();
+        try
+        {
+            var sessions = await RestartAsync(dir, owned);
+            var fresh = (await sessions.StartAsync("fresh.bin", "none", 10, null, default)).Id!;
+            var stale = (await sessions.StartAsync("stale.bin", "none", 10, null, default)).Id!;
+            var noInfo = (await sessions.StartAsync("noinfo.bin", "none", 10, null, default)).Id!;
+            var tooBig = (await sessions.StartAsync("toobig.bin", "none", 2, null, default)).Id!;
+            foreach (var d in owned)
+                d.Dispose();
+            owned.Clear();
+            var tmp = Path.Combine(dir.Path, "tmp");
+            foreach (var f in Directory.GetFiles(tmp, stale + ".*"))
+                File.SetLastWriteTimeUtc(f, DateTime.UtcNow.AddHours(-2)); // nothing arrived for two hours
+            File.Delete(Path.Combine(tmp, noInfo + ".session"));
+            await File.WriteAllBytesAsync(Path.Combine(tmp, tooBig + ".part"), new byte[5]); // more than its size
+            await File.WriteAllTextAsync(Path.Combine(tmp, Guid.NewGuid().ToString("N") + ".upload"), "a PUT cut off by the restart");
+
+            sessions = await RestartAsync(dir, owned);
+            await WaitUntilReady(sessions, fresh);
+
+            Assert.Equal(1, sessions.Count);
+            Assert.Equal(0, sessions.Received(fresh));
+            Assert.Equal([fresh + ".part", fresh + ".session"], Directory.GetFiles(tmp).Select(Path.GetFileName).Order(StringComparer.Ordinal));
+        }
+        finally
+        {
+            foreach (var d in owned)
+                d.Dispose();
+        }
     }
 
     [Fact]

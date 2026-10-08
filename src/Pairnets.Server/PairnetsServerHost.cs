@@ -86,6 +86,7 @@ public static class PairnetsServerHost
         var store = app.Services.GetRequiredService<SyncStore>();
         store.UploadStallTimeout = options.UploadStallTimeout;
         store.Initialize();
+        app.Services.GetRequiredService<UploadSessions>(); // takes up the uploads kept over a restart now (after tmp/ was cleaned)
         var auth = app.Services.GetRequiredService<AuthStore>(); // opens (or creates) auth.db now, so a problem stops the start
         // "pairnets-server owner-link" runs without the service's environment; it reads the nest's address from here.
         if (options.PublicUrl is { } publicUrl)

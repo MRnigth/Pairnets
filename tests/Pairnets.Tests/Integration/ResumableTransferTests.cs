@@ -270,6 +270,59 @@ public class ResumableTransferTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task ARestartOfTheServerKeepsTheUpload()
+    {
+        var log = new RequestLog();
+        await using var desktop = Uploader(log);
+        var data = Data(Size, 17);
+        WriteOld(desktop, "video.mp4", data);
+        var before = await UploadUntilOutageAsync(desktop, "video.mp4", Size / 2);
+
+        await _server.RestartAsync(); // an update of the server, say
+        _proxy.Heal();
+        var mark = log.Mark;
+        var r = await desktop.SyncAsync();
+
+        Assert.Equal(1, r.Uploaded);
+        Assert.Equal(data, await File.ReadAllBytesAsync(Path.Combine(_server.Paths.Files, "video.mp4")));
+        Assert.Equal(Size - before, log.PieceBytesSince(mark));
+        Assert.Equal(0, log.Entries.Skip(mark).Count(e => e.Request == "POST api/upload"));
+        Assert.Null(desktop.State.GetUpload("video.mp4"));
+        AssertNoUploadsLeft();
+        Assert.Empty(Directory.GetFiles(_server.Paths.Tmp));
+    }
+
+    [Fact]
+    public async Task APartDamagedOverAServerRestartIsRefusedNotStored()
+    {
+        var log = new RequestLog();
+        await using var desktop = Uploader(log);
+        var data = Data(Size, 18);
+        WriteOld(desktop, "video.mp4", data);
+        await UploadUntilOutageAsync(desktop, "video.mp4", Size / 2);
+        var id = desktop.State.GetUpload("video.mp4")!.UploadId;
+
+        await _server.StopAsync();
+        var part = Path.Combine(_server.Paths.Tmp, id + ".part");
+        var bytes = await File.ReadAllBytesAsync(part);
+        bytes[100] ^= 0xFF;
+        await File.WriteAllBytesAsync(part, bytes);
+        await _server.RestartAsync();
+        _proxy.Heal();
+
+        // The upload continues, but the server's hash of its part does not match the file: nothing is stored.
+        var r = await desktop.SyncAsync();
+        Assert.Equal(0, r.Uploaded);
+        Assert.Equal(1, r.Errors);
+        Assert.Null(_server.Store.Manifest.Get("video.mp4"));
+        AssertNoUploadsLeft();
+
+        r = await desktop.SyncAsync();
+        Assert.Equal(1, r.Uploaded);
+        Assert.Equal(data, await File.ReadAllBytesAsync(Path.Combine(_server.Paths.Files, "video.mp4")));
+    }
+
+    [Fact]
     public async Task AnUploadThatIsNoLongerNeededIsGivenUp()
     {
         var log = new RequestLog();

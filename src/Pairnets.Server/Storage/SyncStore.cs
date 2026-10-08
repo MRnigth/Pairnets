@@ -173,9 +173,6 @@ public sealed class SyncStore : IDisposable
         }
     }
 
-    /// <summary>A new file in tmp/ for an upload that arrives in pieces (see <see cref="UploadSessions"/>).</summary>
-    public string NewUploadPartPath() => NewTmpPath(".part");
-
     /// <summary>
     /// Commits a fully received upload from <paramref name="tmp"/> (in tmp/) if the base still
     /// matches, exactly like <see cref="PutAsync"/> does after receiving its body.
@@ -530,10 +527,30 @@ public sealed class SyncStore : IDisposable
         }
     }
 
+    /// <summary>
+    /// Empties tmp/, except uploads in pieces that received data within the last hour (a part file plus its
+    /// description, see <see cref="UploadSessions"/>): they are taken up again, so a restart of the server does
+    /// not make the client send a big file from the start. Runs after the journal is replayed.
+    /// </summary>
     private void CleanTmp()
     {
+        var cutoff = _clock.GetUtcNow().UtcDateTime - UploadSessions.IdleTimeout;
         foreach (var file in Directory.EnumerateFiles(Paths.Tmp))
+        {
+            if (UploadSessions.TryParseFileName(Path.GetFileName(file), out var id) && IsKeptUpload(id, cutoff))
+                continue;
             TryDelete(file);
+        }
+    }
+
+    private bool IsKeptUpload(string id, DateTime cutoff)
+    {
+        var part = Path.Combine(Paths.Tmp, id + UploadSessions.PartSuffix);
+        var info = Path.Combine(Paths.Tmp, id + UploadSessions.InfoSuffix);
+        if (!File.Exists(part) || !File.Exists(info))
+            return false;
+        var last = File.GetLastWriteTimeUtc(part) > File.GetLastWriteTimeUtc(info) ? File.GetLastWriteTimeUtc(part) : File.GetLastWriteTimeUtc(info);
+        return last >= cutoff;
     }
 
     /// <summary>Compares files/ with the manifest. Never changes anything.</summary>
