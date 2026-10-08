@@ -12,6 +12,7 @@ AppId={{5DB04D62-50C8-4967-B220-449C44AC1BA3}
 AppName=Pairnets
 AppVersion={#AppVersion}
 AppPublisher=Pairnets
+AppCopyright=(c) 2026 Pairnets
 DefaultDirName={localappdata}\Programs\Pairnets
 DefaultGroupName=Pairnets
 DisableProgramGroupPage=yes

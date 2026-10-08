@@ -7,7 +7,7 @@
     <Deterministic>true</Deterministic>
     <Authors>Pairnets contributors</Authors>
     <Product>Pairnets</Product>
-    <Copyright>MIT License</Copyright>
+    <Copyright>© 2026 Pairnets. MIT License.</Copyright>
     <Version>1.0.0</Version>
     <InvariantGlobalization Condition="'$(InvariantGlobalization)' == ''">false</InvariantGlobalization>
     <!-- No telemetry, no source-link network fetches at build time. -->

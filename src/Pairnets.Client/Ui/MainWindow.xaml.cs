@@ -98,7 +98,7 @@ public partial class MainWindow : Window
         FileList.ItemsSource = _shownFiles;
         VersionList.ItemsSource = _versions;
         DevicesList.ItemsSource = _devices;
-        AppVersion.Text = "Pairnets " + PairnetsInfo.ProductVersion;
+        AppVersion.Text = "Pairnets " + PairnetsInfo.ProductVersion + " · " + PairnetsInfo.Copyright;
         AppIcon.Source = AppIcons.Large;
         IsVisibleChanged += (_, _) =>
         {

@@ -15,3 +15,5 @@ Pairnets runs in the notification area. Logs: %LocalAppData%\Pairnets\logs
 Settings: %AppData%\Pairnets\settings.json (the token is encrypted with Windows DPAPI).
 
 Full documentation: https://github.com/MRnigth/Pairnets#readme
+
+(c) 2026 Pairnets - MIT licence
