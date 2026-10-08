@@ -147,7 +147,7 @@ public sealed class NestWebsiteTests : IAsyncLifetime
         using var bare = new HttpClient(new SocketsHttpHandler { AllowAutoRedirect = false, UseProxy = false }) { BaseAddress = noName.Url };
         var explained = await bare.GetAsync("signin");
         Assert.Equal(HttpStatusCode.NotFound, explained.StatusCode);
-        Assert.Contains("install.sh --domain", await explained.Content.ReadAsStringAsync());
+        Assert.Contains("install.sh --public-url https://", await explained.Content.ReadAsStringAsync());
     }
 
     [Fact]

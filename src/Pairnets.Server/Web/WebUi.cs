@@ -91,7 +91,7 @@ public sealed class WebUi
     private static IResult NotOnNest(HttpContext ctx, OwnerAuth owner) =>
         owner.PublicUrl is { } url
             ? Results.Redirect(url + ctx.Request.Path + ctx.Request.QueryString)
-            : Results.Text("This nest has no website yet. Give it its own name on the server with: sudo ./install.sh --domain nest.example.com",
+            : Results.Text("This nest has no website yet. Give it its own name on the server with: sudo ./install.sh --public-url https://nest.example.com",
                 "text/plain", statusCode: StatusCodes.Status404NotFound);
 
     private static string ContentTypeOf(string name) => Path.GetExtension(name).ToLowerInvariant() switch

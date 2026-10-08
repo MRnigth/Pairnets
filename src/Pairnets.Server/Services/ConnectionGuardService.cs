@@ -2,7 +2,7 @@ namespace Pairnets.Server.Services;
 
 /// <summary>
 /// A removed computer must lose its live push connection too, not only its HTTP access. Removals made by this
-/// process close the connection at once; this check catches the others (<c>tether-server devices remove</c> runs
+/// process close the connection at once; this check catches the others (<c>pairnets-server devices remove</c> runs
 /// in another process, and turning the shared token off only changes a setting).
 /// </summary>
 public sealed class ConnectionGuardService(DeviceRegistry devices, SyncOptions options, ILogger<ConnectionGuardService> log) : BackgroundService

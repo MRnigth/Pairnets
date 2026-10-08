@@ -72,7 +72,7 @@ public sealed class TlsCertificateStore
                 {
                     if (!_warnedMissing)
                     {
-                        _log.LogWarning("No HTTPS certificate yet: expected {Cert} and {Key}. HTTPS connections fail until install.sh --domain has fetched one.", _certPath, _keyPath);
+                        _log.LogWarning("No HTTPS certificate yet: expected {Cert} and {Key}. HTTPS connections fail until both files are there (behind the Cloudflare Tunnel, leave Sync:HttpsUrl unset instead).", _certPath, _keyPath);
                         _warnedMissing = true;
                     }
                     return;

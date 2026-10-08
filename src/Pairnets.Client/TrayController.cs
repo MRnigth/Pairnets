@@ -191,7 +191,7 @@ public sealed class TrayController : ITrayActions, IDisposable
         if ((_session?.Status.NestUrl ?? NestFromSettings()) is { } url)
             Shell(url + "/devices");
         else
-            MessageBox.Show("Your nest has no website yet. On the server, give it its own name with: sudo ./install.sh --domain nest.example.com",
+            MessageBox.Show("Your nest has no website yet. On the server, give it its own name with: sudo ./install.sh --public-url https://nest.example.com",
                 "Pairnets", MessageBoxButton.OK, MessageBoxImage.Information);
     }
 

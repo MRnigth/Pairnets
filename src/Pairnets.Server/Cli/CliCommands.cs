@@ -181,7 +181,7 @@ public static class CliCommands
                     var device = auth.GetDevice(which) is { IsActive: true } byId ? byId : auth.FindActiveByName(which);
                     if (device is null)
                     {
-                        await error.WriteLineAsync($"No computer called '{which}'. See: tether-server devices list");
+                        await error.WriteLineAsync($"No computer called '{which}'. See: pairnets-server devices list");
                         return 1;
                     }
                     auth.RemoveDevice(device.Id);
@@ -216,7 +216,7 @@ public static class CliCommands
                 return 0;
             if (auth.GetSetting(AuthStore.SettingPublicUrl) is not { Length: > 0 } url)
             {
-                await error.WriteLineAsync("This nest has no website yet: give it its own name first with  sudo ./install.sh --domain nest.example.com");
+                await error.WriteLineAsync("This nest has no website yet: give it its own name first with: sudo ./install.sh --public-url https://nest.example.com");
                 return 1;
             }
             await output.WriteLineAsync($"{url}/setup#code={auth.CreateSetupCode()}");

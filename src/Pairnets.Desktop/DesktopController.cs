@@ -270,7 +270,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
         if ((_session?.Status.NestUrl ?? NestFromSettings()) is { } url)
             _platform.Open(url + "/devices");
         else
-            await Dialogs.InfoAsync(_window, "Pairnets", "Your nest has no website yet. On the server, give it its own name with: sudo ./install.sh --domain nest.example.com");
+            await Dialogs.InfoAsync(_window, "Pairnets", "Your nest has no website yet. On the server, give it its own name with: sudo ./install.sh --public-url https://nest.example.com");
     }
 
     /// <summary>The nest's website when this computer already talks to it over HTTPS.</summary>
