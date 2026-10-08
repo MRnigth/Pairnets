@@ -207,14 +207,22 @@ public sealed class ServerUpdater(ServerPaths paths, SyncOptions options, TimePr
         }
     }
 
-    private static readonly System.Text.RegularExpressions.Regex TokenLine =
-        new(@"(Token:\s*|SYNC_TOKEN=)\S+", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+    /// <summary>
+    /// What never leaves the server in the update log (as in update.sh's own redact): "Token: …", any
+    /// …_TOKEN=… (sync, tunnel, Cloudflare), passwords, secrets and API keys in NAME=value form, Bearer and
+    /// --token values, and the code or token in a link (?code=, &amp;code=, #code=, ?token=, …).
+    /// </summary>
+    private static readonly System.Text.RegularExpressions.Regex Secrets = new(
+        @"(?<keep>Token:\s*|\b[A-Z_]*_TOKEN\s*=\s*|\b[A-Z_]*(?:SECRET|PASSWORD|API_KEY)[A-Z_]*\s*=\s*|\bBearer\s+|--token[=\s]\s*)\S+"
+        + @"|(?<keep>[?&#](?:code|token|access_token)=)[^&#\s""'<>]+",
+        System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.CultureInvariant);
 
+    /// <summary>Hides the server's own token and everything <see cref="Secrets"/> matches, every time it occurs on the line.</summary>
     private static string Redact(string line, string? hide)
     {
         if (!string.IsNullOrEmpty(hide))
             line = line.Replace(hide, "(hidden)", StringComparison.Ordinal);
-        return TokenLine.Replace(line, "$1(hidden)");
+        return Secrets.Replace(line, "${keep}(hidden)");
     }
 
     public enum RequestOutcome { Requested, NotInstalled, TooSoon }

@@ -438,7 +438,13 @@ public class ServerApiTests : IAsyncLifetime
         var updateDir = Path.Combine(server.Paths.DataDir, "update");
         Directory.CreateDirectory(updateDir);
         File.WriteAllText(Path.Combine(updateDir, "update.log"),
-            $"2026-10-06T09:00:00Z === update.sh started\n  Token:       {server.Token}\nraw {server.Token} here\nSYNC_TOKEN=fake.token.value\n");
+            $"2026-10-06T09:00:00Z === update.sh started\n  Token:       {server.Token}\nraw {server.Token} here\nSYNC_TOKEN=fake.token.value\n" +
+            "TUNNEL_TOKEN=fake.tunnel.one and again TUNNEL_TOKEN=fake.tunnel.two\n" +
+            "open https://nest.example.com/setup#code=fake.setup.one or https://nest.example.com/link?code=fake.link.two&lang=en\n" +
+            "GET /hub?token=fake.query.one&code=fake.query.two#token=fake.frag.three\n" +
+            "SYNC_TOKEN=fake.sync.one SYNC_TOKEN=fake.sync.two\n" +
+            "Sync__SmtpPassword=fake.smtp.pass Authorization: Bearer fake.bearer.value\n" +
+            "cloudflared service install --token fake.cli.token\n");
         File.WriteAllText(Path.Combine(updateDir, "last-attempt"), "1790000000\n");
 
         Assert.Equal(HttpStatusCode.Unauthorized, (await server.RawHttp().GetAsync("api/update/diagnostics")).StatusCode);
@@ -448,9 +454,16 @@ public class ServerApiTests : IAsyncLifetime
         Assert.False(diagnostics.RequestPending);
         Assert.Equal("idle", diagnostics.Status.State);
         Assert.Equal(DateTimeOffset.FromUnixTimeSeconds(1790000000), diagnostics.LastAttemptAt);
-        Assert.Equal(4, diagnostics.LogTail.Count);
-        Assert.DoesNotContain(diagnostics.LogTail, l => l.Contains(server.Token) || l.Contains("fake.token"));
+        Assert.Equal(10, diagnostics.LogTail.Count);
+        Assert.DoesNotContain(diagnostics.LogTail, l => l.Contains(server.Token) || l.Contains("fake."));
         Assert.Equal("  Token:       (hidden)", diagnostics.LogTail[1]);
+        // Every occurrence on a line, and only the value: the rest of the line stays readable.
+        Assert.Equal("TUNNEL_TOKEN=(hidden) and again TUNNEL_TOKEN=(hidden)", diagnostics.LogTail[4]);
+        Assert.Equal("open https://nest.example.com/setup#code=(hidden) or https://nest.example.com/link?code=(hidden)&lang=en", diagnostics.LogTail[5]);
+        Assert.Equal("GET /hub?token=(hidden)&code=(hidden)#token=(hidden)", diagnostics.LogTail[6]);
+        Assert.Equal("SYNC_TOKEN=(hidden) SYNC_TOKEN=(hidden)", diagnostics.LogTail[7]);
+        Assert.Equal("Sync__SmtpPassword=(hidden) Authorization: Bearer (hidden)", diagnostics.LogTail[8]);
+        Assert.Equal("cloudflared service install --token (hidden)", diagnostics.LogTail[9]);
 
         var report = diagnostics.ToReport();
         Assert.Contains("update.sh present:   yes", report);
