@@ -88,7 +88,8 @@ what cannot lose or silently overwrite data.
   without an owner the first person to open it takes the nest.
 * **A setup link can replace a forgotten password, briefly.** The browser that opened a setup link
   may set a new password without the old one for 30 minutes, and only if the password is older than
-  that sign-in (so once per link). Every other browser still needs the current password, so one left
+  that sign-in (so once per link); every other signed-in browser is then signed out, in case someone
+  else changed it. Every other browser still needs the current password to change it, so one left
   signed in cannot lock you out. That keeps "SSH, `owner-link`, new password" a real way back in.
 * **Maintenance commands run as the data folder's owner.** On Linux and macOS the CLI compares the
   folder's owner with the user running it and stops with the right `sudo -u pairnets …` line: run
@@ -267,8 +268,9 @@ what cannot lose or silently overwrite data.
   replaced, the request no longer looks local, so the middleware also marks that the connection
   itself came from loopback, and only that mark lets `X-Forwarded-Proto: https` count. (Checking the
   replaced address made the website redirect to itself forever behind every tunnel.)
-* **`install.sh` fails when the server does not answer.** It waits up to a minute for the local
-  health check and exits non-zero otherwise, so the self-updater reports a failed update instead of
+* **`install.sh` fails when the server does not answer.** It waits for the local
+  health check (up to 5 minutes while systemd says the server is starting: a big nest checks its data
+  folder first) and exits non-zero otherwise, so the self-updater reports a failed update instead of
   a success. Giving `--public-url` removes old `PUBLIC_URL=` / `Sync__PublicUrl=` lines, which the
   server reads first, so the given name always wins. On a terminal it prints the setup link at the
   end; never into the updater's log.

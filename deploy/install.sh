@@ -96,8 +96,10 @@ command -v systemctl >/dev/null || die "systemd is required"
 env_value() {
   local value
   value="$(grep -iE "^[[:space:]]*$1=" "$ENV_FILE" 2>/dev/null | head -n1 | cut -d= -f2-)" || true
-  value="${value%\"}"
-  printf '%s' "${value#\"}"
+  value="${value%$'\r'}" # a file edited on Windows
+  value="${value%\"}"; value="${value#\"}"
+  value="${value%\'}"
+  printf '%s' "${value#\'}"
 }
 
 # The nest's public name as the server reads it: Sync__PublicUrl, then PUBLIC_URL, then PAIRNETS_PUBLIC_URL.
@@ -315,19 +317,26 @@ if [[ -f /etc/systemd/system/pairnets-update.timer ]]; then
 fi
 
 # 5. Wait for health, on this machine first. This result decides the exit code, so the self-updater
-#    reports a server that does not come back as a failed update.
+#    reports a server that does not come back as a failed update. The server only answers after it has
+#    checked its data folder, which takes a while on a big nest: wait up to 5 minutes while systemd says
+#    it is starting or running, and stop at once when it has failed.
 LOCAL_HEALTH=failed
+HEALTH_WAIT=300
 if command -v curl >/dev/null; then
-  for _ in $(seq 1 60); do
+  SECONDS=0
+  while (( SECONDS < HEALTH_WAIT )); do
     if curl -fsS --max-time 5 "http://$BIND:$PORT/api/health" >/dev/null 2>&1; then LOCAL_HEALTH=ok; break; fi
-    sleep 1
+    case "$(systemctl is-active "$SERVICE" 2>/dev/null || true)" in
+      active|activating|reloading) sleep 1 ;;
+      *) break ;;
+    esac
   done
 else
   LOCAL_HEALTH=unchecked
   echo "Note: curl is not installed, so the server's health was not checked (sudo apt install curl)." >&2
 fi
 if [[ "$LOCAL_HEALTH" == failed ]]; then
-  echo "WARNING: the service did not answer on http://$BIND:$PORT/api/health within a minute." >&2
+  echo "WARNING: the service did not answer on http://$BIND:$PORT/api/health (state: $(systemctl is-active "$SERVICE" 2>/dev/null || true), after ${SECONDS}s)." >&2
   echo "         Check: sudo systemctl status $SERVICE" >&2
   echo "         Log:   sudo journalctl -u $SERVICE -n 50" >&2
 fi

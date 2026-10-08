@@ -247,7 +247,18 @@ public static class WebEndpoints
         if (OwnerAuth.PasswordProblem(body?.Password) is { } problem)
             return Error(StatusCodes.Status400BadRequest, ErrorCodes.BadRequest, problem);
         owner.SetPassword(body!.Password!);
-        log.LogInformation(reset ? "The nest's password was replaced after signing in with a setup link" : "The nest's password was set");
+        if (reset)
+        {
+            // The password may have been "forgotten" because someone else changed it: their browser goes too.
+            var others = owner.Store.ListSessions().Where(s => s.Id != session.Id).ToList();
+            foreach (var other in others)
+                owner.Store.DeleteSession(other.Id);
+            log.LogInformation("The nest's password was replaced after signing in with a setup link; {Count} other browser(s) signed out", others.Count);
+        }
+        else
+        {
+            log.LogInformation("The nest's password was set");
+        }
         return Results.NoContent();
     }
 

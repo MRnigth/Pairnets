@@ -76,6 +76,29 @@ public sealed class SetupLinkPasswordResetTests : IDisposable
         Assert.True(_owner.CheckPassword(NewPassword));
     }
 
+    [Fact]
+    public void ResettingThePasswordSignsOutEveryOtherBrowser()
+    {
+        var stranger = SignIn("password");
+        var browser = SignIn(WebEndpoints.SetupLinkMethod);
+
+        Assert.Equal(StatusCodes.Status204NoContent, Post(browser, NewPassword).Status);
+
+        Assert.Null(_store.FindSession(stranger));
+        Assert.NotNull(_store.FindSession(browser));
+    }
+
+    [Fact]
+    public void ChangingThePasswordWithTheOldOneKeepsOtherBrowsers()
+    {
+        var laptop = SignIn("password");
+        var browser = SignIn("passkey");
+
+        Assert.Equal(StatusCodes.Status204NoContent, Post(browser, NewPassword, current: OldPassword).Status);
+
+        Assert.NotNull(_store.FindSession(laptop));
+    }
+
     [Theory]
     [InlineData("password")]
     [InlineData("passkey")]
