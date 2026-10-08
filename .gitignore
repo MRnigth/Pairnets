@@ -494,3 +494,8 @@ publish/
 dist/
 logs/
 screens/
+
+# ---- Pairnets Cloud (cloud/, Cloudflare Worker) ----
+.dev.vars
+.wrangler/
+cloud/node_modules/
