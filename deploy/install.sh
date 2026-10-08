@@ -1,14 +1,16 @@
 #!/usr/bin/env bash
-# Pairnets server installer for Ubuntu. Idempotent: run it again to upgrade.
+# Pairnets server installer for Ubuntu (the server is "the nest"). Idempotent: run it again to upgrade.
+# The self-updater (update.sh) runs it the same way on every upgrade, without a terminal.
 #
 #   sudo ./install.sh --public-url https://sync.example.com
-#                                    # first install: listen on 127.0.0.1 and let a Cloudflare Tunnel
-#                                    # bring the PCs in, with no open ports (asks for the tunnel token,
-#                                    # or reads it from TUNNEL_TOKEN; see docs/HOWTO.md)
-#   sudo ./install.sh                # upgrade: keep the token, settings and tunnel already configured
+#       first install: the server listens on 127.0.0.1 only and a Cloudflare Tunnel gives it its public
+#       name, with no open ports (asks for the tunnel token, or reads it from TUNNEL_TOKEN; see docs/HOWTO.md)
+#   sudo ./install.sh
+#       upgrade: keeps the data, settings, name and tunnel already configured
 #
-# --cloudflare-tunnel (implied by --public-url) is still accepted. Advanced: --bind <ip> [--port 5075]
-# listens on another address instead of the tunnel.
+# At the end it prints the nest's address and, on a terminal, a one-time link to set up the nest's
+# website. Then each computer installs the Pairnets app, types the nest's name and signs in with the
+# browser. Exits non-zero when the server does not answer after the install. More options: --help.
 #
 # Run it from the extracted release folder (it must contain pairnets-server).
 set -euo pipefail
@@ -29,14 +31,58 @@ TUNNEL_SERVICE=pairnets-tunnel
 
 die() { echo "error: $*" >&2; exit 1; }
 
+usage() {
+  cat <<'USAGE'
+Usage: sudo ./install.sh [options]
+
+  sudo ./install.sh --public-url https://sync.example.com
+      First install, or a new name for the nest: the public name you gave your Cloudflare Tunnel.
+      Asks for the tunnel token (or reads it from TUNNEL_TOKEN). See docs/HOWTO.md.
+  sudo ./install.sh
+      Upgrade: keeps the data, settings, name and tunnel already configured.
+
+Options:
+  --public-url https://<name>   the nest's public name (sets up the Cloudflare Tunnel)
+  --cloudflare-tunnel           set up the tunnel again (new token) for the name already configured
+  --bind <ip>                   advanced: listen on this address instead of using the tunnel
+  --port <port>                 the port the server listens on (default 5075)
+  -h, --help                    show this help
+USAGE
+}
+
+usage_error() { echo "error: $*" >&2; echo >&2; usage >&2; exit 2; }
+
+missing_value() { # missing_value <option>
+  local example=192.0.2.10
+  case "$1" in
+    --public-url) example=https://sync.example.com ;;
+    --port) example=5075 ;;
+  esac
+  echo "error: $1 needs a value, for example: $1 $example" >&2
+  exit 2
+}
+
+set_option() { # set_option <option> <value>
+  [[ -n "$2" ]] || missing_value "$1"
+  case "$1" in
+    --bind) BIND="$2" ;;
+    --port) PORT="$2"; PORT_GIVEN=1 ;;
+    --public-url) PUBLIC_URL="$2" ;;
+  esac
+}
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --bind) BIND="${2:-}"; shift 2 ;;
-    --port) PORT="${2:-}"; PORT_GIVEN=1; shift 2 ;;
+    --bind|--port|--public-url)
+      # Last on the line, or followed by another option: the value is missing.
+      if [[ $# -lt 2 || "$2" == -* ]]; then missing_value "$1"; fi
+      set_option "$1" "$2"
+      shift 2 ;;
+    --bind=*|--port=*|--public-url=*) set_option "${1%%=*}" "${1#*=}"; shift ;;
     --cloudflare-tunnel) TUNNEL=1; shift ;;
-    --public-url) PUBLIC_URL="${2:-}"; shift 2 ;;
-    -h|--help) sed -n '2,13p' "$0"; exit 0 ;;
-    *) die "unknown option: $1" ;;
+    -h|--help) usage; exit 0 ;;
+    https://*) usage_error "unknown option: $1 (to give the nest this name use: --public-url $1)" ;;
+    *) usage_error "unknown option: $1" ;;
   esac
 done
 
@@ -44,6 +90,27 @@ done
 [[ -x "$SRC_DIR/pairnets-server" ]] || die "pairnets-server binary not found next to install.sh"
 [[ "$PORT" =~ ^[0-9]+$ ]] || die "invalid port: $PORT"
 command -v systemctl >/dev/null || die "systemd is required"
+
+# env_value <key>: the value of <key> in $ENV_FILE, or nothing. Keys match without regard to case, as
+# the server reads them.
+env_value() {
+  local value
+  value="$(grep -iE "^[[:space:]]*$1=" "$ENV_FILE" 2>/dev/null | head -n1 | cut -d= -f2-)" || true
+  value="${value%\"}"
+  printf '%s' "${value#\"}"
+}
+
+# The nest's public name as the server reads it: Sync__PublicUrl, then PUBLIC_URL, then PAIRNETS_PUBLIC_URL.
+public_name() {
+  local key value
+  for key in Sync__PublicUrl PUBLIC_URL PAIRNETS_PUBLIC_URL; do
+    value="$(env_value "$key")"
+    if [[ -n "${value//[[:space:]]/}" ]]; then
+      printf '%s' "${value%/}"
+      return 0
+    fi
+  done
+}
 
 # 0. Pairnets used to be called Tether. The first time, take over a Tether server on this machine:
 #    its files, history, token, address and Cloudflare Tunnel. Data is only moved, never deleted.
@@ -76,11 +143,10 @@ if [[ -f /etc/tether/tether.env && ! -e "$CONF_DIR" ]]; then
 fi
 
 EXISTING_URL=""
-EXISTING_PUBLIC_URL=""
 if [[ -f "$ENV_FILE" ]]; then
   EXISTING_URL="$(grep '^ASPNETCORE_URLS=' "$ENV_FILE" | head -n1 | cut -d= -f2- || true)"
-  EXISTING_PUBLIC_URL="$(grep '^PAIRNETS_PUBLIC_URL=' "$ENV_FILE" | head -n1 | cut -d= -f2- || true)"
 fi
+EXISTING_PUBLIC_URL="$(public_name)"
 
 if [[ -n "$PUBLIC_URL" ]]; then
   PUBLIC_URL="${PUBLIC_URL%/}"
@@ -159,17 +225,15 @@ if [[ -f "$SRC_DIR/update.sh" ]]; then
   install -m 0755 -o root -g root "$SRC_DIR/update.sh" "$INSTALL_DIR/update.sh"
 fi
 
-# 3. Token and environment file (the token is generated once and kept on upgrades).
-NEW_TOKEN=""
-if [[ -f "$ENV_FILE" ]] && grep -q '^SYNC_TOKEN=.\{16,\}' "$ENV_FILE"; then
-  TOKEN="$(grep '^SYNC_TOKEN=' "$ENV_FILE" | head -n1 | cut -d= -f2-)"
-else
+# 3. Environment file. The shared token (for older apps) is generated once, kept on upgrades and never
+#    printed: it stays in this root-only file.
+TOKEN=""
+if [[ ! -f "$ENV_FILE" ]] || ! grep -q '^SYNC_TOKEN=.\{16,\}' "$ENV_FILE"; then
   command -v openssl >/dev/null || die "openssl is required to generate a token (apt install openssl)"
   TOKEN="$(openssl rand -hex 32)"
-  NEW_TOKEN=1
 fi
 umask 077
-if [[ -f "$ENV_FILE" && -z "$NEW_TOKEN" ]]; then
+if [[ -f "$ENV_FILE" && -z "$TOKEN" ]]; then
   # Upgrade: keep every setting, only (re)write the address in case --bind/--port was given.
   sed -e "s#^ASPNETCORE_URLS=.*#ASPNETCORE_URLS=http://$BIND:$PORT#" -e "s#^Sync__UpdateDir=.*#Sync__UpdateDir=$DATA_DIR/update#" "$ENV_FILE" > "$ENV_FILE.tmp"
   grep -q '^ASPNETCORE_URLS=' "$ENV_FILE.tmp" || echo "ASPNETCORE_URLS=http://$BIND:$PORT" >> "$ENV_FILE.tmp"
@@ -195,7 +259,16 @@ if [[ -n "$TUNNEL" ]]; then
   set_env Sync__TrustProxyHeaders true
 fi
 if [[ -n "$PUBLIC_URL" ]]; then
-  # Only for this script's summary: the address the PCs use.
+  # The nest's public name: the server builds its website, sign-in links and passkeys on it, and the
+  # apps type it to sign in. The server reads Sync__PublicUrl and PUBLIC_URL before PAIRNETS_PUBLIC_URL,
+  # so those lines go: the name given here always wins.
+  OVERRIDES='^[[:space:]]*(PUBLIC_URL|Sync__PublicUrl)='
+  REPLACED="$(grep -iE "$OVERRIDES" "$ENV_FILE.tmp" | cut -d= -f1 | tr -d '[:blank:]' | paste -sd, - || true)"
+  if [[ -n "$REPLACED" ]]; then
+    { grep -viE "$OVERRIDES" "$ENV_FILE.tmp" || true; } > "$ENV_FILE.tmp.new"
+    mv "$ENV_FILE.tmp.new" "$ENV_FILE.tmp"
+    echo "Replaced ${REPLACED//,/ and } in $ENV_FILE: the nest's name is now PAIRNETS_PUBLIC_URL=$PUBLIC_URL"
+  fi
   set_env PAIRNETS_PUBLIC_URL "$PUBLIC_URL"
 fi
 chown root:root "$ENV_FILE.tmp"
@@ -219,6 +292,8 @@ if [[ -n "$TUNNEL" ]]; then
   chmod 600 "$TUNNEL_ENV.tmp"
   mv "$TUNNEL_ENV.tmp" "$TUNNEL_ENV"
 fi
+# Nothing below needs it, and no other program (the pairnets user's owner-link below) inherits it.
+unset TUNNEL_TOKEN
 if [[ -n "$TUNNEL" || -n "$TUNNEL_FROM_TETHER" || -f /etc/systemd/system/$TUNNEL_SERVICE.service ]] && [[ -f "$SRC_DIR/$TUNNEL_SERVICE.service" ]]; then
   install -m 0644 -o root -g root "$SRC_DIR/$TUNNEL_SERVICE.service" /etc/systemd/system/$TUNNEL_SERVICE.service
 fi
@@ -239,34 +314,61 @@ if [[ -f /etc/systemd/system/pairnets-update.timer ]]; then
   systemctl enable --now pairnets-update.timer
 fi
 
-# 5. Wait for health.
-ok=""
-for _ in $(seq 1 30); do
-  if command -v curl >/dev/null && curl -fsS "http://$BIND:$PORT/api/health" >/dev/null 2>&1; then ok=1; break; fi
-  sleep 1
-done
-if [[ -z "$ok" ]]; then
-  echo "WARNING: the service did not answer on http://$BIND:$PORT/api/health yet." >&2
-  echo "         Check: sudo journalctl -u $SERVICE -n 50" >&2
+# 5. Wait for health, on this machine first. This result decides the exit code, so the self-updater
+#    reports a server that does not come back as a failed update.
+LOCAL_HEALTH=failed
+if command -v curl >/dev/null; then
+  for _ in $(seq 1 60); do
+    if curl -fsS --max-time 5 "http://$BIND:$PORT/api/health" >/dev/null 2>&1; then LOCAL_HEALTH=ok; break; fi
+    sleep 1
+  done
+else
+  LOCAL_HEALTH=unchecked
+  echo "Note: curl is not installed, so the server's health was not checked (sudo apt install curl)." >&2
+fi
+if [[ "$LOCAL_HEALTH" == failed ]]; then
+  echo "WARNING: the service did not answer on http://$BIND:$PORT/api/health within a minute." >&2
+  echo "         Check: sudo systemctl status $SERVICE" >&2
+  echo "         Log:   sudo journalctl -u $SERVICE -n 50" >&2
 fi
 
-SERVER_URL="http://$BIND:$PORT/"
-CONFIGURED_PUBLIC_URL="$(grep '^PAIRNETS_PUBLIC_URL=' "$ENV_FILE" | head -n1 | cut -d= -f2- || true)"
-if [[ "$BIND" == 127.0.0.1 && -n "$CONFIGURED_PUBLIC_URL" ]]; then
-  SERVER_URL="$CONFIGURED_PUBLIC_URL/"
-fi
-if [[ -n "$TUNNEL" ]]; then
-  # The tunnel needs a few seconds to connect, and DNS for a new hostname a little longer.
-  ok=""
+SERVER_DATA_DIR="$(env_value Sync__DataDir)"
+SERVER_DATA_DIR="${SERVER_DATA_DIR:-$DATA_DIR}"
+NEST_URL="$(public_name)"
+
+# Then through a new tunnel: it needs a few seconds to connect, and DNS for a new hostname a little longer.
+TUNNEL_HEALTH=""
+if [[ -n "$TUNNEL" && -n "$NEST_URL" && "$LOCAL_HEALTH" == ok ]]; then
+  TUNNEL_HEALTH=failed
   for _ in $(seq 1 30); do
-    if curl -fsS --max-time 10 "${SERVER_URL}api/health" >/dev/null 2>&1; then ok=1; break; fi
+    if curl -fsS --max-time 10 "$NEST_URL/api/health" >/dev/null 2>&1; then TUNNEL_HEALTH=ok; break; fi
     sleep 2
   done
-  if [[ -z "$ok" ]]; then
-    echo "WARNING: ${SERVER_URL}api/health did not answer through the tunnel yet. Check:" >&2
+  if [[ "$TUNNEL_HEALTH" == failed ]]; then
+    echo "WARNING: $NEST_URL/api/health did not answer through the tunnel yet. Check:" >&2
     echo "         - the tunnel runs: sudo systemctl status $TUNNEL_SERVICE (log: sudo journalctl -u $TUNNEL_SERVICE -n 50)" >&2
-    echo "         - in the Cloudflare dashboard the tunnel has a public hostname ${SERVER_URL%/} -> HTTP localhost:$PORT" >&2
+    echo "         - in the Cloudflare dashboard the tunnel has a public hostname $NEST_URL -> HTTP localhost:$PORT" >&2
     echo "         - Bot Fight Mode is off for the domain (Security > Bots)" >&2
+  fi
+fi
+
+# 6. The one-time link to set up the nest's website, only for a person at a terminal (never into the
+#    self-updater's log), once the server runs (it reads the nest's name from what the server saved).
+OWNER_LINK_CMD="sudo -u pairnets $INSTALL_DIR/pairnets-server owner-link"
+if [[ "$SERVER_DATA_DIR" != "$DATA_DIR" ]]; then
+  OWNER_LINK_CMD="$OWNER_LINK_CMD --data-dir $SERVER_DATA_DIR"
+fi
+OWNER_LINK=""
+OWNER_LINK_STATE=""
+OWNER_ERROR=""
+if [[ -t 1 && "$LOCAL_HEALTH" == ok && -n "$NEST_URL" ]]; then
+  # --if-new prints nothing when the owner already has a way to sign in.
+  if OWNER_OUT="$(cd / && timeout 60 runuser -u pairnets -- "$INSTALL_DIR/pairnets-server" owner-link --if-new --data-dir "$SERVER_DATA_DIR" 2>&1)"; then
+    OWNER_LINK="$(printf '%s\n' "$OWNER_OUT" | grep -E '^https://' | tail -n1 || true)"
+    if [[ -n "$OWNER_LINK" ]]; then OWNER_LINK_STATE="new"; else OWNER_LINK_STATE="exists"; fi
+  else
+    OWNER_LINK_STATE="failed"
+    OWNER_ERROR="$(printf '%s\n' "$OWNER_OUT" | head -n1)"
   fi
 fi
 
@@ -277,8 +379,12 @@ if [[ -f /etc/systemd/system/$TUNNEL_SERVICE.service ]]; then
 fi
 
 echo
-echo "Pairnets server is installed."
-echo "  Data:    $DATA_DIR"
+if [[ "$LOCAL_HEALTH" == failed ]]; then
+  echo "Pairnets server is installed, but it is not answering (see the warning above)."
+else
+  echo "Pairnets server is installed."
+fi
+echo "  Data:    $SERVER_DATA_DIR"
 echo "  Config:  $ENV_FILE (root only)"
 echo "  Logs:    sudo journalctl -u $SERVICE -f"
 echo "  Updater: pairnets-update.path is ${UPDATER_STATE:-unknown} (should be: active)"
@@ -286,12 +392,47 @@ if [[ -n "$TUNNEL_STATE" ]]; then
   echo "  Tunnel:  $TUNNEL_SERVICE is $TUNNEL_STATE (should be: active)"
 fi
 echo
-echo "Enter these settings in Pairnets on both PCs:"
-echo "  Server URL:  $SERVER_URL"
-if [[ -n "$NEW_TOKEN" ]]; then
-  echo "  Token:       $TOKEN"
-  echo
-  echo "The token is shown only this once. Store it in your password manager."
-else
-  echo "  Token:       (unchanged; read it with: sudo grep SYNC_TOKEN $ENV_FILE)"
+if [[ "$LOCAL_HEALTH" == failed ]]; then
+  [[ -z "$NEST_URL" ]] || echo "Your nest's address: $NEST_URL"
+  echo "The server did not start, so the install is not finished: see the warning above."
+  exit 1
 fi
+
+if [[ -z "$NEST_URL" ]]; then
+  # Advanced --bind without a public name: no website, so only the shared token works.
+  echo "This nest has no public name, so it has no website and the apps cannot sign in with the browser."
+  echo "Give it one with: sudo ./install.sh --public-url https://sync.example.com"
+  echo "Until then only older Pairnets apps connect, with the address http://$BIND:$PORT/ and the shared"
+  echo "token kept in $ENV_FILE (show it with: sudo grep SYNC_TOKEN $ENV_FILE)."
+  exit 0
+fi
+
+echo "Your nest's address: $NEST_URL"
+echo
+echo "Next steps:"
+case "$OWNER_LINK_STATE" in
+  new)
+    echo "  1. Set up your nest's website: open this link in your browser. It works once, within"
+    echo "     24 hours; keep it to yourself."
+    echo "       $OWNER_LINK"
+    ;;
+  exists)
+    echo "  1. Your nest's website is already set up: $NEST_URL/"
+    echo "     (Locked out? Make a one-time link to get back in with: $OWNER_LINK_CMD)"
+    ;;
+  failed)
+    echo "  1. Set up your nest's website. The setup link could not be made just now:"
+    echo "       ${OWNER_ERROR:-no answer}"
+    echo "     Make one with: $OWNER_LINK_CMD"
+    ;;
+  *)
+    echo "  1. Set up your nest's website (if you have not yet): make a one-time link with"
+    echo "       $OWNER_LINK_CMD"
+    ;;
+esac
+echo "  2. On each computer: install the Pairnets app (https://pairnets.app/add), type the nest's"
+echo "     name ${NEST_URL#https://}, press \"Sign in with your browser\", sign in on the nest's page"
+echo "     and approve the computer."
+echo
+echo "For older apps only: they ask for the address and a shared token. The token is kept in"
+echo "$ENV_FILE (show it with: sudo grep SYNC_TOKEN $ENV_FILE)."
