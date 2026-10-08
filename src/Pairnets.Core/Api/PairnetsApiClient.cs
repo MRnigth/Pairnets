@@ -490,7 +490,18 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
         long offset = 0;
         if (resume.Id is { } earlier)
         {
-            var status = await UploadStatusAsync(earlier, ct).ConfigureAwait(false);
+            UploadStatus? status;
+            try
+            {
+                status = await UploadStatusAsync(earlier, ct).ConfigureAwait(false);
+            }
+            catch (PairnetsProtocolException)
+            {
+                // An answer this upload cannot go on from: give it up (the next pass starts it again).
+                await AbandonUploadAsync(earlier).ConfigureAwait(false);
+                resume.Forget();
+                throw;
+            }
             if (status is { Received: var have } && have <= reader.Size)
             {
                 // The server kept what an earlier attempt sent. Those bytes are read again here (not sent), so the hash
@@ -618,9 +629,9 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
                 resume.Forget(); // stored, or refused (conflict, ...): either way the server is done with it
                 return (result, hash);
             }
-            catch (UploadBusyException) when (!ct.IsCancellationRequested)
+            catch (UploadBusyException)
             {
-                await patience.BusyAsync(ct).ConfigureAwait(false);
+                await patience.BusyAsync(ct).ConfigureAwait(false); // throws when cancelled (Pause) or waited too long
                 ask = true;
             }
             catch (PairnetsNetworkException ex) when (!ct.IsCancellationRequested)
