@@ -56,7 +56,7 @@ public sealed class SyncOptions
     public TimeSpan TlsRecheckInterval { get; set; } = TimeSpan.FromSeconds(30);
 
     /// <summary>
-    /// The nest's own address, e.g. "https://sync.pairnets.app" (Sync:PublicUrl or PUBLIC_URL). Used to build
+    /// The nest's own address, e.g. "https://sync.pairnets.app" (Sync:PublicUrl, PUBLIC_URL or PAIRNETS_PUBLIC_URL). Used to build
     /// the sign-in website's own origin and to bind passkeys. Behind the Cloudflare Tunnel the server itself
     /// listens on loopback, so this is how it learns its public name.
     /// </summary>
@@ -118,8 +118,11 @@ public sealed class SyncOptions
         if (string.IsNullOrEmpty(options.Token))
             options.Token = configuration["SYNC_TOKEN"] ?? string.Empty;
         options.Token = options.Token.Trim();
+        // install.sh writes PAIRNETS_PUBLIC_URL into /etc/pairnets/pairnets.env; PUBLIC_URL is the short form.
         if (string.IsNullOrWhiteSpace(options.PublicUrl))
             options.PublicUrl = configuration["PUBLIC_URL"];
+        if (string.IsNullOrWhiteSpace(options.PublicUrl))
+            options.PublicUrl = configuration["PAIRNETS_PUBLIC_URL"];
         options.PublicUrl = string.IsNullOrWhiteSpace(options.PublicUrl) ? null : options.PublicUrl.Trim().TrimEnd('/');
         options.HttpsUrl = string.IsNullOrWhiteSpace(options.HttpsUrl) ? null : options.HttpsUrl.Trim();
         return options;

@@ -209,4 +209,15 @@ public class ServerStoreTests
         Assert.Equal("0123456789abcdef", options.Token);
         Assert.Null(options.ValidateForServe());
     }
+
+    [Theory]
+    [InlineData("PAIRNETS_PUBLIC_URL")] // what install.sh writes into /etc/pairnets/pairnets.env
+    [InlineData("PUBLIC_URL")]
+    [InlineData("Sync:PublicUrl")]
+    public void OptionsReadThePublicUrlFromEveryNameItGoesBy(string key)
+    {
+        var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> { [key] = "https://nest.example.com/" }).Build();
+
+        Assert.Equal("https://nest.example.com", SyncOptions.FromConfiguration(config).PublicUrl); // trailing slash dropped
+    }
 }
