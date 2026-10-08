@@ -86,6 +86,19 @@ public sealed class LinuxPlatform : IPlatformServices
             Protect(output.Trim());
             return output.Trim();
         }
+
+        public void Forget(string protectedText)
+        {
+            if (protectedText == PrivateFileSecrets.Marker)
+            {
+                _fallback.Forget(protectedText);
+                return;
+            }
+            // Pairnets' own entry only; one saved by Tether is left alone, as everywhere else.
+            var (code, _) = Proc.Run("secret-tool", ["clear", .. Attributes]);
+            if (code != 0)
+                throw new InvalidOperationException("The key could not be removed from the keyring (is it unlocked?).");
+        }
     }
 
     private sealed class GioTrash(ILogger log) : ILocalTrash

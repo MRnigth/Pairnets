@@ -5,74 +5,35 @@ using Pairnets.Core.Settings;
 namespace Pairnets.Desktop.Views;
 
 /// <summary>
-/// Setting up this computer, in a window of its own: signing in with the browser (<see cref="SignInView"/>),
-/// or, under "Advanced", the settings form with the server address and token (<see cref="SettingsView"/>).
+/// Setting up this computer, in a window of its own: the sign-in (<see cref="SignInView"/>) and nothing
+/// else. There is no form for a server address and token any more.
 /// </summary>
 public partial class SettingsWindow : Window
 {
-    private readonly ClientSettings _current;
-    private readonly ISecretProtector? _protector;
-    private readonly bool _autoStart;
-    private readonly UpdateService? _updates;
-    private readonly string? _serverVersionText;
-
     public SettingsWindow()
-        : this(new ClientSettings(), null, firstRun: true, autoStart: false)
+        : this(new ClientSettings(), null, autoStart: false)
     {
     }
 
-    public SettingsWindow(ClientSettings current, ISecretProtector? protector, bool firstRun, bool autoStart, UpdateService? updates = null,
-        string? serverVersionText = null, Action<string>? openUrl = null, string? nestHint = null)
+    public SettingsWindow(ClientSettings current, ISecretProtector? protector, bool autoStart, Action<string>? openUrl = null, string? nestHint = null)
     {
         InitializeComponent();
-        _current = current;
-        _protector = protector;
-        _autoStart = autoStart;
-        _updates = updates;
-        _serverVersionText = serverVersionText;
-        Title = firstRun ? "Pairnets – set up this computer" : "Pairnets – settings";
-        if (firstRun)
+        Title = "Pairnets – sign in";
+        SignIn = new SignInView(current, protector, autoStart, openUrl ?? (_ => { }), nestHint);
+        SignIn.SignedIn += (settings, key) =>
         {
-            SignIn = new SignInView(current, protector, autoStart, openUrl ?? (_ => { }), nestHint);
-            SignIn.SignedIn += (settings, key) =>
-            {
-                Result = settings;
-                PlainToken = key;
-                Close();
-            };
-            SignIn.AdvancedRequested += () => ShowForm(firstRun: true);
-            Host.Content = SignIn;
-        }
-        else
-        {
-            ShowForm(firstRun: false);
-        }
+            Result = settings;
+            PlainToken = key;
+            Close();
+        };
+        Host.Content = SignIn;
     }
 
-    /// <summary>The sign-in steps (first run only).</summary>
-    public SignInView? SignIn { get; }
-
-    /// <summary>The settings form, once shown.</summary>
-    public SettingsView? View { get; private set; }
+    /// <summary>The sign-in steps.</summary>
+    public SignInView SignIn { get; }
 
     /// <summary>The settings to save, when the window closes with a result.</summary>
     public ClientSettings? Result { get; private set; }
 
     public string? PlainToken { get; private set; }
-
-    /// <summary>The address-and-token form ("Advanced").</summary>
-    public void ShowForm(bool firstRun)
-    {
-        View = new SettingsView(_current, _protector, firstRun, _autoStart, _updates, _serverVersionText);
-        View.Saved += v =>
-        {
-            Result = v.Result;
-            PlainToken = v.PlainToken;
-            Close();
-        };
-        View.Cancelled += Close;
-        Host.Content = View;
-    }
-
-    internal void ShowTestResult(bool? ok, string text) => View?.ShowTestResult(ok, text);
 }

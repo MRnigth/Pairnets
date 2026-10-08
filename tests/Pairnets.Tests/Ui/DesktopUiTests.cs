@@ -264,7 +264,7 @@ public class DesktopUiTests
         window.Show();
         window.ClickNav(MainPage.Settings);
         Assert.Equal(["settings"], actions.Calls); // the controller hands over a fresh form
-        window.ShowSettingsPage(new SettingsView(new ClientSettings { ServerUrl = "http://example.invalid:5075/", Folder = "/tmp/x", DeviceName = "mac" }, null, firstRun: false, autoStart: false));
+        window.ShowSettingsPage(new SettingsView(new ClientSettings { ServerUrl = "http://example.invalid:5075/", Folder = "/tmp/x", DeviceName = "mac" }, null, autoStart: false));
         Assert.Equal(MainPage.Settings, window.Page);
         Assert.True(window.SettingsShown);
         window.ClickNav(MainPage.Activity);
@@ -311,19 +311,14 @@ public class DesktopUiTests
     }
 
     [AvaloniaFact]
-    public void SettingsWindowLoadsInFirstRunAndSettingsModes()
+    public void TheSetupWindowIsTheSignInAndNothingElse()
     {
-        var first = new SettingsWindow(new ClientSettings(), null, firstRun: true, autoStart: false);
-        first.Show();
-        Assert.Contains("set up this computer", first.Title);
-        Assert.NotNull(first.SignIn);
-        first.ShowForm(firstRun: true); // "Connect with server address and token instead"
-        Assert.NotNull(first.View);
-        first.Close();
-        var later = new SettingsWindow(new ClientSettings { ServerUrl = "http://example.invalid:5075/", Folder = "/tmp/x", DeviceName = "mac" }, null, firstRun: false, autoStart: true);
-        later.Show();
-        Assert.Contains("settings", later.Title);
-        later.Close();
+        var window = new SettingsWindow(new ClientSettings(), null, autoStart: false);
+        window.Show();
+        Assert.Contains("sign in", window.Title);
+        Assert.NotNull(window.SignIn);
+        Assert.Same(window.SignIn, window.Host.Content); // no form for a server address and token behind it
+        window.Close();
     }
 
     /// <summary>
@@ -431,9 +426,12 @@ public class DesktopUiTests
         Avalonia.Threading.Dispatcher.UIThread.RunJobs();
         Save(window, outDir, $"main-window-history-{suffix}.png");
 
-        window.ShowSettingsPage(new SettingsView(new ClientSettings { ServerUrl = "https://sync.example.com/", Folder = "/Users/me/Work", DeviceName = "MacBook", DeviceId = "id" },
-            null, firstRun: false, autoStart: true, serverVersionText: "Server 1.0.58"));
+        var settingsPage = new SettingsView(new ClientSettings { ServerUrl = "https://sync.example.com/", Folder = "/Users/me/Work", DeviceName = "MacBook", DeviceId = "id" },
+            null, autoStart: true, serverVersionText: "Server 1.0.58");
+        window.ShowSettingsPage(settingsPage);
         Save(window, outDir, $"main-window-settings-{suffix}.png");
+        settingsPage.ScrollToEnd();
+        Save(window, outDir, $"main-window-settings-start-over-{suffix}.png");
         window.AllowClose = true;
         window.Close();
 
@@ -459,9 +457,9 @@ public class DesktopUiTests
         Save(panel, outDir, $"tray-panel-idle-{suffix}.png");
         panel.Close();
 
-        var signIn = new SettingsWindow(new ClientSettings { DeviceName = "MacBook" }, null, firstRun: true, autoStart: true);
+        var signIn = new SettingsWindow(new ClientSettings { DeviceName = "MacBook" }, null, autoStart: true);
         signIn.Show();
-        signIn.SignIn!.ShowAddress("nest.pairnets.app", new NestCheck(NestCheckStatus.Found, new Uri("https://nest.pairnets.app/"),
+        signIn.SignIn.ShowAddress("nest.pairnets.app", new NestCheck(NestCheckStatus.Found, new Uri("https://nest.pairnets.app/"),
             new ServerHello("Pairnets", 1, "1.0.80", "https://nest.pairnets.app", true, true, new SignInMethods(true, true, true, true)),
             "Found it (Pairnets server 1.0.80)"));
         Save(signIn, outDir, $"sign-in-welcome-{suffix}.png");
@@ -476,13 +474,6 @@ public class DesktopUiTests
         signIn.SignIn.Folder = "/Users/me/Work";
         Save(signIn, outDir, $"sign-in-folder-{suffix}.png");
         signIn.Close();
-
-        var settings = new SettingsWindow(new ClientSettings { DeviceName = "MacBook" }, null, firstRun: true, autoStart: true);
-        settings.Show();
-        settings.ShowForm(firstRun: true);
-        settings.ShowTestResult(true, "Connected. Server and token are OK.");
-        Save(settings, outDir, $"settings-first-run-{suffix}.png");
-        settings.Close();
 
         var serverUpdate = new ServerUpdateWindow(null, "1.0.52", "1.0.58");
         serverUpdate.Show();
@@ -522,5 +513,29 @@ public class DesktopUiTests
         Assert.Equal("file:v1", marker);
         Assert.Equal("a-very-secret-token-value", store.Unprotect(marker));
         Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite, File.GetUnixFileMode(path));
+
+        ((ISecretProtector)store).Forget(marker); // "Reset this app" removes it
+        Assert.False(File.Exists(path));
+        ((ISecretProtector)store).Forget(marker); // already gone: no error
+        ((ISecretProtector)store).Forget("keychain:v1"); // somebody else's marker: left alone
+    }
+
+    [AvaloniaFact]
+    public void TheSettingsPageHasAResetButtonThatAsksTheController()
+    {
+        var view = new SettingsView(new ClientSettings { ServerUrl = "http://example.invalid:5075/", Folder = "/tmp/x", DeviceName = "mac" }, null, autoStart: false);
+        var window = new Avalonia.Controls.Window { Content = view };
+        window.Show();
+        var asked = 0;
+        view.ResetRequested += () => asked++;
+
+        var button = view.ResetButton;
+
+        Assert.NotNull(button);
+        Assert.True(button.IsVisible); // also for a computer that is not signed in with its own key
+        Assert.Contains("danger", button.Classes);
+        button.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Avalonia.Controls.Button.ClickEvent));
+        Assert.Equal(1, asked);
+        window.Close();
     }
 }

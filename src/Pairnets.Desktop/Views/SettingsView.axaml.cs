@@ -12,17 +12,16 @@ using Pairnets.Core.Sync;
 namespace Pairnets.Desktop.Views;
 
 /// <summary>
-/// The settings form: the main window's Settings page, and the first-time setup window.
-/// Validation and preview logic live in Pairnets.Core.
+/// The settings form: the main window's Settings page. Setting up a computer is the sign-in window
+/// (<see cref="SignInView"/>), never this form. Validation and preview logic live in Pairnets.Core.
 /// </summary>
 public partial class SettingsView : UserControl
 {
     private readonly ClientSettings _original;
     private readonly ISecretProtector? _protector;
-    private readonly bool _firstRun;
 
     public SettingsView()
-        : this(new ClientSettings(), null, firstRun: true, autoStart: false)
+        : this(new ClientSettings(), null, autoStart: false)
     {
     }
 
@@ -47,18 +46,13 @@ public partial class SettingsView : UserControl
         e.Handled = true;
     }
 
-    public SettingsView(ClientSettings current, ISecretProtector? protector, bool firstRun, bool autoStart, UpdateService? updates = null, string? serverVersionText = null)
+    public SettingsView(ClientSettings current, ISecretProtector? protector, bool autoStart, UpdateService? updates = null, string? serverVersionText = null)
     {
         _updates = updates;
         InitializeComponent();
         _original = current;
         _protector = protector;
-        _firstRun = firstRun;
-        WelcomeHeader.IsVisible = firstRun;
-        if (!firstRun)
-            Form.Margin = new Avalonia.Thickness(0, 0, 14, 16); // inside the main window, which has its own margins
-        SaveButton.Content = firstRun ? "Start syncing" : "Save";
-        if (!firstRun && current.HasOwnKey)
+        if (current.HasOwnKey)
         {
             // Signed in with its own key: show who it is; the address and token stay one click away.
             ServerHeading.Text = "Your nest";
@@ -187,6 +181,14 @@ public partial class SettingsView : UserControl
     /// <summary>"Manage devices on the web".</summary>
     public event Action? ManageDevicesRequested;
 
+    /// <summary>Scrolls to the bottom of the page (screenshot test).</summary>
+    internal void ScrollToEnd() => Scroller.ScrollToEnd();
+
+    /// <summary>"Reset this app…" (the controller asks first, and starts over from the sign-in window).</summary>
+    public event Action? ResetRequested;
+
+    private void OnReset(object? sender, RoutedEventArgs e) => ResetRequested?.Invoke();
+
     private void OnSignOut(object? sender, RoutedEventArgs e) => SignOutRequested?.Invoke();
 
     private void OnManageDevices(object? sender, RoutedEventArgs e) => ManageDevicesRequested?.Invoke();
@@ -234,7 +236,7 @@ public partial class SettingsView : UserControl
                 if (!await Dialogs.ConfirmAsync(Owner, "Pairnets", test.Message + "\n\nSave these settings anyway?"))
                     return;
             }
-            else if (_firstRun || !string.Equals(folder, _original.Folder, StringComparison.Ordinal))
+            else if (!string.Equals(folder, _original.Folder, StringComparison.Ordinal))
             {
                 using var api = new PairnetsApiClient(url, token, DeviceName());
                 var preview = await FirstSyncPreview.ComputeAsync(folder, new IgnoreList(Patterns()), api, CancellationToken.None);

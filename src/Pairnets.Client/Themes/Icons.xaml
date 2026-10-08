@@ -41,5 +41,6 @@
   <SolidColorBrush x:Key="S.Orange" Color="#E66E14" />
   <SolidColorBrush x:Key="S.OrangeHover" Color="#C95E0F" />
   <SolidColorBrush x:Key="S.Red" Color="#CF222E" />
+  <SolidColorBrush x:Key="S.RedHover" Color="#A61B25" />
   <SolidColorBrush x:Key="S.Yellow" Color="#D6A021" />
 </ResourceDictionary>

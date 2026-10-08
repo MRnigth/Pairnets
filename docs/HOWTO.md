@@ -202,26 +202,26 @@ experience also run `sudo apt install libsecret-tools libnotify-bin`. Pairnets t
 in your keyring and can show notifications. On GNOME the tray icon needs the *AppIndicator*
 extension, which Ubuntu enables by default.
 
-### First-run setup
+### First-run setup: sign in
 
-When Pairnets starts for the first time, the **first-time setup** window opens. It looks the same on
-Windows, Mac and Linux, and follows your system's light or dark mode:
+When Pairnets starts for the first time (or after **Reset**), the **sign-in** window opens. It looks
+the same on Windows, Mac and Linux, and follows your system's light or dark mode:
 
-![First-time setup window](images/settings-first-run-light.png)
+![Sign-in window](images/sign-in-welcome-light.png)
 
+1. Type your nest's name, for example `nest.pairnets.app`. Pairnets checks that it is yours and
+   shows which ways your nest offers.
+2. Choose **Continue with Google**, or type your email and choose **Continue with email**, or
+   choose **More ways to sign in in your browser** for a password or passkey. Your browser opens
+   your nest's website and signs you in there.
+3. Check that the code on the website matches the one in Pairnets and press **Allow**. The website
+   sends you straight back to Pairnets.
+4. Choose the folder to sync, for example `D:\Work` (it may already contain your files), and press
+   **Start syncing**. Tick **Start Pairnets when I sign in** so syncing starts automatically.
 
-| Field | What to enter |
-|-------|---------------|
-| **Server URL** | `https://sync.example.com/` exactly as printed by `install.sh` |
-| **Token** | the token printed by `install.sh` |
-| **Folder to sync** | click **Browse…** and pick the folder, e.g. `D:\Work`. It may already contain your files. |
-| **Device name** | pre-filled with the computer name. Leave it, but **each PC needs a different name**. It appears in conflict file names. |
-| **Extra ignore patterns** | optional, one per line, e.g. `*.bak` or `node_modules/`. Common junk is ignored already. |
-| **Start Pairnets when I sign in / log in** | tick it so syncing starts automatically. |
-
-1. Click **Test connection**. You should see *"Connected. Server and token are OK."*
-   If not, see [section 9](#9-when-something-needs-your-attention).
-2. Click **Start syncing**.
+There is no form for a server address and token any more: a computer only gets in when you allow it
+on your nest. Your nest therefore needs its own public name first (see [section 3](#3-install-the-server)).
+Extra ignore patterns, speed limits and the device name are on the **Settings** page afterwards.
 
 The first sync uploads everything in the folder. A 20 GB folder takes a while; you can keep
 working meanwhile.
@@ -655,11 +655,31 @@ In **Settings → Updates and speed**:
   computer has its own limits; all files in progress together stay under the limit.
 * **Wait while my other computer uploads many files**: the batch wait described in section 5.
 
+### Starting over
+
+**Settings → Start over → Reset this app…** returns this computer to how it was before you first
+set it up. After you confirm it:
+
+* this computer is removed from your nest (if the nest can't be reached, Pairnets says so; remove
+  the computer on your nest's **Devices** page then);
+* every setting, the saved sign-in key (in the Keychain or keyring on Mac and Linux) and Pairnets'
+  sync notes for your folders are deleted, and *Start with Windows / Start at login* is turned off;
+* the small `.pairnets-marker` file and `.pairnets-tmp` folder Pairnets keeps inside your sync folder
+  are removed.
+
+**Your own files are never deleted**, and the log files are kept (they are what *Report a bug*
+uses). Pairnets then opens the sign-in window. When you choose the same folder again, it compares
+that folder with your nest as on a first sync: nothing is deleted, and files that differ become
+conflict copies.
+
 ### Uninstalling
+
+Use **Reset this app…** (above) first if you also want Pairnets' settings, saved key and sync notes
+gone, then uninstall.
 
 **Uninstall from a Mac**: menu-bar icon → **Quit Pairnets**, untick "Start at login" first if you
 had it on, then delete **Pairnets** from Applications. The token is in the *Keychain Access* app
-under "Pairnets".
+under "Pairnets" (Reset removes it).
 
 **Uninstall from Linux**: quit Pairnets, then
 `rm -rf ~/.local/opt/pairnets ~/.local/bin/pairnets ~/.local/share/applications/pairnets.desktop ~/.config/autostart/pairnets.desktop`.
@@ -667,7 +687,8 @@ under "Pairnets".
 **Uninstall from Windows**: right-click → **Exit**. Untick "Start with Windows" first if you had it
 on. Then delete `Pairnets.exe`, or uninstall through *Settings → Apps* if you used the installer.
 Your synced folder and its files stay where they are. To also remove Pairnets's settings and
-state, delete `%AppData%\Pairnets` and `%LocalAppData%\Pairnets`.
+state, use **Reset this app…** before uninstalling (or delete `%AppData%\Pairnets` and
+`%LocalAppData%\Pairnets` by hand).
 
 **Uninstall the server**:
 

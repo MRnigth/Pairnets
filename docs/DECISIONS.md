@@ -295,3 +295,23 @@ what cannot lose or silently overwrite data.
   lands back on the approval page. The email typed in the app is only compared against the owner's
   saved address — the link always goes to the saved address, and the answer never says whether they
   matched, so nothing leaks and no stranger gets mail.
+* **The address-and-token first-run screen is gone** (your choice). The first-run window is the
+  sign-in screen and nothing else; the "Connect with server address and token instead" link and the
+  form behind it were removed from both apps. Consequence: a nest with no public name of its own
+  (`install.sh --public-url`) can no longer be connected from the app's first run. The Settings page
+  keeps its address and token fields for computers that are already set up. The "server rejected the
+  token" notices now say "Sign in to your nest" and open the sign-in window.
+* **Reset this app** (Settings → Start over, both apps; your choice of scope). It removes this
+  computer from the nest (best effort, as Sign out does), stops syncing, then deletes the settings
+  file (not the whole folders: a leftover `Tether\` folder would be taken over again), the saved key
+  (new `ISecretProtector.Forget`: Keychain item, `secret-tool clear`, the 600 fallback file; DPAPI's
+  key lives in settings.json), the sync notes of every folder (`state.db` in the hash-named folders
+  of `LocalDir`), and turns start-at-login off. In the synced folder it removes only `.pairnets-marker`
+  and `.pairnets-tmp`, never user files; without the marker the next sign-in is a plain first-sync
+  merge instead of a "foreign marker" question. Logs and the single-instance lock are kept (a bug
+  report is made from the logs). Reset always ends at the sign-in window with blank settings, so
+  nothing is prefilled.
+* **`pairnets://` "come back" pipe on macOS/Linux.** The pipe name is now `pairnets-` plus 8 hex of the
+  user name's hash (a long user name plus macOS's long temp folder passed the 104-byte socket path
+  limit, which made every poke fail and could crash the app on a pairnets:// launch), and the next
+  listening instance opens before the current one closes (a poke arriving in the gap was lost).

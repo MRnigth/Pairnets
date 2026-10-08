@@ -135,6 +135,14 @@
     <Setter Property="FontWeight" Value="SemiBold" />
   </Style>
 
+  <!-- For actions that cannot be undone (Reset this app). -->
+  <Style x:Key="DangerButton" TargetType="Button" BasedOn="{StaticResource ButtonBase}">
+    <Setter Property="Background" Value="{StaticResource S.Red}" />
+    <Setter Property="Tag" Value="{StaticResource S.RedHover}" />
+    <Setter Property="Foreground" Value="White" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+
   <Style x:Key="FlatButton" TargetType="Button" BasedOn="{StaticResource ButtonBase}">
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="Tag" Value="{DynamicResource T.Hover}" />

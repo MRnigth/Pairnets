@@ -102,6 +102,14 @@ public interface ISecretProtector
     string Protect(string plainText);
 
     string Unprotect(string protectedText);
+
+    /// <summary>
+    /// Removes the secret that <see cref="Protect"/> saved, from wherever it is kept (Keychain, keyring, private file).
+    /// Nothing to do when the secret lives inside the settings file itself (DPAPI on Windows).
+    /// </summary>
+    void Forget(string protectedText)
+    {
+    }
 }
 
 /// <summary>Loads and atomically saves <see cref="ClientSettings"/>.</summary>

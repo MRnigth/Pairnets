@@ -17,21 +17,8 @@
 
   <ScrollViewer x:Name="Scroller" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
                 PreviewMouseWheel="OnScrollWheel">
-  <StackPanel x:Name="Form" Margin="20">
-    <!-- Welcome header (first run only) -->
-    <Grid x:Name="WelcomeHeader" Visibility="Collapsed" Margin="0,0,0,16">
-      <Grid.ColumnDefinitions>
-        <ColumnDefinition Width="Auto" />
-        <ColumnDefinition Width="*" />
-      </Grid.ColumnDefinitions>
-      <Image x:Name="AppIcon" Width="52" Height="52" Margin="0,0,14,0" VerticalAlignment="Top" />
-      <StackPanel Grid.Column="1">
-        <TextBlock Style="{StaticResource H1}" Text="Welcome to Pairnets" />
-        <TextBlock Style="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,3,0,0"
-                   Text="Connect to your server, choose the folder to keep in sync, and you're done. The address and token were printed by install.sh on the server." />
-      </StackPanel>
-    </Grid>
-
+  <!-- Inside the main window, which has its own margins. -->
+  <StackPanel x:Name="Form" Margin="0,0,14,16">
     <!-- Server -->
     <Border Style="{StaticResource Card}">
       <StackPanel>
@@ -178,6 +165,19 @@
         </Grid>
         <TextBlock Style="{StaticResource MutedSmall}" TextWrapping="Wrap" Margin="0,8,0,0"
                    Text="Files from your other computers always come through the server, so the download limit covers them too. All files at once stay under the limit together." />
+      </StackPanel>
+    </Border>
+
+    <!-- Start over -->
+    <Border Style="{StaticResource Card}" Margin="0,12,0,0">
+      <StackPanel>
+        <StackPanel Orientation="Horizontal">
+          <ui:LineIcon Style="{StaticResource CardIcon}" Data="{StaticResource I.Trash}" />
+          <TextBlock Style="{StaticResource H2}" Text="Start over" />
+        </StackPanel>
+        <TextBlock Style="{StaticResource MutedSmall}" TextWrapping="Wrap" Margin="0,8,0,0"
+                   Text="Forgets every setting, signs this computer out of your nest and starts again from the sign-in screen. The files in your sync folder are never deleted." />
+        <Button x:Name="ResetButton" Style="{StaticResource DangerButton}" Content="Reset this app…" HorizontalAlignment="Left" Margin="0,12,0,0" Click="OnReset" />
       </StackPanel>
     </Border>
 

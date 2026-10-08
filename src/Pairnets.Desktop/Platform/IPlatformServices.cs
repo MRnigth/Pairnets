@@ -128,4 +128,10 @@ internal sealed class PrivateFileSecrets(string path) : ISecretProtector
             throw new InvalidOperationException("Unknown token storage.");
         return File.ReadAllText(path).Trim();
     }
+
+    public void Forget(string protectedText)
+    {
+        if (protectedText == Marker)
+            File.Delete(path); // no error when it is already gone
+    }
 }

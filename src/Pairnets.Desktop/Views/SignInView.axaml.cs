@@ -71,9 +71,6 @@ public partial class SignInView : UserControl
     /// <summary>Signed in and a folder chosen: the settings to save (key protected) and the plain key for this session.</summary>
     public event Action<ClientSettings, string>? SignedIn;
 
-    /// <summary>"Connect with server address and token instead".</summary>
-    public event Action? AdvancedRequested;
-
     private Window? Owner => TopLevel.GetTopLevel(this) as Window;
 
     /// <summary>
@@ -189,8 +186,6 @@ public partial class SignInView : UserControl
     }
 
     private string ThisName() => _current.DeviceName ?? Environment.MachineName;
-
-    private void OnAdvanced(object? sender, RoutedEventArgs e) => AdvancedRequested?.Invoke();
 
     // ------------------------------------------------------------------ 2. waiting for approval
 

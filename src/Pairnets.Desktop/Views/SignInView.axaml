@@ -61,7 +61,6 @@
         </Border>
         <TextBlock Classes="muted small" TextWrapping="Wrap" TextAlignment="Center"
                    Text="Your nest is your own server. New computers only get in when you allow them there." />
-        <Button x:Name="AdvancedButton" Classes="link" HorizontalAlignment="Center" Content="Connect with server address and token instead" Click="OnAdvanced" />
       </StackPanel>
 
       <!-- 2. Waiting: the code to compare, until it is approved on the nest -->

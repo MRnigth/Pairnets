@@ -30,7 +30,7 @@ public static class PairingEndpoints
         {
             if (options.PublicUrl is null)
                 return Error(StatusCodes.Status409Conflict, ErrorCodes.BadRequest,
-                    "This nest has no website yet to approve computers on. Give it its own name (install.sh --domain), or use the address and token.");
+                    "This nest has no website yet to approve computers on. Give it its own public name first (install.sh --public-url https://nest.example.com).");
             var name = AuthStore.CleanName(body?.Name);
             if (name is null)
                 return Error(StatusCodes.Status400BadRequest, ErrorCodes.BadRequest, "Send this computer's name.");

@@ -230,6 +230,66 @@ public sealed class TrayController : ITrayActions, IDisposable
         ShowSettings(firstRun: true);
     }
 
+    private bool _resetting;
+
+    /// <summary>
+    /// "Reset this app": removes this computer from the nest (best effort), stops syncing, forgets every setting, the
+    /// saved key and the sync notes, and starts again from the sign-in window. The files in the folder stay.
+    /// </summary>
+    public async void ResetEverything()
+    {
+        if (_resetting)
+            return;
+        var folder = _settings.Folder;
+        var where = string.IsNullOrWhiteSpace(folder) ? "your sync folder" : folder;
+        if (MessageBox.Show($"Reset Pairnets on this computer?\n\nThis signs this computer out of your nest, forgets every setting and the saved sign-in, and removes Pairnets' sync notes. Your files in {where} are not deleted. The log files are kept.\n\nYou start again from the sign-in screen.",
+                "Pairnets – reset", MessageBoxButton.OKCancel, MessageBoxImage.Warning, MessageBoxResult.Cancel) != MessageBoxResult.OK)
+            return;
+        _resetting = true;
+        try
+        {
+            var hadOwnKey = _settings.HasOwnKey;
+            var removed = false;
+            try
+            {
+                removed = _session is not null && await _session.SignOutAsync();
+            }
+            catch (Exception ex) when (ex is Pairnets.Core.Api.PairnetsNetworkException or Pairnets.Core.Api.PairnetsAuthException or Pairnets.Core.Api.PairnetsProtocolException)
+            {
+                _log.LogWarning("Could not remove this computer on the nest: {Error}", ex.Message);
+            }
+            StopSession(); // the sync notes are only free to delete once the session is gone
+            var result = LocalReset.Run(_settings, _protector);
+            var notes = new List<string>(result.Problems);
+            try
+            {
+                AutoStart.Set(false);
+            }
+            catch (Exception ex) when (ex is UnauthorizedAccessException or IOException or System.Security.SecurityException)
+            {
+                notes.Add("Start with Windows could not be turned off: " + ex.Message);
+            }
+            if (hadOwnKey && !removed)
+                notes.Add("Your nest could not be told. Remove this computer on your nest's Devices page so its key stops working there too.");
+            _log.LogInformation("Pairnets was reset on this computer ({Folders} sync folder(s) cleared, {Problems} problem(s))", result.StateFoldersRemoved, result.Problems.Count);
+
+            _settings = new ClientSettings();
+            _fileLog.Minimum = LogLevel.Information;
+            _updates.SetEnabled(true);
+            (_updateDismissed, _updateProgress, _updateError, _serverPromptShownFor, _lowSpaceNoticed) = (false, null, null, null, false);
+            _lastToast.Clear();
+            _dirty = true;
+            if (notes.Count > 0)
+                MessageBox.Show("Pairnets was reset, with these notes:\n\n• " + string.Join("\n• ", notes), "Pairnets", MessageBoxButton.OK, MessageBoxImage.Warning);
+            _window?.Navigate(MainPage.Overview);
+            ShowSettings(firstRun: true);
+        }
+        finally
+        {
+            _resetting = false;
+        }
+    }
+
     /// <summary>This computer got its own key, moved to the nest's HTTPS name or was renamed: save and reconnect.</summary>
     private void OnAccountChanged(ClientSession from, ClientSettings next, string token)
     {
@@ -338,7 +398,7 @@ public sealed class TrayController : ITrayActions, IDisposable
         }
         else if (result.Outcome == PassOutcome.AuthFailed)
         {
-            Toast("auth", "The server rejected the token", "Open Settings and enter the token printed by install.sh.", Forms.ToolTipIcon.Error, () => ShowSettings(false));
+            Toast("auth", "Sign in to your nest", "Your nest did not accept this computer's sign-in. Sign in again to keep syncing.", Forms.ToolTipIcon.Error, () => ShowSettings(true));
         }
         _dirty = true;
     }
@@ -520,7 +580,7 @@ public sealed class TrayController : ITrayActions, IDisposable
         StartSession(null);
     }
 
-    /// <summary>First-time setup is a window of its own; later, Settings is a page of the main window.</summary>
+    /// <summary>Signing in is a window of its own; later, Settings is a page of the main window.</summary>
     public void ShowSettings(bool firstRun)
     {
         if (!firstRun && _settings.IsComplete && _settings.FirstRunCompleted)
@@ -528,8 +588,7 @@ public sealed class TrayController : ITrayActions, IDisposable
             ShowMainWindow(MainPage.Settings);
             return;
         }
-        var window = new SettingsWindow(_settings, _protector, firstRun: true, _updates, _session?.Status.ServerVersionText, Shell,
-            _session?.Status.NestUrl);
+        var window = new SettingsWindow(_settings, _protector, Shell, _session?.Status.NestUrl);
         if (window.ShowDialog() != true || window.Result is null)
             return;
         ApplySettings(window.Result, window.PlainToken);
@@ -540,13 +599,14 @@ public sealed class TrayController : ITrayActions, IDisposable
     {
         if (_window is null)
             return;
-        var view = new SettingsView(_settings, _protector, firstRun: false, _updates, _session?.Status.ServerVersionText);
+        var view = new SettingsView(_settings, _protector, _updates, _session?.Status.ServerVersionText);
         view.Saved += v =>
         {
             ApplySettings(v.Result!, v.PlainToken);
             _window?.Navigate(MainPage.Overview);
         };
         view.SignOutRequested += SignOut;
+        view.ResetRequested += ResetEverything;
         view.ManageDevicesRequested += ManageDevices;
         view.Cancelled += () => _window?.Navigate(MainPage.Overview);
         _window.ShowSettingsPage(view);

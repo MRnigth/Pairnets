@@ -173,9 +173,12 @@ public static class Program
         window.SelectHistoryRow(0);
         Save(window, outDir, $"windows-main-history-{suffix}.png", print);
 
-        window.ShowSettingsPage(new SettingsView(new ClientSettings { ServerUrl = "https://sync.example.com/", Folder = folder, DeviceName = "DESKTOP" },
-            new NoProtector(), firstRun: false, serverVersionText: "Server 1.0.58"));
+        var settingsPage = new SettingsView(new ClientSettings { ServerUrl = "https://sync.example.com/", Folder = folder, DeviceName = "DESKTOP" },
+            new NoProtector(), serverVersionText: "Server 1.0.58");
+        window.ShowSettingsPage(settingsPage);
         Save(window, outDir, $"windows-main-settings-{suffix}.png", print);
+        settingsPage.ScrollToEnd();
+        Save(window, outDir, $"windows-main-settings-start-over-{suffix}.png", print);
         window.AllowClose = true;
         window.Close();
 
@@ -194,7 +197,7 @@ public static class Program
         Save(panel, outDir, $"windows-tray-panel-{suffix}.png", print);
         panel.Close();
 
-        var signIn = new SettingsWindow(new ClientSettings { DeviceName = "DESKTOP" }, new NoProtector(), firstRun: true);
+        var signIn = new SettingsWindow(new ClientSettings { DeviceName = "DESKTOP" }, new NoProtector());
         Place(signIn);
         signIn.SignIn!.ShowAddress("nest.pairnets.app", new NestCheck(NestCheckStatus.Found, new Uri("https://nest.pairnets.app/"),
             new ServerHello("Pairnets", 1, "1.0.80", "https://nest.pairnets.app", true, true, new SignInMethods(true, true, true, true)),
@@ -207,13 +210,6 @@ public static class Program
         signIn.SignIn.Folder = @"D:\Work";
         Save(signIn, outDir, $"windows-sign-in-folder-{suffix}.png", print);
         signIn.Close();
-
-        var settings = new SettingsWindow(new ClientSettings { DeviceName = "DESKTOP", UploadLimitMBps = 5 }, new NoProtector(), firstRun: true) { Height = 1320 };
-        settings.ShowForm(firstRun: true);
-        Place(settings);
-        settings.ShowTestResult(true, "Connected. Server and token are OK.");
-        Save(settings, outDir, $"windows-settings-first-run-{suffix}.png", print);
-        settings.Close();
 
         var serverUpdate = new ServerUpdateWindow(null, "1.0.52", "1.0.58");
         Place(serverUpdate);

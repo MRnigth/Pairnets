@@ -116,6 +116,20 @@
     <Setter Property="Background" Value="#C95E0F" />
     <Setter Property="Foreground" Value="White" />
   </Style>
+  <!-- For actions that cannot be undone (Reset this app). -->
+  <Style Selector="Button.danger">
+    <Setter Property="Background" Value="{StaticResource S.Red}" />
+    <Setter Property="Foreground" Value="White" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+  <Style Selector="Button.danger /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{StaticResource S.Red}" />
+    <Setter Property="Foreground" Value="White" />
+  </Style>
+  <Style Selector="Button.danger:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="#A61B25" />
+    <Setter Property="Foreground" Value="White" />
+  </Style>
 
   <!-- Segmented control (two RadioButtons inside Border.segments) -->
   <Style Selector="Border.segments">

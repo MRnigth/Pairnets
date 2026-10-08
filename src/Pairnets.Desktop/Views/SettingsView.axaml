@@ -3,17 +3,8 @@
              xmlns:v="using:Pairnets.Desktop.Views"
              x:Class="Pairnets.Desktop.Views.SettingsView">
   <ScrollViewer x:Name="Scroller" HorizontalScrollBarVisibility="Disabled" PointerWheelChanged="OnScrollWheel">
-  <StackPanel x:Name="Form" Margin="20" Spacing="12">
-    <!-- Welcome header (first run only) -->
-    <Grid x:Name="WelcomeHeader" ColumnDefinitions="Auto,*" IsVisible="False" Margin="0,0,0,4">
-      <Image Source="avares://Pairnets/Assets/pairnets-icon-256.png" Width="52" Height="52" Margin="0,0,14,0" VerticalAlignment="Top" />
-      <StackPanel Grid.Column="1" Spacing="3">
-        <TextBlock Classes="h1" Text="Welcome to Pairnets" />
-        <TextBlock Classes="muted" TextWrapping="Wrap"
-                   Text="Connect to your server, choose the folder to keep in sync, and you're done. The address and token were printed by install.sh on the server." />
-      </StackPanel>
-    </Grid>
-
+  <!-- Inside the main window, which has its own margins. -->
+  <StackPanel x:Name="Form" Margin="0,0,14,16" Spacing="12">
     <!-- Server -->
     <Border Classes="card">
       <StackPanel Spacing="10">
@@ -149,6 +140,19 @@
           <TextBlock Classes="muted small" TextWrapping="Wrap"
                      Text="Files from your other computers always come through the server, so the download limit covers them too. All files at once stay under the limit together." />
         </StackPanel>
+      </StackPanel>
+    </Border>
+
+    <!-- Start over -->
+    <Border Classes="card">
+      <StackPanel Spacing="10">
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <v:LineIcon Classes="icon" Width="17" Height="17" Data="{StaticResource I.Trash}" />
+          <TextBlock Classes="h2" Text="Start over" />
+        </StackPanel>
+        <TextBlock Classes="muted small" TextWrapping="Wrap"
+                   Text="Forgets every setting, signs this computer out of your nest and starts again from the sign-in screen. The files in your sync folder are never deleted." />
+        <Button x:Name="ResetButton" Classes="danger" HorizontalAlignment="Left" Content="Reset this app…" Click="OnReset" />
       </StackPanel>
     </Border>
 

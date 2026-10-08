@@ -75,6 +75,7 @@ public sealed class MacPlatform : IPlatformServices
         private const string Security = "/System/Library/Frameworks/Security.framework/Security";
         private const string CoreFoundation = "/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation";
         private const int ErrSecDuplicateItem = -25299;
+        private const int ErrSecItemNotFound = -25300;
         private static readonly byte[] Service = Encoding.UTF8.GetBytes("Pairnets");
         private static readonly byte[] TetherService = Encoding.UTF8.GetBytes(Pairnets.Core.Legacy.TetherNames.KeychainService);
         private static readonly byte[] Account = Encoding.UTF8.GetBytes("sync-token");
@@ -92,6 +93,9 @@ public sealed class MacPlatform : IPlatformServices
 
         [DllImport(Security)]
         private static extern int SecKeychainItemFreeContent(IntPtr attrList, IntPtr data);
+
+        [DllImport(Security)]
+        private static extern int SecKeychainItemDelete(IntPtr itemRef);
 
         [DllImport(CoreFoundation)]
         private static extern void CFRelease(IntPtr cf);
@@ -128,6 +132,29 @@ public sealed class MacPlatform : IPlatformServices
                 return token;
             }
             throw new InvalidOperationException($"The token is not in the Keychain (error {rc}).");
+        }
+
+        /// <summary>Removes Pairnets' Keychain entry (one saved by Tether is left alone, as everywhere else).</summary>
+        public void Forget(string protectedText)
+        {
+            if (protectedText != Marker)
+                return;
+            var rc = SecKeychainFindGenericPassword(IntPtr.Zero, (uint)Service.Length, Service, (uint)Account.Length, Account, out _, out var data, out var item);
+            if (rc == ErrSecItemNotFound)
+                return; // nothing left to remove
+            if (rc != 0)
+                throw new InvalidOperationException($"Could not find the key in the Keychain (error {rc}).");
+            try
+            {
+                SecKeychainItemFreeContent(IntPtr.Zero, data);
+                rc = SecKeychainItemDelete(item);
+            }
+            finally
+            {
+                CFRelease(item);
+            }
+            if (rc != 0)
+                throw new InvalidOperationException($"Could not remove the key from the Keychain (error {rc}).");
         }
 
         private static bool Find(byte[] service, out string token, out int rc)

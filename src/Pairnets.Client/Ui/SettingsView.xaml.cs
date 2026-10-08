@@ -15,14 +15,13 @@ using Pairnets.Core.Sync;
 namespace Pairnets.Client.Ui;
 
 /// <summary>
-/// The settings form: the main window's Settings page, and the first-time setup window.
-/// All validation logic lives in Pairnets.Core.
+/// The settings form: the main window's Settings page. Setting up a computer is the sign-in window
+/// (<see cref="SignInView"/>), never this form. All validation logic lives in Pairnets.Core.
 /// </summary>
 public partial class SettingsView : UserControl
 {
     private readonly ClientSettings _original;
     private readonly ISecretProtector _protector;
-    private readonly bool _firstRun;
 
     private readonly UpdateService? _updates;
 
@@ -44,18 +43,13 @@ public partial class SettingsView : UserControl
     /// <summary>The window this form is in, as the owner of its dialogs.</summary>
     private Window? Owner => Window.GetWindow(this);
 
-    public SettingsView(ClientSettings current, ISecretProtector protector, bool firstRun, UpdateService? updates = null, string? serverVersionText = null)
+    public SettingsView(ClientSettings current, ISecretProtector protector, UpdateService? updates = null, string? serverVersionText = null)
     {
         _updates = updates;
         InitializeComponent();
         _original = current;
         _protector = protector;
-        _firstRun = firstRun;
-        WelcomeHeader.Visibility = firstRun ? Visibility.Visible : Visibility.Collapsed;
-        if (!firstRun)
-            Form.Margin = new Thickness(0, 0, 14, 16); // inside the main window, which has its own margins
-        AppIcon.Source = AppIcons.Large;
-        if (!firstRun && current.HasOwnKey)
+        if (current.HasOwnKey)
         {
             // Signed in with its own key: show who it is; the address and token stay one click away.
             ServerHeading.Text = "Your nest";
@@ -63,7 +57,6 @@ public partial class SettingsView : UserControl
             AddressFields.Visibility = Visibility.Collapsed;
             SignedInText.Text = $"{(Uri.TryCreate(current.ServerUrl, UriKind.Absolute, out var nest) ? nest.Authority : current.ServerUrl)} · signed in as {current.DeviceName}";
         }
-        SaveButton.Content = firstRun ? "Start syncing" : "Save";
         ServerUrlBox.Text = current.ServerUrl ?? string.Empty;
         FolderBox.Text = current.Folder ?? string.Empty;
         DeviceBox.Text = current.DeviceName ?? Environment.MachineName;
@@ -236,7 +229,7 @@ public partial class SettingsView : UserControl
                 if (Ask(test.Message + "\n\nSave these settings anyway?", "Pairnets", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
                     return;
             }
-            else if (_firstRun || !string.Equals(folder, _original.Folder, StringComparison.OrdinalIgnoreCase))
+            else if (!string.Equals(folder, _original.Folder, StringComparison.OrdinalIgnoreCase))
             {
                 var extra = SplitPatterns();
                 using var api = new PairnetsApiClient(url, token, DeviceName());
@@ -296,6 +289,14 @@ public partial class SettingsView : UserControl
 
     /// <summary>"Manage devices on the web".</summary>
     public event Action? ManageDevicesRequested;
+
+    /// <summary>Scrolls to the bottom of the page (screenshot tool).</summary>
+    public void ScrollToEnd() => Scroller.ScrollToEnd();
+
+    /// <summary>"Reset this app…" (the controller asks first, and starts over from the sign-in window).</summary>
+    public event Action? ResetRequested;
+
+    private void OnReset(object sender, RoutedEventArgs e) => ResetRequested?.Invoke();
 
     private void OnSignOut(object sender, RoutedEventArgs e) => SignOutRequested?.Invoke();
 

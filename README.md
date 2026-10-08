@@ -68,7 +68,7 @@ With a domain on Cloudflare, for example `pairnets.app`, the server becomes your
 `nest.pairnets.app`, reached through your Cloudflare Tunnel:
 
 ```bash
-sudo ./install.sh --domain nest.pairnets.app
+sudo ./install.sh --public-url https://nest.pairnets.app
 ```
 
 It prints a one-time link to set up the nest's website, where you approve new computers, see them
@@ -77,15 +77,15 @@ and remove them. See [DEPLOY.md](docs/DEPLOY.md#your-nests-own-name-https).
 ### Each PC
 
 1. Install Pairnets (see the table above).
-2. Open it, type your nest's name (`nest.pairnets.app`) and press **Sign in with your browser**.
+2. Open it, type your nest's name (`nest.pairnets.app`) and choose **Continue with Google**,
+   **Continue with email**, or **More ways to sign in in your browser**.
    Check that the code matches and press **Allow** on your nest's website — it then sends you
    straight back to Pairnets.
 3. Choose the folder (for example `D:\Work`) and press **Start syncing**.
    Optional: tick **Start with Windows**.
 
-No nest yet? Choose *Connect with server address and token instead*, enter the server URL and token
-printed by `install.sh`, and keep the device name (each PC must have its own). A computer set up
-that way switches to its own key by itself once your server has a nest.
+There is no address-and-token form: give your server its own name first (the step above). To start
+over on a computer, use **Settings → Start over → Reset this app**.
 
 
 Pairnets has a window with a sidebar: **Overview** (status, a picture of this computer, the server

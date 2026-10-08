@@ -18,7 +18,7 @@ public enum NestCheckStatus
     /// <summary>A Pairnets nest that lets computers sign in.</summary>
     Found,
 
-    /// <summary>A Pairnets server without its own name yet: connect with the address and token instead.</summary>
+    /// <summary>A Pairnets server without its own public name yet: it has no website to approve computers on.</summary>
     NoSignIn,
 
     /// <summary>Something answered, but not a Pairnets server.</summary>
@@ -113,9 +113,9 @@ public static class Nest
         {
             var hello = await client.GetHelloAsync(ct).ConfigureAwait(false);
             if (hello is null)
-                return new(NestCheckStatus.NoSignIn, url, null, "This server is too old to sign in. Update it, or use the address and token instead.");
+                return new(NestCheckStatus.NoSignIn, url, null, "This server is too old to sign in. Update the server first.");
             if (!hello.SignIn)
-                return new(NestCheckStatus.NoSignIn, url, hello, "This server has no name of its own yet, so it cannot approve sign-ins. Use the address and token instead.");
+                return new(NestCheckStatus.NoSignIn, url, hello, "This server has no public name of its own yet, so it cannot approve sign-ins. Give your nest its own name first (see the install steps on pairnets.app).");
             return new(NestCheckStatus.Found, url, hello, $"Found it (Pairnets server {hello.ServerVersion ?? "?"})");
         }
         catch (PairnetsNetworkException)
@@ -242,7 +242,7 @@ public sealed class PairingFlow
             return Set(new(PairingStage.Failed, Message: ex.Message));
         }
         if (start is null)
-            return Set(new(PairingStage.Failed, Message: "This server cannot approve sign-ins. Update it, or connect with the address and token instead."));
+            return Set(new(PairingStage.Failed, Message: "This server cannot approve sign-ins. Update the server, and give your nest its own name, then try again."));
 
         var expires = _clock.GetUtcNow().AddSeconds(start.ExpiresInSeconds);
         // The link comes from the nest we were pointed at, but it is rebuilt from its address and the code: whatever else a
