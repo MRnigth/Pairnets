@@ -50,6 +50,12 @@
   <div class="row end"><button type="button" data-close>Cancel</button><button type="button" class="danger" id="remove-confirm">Remove</button></div>
 </dialog>
 
+<dialog id="forget-dialog">
+  <h2>Forget <span id="forget-name"></span>?</h2>
+  <p>It only used the old shared token, so it has no key of its own to remove. This takes it off the list. <span id="forget-token-on">The old shared token is still on, so it comes back the next time it connects; turn the token off under Security to keep it out.</span></p>
+  <div class="row end"><button type="button" data-close>Cancel</button><button type="button" class="danger" id="forget-confirm">Forget</button></div>
+</dialog>
+
 <dialog id="rename-dialog">
   <h2>Rename this computer</h2>
   <form id="rename-form">

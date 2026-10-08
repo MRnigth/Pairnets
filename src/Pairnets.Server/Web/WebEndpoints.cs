@@ -164,6 +164,16 @@ public static class WebEndpoints
             return renamed is null ? Error(StatusCodes.Status404NotFound, ErrorCodes.NotFound, "No such computer.") : Json(new { renamed.Id, renamed.Name });
         });
 
+        // A computer seen only with the old shared token has no key to remove: this clears its row from the list.
+        // By name in the body (it is whatever the app sent, so it may hold any character).
+        signedIn.MapPost("/devices/forget", (NameBody? body, DeviceRegistry devices, ILogger<DeviceKeys> log) =>
+        {
+            if (string.IsNullOrEmpty(body?.Name) || !devices.ForgetShared(body.Name))
+                return Error(StatusCodes.Status404NotFound, ErrorCodes.NotFound, "No such computer on the old shared token.");
+            log.LogInformation("Computer {Name} (old shared token) was forgotten on the nest's website", body.Name);
+            return Results.NoContent();
+        });
+
         signedIn.MapGet("/pair/{code}", (string code, HttpContext ctx, AuthStore auth) =>
             auth.FindPairRequestByCode(code) is { } request
                 ? Json(View(request, ctx))

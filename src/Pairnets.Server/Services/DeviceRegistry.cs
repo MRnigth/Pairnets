@@ -155,6 +155,22 @@ public sealed class DeviceRegistry : IDisposable
         SaveIfDue();
     }
 
+    /// <summary>
+    /// Drops a computer known only by the name it sent with the old shared token (it has no key to remove) and
+    /// closes its push connections. False when there is none by that name. If it connects with the token again,
+    /// it is listed again.
+    /// </summary>
+    public bool ForgetShared(string name)
+    {
+        lock (_gate)
+        {
+            if (!_devices.TryGetValue(name, out var entry) || entry.Id is not null)
+                return false;
+        }
+        Remove(name);
+        return true;
+    }
+
     /// <summary>A computer that used the shared token as <paramref name="name"/> now has its own key: keep its history.</summary>
     public void Adopt(string name, string newKey, string newName)
     {

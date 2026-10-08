@@ -500,6 +500,17 @@
 
     let removing = null;
     let renaming = null;
+    let forgetting = null;
+    let sharedTokenAllowed = true;
+    $("forget-confirm").addEventListener("click", async () => {
+      $("forget-dialog").close();
+      try {
+        await api("POST", "/devices/forget", { name: forgetting.name });
+        await load();
+      } catch (error) {
+        showError(error);
+      }
+    });
     $("remove-confirm").addEventListener("click", async () => {
       $("remove-dialog").close();
       try {
@@ -529,9 +540,18 @@
     });
 
     function menu(device) {
-      const items = h("div", { class: "items", hidden: true },
-        h("button", { type: "button", onclick: () => { renaming = device; $("rename-input").value = device.name; $("rename-dialog").showModal(); } }, "Rename…"),
-        h("button", { type: "button", class: "danger", onclick: () => { removing = device; $("remove-name").textContent = device.name; $("remove-dialog").showModal(); } }, "Remove from Pairnets…"));
+      // A computer on the old shared token has no key to remove or name to change here: it can only be forgotten.
+      const items = device.ownKey
+        ? h("div", { class: "items", hidden: true },
+          h("button", { type: "button", onclick: () => { renaming = device; $("rename-input").value = device.name; $("rename-dialog").showModal(); } }, "Rename…"),
+          h("button", { type: "button", class: "danger", onclick: () => { removing = device; $("remove-name").textContent = device.name; $("remove-dialog").showModal(); } }, "Remove from Pairnets…"))
+        : h("div", { class: "items", hidden: true },
+          h("button", { type: "button", class: "danger", onclick: () => {
+            forgetting = device;
+            $("forget-name").textContent = device.name;
+            $("forget-token-on").hidden = !sharedTokenAllowed;
+            $("forget-dialog").showModal();
+          } }, "Forget this computer…"));
       const wrap = h("div", { class: "menu" });
       const toggle = h("button", { type: "button", class: "icon", "aria-label": `More for ${device.name}`, onclick: (event) => {
         event.stopPropagation();
@@ -552,9 +572,9 @@
         h("div", { class: "grow" },
           h("div", { class: "title" }, d.name),
           h("div", { class: "detail" }, parts.filter(Boolean).join(" · ")),
-          d.ownKey ? null : h("div", { class: "note" }, "ⓘ Still uses the old shared token. It switches to its own key by itself at its next start.")),
+          d.ownKey ? null : h("div", { class: "note" }, "ⓘ Uses the old shared token. Pairnets on it stops syncing and shows “Sign in to your nest” until you sign it in there and approve it here.")),
         h("span", { class: d.online ? "pill ok" : "pill" }, d.online ? "Online" : "Last seen " + ago(d.lastSeen)),
-        d.ownKey ? menu(d) : null);
+        menu(d));
     }
 
     function pendingRow(r) {
@@ -571,6 +591,7 @@
       showError(null);
       try {
         const data = await api("GET", "/devices");
+        sharedTokenAllowed = data.sharedTokenAllowed;
         const list = $("devices");
         list.replaceChildren(...(data.devices.length ? data.devices.map(deviceRow) : [h("li", { class: "empty" }, "No computers yet. Add one: open Pairnets on it and press Sign in.")]));
         $("pending-section").hidden = data.pending.length === 0;
@@ -709,7 +730,7 @@
       $("shared-token-detail").textContent = total === 0 ? "No computers have connected yet."
         : data.devicesOnSharedToken === 0
         ? `All ${total} computer${total === 1 ? " has its" : "s have their"} own key. You can turn this off.`
-        : `${data.devicesWithOwnKey} of ${total} computers have switched to their own key. Turn this off when all have.`;
+        : `Still on the old shared token: ${data.devicesOnSharedToken} of ${total} computers. Pairnets on such a computer stops syncing until you sign it in and approve it; then it has its own key. Turn this off when all have one. A computer you no longer use can be forgotten under Devices (⋯).`;
     }
 
     for (const ringEl of document.querySelectorAll("[data-icon]")) ringEl.append(icon(ringEl.dataset.icon));
