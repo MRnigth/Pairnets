@@ -1,0 +1,332 @@
+{
+  "format": "pairnets-login-assertion-vectors",
+  "version": 1,
+  "generator": "cloud/test/vectors.gen.test.ts",
+  "issuer": "https://id.pairnets.app",
+  "nestId": "nst_testnest000000000000000001",
+  "sub": "acc_testacct000000000000000001",
+  "keys": [
+    {
+      "kty": "EC",
+      "crv": "P-256",
+      "kid": "test-1",
+      "x": "1p1zXhDQ6ho-bWxRkDHrZVoJ0Ur6KApv6J82cGbyXjc",
+      "y": "AlJ_gA5yhI2E4cy6X4kAbo3ebFS187gOOgYvIy60W8E"
+    },
+    {
+      "kty": "EC",
+      "crv": "P-256",
+      "kid": "test-2",
+      "x": "GO-M-g-uZlDcJMqvI5H3Q8kTGw59JDH-svic6sxNMA8",
+      "y": "QL8JbOhv_w08i9kPUUA2aE9cf3plxi-VKiabkK1YxaY"
+    }
+  ],
+  "cases": [
+    {
+      "name": "valid",
+      "description": "the reference assertion",
+      "jws": "eyJhbGciOiJFUzI1NiIsInR5cCI6InBuLWxvZ2luK2p3dCIsImtpZCI6InRlc3QtMSJ9.eyJpc3MiOiJodHRwczovL2lkLnBhaXJuZXRzLmFwcCIsImF1ZCI6Im5zdF90ZXN0bmVzdDAwMDAwMDAwMDAwMDAwMDAwMSIsInN1YiI6ImFjY190ZXN0YWNjdDAwMDAwMDAwMDAwMDAwMDAwMSIsImlhdCI6MTc5MTUwNDAwMCwibmJmIjoxNzkxNTA0MDAwLCJleHAiOjE3OTE1MDQwOTAsIm5vbmNlIjoiVGVzdE5vbmNlMDAwMDAwMDAwMDAwQSIsImp0aSI6IlRlc3RKdGkwMDAwMDAwMDAwMDAwMEEiLCJhbXIiOlsiZ29vZ2xlIl0sImF1dGhfdGltZSI6MTc5MTUwMzQwMCwidmVyIjoxfQ.M5F_idxSi91py7qow3x9Hg3PTMnzsLkUVABcv3aMNW0wtp-aMSAw9m2pF1dJ0Y2EqbTmvVFsxmGbKBMExegwHg",
+      "now": 1791504000,
+      "nonce": "TestNonce000000000000A",
+      "expect": "ok",
+      "reason": null
+    },
+    {
+      "name": "valid-next-key",
+      "description": "kid test-2, signed with test-2 (the next key works)",
+      "jws": "eyJhbGciOiJFUzI1NiIsInR5cCI6InBuLWxvZ2luK2p3dCIsImtpZCI6InRlc3QtMiJ9.eyJpc3MiOiJodHRwczovL2lkLnBhaXJuZXRzLmFwcCIsImF1ZCI6Im5zdF90ZXN0bmVzdDAwMDAwMDAwMDAwMDAwMDAwMSIsInN1YiI6ImFjY190ZXN0YWNjdDAwMDAwMDAwMDAwMDAwMDAwMSIsImlhdCI6MTc5MTUwNDAwMCwibmJmIjoxNzkxNTA0MDAwLCJleHAiOjE3OTE1MDQwOTAsIm5vbmNlIjoiVGVzdE5vbmNlMDAwMDAwMDAwMDAwQSIsImp0aSI6IlRlc3RKdGkwMDAwMDAwMDAwMDAwMEEiLCJhbXIiOlsiZ29vZ2xlIl0sImF1dGhfdGltZSI6MTc5MTUwMzQwMCwidmVyIjoxfQ.0JR4mSzXxIfdQtUGXI11H6xYCWOcvGJhAh7NHtJAn24j9JvUaByxwrokFDL4H_eQR_nvZ4bJoxkUsL6ex6Vfzg",
+      "now": 1791504000,
+      "nonce": "TestNonce000000000000A",
+      "expect": "ok",
+      "reason": null
+    },
+    {
+      "name": "skew-late-ok",
+      "description": "the reference assertion 149 s after iat (inside exp + 60 s)",
+      "jws": "eyJhbGciOiJFUzI1NiIsInR5cCI6InBuLWxvZ2luK2p3dCIsImtpZCI6InRlc3QtMSJ9.eyJpc3MiOiJodHRwczovL2lkLnBhaXJuZXRzLmFwcCIsImF1ZCI6Im5zdF90ZXN0bmVzdDAwMDAwMDAwMDAwMDAwMDAwMSIsInN1YiI6ImFjY190ZXN0YWNjdDAwMDAwMDAwMDAwMDAwMDAwMSIsImlhdCI6MTc5MTUwNDAwMCwibmJmIjoxNzkxNTA0MDAwLCJleHAiOjE3OTE1MDQwOTAsIm5vbmNlIjoiVGVzdE5vbmNlMDAwMDAwMDAwMDAwQSIsImp0aSI6IlRlc3RKdGkwMDAwMDAwMDAwMDAwMEEiLCJhbXIiOlsiZ29vZ2xlIl0sImF1dGhfdGltZSI6MTc5MTUwMzQwMCwidmVyIjoxfQ.M5F_idxSi91py7qow3x9Hg3PTMnzsLkUVABcv3aMNW0wtp-aMSAw9m2pF1dJ0Y2EqbTmvVFsxmGbKBMExegwHg",
+      "now": 1791504149,
+      "nonce": "TestNonce000000000000A",
+      "expect": "ok",
+      "reason": null
+    },
+    {
+      "name": "skew-early-ok",
+      "description": "the reference assertion with the nest clock 60 s behind",
+      "jws": "eyJhbGciOiJFUzI1NiIsInR5cCI6InBuLWxvZ2luK2p3dCIsImtpZCI6InRlc3QtMSJ9.eyJpc3MiOiJodHRwczovL2lkLnBhaXJuZXRzLmFwcCIsImF1ZCI6Im5zdF90ZXN0bmVzdDAwMDAwMDAwMDAwMDAwMDAwMSIsInN1YiI6ImFjY190ZXN0YWNjdDAwMDAwMDAwMDAwMDAwMDAwMSIsImlhdCI6MTc5MTUwNDAwMCwibmJmIjoxNzkxNTA0MDAwLCJleHAiOjE3OTE1MDQwOTAsIm5vbmNlIjoiVGVzdE5vbmNlMDAwMDAwMDAwMDAwQSIsImp0aSI6IlRlc3RKdGkwMDAwMDAwMDAwMDAwMEEiLCJhbXIiOlsiZ29vZ2xlIl0sImF1dGhfdGltZSI6MTc5MTUwMzQwMCwidmVyIjoxfQ.M5F_idxSi91py7qow3x9Hg3PTMnzsLkUVABcv3aMNW0wtp-aMSAw9m2pF1dJ0Y2EqbTmvVFsxmGbKBMExegwHg",
+      "now": 1791503940,
+      "nonce": "TestNonce000000000000A",
+      "expect": "ok",
+      "reason": null
+    },
+    {
+      "name": "wrong-kid",
+      "description": "kid test-9 (not pinned), signed with test-1",
+      "jws": "eyJhbGciOiJFUzI1NiIsInR5cCI6InBuLWxvZ2luK2p3dCIsImtpZCI6InRlc3QtOSJ9.eyJpc3MiOiJodHRwczovL2lkLnBhaXJuZXRzLmFwcCIsImF1ZCI6Im5zdF90ZXN0bmVzdDAwMDAwMDAwMDAwMDAwMDAwMSIsInN1YiI6ImFjY190ZXN0YWNjdDAwMDAwMDAwMDAwMDAwMDAwMSIsImlhdCI6MTc5MTUwNDAwMCwibmJmIjoxNzkxNTA0MDAwLCJleHAiOjE3OTE1MDQwOTAsIm5vbmNlIjoiVGVzdE5vbmNlMDAwMDAwMDAwMDAwQSIsImp0aSI6IlRlc3RKdGkwMDAwMDAwMDAwMDAwMEEiLCJhbXIiOlsiZ29vZ2xlIl0sImF1dGhfdGltZSI6MTc5MTUwMzQwMCwidmVyIjoxfQ.8tMuVeLoR3ToqkG29j3epZ0DDtsfwzyIxkugi_uNJG8LPV9SUd_XK9aLfp08vydcpRI_SeVe7rkIZ1_AdLZsQQ",
+      "now": 1791504000,
+      "nonce": "TestNonce000000000000A",
+      "expect": "failed",
+      "reason": "kid"
+    },
+    {
+      "name": "alg-none",
+      "description": "alg none, empty signature segment",
+      "jws": "eyJhbGciOiJub25lIiwidHlwIjoicG4tbG9naW4rand0Iiwia2lkIjoidGVzdC0xIn0.eyJpc3MiOiJodHRwczovL2lkLnBhaXJuZXRzLmFwcCIsImF1ZCI6Im5zdF90ZXN0bmVzdDAwMDAwMDAwMDAwMDAwMDAwMSIsInN1YiI6ImFjY190ZXN0YWNjdDAwMDAwMDAwMDAwMDAwMDAwMSIsImlhdCI6MTc5MTUwNDAwMCwibmJmIjoxNzkxNTA0MDAwLCJleHAiOjE3OTE1MDQwOTAsIm5vbmNlIjoiVGVzdE5vbmNlMDAwMDAwMDAwMDAwQSIsImp0aSI6IlRlc3RKdGkwMDAwMDAwMDAwMDAwMEEiLCJhbXIiOlsiZ29vZ2xlIl0sImF1dGhfdGltZSI6MTc5MTUwMzQwMCwidmVyIjoxfQ.",
+      "now": 1791504000,
+      "nonce": "TestNonce000000000000A",
+      "expect": "failed",
+      "reason": "alg"
+    },
+    {
+      "name": "alg-hs256",
+      "description": "alg HS256, HMAC keyed with test-1's public point 04||x||y",
+      "jws": "eyJhbGciOiJIUzI1NiIsInR5cCI6InBuLWxvZ2luK2p3dCIsImtpZCI6InRlc3QtMSJ9.eyJpc3MiOiJodHRwczovL2lkLnBhaXJuZXRzLmFwcCIsImF1ZCI6Im5zdF90ZXN0bmVzdDAwMDAwMDAwMDAwMDAwMDAwMSIsInN1YiI6ImFjY190ZXN0YWNjdDAwMDAwMDAwMDAwMDAwMDAwMSIsImlhdCI6MTc5MTUwNDAwMCwibmJmIjoxNzkxNTA0MDAwLCJleHAiOjE3OTE1MDQwOTAsIm5vbmNlIjoiVGVzdE5vbmNlMDAwMDAwMDAwMDAwQSIsImp0aSI6IlRlc3RKdGkwMDAwMDAwMDAwMDAwMEEiLCJhbXIiOlsiZ29vZ2xlIl0sImF1dGhfdGltZSI6MTc5MTUwMzQwMCwidmVyIjoxfQ.cYl9iLzt4tMFitxqo-pfEiFYudDBbNYPwJrhH6za-NI",
+      "now": 1791504000,
+      "nonce": "TestNonce000000000000A",
+      "expect": "failed",
+      "reason": "alg"
+    },
+    {
+      "name": "typ-jwt",
+      "description": "typ JWT",
+      "jws": "eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6InRlc3QtMSJ9.eyJpc3MiOiJodHRwczovL2lkLnBhaXJuZXRzLmFwcCIsImF1ZCI6Im5zdF90ZXN0bmVzdDAwMDAwMDAwMDAwMDAwMDAwMSIsInN1YiI6ImFjY190ZXN0YWNjdDAwMDAwMDAwMDAwMDAwMDAwMSIsImlhdCI6MTc5MTUwNDAwMCwibmJmIjoxNzkxNTA0MDAwLCJleHAiOjE3OTE1MDQwOTAsIm5vbmNlIjoiVGVzdE5vbmNlMDAwMDAwMDAwMDAwQSIsImp0aSI6IlRlc3RKdGkwMDAwMDAwMDAwMDAwMEEiLCJhbXIiOlsiZ29vZ2xlIl0sImF1dGhfdGltZSI6MTc5MTUwMzQwMCwidmVyIjoxfQ.WBvooATnfH_doSrb91eNIomIiTxMQ0hgX2n67T8YKTXEQEXSpULq0uu_oPuV3oY1xrMyib1vBAmS5UGhqryeuw",
+      "now": 1791504000,
+      "nonce": "TestNonce000000000000A",
+      "expect": "failed",
+      "reason": "typ"
+    },
+    {
+      "name": "crit-header",
+      "description": "extra crit member in the header, validly signed",
+      "jws": "eyJhbGciOiJFUzI1NiIsInR5cCI6InBuLWxvZ2luK2p3dCIsImtpZCI6InRlc3QtMSIsImNyaXQiOlsiZXhwIl19.eyJpc3MiOiJodHRwczovL2lkLnBhaXJuZXRzLmFwcCIsImF1ZCI6Im5zdF90ZXN0bmVzdDAwMDAwMDAwMDAwMDAwMDAwMSIsInN1YiI6ImFjY190ZXN0YWNjdDAwMDAwMDAwMDAwMDAwMDAwMSIsImlhdCI6MTc5MTUwNDAwMCwibmJmIjoxNzkxNTA0MDAwLCJleHAiOjE3OTE1MDQwOTAsIm5vbmNlIjoiVGVzdE5vbmNlMDAwMDAwMDAwMDAwQSIsImp0aSI6IlRlc3RKdGkwMDAwMDAwMDAwMDAwMEEiLCJhbXIiOlsiZ29vZ2xlIl0sImF1dGhfdGltZSI6MTc5MTUwMzQwMCwidmVyIjoxfQ.CoALMHttu8quKWBQb5M-QcpTrCoS4hiPWFBRvTNRh1QZAuNqSQCSoOB_Z181C-tVDfoNTq4CZdHE4doIIDoiSg",
+      "now": 1791504000,
+      "nonce": "TestNonce000000000000A",
+      "expect": "failed",
+      "reason": "header"
+    },
+    {
+      "name": "jwk-header",
+      "description": "header carries test-2's public JWK, signed with test-2",
+      "jws": "eyJhbGciOiJFUzI1NiIsInR5cCI6InBuLWxvZ2luK2p3dCIsImtpZCI6InRlc3QtMSIsImp3ayI6eyJrdHkiOiJFQyIsImNydiI6IlAtMjU2Iiwia2lkIjoidGVzdC0yIiwieCI6IkdPLU0tZy11WmxEY0pNcXZJNUgzUThrVEd3NTlKREgtc3ZpYzZzeE5NQTgiLCJ5IjoiUUw4SmJPaHZfdzA4aTlrUFVVQTJhRTljZjNwbHhpLVZLaWFia0sxWXhhWSJ9fQ.eyJpc3MiOiJodHRwczovL2lkLnBhaXJuZXRzLmFwcCIsImF1ZCI6Im5zdF90ZXN0bmVzdDAwMDAwMDAwMDAwMDAwMDAwMSIsInN1YiI6ImFjY190ZXN0YWNjdDAwMDAwMDAwMDAwMDAwMDAwMSIsImlhdCI6MTc5MTUwNDAwMCwibmJmIjoxNzkxNTA0MDAwLCJleHAiOjE3OTE1MDQwOTAsIm5vbmNlIjoiVGVzdE5vbmNlMDAwMDAwMDAwMDAwQSIsImp0aSI6IlRlc3RKdGkwMDAwMDAwMDAwMDAwMEEiLCJhbXIiOlsiZ29vZ2xlIl0sImF1dGhfdGltZSI6MTc5MTUwMzQwMCwidmVyIjoxfQ.cgleGRgMqmpgirVxsGMU1mmkfNzt75im7094mPdCdj0VdCAzo4GBY10ar5OG2JohCCoHt4hJ0Xy_rwG8bTs3MA",
+      "now": 1791504000,
+      "nonce": "TestNonce000000000000A",
+      "expect": "failed",
+      "reason": "header"
+    },
+    {
+      "name": "sig-der",
+      "description": "signature as DER instead of raw r||s",
+      "jws": "eyJhbGciOiJFUzI1NiIsInR5cCI6InBuLWxvZ2luK2p3dCIsImtpZCI6InRlc3QtMSJ9.eyJpc3MiOiJodHRwczovL2lkLnBhaXJuZXRzLmFwcCIsImF1ZCI6Im5zdF90ZXN0bmVzdDAwMDAwMDAwMDAwMDAwMDAwMSIsInN1YiI6ImFjY190ZXN0YWNjdDAwMDAwMDAwMDAwMDAwMDAwMSIsImlhdCI6MTc5MTUwNDAwMCwibmJmIjoxNzkxNTA0MDAwLCJleHAiOjE3OTE1MDQwOTAsIm5vbmNlIjoiVGVzdE5vbmNlMDAwMDAwMDAwMDAwQSIsImp0aSI6IlRlc3RKdGkwMDAwMDAwMDAwMDAwMEEiLCJhbXIiOlsiZ29vZ2xlIl0sImF1dGhfdGltZSI6MTc5MTUwMzQwMCwidmVyIjoxfQ.MEQCIDORf4ncUovdacu6qMN8fR4Nz0zJ87C5FFQAXL92jDVtAiAwtp-aMSAw9m2pF1dJ0Y2EqbTmvVFsxmGbKBMExegwHg",
+      "now": 1791504000,
+      "nonce": "TestNonce000000000000A",
+      "expect": "failed",
+      "reason": "sig-format"
+    },
+    {
+      "name": "sig-noncanonical",
+      "description": "last signature character with an unused bit set",
+      "jws": "eyJhbGciOiJFUzI1NiIsInR5cCI6InBuLWxvZ2luK2p3dCIsImtpZCI6InRlc3QtMSJ9.eyJpc3MiOiJodHRwczovL2lkLnBhaXJuZXRzLmFwcCIsImF1ZCI6Im5zdF90ZXN0bmVzdDAwMDAwMDAwMDAwMDAwMDAwMSIsInN1YiI6ImFjY190ZXN0YWNjdDAwMDAwMDAwMDAwMDAwMDAwMSIsImlhdCI6MTc5MTUwNDAwMCwibmJmIjoxNzkxNTA0MDAwLCJleHAiOjE3OTE1MDQwOTAsIm5vbmNlIjoiVGVzdE5vbmNlMDAwMDAwMDAwMDAwQSIsImp0aSI6IlRlc3RKdGkwMDAwMDAwMDAwMDAwMEEiLCJhbXIiOlsiZ29vZ2xlIl0sImF1dGhfdGltZSI6MTc5MTUwMzQwMCwidmVyIjoxfQ.M5F_idxSi91py7qow3x9Hg3PTMnzsLkUVABcv3aMNW0wtp-aMSAw9m2pF1dJ0Y2EqbTmvVFsxmGbKBMExegwHh",
+      "now": 1791504000,
+      "nonce": "TestNonce000000000000A",
+      "expect": "failed",
+      "reason": "sig-format"
+    },
+    {
+      "name": "sig-std-alphabet",
+      "description": "signature in the standard base64 alphabet (+ and /)",
+      "jws": "eyJhbGciOiJFUzI1NiIsInR5cCI6InBuLWxvZ2luK2p3dCIsImtpZCI6InRlc3QtMSJ9.eyJpc3MiOiJodHRwczovL2lkLnBhaXJuZXRzLmFwcCIsImF1ZCI6Im5zdF90ZXN0bmVzdDAwMDAwMDAwMDAwMDAwMDAwMSIsInN1YiI6ImFjY190ZXN0YWNjdDAwMDAwMDAwMDAwMDAwMDAwMSIsImlhdCI6MTc5MTUwNDAwMCwibmJmIjoxNzkxNTA0MDAwLCJleHAiOjE3OTE1MDQwOTAsIm5vbmNlIjoiVGVzdE5vbmNlMDAwMDAwMDAwMDAwQSIsImp0aSI6IlRlc3RKdGkwMDAwMDAwMDAwMDAwMEEiLCJhbXIiOlsiZ29vZ2xlIl0sImF1dGhfdGltZSI6MTc5MTUwMzQwMCwidmVyIjoxfQ.M5F/idxSi91py7qow3x9Hg3PTMnzsLkUVABcv3aMNW0wtp+aMSAw9m2pF1dJ0Y2EqbTmvVFsxmGbKBMExegwHg",
+      "now": 1791504000,
+      "nonce": "TestNonce000000000000A",
+      "expect": "failed",
+      "reason": "sig-format"
+    },
+    {
+      "name": "payload-padding",
+      "description": "payload segment with = padding",
+      "jws": "eyJhbGciOiJFUzI1NiIsInR5cCI6InBuLWxvZ2luK2p3dCIsImtpZCI6InRlc3QtMSJ9.eyJpc3MiOiJodHRwczovL2lkLnBhaXJuZXRzLmFwcCIsImF1ZCI6Im5zdF90ZXN0bmVzdDAwMDAwMDAwMDAwMDAwMDAwMSIsInN1YiI6ImFjY190ZXN0YWNjdDAwMDAwMDAwMDAwMDAwMDAwMSIsImlhdCI6MTc5MTUwNDAwMCwibmJmIjoxNzkxNTA0MDAwLCJleHAiOjE3OTE1MDQwOTAsIm5vbmNlIjoiVGVzdE5vbmNlMDAwMDAwMDAwMDAwQSIsImp0aSI6IlRlc3RKdGkwMDAwMDAwMDAwMDAwMEEiLCJhbXIiOlsiZ29vZ2xlIl0sImF1dGhfdGltZSI6MTc5MTUwMzQwMCwidmVyIjoxfQ=.M5F_idxSi91py7qow3x9Hg3PTMnzsLkUVABcv3aMNW0wtp-aMSAw9m2pF1dJ0Y2EqbTmvVFsxmGbKBMExegwHg",
+      "now": 1791504000,
+      "nonce": "TestNonce000000000000A",
+      "expect": "failed",
+      "reason": "b64"
+    },
+    {
+      "name": "payload-whitespace",
+      "description": "a space inside the payload segment",
+      "jws": "eyJhbGciOiJFUzI1NiIsInR5cCI6InBuLWxvZ2luK2p3dCIsImtpZCI6InRlc3QtMSJ9.eyJpc3MiOi JodHRwczovL2lkLnBhaXJuZXRzLmFwcCIsImF1ZCI6Im5zdF90ZXN0bmVzdDAwMDAwMDAwMDAwMDAwMDAwMSIsInN1YiI6ImFjY190ZXN0YWNjdDAwMDAwMDAwMDAwMDAwMDAwMSIsImlhdCI6MTc5MTUwNDAwMCwibmJmIjoxNzkxNTA0MDAwLCJleHAiOjE3OTE1MDQwOTAsIm5vbmNlIjoiVGVzdE5vbmNlMDAwMDAwMDAwMDAwQSIsImp0aSI6IlRlc3RKdGkwMDAwMDAwMDAwMDAwMEEiLCJhbXIiOlsiZ29vZ2xlIl0sImF1dGhfdGltZSI6MTc5MTUwMzQwMCwidmVyIjoxfQ.M5F_idxSi91py7qow3x9Hg3PTMnzsLkUVABcv3aMNW0wtp-aMSAw9m2pF1dJ0Y2EqbTmvVFsxmGbKBMExegwHg",
+      "now": 1791504000,
+      "nonce": "TestNonce000000000000A",
+      "expect": "failed",
+      "reason": "b64"
+    },
+    {
+      "name": "tampered-payload",
+      "description": "sub changed after signing",
+      "jws": "eyJhbGciOiJFUzI1NiIsInR5cCI6InBuLWxvZ2luK2p3dCIsImtpZCI6InRlc3QtMSJ9.eyJpc3MiOiJodHRwczovL2lkLnBhaXJuZXRzLmFwcCIsImF1ZCI6Im5zdF90ZXN0bmVzdDAwMDAwMDAwMDAwMDAwMDAwMSIsInN1YiI6ImFjY190ZXN0YWNjdDAwMDAwMDAwMDAwMDAwMDAwMiIsImlhdCI6MTc5MTUwNDAwMCwibmJmIjoxNzkxNTA0MDAwLCJleHAiOjE3OTE1MDQwOTAsIm5vbmNlIjoiVGVzdE5vbmNlMDAwMDAwMDAwMDAwQSIsImp0aSI6IlRlc3RKdGkwMDAwMDAwMDAwMDAwMEEiLCJhbXIiOlsiZ29vZ2xlIl0sImF1dGhfdGltZSI6MTc5MTUwMzQwMCwidmVyIjoxfQ.M5F_idxSi91py7qow3x9Hg3PTMnzsLkUVABcv3aMNW0wtp-aMSAw9m2pF1dJ0Y2EqbTmvVFsxmGbKBMExegwHg",
+      "now": 1791504000,
+      "nonce": "TestNonce000000000000A",
+      "expect": "failed",
+      "reason": "sig"
+    },
+    {
+      "name": "wrong-key-same-kid",
+      "description": "kid test-1, signed with test-2's key",
+      "jws": "eyJhbGciOiJFUzI1NiIsInR5cCI6InBuLWxvZ2luK2p3dCIsImtpZCI6InRlc3QtMSJ9.eyJpc3MiOiJodHRwczovL2lkLnBhaXJuZXRzLmFwcCIsImF1ZCI6Im5zdF90ZXN0bmVzdDAwMDAwMDAwMDAwMDAwMDAwMSIsInN1YiI6ImFjY190ZXN0YWNjdDAwMDAwMDAwMDAwMDAwMDAwMSIsImlhdCI6MTc5MTUwNDAwMCwibmJmIjoxNzkxNTA0MDAwLCJleHAiOjE3OTE1MDQwOTAsIm5vbmNlIjoiVGVzdE5vbmNlMDAwMDAwMDAwMDAwQSIsImp0aSI6IlRlc3RKdGkwMDAwMDAwMDAwMDAwMEEiLCJhbXIiOlsiZ29vZ2xlIl0sImF1dGhfdGltZSI6MTc5MTUwMzQwMCwidmVyIjoxfQ.4ruXgS2jr9g6DqIiovGwgjDC5vKGt-OlW5Dl1xhBpAw5U5f5vWjZrjHmovIeqkVOM-KKxymPUWZI9mhWDqEPfQ",
+      "now": 1791504000,
+      "nonce": "TestNonce000000000000A",
+      "expect": "failed",
+      "reason": "sig"
+    },
+    {
+      "name": "duplicate-claim",
+      "description": "sub appears twice in the payload",
+      "jws": "eyJhbGciOiJFUzI1NiIsInR5cCI6InBuLWxvZ2luK2p3dCIsImtpZCI6InRlc3QtMSJ9.eyJpc3MiOiJodHRwczovL2lkLnBhaXJuZXRzLmFwcCIsImF1ZCI6Im5zdF90ZXN0bmVzdDAwMDAwMDAwMDAwMDAwMDAwMSIsInN1YiI6ImFjY190ZXN0YWNjdDAwMDAwMDAwMDAwMDAwMDAwMSIsImlhdCI6MTc5MTUwNDAwMCwibmJmIjoxNzkxNTA0MDAwLCJleHAiOjE3OTE1MDQwOTAsIm5vbmNlIjoiVGVzdE5vbmNlMDAwMDAwMDAwMDAwQSIsImp0aSI6IlRlc3RKdGkwMDAwMDAwMDAwMDAwMEEiLCJhbXIiOlsiZ29vZ2xlIl0sImF1dGhfdGltZSI6MTc5MTUwMzQwMCwidmVyIjoxLCJzdWIiOiJhY2NfdGVzdGFjY3QwMDAwMDAwMDAwMDAwMDAwMDIifQ.zfpErWaNDXwEuZu2hGweRND8o7f-tbSncmE4y2FcQnwNkXI7VzhTENFSldHbfE4Ns05f-twncyapX8B3gDPgoQ",
+      "now": 1791504000,
+      "nonce": "TestNonce000000000000A",
+      "expect": "failed",
+      "reason": "claims"
+    },
+    {
+      "name": "aud-array",
+      "description": "aud is an array",
+      "jws": "eyJhbGciOiJFUzI1NiIsInR5cCI6InBuLWxvZ2luK2p3dCIsImtpZCI6InRlc3QtMSJ9.eyJpc3MiOiJodHRwczovL2lkLnBhaXJuZXRzLmFwcCIsImF1ZCI6WyJuc3RfdGVzdG5lc3QwMDAwMDAwMDAwMDAwMDAwMDEiXSwic3ViIjoiYWNjX3Rlc3RhY2N0MDAwMDAwMDAwMDAwMDAwMDAxIiwiaWF0IjoxNzkxNTA0MDAwLCJuYmYiOjE3OTE1MDQwMDAsImV4cCI6MTc5MTUwNDA5MCwibm9uY2UiOiJUZXN0Tm9uY2UwMDAwMDAwMDAwMDBBIiwianRpIjoiVGVzdEp0aTAwMDAwMDAwMDAwMDAwQSIsImFtciI6WyJnb29nbGUiXSwiYXV0aF90aW1lIjoxNzkxNTAzNDAwLCJ2ZXIiOjF9.xTzoT6W9RIpy-UeoO5PVbJFKKBG7elQaf60vrpAmJTV5jNzxtMV0wAlAZapwnJCXyPaAfPTRBR0bMTWtPbicig",
+      "now": 1791504000,
+      "nonce": "TestNonce000000000000A",
+      "expect": "failed",
+      "reason": "claims"
+    },
+    {
+      "name": "iat-string",
+      "description": "iat is a string",
+      "jws": "eyJhbGciOiJFUzI1NiIsInR5cCI6InBuLWxvZ2luK2p3dCIsImtpZCI6InRlc3QtMSJ9.eyJpc3MiOiJodHRwczovL2lkLnBhaXJuZXRzLmFwcCIsImF1ZCI6Im5zdF90ZXN0bmVzdDAwMDAwMDAwMDAwMDAwMDAwMSIsInN1YiI6ImFjY190ZXN0YWNjdDAwMDAwMDAwMDAwMDAwMDAwMSIsImlhdCI6IjE3OTE1MDQwMDAiLCJuYmYiOjE3OTE1MDQwMDAsImV4cCI6MTc5MTUwNDA5MCwibm9uY2UiOiJUZXN0Tm9uY2UwMDAwMDAwMDAwMDBBIiwianRpIjoiVGVzdEp0aTAwMDAwMDAwMDAwMDAwQSIsImFtciI6WyJnb29nbGUiXSwiYXV0aF90aW1lIjoxNzkxNTAzNDAwLCJ2ZXIiOjF9.Ifjk9GugY4zkWH6U_sdfj6rOQ1HHGbN3lNTKzwUp6KViLa1K3xzyuJo1CGL6P0oLIjfsg0II9wTcn7E51l1ZBg",
+      "now": 1791504000,
+      "nonce": "TestNonce000000000000A",
+      "expect": "failed",
+      "reason": "claims"
+    },
+    {
+      "name": "ver-2",
+      "description": "ver 2",
+      "jws": "eyJhbGciOiJFUzI1NiIsInR5cCI6InBuLWxvZ2luK2p3dCIsImtpZCI6InRlc3QtMSJ9.eyJpc3MiOiJodHRwczovL2lkLnBhaXJuZXRzLmFwcCIsImF1ZCI6Im5zdF90ZXN0bmVzdDAwMDAwMDAwMDAwMDAwMDAwMSIsInN1YiI6ImFjY190ZXN0YWNjdDAwMDAwMDAwMDAwMDAwMDAwMSIsImlhdCI6MTc5MTUwNDAwMCwibmJmIjoxNzkxNTA0MDAwLCJleHAiOjE3OTE1MDQwOTAsIm5vbmNlIjoiVGVzdE5vbmNlMDAwMDAwMDAwMDAwQSIsImp0aSI6IlRlc3RKdGkwMDAwMDAwMDAwMDAwMEEiLCJhbXIiOlsiZ29vZ2xlIl0sImF1dGhfdGltZSI6MTc5MTUwMzQwMCwidmVyIjoyfQ.aih2-r6UW0NXte9yimjZ64_GbkhUZXx3qe12RmQkvdAQB1rk7Q3bIH_Uivf_fI5Wo9SvwucxmahX7DsWqkxO-g",
+      "now": 1791504000,
+      "nonce": "TestNonce000000000000A",
+      "expect": "failed",
+      "reason": "ver"
+    },
+    {
+      "name": "iss-trailing-slash",
+      "description": "iss with a trailing slash",
+      "jws": "eyJhbGciOiJFUzI1NiIsInR5cCI6InBuLWxvZ2luK2p3dCIsImtpZCI6InRlc3QtMSJ9.eyJpc3MiOiJodHRwczovL2lkLnBhaXJuZXRzLmFwcC8iLCJhdWQiOiJuc3RfdGVzdG5lc3QwMDAwMDAwMDAwMDAwMDAwMDEiLCJzdWIiOiJhY2NfdGVzdGFjY3QwMDAwMDAwMDAwMDAwMDAwMDEiLCJpYXQiOjE3OTE1MDQwMDAsIm5iZiI6MTc5MTUwNDAwMCwiZXhwIjoxNzkxNTA0MDkwLCJub25jZSI6IlRlc3ROb25jZTAwMDAwMDAwMDAwMEEiLCJqdGkiOiJUZXN0SnRpMDAwMDAwMDAwMDAwMDBBIiwiYW1yIjpbImdvb2dsZSJdLCJhdXRoX3RpbWUiOjE3OTE1MDM0MDAsInZlciI6MX0.0YpJhVlo9C8D1s5hUN75D4RqaowZMj4uxU647QqAVG_XkDV2sVrvQJbJLadtx0UHUG1VsC3i1gbU49N7v2ZGsg",
+      "now": 1791504000,
+      "nonce": "TestNonce000000000000A",
+      "expect": "failed",
+      "reason": "iss"
+    },
+    {
+      "name": "bad-aud",
+      "description": "aud is another nest",
+      "jws": "eyJhbGciOiJFUzI1NiIsInR5cCI6InBuLWxvZ2luK2p3dCIsImtpZCI6InRlc3QtMSJ9.eyJpc3MiOiJodHRwczovL2lkLnBhaXJuZXRzLmFwcCIsImF1ZCI6Im5zdF90ZXN0bmVzdDAwMDAwMDAwMDAwMDAwMDAwMiIsInN1YiI6ImFjY190ZXN0YWNjdDAwMDAwMDAwMDAwMDAwMDAwMSIsImlhdCI6MTc5MTUwNDAwMCwibmJmIjoxNzkxNTA0MDAwLCJleHAiOjE3OTE1MDQwOTAsIm5vbmNlIjoiVGVzdE5vbmNlMDAwMDAwMDAwMDAwQSIsImp0aSI6IlRlc3RKdGkwMDAwMDAwMDAwMDAwMEEiLCJhbXIiOlsiZ29vZ2xlIl0sImF1dGhfdGltZSI6MTc5MTUwMzQwMCwidmVyIjoxfQ.Jh8dUGq83OvYOB9zBcvyI7sooU59lMTjNxl0YIeUNr7gCtSmC39OFoDrr1CeYsWrw0qp483MYVWQQ6NNp-YdaQ",
+      "now": 1791504000,
+      "nonce": "TestNonce000000000000A",
+      "expect": "failed",
+      "reason": "aud"
+    },
+    {
+      "name": "bad-sub",
+      "description": "sub is another account",
+      "jws": "eyJhbGciOiJFUzI1NiIsInR5cCI6InBuLWxvZ2luK2p3dCIsImtpZCI6InRlc3QtMSJ9.eyJpc3MiOiJodHRwczovL2lkLnBhaXJuZXRzLmFwcCIsImF1ZCI6Im5zdF90ZXN0bmVzdDAwMDAwMDAwMDAwMDAwMDAwMSIsInN1YiI6ImFjY190ZXN0YWNjdDAwMDAwMDAwMDAwMDAwMDAwMiIsImlhdCI6MTc5MTUwNDAwMCwibmJmIjoxNzkxNTA0MDAwLCJleHAiOjE3OTE1MDQwOTAsIm5vbmNlIjoiVGVzdE5vbmNlMDAwMDAwMDAwMDAwQSIsImp0aSI6IlRlc3RKdGkwMDAwMDAwMDAwMDAwMEEiLCJhbXIiOlsiZ29vZ2xlIl0sImF1dGhfdGltZSI6MTc5MTUwMzQwMCwidmVyIjoxfQ.4WYGKCNUruN0tBYyUYaWKGKQX4M6A2ruWTcnYPCHqRd00E9SHQ4dHtdc-ZuT8qRo8wvT3mQ81iSAw1AwVohvLQ",
+      "now": 1791504000,
+      "nonce": "TestNonce000000000000A",
+      "expect": "failed",
+      "reason": "sub"
+    },
+    {
+      "name": "clock-behind",
+      "description": "nest clock 301 s ahead of iat",
+      "jws": "eyJhbGciOiJFUzI1NiIsInR5cCI6InBuLWxvZ2luK2p3dCIsImtpZCI6InRlc3QtMSJ9.eyJpc3MiOiJodHRwczovL2lkLnBhaXJuZXRzLmFwcCIsImF1ZCI6Im5zdF90ZXN0bmVzdDAwMDAwMDAwMDAwMDAwMDAwMSIsInN1YiI6ImFjY190ZXN0YWNjdDAwMDAwMDAwMDAwMDAwMDAwMSIsImlhdCI6MTc5MTUwNDAwMCwibmJmIjoxNzkxNTA0MDAwLCJleHAiOjE3OTE1MDQwOTAsIm5vbmNlIjoiVGVzdE5vbmNlMDAwMDAwMDAwMDAwQSIsImp0aSI6IlRlc3RKdGkwMDAwMDAwMDAwMDAwMEEiLCJhbXIiOlsiZ29vZ2xlIl0sImF1dGhfdGltZSI6MTc5MTUwMzQwMCwidmVyIjoxfQ.M5F_idxSi91py7qow3x9Hg3PTMnzsLkUVABcv3aMNW0wtp-aMSAw9m2pF1dJ0Y2EqbTmvVFsxmGbKBMExegwHg",
+      "now": 1791504301,
+      "nonce": "TestNonce000000000000A",
+      "expect": "clock",
+      "reason": "clock"
+    },
+    {
+      "name": "clock-ahead",
+      "description": "nest clock 301 s behind iat",
+      "jws": "eyJhbGciOiJFUzI1NiIsInR5cCI6InBuLWxvZ2luK2p3dCIsImtpZCI6InRlc3QtMSJ9.eyJpc3MiOiJodHRwczovL2lkLnBhaXJuZXRzLmFwcCIsImF1ZCI6Im5zdF90ZXN0bmVzdDAwMDAwMDAwMDAwMDAwMDAwMSIsInN1YiI6ImFjY190ZXN0YWNjdDAwMDAwMDAwMDAwMDAwMDAwMSIsImlhdCI6MTc5MTUwNDAwMCwibmJmIjoxNzkxNTA0MDAwLCJleHAiOjE3OTE1MDQwOTAsIm5vbmNlIjoiVGVzdE5vbmNlMDAwMDAwMDAwMDAwQSIsImp0aSI6IlRlc3RKdGkwMDAwMDAwMDAwMDAwMEEiLCJhbXIiOlsiZ29vZ2xlIl0sImF1dGhfdGltZSI6MTc5MTUwMzQwMCwidmVyIjoxfQ.M5F_idxSi91py7qow3x9Hg3PTMnzsLkUVABcv3aMNW0wtp-aMSAw9m2pF1dJ0Y2EqbTmvVFsxmGbKBMExegwHg",
+      "now": 1791503699,
+      "nonce": "TestNonce000000000000A",
+      "expect": "clock",
+      "reason": "clock"
+    },
+    {
+      "name": "iat-future",
+      "description": "iat 61 s in the nest's future",
+      "jws": "eyJhbGciOiJFUzI1NiIsInR5cCI6InBuLWxvZ2luK2p3dCIsImtpZCI6InRlc3QtMSJ9.eyJpc3MiOiJodHRwczovL2lkLnBhaXJuZXRzLmFwcCIsImF1ZCI6Im5zdF90ZXN0bmVzdDAwMDAwMDAwMDAwMDAwMDAwMSIsInN1YiI6ImFjY190ZXN0YWNjdDAwMDAwMDAwMDAwMDAwMDAwMSIsImlhdCI6MTc5MTUwNDAwMCwibmJmIjoxNzkxNTA0MDAwLCJleHAiOjE3OTE1MDQwOTAsIm5vbmNlIjoiVGVzdE5vbmNlMDAwMDAwMDAwMDAwQSIsImp0aSI6IlRlc3RKdGkwMDAwMDAwMDAwMDAwMEEiLCJhbXIiOlsiZ29vZ2xlIl0sImF1dGhfdGltZSI6MTc5MTUwMzQwMCwidmVyIjoxfQ.M5F_idxSi91py7qow3x9Hg3PTMnzsLkUVABcv3aMNW0wtp-aMSAw9m2pF1dJ0Y2EqbTmvVFsxmGbKBMExegwHg",
+      "now": 1791503939,
+      "nonce": "TestNonce000000000000A",
+      "expect": "failed",
+      "reason": "iat"
+    },
+    {
+      "name": "lifetime-too-long",
+      "description": "exp = iat + 301",
+      "jws": "eyJhbGciOiJFUzI1NiIsInR5cCI6InBuLWxvZ2luK2p3dCIsImtpZCI6InRlc3QtMSJ9.eyJpc3MiOiJodHRwczovL2lkLnBhaXJuZXRzLmFwcCIsImF1ZCI6Im5zdF90ZXN0bmVzdDAwMDAwMDAwMDAwMDAwMDAwMSIsInN1YiI6ImFjY190ZXN0YWNjdDAwMDAwMDAwMDAwMDAwMDAwMSIsImlhdCI6MTc5MTUwNDAwMCwibmJmIjoxNzkxNTA0MDAwLCJleHAiOjE3OTE1MDQzMDEsIm5vbmNlIjoiVGVzdE5vbmNlMDAwMDAwMDAwMDAwQSIsImp0aSI6IlRlc3RKdGkwMDAwMDAwMDAwMDAwMEEiLCJhbXIiOlsiZ29vZ2xlIl0sImF1dGhfdGltZSI6MTc5MTUwMzQwMCwidmVyIjoxfQ.hhhkMXJGP5Yhszzusmjeos6yuBPbkBfXJB6bobww4wnml1PpamRxHbvqpG77KJJy2VSsSrMt-EHaSo7EzWIAnQ",
+      "now": 1791504000,
+      "nonce": "TestNonce000000000000A",
+      "expect": "failed",
+      "reason": "lifetime"
+    },
+    {
+      "name": "nbf-future",
+      "description": "nbf 61 s in the future",
+      "jws": "eyJhbGciOiJFUzI1NiIsInR5cCI6InBuLWxvZ2luK2p3dCIsImtpZCI6InRlc3QtMSJ9.eyJpc3MiOiJodHRwczovL2lkLnBhaXJuZXRzLmFwcCIsImF1ZCI6Im5zdF90ZXN0bmVzdDAwMDAwMDAwMDAwMDAwMDAwMSIsInN1YiI6ImFjY190ZXN0YWNjdDAwMDAwMDAwMDAwMDAwMDAwMSIsImlhdCI6MTc5MTUwNDAwMCwibmJmIjoxNzkxNTA0MDYxLCJleHAiOjE3OTE1MDQwOTAsIm5vbmNlIjoiVGVzdE5vbmNlMDAwMDAwMDAwMDAwQSIsImp0aSI6IlRlc3RKdGkwMDAwMDAwMDAwMDAwMEEiLCJhbXIiOlsiZ29vZ2xlIl0sImF1dGhfdGltZSI6MTc5MTUwMzQwMCwidmVyIjoxfQ.2recYE0QCEc3QlyTyADlFRByj-ioJlM9_MTidEmsiYbWRkh1AVtZFyUtPggRP7dHk-Y9T6gRoGPQNamYHtZvtg",
+      "now": 1791504000,
+      "nonce": "TestNonce000000000000A",
+      "expect": "failed",
+      "reason": "nbf"
+    },
+    {
+      "name": "expired",
+      "description": "150 s after iat (exp + 60 s reached)",
+      "jws": "eyJhbGciOiJFUzI1NiIsInR5cCI6InBuLWxvZ2luK2p3dCIsImtpZCI6InRlc3QtMSJ9.eyJpc3MiOiJodHRwczovL2lkLnBhaXJuZXRzLmFwcCIsImF1ZCI6Im5zdF90ZXN0bmVzdDAwMDAwMDAwMDAwMDAwMDAwMSIsInN1YiI6ImFjY190ZXN0YWNjdDAwMDAwMDAwMDAwMDAwMDAwMSIsImlhdCI6MTc5MTUwNDAwMCwibmJmIjoxNzkxNTA0MDAwLCJleHAiOjE3OTE1MDQwOTAsIm5vbmNlIjoiVGVzdE5vbmNlMDAwMDAwMDAwMDAwQSIsImp0aSI6IlRlc3RKdGkwMDAwMDAwMDAwMDAwMEEiLCJhbXIiOlsiZ29vZ2xlIl0sImF1dGhfdGltZSI6MTc5MTUwMzQwMCwidmVyIjoxfQ.M5F_idxSi91py7qow3x9Hg3PTMnzsLkUVABcv3aMNW0wtp-aMSAw9m2pF1dJ0Y2EqbTmvVFsxmGbKBMExegwHg",
+      "now": 1791504150,
+      "nonce": "TestNonce000000000000A",
+      "expect": "failed",
+      "reason": "exp"
+    },
+    {
+      "name": "auth-time-future",
+      "description": "auth_time after iat",
+      "jws": "eyJhbGciOiJFUzI1NiIsInR5cCI6InBuLWxvZ2luK2p3dCIsImtpZCI6InRlc3QtMSJ9.eyJpc3MiOiJodHRwczovL2lkLnBhaXJuZXRzLmFwcCIsImF1ZCI6Im5zdF90ZXN0bmVzdDAwMDAwMDAwMDAwMDAwMDAwMSIsInN1YiI6ImFjY190ZXN0YWNjdDAwMDAwMDAwMDAwMDAwMDAwMSIsImlhdCI6MTc5MTUwNDAwMCwibmJmIjoxNzkxNTA0MDAwLCJleHAiOjE3OTE1MDQwOTAsIm5vbmNlIjoiVGVzdE5vbmNlMDAwMDAwMDAwMDAwQSIsImp0aSI6IlRlc3RKdGkwMDAwMDAwMDAwMDAwMEEiLCJhbXIiOlsiZ29vZ2xlIl0sImF1dGhfdGltZSI6MTc5MTUwNDAwMSwidmVyIjoxfQ.NJOJfn4HME7b2YgfW2tichE6-N8B2oXo1pmAJXZy1KYzW-B7_koc5ZzoYtFzxA1ZI1sSn3k8-dph_ATsHUb-lg",
+      "now": 1791504000,
+      "nonce": "TestNonce000000000000A",
+      "expect": "failed",
+      "reason": "auth_time"
+    },
+    {
+      "name": "nonce-mismatch",
+      "description": "the nest expected another nonce",
+      "jws": "eyJhbGciOiJFUzI1NiIsInR5cCI6InBuLWxvZ2luK2p3dCIsImtpZCI6InRlc3QtMSJ9.eyJpc3MiOiJodHRwczovL2lkLnBhaXJuZXRzLmFwcCIsImF1ZCI6Im5zdF90ZXN0bmVzdDAwMDAwMDAwMDAwMDAwMDAwMSIsInN1YiI6ImFjY190ZXN0YWNjdDAwMDAwMDAwMDAwMDAwMDAwMSIsImlhdCI6MTc5MTUwNDAwMCwibmJmIjoxNzkxNTA0MDAwLCJleHAiOjE3OTE1MDQwOTAsIm5vbmNlIjoiVGVzdE5vbmNlMDAwMDAwMDAwMDAwQSIsImp0aSI6IlRlc3RKdGkwMDAwMDAwMDAwMDAwMEEiLCJhbXIiOlsiZ29vZ2xlIl0sImF1dGhfdGltZSI6MTc5MTUwMzQwMCwidmVyIjoxfQ.M5F_idxSi91py7qow3x9Hg3PTMnzsLkUVABcv3aMNW0wtp-aMSAw9m2pF1dJ0Y2EqbTmvVFsxmGbKBMExegwHg",
+      "now": 1791504000,
+      "nonce": "OtherNonce00000000000A",
+      "expect": "failed",
+      "reason": "nonce"
+    },
+    {
+      "name": "amr-empty",
+      "description": "amr is empty",
+      "jws": "eyJhbGciOiJFUzI1NiIsInR5cCI6InBuLWxvZ2luK2p3dCIsImtpZCI6InRlc3QtMSJ9.eyJpc3MiOiJodHRwczovL2lkLnBhaXJuZXRzLmFwcCIsImF1ZCI6Im5zdF90ZXN0bmVzdDAwMDAwMDAwMDAwMDAwMDAwMSIsInN1YiI6ImFjY190ZXN0YWNjdDAwMDAwMDAwMDAwMDAwMDAwMSIsImlhdCI6MTc5MTUwNDAwMCwibmJmIjoxNzkxNTA0MDAwLCJleHAiOjE3OTE1MDQwOTAsIm5vbmNlIjoiVGVzdE5vbmNlMDAwMDAwMDAwMDAwQSIsImp0aSI6IlRlc3RKdGkwMDAwMDAwMDAwMDAwMEEiLCJhbXIiOltdLCJhdXRoX3RpbWUiOjE3OTE1MDM0MDAsInZlciI6MX0.g7-A5GkBg2PH-6QbF8-NU2bL5BRuUtCi18E9Myd6Rq8YLfiwUIrGFhY5j-zmiQ3krXNGyzAURGI-buck-Eb8Cw",
+      "now": 1791504000,
+      "nonce": "TestNonce000000000000A",
+      "expect": "failed",
+      "reason": "amr"
+    },
+    {
+      "name": "jti-short",
+      "description": "jti too short",
+      "jws": "eyJhbGciOiJFUzI1NiIsInR5cCI6InBuLWxvZ2luK2p3dCIsImtpZCI6InRlc3QtMSJ9.eyJpc3MiOiJodHRwczovL2lkLnBhaXJuZXRzLmFwcCIsImF1ZCI6Im5zdF90ZXN0bmVzdDAwMDAwMDAwMDAwMDAwMDAwMSIsInN1YiI6ImFjY190ZXN0YWNjdDAwMDAwMDAwMDAwMDAwMDAwMSIsImlhdCI6MTc5MTUwNDAwMCwibmJmIjoxNzkxNTA0MDAwLCJleHAiOjE3OTE1MDQwOTAsIm5vbmNlIjoiVGVzdE5vbmNlMDAwMDAwMDAwMDAwQSIsImp0aSI6InNob3J0IiwiYW1yIjpbImdvb2dsZSJdLCJhdXRoX3RpbWUiOjE3OTE1MDM0MDAsInZlciI6MX0.hmg6poMdi2J97bZOTXh0yCqiW_jVFBWeFnSsEVejvMD7P9wybfV4ZZjOiSuv88eimfB-5tXXOubFBTHOLk75UQ",
+      "now": 1791504000,
+      "nonce": "TestNonce000000000000A",
+      "expect": "failed",
+      "reason": "jti"
+    }
+  ]
+}
