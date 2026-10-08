@@ -86,6 +86,33 @@ public class SyncEngineUnitTests : IDisposable
     }
 
     [Fact]
+    public async Task ThePlannedUploadsAndDownloadsAreToldInRunOrder()
+    {
+        IReadOnlyList<(string Path, string Operation)>? planned = null;
+        _engine.ExecutionPlanned += p => planned = p;
+        Write("b.txt", "b");
+        Write("a/c.txt", "c");
+        Write("d.txt", "d");
+        Write("e.txt", "e");
+        _api.Put("z.txt", "z");
+        _api.Put("m.txt", "m");
+
+        await Pass();
+        Assert.Equal([("a/c.txt", "upload"), ("b.txt", "upload"), ("d.txt", "upload"), ("e.txt", "upload"), ("m.txt", "download"), ("z.txt", "download")], planned);
+
+        // Deletions and conflicts are left out.
+        File.Delete(Local("d.txt"));
+        _api.Delete("e.txt");
+        Write("a/c.txt", "local edit");
+        _api.Put("a/c.txt", "server edit");
+        Write("n.txt", "n");
+        _api.Put("y.txt", "y");
+        var r = await Pass();
+        Assert.Equal((1, 1, 1), (r.Conflicts, r.DeletedLocal, r.DeletedRemote));
+        Assert.Equal([("n.txt", "upload"), ("y.txt", "download")], planned);
+    }
+
+    [Fact]
     public async Task OfflineIsReportedAndRecovers()
     {
         Write("a.txt", "a");

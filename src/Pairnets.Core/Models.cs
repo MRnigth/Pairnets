@@ -108,7 +108,12 @@ public sealed record ServerHello(string Product, int ApiVersion, string? ServerV
 public sealed record SignInMethods(bool Password, bool Passkeys, bool Email, bool Google);
 
 /// <summary>Answer of <c>GET /api/me</c>: who the server thinks this computer is.</summary>
-public sealed record DeviceMe(string? Id, string Name, string Kind)
+/// <remarks>
+/// For a computer with its own key, also who let it in: the owner's <see cref="Email"/>, the way they were signed in
+/// on the nest's website when they pressed Allow (<see cref="Method"/>: "google", "email", "passkey", "password", or
+/// another way as the nest wrote it) and when (<see cref="Added"/>). Null when not known, and from older servers.
+/// </remarks>
+public sealed record DeviceMe(string? Id, string Name, string Kind, string? Email = null, string? Method = null, DateTimeOffset? Added = null)
 {
     public const string KindDeviceKey = "device-key";
     public const string KindSharedToken = "shared-token";

@@ -182,9 +182,9 @@ public sealed class TestServer : IAsyncDisposable
     /// A computer's own key, as Allow on the nest would mint it, written straight into the store and
     /// the device list: no endpoint hands out keys any more, so tests that just need one start here.
     /// </summary>
-    public DeviceKeyGrant MintKey(string name)
+    public DeviceKeyGrant MintKey(string name, string approvedBy = "test")
     {
-        var (device, key) = Services.GetRequiredService<Pairnets.Server.Auth.DeviceKeys>().Store.AddDevice(name, "test", "test");
+        var (device, key) = Services.GetRequiredService<Pairnets.Server.Auth.DeviceKeys>().Store.AddDevice(name, "test", approvedBy);
         var identity = new Pairnets.Server.Web.DeviceIdentity(device.Id, device.Name, Pairnets.Server.Web.DeviceAuthKind.DeviceKey);
         Services.GetRequiredService<Pairnets.Server.Services.DeviceRegistry>().Seen(identity.RegistryKey, device.Name, null);
         return new DeviceKeyGrant(device.Id, device.Name, key);

@@ -28,9 +28,10 @@ public static class Endpoints
                 new SignInMethods(password, passkeys > 0, email, google)));
         });
 
-        // Who the server thinks this computer is (the apps adopt a name changed on the nest).
-        app.MapGet("/api/me", (HttpContext ctx) => DeviceIdentity.Of(ctx) is { } me
-            ? Json(new DeviceMe(me.Id, me.Name, me.Kind == DeviceAuthKind.DeviceKey ? DeviceMe.KindDeviceKey : DeviceMe.KindSharedToken))
+        // Who the server thinks this computer is (the apps adopt a name changed on the nest), and who let it in
+        // (the apps' account button shows the owner's email and how they signed in).
+        app.MapGet("/api/me", (HttpContext ctx, AuthStore auth) => DeviceIdentity.Of(ctx) is { } me
+            ? Json(Me(me, auth))
             : Error(StatusCodes.Status401Unauthorized, ErrorCodes.Unauthorized, "Not signed in."));
 
         // There used to be a POST /api/devices/upgrade here that traded the shared token for a key with no
@@ -288,6 +289,22 @@ public static class Endpoints
         }
         devices.Remove(key);
         log.LogInformation("Computer {Name} was removed ({Why})", device.Name, why);
+    }
+
+    /// <summary>
+    /// The answer of <c>GET /api/me</c>. A computer with its own key also learns who let it in: how the owner was
+    /// signed in, their email (the Google account's after a Google sign-in, else the one sign-in links go to) and
+    /// when. The shared token says nothing more.
+    /// </summary>
+    internal static DeviceMe Me(DeviceIdentity me, AuthStore auth)
+    {
+        if (me.Kind != DeviceAuthKind.DeviceKey)
+            return new DeviceMe(me.Id, me.Name, DeviceMe.KindSharedToken);
+        var device = me.Id is { } id ? auth.GetDevice(id) : null;
+        var method = device?.ApprovalMethod;
+        var google = auth.GoogleAccount?.Email is { Length: > 0 } g ? g : null;
+        var email = method == "google" ? google ?? auth.OwnerEmail : auth.OwnerEmail ?? google;
+        return new DeviceMe(me.Id, me.Name, DeviceMe.KindDeviceKey, email, method, device?.Created);
     }
 
     public static async Task<PairedDevice?> RenameDeviceAsync(string id, string name, DeviceKeys keys, DeviceRegistry devices, IHubContext<SyncHub> hub)
