@@ -31,6 +31,18 @@ public sealed class AuthStoreTests : IDisposable
         Assert.DoesNotContain(key, File.ReadAllText(Path.Combine(_dir.Path, "auth.db"), System.Text.Encoding.Latin1));
     }
 
+    [Theory]
+    [InlineData("approved by the owner (google)", "google")]
+    [InlineData("approved by the owner (email link)", "email")]
+    [InlineData("approved by the owner (passkey)", "passkey")]
+    [InlineData("approved by the owner (Password)", "password")]
+    [InlineData("approved by the owner (setup link)", "setup link")]
+    [InlineData("approved by the owner (website)", null)]
+    [InlineData("approved by the owner", null)]
+    [InlineData("test", null)]
+    public void TheWayTheOwnerSignedInIsReadFromTheApproval(string approvedBy, string? method) =>
+        Assert.Equal(method, new PairedDevice("id", "LAPTOP", null, DateTimeOffset.UnixEpoch, approvedBy, null).ApprovalMethod);
+
     [Fact]
     public void NamesStayUniqueAmongActiveComputers()
     {

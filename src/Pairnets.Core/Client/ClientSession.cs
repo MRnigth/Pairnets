@@ -142,11 +142,16 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
                 // No more silent key here: a person approves every computer on the nest's website.
                 RequireSignIn();
             }
-            else if (Settings.HasOwnKey && await Api.GetMeAsync(ct).ConfigureAwait(false) is { } me
-                && me.Id == Settings.DeviceId && !string.Equals(me.Name, Settings.DeviceName, StringComparison.Ordinal))
+            else if (Settings.HasOwnKey && await Api.GetMeAsync(ct).ConfigureAwait(false) is { } me && me.Id == Settings.DeviceId)
             {
-                (next.DeviceName, changed) = (me.Name, true);
-                Activity.Add(ActivityKind.Info, null, $"This computer is now called {me.Name}", _clock);
+                // Who let this computer in (the account button); older servers do not say.
+                var account = me.Email is null && me.Method is null && me.Added is null ? null : new AccountInfo(me.Email, me.Method, me.Added);
+                Update(s => s with { Account = account });
+                if (!string.Equals(me.Name, Settings.DeviceName, StringComparison.Ordinal))
+                {
+                    (next.DeviceName, changed) = (me.Name, true);
+                    Activity.Add(ActivityKind.Info, null, $"This computer is now called {me.Name}", _clock);
+                }
             }
             if (!_moveTried && PairnetsApiClient.TryParseServerUrl(hello.PublicUrl, out var publicUrl) && publicUrl is not null
                 && !SameAddress(publicUrl, Settings.ServerUrl))
