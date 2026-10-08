@@ -24,7 +24,7 @@ public enum NestCheckStatus
     /// <summary>Something answered, but not a Pairnets server.</summary>
     NotPairnets,
 
-    /// <summary>Nothing answered (Tailscale off, wrong name, server down).</summary>
+    /// <summary>Nothing answered (wrong name, server down, no internet).</summary>
     Unreachable,
 }
 
@@ -39,7 +39,7 @@ public static class Nest
 {
     /// <summary>
     /// "nest.pairnets.app" → https://nest.pairnets.app/ (names get HTTPS); "100.x.y.z" → http://100.x.y.z:5075/
-    /// (a bare Tailscale address is the old plain address); full URLs stay as typed. Null when it cannot be an address.
+    /// (a bare IP address is the old plain server address); full URLs stay as typed. Null when it cannot be an address.
     /// </summary>
     public static Uri? ParseAddress(string? text)
     {
@@ -97,7 +97,7 @@ public static class Nest
         }
         catch (PairnetsNetworkException)
         {
-            return new(NestCheckStatus.Unreachable, url, null, "Can't reach it. Make sure Tailscale is on, and check the name.");
+            return new(NestCheckStatus.Unreachable, url, null, "Can't reach it. Check the name, and that this computer is online.");
         }
         catch (Exception ex) when (ex is PairnetsProtocolException or PairnetsAuthException or JsonException)
         {

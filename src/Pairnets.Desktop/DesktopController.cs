@@ -257,12 +257,11 @@ public sealed class DesktopController : ITrayActions, IDisposable
 
     public async void AddComputer() => await Dialogs.InfoAsync(_window, "Pairnets – add a computer", AddComputerSteps(_session?.Status.NestUrl ?? NestFromSettings()));
 
-    /// <summary>The three steps, with this nest's name filled in.</summary>
+    /// <summary>The two steps, with this nest's name filled in.</summary>
     public static string AddComputerSteps(string? nestUrl) =>
         "On the computer you want to add:\n\n" +
-        "1. Turn on Tailscale, signed in with the same account as this one.\n" +
-        "2. Install Pairnets (pairnets.app/add).\n" +
-        $"3. Open Pairnets, type {(Uri.TryCreate(nestUrl, UriKind.Absolute, out var u) ? u.Authority : "your nest's name")} and press \"Sign in with your browser\".\n\n" +
+        "1. Install Pairnets (pairnets.app/add).\n" +
+        $"2. Open Pairnets, type {(Uri.TryCreate(nestUrl, UriKind.Absolute, out var u) ? u.Authority : "your nest's name")} and press \"Sign in with your browser\".\n\n" +
         "Its request then pops up here and on your nest, where you allow it.";
 
     public async void ManageDevices()

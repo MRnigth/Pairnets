@@ -27,7 +27,7 @@
           </StackPanel>
         </Border>
         <TextBlock Style="{StaticResource MutedSmall}" TextWrapping="Wrap" TextAlignment="Center" Margin="0,14,0,0"
-                   Text="Your nest is your own server. Only devices on your Tailscale network can reach it." />
+                   Text="Your nest is your own server. New computers only get in when you allow them there." />
         <Button Style="{StaticResource LinkButton}" HorizontalAlignment="Center" Margin="0,8,0,0"
                 Content="Connect with server address and token instead" Click="OnAdvanced" />
       </StackPanel>

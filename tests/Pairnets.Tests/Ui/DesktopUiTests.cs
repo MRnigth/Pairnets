@@ -463,7 +463,7 @@ public class DesktopUiTests
         signIn.Show();
         signIn.SignIn!.ShowAddress("nest.pairnets.app", new NestCheck(NestCheckStatus.Found, new Uri("https://nest.pairnets.app/"), null, "Found it (Pairnets server 1.0.80)"));
         Save(signIn, outDir, $"sign-in-welcome-{suffix}.png");
-        signIn.SignIn.ShowAddress("nest.pairnets.app", new NestCheck(NestCheckStatus.Unreachable, new Uri("https://nest.pairnets.app/"), null, "Can't reach it. Make sure Tailscale is on, and check the name."));
+        signIn.SignIn.ShowAddress("nest.pairnets.app", new NestCheck(NestCheckStatus.Unreachable, new Uri("https://nest.pairnets.app/"), null, "Can't reach it. Check the name, and that this computer is online."));
         Save(signIn, outDir, $"sign-in-unreachable-{suffix}.png");
         signIn.SignIn.ShowPairing(new PairingState(PairingStage.Waiting, "KQ7M-4PXD", "https://nest.pairnets.app/link?code=KQ7M-4PXD",
             DateTimeOffset.UtcNow.AddMinutes(9).AddSeconds(41)), openBrowser: false);

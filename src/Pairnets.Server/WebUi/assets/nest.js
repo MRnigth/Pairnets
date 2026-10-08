@@ -288,7 +288,7 @@
       showError(null);
       try {
         await api("POST", "/signin/email/request");
-        showNotice("Check your inbox. The link works once, for 15 minutes, on a device with Tailscale on.");
+        showNotice("Check your inbox. The link works once, for 15 minutes.");
       } catch (error) {
         showError(error);
       } finally {
@@ -418,7 +418,7 @@
     $("request-icon").replaceWith(ring(systemIcon(request.system)));
     $("request-name").textContent = request.name;
     $("request-detail").textContent = [request.system, request.appVersion ? "Pairnets " + request.appVersion : null].filter(Boolean).join(" · ");
-    $("request-from").textContent = `${request.address ? "From " + request.address + " on your Tailscale network · " : ""}asked ${ago(request.created)}`;
+    $("request-from").textContent = `${request.address ? "From " + request.address + " · " : ""}asked ${ago(request.created)}`;
     $("request-same").hidden = !request.sameComputer;
     $("request-code").textContent = request.code;
     $("request-warning").textContent = `${request.name} will be able to read, change and delete the files in your synced folder.`;

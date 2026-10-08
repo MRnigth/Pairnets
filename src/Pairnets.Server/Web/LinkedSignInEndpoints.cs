@@ -147,9 +147,9 @@ public static class LinkedSignInEndpoints
         var (subject, intro) = purpose == EmailLinkPurpose.Confirm
             ? ("Confirm your email for Pairnets", $"Someone (hopefully you) asked to use this address for sign-in links to {host}.")
             : ("Your Pairnets sign-in link", $"Someone (hopefully you) asked to sign in to {host}.");
-        var text = $"{intro}\n\nOpen this link to continue. It works once, for 15 minutes, on a device with Tailscale on:\n{url}\n\nDidn't ask? Ignore this email: nothing happens unless the link is opened.";
+        var text = $"{intro}\n\nOpen this link to continue. It works once, for 15 minutes:\n{url}\n\nDidn't ask? Ignore this email: nothing happens unless the link is opened.";
         var html = $"<p>{WebUtility.HtmlEncode(intro)}</p><p><a href=\"{url}\" style=\"display:inline-block;padding:10px 18px;background:#2563EB;color:#fff;border-radius:8px;text-decoration:none;font-weight:600\">Continue</a></p>" +
-                   "<p style=\"color:#6B7280\">It works once, for 15 minutes, on a device with Tailscale on. Didn't ask? Ignore this email: nothing happens unless the link is opened.</p>";
+                   "<p style=\"color:#6B7280\">It works once, for 15 minutes. Didn't ask? Ignore this email: nothing happens unless the link is opened.</p>";
         await sender.SendAsync(address, subject, text, html, ct);
         log.LogInformation("A {Purpose} email link was sent", purpose);
     }
