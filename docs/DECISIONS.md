@@ -250,6 +250,55 @@ what cannot lose or silently overwrite data.
   and Cloudflare headers and explained in plain words; Pairnets's JSON errors relayed by Cloudflare are
   left alone.
 
+## Big transfers continue where they stopped
+
+* **This replaces two earlier rules:** "Sessions in memory, not in the manifest" (above) and the "half-sent
+  files are discarded" part of "Pause cancels the running pass". An upload or download that stops part-way
+  is now kept and continued. Still nothing partial is ever stored as a file.
+* **Uploads in pieces outlive a pass.** A broken connection, Pause or closing the app no longer drops the
+  upload on the server. The computer keeps the upload's id together with exactly the content it carries
+  (size, modification time, content hash, base, server address) in state.db (new `uploads` table, schema 2),
+  and the next pass asks the server how much it has and sends only the rest. Within one pass a broken
+  connection is retried for about a minute (after 1, 2, 4, 8, 15 and 30 s); then the pass ends offline and the
+  runner's retries (2, 5, 10, 30, 60 s) take over, each continuing from the server's count.
+* **The whole file is checked again, so two versions are never mixed.** When it continues, the computer reads
+  the bytes the server already has once more from the file (they are not sent again) and hashes the whole
+  file as it is now; the server compares that with its own hash of what it received. If the file changed in
+  between in a way that size and time do not show, the commit is refused and the file is sent again from the
+  start. The cost is reading the part already sent once more per continue (local disk: seconds to a minute
+  for 10 GB); trusting a hash kept from before would have been faster but could store a mixed file.
+* **Given up only on purpose.** `DELETE /api/upload/{id}` is sent only when the upload will not be continued:
+  the file changed, was deleted, is in sync now, or the server has another version. An upload nobody comes
+  back for (Reset, Re-link, uninstall) is dropped by the server after an hour without data, as before; so a
+  laptop that sleeps longer than an hour in the middle of an upload sends that file again.
+* **"Busy" is not a failure.** While an earlier piece of the same upload is still arriving (the server waits
+  up to 60 s on a quiet connection), the server answers `upload-busy` and `GET /api/upload/{id}` says
+  `busy: true`. The computer waits (up to 3 minutes) instead of counting a failure and shrinking the pieces.
+  Older servers answer `upload-offset` instead, which is handled the same way.
+* **Uploads also survive a restart of the server.** Each session now has a small description next to its part
+  file in tmp/ (`id.session`: path, base, size, mtime), and the part file is written to disk after every piece.
+  At start-up the server keeps the pairs that received data within the last hour (everything else in tmp/ is
+  still deleted, after the journal is replayed) and takes them up again. The running hash of what arrived lived
+  only in memory, so each kept part file is read and hashed once more, in the background; the upload answers
+  busy meanwhile, so no request waits for it. A part damaged over the restart fails the commit's hash check and
+  is refused, never stored.
+* **Big downloads continue too.** Files from 16 MB keep their partial download in `.pairnets-tmp` when they are
+  cut off, paused or closed, recorded in state.db (new `downloads` table) with the version (content hash) its
+  bytes belong to. The next pass sends `Range` with `If-Range` (a file's ETag is its hash), so the server sends
+  only the rest of that same version, or the whole file if it changed meanwhile. A new version in the manifest
+  deletes the old partial at once. The whole file is still hashed and checked against the server's hash before
+  it replaces anything; a partial that fails the check is deleted and the file is downloaded again in the same
+  pass. Smaller files take about a minute or less even on a slow link, so they simply start again.
+* **No answer takes longer than Cloudflare waits (100 s), and no request carries more than 100 MB.** Pieces are at
+  most 50 MiB (the server takes up to 64 MiB); one PUT is only used for files up to 50 MiB, or with a server from
+  before pieces. The commit no longer waits for gigabytes to reach the disk (each piece already did). Restoring a
+  big history version used to copy and hash it inside the request; it now runs in the background, the request
+  waits at most 60 s and otherwise answers 202, and the app asks again with the same ticket until it is done.
+  Left as it was: a file someone put into `files/` by hand is hashed under the server's lock when a computer
+  overwrites it (rare, and only once).
+* **Going back to an older app** needs Settings → Start over: an app from before refuses a state.db at schema 2
+  ("created by a newer Pairnets"). Nothing is lost by that; it only stops syncing until reset.
+
 ## Renamed from Tether to Pairnets
 
 * **Why.** "Tether" is also the name of a large crypto company, and the matching domains were taken.
