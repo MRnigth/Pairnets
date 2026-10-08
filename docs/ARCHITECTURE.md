@@ -1,26 +1,32 @@
 # Architecture
 
-Pairnets keeps one folder identical on two Windows PCs (used one at a time) through a small server
-reached through a Cloudflare Tunnel: the server listens on 127.0.0.1 and `cloudflared` brings
-requests in over an outbound connection. This document explains how, and why it cannot silently
-overwrite your files.
+Pairnets keeps one folder identical on your computers (Windows, Mac and Linux, built for using one
+at a time) through a small server, the *nest*, reached through a Cloudflare Tunnel: the server
+listens on 127.0.0.1 and `cloudflared` brings requests in over an outbound connection. This document
+explains how, and why it cannot silently overwrite your files.
 
 ```
- Desktop (Windows)                      Ubuntu server (behind the tunnel)                   Laptop (Windows)
- ┌───────────────────┐  HTTPS + token   ┌────────────────────────────────┐  HTTPS + token   ┌───────────────────┐
- │ Pairnets.Client   │ ───────────────▶ │ pairnets-server (ASP.NET Core) │ ◀─────────────── │ Pairnets.Client   │
- │  tray UI (thin)   │                  │  /api/*  + SignalR /hub        │                  │  tray UI (thin)   │
- │ Pairnets.Core     │ ◀── "Changed" ── │  manifest.db (SQLite)          │ ── "Changed" ──▶ │ Pairnets.Core     │
- │  engine, runner,  │    push          │  files/   current versions     │    push          │  engine, runner,  │
- │  state.db         │                  │  history/ old + deleted        │                  │  state.db         │
- └───────────────────┘                  └────────────────────────────────┘                  └───────────────────┘
+ Desktop                                Ubuntu server (behind the tunnel)                   Laptop
+ ┌───────────────────┐  HTTPS + key     ┌────────────────────────────────┐  HTTPS + key     ┌───────────────────┐
+ │ Pairnets app      │ ───────────────▶ │ pairnets-server (ASP.NET Core) │ ◀─────────────── │ Pairnets app      │
+ │  window + tray    │                  │  /api/*  + SignalR /hub        │                  │  window + tray    │
+ │ Pairnets.Core     │ ◀── "Changed" ── │  nest website + /web/api/*     │ ── "Changed" ──▶ │ Pairnets.Core     │
+ │  engine, runner,  │    push          │  manifest.db, auth.db (SQLite) │    push          │  engine, runner,  │
+ │  state.db         │                  │  files/   current versions     │                  │  state.db         │
+ └───────────────────┘                  │  history/ old + deleted        │                  └───────────────────┘
+                                        └────────────────────────────────┘
 ```
 
 * **Pairnets.Core** (net8.0, no UI): path rules, ignore list, hashing, the decision function, the
-  client state database, the scanner, the HTTP client, the sync engine and the runner. Everything
-  here runs and is tested on Linux.
-* **Pairnets.Server**: ASP.NET Core minimal API + SignalR, SQLite manifest, files on disk, systemd.
-* **Pairnets.Client**: WPF/WinForms tray app that only shows state and forwards clicks.
+  client state database, the scanner, the HTTP client, the sync engine and the runner, plus what
+  both apps show and do (`ClientSession`, `StatusSnapshot`, `ActivityFeed`), signing in (`Nest`,
+  `PairingFlow`), the update check and Reset. Everything here runs and is tested on Linux.
+* **Pairnets.Server**: ASP.NET Core minimal API + SignalR, the SQLite manifest (`manifest.db`) and
+  sign-in database (`auth.db`), files on disk, the nest's website (plain HTML, CSS and JavaScript
+  built into the program), systemd.
+* **Pairnets.Client**: the Windows app (WPF, with a WinForms tray icon).
+* **Pairnets.Desktop**: the Mac and Linux app (Avalonia). It mirrors the Windows app page for page;
+  both are thin and draw from the same `StatusSnapshot`.
 
 ## The three-hash algorithm
 
@@ -121,7 +127,9 @@ files/      current version of every file (same relative paths as the clients)
 history/    history/<path>/<yyyyMMddTHHmmssfffZ>-<hash8>: overwritten and deleted versions
 tmp/        in-flight uploads, including the part files of uploads in pieces (emptied at startup)
 manifest.db files(path, pathLower, hash, size, modifiedMs, deleted, version), meta, journal
+auth.db     computers (name and the SHA-256 of their key), waiting sign-in requests, the owner's sign-in (password hash, passkeys, sessions, email, Google) and setup and email links (hashes only)
 devices.json the computers that use the server: name, first and last seen, app version, system, last change (shown in the apps; not used for syncing)
+update/     the self-updater's request file, status.json and update.log
 .lock       held by the running service; maintenance commands refuse to run while it is held
 ```
 
@@ -151,36 +159,117 @@ journal, history, manifest, broadcast). Sessions idle for an hour are dropped, a
 and a restart drops them all (the client then sends that file again). An older server answers
 `404` to `POST /api/upload` and the client falls back to one PUT.
 
+## Signing a computer in
+
+1. The app reads `GET /api/hello` on the name you typed: is this a Pairnets nest, what is its HTTPS
+   name, and which sign-in ways can the app offer.
+2. It asks to join with `POST /api/pair/start` and gets a code (`KQ7M-4PXD`) and a secret only it
+   knows, then opens your browser at `https://<nest>/link?code=…` (with `&method=google` or
+   `&method=email` when you chose one).
+3. You sign in on the nest's website. The approval page shows the code, the computer's name and
+   system, and whether the request came from the same address as your browser. **Allow** calls
+   `POST /web/api/pair/{code}/approve`.
+4. The app asks `POST /api/pair/poll` every 2 seconds with its secret. After Allow it gets its own
+   key, once, and keeps it in the system's secret store. The website then opens `pairnets://signed-in`
+   on that computer, which only brings the app to the front.
+
+Codes last 10 minutes; your other computers hear `PairRequested` on the push channel and show a
+"wants to join" notice that leads to the same page.
+
 ### HTTP API
 
-All endpoints except health need the token (`X-Sync-Token`, `Authorization: Bearer`, or
-`access_token` query on `/hub` only). JSON is camelCase; errors are `{"code","message"}`.
+Who may call:
 
-| Method & path | Result |
-|---------------|--------|
-| `GET /api/health` | `200 ok` (no auth) |
-| `GET /api/info` | `{serverId, version, apiVersion}` (used by "Test connection") |
-| `GET /api/manifest[?since=v]` | `[{path,hash,size,modifiedMs,deleted,version}]`; headers `X-Pairnets-Server-Id`, `X-Pairnets-Version` |
-| `GET /api/file?path=` | file stream with `ETag`, `X-Pairnets-Hash`, `X-Pairnets-Modified-Ms`, Range support; 404 if absent/deleted |
-| `PUT /api/file?path=&base=&mtime=` | 200 entry · 409 `conflict` · 409 `case-collision` · 400 `invalid-name` · 401 |
-| `POST /api/upload?path=&base=&size=&mtime=` | 201 `{id, received: 0}` · the same 400/409 as PUT · 503 `busy` (64 uploads open) |
-| `PUT /api/upload/{id}?offset=` | piece of at most 64 MiB: 200 `{id, received}` · 409 `upload-offset` (offset is not where the server's copy ends) · 413 `too-large` · 404 unknown or expired |
-| `GET /api/upload/{id}` | 200 `{id, received}` (where to continue) · 404 |
-| `POST /api/upload/{id}/commit?hash=` | like PUT: 200 entry · 409 `conflict` / `case-collision` · 409 `upload-offset` (bytes missing) · 400 `upload-mismatch` (hash differs; upload dropped) |
-| `DELETE /api/upload/{id}` | 204, drops the upload and its part file (idempotent) |
-| `DELETE /api/file?path=&base=` | 200 tombstone (idempotent) · 409 `conflict` · 404 never existed |
-| `GET /api/history?path=` | `[{id, storedAtUtc, size, hash8}]` newest first |
-| `POST /api/history/restore?path=&id=` | restores the version as a normal new version |
-| `GET /api/devices` | `[{name, firstSeen, lastSeen, online, appVersion, system, lastChange}]`: every computer that sent an authenticated request (`X-Device-Id`, plus `X-Pairnets-Client` such as "1.0.38; Windows"); `online` while its push channel is open or it was seen in the last 2 minutes |
-| `/hub` (SignalR) | server → clients: `Changed(deviceId, path)` |
+* **open**: no key needed.
+* **key**: a computer's own key, or the old shared token while it is allowed, in `X-Sync-Token`,
+  `Authorization: Bearer`, or the `access_token` query on `/hub` only. A removed computer gets
+  401 `device-removed`; the shared token, once switched off, 401 `shared-token-off`.
+* **own key**: a computer's own key only.
 
-Every response carries `Cache-Control: no-store, no-transform`, so a proxy in between (Cloudflare)
-never caches or rewrites files, manifests or errors.
+JSON is camelCase; errors are `{"code","message"}`.
+
+| Method & path | Who | Result |
+|---------------|-----|--------|
+| `GET /api/health` | open | `200 ok` |
+| `GET /api/hello` | open | `{product, apiVersion, serverVersion, publicUrl, deviceKeys, signIn, methods: {password, passkeys, email, google}}` |
+| `POST /api/pair/start` | open, rate-limited | `{name, system, appVersion}` → `{pollToken, code, verifyUrl, expiresInSeconds, intervalSeconds}` · 409 without a public name · 429 when too many wait |
+| `POST /api/pair/poll` | open, rate-limited | `{pollToken}` → `{status}`: `pending`, `approved` (with `id, name, key`, handed out once), `denied`, `expired` or `used` |
+| `GET /api/me` | key | `{id, name, kind}`: who the nest thinks this computer is (`device-key` or `shared-token`) |
+| `PATCH /api/devices/me` | own key | `{name}`: rename this computer (the nest keeps names unique) |
+| `DELETE /api/devices/{id}` | key | remove a computer: its key stops at once and its push connection closes ("Sign out of this computer") |
+| `GET /api/info` | key | `{serverId, version, apiVersion, serverVersion, diskFreeBytes, diskTotalBytes, updater}` |
+| `POST /api/update` | key | 202 with the updater's status · 409 `updater-missing` · 429 (one request a minute) |
+| `GET /api/update/diagnostics` | key | the updater's state, its units and the last lines of `update.log`, secrets hidden (Debug mode) |
+| `GET /api/manifest[?since=v]` | key | `[{path,hash,size,modifiedMs,deleted,version}]`; headers `X-Pairnets-Server-Id`, `X-Pairnets-Version` |
+| `GET /api/file?path=` | key | file stream with `ETag`, `X-Pairnets-Hash`, `X-Pairnets-Modified-Ms`, Range support; 404 if absent/deleted |
+| `PUT /api/file?path=&base=&mtime=` | key | 200 entry · 409 `conflict` · 409 `case-collision` · 400 `invalid-name` · 401 |
+| `POST /api/upload?path=&base=&size=&mtime=` | key | 201 `{id, received: 0}` · the same 400/409 as PUT · 503 `busy` (64 uploads open) |
+| `PUT /api/upload/{id}?offset=` | key | piece of at most 64 MiB: 200 `{id, received}` · 409 `upload-offset` (offset is not where the server's copy ends) · 413 `too-large` · 404 unknown or expired |
+| `GET /api/upload/{id}` | key | 200 `{id, received}` (where to continue) · 404 |
+| `POST /api/upload/{id}/commit?hash=` | key | like PUT: 200 entry · 409 `conflict` / `case-collision` · 409 `upload-offset` (bytes missing) · 400 `upload-mismatch` (hash differs; upload dropped) |
+| `DELETE /api/upload/{id}` | key | 204, drops the upload and its part file (idempotent) |
+| `DELETE /api/file?path=&base=` | key | 200 tombstone (idempotent) · 409 `conflict` · 404 never existed |
+| `GET /api/history?path=` | key | `[{id, storedAtUtc, size, hash8}]` newest first |
+| `POST /api/history/restore?path=&id=` | key | restores the version as a normal new version |
+| `GET /api/devices` | key | `[{name, firstSeen, lastSeen, online, appVersion, system, lastChange, id}]`: every computer that sent an authenticated request (`X-Device-Id`, plus `X-Pairnets-Client` such as "1.0.38; Windows"); `online` while its push channel is open or it was seen in the last 2 minutes; `id` only for computers with their own key |
+| `/hub` (SignalR) | key | server → clients: `Changed(deviceId, path)`, `PeerBatch` (another computer's big upload starts or ends), `DeviceRemoved`, `DeviceRenamed`, `PairRequested(code, name, system)`, `PairDecided(code, approved)`; clients → server: `BatchStarted(count)`, `BatchFinished()` |
+
+Every API response carries `Cache-Control: no-store, no-transform`, so a proxy in between
+(Cloudflare) never caches or rewrites files, manifests or errors. (The website's pages are
+`no-store` too; its scripts and styles are `no-cache` with an `ETag`.)
 
 The apps' **History** page reads the whole manifest (`GET /api/manifest`, tombstones carry the time
 of deletion in `modifiedMs`) and `GET /api/history`, and restores with `POST /api/history/restore`.
 Because a computer ignores the server's `Changed` echo of its own requests, the app asks its runner
 for a sync right after a restore.
+
+### The nest's website
+
+Plain pages built into the server program, served **only on the nest's own HTTPS name** (directly,
+or through the tunnel with `Sync:TrustProxyHeaders`). Anywhere else a page redirects to that name,
+or answers 404 "no website yet" when the nest has none. Every page has a strict content security
+policy (no inline scripts or styles, nothing from other sites, no framing).
+
+| Page | What it is |
+|------|------------|
+| `/` | goes to `/devices` when signed in, else `/signin`, or `/setup` before any way to sign in exists |
+| `/setup` | first visit: takes the one-time code from `pairnets-server owner-link` (after `#code=`), then adds a passkey or a password |
+| `/signin` | password, passkey, email link or Google, whichever are set up |
+| `/link?code=` | approve or turn away a computer that wants to join |
+| `/devices` | your computers and waiting requests: rename or remove them |
+| `/security` | sign-in ways, where you are signed in, the old shared token switch |
+| `/email-link` | where a sign-in or confirmation email lands |
+| `/assets/*` | the website's CSS and JavaScript |
+
+Its JSON API is `/web/api/*`. Every call must reach the nest's own name; calls that change something
+must come from the nest's own pages (same `Origin`); answers are never cached. **open** below means
+no session is needed (the call itself checks a code, a password or a passkey); **signed in** needs
+the website's session cookie.
+
+| Method & path | Who | Result |
+|---------------|-----|--------|
+| `GET /web/api/state` | open | signed in or not, whether a way to sign in exists, the usable ways, the nest's name |
+| `POST /web/api/setup` | open | `{code}` from the setup link: signs this browser in (one use, 24 hours) |
+| `POST /web/api/signin/password` | open, rate-limited | `{password}`; wrong passwords from any address add up and are checked one at a time |
+| `POST /web/api/signin/passkey/options`, `POST /web/api/signin/passkey` | open, rate-limited | passkey sign-in (WebAuthn) |
+| `POST /web/api/signin/email/request` | open, rate-limited | `{email, next}` → always 204; a link goes only to the owner's confirmed address (at most 5 emails an hour) |
+| `POST /web/api/signin/email/confirm` | open, rate-limited | `{code}` from an email link (15 minutes, once) |
+| `GET /auth/google/start?purpose=&next=`, `GET /auth/google/callback` | open (browser redirects) | sign in with the connected Google account (PKCE), or connect one (`purpose=connect`, signed in) |
+| `POST /web/api/signout` | signed in | ends this browser's session |
+| `GET /web/api/devices` | signed in | computers, waiting requests, whether the shared token is allowed |
+| `PATCH /web/api/devices/{id}`, `DELETE /web/api/devices/{id}` | signed in | rename / remove a computer |
+| `GET /web/api/pair/{code}`, `POST …/approve`, `POST …/deny` | signed in | the approval page |
+| `GET /web/api/security` | signed in | sign-in ways, sessions, shared token, how many computers use which |
+| `POST /web/api/password`, `DELETE /web/api/password` | signed in | set or change the password (the current one is needed), or remove it |
+| `POST /web/api/passkeys/register/options`, `POST /web/api/passkeys/register`, `GET /web/api/passkeys`, `DELETE /web/api/passkeys/{id}` | signed in | add, list and remove passkeys |
+| `POST /web/api/email`, `DELETE /web/api/email` | signed in | send a confirmation link to a new address / turn email links off |
+| `DELETE /web/api/google` | signed in | disconnect Google |
+| `DELETE /web/api/sessions/{id}` | signed in | sign another browser out |
+| `POST /web/api/shared-token` | signed in | `{allowed}`: switch the old shared token on or off (off also closes its live connections) |
+
+Removing the last way to sign in is refused (409). The website and its API need no computer key;
+`/web/api`, `/auth`, `/assets` and the pages are the only paths besides `/api/health`,
+`/api/hello` and `/api/pair/*` that the key check lets through.
 
 ## Designed for later
 

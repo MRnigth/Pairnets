@@ -54,7 +54,8 @@ what cannot lose or silently overwrite data.
   modified at least 2 s before it was hashed (the "racy git" rule). Cheap, and it removes the only
   way mtime could hide a change.
 * **Device id** is the device name. Names must differ between the PCs; the default (computer name)
-  does.
+  does. (Later, computers that sign in get their own id from the nest, which also keeps their names
+  unique.)
 
 ## Server
 
@@ -77,6 +78,11 @@ what cannot lose or silently overwrite data.
 * **`MemoryDenyWriteExecute`** is not set in the unit, because the .NET JIT needs W+X memory.
 * **Single-file publish** keeps `libe_sqlite3.so` next to the binary (no self-extraction), which
   works under `ProtectSystem=strict`.
+* **Data on another disk is bind-mounted onto `/var/lib/pairnets`**, not moved with
+  `Sync__DataDir`. The hardened unit may only write there (`ReadWritePaths`), and the updater's path
+  unit and `update.sh` watch `/var/lib/pairnets/update`, so DEPLOY.md copies the data, mounts the
+  new place onto the old path through `/etc/fstab`, and adds a `RequiresMountsFor=` drop-in so the
+  server never starts on an empty folder when the disk is missing.
 
 ## Client
 
@@ -186,7 +192,7 @@ what cannot lose or silently overwrite data.
   Needs attention, Settings) instead of three tabs and a row of six equal buttons. Sync now, Pause and Open
   folder stay at the top right; the log and bug report moved into a "⋯" menu. The app update is a
   card at the bottom of the sidebar instead of a banner over everything. Settings is a page; the
-  first-time setup keeps its own window. Both apps (WPF and Avalonia) share the design, and all the
+  first run keeps its own window (today the sign-in window). Both apps (WPF and Avalonia) share the design, and all the
   logic behind it (the map, history lists, activity by day) is in Pairnets.Core.
 * **"This computer ⇄ server ⇄ other computer".** The overview draws the computers from the same
   list as the Devices page (`GET /api/devices`, kept by the server in `devices.json`), so it can show
