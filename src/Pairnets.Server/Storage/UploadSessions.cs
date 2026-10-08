@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Security.Cryptography;
+using Pairnets.Core;
 using Pairnets.Core.Hashing;
 using Pairnets.Core.Paths;
 
@@ -39,9 +40,10 @@ public sealed class UploadSessions
 
     public enum StartStatus { Started, Rejected, TooMany }
 
-    public enum ChunkStatus { Ok, NotFound, WrongOffset, TooMuchData, Stalled }
+    /// <summary><see cref="ChunkStatus.Busy"/>: an earlier piece of the same upload is still arriving; the client waits a moment.</summary>
+    public enum ChunkStatus { Ok, NotFound, WrongOffset, TooMuchData, Stalled, Busy }
 
-    public enum CommitStatus { Done, NotFound, Incomplete, HashMismatch }
+    public enum CommitStatus { Done, NotFound, Incomplete, HashMismatch, Busy }
 
     public sealed record StartResult(StartStatus Status, string? Id = null, ChangeResult? Rejection = null);
 
@@ -80,6 +82,13 @@ public sealed class UploadSessions
     public long? Received(string id) => _sessions.TryGetValue(id, out var s) && !s.Closed ? s.Received : null;
 
     /// <summary>
+    /// Where the next piece starts, and whether the session is busy (a piece is still arriving), so the client
+    /// waits instead of sending a piece that would be refused. Null when there is no such session.
+    /// </summary>
+    public UploadStatus? Status(string id) =>
+        _sessions.TryGetValue(id, out var s) && !s.Closed ? new UploadStatus(id, s.Received, Busy: s.Gate.CurrentCount == 0) : null;
+
+    /// <summary>
     /// Appends a piece that starts at <paramref name="offset"/>, which must equal what the server
     /// already has. When the connection breaks part-way, the bytes that did arrive are kept.
     /// </summary>
@@ -88,7 +97,7 @@ public sealed class UploadSessions
         if (!_sessions.TryGetValue(id, out var s))
             return new(ChunkStatus.NotFound);
         if (!await s.Gate.WaitAsync(0, CancellationToken.None).ConfigureAwait(false))
-            return new(ChunkStatus.WrongOffset, s.Received); // another piece of this upload is still arriving
+            return new(ChunkStatus.Busy, s.Received); // another piece of this upload is still arriving
         try
         {
             if (s.Closed)
@@ -145,7 +154,7 @@ public sealed class UploadSessions
         if (!_sessions.TryGetValue(id, out var s))
             return new(CommitStatus.NotFound);
         if (!await s.Gate.WaitAsync(0, CancellationToken.None).ConfigureAwait(false))
-            return new(CommitStatus.Incomplete, Message: "A piece of this upload is still arriving.");
+            return new(CommitStatus.Busy, Message: "A piece of this upload is still arriving.");
         try
         {
             if (s.Closed)

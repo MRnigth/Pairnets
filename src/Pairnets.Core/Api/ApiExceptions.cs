@@ -14,7 +14,13 @@ public sealed class PairnetsAuthException(string message, string? code = null) :
 }
 
 /// <summary>The server could not be reached, timed out, stalled, or failed (5xx). The pass is aborted and retried later.</summary>
-public sealed class PairnetsNetworkException(string message, Exception? inner = null) : Exception(message, inner);
+public class PairnetsNetworkException(string message, Exception? inner = null) : Exception(message, inner);
+
+/// <summary>
+/// A download arrived whole but its content does not match the server's hash. Unlike a cut connection, the
+/// bytes received are worthless: a partial file it was continuing must not be continued again.
+/// </summary>
+public sealed class DownloadMismatchException(string message) : PairnetsNetworkException(message);
 
 /// <summary>The server answered something unexpected for one file. Only that file is skipped.</summary>
 public sealed class PairnetsProtocolException(string message) : Exception(message);

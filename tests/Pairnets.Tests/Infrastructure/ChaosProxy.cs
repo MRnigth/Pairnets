@@ -34,11 +34,48 @@ public sealed class ChaosProxy : IAsyncDisposable
 
     public int Cuts;
 
-    /// <summary>Resets the cutting rules and drops all open connections.</summary>
+    /// <summary>
+    /// The network goes down once this many bytes went client → server over all connections together: every
+    /// connection is cut and new ones are refused until <see cref="Heal"/> (an outage, not a single cut).
+    /// </summary>
+    public long? GoDownAfterUpstreamBytes { get; set; }
+
+    /// <summary>Like <see cref="GoDownAfterUpstreamBytes"/>, counting server → client.</summary>
+    public long? GoDownAfterDownstreamBytes { get; set; }
+
+    private volatile bool _down;
+    private long _upstreamTotal;
+    private long _downstreamTotal;
+
+    /// <summary>True while the network is down (see <see cref="GoDownAfterUpstreamBytes"/>).</summary>
+    public bool IsDown => _down;
+
+    /// <summary>Bytes carried client → server so far, over all connections.</summary>
+    public long UpstreamBytes => Interlocked.Read(ref _upstreamTotal);
+
+    /// <summary>Bytes carried server → client so far, over all connections.</summary>
+    public long DownstreamBytes => Interlocked.Read(ref _downstreamTotal);
+
+    /// <summary>Takes the network down now (see <see cref="GoDownAfterUpstreamBytes"/>).</summary>
+    public void GoDown()
+    {
+        _down = true;
+        DropAll();
+    }
+
+    /// <summary>Resets the cutting rules, brings the network back, and drops all open connections.</summary>
     public void Heal()
     {
         CutAfterUpstreamBytes = null;
         CutAfterDownstreamBytes = null;
+        GoDownAfterUpstreamBytes = null;
+        GoDownAfterDownstreamBytes = null;
+        _down = false;
+        DropAll();
+    }
+
+    private void DropAll()
+    {
         lock (_open)
         {
             foreach (var c in _open)
@@ -70,6 +107,11 @@ public sealed class ChaosProxy : IAsyncDisposable
 
     private async Task HandleAsync(TcpClient client)
     {
+        if (_down)
+        {
+            Abort(client);
+            return;
+        }
         var server = new TcpClient();
         try
         {
@@ -87,8 +129,8 @@ public sealed class ChaosProxy : IAsyncDisposable
             _open.Add(server);
         }
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(_stop.Token);
-        var up = PumpAsync(client, server, () => CutAfterUpstreamBytes, cts);
-        var down = PumpAsync(server, client, () => CutAfterDownstreamBytes, cts);
+        var up = PumpAsync(client, server, () => CutAfterUpstreamBytes, upstream: true, cts);
+        var down = PumpAsync(server, client, () => CutAfterDownstreamBytes, upstream: false, cts);
         await Task.WhenAny(up, down);
         cts.Cancel();
         Abort(client);
@@ -100,7 +142,7 @@ public sealed class ChaosProxy : IAsyncDisposable
         }
     }
 
-    private async Task PumpAsync(TcpClient from, TcpClient to, Func<long?> limit, CancellationTokenSource cts)
+    private async Task PumpAsync(TcpClient from, TcpClient to, Func<long?> limit, bool upstream, CancellationTokenSource cts)
     {
         var buffer = new byte[16 * 1024];
         long total = 0;
@@ -111,9 +153,21 @@ public sealed class ChaosProxy : IAsyncDisposable
             while (!cts.IsCancellationRequested)
             {
                 var n = await src.ReadAsync(buffer, cts.Token);
-                if (n == 0)
+                if (n == 0 || _down)
                     return;
                 var max = limit();
+                var outage = upstream ? GoDownAfterUpstreamBytes : GoDownAfterDownstreamBytes;
+                var carried = upstream ? Interlocked.Read(ref _upstreamTotal) : Interlocked.Read(ref _downstreamTotal);
+                if (outage is not null && carried + n > outage)
+                {
+                    var allowed = (int)Math.Max(0, outage.Value - carried);
+                    if (allowed > 0)
+                        await dst.WriteAsync(buffer.AsMemory(0, allowed), cts.Token);
+                    Interlocked.Add(ref upstream ? ref _upstreamTotal : ref _downstreamTotal, allowed);
+                    Interlocked.Increment(ref Cuts);
+                    GoDown();
+                    return;
+                }
                 if (max is not null && total + n > max)
                 {
                     var allowed = (int)Math.Max(0, max.Value - total);
@@ -124,6 +178,7 @@ public sealed class ChaosProxy : IAsyncDisposable
                 }
                 total += n;
                 await dst.WriteAsync(buffer.AsMemory(0, n), cts.Token);
+                Interlocked.Add(ref upstream ? ref _upstreamTotal : ref _downstreamTotal, n);
             }
         }
         catch (Exception ex) when (ex is IOException or SocketException or OperationCanceledException or ObjectDisposedException)
