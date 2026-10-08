@@ -24,8 +24,8 @@ public static class CliCommands
           pairnets-server devices remove <name or id>
                                                   remove a computer: its key stops working
           pairnets-server owner-link [--if-new]   print a one-time link to set up (or get back into)
-                                                  the nest's website; --if-new: only if no way to
-                                                  sign in is set up yet
+                                                  the nest's website (it cancels older unused links);
+                                                  --if-new: only if no way to sign in is set up yet
           pairnets-server --version
 
         Options:

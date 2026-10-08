@@ -91,7 +91,7 @@ finds your nest:
 * **Passkeys** are tied to it (`Sync__PasskeyRpId`, below, can tie them to a parent domain instead).
 
 **Get into the website.** `install.sh` prints a setup link at the end. To make a new one (it works
-once, for 24 hours; the service may keep running):
+once, for 24 hours, and cancels any older unused link; the service may keep running):
 
 ```bash
 sudo -u pairnets /opt/pairnets/pairnets-server owner-link

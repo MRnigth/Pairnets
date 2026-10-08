@@ -124,14 +124,21 @@ public sealed partial class AuthStore
 
     // ------------------------------------------------------------------ setup links
 
-    /// <summary>A one-time code for the nest's setup page (printed by "pairnets-server owner-link" and install.sh).</summary>
+    /// <summary>
+    /// A one-time code for the nest's setup page (printed by "pairnets-server owner-link" and install.sh).
+    /// Only the newest link works: making one cancels every older unused link, so a link that was seen by
+    /// someone else can always be taken back by making a new one.
+    /// </summary>
     public string CreateSetupCode()
     {
         var code = Base64Url(RandomNumberGenerator.GetBytes(24));
         var now = _clock.GetUtcNow();
         using var conn = Open();
         Purge(conn);
-        using var cmd = Command(conn, "INSERT INTO setupLinks(codeHash, createdMs, expiresMs, usedMs) VALUES($hash, $now, $expires, NULL)",
+        using var cmd = Command(conn, """
+            DELETE FROM setupLinks WHERE usedMs IS NULL;
+            INSERT INTO setupLinks(codeHash, createdMs, expiresMs, usedMs) VALUES($hash, $now, $expires, NULL);
+            """,
             ("$hash", HashKey(code)), ("$now", now.ToUnixTimeMilliseconds()), ("$expires", (now + SetupLinkLifetime).ToUnixTimeMilliseconds()));
         cmd.ExecuteNonQuery();
         return code;

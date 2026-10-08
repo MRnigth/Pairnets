@@ -73,13 +73,24 @@ public sealed class PairRequestTests : IDisposable
     {
         var store = Store();
         var used = store.CreateSetupCode();
-        var late = store.CreateSetupCode();
 
         Assert.True(store.UseSetupCode(used));
         Assert.False(store.UseSetupCode(used));
+        var late = store.CreateSetupCode();
         _clock.Advance(AuthStore.SetupLinkLifetime);
         Assert.False(store.UseSetupCode(late));
         Assert.False(store.UseSetupCode(string.Empty));
+    }
+
+    [Fact]
+    public void ANewSetupLinkCancelsTheOlderUnusedOnes()
+    {
+        var store = Store();
+        var leaked = store.CreateSetupCode();
+        var fresh = store.CreateSetupCode();
+
+        Assert.False(store.UseSetupCode(leaked));
+        Assert.True(store.UseSetupCode(fresh));
     }
 
     [Fact]

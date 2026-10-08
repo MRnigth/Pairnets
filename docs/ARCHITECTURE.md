@@ -249,7 +249,7 @@ the website's session cookie.
 | Method & path | Who | Result |
 |---------------|-----|--------|
 | `GET /web/api/state` | open | signed in or not, whether a way to sign in exists, the usable ways, the nest's name |
-| `POST /web/api/setup` | open | `{code}` from the setup link: signs this browser in (one use, 24 hours) |
+| `POST /web/api/setup` | open | `{code}` from the setup link: signs this browser in (one use, 24 hours; only the newest link works) |
 | `POST /web/api/signin/password` | open, rate-limited | `{password}`; wrong passwords from any address add up and are checked one at a time |
 | `POST /web/api/signin/passkey/options`, `POST /web/api/signin/passkey` | open, rate-limited | passkey sign-in (WebAuthn) |
 | `POST /web/api/signin/email/request` | open, rate-limited | `{email, next}` → always 204; a link goes only to the owner's confirmed address (at most 5 emails an hour) |
