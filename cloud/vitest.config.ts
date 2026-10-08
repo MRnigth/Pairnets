@@ -26,6 +26,8 @@ export default defineConfig(async () => {
       setupFiles: ["./test/setup.ts"],
       // One shared local D1: files run one after another and each test starts from empty tables.
       fileParallelism: false,
+      // Some tests make RSA keys or send hundreds of requests; CI machines are slower than a desktop.
+      testTimeout: 60_000,
     },
   };
 });
