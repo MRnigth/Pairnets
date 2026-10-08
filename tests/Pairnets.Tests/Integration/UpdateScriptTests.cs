@@ -61,13 +61,73 @@ public class UpdateScriptTests : IDisposable
         Assert.Contains("did not match its checksum", message);
     }
 
-    private void MakeRelease(string version, bool corrupt)
+    [Fact]
+    public void SecretsInTheInstallOutputNeverReachTheLog()
+    {
+        if (!OperatingSystem.IsLinux())
+            return;
+        // Fake values only. The tunnel token is built here so no token-shaped text sits in the repo.
+        var tunnelToken = "eyJ" + "hIjoi" + new string('Q', 64) + "==";
+        string[] secrets =
+        [
+            "fake.shared.token", "fake.sync.value", "fake.tunnel.value", tunnelToken, "fake.setup.code",
+            "fake.smtp.pass", "fake.google.secret", "first.fake.one", "second.fake.one", "fake.query.token",
+        ];
+        string[] lines =
+        [
+            "  Token:       fake.shared.token",
+            "SYNC_TOKEN=fake.sync.value",
+            "TUNNEL_TOKEN=fake.tunnel.value",
+            "cloudflared service install " + tunnelToken,
+            "       https://sync.example.com/setup#code=fake.setup.code",
+            "Sync__SmtpPassword=fake.smtp.pass",
+            "Sync__GoogleClientSecret=fake.google.secret",
+            "SYNC_TOKEN=first.fake.one TUNNEL_TOKEN=second.fake.one",
+            "https://sync.example.com/link?token=fake.query.token&code=fake.setup.code",
+            "Keeping the configured address 127.0.0.1:5075",
+        ];
+        var script = "#!/bin/sh\n" + string.Concat(lines.Select(l => $"echo '{l}'\n")) + "echo 'SYNC_TOKEN=fake.sync.value' >&2\n";
+        MakeRelease("1.0.99", corrupt: false, installScript: script);
+
+        var (state, message) = Run(dryRun: false);
+
+        Assert.Equal("succeeded", state);
+        Assert.Equal("Updated from 1.0.29 to 1.0.99.", message);
+        var log = File.ReadAllText(_dir.Combine("update", "update.log"));
+        foreach (var secret in secrets)
+            Assert.DoesNotContain(secret, log);
+        Assert.Contains("Token:       (hidden)", log);
+        Assert.Contains("SYNC_TOKEN=(hidden) TUNNEL_TOKEN=(hidden)", log);
+        Assert.Contains("cloudflared service install (hidden)", log);
+        Assert.Contains("/setup#code=(hidden)", log);
+        Assert.Contains("Sync__SmtpPassword=(hidden)", log);
+        Assert.Contains("Sync__GoogleClientSecret=(hidden)", log);
+        Assert.Contains("Keeping the configured address 127.0.0.1:5075", log); // everything else is kept as it was
+    }
+
+    [Fact]
+    public void AnInstallThatFailsIsReportedAsAFailedUpdate()
+    {
+        if (!OperatingSystem.IsLinux())
+            return;
+        // install.sh exits non-zero when the server does not answer after the install.
+        MakeRelease("1.0.99", corrupt: false, installScript: "#!/bin/sh\necho 'WARNING: the service did not answer'\nexit 1\n");
+
+        var (state, message) = Run(dryRun: false);
+
+        Assert.Equal("failed", state);
+        Assert.Contains("Installing 1.0.99 did not finish", message);
+        Assert.Contains("WARNING: the service did not answer", File.ReadAllText(_dir.Combine("update", "update.log")));
+    }
+
+    private void MakeRelease(string version, bool corrupt, string installScript = "#!/bin/sh\necho installed\n")
     {
         var release = _dir.Combine("release");
         var payload = Path.Combine(release, "pairnets-server-linux-x64");
         Directory.CreateDirectory(payload);
         File.WriteAllText(Path.Combine(payload, "VERSION"), version + "\n");
-        File.WriteAllText(Path.Combine(payload, "install.sh"), "#!/bin/sh\necho installed\n");
+        File.WriteAllText(Path.Combine(payload, "install.sh"), installScript);
+        Bash($"chmod +x '{Path.Combine(payload, "install.sh")}'");
         Directory.CreateDirectory(_dir.Combine("install"));
         File.WriteAllText(_dir.Combine("install", "VERSION"), "1.0.29\n");
         var archive = Path.Combine(release, "pairnets-server-linux-x64.tar.gz");
@@ -78,7 +138,7 @@ public class UpdateScriptTests : IDisposable
         Bash($"cd '{release}' && sha256sum pairnets-server-linux-x64.tar.gz > SHA256SUMS.txt");
     }
 
-    private (string State, string Message) Run()
+    private (string State, string Message) Run(bool dryRun = true)
     {
         var updateDir = _dir.Combine("update");
         Directory.CreateDirectory(updateDir);
@@ -88,7 +148,10 @@ public class UpdateScriptTests : IDisposable
         start.Environment["PAIRNETS_BASE_URL"] = _dir.Combine("release");
         start.Environment["PAIRNETS_UPDATE_DIR"] = updateDir;
         start.Environment["PAIRNETS_INSTALL_DIR"] = _dir.Combine("install");
-        start.Environment["PAIRNETS_UPDATE_DRY_RUN"] = "1";
+        if (dryRun)
+            start.Environment["PAIRNETS_UPDATE_DRY_RUN"] = "1";
+        else
+            start.Environment.Remove("PAIRNETS_UPDATE_DRY_RUN");
         using var process = Process.Start(start)!;
         process.WaitForExit(60_000);
         using var status = JsonDocument.Parse(File.ReadAllText(Path.Combine(updateDir, "status.json")));

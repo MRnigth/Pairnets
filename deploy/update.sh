@@ -26,12 +26,16 @@ LOG_MAX=262144 # bytes; the previous log is kept as update.log.1
 
 log() { printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*"; }
 
-# Secrets never reach the log: the sync token (install.sh prints it only on a first install, but be
-# sure), setup links, and the Cloudflare, mail and Google credentials install.sh may handle.
+# Secrets never reach the log, however many share a line: the sync token (install.sh never prints it,
+# but be sure), the Cloudflare tunnel token (also bare: it is base64 JSON, so it starts with eyJ),
+# one-time setup and sign-in links, and the Cloudflare, mail and Google credentials install.sh may handle.
 redact() {
-  sed -E 's/(Token:[[:space:]]*)[^[:space:]]+/\1(hidden)/I; s/(SYNC_TOKEN=)[^[:space:]]+/\1(hidden)/; s/(api_token[[:space:]]*=[[:space:]]*)[^[:space:]]+/\1(hidden)/I;
-    s/(CLOUDFLARE_API_TOKEN=)[^[:space:]]+/\1(hidden)/; s/(Bearer[[:space:]]+)[^[:space:]"]+/\1(hidden)/I; s/((SECRET|PASSWORD|API_KEY)[A-Za-z_]*=)[^[:space:]]+/\1(hidden)/I;
-    s/([?&#](code|token)=)[^[:space:]&]+/\1(hidden)/I'
+  sed -E \
+    -e 's/((token|secret|password)[[:space:]]*:[[:space:]]*)[^[:space:]]+/\1(hidden)/gI' \
+    -e 's/([?&#][A-Za-z_]*(code|token|secret)=)[^[:space:]&]+/\1(hidden)/gI' \
+    -e 's/([A-Za-z0-9_]*(token|secret|password|passwd|api_?key)[A-Za-z0-9_]*[[:space:]]*=[[:space:]]*)[^[:space:]]+/\1(hidden)/gI' \
+    -e 's/(Bearer[[:space:]]+)[^[:space:]"]+/\1(hidden)/gI' \
+    -e 's%eyJ[A-Za-z0-9+/=_.-]{20,}%(hidden)%g'
 }
 
 json_escape() { local s=${1//\\/\\\\}; s=${s//\"/\\\"}; printf '%s' "${s//$'\n'/ }"; }
@@ -123,5 +127,5 @@ log "running install.sh from the new release"
 if "$SRC/install.sh" 2>&1 | redact; then
   status succeeded "Updated from $old to $new."
 else
-  status failed "install.sh failed. Nothing more was changed; turn on Debug mode in the app to see the update log."
+  status failed "Installing $new did not finish: install.sh reported a problem (the server may not have started again). Turn on Debug mode in the app to see the update log."
 fi
