@@ -194,7 +194,7 @@ JSON is camelCase; errors are `{"code","message"}`.
 | `GET /api/hello` | open | `{product, apiVersion, serverVersion, publicUrl, deviceKeys, signIn, methods: {password, passkeys, email, google}}` |
 | `POST /api/pair/start` | open, rate-limited | `{name, system, appVersion}` → `{pollToken, code, verifyUrl, expiresInSeconds, intervalSeconds}` · 409 without a public name · 429 when too many wait |
 | `POST /api/pair/poll` | open, rate-limited | `{pollToken}` → `{status}`: `pending`, `approved` (with `id, name, key`, handed out once), `denied`, `expired` or `used` |
-| `GET /api/me` | key | `{id, name, kind}`: who the nest thinks this computer is (`device-key` or `shared-token`) |
+| `GET /api/me` | key | `{id, name, kind, email, method, added}`: who the nest thinks this computer is (`device-key` or `shared-token`); with its own key also who let it in: the owner's email, how they were signed in when they pressed Allow (`google`, `email`, `passkey`, `password`, or as written, like `setup link`) and when. Null when not known |
 | `PATCH /api/devices/me` | own key | `{name}`: rename this computer (the nest keeps names unique) |
 | `DELETE /api/devices/{id}` | key | remove a computer: its key stops at once and its push connection closes ("Sign out of this computer") |
 | `GET /api/info` | key | `{serverId, version, apiVersion, serverVersion, diskFreeBytes, diskTotalBytes, updater}` |
