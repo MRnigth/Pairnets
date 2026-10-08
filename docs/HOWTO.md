@@ -275,6 +275,9 @@ the top right are always there: **Open folder**, **Pause**/**Resume**, **Sync no
   same time. "Limited to 5 MB/s" shows when you set a speed limit.
 * **Recent**: the last changes; several files of one folder that synced together show as one folder
   row. **See all** opens the Activity page.
+
+![A folder in progress, opened to show its files](images/main-window-syncing-folder-light.png)
+
 * **Facts** along the bottom: the folder, when it last synced, the server's version (with **Update
   server…** when the server is older than the app, shown in orange) and the free space on the server
   (orange when less than 5 GB or 5 % is left).
@@ -309,6 +312,8 @@ in as (your email, and how you signed in), this computer and your nest, with **A
 **notification** switches (when another computer wants to join, when something needs your attention,
 when a new version of Pairnets is out) and **Start over**. (An older server can't say your email yet;
 then the page shows this computer's name instead.)
+
+![The Account page](images/main-window-account-light.png)
 
 **Settings** has your nest (the server address and token are under **Advanced**), the folder, this
 computer's name, ignore patterns, **Updates and speed** and **Start over**. **Save** applies it at once.
