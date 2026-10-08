@@ -48,8 +48,7 @@ public partial class ServerUpdateWindow : Window
             VersionsText.Text = serverVersion;
             SkipButton.Visibility = Visibility.Collapsed;
             UpdateButton.Content = "Check for update";
-            Badge.SetResourceReference(Shape.FillProperty, "S.Green"); // nothing is wrong: no warning colour
-            BadgeIcon.Data = Visuals.Resource<Geometry>("I.Check");
+            ShowBadge("S.Green", "I.Check"); // nothing is wrong: no warning colour
             _upToDate = true;
         }
         Loaded += (_, _) => Motion.Bob(BadgeHost, !_upToDate && AskPanel.Visibility == Visibility.Visible);
@@ -64,6 +63,9 @@ public partial class ServerUpdateWindow : Window
     public bool AlwaysUpdate => AlwaysBox.IsChecked == true;
 
     public string ServerVersion { get; }
+
+    /// <summary>The badge's status colour (S.Orange to do, S.Green done, S.Blue setting up).</summary>
+    internal string BadgeKey { get; private set; } = "S.Orange";
 
     /// <summary>Set when the user chose "Don't ask for this version".</summary>
     public bool Skipped { get; private set; }
@@ -118,10 +120,11 @@ public partial class ServerUpdateWindow : Window
         ResultPanel.Visibility = Visibility.Collapsed;
         BusyPanel.Visibility = Visibility.Visible;
         Ring.Visibility = Visibility.Visible;
+        RingTrack.Visibility = Visibility.Visible;
+        BadgeHost.Visibility = Visibility.Collapsed; // the turning ring stands in for the badge
         Motion.Bob(BadgeHost, false);
         Motion.Spin(Ring, true);
-        Badge.SetResourceReference(Shape.FillProperty, "S.Blue");
-        BadgeIcon.Data = Visuals.Resource<Geometry>("I.Server");
+        BadgeKey = "S.Blue";
         Heading.Text = "Updating your server…";
         Explanation.Text = "It downloads the newest release, checks it, installs it and restarts.";
         StepText.Text = step;
@@ -135,6 +138,8 @@ public partial class ServerUpdateWindow : Window
         Motion.Spin(Ring, false);
         Motion.Bob(BadgeHost, false);
         Ring.Visibility = Visibility.Collapsed;
+        RingTrack.Visibility = Visibility.Collapsed;
+        BadgeHost.Visibility = Visibility.Visible;
         RetryButton.Visibility = Visibility.Collapsed;
         CommandPanel.Visibility = Visibility.Collapsed;
         string brush, icon;
@@ -165,11 +170,38 @@ public partial class ServerUpdateWindow : Window
             Explanation.Text = result.Message + " Nothing on the server was changed.";
             RetryButton.Visibility = Visibility.Visible;
         }
-        Badge.SetResourceReference(Shape.FillProperty, brush);
-        BadgeIcon.Data = Visuals.Resource<Geometry>(icon);
+        ShowBadge(brush, icon);
         Motion.Pop(BadgeHost);
         if (_debug && result.Details is { } details) // after the trace lines still queued for the window
             Dispatcher.InvokeAsync(() => AppendDetail("--- What the server reports ---" + Environment.NewLine + details), DispatcherPriority.Background);
+    }
+
+    /// <summary>
+    /// The badge in a status colour: a soft circle with the icon in the strong colour (S.Orange needs doing,
+    /// S.Blue setting up); up to date is an outlined ring, as on the overview.
+    /// </summary>
+    private void ShowBadge(string key, string icon)
+    {
+        BadgeKey = key;
+        var (soft, strong) = key switch
+        {
+            "S.Green" => ("T.OkPill", "S.Green"),
+            "S.Blue" => ("T.AccentSoft", "S.Blue"),
+            _ => ("T.WarnPill", "T.WarnText"),
+        };
+        if (key == "S.Green")
+        {
+            Badge.Fill = Brushes.Transparent;
+            Badge.SetResourceReference(Shape.StrokeProperty, strong);
+            Badge.StrokeThickness = 3;
+        }
+        else
+        {
+            Badge.SetResourceReference(Shape.FillProperty, soft);
+            Badge.StrokeThickness = 0;
+        }
+        BadgeIcon.SetResourceReference(LineIcon.StrokeProperty, strong);
+        BadgeIcon.Data = Visuals.Resource<Geometry>(icon);
     }
 
     private void OnCopy(object sender, RoutedEventArgs e) => Clipboard.SetText(CommandText.Text);

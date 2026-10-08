@@ -1054,48 +1054,4 @@
       </Setter.Value>
     </Setter>
   </Style>
-  <Style x:Key="Disclosure" TargetType="Expander">
-    <Setter Property="Foreground" Value="{DynamicResource T.Text}" />
-    <Setter Property="Template">
-      <Setter.Value>
-        <ControlTemplate TargetType="Expander">
-          <StackPanel>
-            <ToggleButton IsChecked="{Binding IsExpanded, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}"
-                          Cursor="Hand" FocusVisualStyle="{x:Null}" HorizontalAlignment="Left">
-              <ToggleButton.Template>
-                <ControlTemplate TargetType="ToggleButton">
-                  <StackPanel Orientation="Horizontal" Background="Transparent">
-                    <Path x:Name="chev" Data="M2,1 L6,5 L2,9" Stroke="{DynamicResource T.Muted}" StrokeThickness="1.8"
-                          StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
-                          Width="10" Height="10" VerticalAlignment="Center" RenderTransformOrigin="0.5,0.5">
-                      <Path.RenderTransform>
-                        <RotateTransform x:Name="rot" Angle="0" />
-                      </Path.RenderTransform>
-                    </Path>
-                    <ContentPresenter Margin="8,0,0,0" VerticalAlignment="Center" />
-                  </StackPanel>
-                  <ControlTemplate.Triggers>
-                    <Trigger Property="IsChecked" Value="True">
-                      <Setter TargetName="chev" Property="RenderTransform">
-                        <Setter.Value>
-                          <RotateTransform Angle="90" />
-                        </Setter.Value>
-                      </Setter>
-                    </Trigger>
-                  </ControlTemplate.Triggers>
-                </ControlTemplate>
-              </ToggleButton.Template>
-              <ContentPresenter ContentSource="Header" TextElement.FontWeight="SemiBold" />
-            </ToggleButton>
-            <ContentPresenter x:Name="body" Margin="0,10,0,0" Visibility="Collapsed" />
-          </StackPanel>
-          <ControlTemplate.Triggers>
-            <Trigger Property="IsExpanded" Value="True">
-              <Setter TargetName="body" Property="Visibility" Value="Visible" />
-            </Trigger>
-          </ControlTemplate.Triggers>
-        </ControlTemplate>
-      </Setter.Value>
-    </Setter>
-  </Style>
 </ResourceDictionary>

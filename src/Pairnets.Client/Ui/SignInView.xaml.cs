@@ -49,12 +49,13 @@ public partial class SignInView : UserControl
         };
         EmailBox.TextChanged += (_, _) =>
         {
-            EmailHint.Visibility = EmailBox.Text.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
             EmailButton.IsEnabled = _check is { CanSignIn: true } && Nest.LooksLikeEmail(EmailBox.Text);
         };
         _clock.Tick += (_, _) => DrawWaiting();
+        IsVisibleChanged += (_, _) => SpinWhileWaiting();
         Unloaded += (_, _) =>
         {
+            Motion.Spin(WaitIcon, false);
             _clock.Stop();
             _flowStop?.Cancel();
             _checking?.Cancel();
@@ -135,9 +136,9 @@ public partial class SignInView : UserControl
             _ => ("I.Wait", "T.Muted"),
         };
         CheckIcon.Data = Visuals.Resource<Geometry>(icon);
-        CheckIcon.Stroke = Visuals.Resource<Brush>(brush);
-        CheckText.Foreground = check.Status == NestCheckStatus.Found ? Visuals.Resource<Brush>("S.Green")
-            : check.Status == NestCheckStatus.Empty ? Visuals.Resource<Brush>("T.Muted") : Visuals.Resource<Brush>("T.Text");
+        CheckIcon.SetResourceReference(LineIcon.StrokeProperty, brush);
+        CheckText.SetResourceReference(TextBlock.ForegroundProperty, check.Status == NestCheckStatus.Found ? brush
+            : check.Status == NestCheckStatus.Empty ? "T.Muted" : "T.Text");
         DrawMethods();
     }
 
@@ -156,7 +157,7 @@ public partial class SignInView : UserControl
         EmailButton.IsEnabled = email && Nest.LooksLikeEmail(EmailBox.Text);
         // With no button of its own on show, the browser is the one way in and takes the accent.
         BrowserButton.Content = google || email ? "More ways to sign in in your browser" : "Sign in with your browser";
-        BrowserButton.Style = Visuals.Resource<Style>(google || email ? "SubtleButton" : "AccentButton");
+        BrowserButton.SetResourceReference(StyleProperty, google || email ? "FlatButton" : "AccentButton");
         BrowserButton.IsEnabled = can;
     }
 
@@ -211,7 +212,7 @@ public partial class SignInView : UserControl
         WelcomeStep.Visibility = Visibility.Collapsed;
         FolderStep.Visibility = Visibility.Collapsed;
         WaitStep.Visibility = Visibility.Visible;
-        CodeText.Text = state.Code ?? "····-····";
+        CodeText.Text = Spaced(state.Code ?? "····-····");
         if (state.Stage == PairingStage.Waiting && openBrowser && !_browserOpened && state.VerifyUrl is { } link)
         {
             _browserOpened = true;
@@ -240,8 +241,21 @@ public partial class SignInView : UserControl
             _clock.Stop();
         else
             _clock.Start();
+        SpinWhileWaiting();
         DrawWaiting();
     }
+
+    /// <summary>
+    /// The code with a thin space between its characters, so it is easy to compare (the Mac/Linux app spaces the
+    /// letters out; WPF text has no letter spacing).
+    /// </summary>
+    private static string Spaced(string code) => string.Join(ThinSpace, code.Select(c => c.ToString()));
+
+    private static readonly string ThinSpace = ((char)0x2009).ToString();
+
+    /// <summary>The arrows next to "Waiting for approval…" turn while the step shows.</summary>
+    private void SpinWhileWaiting() =>
+        Motion.Spin(WaitIcon, IsVisible && WaitStep.Visibility == Visibility.Visible && WaitRow.Visibility == Visibility.Visible);
 
     private void DrawWaiting()
     {
@@ -283,6 +297,7 @@ public partial class SignInView : UserControl
         _clock.Stop();
         WaitStep.Visibility = Visibility.Collapsed;
         WelcomeStep.Visibility = Visibility.Visible;
+        SpinWhileWaiting();
     }
 
     // ------------------------------------------------------------------ 3. the folder
@@ -295,7 +310,8 @@ public partial class SignInView : UserControl
         WelcomeStep.Visibility = Visibility.Collapsed;
         WaitStep.Visibility = Visibility.Collapsed;
         FolderStep.Visibility = Visibility.Visible;
-        SignedInText.Text = $"✓ Signed in as {grant.Name}" + (nest is null ? string.Empty : $" on {nest.Host}");
+        SpinWhileWaiting();
+        SignedInText.Text = $"Signed in as {grant.Name}" + (nest is null ? string.Empty : $" on {nest.Host}");
     }
 
     /// <summary>The folder field (screenshot tool).</summary>

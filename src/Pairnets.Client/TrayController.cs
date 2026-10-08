@@ -647,9 +647,8 @@ public sealed class TrayController : ITrayActions, IDisposable
             ApplySettings(v.Result!, v.PlainToken);
             _window?.Navigate(MainPage.Overview);
         };
-        view.SignOutRequested += SignOut;
+        view.AccountRequested += () => _window?.Navigate(MainPage.Account);
         view.ResetRequested += ResetEverything;
-        view.ManageDevicesRequested += ManageDevices;
         view.Cancelled += () => _window?.Navigate(MainPage.Overview);
         _window.ShowSettingsPage(view);
     }
