@@ -178,7 +178,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
         var (brushKey, iconKey) = Visuals.ForStatus(status);
         try
         {
-            var fill = Visuals.Resource<IBrush>(brushKey) ?? Brushes.Gray;
+            var fill = new SolidColorBrush(Visuals.TrayColor(brushKey));
             var glyph = Visuals.Resource<Geometry>(iconKey);
             var bitmap = new RenderTargetBitmap(new PixelSize(44, 44), new Vector(96, 96));
             using (var ctx = bitmap.CreateDrawingContext())

@@ -347,3 +347,47 @@ what cannot lose or silently overwrite data.
   user name's hash (a long user name plus macOS's long temp folder passed the 104-byte socket path
   limit, which made every poke fail and could crash the app on a pairnets:// launch), and the next
   listening instance opens before the current one closes (a poke arriving in the gap was lost).
+
+## Visual design: Quiet (your choice)
+
+* **Chosen from three directions on a design canvas** ("Quiet", "Map first", "Console"); you picked
+  Quiet and asked for everything designed to be built, features included. The canvas holds every
+  screen in light and dark and is the reference for later changes.
+* **Paper and ink, hairlines instead of cards.** Warm off-white (#F7F6F3) and ink (#1B1A17) in light,
+  warm charcoal (#161513) and paper (#ECEAE4) in dark. Sections are separated by 1px lines, not boxes.
+  The one main action ("Sync now", "Start syncing", "Update server") is ink-filled; other buttons are
+  outlined. Colour only means something: blue progress and uploads/downloads, green up to date, grey
+  waiting or offline, orange a decision, red a problem. The status colours now differ per theme
+  (lighter in dark) so they stay readable; both apps keep the old key names (T.*, S.*) with new values.
+* **Instrument Sans, embedded** (SIL Open Font License, `assets/fonts/OFL.txt`) in both apps, so the
+  look is the same on Windows, macOS and Linux. Static Regular/Medium/SemiBold/Bold files, not the
+  variable font: neither UI toolkit picks weights out of a variable font reliably. Tabular figures,
+  so numbers don't jiggle while they count.
+* **An icon rail instead of the sidebar.** 68px with the five pages, and at the bottom the app update
+  (a download icon with a dot, which opens a small notice instead of a permanent card), the account
+  button (the first letter of the account's email, or of the computer's name) and Settings. The
+  update notice and the account menu are drawn inside the window, not as pop-up windows, so they
+  look the same everywhere and show up in the screenshots.
+* **The overview leads with a ring.** A 152px ring shows how far the sync is (blue), full green with
+  a tick when up to date, grey with "on the server" while waiting for the other computer, full orange
+  with "!" when Pairnets needs a decision. Next to it the status in large type and what it means
+  (`OverviewRing`, `OverviewLines` in Core, shared by both apps). The computers and the server sit on
+  one line under it, with the speed ("↑ 4.90 MB/s") above the moving dots.
+* **Folders in "In progress" open to list every file of the sync.** The engine publishes its plan
+  (each upload and download with its path), and the session keeps where each file is: done, moving
+  (with its percent) or waiting (`StatusSnapshot.Batch`). Several files in one folder become one row
+  ("Photos/summer · 2 of 18 files · 18%"); opening it lists them all. Rows update in place, so an
+  open folder stays open while its files move.
+* **Folder rows in the activity lists.** Three or more uploads, downloads or deletions in one folder,
+  each within 2 minutes of the next, fold into one row ("Photos/summer · 18 files uploaded") that
+  opens to list them. Purely a way of showing the feed: nothing is stored differently.
+* **An Account page** (from the account button): the account's email and how it signed in (the nest
+  now answers these in `/api/me`, from the owner's email or Google account and the way the computer
+  was approved; older servers send nothing and the page falls back to the computer's name), the nest
+  with its version and free space, this computer, three notification switches, and Start over.
+  Signing out and "Manage devices on the web" moved here from Settings.
+* **Notification switches.** "When another computer wants to join", "When something needs your
+  attention", "When a new version of Pairnets is out" (`ClientSettings.Notify*`, all on by default,
+  so nothing changes until someone turns one off). Plain news such as "caught up after being away"
+  always shows. `NotifyPolicy` sorts each notification by its key, in both apps.
+* **Needs attention has an empty state** ("Nothing needs you right now") instead of a blank page.

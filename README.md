@@ -87,13 +87,14 @@ use **Settings → Start over → Reset this app…**: it removes Pairnets' sett
 notes on that computer (and the computer from your nest), never your synced files.
 
 
-Pairnets has a window with a sidebar: **Overview** (status, a picture of this computer, the server
-and your other computer with files moving between them, the current transfer, facts and recent
-activity), **Activity** (by day), **History** (get back deleted files and older versions with one
-click), **Devices**, **Needs attention** and **Settings**. Its icon sits in the notification area (Windows), menu
+Pairnets has a calm window with a strip of icons on the left: **Overview** (a ring that shows how
+far the sync is, this computer, the server and your other computer on one line with the speed, the
+files and folders in progress, recent activity and facts), **Activity** (by day), **History** (get
+back deleted files and older versions with one click), **Devices**, **Needs attention**, your
+**Account** and **Settings**. Its icon sits in the notification area (Windows), menu
 bar (Mac) or system tray (Linux); clicking it opens a small quick panel with the same status at a
 glance. The icon is green when up to date, blue while syncing, grey when offline, orange when it
-needs your decision, red on errors, and yellow when paused. Closing the window keeps Pairnets syncing
+needs your decision, red on errors, and grey when paused. Closing the window keeps Pairnets syncing
 in the background.
 
 ## How it works, in plain words

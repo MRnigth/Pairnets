@@ -33,6 +33,19 @@ public static class Visuals
         _ => ("S.Grey", "I.Info"),
     };
 
+    /// <summary>
+    /// The tray / menu-bar icon's fill for a status key: always the strong (light-theme) colours, so the white
+    /// symbol on it stays readable whatever the theme.
+    /// </summary>
+    public static Color TrayColor(string key) => Color.Parse(key switch
+    {
+        "S.Green" => "#2D7A4B",
+        "S.Blue" => "#2F47C4",
+        "S.Orange" => "#A35400",
+        "S.Red" => "#B42318",
+        _ => "#8A857C",
+    });
+
     public static T? Resource<T>(string key) where T : class =>
         Application.Current?.TryFindResource(key, Application.Current.ActualThemeVariant, out var value) == true ? value as T : null;
 
