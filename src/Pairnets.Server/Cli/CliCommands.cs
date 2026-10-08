@@ -42,7 +42,11 @@ public static class CliCommands
     public static bool IsCliCommand(string[] args) =>
         args.Length > 0 && args[0] is "rescan" or "history" or "devices" or "owner-link" or "--help" or "-h" or "help" or "--version";
 
-    public static async Task<int> RunAsync(string[] args, TextWriter output, TextWriter error)
+    /// <param name="whoOwns">
+    /// Tells who owns the data folder and who runs the command (<see cref="DataDirUser.Probe"/> unless a test
+    /// passes its own). A command run as anyone but the owner stops before it touches a file.
+    /// </param>
+    public static async Task<int> RunAsync(string[] args, TextWriter output, TextWriter error, Func<string, DataDirUser.Users?>? whoOwns = null)
     {
         if (args[0] is "--help" or "-h" or "help")
         {
@@ -93,6 +97,26 @@ public static class CliCommands
             return 2;
         }
 
+        // auth.db and manifest.db belong to the service's user: anyone else (root included) is sent there.
+        var users = (whoOwns ?? DataDirUser.Probe)(options.DataDir);
+        if (DataDirUser.Problem(users, options.DataDir, args) is { } wrongUser)
+        {
+            await error.WriteLineAsync(wrongUser);
+            return 1;
+        }
+        try
+        {
+            return await RunCommandAsync(options, positional, dryRun, ifNew, output, error);
+        }
+        catch (Exception ex) when (!OperatingSystem.IsWindows() && DataDirUser.IsAccessDenied(ex))
+        {
+            await error.WriteLineAsync(DataDirUser.AccessDenied(users, options.DataDir, args));
+            return 1;
+        }
+    }
+
+    private static async Task<int> RunCommandAsync(SyncOptions options, List<string> positional, bool dryRun, bool ifNew, TextWriter output, TextWriter error)
+    {
         using var loggerFactory = LoggerFactory.Create(b => b.AddSimpleConsole(o => o.SingleLine = true).SetMinimumLevel(LogLevel.Warning));
         var paths = new ServerPaths(options.DataDir);
         if (positional is ["devices", ..])
@@ -105,7 +129,7 @@ public static class CliCommands
             paths.EnsureCreated();
             dataLock = SyncStore.AcquireDataDirLock(paths);
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (Exception ex) when (ex is IOException || (ex is UnauthorizedAccessException && OperatingSystem.IsWindows()))
         {
             await error.WriteLineAsync(ex.Message);
             return 3;
