@@ -1,6 +1,6 @@
-using System.Net;
 using Microsoft.AspNetCore.Identity;
 using Pairnets.Server.Storage;
+using Pairnets.Server.Web;
 
 namespace Pairnets.Server.Auth;
 
@@ -51,11 +51,15 @@ public sealed class OwnerAuth(AuthStore store, SyncOptions options, TimeProvider
     public bool IsNestRequest(HttpContext context) =>
         IsSecure(context) && options.PublicHost is { } host && string.Equals(context.Request.Host.Host, host, StringComparison.OrdinalIgnoreCase);
 
-    /// <summary>The request reached the server over HTTPS, directly or through the trusted local proxy (tunnel).</summary>
+    /// <summary>
+    /// The request reached the server over HTTPS, directly or through the trusted local proxy (tunnel). The proxy
+    /// is recognised by <see cref="ProxyClientAddressMiddleware"/>, not by the client address: that middleware has
+    /// already replaced 127.0.0.1 with the browser's own address.
+    /// </summary>
     private bool IsSecure(HttpContext context) =>
         context.Request.IsHttps
         || (options.TrustProxyHeaders
-            && (context.Connection.RemoteIpAddress is null || IPAddress.IsLoopback(context.Connection.RemoteIpAddress))
+            && ProxyClientAddressMiddleware.CameThroughLocalProxy(context)
             && string.Equals(context.Request.Headers["X-Forwarded-Proto"].ToString(), "https", StringComparison.OrdinalIgnoreCase));
 
     /// <summary>

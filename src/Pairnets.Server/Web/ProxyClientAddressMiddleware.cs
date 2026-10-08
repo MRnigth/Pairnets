@@ -7,18 +7,39 @@ namespace Pairnets.Server.Web;
 /// 127.0.0.1, so one stranger trying tokens would make the failure throttle slow down everybody. With
 /// Sync:TrustProxyHeaders the client's real address is taken from CF-Connecting-IP (Cloudflare) or the
 /// last X-Forwarded-For entry, and only on connections from loopback, so nobody else can fake it.
+/// Because the address is replaced, the fact that the connection itself came from this machine is kept
+/// separately (<see cref="CameThroughLocalProxy"/>): the nest's website needs it to believe the proxy's
+/// X-Forwarded-Proto.
 /// </summary>
 public sealed class ProxyClientAddressMiddleware(RequestDelegate next)
 {
     public const string CloudflareHeader = "CF-Connecting-IP";
 
+    /// <summary>
+    /// HttpContext.Items key, set when the connection itself came from this machine (the tunnel or a local
+    /// proxy), before the client address was replaced. Only this middleware sets it; no header can.
+    /// </summary>
+    public const string LocalProxyItem = "pairnets.via-local-proxy";
+
     public Task InvokeAsync(HttpContext context)
     {
         var remote = context.Connection.RemoteIpAddress;
-        if (remote is not null && IsLoopback(remote) && TryGetClientAddress(context.Request.Headers, out var client))
-            context.Connection.RemoteIpAddress = client;
+        // No address at all (in-memory hosts, Unix sockets) is not a network peer either: it counts as local.
+        if (remote is null || IsLoopback(remote))
+        {
+            context.Items[LocalProxyItem] = true;
+            if (remote is not null && TryGetClientAddress(context.Request.Headers, out var client))
+                context.Connection.RemoteIpAddress = client;
+        }
         return next(context);
     }
+
+    /// <summary>
+    /// True when this request's connection came from this machine (the tunnel or a local proxy), whatever
+    /// client address the proxy passed on. Only set while Sync:TrustProxyHeaders is on.
+    /// </summary>
+    public static bool CameThroughLocalProxy(HttpContext context) =>
+        context.Items.TryGetValue(LocalProxyItem, out var value) && value is true;
 
     /// <summary>The client address a local proxy passed on, if it sent a valid one.</summary>
     public static bool TryGetClientAddress(IHeaderDictionary headers, out IPAddress address)
