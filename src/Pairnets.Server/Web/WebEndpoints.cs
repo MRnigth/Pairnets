@@ -68,7 +68,7 @@ public static class WebEndpoints
             {
                 log.LogWarning("A setup link was refused (used, expired or wrong) from {Address}", ctx.Connection.RemoteIpAddress);
                 return Error(StatusCodes.Status400BadRequest, ErrorCodes.BadRequest,
-                    "This setup link was already used or has expired. Make a new one on the server: sudo -u tether /opt/tether/tether-server owner-link");
+                    "This setup link was already used or has expired. Make a new one on the server: sudo -u pairnets /opt/pairnets/pairnets-server owner-link");
             }
             owner.SignIn(ctx, "setup link");
             log.LogInformation("Signed in to the nest's website with a setup link from {Address}", ctx.Connection.RemoteIpAddress);
@@ -243,6 +243,18 @@ public static class WebEndpoints
         var (password, passkeys, email, google) = owner.UsableMethods();
         return new MethodsView(password, passkeys, email, google);
     }
+
+    /// <summary>
+    /// A "go back to this page after signing in" value as a path on this site, or null. Same rule as the
+    /// website's own safeNext: it must start with one "/" (never "//" or "/\", which browsers read as another
+    /// site), so a sign-in can never be bounced somewhere else.
+    /// </summary>
+    internal static string? SafeNextPath(string? value) =>
+        value is ['/', not ('/' or '\\'), ..] && value.Length <= 512
+            && !value.Contains('\\', StringComparison.Ordinal) && !value.Any(char.IsControl)
+            && Uri.TryCreate(value, UriKind.Relative, out _)
+        ? value
+        : null;
 
     /// <summary>Stands for "everyone" in the failure counter: wrong passwords from any address add up here.</summary>
     private static readonly IPAddress AnyAddress = IPAddress.Broadcast;

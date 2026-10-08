@@ -461,7 +461,9 @@ public class DesktopUiTests
 
         var signIn = new SettingsWindow(new ClientSettings { DeviceName = "MacBook" }, null, firstRun: true, autoStart: true);
         signIn.Show();
-        signIn.SignIn!.ShowAddress("nest.pairnets.app", new NestCheck(NestCheckStatus.Found, new Uri("https://nest.pairnets.app/"), null, "Found it (Pairnets server 1.0.80)"));
+        signIn.SignIn!.ShowAddress("nest.pairnets.app", new NestCheck(NestCheckStatus.Found, new Uri("https://nest.pairnets.app/"),
+            new ServerHello("Pairnets", 1, "1.0.80", "https://nest.pairnets.app", true, true, new SignInMethods(true, true, true, true)),
+            "Found it (Pairnets server 1.0.80)"));
         Save(signIn, outDir, $"sign-in-welcome-{suffix}.png");
         signIn.SignIn.ShowAddress("nest.pairnets.app", new NestCheck(NestCheckStatus.Unreachable, new Uri("https://nest.pairnets.app/"), null, "Can't reach it. Check the name, and that this computer is online."));
         Save(signIn, outDir, $"sign-in-unreachable-{suffix}.png");

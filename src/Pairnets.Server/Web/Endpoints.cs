@@ -19,40 +19,22 @@ public static class Endpoints
         app.MapGet("/api/health", () => Results.Text("ok", "text/plain"));
 
         // No sign-in needed: lets an app (or the nest's web page) recognise a Pairnets server and find its HTTPS name.
-        app.MapGet("/api/hello", (SyncOptions options) => Json(new ServerHello(PairnetsInfo.ProductName, PairnetsInfo.ApiVersion,
-            PairnetsInfo.ProductVersion, options.PublicUrl, DeviceKeys: true, SignIn: options.PublicUrl is not null)));
+        // The sign-in ways are told too, so the apps can show matching buttons (the sign-in page lists them anyway).
+        app.MapGet("/api/hello", (SyncOptions options, Auth.OwnerAuth owner) =>
+        {
+            var (password, passkeys, email, google) = owner.UsableMethods();
+            return Json(new ServerHello(PairnetsInfo.ProductName, PairnetsInfo.ApiVersion,
+                PairnetsInfo.ProductVersion, options.PublicUrl, DeviceKeys: true, SignIn: options.PublicUrl is not null,
+                new SignInMethods(password, passkeys > 0, email, google)));
+        });
 
         // Who the server thinks this computer is (the apps adopt a name changed on the nest).
         app.MapGet("/api/me", (HttpContext ctx) => DeviceIdentity.Of(ctx) is { } me
             ? Json(new DeviceMe(me.Id, me.Name, me.Kind == DeviceAuthKind.DeviceKey ? DeviceMe.KindDeviceKey : DeviceMe.KindSharedToken))
             : Error(StatusCodes.Status401Unauthorized, ErrorCodes.Unauthorized, "Not signed in."));
 
-        // A computer set up with the shared token trades it for its own key, silently, at its next start.
-        app.MapPost("/api/devices/upgrade", (HttpContext ctx, DeviceKeys keys, DeviceRegistry devices, DeviceNameRequest? body) =>
-        {
-            if (DeviceIdentity.Of(ctx) is not { Kind: DeviceAuthKind.SharedToken } shared)
-                return Error(StatusCodes.Status409Conflict, ErrorCodes.WrongCredential, "This computer already has its own key.");
-            var name = AuthStore.CleanName(body?.Name) ?? AuthStore.CleanName(shared.Name);
-            if (name is null)
-                return Error(StatusCodes.Status400BadRequest, ErrorCodes.BadRequest, "Send this computer's name.");
-            var (version, system) = DeviceRegistry.ParseClient(ctx.Request.Headers[PairnetsHeaders.Client].ToString());
-            // Asked before but the app never saved its key (it crashed, say): same computer, new key, no "(2)".
-            PairedDevice device;
-            string key;
-            if (keys.Store.FindActiveByName(name) is { ApprovedBy: SharedTokenApproval } earlier && keys.Store.ReplaceKey(earlier.Id) is { } replaced)
-            {
-                (device, key) = (earlier, replaced);
-                keys.Forget(earlier.Id);
-            }
-            else
-            {
-                (device, key) = keys.Store.AddDevice(name, system, SharedTokenApproval);
-            }
-            devices.Adopt(shared.Name, new DeviceIdentity(device.Id, device.Name, DeviceAuthKind.DeviceKey).RegistryKey, device.Name);
-            ctx.RequestServices.GetRequiredService<ILogger<DeviceKeys>>()
-                .LogInformation("{Name} switched from the shared token to its own key (app {Version})", device.Name, version);
-            return Json(new DeviceKeyGrant(device.Id, device.Name, key));
-        });
+        // There used to be a POST /api/devices/upgrade here that traded the shared token for a key with no
+        // one asked. It is gone on purpose: the only way to a key is a person pressing Allow on the nest.
 
         // Remove a computer (the Devices page, or "Sign out of this computer"): its key stops working at once.
         app.MapDelete("/api/devices/{id}", async (string id, HttpContext ctx, DeviceKeys keys, DeviceRegistry devices, IHubContext<SyncHub> hub) =>
@@ -345,9 +327,6 @@ public static class Endpoints
     /// app sent (URL-escaped on the wire so any name fits in a header).
     /// </summary>
     public static string DeviceId(HttpContext ctx) => DeviceIdentity.Of(ctx)?.Name ?? DeviceIdentity.HeaderName(ctx);
-
-    /// <summary>How computers that traded the shared token for their own key were let in (shown on the nest).</summary>
-    public const string SharedTokenApproval = "shared token";
 
     /// <summary>Reads the optional "mtime" (Unix milliseconds). False when it is present but invalid.</summary>
     private static bool TryReadMtime(HttpContext ctx, out long? mtime)

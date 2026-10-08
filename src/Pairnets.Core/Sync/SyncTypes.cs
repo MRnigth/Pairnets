@@ -33,6 +33,9 @@ public enum BlockReason
 
     /// <summary>This computer was removed from the nest, or the shared token it uses was turned off: sign in again.</summary>
     SignedOut,
+
+    /// <summary>Still set up with the shared token although the nest signs computers in: sign in to keep syncing.</summary>
+    SignInRequired,
 }
 
 public enum PassOutcome

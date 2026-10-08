@@ -99,8 +99,13 @@ public sealed record DeviceInfo(
 /// Answer of <c>GET /api/hello</c> (no sign-in needed): "this is a Pairnets server". <see cref="PublicUrl"/> is
 /// the nest's own HTTPS name when it has one; <see cref="DeviceKeys"/> says computers can get their own key.
 /// </summary>
-/// <remarks><see cref="SignIn"/>: new computers can ask to join and be approved on the nest's website.</remarks>
-public sealed record ServerHello(string Product, int ApiVersion, string? ServerVersion, string? PublicUrl, bool DeviceKeys, bool SignIn);
+/// <remarks><see cref="SignIn"/>: new computers can ask to join and be approved on the nest's website.
+/// <see cref="Methods"/> is how the owner can sign in there (null on servers from before it was told).</remarks>
+public sealed record ServerHello(string Product, int ApiVersion, string? ServerVersion, string? PublicUrl, bool DeviceKeys, bool SignIn,
+    SignInMethods? Methods = null);
+
+/// <summary>The ways the owner can sign in on the nest's website (the apps show matching buttons).</summary>
+public sealed record SignInMethods(bool Password, bool Passkeys, bool Email, bool Google);
 
 /// <summary>Answer of <c>GET /api/me</c>: who the server thinks this computer is.</summary>
 public sealed record DeviceMe(string? Id, string Name, string Kind)
@@ -109,10 +114,10 @@ public sealed record DeviceMe(string? Id, string Name, string Kind)
     public const string KindSharedToken = "shared-token";
 }
 
-/// <summary>A computer's own key, returned once (POST /api/devices/upgrade, and pairing later).</summary>
+/// <summary>A computer's own key, handed out exactly once when its sign-in is approved.</summary>
 public sealed record DeviceKeyGrant(string Id, string Name, string Key);
 
-/// <summary>Body of POST /api/devices/upgrade and PATCH /api/devices/me.</summary>
+/// <summary>Body of PATCH /api/devices/me.</summary>
 public sealed record DeviceNameRequest(string? Name);
 
 /// <summary>POST /api/pair/start: a new computer asks to join (no sign-in needed; the owner approves it).</summary>

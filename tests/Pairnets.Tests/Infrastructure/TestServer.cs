@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Pairnets.Core;
 using Pairnets.Core.Api;
 using Pairnets.Server;
 using Pairnets.Server.Storage;
@@ -176,6 +177,18 @@ public sealed class TestServer : IAsyncDisposable
 
     public PairnetsApiClient Client(string device = "test", string? token = null, Uri? url = null) =>
         new(url ?? Url, token ?? Token, device);
+
+    /// <summary>
+    /// A computer's own key, as Allow on the nest would mint it, written straight into the store and
+    /// the device list: no endpoint hands out keys any more, so tests that just need one start here.
+    /// </summary>
+    public DeviceKeyGrant MintKey(string name)
+    {
+        var (device, key) = Services.GetRequiredService<Pairnets.Server.Auth.DeviceKeys>().Store.AddDevice(name, "test", "test");
+        var identity = new Pairnets.Server.Web.DeviceIdentity(device.Id, device.Name, Pairnets.Server.Web.DeviceAuthKind.DeviceKey);
+        Services.GetRequiredService<Pairnets.Server.Services.DeviceRegistry>().Seen(identity.RegistryKey, device.Name, null);
+        return new DeviceKeyGrant(device.Id, device.Name, key);
+    }
 
     public HttpClient RawHttp(string? token = null)
     {

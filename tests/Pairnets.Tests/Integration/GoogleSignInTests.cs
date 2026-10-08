@@ -109,6 +109,28 @@ public sealed class GoogleSignInTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task SigningInWithGoogleComesBackToThePageItLeft()
+    {
+        using var owner = await SignedIn();
+        var connect = await Start(owner, "auth/google/start?purpose=connect");
+        GoogleAnswers(connect);
+        await Callback(owner, connect);
+
+        // "Continue with Google" pressed in the app: the approval page sends its own address along.
+        using var same = _server.WebBrowser();
+        var signIn = await Start(same, "auth/google/start?next=" + Uri.EscapeDataString("/link?code=KQ7M-4PXD&method=google"));
+        GoogleAnswers(signIn);
+        Assert.Equal("/link?code=KQ7M-4PXD&method=google", await Callback(same, signIn));
+        Assert.True((await State(same)).SignedIn);
+
+        // Anything that is not a path on this site is dropped.
+        using var other = _server.WebBrowser();
+        var crooked = await Start(other, "auth/google/start?next=" + Uri.EscapeDataString("https://evil.example/"));
+        GoogleAnswers(crooked);
+        Assert.Equal("/devices", await Callback(other, crooked));
+    }
+
+    [Fact]
     public async Task ADifferentGoogleAccountDoesNotGetIn()
     {
         using var owner = await SignedIn();

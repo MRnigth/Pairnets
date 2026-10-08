@@ -22,7 +22,7 @@ public sealed partial class AuthStore
     /// <summary>How long a browser stays signed in without visiting.</summary>
     public static readonly TimeSpan SessionLifetime = TimeSpan.FromDays(30);
 
-    /// <summary>How long a setup link printed by "tether-server owner-link" works (once).</summary>
+    /// <summary>How long a setup link printed by "pairnets-server owner-link" works (once).</summary>
     public static readonly TimeSpan SetupLinkLifetime = TimeSpan.FromHours(24);
 
     // ------------------------------------------------------------------ password
@@ -124,7 +124,7 @@ public sealed partial class AuthStore
 
     // ------------------------------------------------------------------ setup links
 
-    /// <summary>A one-time code for the nest's setup page (printed by "tether-server owner-link" and install.sh).</summary>
+    /// <summary>A one-time code for the nest's setup page (printed by "pairnets-server owner-link" and install.sh).</summary>
     public string CreateSetupCode()
     {
         var code = Base64Url(RandomNumberGenerator.GetBytes(24));

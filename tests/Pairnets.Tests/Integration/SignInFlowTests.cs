@@ -124,14 +124,16 @@ public sealed class SignInFlowTests : IAsyncLifetime
     {
         using var folder = new TempDir("join-folder");
         using var stateBase = new TempDir("join-state");
+        var desktop = _server.MintKey("DESKTOP"); // a computer that is already signed in hears about newcomers
         await using var session = ClientSession.Start(new Pairnets.Core.Settings.ClientSettings
         {
             ServerUrl = _server.Url.ToString(),
             ProtectedToken = "unused",
             Folder = folder.Path,
             DeviceName = "DESKTOP",
+            DeviceId = desktop.Id,
             FirstRunCompleted = true,
-        }, _server.Token, new Pairnets.Core.Sync.PermanentDeleteTrash(), stateBaseDir: stateBase.Path,
+        }, desktop.Key, new Pairnets.Core.Sync.PermanentDeleteTrash(), stateBaseDir: stateBase.Path,
             runnerOptions: o => new Pairnets.Core.Sync.RunnerOptions { ServerUrl = o.ServerUrl, Token = o.Token, DeviceId = o.DeviceId, PeriodicInterval = TimeSpan.FromHours(1) });
         var heard = new TaskCompletionSource<JoinRequest>(TaskCreationOptions.RunContinuationsAsynchronously);
         session.JoinRequested += r => heard.TrySetResult(r);

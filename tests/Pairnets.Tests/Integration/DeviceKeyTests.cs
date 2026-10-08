@@ -28,11 +28,7 @@ public sealed class DeviceKeyTests : IAsyncLifetime
     private static async Task<string?> Code(HttpResponseMessage resp) =>
         (await resp.Content.ReadFromJsonAsync<ErrorBody>(PairnetsJson.Options))?.Code;
 
-    private async Task<DeviceKeyGrant> Upgrade(string name)
-    {
-        using var shared = _server.Client(name);
-        return await shared.GetOwnKeyAsync(name, CancellationToken.None);
-    }
+    private DeviceKeyGrant Approve(string name) => _server.MintKey(name);
 
     [Fact]
     public async Task HelloNeedsNoSignInAndSaysWhatTheServerOffers()
@@ -45,12 +41,14 @@ public sealed class DeviceKeyTests : IAsyncLifetime
         Assert.Equal("Pairnets", hello!.Product);
         Assert.Equal("https://nest.example.test", hello.PublicUrl);
         Assert.True(hello.DeviceKeys);
+        // A fresh nest has no way to sign in set up yet; the apps show buttons from this.
+        Assert.Equal(new SignInMethods(false, false, false, false), hello.Methods);
     }
 
     [Fact]
-    public async Task ASharedTokenComputerGetsItsOwnKeyAndUsesIt()
+    public async Task AComputersOwnKeyWorksAndSaysWhoItIs()
     {
-        var grant = await Upgrade("LAPTOP");
+        var grant = Approve("LAPTOP");
 
         Assert.StartsWith("pn_", grant.Key);
         Assert.Equal("LAPTOP", grant.Name);
@@ -61,21 +59,19 @@ public sealed class DeviceKeyTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task AskingAgainGivesTheSameComputerANewKey()
+    public async Task NoEndpointHandsOutKeysWithoutAPerson()
     {
-        var first = await Upgrade("LAPTOP");
-        var second = await Upgrade("LAPTOP"); // the app crashed before saving the first one
-
-        Assert.Equal(first.Id, second.Id);
-        Assert.Equal("LAPTOP", second.Name);
-        using var old = _server.Client("LAPTOP", first.Key);
-        await Assert.ThrowsAsync<PairnetsAuthException>(() => old.GetInfoAsync(CancellationToken.None));
+        // The silent POST /api/devices/upgrade is gone: Allow on the nest is the only way to a key.
+        // (The path now only matches DELETE /api/devices/{id}, so a POST gets "method not allowed".)
+        using var shared = _server.RawHttp(_server.Token);
+        var gone = await shared.PostAsJsonAsync("api/devices/upgrade", new DeviceNameRequest("LAPTOP"), PairnetsJson.Options);
+        Assert.Equal(HttpStatusCode.MethodNotAllowed, gone.StatusCode);
     }
 
     [Fact]
     public async Task AComputerWithItsOwnKeyCannotPretendToBeAnother()
     {
-        var grant = await Upgrade("LAPTOP");
+        var grant = Approve("LAPTOP");
         using var own = _server.Client("DESKTOP", grant.Key);
         using var sync = new MemoryStream("x"u8.ToArray());
 
@@ -85,16 +81,13 @@ public sealed class DeviceKeyTests : IAsyncLifetime
         Assert.Contains(devices!, d => d.Name == "LAPTOP" && d.Id == grant.Id && d.LastChange is not null);
         Assert.DoesNotContain(devices!, d => d.Name == "DESKTOP");
         Assert.Equal(DeviceMe.KindDeviceKey, (await own.GetMeAsync(CancellationToken.None))!.Kind);
-        // Its key is not the shared token: it cannot ask for another one.
-        var again = await own.GetOwnKeyAsync("LAPTOP", CancellationToken.None).ContinueWith(t => t.Exception?.InnerException);
-        Assert.IsType<PairnetsProtocolException>(again);
     }
 
     [Fact]
     public async Task ARemovedComputerIsToldSoAndDropsOutOfTheList()
     {
-        var laptop = await Upgrade("LAPTOP");
-        var desktop = await Upgrade("DESKTOP");
+        var laptop = Approve("LAPTOP");
+        var desktop = Approve("DESKTOP");
         using var laptopApi = _server.Client("LAPTOP", laptop.Key);
         using var desktopApi = _server.Client("DESKTOP", desktop.Key);
         await laptopApi.GetInfoAsync(CancellationToken.None);
@@ -113,8 +106,8 @@ public sealed class DeviceKeyTests : IAsyncLifetime
     [Fact]
     public async Task ARemovedComputerHearsAboutItAndItsPushChannelIsClosed()
     {
-        var laptop = await Upgrade("LAPTOP");
-        var desktop = await Upgrade("DESKTOP");
+        var laptop = Approve("LAPTOP");
+        var desktop = Approve("DESKTOP");
         var removedMessage = new TaskCompletionSource<(string Id, string Name)>(TaskCreationOptions.RunContinuationsAsynchronously);
         var closed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         await using var hub = new HubConnectionBuilder()
@@ -140,7 +133,7 @@ public sealed class DeviceKeyTests : IAsyncLifetime
     [Fact]
     public async Task TurningOffTheSharedTokenLeavesOnlyOwnKeys()
     {
-        var grant = await Upgrade("LAPTOP");
+        var grant = Approve("LAPTOP");
         Keys.AllowSharedToken = false;
 
         using var shared = _server.Client("DESKTOP");
@@ -156,8 +149,8 @@ public sealed class DeviceKeyTests : IAsyncLifetime
     [Fact]
     public async Task RenamingKeepsNamesUniqueAndTellsTheOthers()
     {
-        var laptop = await Upgrade("LAPTOP");
-        var desktop = await Upgrade("DESKTOP");
+        var laptop = Approve("LAPTOP");
+        var desktop = Approve("DESKTOP");
         using var desktopApi = _server.Client("DESKTOP", desktop.Key);
 
         var renamed = await desktopApi.RenameThisDeviceAsync("laptop", CancellationToken.None);
@@ -172,7 +165,7 @@ public sealed class DeviceKeyTests : IAsyncLifetime
     [Fact]
     public async Task KeysAreNeverLogged()
     {
-        var grant = await Upgrade("LAPTOP");
+        var grant = Approve("LAPTOP");
         using var own = _server.Client("LAPTOP", grant.Key);
         await own.GetInfoAsync(CancellationToken.None);
         using var anon = _server.RawHttp();
@@ -190,7 +183,7 @@ public sealed class DeviceKeyTests : IAsyncLifetime
             .OfType<RouteEndpoint>()
             .Select(e => (Pattern: "/" + e.RoutePattern.RawText!.TrimStart('/'), Methods: e.Metadata.GetMetadata<Microsoft.AspNetCore.Routing.HttpMethodMetadata>()?.HttpMethods ?? ["GET"]))
             .ToList();
-        Assert.Contains(routes, r => r.Pattern == "/api/devices/upgrade");
+        Assert.DoesNotContain(routes, r => r.Pattern == "/api/devices/upgrade"); // keys only come from Allow on the nest
         using var anonymous = _server.RawHttp();
         var throttle = _server.Services.GetRequiredService<FailureThrottle>();
 
@@ -211,10 +204,44 @@ public sealed class DeviceKeyTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task ASessionOnTheSharedTokenSwitchesToItsOwnKeyByItself()
+    public async Task ASharedTokenSessionStopsUntilAPersonSignsItIn()
     {
-        using var folder = new TempDir("upgrade");
-        using var stateBase = new TempDir("upgrade-state");
+        // The nest has its own name, so it can sign computers in: no key arrives silently any more.
+        await using var server = await TestServer.StartAsync(config: new() { ["Sync:PublicUrl"] = "https://nest.example.test" });
+        using var folder = new TempDir("needs-signin");
+        using var stateBase = new TempDir("needs-signin-state");
+        await File.WriteAllTextAsync(Path.Combine(folder.Path, "kept.txt"), "untouched");
+        var settings = new ClientSettings
+        {
+            ServerUrl = server.Url.ToString(),
+            ProtectedToken = "unused",
+            Folder = folder.Path,
+            DeviceName = "MAC",
+            FirstRunCompleted = true,
+        };
+        await using var session = ClientSession.Start(settings, server.Token, new PermanentDeleteTrash(), stateBaseDir: stateBase.Path,
+            runnerOptions: o => new RunnerOptions { ServerUrl = o.ServerUrl, Token = o.Token, DeviceId = o.DeviceId, PeriodicInterval = TimeSpan.FromHours(1) });
+        var changed = false;
+        session.AccountChanged += (_, _) => changed = true;
+
+        await session.CheckAccountAsync(await session.Api.GetInfoAsync(CancellationToken.None));
+
+        await WaitUntil(() => session.Status is { BlockReason: BlockReason.SignInRequired, Status: RunnerStatus.Blocked }, "sign-in stop",
+            () => $"{session.Status.Status} {session.Status.BlockReason} {session.Status.Text}");
+        var status = session.Status;
+        Assert.Equal("Sign in to your nest", status.Headline);
+        Assert.Equal("Sign in with your browser…", status.FixLabel);
+        Assert.False(changed); // no key was fetched behind the owner's back
+        Assert.False(settings.HasOwnKey); // settings and folder stay exactly as they were
+        Assert.Equal("untouched", await File.ReadAllTextAsync(Path.Combine(folder.Path, "kept.txt")));
+    }
+
+    [Fact]
+    public async Task ASharedTokenSessionAgainstAServerWithoutSignInKeepsSyncing()
+    {
+        // This nest has no name of its own yet, so there is nothing to sign in to: the shared token still works.
+        using var folder = new TempDir("old-server");
+        using var stateBase = new TempDir("old-server-state");
         var settings = new ClientSettings
         {
             ServerUrl = _server.Url.ToString(),
@@ -225,25 +252,17 @@ public sealed class DeviceKeyTests : IAsyncLifetime
         };
         await using var session = ClientSession.Start(settings, _server.Token, new PermanentDeleteTrash(), stateBaseDir: stateBase.Path,
             runnerOptions: o => new RunnerOptions { ServerUrl = o.ServerUrl, Token = o.Token, DeviceId = o.DeviceId, PeriodicInterval = TimeSpan.FromHours(1) });
-        var changed = new TaskCompletionSource<(ClientSettings Settings, string Key)>(TaskCreationOptions.RunContinuationsAsynchronously);
-        session.AccountChanged += (next, key) => changed.TrySetResult((next, key));
 
         await session.CheckAccountAsync(await session.Api.GetInfoAsync(CancellationToken.None));
-        var (next, key) = await changed.Task.WaitAsync(TimeSpan.FromSeconds(10));
 
-        Assert.StartsWith("pn_", key);
-        Assert.Equal("MAC", next.DeviceName);
-        Assert.True(next.HasOwnKey);
-        Assert.False(settings.HasOwnKey); // the running session's settings are untouched until the app saves them
-        Assert.Equal(_server.Url.ToString(), next.ServerUrl); // no HTTPS name: stays where it is
-        using var own = _server.Client("MAC", key);
-        Assert.Equal(next.DeviceId, (await own.GetMeAsync(CancellationToken.None))!.Id);
+        Assert.False(session.Engine.SignInRequired);
+        await WaitUntil(() => session.Status.Status == RunnerStatus.Idle, "first pass");
     }
 
     [Fact]
     public async Task ARemovedComputerStopsWithSignInAgain()
     {
-        var grant = await Upgrade("MAC");
+        var grant = Approve("MAC");
         using var folder = new TempDir("removed");
         using var stateBase = new TempDir("removed-state");
         await using var session = ClientSession.Start(new ClientSettings
@@ -272,8 +291,8 @@ public sealed class DeviceKeyTests : IAsyncLifetime
     [Fact]
     public async Task SavingSettingsKeepsTheKeyAndSendsANewNameToTheNest()
     {
-        var laptop = await Upgrade("LAPTOP");
-        await Upgrade("DESK");
+        var laptop = Approve("LAPTOP");
+        Approve("DESK");
         var original = new ClientSettings { ServerUrl = _server.Url.ToString(), DeviceName = "LAPTOP", DeviceId = laptop.Id };
 
         Assert.Equal((laptop.Id, "LAPTOP"), await OwnKey.CarryOverAsync(original, _server.Url, laptop.Key, tokenTyped: false, "LAPTOP"));

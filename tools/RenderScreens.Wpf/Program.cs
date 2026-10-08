@@ -196,7 +196,9 @@ public static class Program
 
         var signIn = new SettingsWindow(new ClientSettings { DeviceName = "DESKTOP" }, new NoProtector(), firstRun: true);
         Place(signIn);
-        signIn.SignIn!.ShowAddress("nest.pairnets.app", new NestCheck(NestCheckStatus.Found, new Uri("https://nest.pairnets.app/"), null, "Found it (Pairnets server 1.0.80)"));
+        signIn.SignIn!.ShowAddress("nest.pairnets.app", new NestCheck(NestCheckStatus.Found, new Uri("https://nest.pairnets.app/"),
+            new ServerHello("Pairnets", 1, "1.0.80", "https://nest.pairnets.app", true, true, new SignInMethods(true, true, true, true)),
+            "Found it (Pairnets server 1.0.80)"));
         Save(signIn, outDir, $"windows-sign-in-welcome-{suffix}.png", print);
         signIn.SignIn.ShowPairing(new PairingState(PairingStage.Waiting, "KQ7M-4PXD", "https://nest.pairnets.app/link?code=KQ7M-4PXD",
             DateTimeOffset.UtcNow.AddMinutes(9).AddSeconds(41)), openBrowser: false);

@@ -276,3 +276,22 @@ what cannot lose or silently overwrite data.
 * **No old file names in releases** (your choice). Tether apps and servers look for `TetherSetup.exe`,
   `tether-server-linux-x64.tar.gz` and so on, so they can't update themselves into Pairnets. Each
   machine gets Pairnets by hand once, and the migration then happens on its own.
+
+## Sign-in is required, not silent (your choice)
+
+* **The silent key upgrade is gone.** Computers set up before per-computer keys used to trade the
+  shared token for their own key in the background (`POST /api/devices/upgrade`), so they never saw
+  a sign-in screen. You asked for the opposite: on a nest that can sign computers in, such a computer
+  now stops syncing with "Sign in to your nest" and a person signs it in through the browser. The
+  endpoint was removed entirely — the only way to a key is Allow on the nest. Files, folder and
+  settings stay untouched while it waits; against an old server without sign-in the shared token
+  keeps working, because there is nothing to sign in to.
+* **The sign-in screen leads with Google and email** (styled after Claude's sign-in: "Continue with
+  Google", or, an email box with "Continue with email"), with "More ways to sign in in your browser"
+  for password and passkey. The buttons only show what the nest actually offers; `/api/hello` now
+  says which ways are set up. The chosen way rides in the approval link (`&method=google`), and the
+  nest's sign-in page starts that way by itself; a `next` path (checked to be a path on this site,
+  on the server too) rides through Google's OAuth state and the email link's fragment so the browser
+  lands back on the approval page. The email typed in the app is only compared against the owner's
+  saved address — the link always goes to the saved address, and the answer never says whether they
+  matched, so nothing leaks and no stranger gets mail.

@@ -85,6 +85,33 @@ public sealed class EmailLinkTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task TheAddressTypedInTheAppMustBeTheOwnersAndTheLinkCarriesTheWayBack()
+    {
+        using var owner = await SignedIn();
+        await ConfirmAddress(owner, "you@example.com");
+        using var app = _server.WebBrowser();
+
+        // Someone else's address (or a typo) sends nothing anywhere, and the answer does not say so.
+        Assert.Equal(HttpStatusCode.NoContent,
+            (await app.PostAsJsonAsync("web/api/signin/email/request", new { email = "wrong@example.com", next = "/link?code=KQ7M-4PXD" })).StatusCode);
+        Assert.Single(_mail.Messages); // still only the confirmation mail from the setup above
+
+        // The owner's own address (however it is cased) gets the link; the way back rides in the fragment, like the code.
+        Assert.Equal(HttpStatusCode.NoContent,
+            (await app.PostAsJsonAsync("web/api/signin/email/request", new { email = "You@Example.COM", next = "/link?code=KQ7M-4PXD" })).StatusCode);
+        var link = _mail.Messages[^1];
+        Assert.Equal(("you@example.com", "Your Pairnets sign-in link"), (link.To, link.Subject));
+        Assert.EndsWith("&next=%2Flink%3Fcode%3DKQ7M-4PXD", link.Link);
+        Assert.NotEqual(string.Empty, link.Code);
+        Assert.DoesNotContain("&", link.Code, StringComparison.Ordinal);
+
+        // Only a path on this site may ride along; anything else is dropped.
+        Assert.Equal(HttpStatusCode.NoContent,
+            (await app.PostAsJsonAsync("web/api/signin/email/request", new { email = "you@example.com", next = "https://evil.example/" })).StatusCode);
+        Assert.DoesNotContain("next=", _mail.Messages[^1].Link, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task OnlyAFewEmailsAreSentPerHour()
     {
         using var owner = await SignedIn();

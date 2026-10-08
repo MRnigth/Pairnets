@@ -37,7 +37,7 @@ public sealed class GoogleSignIn
     private readonly HttpClient _http;
     private readonly ConcurrentDictionary<string, Pending> _pending = new(StringComparer.Ordinal);
 
-    private sealed record Pending(string Purpose, string Verifier, string Nonce, string? SessionId, DateTimeOffset Expires);
+    private sealed record Pending(string Purpose, string Verifier, string Nonce, string? SessionId, string? Next, DateTimeOffset Expires);
 
     public GoogleSignIn(SyncOptions options, TimeProvider? clock = null, HttpMessageHandler? handler = null)
     {
@@ -48,8 +48,11 @@ public sealed class GoogleSignIn
 
     public string RedirectUri => $"{_options.PublicUrl}/auth/google/callback";
 
-    /// <summary>Where to send the browser: Google's sign-in page, with a one-time state, PKCE challenge and nonce.</summary>
-    public Uri Start(string purpose, string? sessionId)
+    /// <summary>
+    /// Where to send the browser: Google's sign-in page, with a one-time state, PKCE challenge and nonce.
+    /// <paramref name="next"/> is a path on the nest to go back to afterwards (already checked by the caller).
+    /// </summary>
+    public Uri Start(string purpose, string? sessionId, string? next = null)
     {
         var now = _clock.GetUtcNow();
         foreach (var (key, value) in _pending)
@@ -62,7 +65,7 @@ public sealed class GoogleSignIn
         var state = WebAuthnVerifier.ToBase64Url(RandomNumberGenerator.GetBytes(18));
         var verifier = WebAuthnVerifier.ToBase64Url(RandomNumberGenerator.GetBytes(32));
         var nonce = WebAuthnVerifier.ToBase64Url(RandomNumberGenerator.GetBytes(18));
-        _pending[state] = new Pending(purpose, verifier, nonce, sessionId, now + StateLifetime);
+        _pending[state] = new Pending(purpose, verifier, nonce, sessionId, next, now + StateLifetime);
         var challenge = WebAuthnVerifier.ToBase64Url(SHA256.HashData(Encoding.ASCII.GetBytes(verifier)));
         var query = new Dictionary<string, string>
         {
@@ -82,9 +85,10 @@ public sealed class GoogleSignIn
 
     /// <summary>
     /// Finishes the flow: checks the state, swaps the code for Google's identity token, and checks that. Returns the
-    /// purpose the flow was started for, the session it belongs to (connecting needs the signed-in browser) and the account.
+    /// purpose the flow was started for, the session it belongs to (connecting needs the signed-in browser), the
+    /// path to go back to, and the account.
     /// </summary>
-    public async Task<(string Purpose, string? SessionId, GoogleIdentity Identity)> FinishAsync(string? state, string? code, CancellationToken ct)
+    public async Task<(string Purpose, string? SessionId, string? Next, GoogleIdentity Identity)> FinishAsync(string? state, string? code, CancellationToken ct)
     {
         if (string.IsNullOrEmpty(state) || !_pending.TryRemove(state, out var pending) || pending.Expires <= _clock.GetUtcNow())
             throw new GoogleSignInException("expired", "This Google sign-in expired. Try again.");
@@ -111,7 +115,7 @@ public sealed class GoogleSignIn
         {
             throw new GoogleSignInException("failed", "Could not reach Google from the server. Try again.");
         }
-        return (pending.Purpose, pending.SessionId, ReadIdToken(token?.IdToken, pending.Nonce));
+        return (pending.Purpose, pending.SessionId, pending.Next, ReadIdToken(token?.IdToken, pending.Nonce));
     }
 
     private GoogleIdentity ReadIdToken(string? idToken, string nonce)

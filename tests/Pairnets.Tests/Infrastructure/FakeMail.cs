@@ -14,7 +14,7 @@ public sealed class FakeEmailSender : IEmailSender
         /// <summary>The sign-in link in the message, and the code after "#code=".</summary>
         public string Link => Regex.Match(Text, @"https://\S+/email-link#code=\S+").Value;
 
-        public string Code => Link[(Link.IndexOf("#code=", StringComparison.Ordinal) + 6)..];
+        public string Code => Link[(Link.IndexOf("#code=", StringComparison.Ordinal) + 6)..].Split('&')[0];
     }
 
     private readonly List<Sent> _messages = [];

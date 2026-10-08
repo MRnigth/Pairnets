@@ -330,7 +330,9 @@ public sealed class TrayController : ITrayActions, IDisposable
         if (result.Outcome == PassOutcome.Blocked)
         {
             var deletions = result.BlockReason is BlockReason.MassDelete or BlockReason.FolderEmpty;
-            var title = deletions ? "Deletions blocked" : result.BlockReason == BlockReason.SignedOut ? "Signed out of your nest" : "Pairnets paused syncing";
+            var title = deletions ? "Deletions blocked"
+                : result.BlockReason == BlockReason.SignedOut ? "Signed out of your nest"
+                : result.BlockReason == BlockReason.SignInRequired ? "Sign in to your nest" : "Pairnets paused syncing";
             Toast("blocked:" + result.BlockReason, title, result.Message ?? result.BlockReason.ToString(),
                 result.BlockReason == BlockReason.SignedOut ? Forms.ToolTipIcon.Error : Forms.ToolTipIcon.Warning, FixBlocked);
         }
@@ -483,6 +485,7 @@ public sealed class TrayController : ITrayActions, IDisposable
                 LocateFolder(status.Text);
                 break;
             case BlockReason.SignedOut:
+            case BlockReason.SignInRequired:
                 ShowSettings(firstRun: true);
                 break;
         }
@@ -525,7 +528,8 @@ public sealed class TrayController : ITrayActions, IDisposable
             ShowMainWindow(MainPage.Settings);
             return;
         }
-        var window = new SettingsWindow(_settings, _protector, firstRun: true, _updates, _session?.Status.ServerVersionText, Shell);
+        var window = new SettingsWindow(_settings, _protector, firstRun: true, _updates, _session?.Status.ServerVersionText, Shell,
+            _session?.Status.NestUrl);
         if (window.ShowDialog() != true || window.Result is null)
             return;
         ApplySettings(window.Result, window.PlainToken);

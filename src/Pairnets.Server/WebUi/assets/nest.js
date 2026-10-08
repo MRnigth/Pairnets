@@ -282,19 +282,28 @@
     }
     const problem = GOOGLE_PROBLEMS[new URLSearchParams(location.search).get("error")];
     if (problem) showError(new Error(problem));
-    $("email-signin").addEventListener("click", async () => {
-      const button = $("email-signin");
-      setBusy(button, true);
+    // The way back rides along to Google (in its state) and into the email link, so both land here again.
+    $("google-signin").href = "/auth/google/start?next=" + encodeURIComponent(next);
+    // A button pressed in the app ("Continue with Google / email" on its sign-in screen) rides in next's
+    // own query; the page then starts that way by itself instead of asking twice.
+    const hint = (() => {
+      try { return new URL(next, location.origin).searchParams; } catch { return new URLSearchParams(); }
+    })();
+    const requestEmailLink = async (button) => {
+      if (button) setBusy(button, true);
       showError(null);
       try {
-        await api("POST", "/signin/email/request");
+        await api("POST", "/signin/email/request", { email: hint.get("email") || undefined, next });
         showNotice("Check your inbox. The link works once, for 15 minutes.");
       } catch (error) {
         showError(error);
       } finally {
-        setBusy(button, false);
+        if (button) setBusy(button, false);
       }
-    });
+    };
+    $("email-signin").addEventListener("click", () => requestEmailLink($("email-signin")));
+    if (hint.get("method") === "google" && state.methods.google && !problem) return location.replace($("google-signin").href);
+    if (hint.get("method") === "email" && state.methods.email) await requestEmailLink(null);
     $("passkey-signin").addEventListener("click", async () => {
       const button = $("passkey-signin");
       setBusy(button, true);
@@ -743,7 +752,10 @@
   // ------------------------------------------------------------------ email link
 
   async function emailLinkPage() {
-    const code = new URLSearchParams(location.hash.slice(1)).get("code");
+    const params = new URLSearchParams(location.hash.slice(1));
+    const code = params.get("code");
+    // Back to the page the sign-in left (approving a computer, say); only a path on this site counts.
+    const next = safeNext(params.get("next")) || "/devices";
     // The code is in the fragment so neither a mail scanner nor a server log ever sees it.
     if (location.hash) history.replaceState(null, "", location.pathname);
     if (!code) {
@@ -758,7 +770,7 @@
       showError(null);
       try {
         await api("POST", "/signin/email/confirm", { code });
-        location.replace("/devices");
+        location.replace(next);
       } catch (error) {
         showError(error);
         setBusy(button, false);

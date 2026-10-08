@@ -87,7 +87,7 @@ public static class PairnetsServerHost
         store.UploadStallTimeout = options.UploadStallTimeout;
         store.Initialize();
         var auth = app.Services.GetRequiredService<AuthStore>(); // opens (or creates) auth.db now, so a problem stops the start
-        // "tether-server owner-link" runs without the service's environment; it reads the nest's address from here.
+        // "pairnets-server owner-link" runs without the service's environment; it reads the nest's address from here.
         if (options.PublicUrl is { } publicUrl)
             auth.SetSetting(AuthStore.SettingPublicUrl, publicUrl);
         else

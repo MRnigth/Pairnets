@@ -27,24 +27,30 @@ public partial class SignInView : UserControl
     private NestCheck? _check;
     private PairingState? _state;
     private Uri? _nest;
+    private string? _method;
+    private string? _email;
     private bool _browserOpened;
     private bool _quiet;
 
-    public SignInView(ClientSettings current, ISecretProtector? protector, Action<string> openUrl)
+    public SignInView(ClientSettings current, ISecretProtector? protector, Action<string> openUrl, string? nestHint = null)
     {
         InitializeComponent();
         _current = current;
         _protector = protector;
         _openUrl = openUrl;
         AppIcon.Source = AppIcons.Large;
-        NameBox.Text = current.DeviceName ?? Environment.MachineName;
         FolderBox.Text = current.Folder ?? string.Empty;
         AutoStartBox.IsChecked = current.StartWithWindows || !current.FirstRunCompleted;
-        AddressBox.Text = SuggestedAddress(current);
+        AddressBox.Text = SuggestedAddress(current, nestHint);
         AddressBox.TextChanged += (_, _) =>
         {
             if (!_quiet)
                 CheckSoon();
+        };
+        EmailBox.TextChanged += (_, _) =>
+        {
+            EmailHint.Visibility = EmailBox.Text.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
+            EmailButton.IsEnabled = _check is { CanSignIn: true } && Nest.LooksLikeEmail(EmailBox.Text);
         };
         _clock.Tick += (_, _) => DrawWaiting();
         Unloaded += (_, _) =>
@@ -65,11 +71,16 @@ public partial class SignInView : UserControl
 
     private Window? Owner => Window.GetWindow(this);
 
-    /// <summary>The nest this computer used before (signing in again), as people type it.</summary>
-    private static string SuggestedAddress(ClientSettings current) =>
+    /// <summary>
+    /// The nest this computer used before (signing in again), as people type it. An old install may still
+    /// point at a plain address; the nest's own name, learned while syncing, then fills the field instead.
+    /// </summary>
+    private static string SuggestedAddress(ClientSettings current, string? nestHint) =>
         Uri.TryCreate(current.ServerUrl, UriKind.Absolute, out var url) && url.Scheme == Uri.UriSchemeHttps
             ? url.IsDefaultPort ? url.Host : url.Authority
-            : string.Empty;
+            : Uri.TryCreate(nestHint, UriKind.Absolute, out var nest) && nest.Scheme == Uri.UriSchemeHttps
+                ? nest.IsDefaultPort ? nest.Host : nest.Authority
+                : string.Empty;
 
     // ------------------------------------------------------------------ 1. which nest
 
@@ -77,7 +88,8 @@ public partial class SignInView : UserControl
     {
         _checking?.Cancel();
         var cts = _checking = new CancellationTokenSource();
-        SignInButton.IsEnabled = false;
+        _check = null;
+        DrawMethods();
         var text = AddressBox.Text;
         _ = Task.Run(async () =>
         {
@@ -129,29 +141,59 @@ public partial class SignInView : UserControl
         CheckIcon.Stroke = Visuals.Resource<Brush>(brush);
         CheckText.Foreground = check.Status == NestCheckStatus.Found ? Visuals.Resource<Brush>("S.Green")
             : check.Status == NestCheckStatus.Empty ? Visuals.Resource<Brush>("T.Muted") : Visuals.Resource<Brush>("T.Text");
-        SignInButton.IsEnabled = check.CanSignIn;
+        DrawMethods();
     }
 
-    private void OnSignIn(object sender, RoutedEventArgs e)
+    /// <summary>Shows the ways into the nest that was found: Google, email, and the browser for the rest.</summary>
+    private void DrawMethods()
+    {
+        var can = _check is { CanSignIn: true };
+        var methods = _check?.Hello?.Methods;
+        var google = can && methods?.Google == true;
+        var email = can && methods?.Email == true;
+        GoogleButton.Visibility = google ? Visibility.Visible : Visibility.Collapsed;
+        GoogleButton.IsEnabled = google;
+        OrRow.Visibility = google && email ? Visibility.Visible : Visibility.Collapsed;
+        EmailPanel.Visibility = email ? Visibility.Visible : Visibility.Collapsed;
+        EmailBox.IsEnabled = email;
+        EmailButton.IsEnabled = email && Nest.LooksLikeEmail(EmailBox.Text);
+        // With no button of its own on show, the browser is the one way in and takes the accent.
+        BrowserButton.Content = google || email ? "More ways to sign in in your browser" : "Sign in with your browser";
+        BrowserButton.Style = Visuals.Resource<Style>(google || email ? "SubtleButton" : "AccentButton");
+        BrowserButton.IsEnabled = can;
+    }
+
+    private void OnSignIn(object sender, RoutedEventArgs e) => StartChecked(null, null);
+
+    private void OnGoogle(object sender, RoutedEventArgs e) => StartChecked("google", null);
+
+    private void OnEmail(object sender, RoutedEventArgs e)
+    {
+        if (Nest.LooksLikeEmail(EmailBox.Text))
+            StartChecked("email", EmailBox.Text.Trim());
+    }
+
+    private void StartChecked(string? method, string? email)
     {
         if (_check is not { CanSignIn: true, Url: { } url })
             return;
         _nest = url;
-        StartFlow(url, ThisName());
+        StartFlow(url, ThisName(), method, email);
     }
 
-    private string ThisName() => string.IsNullOrWhiteSpace(NameBox.Text) ? Environment.MachineName : NameBox.Text.Trim();
+    private string ThisName() => _current.DeviceName ?? Environment.MachineName;
 
     private void OnAdvanced(object sender, RoutedEventArgs e) => AdvancedRequested?.Invoke();
 
     // ------------------------------------------------------------------ 2. waiting for approval
 
-    private void StartFlow(Uri url, string name)
+    private void StartFlow(Uri url, string name, string? method, string? email)
     {
         _flowStop?.Cancel();
         var stop = _flowStop = new CancellationTokenSource();
         _browserOpened = false;
-        var flow = new PairingFlow(url, name);
+        (_method, _email) = (method, email);
+        var flow = new PairingFlow(url, name, method, email);
         flow.Changed += s => Dispatcher.BeginInvoke(() =>
         {
             if (!stop.IsCancellationRequested)
@@ -237,7 +279,7 @@ public partial class SignInView : UserControl
     private void OnRetry(object sender, RoutedEventArgs e)
     {
         if (_nest is { } url)
-            StartFlow(url, ThisName());
+            StartFlow(url, ThisName(), _method, _email);
     }
 
     private void OnBack(object sender, RoutedEventArgs e)

@@ -112,13 +112,12 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
     private static readonly TimeSpan JoinRequestLifetime = TimeSpan.FromMinutes(10);
 
     private int _accountCheckRunning;
-    private bool _ownKeyTried;
     private bool _moveTried;
 
     /// <summary>
     /// Brings this computer's sign-in up to date with what the nest offers. Silent and safe to repeat:
     /// <list type="bullet">
-    /// <item>On the shared token, it asks for its own key (once per session).</item>
+    /// <item>On the shared token, when the nest signs computers in, syncing stops until a person signs this one in.</item>
     /// <item>With its own key, it adopts a name changed on the nest.</item>
     /// <item>When the nest has an HTTPS name, it moves there, but only if that address is the same server.</item>
     /// </list>
@@ -138,13 +137,10 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
             var next = Settings.Clone();
             var token = _token;
             var changed = false;
-            if (!Settings.HasOwnKey && hello.DeviceKeys && !_ownKeyTried)
+            if (!Settings.HasOwnKey && hello.SignIn)
             {
-                _ownKeyTried = true;
-                var grant = await Api.GetOwnKeyAsync(Settings.DeviceName!, ct).ConfigureAwait(false);
-                (next.DeviceId, next.DeviceName, token, changed) = (grant.Id, grant.Name, grant.Key, true);
-                _log.LogInformation("This computer now has its own key on the nest (as {Name})", grant.Name);
-                Activity.Add(ActivityKind.Info, null, "This computer now has its own key on your nest", _clock);
+                // No more silent key here: a person approves every computer on the nest's website.
+                RequireSignIn();
             }
             else if (Settings.HasOwnKey && await Api.GetMeAsync(ct).ConfigureAwait(false) is { } me
                 && me.Id == Settings.DeviceId && !string.Equals(me.Name, Settings.DeviceName, StringComparison.Ordinal))
@@ -197,6 +193,20 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
     {
         if (Status.BlockReason != BlockReason.SignedOut)
             Runner.RequestSync("signed-out");
+    }
+
+    /// <summary>
+    /// Still on the shared token although the nest signs computers in: syncing stops until a person signs
+    /// this computer in with the browser. Its folder, files and settings all stay as they are.
+    /// </summary>
+    private void RequireSignIn()
+    {
+        if (Engine.SignInRequired)
+            return;
+        Engine.SignInRequired = true;
+        _log.LogInformation("This nest signs computers in; syncing stops until this computer is signed in");
+        Activity.Add(ActivityKind.Info, null, "Sign in to your nest to keep syncing", _clock);
+        Runner.RequestSync("sign-in-required");
     }
 
     /// <summary>

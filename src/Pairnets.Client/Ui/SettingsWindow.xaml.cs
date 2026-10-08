@@ -17,7 +17,7 @@ public partial class SettingsWindow : Window
     private readonly string? _serverVersionText;
 
     public SettingsWindow(ClientSettings current, ISecretProtector protector, bool firstRun, UpdateService? updates = null,
-        string? serverVersionText = null, Action<string>? openUrl = null)
+        string? serverVersionText = null, Action<string>? openUrl = null, string? nestHint = null)
     {
         ThemeManager.Attach(this);
         InitializeComponent();
@@ -29,7 +29,7 @@ public partial class SettingsWindow : Window
         Title = firstRun ? "Pairnets – set up this computer" : "Pairnets – settings";
         if (firstRun)
         {
-            SignIn = new SignInView(current, protector, openUrl ?? (_ => { }));
+            SignIn = new SignInView(current, protector, openUrl ?? (_ => { }), nestHint);
             SignIn.SignedIn += (settings, key) =>
             {
                 Result = settings;

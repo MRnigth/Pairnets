@@ -231,7 +231,8 @@ public sealed class DesktopController : ITrayActions, IDisposable
         {
             if (r.Outcome == PassOutcome.Blocked)
                 Notify("blocked:" + r.BlockReason, r.BlockReason is BlockReason.MassDelete or BlockReason.FolderEmpty ? "Deletions blocked"
-                    : r.BlockReason == BlockReason.SignedOut ? "Signed out of your nest" : "Pairnets paused syncing", r.Message ?? r.BlockReason.ToString());
+                    : r.BlockReason == BlockReason.SignedOut ? "Signed out of your nest"
+                    : r.BlockReason == BlockReason.SignInRequired ? "Sign in to your nest" : "Pairnets paused syncing", r.Message ?? r.BlockReason.ToString());
             else if (r.Outcome == PassOutcome.AuthFailed)
                 Notify("auth", "The server rejected the token", "Open Settings and enter the token printed by install.sh.");
         };
@@ -519,6 +520,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
                 await LocateFolderAsync(status.Text);
                 break;
             case BlockReason.SignedOut:
+            case BlockReason.SignInRequired:
                 ShowSettings(firstRun: true);
                 break;
         }
@@ -655,7 +657,8 @@ public sealed class DesktopController : ITrayActions, IDisposable
 
     private void ShowSettings(bool firstRun)
     {
-        var window = new SettingsWindow(_settings, _platform.Secrets, firstRun, SafeIsAutoStart(), _updates, _session?.Status.ServerVersionText, _platform.Open);
+        var window = new SettingsWindow(_settings, _platform.Secrets, firstRun, SafeIsAutoStart(), _updates, _session?.Status.ServerVersionText, _platform.Open,
+            _session?.Status.NestUrl);
         window.Closed += (_, _) =>
         {
             if (window.Result is null)

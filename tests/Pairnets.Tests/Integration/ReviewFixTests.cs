@@ -33,12 +33,11 @@ public sealed class ReviewFixTests
     public async Task AComputerRemovedFromTheCommandLineLosesItsPushConnection()
     {
         await using var server = await TestServer.StartAsync(config: FastChecks);
-        using var shared = server.Client("LAPTOP");
-        var laptop = await shared.GetOwnKeyAsync("LAPTOP", CancellationToken.None);
+        var laptop = server.MintKey("LAPTOP");
         var (hub, closed) = await OpenHubAsync(server, laptop.Key);
         await using var _ = hub;
 
-        // tether-server devices remove runs in its own process: it only touches auth.db, not this server's memory.
+        // pairnets-server devices remove runs in its own process: it only touches auth.db, not this server's memory.
         Assert.True(new AuthStore(server.Paths).RemoveDevice(laptop.Id));
 
         await closed.WaitAsync(TimeSpan.FromSeconds(15));
@@ -51,8 +50,7 @@ public sealed class ReviewFixTests
     public async Task TurningOffTheSharedTokenClosesConnectionsThatUseIt()
     {
         await using var server = await TestServer.StartAsync(config: FastChecks);
-        using var shared = server.Client("LAPTOP");
-        var grant = await shared.GetOwnKeyAsync("LAPTOP", CancellationToken.None);
+        var grant = server.MintKey("LAPTOP");
         var (oldHub, oldClosed) = await OpenHubAsync(server, server.Token);
         var (ownHub, _) = await OpenHubAsync(server, grant.Key);
         await using var _1 = oldHub;

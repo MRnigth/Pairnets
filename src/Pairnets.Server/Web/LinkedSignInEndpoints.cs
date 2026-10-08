@@ -13,7 +13,7 @@ namespace Pairnets.Server.Web;
 /// </summary>
 public static class LinkedSignInEndpoints
 {
-    public sealed record EmailBody(string? Email);
+    public sealed record EmailBody(string? Email, string? Next = null);
 
     public sealed record CodeBody(string? Code);
 
@@ -26,14 +26,17 @@ public static class LinkedSignInEndpoints
 
         // ---- email links
 
-        open.MapPost("/signin/email/request", async (OwnerAuth owner, IEmailSender sender, ILogger<OwnerAuth> log, CancellationToken ct) =>
+        open.MapPost("/signin/email/request", async (EmailBody? body, OwnerAuth owner, IEmailSender sender, ILogger<OwnerAuth> log, CancellationToken ct) =>
         {
             // The answer never says whether an address is set up: anyone may ask, only the owner's inbox gets a link.
-            if (owner.UsableMethods().Email && owner.Store.OwnerEmail is { } address)
+            // The apps send along the address typed on their sign-in screen; a link only goes out when it is the
+            // owner's own (never to the typed address), so typing someone else's email sends nothing anywhere.
+            if (owner.UsableMethods().Email && owner.Store.OwnerEmail is { } address
+                && (body?.Email is not { Length: > 0 } typed || string.Equals(typed.Trim(), address, StringComparison.OrdinalIgnoreCase)))
             {
                 if (!emails.TryTake(owner.Now))
                     return Error(StatusCodes.Status429TooManyRequests, ErrorCodes.BadRequest, "A few sign-in emails were sent a moment ago. Check your inbox, or wait a little.");
-                await SendLinkAsync(owner, sender, address, EmailLinkPurpose.SignIn, log, ct);
+                await SendLinkAsync(owner, sender, address, EmailLinkPurpose.SignIn, log, ct, WebEndpoints.SafeNextPath(body?.Next));
             }
             return Results.NoContent();
         }).RequireRateLimiting(PairingEndpoints.RateLimitPolicy);
@@ -91,7 +94,7 @@ public static class LinkedSignInEndpoints
             return Results.NoContent();
         });
 
-        app.MapGet("/auth/google/start", (HttpContext ctx, string? purpose, OwnerAuth owner, GoogleSignIn google) =>
+        app.MapGet("/auth/google/start", (HttpContext ctx, string? purpose, string? next, OwnerAuth owner, GoogleSignIn google) =>
         {
             if (!owner.IsNestRequest(ctx))
                 return Results.NotFound();
@@ -102,7 +105,7 @@ public static class LinkedSignInEndpoints
                 return session is null ? Results.Redirect("/signin") : Results.Redirect(google.Start(GoogleSignIn.Connect, session.Id).ToString());
             if (owner.Store.GoogleAccount is null)
                 return Results.Redirect("/signin?error=google-none");
-            return Results.Redirect(google.Start(GoogleSignIn.SignIn, null).ToString());
+            return Results.Redirect(google.Start(GoogleSignIn.SignIn, null, WebEndpoints.SafeNextPath(next)).ToString());
         }).RequireRateLimiting(PairingEndpoints.RateLimitPolicy);
 
         app.MapGet("/auth/google/callback", async (HttpContext ctx, [FromQuery] string? state, [FromQuery] string? code, OwnerAuth owner, GoogleSignIn google,
@@ -113,7 +116,7 @@ public static class LinkedSignInEndpoints
             var address = ctx.Connection.RemoteIpAddress ?? IPAddress.None;
             try
             {
-                var (purpose, sessionId, identity) = await google.FinishAsync(state, code, ct);
+                var (purpose, sessionId, next, identity) = await google.FinishAsync(state, code, ct);
                 if (purpose == GoogleSignIn.Connect)
                 {
                     if (owner.Current(ctx) is not { } session || session.Id != sessionId)
@@ -129,7 +132,8 @@ public static class LinkedSignInEndpoints
                     return Results.Redirect("/signin?error=google-mismatch");
                 }
                 owner.SignIn(ctx, "google");
-                return Results.Redirect("/devices");
+                // Back to the page the sign-in left (approving a computer, say), or the devices page.
+                return Results.Redirect(next ?? "/devices");
             }
             catch (GoogleSignInException ex)
             {
@@ -139,10 +143,13 @@ public static class LinkedSignInEndpoints
         }).RequireRateLimiting(PairingEndpoints.RateLimitPolicy);
     }
 
-    private static async Task SendLinkAsync(OwnerAuth owner, IEmailSender sender, string address, string purpose, ILogger log, CancellationToken ct)
+    private static async Task SendLinkAsync(OwnerAuth owner, IEmailSender sender, string address, string purpose, ILogger log, CancellationToken ct,
+        string? next = null)
     {
         var code = owner.Store.CreateEmailLink(purpose, address);
-        var url = $"{owner.PublicUrl}/email-link#code={code}";
+        // "next" rides in the fragment like the code: the browser comes back to the page it left for the inbox
+        // (approving a computer, say). Both stay out of server logs, and only paths on this site are accepted.
+        var url = $"{owner.PublicUrl}/email-link#code={code}" + (next is null ? string.Empty : "&next=" + Uri.EscapeDataString(next));
         var host = owner.Options.PublicHost ?? "your nest";
         var (subject, intro) = purpose == EmailLinkPurpose.Confirm
             ? ("Confirm your email for Pairnets", $"Someone (hopefully you) asked to use this address for sign-in links to {host}.")

@@ -6,15 +6,15 @@
   <ScrollViewer HorizontalScrollBarVisibility="Disabled">
     <Panel Margin="28,26,28,24">
 
-      <!-- 1. Welcome: which nest, and this computer's name -->
+      <!-- 1. Welcome: which nest, then the ways to sign in there -->
       <StackPanel x:Name="WelcomeStep" Spacing="14" MaxWidth="470">
         <Image Source="avares://Pairnets/Assets/pairnets-icon-256.png" Width="64" Height="64" HorizontalAlignment="Center" />
         <StackPanel Spacing="4">
-          <TextBlock Classes="h1" Text="Welcome to Pairnets" HorizontalAlignment="Center" />
+          <TextBlock Classes="h1" Text="Sign in" HorizontalAlignment="Center" />
           <TextBlock Classes="muted" Text="Keep one folder the same on all your computers." HorizontalAlignment="Center" TextWrapping="Wrap" />
         </StackPanel>
         <Border Classes="card">
-          <StackPanel Spacing="14">
+          <StackPanel Spacing="0">
             <StackPanel Spacing="6">
               <TextBlock Classes="label" Text="Your nest" />
               <TextBox x:Name="AddressBox" Watermark="nest.example.com" />
@@ -23,13 +23,40 @@
                 <TextBlock x:Name="CheckText" Classes="small" TextWrapping="Wrap" MaxWidth="380" />
               </StackPanel>
             </StackPanel>
-            <StackPanel Spacing="6">
-              <TextBlock Classes="label" Text="This computer's name" />
-              <TextBox x:Name="NameBox" MaxLength="64" />
-              <TextBlock Classes="muted small" Text="Each computer needs its own name." />
+
+            <!-- "Continue with Google": the browser signs in with Google right away -->
+            <Button x:Name="GoogleButton" Classes="subtle" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                    Padding="13,10" Margin="0,16,0,0" Click="OnGoogle" IsEnabled="False" IsVisible="False">
+              <StackPanel Orientation="Horizontal" Spacing="10">
+                <Viewbox Width="18" Height="18" VerticalAlignment="Center">
+                  <Canvas Width="48" Height="48">
+                    <Path Fill="#EA4335" Data="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z" />
+                    <Path Fill="#4285F4" Data="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z" />
+                    <Path Fill="#34A853" Data="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z" />
+                    <Path Fill="#FBBC05" Data="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z" />
+                  </Canvas>
+                </Viewbox>
+                <TextBlock Text="Continue with Google" VerticalAlignment="Center" />
+              </StackPanel>
+            </Button>
+
+            <!-- or -->
+            <Grid x:Name="OrRow" ColumnDefinitions="*,Auto,*" Margin="0,14,0,2" IsVisible="False">
+              <Border Height="1" Background="{DynamicResource T.Border}" VerticalAlignment="Center" />
+              <TextBlock Grid.Column="1" Classes="muted small" Text="OR" Margin="10,0" />
+              <Border Grid.Column="2" Height="1" Background="{DynamicResource T.Border}" VerticalAlignment="Center" />
+            </Grid>
+
+            <!-- "Continue with email": a sign-in link lands in the owner's inbox -->
+            <StackPanel x:Name="EmailPanel" Spacing="10" IsVisible="False">
+              <TextBox x:Name="EmailBox" Watermark="Enter your email" Margin="0,12,0,0" IsEnabled="False" />
+              <Button x:Name="EmailButton" Classes="accent" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                      Padding="13,10" Content="Continue with email" Click="OnEmail" IsEnabled="False" />
             </StackPanel>
-            <Button x:Name="SignInButton" Classes="accent" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
-                    Padding="13,10" Content="Sign in with your browser" Click="OnSignIn" IsEnabled="False" />
+
+            <!-- password, passkey, and everything else live on the nest's own page -->
+            <Button x:Name="BrowserButton" Classes="accent" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                    Padding="13,10" Margin="0,16,0,0" Content="Sign in with your browser" Click="OnSignIn" IsEnabled="False" />
           </StackPanel>
         </Border>
         <TextBlock Classes="muted small" TextWrapping="Wrap" TextAlignment="Center"

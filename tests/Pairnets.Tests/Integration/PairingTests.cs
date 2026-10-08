@@ -121,8 +121,7 @@ public sealed class PairingTests : IAsyncLifetime
     [Fact]
     public async Task TheOtherComputersHearThatSomeoneWantsToJoin()
     {
-        using var shared = _server.Client("DESKTOP");
-        var grant = await shared.GetOwnKeyAsync("DESKTOP", CancellationToken.None);
+        var grant = _server.MintKey("DESKTOP");
         var heard = new TaskCompletionSource<(string Code, string Name)>(TaskCreationOptions.RunContinuationsAsynchronously);
         var decided = new TaskCompletionSource<(string Code, bool Approved)>(TaskCreationOptions.RunContinuationsAsynchronously);
         await using var hub = new HubConnectionBuilder()

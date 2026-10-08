@@ -74,8 +74,31 @@ public static class Nest
         return allowed ? uri.GetLeftPart(UriPartial.Authority) : null;
     }
 
-    /// <summary>The page where a computer's sign-in is approved, built here from the nest's address and the code (never taken as given).</summary>
-    public static string ApprovalLink(string origin, string code) => $"{origin}/link?code={Uri.EscapeDataString(code)}";
+    /// <summary>
+    /// The page where a computer's sign-in is approved, built here from the nest's address and the code (never taken
+    /// as given). <paramref name="method"/> ("google" or "email") and <paramref name="email"/> say which button was
+    /// pressed in the app, so the nest's sign-in page starts that way right away.
+    /// </summary>
+    public static string ApprovalLink(string origin, string code, string? method = null, string? email = null)
+    {
+        var link = $"{origin}/link?code={Uri.EscapeDataString(code)}";
+        if (method is not null)
+            link += "&method=" + Uri.EscapeDataString(method);
+        if (email is not null)
+            link += "&email=" + Uri.EscapeDataString(email);
+        return link;
+    }
+
+    /// <summary>
+    /// Shaped like an email address (one @ with something on both sides, no spaces). The nest decides
+    /// whether it really is the owner's; this only keeps empty or half-typed addresses off the buttons.
+    /// </summary>
+    public static bool LooksLikeEmail(string? text)
+    {
+        var typed = text?.Trim() ?? string.Empty;
+        var at = typed.IndexOf('@', StringComparison.Ordinal);
+        return at > 0 && at == typed.LastIndexOf('@') && at < typed.Length - 1 && !typed.Contains(' ', StringComparison.Ordinal);
+    }
 
     /// <summary>Checks the typed address: is there a Pairnets nest that lets this computer sign in? Never throws.</summary>
     public static async Task<NestCheck> CheckAsync(string? text, HttpMessageHandler? handler = null, CancellationToken ct = default)
@@ -174,14 +197,19 @@ public sealed class PairingFlow
 {
     private readonly Uri _server;
     private readonly string _name;
+    private readonly string? _method;
+    private readonly string? _email;
     private readonly TimeProvider _clock;
     private readonly HttpMessageHandler? _handler;
     private readonly TimeSpan? _interval;
 
-    public PairingFlow(Uri server, string name, TimeProvider? clock = null, HttpMessageHandler? handler = null, TimeSpan? interval = null)
+    public PairingFlow(Uri server, string name, string? method = null, string? email = null,
+        TimeProvider? clock = null, HttpMessageHandler? handler = null, TimeSpan? interval = null)
     {
         _server = server;
         _name = name;
+        _method = method;
+        _email = email;
         _clock = clock ?? TimeProvider.System;
         _handler = handler;
         _interval = interval;
@@ -220,7 +248,7 @@ public sealed class PairingFlow
         // The link comes from the nest we were pointed at, but it is rebuilt from its address and the code: whatever else a
         // server puts in "verifyUrl" never reaches the operating system.
         var origin = Nest.SafeOrigin(start.VerifyUrl, _server) ?? Nest.SafeOrigin(_server.ToString(), _server);
-        Set(new(PairingStage.Waiting, start.Code, origin is null ? null : Nest.ApprovalLink(origin, start.Code), expires));
+        Set(new(PairingStage.Waiting, start.Code, origin is null ? null : Nest.ApprovalLink(origin, start.Code, _method, _email), expires));
         var interval = _interval ?? TimeSpan.FromSeconds(Math.Clamp(start.IntervalSeconds, 1, 30));
         while (!ct.IsCancellationRequested)
         {

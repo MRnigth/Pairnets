@@ -154,16 +154,6 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
         return await ReadJsonAsync<DeviceMe>(resp, timeout, ct).ConfigureAwait(false);
     }
 
-    /// <summary>Trades the shared token this client uses for this computer's own key.</summary>
-    public async Task<DeviceKeyGrant> GetOwnKeyAsync(string name, CancellationToken ct)
-    {
-        using var timeout = Linked(ct, TimeSpan.FromSeconds(30));
-        using var resp = await SendAsync(new HttpRequestMessage(HttpMethod.Post, "api/devices/upgrade") { Content = JsonContent.Create(new DeviceNameRequest(name), options: PairnetsJson.Options) },
-            HttpCompletionOption.ResponseContentRead, timeout, ct).ConfigureAwait(false);
-        await ThrowForStatusAsync(resp).ConfigureAwait(false);
-        return await ReadJsonAsync<DeviceKeyGrant>(resp, timeout, ct).ConfigureAwait(false);
-    }
-
     /// <summary>Removes a computer from the nest (this one too: "Sign out of this computer"). False when it was already gone.</summary>
     public async Task<bool> RemoveDeviceAsync(string id, CancellationToken ct)
     {

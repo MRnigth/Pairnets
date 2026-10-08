@@ -22,7 +22,7 @@ public partial class SettingsWindow : Window
     }
 
     public SettingsWindow(ClientSettings current, ISecretProtector? protector, bool firstRun, bool autoStart, UpdateService? updates = null,
-        string? serverVersionText = null, Action<string>? openUrl = null)
+        string? serverVersionText = null, Action<string>? openUrl = null, string? nestHint = null)
     {
         InitializeComponent();
         _current = current;
@@ -33,7 +33,7 @@ public partial class SettingsWindow : Window
         Title = firstRun ? "Pairnets – set up this computer" : "Pairnets – settings";
         if (firstRun)
         {
-            SignIn = new SignInView(current, protector, autoStart, openUrl ?? (_ => { }));
+            SignIn = new SignInView(current, protector, autoStart, openUrl ?? (_ => { }), nestHint);
             SignIn.SignedIn += (settings, key) =>
             {
                 Result = settings;

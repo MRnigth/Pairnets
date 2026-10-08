@@ -53,6 +53,19 @@ public sealed class SyncEngine
 
     public string MarkerPath => Path.Combine(Root, PathRules.MarkerFileName);
 
+    private volatile bool _signInRequired;
+
+    /// <summary>
+    /// Set while this computer still uses the shared token although its nest signs computers in: every
+    /// pass is blocked (<see cref="BlockReason.SignInRequired"/>) until a person signs it in with the
+    /// browser. Nothing on disk is touched meanwhile.
+    /// </summary>
+    public bool SignInRequired
+    {
+        get => _signInRequired;
+        set => _signInRequired = value;
+    }
+
     public string TempDirectory => Path.Combine(Root, PathRules.TempFolderName);
 
     public event Action<SyncProgress>? Progress;
@@ -194,6 +207,13 @@ public sealed class SyncEngine
 
     private async Task RunPassCoreAsync(PassOptions options, PassResult result, CancellationToken ct)
     {
+        // ---- 0. A computer the nest wants signed in does nothing until a person signs it in.
+        if (SignInRequired)
+        {
+            Block(result, BlockReason.SignInRequired, "Your nest now signs computers in. Sign in with your browser to keep syncing; your files stay as they are.");
+            return;
+        }
+
         // ---- 1. Folder and marker: never mistake a missing or wrong folder for "everything was deleted".
         if (!Directory.Exists(Root))
         {
