@@ -377,13 +377,17 @@ what cannot lose or silently overwrite data.
   (each upload and download with its path), and the session keeps where each file is: done, moving
   (with its percent) or waiting (`StatusSnapshot.Batch`). Several files in one folder become one row
   ("Photos/summer · 2 of 18 files · 18%"); opening it lists them all. Rows update in place, so an
-  open folder stays open while its files move.
+  open folder stays open while its files move. Deletions and conflicts are not in the plan (they move
+  no bytes; a conflict's copy and its download appear once they start moving). Past 5000 files the
+  list shows a window from just before the first unfinished file, plus everything moving, so a huge
+  first sync costs no more memory than a small one.
 * **Folder rows in the activity lists.** Three or more uploads, downloads or deletions in one folder,
   each within 2 minutes of the next, fold into one row ("Photos/summer · 18 files uploaded") that
   opens to list them. Purely a way of showing the feed: nothing is stored differently.
 * **An Account page** (from the account button): the account's email and how it signed in (the nest
   now answers these in `/api/me`, from the owner's email or Google account and the way the computer
-  was approved; older servers send nothing and the page falls back to the computer's name), the nest
+  was approved; older servers send nothing and the page falls back to the computer's name; when the
+  owner has no email address saved, the linked Google account's address is shown instead), the nest
   with its version and free space, this computer, three notification switches, and Start over.
   Signing out and "Manage devices on the web" moved here from Settings.
 * **Notification switches.** "When another computer wants to join", "When something needs your
