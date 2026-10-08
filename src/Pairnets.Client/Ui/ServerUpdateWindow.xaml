@@ -4,32 +4,42 @@
         xmlns:ui="clr-namespace:Pairnets.Client.Ui"
         Title="Pairnets – update the server" Width="540" SizeToContent="Height" ResizeMode="NoResize"
         WindowStartupLocation="CenterScreen">
-  <StackPanel Margin="22">
+  <Window.Resources>
+    <Style x:Key="Fact" TargetType="TextBlock">
+      <Setter Property="FontSize" Value="13" />
+      <Setter Property="Margin" Value="0,8" />
+    </Style>
+    <Style x:Key="FactMuted" TargetType="TextBlock" BasedOn="{StaticResource Fact}">
+      <Setter Property="Foreground" Value="{DynamicResource T.Muted}" />
+    </Style>
+  </Window.Resources>
+  <StackPanel Margin="28,26,28,26">
     <Grid>
       <Grid.ColumnDefinitions>
         <ColumnDefinition Width="Auto" />
         <ColumnDefinition Width="*" />
       </Grid.ColumnDefinitions>
-      <Grid Width="60" Height="60" Margin="0,0,12,0" VerticalAlignment="Top">
-        <!-- Spinning ring while the server updates -->
-        <Path x:Name="Ring" Width="60" Height="60" Stroke="{DynamicResource T.Accent}" StrokeThickness="3"
-              StrokeStartLineCap="Round" StrokeEndLineCap="Round" Visibility="Collapsed"
-              Data="M 30,1.5 A 28.5,28.5 0 0 1 56.8,20.3" />
+      <Grid Width="44" Height="44" Margin="0,0,16,0" VerticalAlignment="Top">
         <!-- The server badge: bobs while it waits for an answer, pops when done -->
         <Grid x:Name="BadgeHost" Width="44" Height="44">
-          <Ellipse x:Name="Badge" Fill="{StaticResource S.Orange}" />
-          <ui:LineIcon x:Name="BadgeIcon" Width="22" Height="22" StrokeThickness="2.2" Stroke="White" Data="{StaticResource I.Server}" />
+          <Ellipse x:Name="Badge" Fill="{DynamicResource T.WarnPill}" />
+          <ui:LineIcon x:Name="BadgeIcon" Width="20" Height="20" StrokeThickness="1.9" Stroke="{DynamicResource T.WarnText}" Data="{StaticResource I.Server}" />
         </Grid>
+        <!-- A turning ring while the server updates -->
+        <Ellipse x:Name="RingTrack" Width="44" Height="44" Stroke="{DynamicResource T.Track}" StrokeThickness="4" Visibility="Collapsed" />
+        <Path x:Name="Ring" Width="44" Height="44" Stroke="{DynamicResource T.Accent}" StrokeThickness="4"
+              StrokeStartLineCap="Round" StrokeEndLineCap="Round" Visibility="Collapsed"
+              Data="M 22,2 A 20,20 0 0 1 42,22" />
       </Grid>
       <StackPanel Grid.Column="1" VerticalAlignment="Center">
-        <TextBlock x:Name="Heading" Style="{StaticResource H2}" FontSize="18" Text="Your server should be updated" />
-        <TextBlock x:Name="Explanation" Style="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,4,0,0" />
+        <TextBlock x:Name="Heading" FontSize="19" FontWeight="SemiBold" TextWrapping="Wrap" Text="Your server should be updated" />
+        <TextBlock x:Name="Explanation" Style="{StaticResource Muted}" LineHeight="20" LineStackingStrategy="BlockLineHeight" TextWrapping="Wrap" Margin="0,4,0,0" />
       </StackPanel>
     </Grid>
 
     <!-- 1. Ask -->
-    <StackPanel x:Name="AskPanel" Margin="0,14,0,0">
-      <Border Style="{StaticResource CodeBox}" CornerRadius="10" Padding="12,10">
+    <StackPanel x:Name="AskPanel" Margin="0,16,0,0">
+      <Border Style="{StaticResource Hairline}">
         <Grid>
           <Grid.ColumnDefinitions>
             <ColumnDefinition Width="110" />
@@ -40,53 +50,61 @@
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
           </Grid.RowDefinitions>
-          <TextBlock Style="{StaticResource MutedSmall}" Text="Server" />
-          <TextBlock x:Name="VersionsText" Grid.Column="1" FontSize="12" FontWeight="SemiBold" />
-          <TextBlock Grid.Row="1" Style="{StaticResource MutedSmall}" Text="Takes" Margin="0,4,0,0" />
-          <TextBlock Grid.Row="1" Grid.Column="1" FontSize="12" Text="about 30 seconds" Margin="0,4,0,0" />
-          <TextBlock Grid.Row="2" Style="{StaticResource MutedSmall}" Text="Your files" Margin="0,4,0,0" />
-          <TextBlock Grid.Row="2" Grid.Column="1" FontSize="12" Text="stay as they are; syncing pauses briefly" Margin="0,4,0,0" />
+          <Border Grid.ColumnSpan="2" Style="{StaticResource HairlineBottom}" />
+          <Border Grid.Row="1" Grid.ColumnSpan="2" Style="{StaticResource HairlineBottom}" />
+          <Border Grid.Row="2" Grid.ColumnSpan="2" Style="{StaticResource HairlineBottom}" />
+          <TextBlock Style="{StaticResource FactMuted}" Text="Server" />
+          <TextBlock x:Name="VersionsText" Grid.Column="1" Style="{StaticResource Fact}" FontWeight="SemiBold" />
+          <TextBlock Grid.Row="1" Style="{StaticResource FactMuted}" Text="Takes" />
+          <TextBlock Grid.Row="1" Grid.Column="1" Style="{StaticResource Fact}" Text="about 30 seconds" />
+          <TextBlock Grid.Row="2" Style="{StaticResource FactMuted}" Text="Your files" />
+          <TextBlock Grid.Row="2" Grid.Column="1" Style="{StaticResource Fact}" Text="stay as they are; syncing pauses briefly" />
         </Grid>
       </Border>
-      <CheckBox x:Name="AlwaysBox" Style="{StaticResource Switch}" Content="From now on, update the server automatically" Margin="0,14,0,0" />
-      <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,14,0,0">
-        <Button x:Name="SkipButton" Style="{StaticResource FlatButton}" Content="Don't ask for this version" Click="OnSkip" />
-        <Button Style="{StaticResource SubtleButton}" Content="Later" Margin="8,0,0,0" Click="OnLater" />
+      <CheckBox x:Name="AlwaysBox" Style="{StaticResource Check}" Content="From now on, update the server automatically" Margin="0,16,0,0" />
+      <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
+        <Button x:Name="SkipButton" Style="{StaticResource FlatButton}" Foreground="{DynamicResource T.Muted}" Content="Don't ask for this version" Click="OnSkip" />
+        <Button Content="Later" Margin="8,0,0,0" Click="OnLater" />
         <Button x:Name="UpdateButton" Style="{StaticResource AccentButton}" Content="Update server" Margin="8,0,0,0" Click="OnUpdate" />
       </StackPanel>
     </StackPanel>
 
     <!-- 2. Updating -->
-    <StackPanel x:Name="BusyPanel" Margin="0,14,0,0" Visibility="Collapsed">
-      <TextBlock x:Name="StepText" FontSize="12" FontWeight="SemiBold" />
-      <TextBlock Style="{StaticResource MutedSmall}" Text="You can close this window. Pairnets reconnects by itself." Margin="0,4,0,0" />
+    <StackPanel x:Name="BusyPanel" Margin="0,16,0,0" Visibility="Collapsed">
+      <ProgressBar Style="{StaticResource ThinProgress}" IsIndeterminate="True" />
+      <TextBlock x:Name="StepText" Style="{StaticResource Small}" FontWeight="Medium" Margin="0,8,0,0" />
+      <TextBlock Style="{StaticResource MutedSmall}" TextWrapping="Wrap" Margin="0,8,0,0"
+                 Text="Syncing pauses briefly. Your files are not touched. You can close this window: Pairnets reconnects by itself." />
     </StackPanel>
 
-    <!-- 3. Done or failed -->
-    <StackPanel x:Name="ResultPanel" Margin="0,14,0,0" Visibility="Collapsed">
-      <StackPanel x:Name="CommandPanel" Visibility="Collapsed">
-        <Border Style="{StaticResource CodeBox}">
-          <TextBox x:Name="CommandText" IsReadOnly="True" BorderThickness="0" Background="Transparent" Foreground="{DynamicResource T.Text}"
-                   FontFamily="Cascadia Mono, Consolas" FontSize="12" TextWrapping="Wrap"
+    <!-- 3. Done, one-time setup, or not updated -->
+    <StackPanel x:Name="ResultPanel" Margin="0,16,0,0" Visibility="Collapsed">
+      <StackPanel x:Name="CommandPanel" Margin="0,0,0,12" Visibility="Collapsed">
+        <Border Style="{StaticResource CodeBox}" Padding="14,12">
+          <TextBox x:Name="CommandText" Style="{StaticResource CodeText}" FontSize="12.5" TextWrapping="Wrap"
                    Text="curl -fsSL https://raw.githubusercontent.com/MRnigth/Pairnets/main/deploy/get.sh | sudo bash" />
         </Border>
-        <Button Style="{StaticResource SubtleButton}" Content="Copy command" HorizontalAlignment="Left" Margin="0,8,0,0" Click="OnCopy" />
+        <Button HorizontalAlignment="Left" Margin="0,10,0,0" Click="OnCopy">
+          <StackPanel Orientation="Horizontal">
+            <ui:LineIcon Width="14" Height="14" Data="{StaticResource I.Copy}" Margin="0,0,7,0" />
+            <TextBlock Text="Copy command" />
+          </StackPanel>
+        </Button>
       </StackPanel>
-      <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
-        <Button x:Name="RetryButton" Style="{StaticResource SubtleButton}" Content="Try again" Margin="0,0,8,0" Click="OnUpdate" Visibility="Collapsed" />
-        <Button Style="{StaticResource AccentButton}" Content="Close" Click="OnLater" />
+      <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+        <Button x:Name="RetryButton" Content="Try again" Margin="0,0,8,0" Click="OnUpdate" Visibility="Collapsed" />
+        <Button Style="{StaticResource AccentButton}" Content="Close" Padding="18,0" Click="OnLater" />
       </StackPanel>
     </StackPanel>
 
     <!-- Debug mode: every step of the app and what the server's updater reports -->
-    <StackPanel x:Name="DetailsPanel" Margin="0,14,0,0" Visibility="Collapsed">
+    <StackPanel x:Name="DetailsPanel" Margin="0,16,0,0" Visibility="Collapsed">
       <TextBlock Style="{StaticResource MutedSmall}" Text="Details (Debug mode)" />
-      <Border Style="{StaticResource CodeBox}" Margin="0,4,0,0">
-        <TextBox x:Name="DetailsText" IsReadOnly="True" BorderThickness="0" Background="Transparent" Foreground="{DynamicResource T.Text}"
-                 FontFamily="Cascadia Mono, Consolas" FontSize="11" TextWrapping="NoWrap" MaxHeight="220"
+      <Border Style="{StaticResource CodeBox}" Padding="10,8" Margin="0,6,0,0">
+        <TextBox x:Name="DetailsText" Style="{StaticResource CodeText}" FontSize="11" TextWrapping="NoWrap" MaxHeight="220"
                  VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" />
       </Border>
-      <Button Style="{StaticResource SubtleButton}" Content="Copy details" HorizontalAlignment="Left" Margin="0,8,0,0" Click="OnCopyDetails" />
+      <Button Content="Copy details" HorizontalAlignment="Left" Margin="0,6,0,0" Click="OnCopyDetails" />
     </StackPanel>
   </StackPanel>
 </Window>

@@ -6,30 +6,18 @@
         Title="Pairnets" Width="980" Height="700" MinWidth="800" MinHeight="560"
         WindowStartupLocation="CenterScreen">
   <Window.Resources>
-    <ui:ActivityBrushConverter x:Key="KindBrush" />
     <ui:ActivityIconConverter x:Key="KindIcon" />
-    <ui:DirectionBrushConverter x:Key="DirectionBrush" />
-    <BooleanToVisibilityConverter x:Key="Visible" />
-    <Style x:Key="ToolIcon" TargetType="ui:LineIcon">
-      <Setter Property="Width" Value="17" />
-      <Setter Property="Height" Value="17" />
-      <Setter Property="Margin" Value="0,0,7,0" />
-      <Setter Property="Stroke" Value="{DynamicResource T.Text}" />
-    </Style>
-    <Style x:Key="TileIcon" TargetType="ui:LineIcon">
-      <Setter Property="Width" Value="14" />
-      <Setter Property="Height" Value="14" />
-      <Setter Property="Margin" Value="0,0,6,0" />
-      <Setter Property="StrokeThickness" Value="2.3" />
-      <Setter Property="Stroke" Value="{DynamicResource T.Muted}" />
-    </Style>
+    <ui:VisibleConverter x:Key="Visible" />
+    <ui:VisibleConverter x:Key="Hidden" Invert="True" />
 
-    <!-- Activity rows and day headings (Overview and Activity pages) -->
+    <!-- Activity rows, day headings and folder rows (Overview, Activity page) -->
     <DataTemplate DataType="{x:Type c:ActivityDay}">
-      <TextBlock Style="{StaticResource Day}" Text="{Binding Text}" />
+      <Border Style="{StaticResource HairlineBottom}" Padding="0,14,0,6">
+        <TextBlock Style="{StaticResource Day}" Text="{Binding Text}" />
+      </Border>
     </DataTemplate>
     <DataTemplate DataType="{x:Type c:ActivityItem}">
-      <Border x:Name="ActivityRow" Style="{StaticResource Row}" ToolTip="{Binding TimeText}" Loaded="OnRowLoaded">
+      <Border x:Name="ActivityRow" Style="{StaticResource LineRow}" Padding="0,8" ToolTip="{Binding TimeText}" Loaded="OnRowLoaded">
         <Border.ContextMenu>
           <ContextMenu>
             <MenuItem Header="Show in folder" Click="OnRevealActivity" />
@@ -42,17 +30,15 @@
             <ColumnDefinition Width="*" />
             <ColumnDefinition Width="Auto" />
           </Grid.ColumnDefinitions>
-          <Grid Width="30" Height="30" Margin="0,0,12,0">
-            <Ellipse Fill="{Binding Kind, Converter={StaticResource KindBrush}}" />
-            <ui:LineIcon Width="19" Height="19" StrokeThickness="2.6" Stroke="White"
+          <Border Style="{StaticResource GlyphCircle}" Margin="0,0,12,0">
+            <ui:LineIcon Style="{StaticResource ToneIcon}" Tag="{Binding Tone}" Width="14" Height="14" StrokeThickness="2.4"
                          Data="{Binding Kind, Converter={StaticResource KindIcon}}" />
-          </Grid>
+          </Border>
           <StackPanel Grid.Column="1" VerticalAlignment="Center">
-            <TextBlock Text="{Binding Primary}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
-            <TextBlock Text="{Binding Secondary}" Style="{StaticResource MutedSmall}" TextTrimming="CharacterEllipsis" Margin="0,1,0,0" />
+            <TextBlock Text="{Binding Primary}" Style="{StaticResource Strong}" TextTrimming="CharacterEllipsis" />
+            <TextBlock Text="{Binding Secondary}" Style="{StaticResource MutedSmall}" TextTrimming="CharacterEllipsis" />
           </StackPanel>
-          <TextBlock Grid.Column="2" Text="{Binding WhenText}" Style="{StaticResource MutedSmall}"
-                     VerticalAlignment="Center" Margin="12,0,4,0" />
+          <TextBlock Grid.Column="2" Text="{Binding WhenText}" Style="{StaticResource MutedSmall}" VerticalAlignment="Center" Margin="12,0,0,0" />
         </Grid>
       </Border>
       <DataTemplate.Triggers>
@@ -62,95 +48,111 @@
         </DataTrigger>
       </DataTemplate.Triggers>
     </DataTemplate>
-  </Window.Resources>
-
-  <Grid>
-    <Grid.ColumnDefinitions>
-      <ColumnDefinition Width="220" />
-      <ColumnDefinition Width="*" />
-    </Grid.ColumnDefinitions>
-
-    <!-- ======================= Sidebar ======================= -->
-    <Border Style="{StaticResource Sidebar}">
-      <DockPanel Margin="12,18,12,14">
-        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="8,0,0,22">
-          <Image x:Name="AppIcon" Width="30" Height="30" Margin="0,0,10,0" />
-          <TextBlock Text="Pairnets" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center" />
-        </StackPanel>
-
-        <!-- Bottom: the app update (instead of a banner over everything) and the version -->
-        <StackPanel DockPanel.Dock="Bottom">
-          <Border x:Name="UpdateCard" Style="{StaticResource Banner}" Padding="12,10" Margin="0,0,0,10" Visibility="Collapsed">
-            <StackPanel>
-              <StackPanel Orientation="Horizontal">
-                <ui:LineIcon x:Name="UpdateIcon" Width="16" Height="16" Margin="0,0,7,0" Stroke="{DynamicResource T.Accent}" Data="{StaticResource I.Download}" VerticalAlignment="Top" />
-                <TextBlock x:Name="UpdateTitle" FontWeight="SemiBold" FontSize="12" TextWrapping="Wrap" MaxWidth="150" />
-              </StackPanel>
-              <TextBlock x:Name="UpdateDetail" Style="{StaticResource MutedSmall}" TextWrapping="Wrap" Margin="0,6,0,0" />
-              <ProgressBar x:Name="UpdateProgress" Style="{StaticResource ThinProgress}" Minimum="0" Maximum="100" Margin="0,6,0,0" Visibility="Collapsed" />
-              <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
-                <Button x:Name="UpdateButton" Style="{StaticResource AccentButton}" Padding="11,5" FontSize="12.5" Content="Update now" Click="OnUpdateNow" />
-                <Button x:Name="UpdateLater" Style="{StaticResource FlatButton}" Padding="9,5" FontSize="12.5" Margin="4,0,0,0" Content="Later" Click="OnUpdateLater" />
-              </StackPanel>
-            </StackPanel>
-          </Border>
-          <Grid>
-            <Grid.ColumnDefinitions>
-              <ColumnDefinition Width="*" />
-              <ColumnDefinition Width="Auto" />
-            </Grid.ColumnDefinitions>
-            <TextBlock x:Name="AppVersion" Style="{StaticResource MutedSmall}" Margin="10,0,0,0" VerticalAlignment="Center" />
-            <RadioButton x:Name="NavSettings" Grid.Column="1" Style="{StaticResource Nav}" GroupName="page" Margin="0"
-                         ToolTip="Settings" Checked="OnNav">
-              <StackPanel Orientation="Horizontal">
-                <ui:LineIcon Data="{StaticResource I.Settings}" Width="16" Height="16" Margin="0,0,7,0" />
-                <TextBlock Text="Settings" FontSize="12.5" VerticalAlignment="Center" />
-              </StackPanel>
-            </RadioButton>
-          </Grid>
-        </StackPanel>
-
+    <DataTemplate DataType="{x:Type c:ActivityFolder}">
+      <Border Style="{StaticResource LineRow}" Padding="0,8" Loaded="OnRowLoaded">
         <StackPanel>
-          <RadioButton x:Name="NavOverview" Style="{StaticResource Nav}" GroupName="page" IsChecked="True" Checked="OnNav">
-            <StackPanel Orientation="Horizontal">
-              <ui:LineIcon Data="{StaticResource I.Home}" Margin="0,0,11,0" />
-              <TextBlock Text="Overview" VerticalAlignment="Center" />
-            </StackPanel>
-          </RadioButton>
-          <RadioButton x:Name="NavActivity" Style="{StaticResource Nav}" GroupName="page" Checked="OnNav">
-            <StackPanel Orientation="Horizontal">
-              <ui:LineIcon Data="{StaticResource I.Activity}" Margin="0,0,11,0" />
-              <TextBlock Text="Activity" VerticalAlignment="Center" />
-            </StackPanel>
-          </RadioButton>
-          <RadioButton x:Name="NavHistory" Style="{StaticResource Nav}" GroupName="page" Checked="OnNav">
-            <StackPanel Orientation="Horizontal">
-              <ui:LineIcon Data="{StaticResource I.History}" Margin="0,0,11,0" />
-              <TextBlock Text="History" VerticalAlignment="Center" />
-            </StackPanel>
-          </RadioButton>
-          <RadioButton x:Name="NavDevices" Style="{StaticResource Nav}" GroupName="page" Checked="OnNav">
-            <StackPanel Orientation="Horizontal">
-              <ui:LineIcon Data="{StaticResource I.Computer}" Margin="0,0,11,0" />
-              <TextBlock Text="Devices" VerticalAlignment="Center" />
-            </StackPanel>
-          </RadioButton>
-          <RadioButton x:Name="NavAttention" Style="{StaticResource Nav}" GroupName="page" Checked="OnNav">
+          <ToggleButton x:Name="FolderToggle" Style="{StaticResource RowToggle}" Checked="OnChevronToggled" Unchecked="OnChevronToggled">
             <Grid>
               <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
               </Grid.ColumnDefinitions>
-              <ui:LineIcon Data="{StaticResource I.Warning}" />
-              <TextBlock Grid.Column="1" Text="Needs attention" VerticalAlignment="Center" Margin="11,0,0,0" />
-              <Border x:Name="AttentionBadge" Grid.Column="2" Style="{StaticResource Badge}" Margin="6,0,0,0" Visibility="Collapsed">
-                <TextBlock x:Name="AttentionCount" Foreground="White" FontSize="11" FontWeight="SemiBold"
-                           HorizontalAlignment="Center" VerticalAlignment="Center" />
+              <Border Style="{StaticResource GlyphCircle}" Margin="0,0,12,0">
+                <ui:LineIcon Style="{StaticResource ToneIcon}" Tag="{Binding Tone}" Width="14" Height="14" StrokeThickness="2.1" Data="{StaticResource I.Folder}" />
+              </Border>
+              <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                <StackPanel Orientation="Horizontal">
+                  <TextBlock Text="{Binding Primary}" Style="{StaticResource Bold}" TextTrimming="CharacterEllipsis" />
+                  <ui:LineIcon x:Name="Chevron" Width="12" Height="12" StrokeThickness="2.6" Stroke="{DynamicResource T.Muted}"
+                               Data="{StaticResource I.Chevron}" VerticalAlignment="Center" Margin="6,0,0,0" />
+                </StackPanel>
+                <TextBlock Text="{Binding Secondary}" Style="{StaticResource MutedSmall}" TextTrimming="CharacterEllipsis" />
+              </StackPanel>
+              <TextBlock Grid.Column="2" Text="{Binding WhenText}" Style="{StaticResource MutedSmall}" VerticalAlignment="Center" Margin="12,0,0,0" />
+            </Grid>
+          </ToggleButton>
+          <ItemsControl ItemsSource="{Binding Items}" Style="{StaticResource PlainList}" Margin="40,6,0,0"
+                        Visibility="{Binding IsChecked, ElementName=FolderToggle, Converter={StaticResource Visible}}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate DataType="{x:Type c:ActivityItem}">
+                <Grid Height="26">
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                  </Grid.ColumnDefinitions>
+                  <TextBlock Text="{Binding Primary}" FontSize="13" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                  <TextBlock Grid.Column="1" Text="{Binding WhenText}" Style="{StaticResource MutedSmall}" VerticalAlignment="Center" Margin="12,0,0,0" />
+                </Grid>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+      </Border>
+    </DataTemplate>
+  </Window.Resources>
+
+  <Grid>
+    <Grid.ColumnDefinitions>
+      <ColumnDefinition Width="68" />
+      <ColumnDefinition Width="*" />
+    </Grid.ColumnDefinitions>
+
+    <!-- ======================= Icon rail ======================= -->
+    <Border Style="{StaticResource Sidebar}">
+      <DockPanel Margin="0,18,0,16">
+        <StackPanel DockPanel.Dock="Top">
+          <Image x:Name="AppIcon" Width="32" Height="32" Margin="0,0,0,24" HorizontalAlignment="Center" ToolTip="Pairnets" />
+          <RadioButton x:Name="NavOverview" Style="{StaticResource Nav}" GroupName="page" IsChecked="True" Checked="OnNav"
+                       ToolTip="Overview" AutomationProperties.Name="Overview" Margin="0,0,0,6">
+            <ui:LineIcon Data="{StaticResource I.Home}" />
+          </RadioButton>
+          <RadioButton x:Name="NavActivity" Style="{StaticResource Nav}" GroupName="page" Checked="OnNav"
+                       ToolTip="Activity" AutomationProperties.Name="Activity" Margin="0,0,0,6">
+            <ui:LineIcon Data="{StaticResource I.Activity}" />
+          </RadioButton>
+          <RadioButton x:Name="NavHistory" Style="{StaticResource Nav}" GroupName="page" Checked="OnNav"
+                       ToolTip="History" AutomationProperties.Name="History" Margin="0,0,0,6">
+            <ui:LineIcon Data="{StaticResource I.History}" />
+          </RadioButton>
+          <RadioButton x:Name="NavDevices" Style="{StaticResource Nav}" GroupName="page" Checked="OnNav"
+                       ToolTip="Devices" AutomationProperties.Name="Devices" Margin="0,0,0,6">
+            <ui:LineIcon Data="{StaticResource I.Computer}" />
+          </RadioButton>
+          <RadioButton x:Name="NavAttention" Style="{StaticResource Nav}" GroupName="page" Checked="OnNav"
+                       ToolTip="Needs attention" AutomationProperties.Name="Needs attention">
+            <Grid Width="44" Height="44">
+              <ui:LineIcon Data="{StaticResource I.Warning}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+              <Border x:Name="AttentionBadge" Style="{StaticResource Badge}" Visibility="Collapsed" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,5,3,0">
+                <TextBlock x:Name="AttentionCount" />
               </Border>
             </Grid>
           </RadioButton>
         </StackPanel>
+
+        <StackPanel DockPanel.Dock="Bottom" VerticalAlignment="Bottom">
+          <Button x:Name="UpdateRailButton" Style="{StaticResource RailButton}" Visibility="Collapsed" Click="OnToggleUpdate" Margin="0,0,0,6"
+                  ToolTip="A new version of Pairnets is available" AutomationProperties.Name="Update available">
+            <Grid Width="44" Height="44">
+              <ui:LineIcon x:Name="UpdateIcon" Width="21" Height="21" StrokeThickness="1.8" Stroke="{DynamicResource T.Accent}" Data="{StaticResource I.Download}"
+                           HorizontalAlignment="Center" VerticalAlignment="Center" />
+              <Ellipse Width="8" Height="8" Fill="{DynamicResource T.Accent}" Stroke="{DynamicResource T.Sidebar}" StrokeThickness="2"
+                       HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,9,9,0" />
+            </Grid>
+          </Button>
+          <Button x:Name="AccountButton" Style="{StaticResource RailButton}" Click="OnToggleAccount" ToolTip="Account" AutomationProperties.Name="Account" Margin="0,0,0,6">
+            <Border Style="{StaticResource Avatar}">
+              <TextBlock x:Name="AccountInitial" Text="?" />
+            </Border>
+          </Button>
+          <RadioButton x:Name="NavSettings" Style="{StaticResource Nav}" GroupName="page" Checked="OnNav"
+                       ToolTip="Settings" AutomationProperties.Name="Settings">
+            <ui:LineIcon Data="{StaticResource I.Settings}" />
+          </RadioButton>
+          <!-- The Account page has no rail entry of its own (the account button opens it); this keeps the group whole. -->
+          <RadioButton x:Name="NavAccount" Style="{StaticResource Nav}" GroupName="page" Checked="OnNav" Visibility="Collapsed" />
+        </StackPanel>
+        <Grid />
       </DockPanel>
     </Border>
 
@@ -160,8 +162,9 @@
         <RowDefinition Height="Auto" />
         <RowDefinition Height="*" />
       </Grid.RowDefinitions>
-      <Grid Margin="28,22,28,0">
+      <Grid Margin="36,24,36,0">
         <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="Auto" />
           <ColumnDefinition Width="*" />
           <ColumnDefinition Width="Auto" />
         </Grid.ColumnDefinitions>
@@ -169,33 +172,50 @@
           <RowDefinition Height="Auto" />
           <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
-        <TextBlock x:Name="PageTitle" Style="{StaticResource Title}" Text="Overview" VerticalAlignment="Center" />
-        <TextBlock x:Name="PageSubtitle" Grid.Row="1" Grid.ColumnSpan="2" Style="{StaticResource Muted}" Margin="0,4,0,0" TextWrapping="Wrap" Visibility="Collapsed" />
-        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-          <Button Style="{StaticResource SubtleButton}" Margin="0,0,8,0" Click="OnOpenFolder" ToolTip="Open the synced folder">
+        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+          <TextBlock x:Name="PageTitle" Style="{StaticResource Title}" Text="Overview" VerticalAlignment="Center" />
+          <Button x:Name="AttentionCallout" Style="{StaticResource CalloutButton}" Visibility="Collapsed" Click="OnReviewAttention" VerticalAlignment="Center" Margin="12,0,0,0">
             <StackPanel Orientation="Horizontal">
-              <ui:LineIcon Style="{StaticResource ToolIcon}" Data="{StaticResource I.Folder}" />
+              <Ellipse Width="7" Height="7" Fill="{DynamicResource T.WarnFill}" VerticalAlignment="Center" Margin="0,0,8,0" />
+              <TextBlock x:Name="AttentionCalloutText" FontSize="13" FontWeight="Medium" VerticalAlignment="Center" Margin="0,0,8,0" />
+              <TextBlock Text="Review" FontSize="13" FontWeight="SemiBold" TextDecorations="Underline" VerticalAlignment="Center" />
+            </StackPanel>
+          </Button>
+        </StackPanel>
+        <TextBlock x:Name="PageSubtitle" Grid.Row="1" Grid.ColumnSpan="3" Style="{StaticResource Muted}" Margin="0,4,0,0" TextWrapping="Wrap" Visibility="Collapsed" />
+        <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+          <Button Click="OnOpenFolder" ToolTip="Open the synced folder" Margin="0,0,8,0">
+            <StackPanel Orientation="Horizontal">
+              <ui:LineIcon Data="{StaticResource I.Folder}" Margin="0,0,8,0" />
               <TextBlock Text="Open folder" />
             </StackPanel>
           </Button>
-          <Button Style="{StaticResource SubtleButton}" Margin="0,0,8,0" Click="OnPause">
+          <Button Click="OnPause" Margin="0,0,8,0">
             <StackPanel Orientation="Horizontal">
-              <ui:LineIcon x:Name="PauseGlyph" Style="{StaticResource ToolIcon}" Data="{StaticResource I.Pause}" />
+              <ui:LineIcon x:Name="PauseGlyph" Data="{StaticResource I.Pause}" Margin="0,0,8,0" />
               <TextBlock x:Name="PauseText" Text="Pause" />
             </StackPanel>
           </Button>
-          <Button Style="{StaticResource AccentButton}" Margin="0,0,8,0" Click="OnSyncNow">
+          <Button Style="{StaticResource AccentButton}" Click="OnSyncNow" Margin="0,0,8,0">
             <StackPanel Orientation="Horizontal">
-              <ui:LineIcon Style="{StaticResource ToolIcon}" Stroke="White" Data="{StaticResource I.Sync}" />
+              <ui:LineIcon StrokeThickness="2" Data="{StaticResource I.Sync}" Margin="0,0,8,0" />
               <TextBlock Text="Sync now" />
             </StackPanel>
           </Button>
-          <Button x:Name="MoreButton" Style="{StaticResource IconButton}" ToolTip="More" Click="OnMore">
-            <ui:LineIcon Width="18" Height="18" StrokeThickness="3.2" Stroke="{DynamicResource T.Text}" Data="{StaticResource I.More}" />
+          <Button x:Name="MoreButton" Style="{StaticResource IconButton}" ToolTip="More" AutomationProperties.Name="More" Click="OnMore">
+            <ui:LineIcon Width="18" Height="18" StrokeThickness="3.2" Data="{StaticResource I.More}" />
             <Button.ContextMenu>
-              <ContextMenu Placement="Bottom">
-                <MenuItem Header="View log" Click="OnViewLog" />
-                <MenuItem Header="Report a bug…" Click="OnReportBug" />
+              <ContextMenu>
+                <MenuItem Header="View log" Click="OnViewLog">
+                  <MenuItem.Icon>
+                    <ui:LineIcon Data="{StaticResource I.Log}" />
+                  </MenuItem.Icon>
+                </MenuItem>
+                <MenuItem Header="Report a bug…" Click="OnReportBug">
+                  <MenuItem.Icon>
+                    <ui:LineIcon Data="{StaticResource I.Bug}" />
+                  </MenuItem.Icon>
+                </MenuItem>
               </ContextMenu>
             </Button.ContextMenu>
           </Button>
@@ -204,198 +224,214 @@
 
       <Grid Grid.Row="1">
         <!-- ============ Overview ============ -->
-        <ScrollViewer x:Name="OverviewPage" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-          <StackPanel Margin="28,18,28,24">
-            <Border Style="{StaticResource Hero}">
-              <Grid>
-                <Border x:Name="HeroTint" CornerRadius="15" IsHitTestVisible="False" />
-                <StackPanel Margin="22,20,22,22">
-                  <Grid>
-                    <Grid.ColumnDefinitions>
-                      <ColumnDefinition Width="Auto" />
-                      <ColumnDefinition Width="*" />
-                      <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
-                    <Grid x:Name="StatusBadgeHost" Width="48" Height="48" VerticalAlignment="Center" Margin="0,0,16,0">
-                      <Ellipse x:Name="StatusBadge" Fill="{StaticResource S.Grey}" />
-                      <ui:LineIcon x:Name="StatusGlyph" Width="23" Height="23" StrokeThickness="2.6" Stroke="White" Data="{StaticResource I.CloudOff}" />
-                    </Grid>
-                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                      <TextBlock x:Name="Headline" Style="{StaticResource H1}" Text="Starting…" />
-                      <TextBlock x:Name="Detail" Style="{StaticResource Muted}" TextWrapping="Wrap" MaxWidth="520" HorizontalAlignment="Left" Margin="0,3,0,0" />
-                    </StackPanel>
-                    <Button x:Name="FixButton" Grid.Column="2" Style="{StaticResource WarnButton}" Visibility="Collapsed" VerticalAlignment="Center" Margin="12,0,0,0" Click="OnFix" />
-                  </Grid>
-
-                  <ui:DeviceMapView x:Name="Map" Margin="0,22,0,0" />
-
-                  <!-- Waiting for the other computer's big batch -->
-                  <StackPanel x:Name="WaitPanel" Margin="0,22,0,0" Visibility="Collapsed">
-                    <ProgressBar x:Name="WaitProgress" Style="{StaticResource RoundProgress}" Minimum="0" Maximum="100" />
-                    <Grid Margin="0,6,0,0">
-                      <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                      </Grid.ColumnDefinitions>
-                      <TextBlock x:Name="WaitText" Style="{StaticResource MutedSmall}" />
-                      <TextBlock Grid.Column="1" Style="{StaticResource MutedSmall}" Text="Your own changes still upload" />
-                    </Grid>
-                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
-                      <Button Style="{StaticResource SubtleButton}" Content="Download now anyway" Click="OnDownloadNow" />
-                      <TextBlock Style="{StaticResource MutedSmall}" VerticalAlignment="Center" TextWrapping="Wrap" MaxWidth="320" Margin="10,0,0,0"
-                                 Text="Stops waiting by itself if the other computer goes quiet for 2 minutes." />
-                    </StackPanel>
-                  </StackPanel>
+        <ScrollViewer x:Name="OverviewPage" HorizontalScrollBarVisibility="Disabled">
+          <StackPanel Margin="36,18,36,0">
+            <!-- The ring and what it means -->
+            <Grid>
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="152" />
+                <ColumnDefinition Width="*" />
+              </Grid.ColumnDefinitions>
+              <Grid x:Name="RingHost" Width="152" Height="152" VerticalAlignment="Top">
+                <ui:ProgressRing x:Name="Ring" Thickness="8" />
+                <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                  <TextBlock x:Name="RingText" FontSize="32" FontWeight="SemiBold" HorizontalAlignment="Center" />
+                  <TextBlock x:Name="RingCaption" Style="{StaticResource Muted}" FontSize="12" HorizontalAlignment="Center" Margin="0,1,0,0" Visibility="Collapsed" />
                 </StackPanel>
+                <ui:LineIcon x:Name="RingIcon" Width="50" Height="50" StrokeThickness="2.2" Visibility="Collapsed"
+                             HorizontalAlignment="Center" VerticalAlignment="Center" />
               </Grid>
-            </Border>
-
-            <!-- Something needs a decision -->
-            <Border x:Name="AttentionCallout" Style="{StaticResource Callout}" Margin="0,14,0,0" Visibility="Collapsed">
-              <Grid>
-                <Grid.ColumnDefinitions>
-                  <ColumnDefinition Width="Auto" />
-                  <ColumnDefinition Width="*" />
-                  <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
-                <ui:LineIcon Width="18" Height="18" Stroke="{DynamicResource T.WarnText}" Data="{StaticResource I.Warning}" Margin="0,0,10,0" VerticalAlignment="Center" />
-                <TextBlock x:Name="AttentionCalloutText" Grid.Column="1" FontWeight="SemiBold" Foreground="{DynamicResource T.WarnText}" VerticalAlignment="Center" />
-                <Button Grid.Column="2" Style="{StaticResource SubtleButton}" Content="Review" Click="OnReviewAttention" />
-              </Grid>
-            </Border>
-
-            <!-- Current transfer: the whole batch, speed, and the files in progress -->
-            <Border x:Name="TransferCard" Style="{StaticResource Card}" Padding="18,14,18,16" Margin="0,14,0,0" Visibility="Collapsed">
-              <StackPanel>
-                <Grid>
-                  <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="Auto" />
-                  </Grid.ColumnDefinitions>
-                  <StackPanel Orientation="Horizontal">
-                    <ui:LineIcon x:Name="TransferArrow" Width="16" Height="16" StrokeThickness="2.4" Margin="0,0,6,0"
-                                 Stroke="{StaticResource S.Green}" Data="{StaticResource I.Up}" VerticalAlignment="Center" />
-                    <TextBlock x:Name="TransferTitle" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
-                  </StackPanel>
-                  <TextBlock x:Name="TransferSpeed" Grid.Column="1" Style="{StaticResource MutedSmall}" VerticalAlignment="Center" Margin="8,0,0,0" />
-                  <Border x:Name="LimitPill" Grid.Column="2" Style="{StaticResource Pill}" Margin="8,0,0,0" Visibility="Collapsed">
-                    <TextBlock x:Name="LimitText" FontSize="11.5" />
-                  </Border>
-                </Grid>
-                <ProgressBar x:Name="TransferProgress" Style="{StaticResource RoundProgress}" Minimum="0" Maximum="100" Margin="0,10,0,0" />
-                <TextBlock x:Name="TransferOverall" Style="{StaticResource MutedSmall}" Margin="0,8,0,0" />
-                <Border x:Name="ActiveDivider" Style="{StaticResource Divider}" Margin="0,10,0,2" />
-                <ItemsControl x:Name="ActiveList" Style="{StaticResource PlainList}">
-                  <ItemsControl.ItemsPanel>
-                    <ItemsPanelTemplate>
-                      <UniformGrid Columns="2" />
-                    </ItemsPanelTemplate>
-                  </ItemsControl.ItemsPanel>
+              <StackPanel Grid.Column="1" Margin="36,0,0,0" VerticalAlignment="Center">
+                <TextBlock x:Name="Headline" Style="{StaticResource H1}" Text="Starting…" TextWrapping="Wrap" TextTrimming="CharacterEllipsis" MaxHeight="116" />
+                <TextBlock x:Name="Lead" Style="{StaticResource Lead}" TextWrapping="Wrap" Margin="0,12,0,0" />
+                <ItemsControl x:Name="DetailLines" Style="{StaticResource PlainList}" Margin="0,8,0,0">
                   <ItemsControl.ItemTemplate>
                     <DataTemplate>
-                      <StackPanel Margin="0,6,16,2" Loaded="OnRowLoaded">
-                        <Grid>
-                          <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                          </Grid.ColumnDefinitions>
-                          <TextBlock Text="{Binding FileName}" FontWeight="SemiBold" FontSize="12.5" TextTrimming="CharacterEllipsis" />
-                          <TextBlock Grid.Column="1" Text="{Binding PercentText}" Style="{StaticResource MutedSmall}" Margin="6,0,0,0" />
-                        </Grid>
-                        <ProgressBar Style="{StaticResource ThinProgress}" Minimum="0" Maximum="100" ui:Motion.SmoothValue="{Binding PercentValue, Mode=OneWay}" Margin="0,4,0,0"
-                                     Foreground="{Binding IsUpload, Converter={StaticResource DirectionBrush}}" />
+                      <TextBlock Text="{Binding}" Style="{StaticResource Muted}" FontSize="14" TextWrapping="Wrap" MaxWidth="560" HorizontalAlignment="Left" Margin="0,0,0,4" />
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <Button x:Name="FixButton" Style="{StaticResource WarnButton}" Visibility="Collapsed" HorizontalAlignment="Left" Margin="0,8,0,0" Click="OnFix" />
+                <StackPanel x:Name="WaitPanel" Orientation="Horizontal" Visibility="Collapsed" Margin="0,8,0,0">
+                  <Button Content="Download now anyway" Click="OnDownloadNow" />
+                  <TextBlock Style="{StaticResource MutedSmall}" VerticalAlignment="Center" TextWrapping="Wrap" MaxWidth="330" Margin="14,0,0,0"
+                             Text="Stops waiting by itself if the other computer goes quiet for 2 minutes." />
+                </StackPanel>
+              </StackPanel>
+            </Grid>
+
+            <!-- This computer ── server ── the other computer -->
+            <Border Style="{StaticResource Hairline}" BorderThickness="0,1,0,1" Padding="0,14" Margin="0,22,0,0">
+              <ui:DeviceMapView x:Name="Map" />
+            </Border>
+
+            <!-- In progress (while files move) and recent activity -->
+            <Grid x:Name="ListsGrid" Margin="0,18,0,0">
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="44" />
+                <ColumnDefinition Width="*" />
+              </Grid.ColumnDefinitions>
+              <StackPanel x:Name="TransferCard" Visibility="Collapsed">
+                <TextBlock Style="{StaticResource H2}" Text="In progress" Margin="0,0,0,4" />
+                <ItemsControl x:Name="ActiveList" Style="{StaticResource PlainList}">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate DataType="{x:Type c:TransferRowView}">
+                      <StackPanel Loaded="OnRowLoaded">
+                        <!-- One file -->
+                        <StackPanel Margin="0,9" Visibility="{Binding IsFolder, Converter={StaticResource Hidden}}">
+                          <Grid>
+                            <Grid.ColumnDefinitions>
+                              <ColumnDefinition Width="*" />
+                              <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="{Binding Title}" Style="{StaticResource Strong}" Margin="20,0,0,0" TextTrimming="CharacterEllipsis" />
+                            <TextBlock Grid.Column="1" Text="{Binding PercentText}" Style="{StaticResource Muted}" Margin="12,0,0,0" />
+                          </Grid>
+                          <ProgressBar Style="{StaticResource ThinProgress}" Minimum="0" Maximum="100" Margin="0,7,0,0"
+                                       ui:Motion.SmoothValue="{Binding PercentValue, Mode=OneWay}" />
+                        </StackPanel>
+                        <!-- A folder: opens to list every file of this sync in it -->
+                        <StackPanel Visibility="{Binding IsFolder, Converter={StaticResource Visible}}">
+                          <ToggleButton x:Name="GroupToggle" Style="{StaticResource RowToggle}" Padding="0,9" Checked="OnChevronToggled" Unchecked="OnChevronToggled">
+                            <StackPanel>
+                              <Grid>
+                                <Grid.ColumnDefinitions>
+                                  <ColumnDefinition Width="Auto" />
+                                  <ColumnDefinition Width="Auto" />
+                                  <ColumnDefinition Width="Auto" />
+                                  <ColumnDefinition Width="*" />
+                                  <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <ui:LineIcon x:Name="Chevron" Width="12" Height="12" StrokeThickness="2.6" Stroke="{DynamicResource T.Muted}"
+                                             Data="{StaticResource I.Chevron}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                <ui:LineIcon Grid.Column="1" Stroke="{DynamicResource T.Accent}" Data="{StaticResource I.Folder}"
+                                             VerticalAlignment="Center" Margin="0,0,8,0" />
+                                <TextBlock Grid.Column="2" Text="{Binding Title}" Style="{StaticResource Bold}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                                <TextBlock Grid.Column="3" Text="{Binding Detail}" Style="{StaticResource Muted}" Margin="8,0,0,0" VerticalAlignment="Center" />
+                                <TextBlock Grid.Column="4" Text="{Binding PercentText}" Style="{StaticResource Muted}" Margin="12,0,0,0" VerticalAlignment="Center" />
+                              </Grid>
+                              <ProgressBar Style="{StaticResource ThinProgress}" Minimum="0" Maximum="100" Margin="0,7,0,0"
+                                           ui:Motion.SmoothValue="{Binding PercentValue, Mode=OneWay}" />
+                            </StackPanel>
+                          </ToggleButton>
+                          <ScrollViewer MaxHeight="112" Margin="28,0,0,4" HorizontalScrollBarVisibility="Disabled"
+                                        Visibility="{Binding IsChecked, ElementName=GroupToggle, Converter={StaticResource Visible}}">
+                            <ItemsControl ItemsSource="{Binding Files}" Style="{StaticResource PlainList}">
+                              <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="{x:Type c:BatchFile}">
+                                  <Grid Height="26">
+                                    <Grid.ColumnDefinitions>
+                                      <ColumnDefinition Width="Auto" />
+                                      <ColumnDefinition Width="*" />
+                                      <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <Grid Width="13" Height="13" Margin="0,0,10,0" VerticalAlignment="Center">
+                                      <ui:LineIcon Width="13" Height="13" StrokeThickness="2.6" Stroke="{DynamicResource S.Green}"
+                                                   Data="{StaticResource I.Check}" Visibility="{Binding IsDone, Converter={StaticResource Visible}}" />
+                                      <ui:LineIcon Width="13" Height="13" StrokeThickness="2.6" Stroke="{DynamicResource S.Blue}"
+                                                   Data="{StaticResource I.Up}" Visibility="{Binding IsMovingUp, Converter={StaticResource Visible}}" />
+                                      <ui:LineIcon Width="13" Height="13" StrokeThickness="2.6" Stroke="{DynamicResource S.Blue}"
+                                                   Data="{StaticResource I.Down}" Visibility="{Binding IsMovingDown, Converter={StaticResource Visible}}" />
+                                      <Ellipse Width="5" Height="5" Fill="{DynamicResource T.Muted}" Visibility="{Binding IsWaiting, Converter={StaticResource Visible}}" />
+                                    </Grid>
+                                    <TextBlock x:Name="FileName" Grid.Column="1" Text="{Binding FileName}" FontSize="13" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                    <TextBlock Grid.Column="2" Text="{Binding StateText}" Style="{StaticResource Muted}" FontSize="13" VerticalAlignment="Center" Margin="10,0,0,0" />
+                                  </Grid>
+                                  <DataTemplate.Triggers>
+                                    <DataTrigger Binding="{Binding IsWaiting}" Value="True">
+                                      <Setter TargetName="FileName" Property="Foreground" Value="{DynamicResource T.Muted}" />
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding IsMoving}" Value="True">
+                                      <Setter TargetName="FileName" Property="FontWeight" Value="Medium" />
+                                    </DataTrigger>
+                                  </DataTemplate.Triggers>
+                                </DataTemplate>
+                              </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                          </ScrollViewer>
+                        </StackPanel>
                       </StackPanel>
                     </DataTemplate>
                   </ItemsControl.ItemTemplate>
                 </ItemsControl>
               </StackPanel>
-            </Border>
 
-            <!-- Facts -->
-            <UniformGrid Columns="4" Margin="-5,14,-5,0">
-              <Border Style="{StaticResource Tile}">
-                <StackPanel>
-                  <StackPanel Orientation="Horizontal">
-                    <ui:LineIcon Style="{StaticResource TileIcon}" Data="{StaticResource I.Folder}" />
-                    <TextBlock Style="{StaticResource Caps}" Text="FOLDER" />
-                  </StackPanel>
-                  <TextBlock x:Name="FolderText" Style="{StaticResource Value}" Text="–" Margin="0,4,0,0" />
-                  <Button Style="{StaticResource LinkButton}" Margin="-6,2,0,-4" HorizontalAlignment="Left" Content="Open" Click="OnOpenFolder" />
-                </StackPanel>
-              </Border>
-              <Border Style="{StaticResource Tile}">
-                <StackPanel>
-                  <StackPanel Orientation="Horizontal">
-                    <ui:LineIcon Style="{StaticResource TileIcon}" Data="{StaticResource I.Clock}" />
-                    <TextBlock Style="{StaticResource Caps}" Text="LAST SYNCED" />
-                  </StackPanel>
-                  <TextBlock x:Name="LastSync" Style="{StaticResource Value}" Text="Not yet" Margin="0,4,0,0" />
-                  <TextBlock x:Name="ConnectionText" Style="{StaticResource MutedSmall}" Margin="0,6,0,0" />
-                </StackPanel>
-              </Border>
-              <Border x:Name="VersionTile" Style="{StaticResource Tile}">
-                <StackPanel>
-                  <StackPanel Orientation="Horizontal">
-                    <ui:LineIcon Style="{StaticResource TileIcon}" Data="{StaticResource I.Server}" />
-                    <TextBlock Style="{StaticResource Caps}" Text="SERVER" />
-                  </StackPanel>
-                  <TextBlock x:Name="VersionText" Style="{StaticResource Value}" Text="–" Margin="0,4,0,0" />
-                  <Button x:Name="VersionButton" Style="{StaticResource LinkButton}" Margin="-6,2,0,-4" HorizontalAlignment="Left" Click="OnUpdateServer" Visibility="Collapsed" />
-                </StackPanel>
-              </Border>
-              <Border x:Name="SpaceTile" Style="{StaticResource Tile}">
-                <StackPanel>
-                  <StackPanel Orientation="Horizontal">
-                    <ui:LineIcon Style="{StaticResource TileIcon}" Data="{StaticResource I.Disk}" />
-                    <TextBlock Style="{StaticResource Caps}" Text="FREE SPACE" />
-                  </StackPanel>
-                  <TextBlock x:Name="SpaceText" Style="{StaticResource Value}" Text="–" Margin="0,4,0,0" />
-                  <TextBlock Style="{StaticResource MutedSmall}" Margin="0,6,0,0" Text="on the server" />
-                </StackPanel>
-              </Border>
-            </UniformGrid>
-
-            <!-- Recent activity -->
-            <Border Style="{StaticResource Card}" Padding="10,12,10,8" Margin="0,14,0,0">
-              <StackPanel>
-                <Grid Margin="8,0,2,2">
+              <StackPanel x:Name="RecentPanel" Grid.ColumnSpan="3">
+                <Grid Margin="0,0,0,2">
                   <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
                   </Grid.ColumnDefinitions>
-                  <TextBlock Style="{StaticResource H2}" Text="Recent activity" VerticalAlignment="Center" />
+                  <TextBlock Style="{StaticResource H2}" Text="Recent" VerticalAlignment="Center" />
                   <Button Grid.Column="1" Style="{StaticResource LinkButton}" Content="See all" Click="OnSeeAllActivity" />
                 </Grid>
-                <ItemsControl x:Name="RecentList" Style="{StaticResource PlainList}" Margin="0,4,0,0" />
-                <TextBlock x:Name="RecentEmpty" Style="{StaticResource Muted}" Margin="8,6,8,8"
+                <ItemsControl x:Name="RecentList" Style="{StaticResource PlainList}" />
+                <TextBlock x:Name="RecentEmpty" Style="{StaticResource Muted}" Margin="0,8" TextWrapping="Wrap"
                            Text="Nothing has happened yet. Changes appear here as they sync." />
               </StackPanel>
+            </Grid>
+
+            <!-- Facts -->
+            <Border Style="{StaticResource Hairline}" Padding="0,14,0,18" Margin="0,14,0,0">
+              <Grid>
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="*" />
+                  <ColumnDefinition Width="24" />
+                  <ColumnDefinition Width="*" />
+                  <ColumnDefinition Width="24" />
+                  <ColumnDefinition Width="*" />
+                  <ColumnDefinition Width="24" />
+                  <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Border Style="{StaticResource Tile}">
+                  <StackPanel>
+                    <TextBlock Style="{StaticResource Caps}" Text="Folder" Margin="0,0,0,3" />
+                    <TextBlock x:Name="FolderText" Style="{StaticResource Value}" Text="–" />
+                  </StackPanel>
+                </Border>
+                <Border Style="{StaticResource Tile}" Grid.Column="2">
+                  <StackPanel>
+                    <TextBlock Style="{StaticResource Caps}" Text="Last synced" Margin="0,0,0,3" />
+                    <TextBlock x:Name="LastSync" Style="{StaticResource Value}" Text="Not yet" />
+                  </StackPanel>
+                </Border>
+                <Border x:Name="VersionTile" Style="{StaticResource Tile}" Grid.Column="4">
+                  <StackPanel>
+                    <TextBlock Style="{StaticResource Caps}" Text="Server" Margin="0,0,0,3" />
+                    <TextBlock x:Name="VersionText" Style="{StaticResource Value}" Text="–" />
+                    <Button x:Name="VersionButton" Style="{StaticResource LinkButton}" FontSize="12.5" HorizontalAlignment="Left" Margin="0,3,0,0" Click="OnUpdateServer" Visibility="Collapsed" />
+                  </StackPanel>
+                </Border>
+                <Border x:Name="SpaceTile" Style="{StaticResource Tile}" Grid.Column="6">
+                  <StackPanel>
+                    <TextBlock Style="{StaticResource Caps}" Text="Free space" Margin="0,0,0,3" />
+                    <TextBlock x:Name="SpaceText" Style="{StaticResource Value}" Text="–" />
+                  </StackPanel>
+                </Border>
+              </Grid>
             </Border>
           </StackPanel>
         </ScrollViewer>
 
         <!-- ============ Activity ============ -->
-        <Border x:Name="ActivityPage" Style="{StaticResource Card}" Margin="28,18,28,24" Padding="8,4,8,8" Visibility="Collapsed">
-          <Grid>
-            <ScrollViewer x:Name="ActivityPanel" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-              <ItemsControl x:Name="ActivityList" Style="{StaticResource PlainList}" />
-            </ScrollViewer>
-            <StackPanel x:Name="ActivityEmpty" HorizontalAlignment="Center" VerticalAlignment="Center">
-              <ui:LineIcon Width="30" Height="30" StrokeThickness="1.6" Stroke="{DynamicResource T.Muted}"
-                           Data="{StaticResource I.Activity}" HorizontalAlignment="Center" Margin="0,0,0,8" />
-              <TextBlock Style="{StaticResource Muted}" Text="Nothing has happened yet. Changes appear here as they sync." />
-            </StackPanel>
-          </Grid>
-        </Border>
+        <Grid x:Name="ActivityPage" Margin="36,18,36,0" Visibility="Collapsed">
+          <ScrollViewer x:Name="ActivityPanel" HorizontalScrollBarVisibility="Disabled">
+            <ItemsControl x:Name="ActivityList" Style="{StaticResource PlainList}" Margin="0,0,0,24" />
+          </ScrollViewer>
+          <StackPanel x:Name="ActivityEmpty" HorizontalAlignment="Center" VerticalAlignment="Center">
+            <ui:LineIcon Width="30" Height="30" StrokeThickness="1.6" Stroke="{DynamicResource T.Muted}" Data="{StaticResource I.Activity}" HorizontalAlignment="Center" />
+            <TextBlock Style="{StaticResource Muted}" Margin="0,10,0,0" Text="Nothing has happened yet. Changes appear here as they sync." />
+          </StackPanel>
+        </Grid>
 
         <!-- ============ History ============ -->
-        <Grid x:Name="HistoryPage" Margin="28,18,28,24" Visibility="Collapsed">
+        <Grid x:Name="HistoryPage" Margin="36,20,36,24" Visibility="Collapsed">
           <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
           </Grid.RowDefinitions>
-          <Grid Margin="0,0,0,12">
+          <Grid>
             <Grid.ColumnDefinitions>
               <ColumnDefinition Width="Auto" />
               <ColumnDefinition Width="*" />
@@ -405,80 +441,73 @@
               <StackPanel Orientation="Horizontal">
                 <RadioButton x:Name="DeletedTab" Style="{StaticResource Seg}" GroupName="history" IsChecked="True" Checked="OnHistoryModeChanged">
                   <StackPanel Orientation="Horizontal">
-                    <ui:LineIcon Width="14" Height="14" Margin="0,0,6,0" Data="{StaticResource I.Trash}"
-                                 Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}" />
+                    <ui:LineIcon Width="14" Height="14" Margin="0,0,7,0" Data="{StaticResource I.Trash}" />
                     <TextBlock Text="Deleted files" />
                   </StackPanel>
                 </RadioButton>
                 <RadioButton x:Name="FilesTab" Style="{StaticResource Seg}" GroupName="history" Checked="OnHistoryModeChanged">
                   <StackPanel Orientation="Horizontal">
-                    <ui:LineIcon Width="14" Height="14" Margin="0,0,6,0" Data="{StaticResource I.File}"
-                                 Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}" />
+                    <ui:LineIcon Width="14" Height="14" Margin="0,0,7,0" Data="{StaticResource I.File}" />
                     <TextBlock Text="All files" />
                   </StackPanel>
                 </RadioButton>
               </StackPanel>
             </Border>
-            <Grid Grid.Column="1" Margin="12,0,8,0">
-              <TextBox x:Name="HistorySearch" Style="{StaticResource Input}" Padding="30,6,8,6" VerticalContentAlignment="Center" TextChanged="OnHistorySearch" />
-              <ui:LineIcon Width="15" Height="15" Margin="11,0,0,0" HorizontalAlignment="Left" Stroke="{DynamicResource T.Muted}" Data="{StaticResource I.Search}" IsHitTestVisible="False" />
-              <TextBlock x:Name="SearchHint" Style="{StaticResource Muted}" Margin="33,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False" Text="Search by name or folder" />
+            <Grid Grid.Column="1" Margin="10,0">
+              <TextBox x:Name="HistorySearch" Style="{StaticResource Input}" Padding="38,8,12,8" ui:Look.Placeholder="Search by name or folder" TextChanged="OnHistorySearch" />
+              <ui:LineIcon Width="16" Height="16" Margin="13,0,0,0" HorizontalAlignment="Left" Stroke="{DynamicResource T.Muted}" Data="{StaticResource I.Search}" IsHitTestVisible="False" />
             </Grid>
             <Button Grid.Column="2" Style="{StaticResource IconButton}" ToolTip="Reload from the server" Click="OnHistoryReload">
-              <ui:LineIcon Width="17" Height="17" Stroke="{DynamicResource T.Text}" Data="{StaticResource I.Sync}" />
+              <ui:LineIcon Data="{StaticResource I.Sync}" />
             </Button>
           </Grid>
 
-          <Grid Grid.Row="1">
-            <Grid.ColumnDefinitions>
-              <ColumnDefinition Width="11*" />
-              <ColumnDefinition Width="10*" />
-            </Grid.ColumnDefinitions>
-            <Border Style="{StaticResource Card}" Padding="8" Margin="0,0,7,0">
-              <Grid>
-                <Grid.RowDefinitions>
-                  <RowDefinition Height="Auto" />
-                  <RowDefinition Height="*" />
-                </Grid.RowDefinitions>
-                <TextBlock x:Name="HistorySummary" Style="{StaticResource MutedSmall}" Margin="8,4,8,6" />
-                <ListBox x:Name="FileList" Grid.Row="1" Style="{StaticResource Rows}" SelectionChanged="OnFileSelected">
-                  <ListBox.ItemTemplate>
-                    <DataTemplate DataType="{x:Type c:ServerFile}">
-                      <Grid>
-                        <Grid.ColumnDefinitions>
-                          <ColumnDefinition Width="Auto" />
-                          <ColumnDefinition Width="*" />
-                        </Grid.ColumnDefinitions>
-                        <Border Width="32" Height="32" CornerRadius="8" Background="{DynamicResource T.Pill}" Margin="0,0,11,0">
-                          <Grid>
-                            <ui:LineIcon x:Name="FileGlyph" Width="17" Height="17" StrokeThickness="2" Stroke="{DynamicResource T.Text}" Data="{StaticResource I.File}" />
-                            <ui:LineIcon Width="17" Height="17" StrokeThickness="2" Stroke="{StaticResource S.Red}" Data="{StaticResource I.Trash}"
-                                         Visibility="{Binding Deleted, Converter={StaticResource Visible}}" />
-                          </Grid>
-                        </Border>
-                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                          <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
-                          <TextBlock Text="{Binding Secondary}" Style="{StaticResource MutedSmall}" TextTrimming="CharacterEllipsis" Margin="0,1,0,0" />
-                        </StackPanel>
-                      </Grid>
-                      <DataTemplate.Triggers>
-                        <DataTrigger Binding="{Binding Deleted}" Value="True">
-                          <Setter TargetName="FileGlyph" Property="Visibility" Value="Collapsed" />
-                        </DataTrigger>
-                      </DataTemplate.Triggers>
-                    </DataTemplate>
-                  </ListBox.ItemTemplate>
-                </ListBox>
-                <StackPanel x:Name="HistoryMessage" Grid.Row="1" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed">
-                  <ui:LineIcon x:Name="HistoryMessageIcon" Width="30" Height="30" StrokeThickness="1.6" Stroke="{DynamicResource T.Muted}" Data="{StaticResource I.History}" HorizontalAlignment="Center" />
-                  <TextBlock x:Name="HistoryMessageText" Style="{StaticResource Muted}" TextWrapping="Wrap" TextAlignment="Center" MaxWidth="300" Margin="0,10,0,0" />
-                  <Button x:Name="HistoryRetry" Style="{StaticResource SubtleButton}" Content="Try again" HorizontalAlignment="Center" Margin="0,10,0,0" Click="OnHistoryReload" Visibility="Collapsed" />
-                </StackPanel>
-              </Grid>
-            </Border>
+          <Border Grid.Row="1" Style="{StaticResource Hairline}" Margin="0,18,0,0">
+            <Grid>
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="*" />
+              </Grid.ColumnDefinitions>
+              <Border BorderBrush="{DynamicResource T.Border}" BorderThickness="0,0,1,0" Padding="0,14,24,0">
+                <Grid>
+                  <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                  </Grid.RowDefinitions>
+                  <TextBlock x:Name="HistorySummary" Style="{StaticResource MutedSmall}" FontWeight="SemiBold" Margin="0,0,0,8" />
+                  <ListBox x:Name="FileList" Grid.Row="1" Style="{StaticResource Rows}" SelectionChanged="OnFileSelected">
+                    <ListBox.ItemTemplate>
+                      <DataTemplate DataType="{x:Type c:ServerFile}">
+                        <Grid>
+                          <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                          </Grid.ColumnDefinitions>
+                          <Border Style="{StaticResource GlyphCircle}" Width="30" Height="30" CornerRadius="15" Margin="0,0,12,0">
+                            <Grid>
+                              <ui:LineIcon Width="14" Height="14" StrokeThickness="2.1" Stroke="{DynamicResource T.Text}" Data="{StaticResource I.File}"
+                                           Visibility="{Binding Deleted, Converter={StaticResource Hidden}}" />
+                              <ui:LineIcon Width="14" Height="14" StrokeThickness="2.1" Stroke="{DynamicResource S.Red}" Data="{StaticResource I.Trash}"
+                                           Visibility="{Binding Deleted, Converter={StaticResource Visible}}" />
+                            </Grid>
+                          </Border>
+                          <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <TextBlock Text="{Binding Name}" Style="{StaticResource Strong}" TextTrimming="CharacterEllipsis" />
+                            <TextBlock Text="{Binding Secondary}" Style="{StaticResource MutedSmall}" TextTrimming="CharacterEllipsis" />
+                          </StackPanel>
+                        </Grid>
+                      </DataTemplate>
+                    </ListBox.ItemTemplate>
+                  </ListBox>
+                  <StackPanel x:Name="HistoryMessage" Grid.Row="1" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed">
+                    <ui:LineIcon x:Name="HistoryMessageIcon" Width="30" Height="30" StrokeThickness="1.6" Stroke="{DynamicResource T.Muted}" Data="{StaticResource I.History}" HorizontalAlignment="Center" />
+                    <TextBlock x:Name="HistoryMessageText" Style="{StaticResource Muted}" TextWrapping="Wrap" TextAlignment="Center" MaxWidth="300" Margin="0,10,0,0" />
+                    <Button x:Name="HistoryRetry" Content="Try again" HorizontalAlignment="Center" Margin="0,10,0,0" Click="OnHistoryReload" Visibility="Collapsed" />
+                  </StackPanel>
+                </Grid>
+              </Border>
 
-            <Border Grid.Column="1" Style="{StaticResource Card}" Margin="7,0,0,0" Padding="18,16">
-              <Grid>
+              <Grid Grid.Column="1" Margin="28,18,0,0">
                 <StackPanel x:Name="DetailEmpty" HorizontalAlignment="Center" VerticalAlignment="Center">
                   <ui:LineIcon Width="30" Height="30" StrokeThickness="1.6" Stroke="{DynamicResource T.Muted}" Data="{StaticResource I.Restore}" HorizontalAlignment="Center" />
                   <TextBlock Style="{StaticResource Muted}" TextWrapping="Wrap" TextAlignment="Center" MaxWidth="260" Margin="0,10,0,0"
@@ -486,36 +515,36 @@
                 </StackPanel>
                 <DockPanel x:Name="DetailPanel" Visibility="Collapsed">
                   <StackPanel DockPanel.Dock="Top">
-                    <TextBlock x:Name="DetailName" Style="{StaticResource H2}" TextWrapping="Wrap" />
-                    <TextBlock x:Name="DetailFolder" Style="{StaticResource MutedSmall}" TextWrapping="Wrap" Margin="0,3,0,0" />
-                    <Border x:Name="DetailStatePill" Style="{StaticResource Pill}" HorizontalAlignment="Left" Margin="0,10,0,0">
-                      <TextBlock x:Name="DetailState" FontSize="12" />
+                    <TextBlock x:Name="DetailName" FontSize="19" FontWeight="SemiBold" TextWrapping="Wrap" />
+                    <TextBlock x:Name="DetailFolder" Style="{StaticResource MutedSmall}" TextWrapping="Wrap" Margin="0,2,0,0" />
+                    <Border x:Name="DetailStatePill" Style="{StaticResource Pill}" HorizontalAlignment="Left" Margin="0,12,0,0" Padding="10,5">
+                      <TextBlock x:Name="DetailState" />
                     </Border>
-                    <Border x:Name="RestoreMessage" Style="{StaticResource OkChip}" Margin="0,10,0,0" Visibility="Collapsed">
+                    <Border x:Name="RestoreMessage" Style="{StaticResource OkChip}" Margin="0,12,0,0" Visibility="Collapsed">
                       <TextBlock x:Name="RestoreMessageText" TextWrapping="Wrap" FontSize="12.5" />
                     </Border>
-                    <TextBlock Style="{StaticResource Caps}" Text="VERSIONS ON THE SERVER" Margin="0,16,0,4" />
+                    <TextBlock Style="{StaticResource H2}" Text="Versions on the server" Margin="0,24,0,4" />
                   </StackPanel>
                   <Grid>
-                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <ScrollViewer HorizontalScrollBarVisibility="Disabled">
                       <ItemsControl x:Name="VersionList" Style="{StaticResource PlainList}">
                         <ItemsControl.ItemTemplate>
                           <DataTemplate DataType="{x:Type c:VersionRow}">
-                            <Border Style="{StaticResource Row}" Loaded="OnRowLoaded">
+                            <Border Style="{StaticResource LineRow}" Padding="0,10" Loaded="OnRowLoaded">
                               <Grid>
                                 <Grid.ColumnDefinitions>
                                   <ColumnDefinition Width="Auto" />
                                   <ColumnDefinition Width="*" />
                                   <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
-                                <Ellipse Width="9" Height="9" Fill="{DynamicResource T.Line}" Margin="2,0,12,0" VerticalAlignment="Center" />
+                                <Ellipse Width="7" Height="7" Fill="{DynamicResource T.Muted}" Margin="0,0,12,0" VerticalAlignment="Center" />
                                 <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                  <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
-                                  <TextBlock Text="{Binding Detail}" Style="{StaticResource MutedSmall}" TextTrimming="CharacterEllipsis" Margin="0,1,0,0" />
+                                  <TextBlock Text="{Binding Title}" Style="{StaticResource Bold}" TextTrimming="CharacterEllipsis" />
+                                  <TextBlock Text="{Binding Detail}" Style="{StaticResource MutedSmall}" TextTrimming="CharacterEllipsis" />
                                 </StackPanel>
-                                <Button Grid.Column="2" Style="{StaticResource SubtleButton}" VerticalAlignment="Center" Margin="10,0,0,0" Click="OnRestore" CommandParameter="{Binding}">
+                                <Button Grid.Column="2" VerticalAlignment="Center" Margin="10,0,0,0" MinHeight="32" Padding="12,0" Click="OnRestore" CommandParameter="{Binding}">
                                   <StackPanel Orientation="Horizontal">
-                                    <ui:LineIcon Width="15" Height="15" Margin="0,0,6,0" Stroke="{DynamicResource T.Text}" Data="{StaticResource I.Restore}" />
+                                    <ui:LineIcon Width="14" Height="14" Margin="0,0,7,0" Data="{StaticResource I.Restore}" />
                                     <TextBlock Text="Restore" />
                                   </StackPanel>
                                 </Button>
@@ -525,26 +554,26 @@
                         </ItemsControl.ItemTemplate>
                       </ItemsControl>
                     </ScrollViewer>
-                    <TextBlock x:Name="VersionsMessage" Style="{StaticResource Muted}" TextWrapping="Wrap" Margin="8" Visibility="Collapsed" />
+                    <TextBlock x:Name="VersionsMessage" Style="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,8" Visibility="Collapsed" />
                   </Grid>
                 </DockPanel>
               </Grid>
-            </Border>
-          </Grid>
+            </Grid>
+          </Border>
         </Grid>
 
         <!-- ============ Devices: every computer that uses the server ============ -->
-        <Border x:Name="DevicesPage" Style="{StaticResource Card}" Margin="28,18,28,24" Padding="8" Visibility="Collapsed">
-          <Grid>
-            <Grid.RowDefinitions>
-              <RowDefinition Height="*" />
-              <RowDefinition Height="Auto" />
-            </Grid.RowDefinitions>
-            <ScrollViewer x:Name="DevicesPanel" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Visibility="Collapsed">
+        <Grid x:Name="DevicesPage" Margin="36,20,36,24" Visibility="Collapsed">
+          <Grid.RowDefinitions>
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+          </Grid.RowDefinitions>
+          <ScrollViewer x:Name="DevicesPanel" HorizontalScrollBarVisibility="Disabled" Visibility="Collapsed">
+            <Border Style="{StaticResource Hairline}" VerticalAlignment="Top">
               <ItemsControl x:Name="DevicesList" Style="{StaticResource PlainList}">
                 <ItemsControl.ItemTemplate>
                   <DataTemplate DataType="{x:Type c:DeviceRow}">
-                    <Border Style="{StaticResource Row}" Padding="10" Loaded="OnRowLoaded">
+                    <Border Style="{StaticResource LineRow}" Padding="0,14" Loaded="OnRowLoaded">
                       <Grid>
                         <Grid.ColumnDefinitions>
                           <ColumnDefinition Width="Auto" />
@@ -552,83 +581,281 @@
                           <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
                         <Grid Width="40" Height="40" Margin="0,0,14,0">
-                          <Ellipse Fill="{DynamicResource T.Node}" Stroke="{DynamicResource T.NodeRing}" StrokeThickness="1.5" />
-                          <ui:LineIcon Width="20" Height="20" StrokeThickness="1.9" Stroke="{DynamicResource T.Text}" Data="{StaticResource I.Computer}" />
-                          <Ellipse x:Name="StateDot" Width="12" Height="12" HorizontalAlignment="Right" VerticalAlignment="Bottom"
-                                   Stroke="{DynamicResource T.Card}" StrokeThickness="2.5" Fill="{StaticResource S.Grey}" />
+                          <Border Style="{StaticResource GlyphCircle}" Width="40" Height="40" CornerRadius="20">
+                            <ui:LineIcon Width="19" Height="19" StrokeThickness="1.8" Stroke="{DynamicResource T.Text}" Data="{StaticResource I.Computer}" />
+                          </Border>
+                          <Ellipse x:Name="StateDot" Style="{StaticResource Dot}" Width="11" Height="11" HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                                   Fill="{DynamicResource S.Grey}" />
                         </Grid>
                         <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                          <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
-                          <TextBlock Text="{Binding Detail}" Style="{StaticResource MutedSmall}" TextTrimming="CharacterEllipsis" Margin="0,2,0,0" />
+                          <TextBlock Text="{Binding Title}" Style="{StaticResource Bold}" FontSize="14" TextTrimming="CharacterEllipsis" />
+                          <TextBlock Text="{Binding Detail}" Style="{StaticResource MutedSmall}" TextTrimming="CharacterEllipsis" />
                         </StackPanel>
-                        <Border Grid.Column="2" Style="{StaticResource Pill}" VerticalAlignment="Center" Margin="12,0,4,0">
-                          <TextBlock Text="{Binding StatusText}" FontSize="12" />
+                        <Border x:Name="StatePill" Grid.Column="2" Style="{StaticResource Pill}" VerticalAlignment="Center" Margin="12,0,0,0" Padding="10,4">
+                          <TextBlock Text="{Binding StatusText}" />
                         </Border>
                       </Grid>
                     </Border>
                     <DataTemplate.Triggers>
                       <DataTrigger Binding="{Binding Online}" Value="True">
-                        <Setter TargetName="StateDot" Property="Fill" Value="{StaticResource S.Green}" />
+                        <Setter TargetName="StateDot" Property="Fill" Value="{DynamicResource S.Green}" />
+                        <Setter TargetName="StatePill" Property="Style" Value="{StaticResource OkPill}" />
                       </DataTrigger>
                     </DataTemplate.Triggers>
                   </DataTemplate>
                 </ItemsControl.ItemTemplate>
               </ItemsControl>
-            </ScrollViewer>
-            <StackPanel x:Name="DevicesEmpty" HorizontalAlignment="Center" VerticalAlignment="Center">
-              <ui:LineIcon Width="30" Height="30" StrokeThickness="1.6" Stroke="{DynamicResource T.Muted}" Data="{StaticResource I.Server}" HorizontalAlignment="Center" />
-              <TextBlock x:Name="DevicesEmptyText" Style="{StaticResource Muted}" TextWrapping="Wrap" TextAlignment="Center" MaxWidth="340" Margin="0,10,0,0"
-                         Text="Loading the computers that use your server…" />
-            </StackPanel>
-            <!-- Adding happens on the new computer (it signs in); removing and renaming on the nest's website. -->
-            <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource T.Border}" Padding="6,12,6,4" Margin="0,6,0,0">
-              <StackPanel Orientation="Horizontal">
-                <Button Style="{StaticResource SubtleButton}" Content="+ Add a computer…" Click="OnAddComputer" />
-                <Button Style="{StaticResource LinkButton}" Content="Manage devices on your nest" Margin="14,0,0,0" VerticalAlignment="Center" Click="OnManageDevices" />
-              </StackPanel>
             </Border>
-          </Grid>
-        </Border>
+          </ScrollViewer>
+          <StackPanel x:Name="DevicesEmpty" HorizontalAlignment="Center" VerticalAlignment="Center">
+            <ui:LineIcon Width="30" Height="30" StrokeThickness="1.6" Stroke="{DynamicResource T.Muted}" Data="{StaticResource I.Server}" HorizontalAlignment="Center" />
+            <TextBlock x:Name="DevicesEmptyText" Style="{StaticResource Muted}" TextWrapping="Wrap" TextAlignment="Center" MaxWidth="340" Margin="0,10,0,0"
+                       Text="Loading the computers that use your server…" />
+          </StackPanel>
+          <!-- Adding happens on the new computer (it signs in); removing and renaming on the nest's website. -->
+          <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,18,0,0">
+            <Button Click="OnAddComputer" Margin="0,0,8,0">
+              <StackPanel Orientation="Horizontal">
+                <ui:LineIcon Width="15" Height="15" StrokeThickness="2" Data="{StaticResource I.Plus}" Margin="0,0,8,0" />
+                <TextBlock Text="Add a computer…" />
+              </StackPanel>
+            </Button>
+            <Button Click="OnManageDevices">
+              <StackPanel Orientation="Horizontal">
+                <ui:LineIcon Width="15" Height="15" Data="{StaticResource I.External}" Margin="0,0,8,0" />
+                <TextBlock Text="Manage devices on the web" />
+              </StackPanel>
+            </Button>
+          </StackPanel>
+        </Grid>
 
         <!-- ============ Needs attention ============ -->
-        <ScrollViewer x:Name="AttentionPage" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Visibility="Collapsed">
-          <StackPanel Margin="28,18,28,24">
-            <ItemsControl x:Name="AttentionList" Style="{StaticResource PlainList}">
-              <ItemsControl.ItemTemplate>
-                <DataTemplate>
-                  <Border Style="{StaticResource Card}" Padding="0" Margin="0,0,0,10" Loaded="OnRowLoaded">
-                    <Grid>
-                      <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="5" />
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                      </Grid.ColumnDefinitions>
-                      <Border CornerRadius="11,0,0,11" Background="{StaticResource S.Orange}" />
-                      <StackPanel Grid.Column="1" Margin="16,14,0,14">
-                        <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextWrapping="Wrap" />
-                        <TextBlock Text="{Binding Detail}" Style="{StaticResource MutedSmall}" TextWrapping="Wrap" Margin="0,3,0,0" />
-                      </StackPanel>
-                      <Button Grid.Column="2" Style="{StaticResource SubtleButton}" Content="{Binding ActionLabel}" Margin="16,0,16,0"
-                              VerticalAlignment="Center" Click="OnAttentionAction" CommandParameter="{Binding}" />
-                    </Grid>
-                  </Border>
-                </DataTemplate>
-              </ItemsControl.ItemTemplate>
-            </ItemsControl>
-            <StackPanel x:Name="AttentionEmpty" HorizontalAlignment="Center" Margin="0,80,0,0" Visibility="Collapsed">
-              <Grid Width="56" Height="56" HorizontalAlignment="Center">
-                <Ellipse Fill="{DynamicResource T.OkPill}" />
-                <ui:LineIcon Width="28" Height="28" StrokeThickness="2.2" Stroke="{StaticResource S.Green}" Data="{StaticResource I.Check}" />
-              </Grid>
-              <TextBlock Style="{StaticResource H2}" HorizontalAlignment="Center" Margin="0,10,0,0" Text="Nothing needs your attention" />
-              <TextBlock Style="{StaticResource Muted}" HorizontalAlignment="Center" Margin="0,4,0,0" Text="Conflicts and files Pairnets can't sync show up here." />
+        <ScrollViewer x:Name="AttentionPage" HorizontalScrollBarVisibility="Disabled" Visibility="Collapsed">
+          <StackPanel Margin="36,20,36,24">
+            <Border x:Name="AttentionListBorder" Style="{StaticResource Hairline}">
+              <ItemsControl x:Name="AttentionList" Style="{StaticResource PlainList}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate>
+                    <Border Style="{StaticResource LineRow}" Padding="0,16" Loaded="OnRowLoaded">
+                      <Grid>
+                        <Grid.ColumnDefinitions>
+                          <ColumnDefinition Width="Auto" />
+                          <ColumnDefinition Width="*" />
+                          <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <Border Width="36" Height="36" CornerRadius="18" Background="{DynamicResource T.WarnPill}" Margin="0,0,14,0" VerticalAlignment="Center">
+                          <ui:LineIcon Width="17" Height="17" StrokeThickness="2.2" Stroke="{DynamicResource T.WarnText}" Data="{StaticResource I.Warning}" />
+                        </Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                          <TextBlock Text="{Binding Title}" Style="{StaticResource Bold}" FontSize="14" TextTrimming="CharacterEllipsis" />
+                          <TextBlock Text="{Binding Detail}" Style="{StaticResource Muted}" FontSize="13" TextWrapping="Wrap" Margin="0,2,0,0" />
+                        </StackPanel>
+                        <Button Grid.Column="2" Content="{Binding ActionLabel}" Margin="16,0,0,0" MinHeight="34"
+                                VerticalAlignment="Center" Click="OnAttentionAction" CommandParameter="{Binding}" />
+                      </Grid>
+                    </Border>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </Border>
+            <StackPanel x:Name="AttentionEmpty" HorizontalAlignment="Center" Margin="0,110,0,0" Visibility="Collapsed">
+              <Border Width="64" Height="64" CornerRadius="32" BorderThickness="2" BorderBrush="{DynamicResource S.Green}" HorizontalAlignment="Center">
+                <ui:LineIcon Width="28" Height="28" StrokeThickness="2.2" Stroke="{DynamicResource S.Green}" Data="{StaticResource I.Check}" />
+              </Border>
+              <TextBlock FontSize="20" FontWeight="SemiBold" HorizontalAlignment="Center" Margin="0,16,0,0" Text="Nothing needs you right now" />
+              <TextBlock Style="{StaticResource Muted}" HorizontalAlignment="Center" Margin="0,10,0,0" Text="Conflicts and files Pairnets can't sync on its own show up here." />
             </StackPanel>
           </StackPanel>
         </ScrollViewer>
 
         <!-- ============ Settings (the form is a SettingsView the controller provides) ============ -->
-        <ContentControl x:Name="SettingsPage" Margin="28,12,14,6" Focusable="False" Visibility="Collapsed" />
+        <ContentControl x:Name="SettingsPage" Margin="36,12,20,0" Focusable="False" Visibility="Collapsed" />
+
+        <!-- ============ Account (from the account button) ============ -->
+        <ScrollViewer x:Name="AccountPage" HorizontalScrollBarVisibility="Disabled" Visibility="Collapsed">
+          <StackPanel Margin="36,20,36,24">
+            <Border Style="{StaticResource Hairline}" Padding="0,18">
+              <Grid>
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="180" />
+                  <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Style="{StaticResource SettingLabel}" Text="Signed in" />
+                <Grid Grid.Column="1">
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                  </Grid.ColumnDefinitions>
+                  <Border Style="{StaticResource AvatarLarge}" VerticalAlignment="Center" Margin="0,0,14,0">
+                    <TextBlock x:Name="AccountPageInitial" Text="?" />
+                  </Border>
+                  <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                    <TextBlock x:Name="AccountPageTitle" Style="{StaticResource Bold}" FontSize="15" TextTrimming="CharacterEllipsis" />
+                    <TextBlock x:Name="AccountPageSubtitle" Style="{StaticResource Muted}" FontSize="13" TextTrimming="CharacterEllipsis" />
+                  </StackPanel>
+                  <Button Grid.Column="2" Style="{StaticResource DangerButton}" Content="Sign out of this computer…" VerticalAlignment="Center" Click="OnSignOut" />
+                </Grid>
+              </Grid>
+            </Border>
+            <Border Style="{StaticResource Hairline}" Padding="0,18">
+              <Grid>
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="180" />
+                  <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Style="{StaticResource SettingLabel}" Text="Your nest" />
+                <StackPanel Grid.Column="1">
+                  <TextBlock x:Name="AccountNest" Style="{StaticResource Strong}" FontSize="14" TextTrimming="CharacterEllipsis" />
+                  <TextBlock x:Name="AccountNestDetail" Style="{StaticResource Muted}" FontSize="13" TextWrapping="Wrap" />
+                  <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                    <Button Click="OnOpenNest" Margin="0,0,8,0">
+                      <StackPanel Orientation="Horizontal">
+                        <ui:LineIcon Width="15" Height="15" Data="{StaticResource I.External}" Margin="0,0,8,0" />
+                        <TextBlock Text="Open your nest" />
+                      </StackPanel>
+                    </Button>
+                    <Button Click="OnManageDevices">
+                      <StackPanel Orientation="Horizontal">
+                        <ui:LineIcon Width="15" Height="15" Data="{StaticResource I.External}" Margin="0,0,8,0" />
+                        <TextBlock Text="Manage devices on the web" />
+                      </StackPanel>
+                    </Button>
+                  </StackPanel>
+                </StackPanel>
+              </Grid>
+            </Border>
+            <Border Style="{StaticResource Hairline}" Padding="0,18">
+              <Grid>
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="180" />
+                  <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Style="{StaticResource SettingLabel}" Text="This computer" />
+                <Grid Grid.Column="1">
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                  </Grid.ColumnDefinitions>
+                  <StackPanel>
+                    <TextBlock x:Name="AccountDevice" Style="{StaticResource Strong}" FontSize="14" TextTrimming="CharacterEllipsis" />
+                    <TextBlock x:Name="AccountDeviceDetail" Style="{StaticResource Muted}" FontSize="13" TextWrapping="Wrap" />
+                  </StackPanel>
+                  <Button Grid.Column="1" Style="{StaticResource LinkButton}" Content="Rename in Settings" VerticalAlignment="Center" Click="OnRenameInSettings" />
+                </Grid>
+              </Grid>
+            </Border>
+            <Border Style="{StaticResource Hairline}" Padding="0,18">
+              <Grid>
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="180" />
+                  <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Style="{StaticResource SettingLabel}" Text="Notifications" />
+                <StackPanel Grid.Column="1">
+                  <CheckBox x:Name="NotifyJoin" Style="{StaticResource Switch}" IsChecked="True" Checked="OnNotifyChanged" Unchecked="OnNotifyChanged"
+                            Content="When another computer wants to join" />
+                  <CheckBox x:Name="NotifyAttention" Style="{StaticResource Switch}" IsChecked="True" Checked="OnNotifyChanged" Unchecked="OnNotifyChanged"
+                            Content="When something needs your attention" Margin="0,22,0,0" />
+                  <CheckBox x:Name="NotifyUpdates" Style="{StaticResource Switch}" IsChecked="True" Checked="OnNotifyChanged" Unchecked="OnNotifyChanged"
+                            Content="When a new version of Pairnets is out" Margin="0,22,0,0" />
+                </StackPanel>
+              </Grid>
+            </Border>
+            <Border Style="{StaticResource Hairline}" BorderThickness="0,1,0,1" Padding="0,18">
+              <Grid>
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="180" />
+                  <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Style="{StaticResource SettingLabel}" Text="Start over" />
+                <Grid Grid.Column="1">
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                  </Grid.ColumnDefinitions>
+                  <TextBlock Style="{StaticResource Help}" Margin="0,0,18,0" VerticalAlignment="Center"
+                             Text="Forgets every setting, signs this computer out of your nest and starts again from the sign-in screen. The files in your sync folder are never deleted." />
+                  <Button Grid.Column="1" Style="{StaticResource DangerButton}" Content="Reset this app…" VerticalAlignment="Center" Click="OnResetApp" />
+                </Grid>
+              </Grid>
+            </Border>
+            <TextBlock x:Name="AppVersion" Style="{StaticResource MutedSmall}" Margin="0,18,0,0" />
+          </StackPanel>
+        </ScrollViewer>
       </Grid>
+    </Grid>
+
+    <!-- ======================= Things that float over the window (in the window, so screenshots show them) ======================= -->
+    <Grid x:Name="PopoverLayer" Grid.ColumnSpan="2" Visibility="Collapsed" Background="Transparent" MouseDown="OnPopoverLayerPressed">
+      <!-- The app update (from the rail's download button) -->
+      <Border x:Name="UpdateCard" Style="{StaticResource Popover}" Width="292" Padding="16" Margin="76,0,0,112"
+              HorizontalAlignment="Left" VerticalAlignment="Bottom" Visibility="Collapsed" MouseDown="OnPopoverPressed">
+        <StackPanel>
+          <TextBlock x:Name="UpdateTitle" FontSize="14" FontWeight="SemiBold" TextWrapping="Wrap" />
+          <TextBlock x:Name="UpdateDetail" Style="{StaticResource Muted}" FontSize="13" TextWrapping="Wrap" Margin="0,6,0,0" />
+          <ProgressBar x:Name="UpdateProgress" Style="{StaticResource ThinProgress}" Minimum="0" Maximum="100" Visibility="Collapsed" Margin="0,10,0,0" />
+          <StackPanel Orientation="Horizontal" Margin="0,14,0,0">
+            <Button x:Name="UpdateButton" Style="{StaticResource AccentButton}" MinHeight="32" Padding="14,0" Content="Download" Click="OnUpdateNow" />
+            <Button x:Name="UpdateLater" Style="{StaticResource FlatButton}" MinHeight="32" Padding="12,0" Margin="8,0,0,0" Content="Later" Click="OnUpdateLater" />
+          </StackPanel>
+        </StackPanel>
+      </Border>
+
+      <!-- The account menu (from the rail's account button) -->
+      <Border x:Name="AccountMenu" Style="{StaticResource Popover}" Width="300" Padding="8" Margin="76,0,0,62"
+              HorizontalAlignment="Left" VerticalAlignment="Bottom" Visibility="Collapsed" MouseDown="OnPopoverPressed">
+        <StackPanel>
+          <Grid Margin="10,10,10,12">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="Auto" />
+              <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <Border Style="{StaticResource Avatar}" Width="40" Height="40" CornerRadius="20" Margin="0,0,12,0">
+              <TextBlock x:Name="AccountMenuInitial" Text="?" FontSize="17" />
+            </Border>
+            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+              <TextBlock x:Name="AccountMenuTitle" FontSize="14" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+              <TextBlock x:Name="AccountMenuSubtitle" Style="{StaticResource Muted}" FontSize="12.5" TextTrimming="CharacterEllipsis" />
+            </StackPanel>
+          </Grid>
+          <Border Style="{StaticResource Hairline}" Margin="10,0" Padding="0,10">
+            <Grid>
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+              </Grid.ColumnDefinitions>
+              <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+              </Grid.RowDefinitions>
+              <TextBlock Style="{StaticResource Muted}" FontSize="12.5" Text="This computer" Margin="0,0,14,6" />
+              <TextBlock x:Name="AccountMenuDevice" Grid.Column="1" FontSize="12.5" FontWeight="Medium" TextTrimming="CharacterEllipsis" Margin="0,0,0,6" />
+              <TextBlock Grid.Row="1" Style="{StaticResource Muted}" FontSize="12.5" Text="Your nest" Margin="0,0,14,0" />
+              <TextBlock x:Name="AccountMenuNest" Grid.Row="1" Grid.Column="1" FontSize="12.5" FontWeight="Medium" TextTrimming="CharacterEllipsis" />
+            </Grid>
+          </Border>
+          <Border Style="{StaticResource Hairline}" Margin="10,0,10,6" />
+          <Button Style="{StaticResource MenuItemButton}" Click="OnAccountSettings">
+            <StackPanel Orientation="Horizontal">
+              <ui:LineIcon Data="{StaticResource I.Person}" Margin="0,0,10,0" />
+              <TextBlock Text="Account settings" />
+            </StackPanel>
+          </Button>
+          <Button Style="{StaticResource MenuItemButton}" Click="OnManageDevices">
+            <StackPanel Orientation="Horizontal">
+              <ui:LineIcon Data="{StaticResource I.External}" Margin="0,0,10,0" />
+              <TextBlock Text="Manage devices on the web" />
+            </StackPanel>
+          </Button>
+          <Button Style="{StaticResource MenuItemDangerButton}" Click="OnSignOut">
+            <StackPanel Orientation="Horizontal">
+              <ui:LineIcon Data="{StaticResource I.SignOut}" Margin="0,0,10,0" />
+              <TextBlock Text="Sign out of this computer…" />
+            </StackPanel>
+          </Button>
+        </StackPanel>
+      </Border>
     </Grid>
   </Grid>
 </Window>

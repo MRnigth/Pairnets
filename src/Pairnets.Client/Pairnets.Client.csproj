@@ -24,6 +24,8 @@
   <ItemGroup>
     <!-- The window and header icon (AppIcons): read from here, not from the exe, so an update shows the new logo at once. -->
     <Resource Include="..\..\assets\pairnets.ico" Link="pairnets.ico" />
+    <!-- Instrument Sans (SIL Open Font License, assets/fonts/OFL.txt): the app's one typeface. -->
+    <Resource Include="..\..\assets\fonts\*.ttf" Link="Fonts\%(Filename)%(Extension)" />
   </ItemGroup>
 
   <ItemGroup>

@@ -7,8 +7,8 @@ namespace Pairnets.Client.Ui;
 
 /// <summary>
 /// The line between a computer and the server (same as the Mac/Linux app). Solid while connected,
-/// dashed when not, and dots travel along it while files move: green towards the server, blue
-/// away from it. Stays still when Windows is set to show fewer animations.
+/// dashed when not, and dots travel along it while files move (<see cref="UpBrush"/> towards the
+/// server, <see cref="DownBrush"/> away from it). Stays still when Windows is set to show fewer animations.
 /// </summary>
 public sealed class FlowLine : FrameworkElement
 {
@@ -26,6 +26,12 @@ public sealed class FlowLine : FrameworkElement
 
     public static readonly DependencyProperty LineBrushProperty = DependencyProperty.Register(
         nameof(LineBrush), typeof(Brush), typeof(FlowLine), new FrameworkPropertyMetadata(Brushes.Gray, FrameworkPropertyMetadataOptions.AffectsRender));
+
+    public static readonly DependencyProperty UpBrushProperty = DependencyProperty.Register(
+        nameof(UpBrush), typeof(Brush), typeof(FlowLine), new FrameworkPropertyMetadata(Brushes.Blue, FrameworkPropertyMetadataOptions.AffectsRender));
+
+    public static readonly DependencyProperty DownBrushProperty = DependencyProperty.Register(
+        nameof(DownBrush), typeof(Brush), typeof(FlowLine), new FrameworkPropertyMetadata(Brushes.Blue, FrameworkPropertyMetadataOptions.AffectsRender));
 
     public LinkFlow Flow
     {
@@ -58,12 +64,26 @@ public sealed class FlowLine : FrameworkElement
         set => SetValue(LineBrushProperty, value);
     }
 
+    public Brush UpBrush
+    {
+        get => (Brush)GetValue(UpBrushProperty);
+        set => SetValue(UpBrushProperty, value);
+    }
+
+    public Brush DownBrush
+    {
+        get => (Brush)GetValue(DownBrushProperty);
+        set => SetValue(DownBrushProperty, value);
+    }
+
     /// <summary>True while dots are travelling (for the screenshot tool and checks).</summary>
     public bool IsFlowing { get; private set; }
 
     public FlowLine()
     {
-        SetResourceReference(LineBrushProperty, "T.Line");
+        SetResourceReference(LineBrushProperty, "T.Border");
+        SetResourceReference(UpBrushProperty, "S.Blue");
+        SetResourceReference(DownBrushProperty, "S.Blue");
         IsVisibleChanged += (_, _) => UpdateMotion(); // nothing moves while the window is hidden
     }
 
@@ -86,17 +106,17 @@ public sealed class FlowLine : FrameworkElement
         var y = ActualHeight / 2;
         if (w <= 4)
             return;
-        var pen = new Pen(LineBrush, 2) { StartLineCap = PenLineCap.Round, EndLineCap = PenLineCap.Round };
+        var pen = new Pen(LineBrush, 2) { StartLineCap = PenLineCap.Round, EndLineCap = PenLineCap.Round, DashCap = PenLineCap.Round };
         if (!Linked)
-            pen.DashStyle = new DashStyle([1, 1.5], 0);
+            pen.DashStyle = new DashStyle([1, 1.5], 0); // 2 px dashes, 3 px gaps (in line widths)
         dc.DrawLine(pen, new Point(0, y), new Point(w, y));
         if (!Linked || Flow == LinkFlow.None)
             return;
         var both = Flow == LinkFlow.Both;
         if (Flow is LinkFlow.Up or LinkFlow.Both)
-            DrawDots(dc, w, both ? y - 3.5 : y, towardsRight: !ServerOnLeft, Visuals.Resource<Brush>("S.Green"));
+            DrawDots(dc, w, both ? y - 3.5 : y, towardsRight: !ServerOnLeft, UpBrush);
         if (Flow is LinkFlow.Down or LinkFlow.Both)
-            DrawDots(dc, w, both ? y + 3.5 : y, towardsRight: ServerOnLeft, Visuals.Resource<Brush>("S.Blue"));
+            DrawDots(dc, w, both ? y + 3.5 : y, towardsRight: ServerOnLeft, DownBrush);
     }
 
     private void DrawDots(DrawingContext dc, double width, double y, bool towardsRight, Brush? brush)

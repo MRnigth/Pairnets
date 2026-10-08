@@ -3,188 +3,291 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:ui="clr-namespace:Pairnets.Client.Ui">
   <UserControl.Resources>
-    <Style x:Key="CardIcon" TargetType="ui:LineIcon">
-      <Setter Property="Width" Value="17" />
-      <Setter Property="Height" Value="17" />
-      <Setter Property="Margin" Value="0,0,8,0" />
-      <Setter Property="Stroke" Value="{DynamicResource T.Text}" />
-      <Setter Property="VerticalAlignment" Value="Center" />
+    <Style x:Key="Section" TargetType="Border" BasedOn="{StaticResource Hairline}">
+      <Setter Property="Padding" Value="0,16" />
     </Style>
-    <Style x:Key="Field" TargetType="StackPanel">
-      <Setter Property="Margin" Value="0,10,0,0" />
+    <!-- A number with up and down buttons (MB/s). -->
+    <Style x:Key="StepButton" TargetType="Button" BasedOn="{StaticResource FlatButton}">
+      <Setter Property="Width" Value="32" />
+      <Setter Property="MinHeight" Value="0" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="BorderThickness" Value="1,0,0,0" />
+      <Setter Property="BorderBrush" Value="{DynamicResource T.InputBorder}" />
+      <Setter Property="ui:Look.CornerRadius" Value="0" />
+      <Setter Property="ui:Look.HoverBorderBrush" Value="{DynamicResource T.InputBorder}" />
     </Style>
   </UserControl.Resources>
 
-  <ScrollViewer x:Name="Scroller" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
-                PreviewMouseWheel="OnScrollWheel">
-  <!-- Inside the main window, which has its own margins. -->
-  <StackPanel x:Name="Form" Margin="0,0,14,16">
-    <!-- Server -->
-    <Border Style="{StaticResource Card}">
-      <StackPanel>
-        <StackPanel Orientation="Horizontal">
-          <ui:LineIcon Style="{StaticResource CardIcon}" Data="{StaticResource I.Server}" />
-          <TextBlock x:Name="ServerHeading" Style="{StaticResource H2}" Text="Your server" />
-        </StackPanel>
-        <!-- Signed in with this computer's own key: who it is, and signing out. -->
-        <StackPanel x:Name="SignedInPanel" Visibility="Collapsed" Margin="0,10,0,0">
-          <TextBlock x:Name="SignedInText" TextWrapping="Wrap" />
-          <WrapPanel Margin="0,12,0,0">
-            <Button Style="{StaticResource SubtleButton}" Content="Manage devices on the web" Margin="0,0,8,0" Click="OnManageDevices" />
-            <Button Style="{StaticResource SubtleButton}" Content="Sign out of this computer" Click="OnSignOut" />
-          </WrapPanel>
-          <Button x:Name="ShowAddressButton" Style="{StaticResource LinkButton}" Content="Advanced: server address and token ▸" HorizontalAlignment="Left" Margin="0,10,0,0" Click="OnShowAddress" />
-        </StackPanel>
-        <StackPanel x:Name="AddressFields">
-        <StackPanel Style="{StaticResource Field}">
-          <TextBlock Style="{StaticResource Label}" Text="Server address" />
-          <TextBox x:Name="ServerUrlBox" Style="{StaticResource Input}"
-                   ToolTip="For example https://sync.example.com/: the address the install command printed on the server" />
-        </StackPanel>
-        <StackPanel Style="{StaticResource Field}">
-          <TextBlock Style="{StaticResource Label}" Text="Token" />
-          <PasswordBox x:Name="TokenBox" Style="{StaticResource PasswordInput}" ToolTip="Leave empty to keep the saved token" />
-        </StackPanel>
-        <Grid Margin="0,12,0,0">
-          <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="Auto" />
-            <ColumnDefinition Width="*" />
-          </Grid.ColumnDefinitions>
-          <Button x:Name="TestButton" Style="{StaticResource SubtleButton}" Content="Test connection" Click="OnTest" VerticalAlignment="Top" />
-          <Border x:Name="TestChip" Grid.Column="1" Style="{StaticResource Chip}" Margin="10,0,0,0" Visibility="Collapsed" HorizontalAlignment="Left">
-            <TextBlock x:Name="TestResult" TextWrapping="Wrap" />
-          </Border>
-        </Grid>
-        </StackPanel>
+  <!-- Inside the main window, which has its own margins. Rows: a label on the left, the controls on the right. -->
+  <DockPanel>
+    <!-- Save and Cancel stay at the bottom while the form scrolls. -->
+    <Border DockPanel.Dock="Bottom" Style="{StaticResource Hairline}" Padding="0,14,16,16">
+      <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+        <Button Content="Cancel" IsCancel="True" Margin="0,0,8,0" Click="OnCancel" />
+        <Button x:Name="SaveButton" Style="{StaticResource AccentButton}" Content="Save" IsDefault="True" Click="OnSave" />
       </StackPanel>
     </Border>
 
-    <!-- Folder -->
-    <Border Style="{StaticResource Card}" Margin="0,12,0,0">
-      <StackPanel>
-        <StackPanel Orientation="Horizontal">
-          <ui:LineIcon Style="{StaticResource CardIcon}" Data="{StaticResource I.Folder}" />
-          <TextBlock Style="{StaticResource H2}" Text="Folder to keep in sync" />
-        </StackPanel>
-        <Grid Margin="0,10,0,0">
-          <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="*" />
-            <ColumnDefinition Width="Auto" />
-          </Grid.ColumnDefinitions>
-          <TextBox x:Name="FolderBox" Style="{StaticResource Input}" VerticalContentAlignment="Center" />
-          <Button Grid.Column="1" Style="{StaticResource SubtleButton}" Content="Browse…" Margin="8,0,0,0" Click="OnBrowse" />
-        </Grid>
-      </StackPanel>
-    </Border>
-
-    <!-- This computer -->
-    <Border Style="{StaticResource Card}" Margin="0,12,0,0">
-      <StackPanel>
-        <StackPanel Orientation="Horizontal">
-          <ui:LineIcon Style="{StaticResource CardIcon}" Data="{StaticResource I.Computer}" />
-          <TextBlock Style="{StaticResource H2}" Text="This computer" />
-        </StackPanel>
-        <StackPanel Style="{StaticResource Field}">
-          <TextBlock Style="{StaticResource Label}" Text="Device name" />
-          <TextBox x:Name="DeviceBox" Style="{StaticResource Input}" />
-          <TextBlock Style="{StaticResource MutedSmall}" Margin="0,5,0,0" TextWrapping="Wrap"
-                     Text="Shown in conflict file names. Use a different name on each computer." />
-        </StackPanel>
-        <CheckBox x:Name="AutoStartBox" Style="{StaticResource Switch}" Content="Start Pairnets when I sign in to Windows" Margin="0,14,0,0" />
-        <Expander Style="{StaticResource Disclosure}" Header="Advanced: files to ignore" Margin="0,14,0,0">
-          <StackPanel>
-            <TextBox x:Name="IgnoreBox" Style="{StaticResource Input}" Height="76" AcceptsReturn="True"
-                     VerticalScrollBarVisibility="Auto" ToolTip="One pattern per line, e.g. *.bak or node_modules/" />
-            <TextBlock Style="{StaticResource MutedSmall}" Margin="0,5,0,0" TextWrapping="Wrap"
-                       Text="One pattern per line, e.g. *.bak or node_modules/. Temporary and system files (~$*, *.tmp, Thumbs.db, .git/ …) are always ignored." />
-          </StackPanel>
-        </Expander>
-      </StackPanel>
-    </Border>
-
-    <!-- Updates and speed -->
-    <Border Style="{StaticResource Card}" Margin="0,12,0,0">
-      <StackPanel>
-        <StackPanel Orientation="Horizontal">
-          <ui:LineIcon Style="{StaticResource CardIcon}" Data="{StaticResource I.Bolt}" />
-          <TextBlock Style="{StaticResource H2}" Text="Updates and speed" />
-        </StackPanel>
-
-        <CheckBox x:Name="UpdateBox" Style="{StaticResource Switch}" Content="Check for updates when Pairnets starts" Margin="0,12,0,0" />
-        <TextBlock Style="{StaticResource MutedSmall}" TextWrapping="Wrap" Margin="50,4,0,0"
-                   Text="Looks for a new version on GitHub at start-up and once a day. Nothing is installed until you click Update." />
-        <StackPanel Orientation="Horizontal" Margin="50,4,0,0">
-          <TextBlock x:Name="VersionText" Style="{StaticResource MutedSmall}" VerticalAlignment="Center" />
-          <Button x:Name="CheckNowButton" Style="{StaticResource FlatButton}" Padding="6,3" FontSize="12" Margin="6,0,0,0"
-                  Foreground="{DynamicResource T.Accent}" Content="Check now" Click="OnCheckNow" />
-        </StackPanel>
-        <TextBlock x:Name="ServerVersionText" Style="{StaticResource MutedSmall}" Margin="50,4,0,0" />
-        <CheckBox x:Name="AutoServerBox" Style="{StaticResource Switch}" Content="Update the server automatically" Margin="0,12,0,0" />
-        <TextBlock Style="{StaticResource MutedSmall}" TextWrapping="Wrap" Margin="50,4,0,0"
-                   Text="When this app finds the server on an older version, it updates it without asking (about 30 seconds; your files are not touched)." />
-        <CheckBox x:Name="DebugBox" Style="{StaticResource Switch}" Content="Debug mode" Margin="0,12,0,0" />
-        <TextBlock Style="{StaticResource MutedSmall}" TextWrapping="Wrap" Margin="50,4,0,0"
-                   Text="Writes more detail to the log and shows the server's update log in the update window. Turn it on when updating the server does not work." />
-        <Border Style="{StaticResource Divider}" Margin="0,12,0,0" />
-
-        <CheckBox x:Name="WaitBox" Style="{StaticResource Switch}" Content="Wait while my other computer uploads many files" Margin="0,12,0,0" />
-        <TextBlock Style="{StaticResource MutedSmall}" TextWrapping="Wrap" Margin="50,4,0,0"
-                   Text="When the other computer sends more than 100 files, download them in one go after it finishes instead of a few at a time." />
-        <Border Style="{StaticResource Divider}" Margin="0,12,0,0" />
-
-        <TextBlock Style="{StaticResource Label}" Text="Files at the same time" Margin="0,12,0,6" />
-        <Border Style="{StaticResource Segments}" HorizontalAlignment="Left">
-          <StackPanel Orientation="Horizontal">
-            <RadioButton x:Name="Par1" Style="{StaticResource Seg}" GroupName="par" Content="1" />
-            <RadioButton x:Name="Par2" Style="{StaticResource Seg}" GroupName="par" Content="2" />
-            <RadioButton x:Name="Par4" Style="{StaticResource Seg}" GroupName="par" Content="4" />
-            <RadioButton x:Name="Par8" Style="{StaticResource Seg}" GroupName="par" Content="8" />
-          </StackPanel>
+    <ScrollViewer x:Name="Scroller" HorizontalScrollBarVisibility="Disabled" PreviewMouseWheel="OnScrollWheel">
+      <StackPanel x:Name="Form" Margin="0,8,16,16">
+        <!-- Server -->
+        <Border Style="{StaticResource Section}">
+          <Grid>
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="200" />
+              <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <TextBlock x:Name="ServerHeading" Style="{StaticResource SettingLabel}" Text="Your server" />
+            <StackPanel Grid.Column="1">
+              <!-- Signed in with this computer's own key: who it is (signing out is on the Account page). -->
+              <StackPanel x:Name="SignedInPanel" Visibility="Collapsed">
+                <TextBlock x:Name="SignedInText" TextWrapping="Wrap" />
+                <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                  <Button Style="{StaticResource LinkButton}" Content="Account settings" Margin="0,0,18,0" Click="OnAccount" />
+                  <Button x:Name="ShowAddressButton" Style="{StaticResource LinkButton}" Content="Advanced: server address and token ▸" Click="OnShowAddress" />
+                </StackPanel>
+              </StackPanel>
+              <StackPanel x:Name="AddressFields">
+                <StackPanel>
+                  <TextBlock Style="{StaticResource Label}" Text="Server address" />
+                  <TextBox x:Name="ServerUrlBox" Style="{StaticResource Input}" ui:Look.Placeholder="https://sync.example.com/" />
+                </StackPanel>
+                <StackPanel Margin="0,10,0,0">
+                  <TextBlock Style="{StaticResource Label}" Text="Token" />
+                  <PasswordBox x:Name="TokenBox" Style="{StaticResource PasswordInput}" />
+                </StackPanel>
+                <Grid Margin="0,10,0,0">
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                  </Grid.ColumnDefinitions>
+                  <Button x:Name="TestButton" Content="Test connection" Click="OnTest" VerticalAlignment="Top" />
+                  <Border x:Name="TestChip" Grid.Column="1" Style="{StaticResource Chip}" Margin="10,0,0,0" Visibility="Collapsed" HorizontalAlignment="Left">
+                    <TextBlock x:Name="TestResult" TextWrapping="Wrap" />
+                  </Border>
+                </Grid>
+              </StackPanel>
+            </StackPanel>
+          </Grid>
         </Border>
-        <TextBlock Style="{StaticResource MutedSmall}" TextWrapping="Wrap" Margin="0,5,0,0"
-                   Text="4 is fastest for most connections. Use 1 on a very slow or metered connection." />
-        <Border Style="{StaticResource Divider}" Margin="0,12,0,0" />
 
-        <TextBlock Style="{StaticResource Label}" Text="Speed limits" Margin="0,12,0,8" />
-        <Grid>
-          <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="Auto" />
-            <ColumnDefinition Width="90" />
-            <ColumnDefinition Width="Auto" />
-          </Grid.ColumnDefinitions>
-          <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-          </Grid.RowDefinitions>
-          <CheckBox x:Name="UpLimitBox" Style="{StaticResource Switch}" Content="Limit upload to the server to" VerticalAlignment="Center" Margin="0,0,12,8" />
-          <TextBox x:Name="UpLimitValue" Grid.Column="1" Style="{StaticResource Input}" Text="5" Margin="0,0,8,8" />
-          <TextBlock Grid.Column="2" Style="{StaticResource Muted}" Text="MB/s" VerticalAlignment="Center" Margin="0,0,0,8" />
-          <CheckBox x:Name="DownLimitBox" Grid.Row="1" Style="{StaticResource Switch}" Content="Limit download from the server to" VerticalAlignment="Center" Margin="0,0,12,0" />
-          <TextBox x:Name="DownLimitValue" Grid.Row="1" Grid.Column="1" Style="{StaticResource Input}" Text="10" Margin="0,0,8,0" />
-          <TextBlock Grid.Row="1" Grid.Column="2" Style="{StaticResource Muted}" Text="MB/s" VerticalAlignment="Center" />
-        </Grid>
-        <TextBlock Style="{StaticResource MutedSmall}" TextWrapping="Wrap" Margin="0,8,0,0"
-                   Text="Files from your other computers always come through the server, so the download limit covers them too. All files at once stay under the limit together." />
+        <!-- Folder -->
+        <Border Style="{StaticResource Section}">
+          <Grid>
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="200" />
+              <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Style="{StaticResource SettingLabel}" Text="Folder to keep in sync" Margin="0,9,24,0" />
+            <Grid Grid.Column="1">
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+              </Grid.ColumnDefinitions>
+              <TextBox x:Name="FolderBox" Style="{StaticResource Input}" ui:Look.Placeholder="Choose a folder…" />
+              <Button Grid.Column="1" Content="Browse…" Margin="8,0,0,0" Click="OnBrowse" />
+            </Grid>
+          </Grid>
+        </Border>
+
+        <!-- This computer -->
+        <Border Style="{StaticResource Section}">
+          <Grid>
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="200" />
+              <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Style="{StaticResource SettingLabel}" Text="This computer" />
+            <StackPanel Grid.Column="1">
+              <StackPanel>
+                <TextBlock Style="{StaticResource Label}" Text="Device name" />
+                <TextBox x:Name="DeviceBox" Style="{StaticResource Input}" />
+                <TextBlock Style="{StaticResource Help}" Margin="0,6,0,0" Text="Shown in conflict file names. Use a different name on each computer." />
+              </StackPanel>
+              <CheckBox x:Name="AutoStartBox" Style="{StaticResource Switch}" Content="Start Pairnets when I sign in to Windows" Margin="0,20,0,0" />
+              <StackPanel Margin="0,20,0,0">
+                <Button x:Name="IgnoreToggle" Style="{StaticResource LinkButton}" HorizontalAlignment="Left" Content="Advanced: files to ignore ▸" Click="OnToggleIgnore" />
+                <StackPanel x:Name="IgnorePanel" Margin="0,8,0,0" Visibility="Collapsed">
+                  <TextBox x:Name="IgnoreBox" Style="{StaticResource Input}" Height="76" AcceptsReturn="True" VerticalContentAlignment="Top"
+                           VerticalScrollBarVisibility="Auto" ui:Look.Placeholder="One pattern per line, e.g. *.bak or node_modules/" />
+                  <TextBlock Style="{StaticResource Help}" Margin="0,6,0,0" Text="Temporary and system files (~$*, *.tmp, Thumbs.db, .git/ …) are always ignored." />
+                </StackPanel>
+              </StackPanel>
+            </StackPanel>
+          </Grid>
+        </Border>
+
+        <!-- Updates and speed -->
+        <Border Style="{StaticResource Section}">
+          <Grid>
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="200" />
+              <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Style="{StaticResource SettingLabel}" Text="Updates and speed" />
+            <StackPanel Grid.Column="1">
+              <Grid>
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="Auto" />
+                  <ColumnDefinition Width="*" />
+                  <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <CheckBox x:Name="UpdateBox" Style="{StaticResource Switch}" VerticalAlignment="Top" Margin="0,7,24,0" />
+                <StackPanel Grid.Column="1">
+                  <TextBlock Text="Check for updates when Pairnets starts" />
+                  <TextBlock Style="{StaticResource Help}" Margin="0,2,0,0" Text="Looks for a new version on GitHub at start-up and once a day. Nothing is installed until you click Update." />
+                  <TextBlock x:Name="VersionText" Style="{StaticResource Help}" Margin="0,2,0,0" />
+                </StackPanel>
+                <Button x:Name="CheckNowButton" Grid.Column="2" Content="Check now" MinHeight="32" Padding="12,0" Margin="12,0,0,0" VerticalAlignment="Top" Click="OnCheckNow" />
+              </Grid>
+              <Grid Margin="0,16,0,0">
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="Auto" />
+                  <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <CheckBox x:Name="AutoServerBox" Style="{StaticResource Switch}" VerticalAlignment="Top" Margin="0,7,24,0" />
+                <StackPanel Grid.Column="1">
+                  <TextBlock Text="Update the server automatically" />
+                  <TextBlock Style="{StaticResource Help}" Margin="0,2,0,0" Text="When this app finds the server on an older version, it updates it without asking (about 30 seconds; your files are not touched)." />
+                  <TextBlock x:Name="ServerVersionText" Style="{StaticResource Help}" Margin="0,2,0,0" />
+                </StackPanel>
+              </Grid>
+              <Grid Margin="0,16,0,0">
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="Auto" />
+                  <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <CheckBox x:Name="DebugBox" Style="{StaticResource Switch}" VerticalAlignment="Top" Margin="0,7,24,0" />
+                <StackPanel Grid.Column="1">
+                  <TextBlock Text="Debug mode" />
+                  <TextBlock Style="{StaticResource Help}" Margin="0,2,0,0" Text="Writes more detail to the log and shows the server's update log in the update window. Turn it on when updating the server does not work." />
+                </StackPanel>
+              </Grid>
+              <Grid Margin="0,16,0,0">
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="Auto" />
+                  <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <CheckBox x:Name="WaitBox" Style="{StaticResource Switch}" VerticalAlignment="Top" Margin="0,7,24,0" />
+                <StackPanel Grid.Column="1">
+                  <TextBlock Text="Wait while my other computer uploads many files" />
+                  <TextBlock Style="{StaticResource Help}" Margin="0,2,0,0" Text="When the other computer sends more than 100 files, download them in one go after it finishes instead of a few at a time." />
+                </StackPanel>
+              </Grid>
+              <StackPanel Margin="0,16,0,0">
+                <TextBlock Text="Files at the same time" />
+                <Border Style="{StaticResource Segments}" HorizontalAlignment="Left" Margin="0,6,0,0">
+                  <StackPanel Orientation="Horizontal">
+                    <RadioButton x:Name="Par1" Style="{StaticResource Seg}" GroupName="par" Content="1" />
+                    <RadioButton x:Name="Par2" Style="{StaticResource Seg}" GroupName="par" Content="2" />
+                    <RadioButton x:Name="Par4" Style="{StaticResource Seg}" GroupName="par" Content="4" />
+                    <RadioButton x:Name="Par8" Style="{StaticResource Seg}" GroupName="par" Content="8" Margin="0" />
+                  </StackPanel>
+                </Border>
+                <TextBlock Style="{StaticResource Help}" Margin="0,6,0,0" Text="4 is fastest for most connections. Use 1 on a very slow or metered connection." />
+              </StackPanel>
+            </StackPanel>
+          </Grid>
+        </Border>
+
+        <!-- Speed limits -->
+        <Border Style="{StaticResource Section}">
+          <Grid>
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="200" />
+              <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Style="{StaticResource SettingLabel}" Text="Speed limits" />
+            <StackPanel Grid.Column="1">
+              <Grid>
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="Auto" />
+                  <ColumnDefinition Width="Auto" />
+                  <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                  <RowDefinition Height="Auto" />
+                  <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <CheckBox x:Name="UpLimitBox" Style="{StaticResource Check}" Content="Limit upload to the server to" VerticalAlignment="Center" Margin="0,0,10,6" />
+                <Border Grid.Column="1" Style="{StaticResource CodeBox}" Padding="0" Width="120" Height="36" Margin="0,0,8,6">
+                  <Grid>
+                    <Grid.ColumnDefinitions>
+                      <ColumnDefinition Width="*" />
+                      <ColumnDefinition Width="Auto" />
+                      <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBox x:Name="UpLimitValue" Style="{StaticResource Input}" BorderThickness="0" Background="Transparent" MinHeight="0" Padding="10,0" Text="5" />
+                    <Button Grid.Column="1" Style="{StaticResource StepButton}" Tag="{Binding ElementName=UpLimitValue}" Click="OnStepUp" ToolTip="More">
+                      <ui:LineIcon Width="14" Height="14" StrokeThickness="2" Data="{StaticResource I.Chevron}" RenderTransformOrigin="0.5,0.5">
+                        <ui:LineIcon.RenderTransform>
+                          <RotateTransform Angle="-90" />
+                        </ui:LineIcon.RenderTransform>
+                      </ui:LineIcon>
+                    </Button>
+                    <Button Grid.Column="2" Style="{StaticResource StepButton}" Tag="{Binding ElementName=UpLimitValue}" Click="OnStepDown" ToolTip="Less">
+                      <ui:LineIcon Width="14" Height="14" StrokeThickness="2" Data="{StaticResource I.Chevron}" RenderTransformOrigin="0.5,0.5">
+                        <ui:LineIcon.RenderTransform>
+                          <RotateTransform Angle="90" />
+                        </ui:LineIcon.RenderTransform>
+                      </ui:LineIcon>
+                    </Button>
+                  </Grid>
+                </Border>
+                <TextBlock Grid.Column="2" Style="{StaticResource Muted}" Text="MB/s" VerticalAlignment="Center" Margin="0,0,0,6" />
+                <CheckBox x:Name="DownLimitBox" Grid.Row="1" Style="{StaticResource Check}" Content="Limit download from the server to" VerticalAlignment="Center" Margin="0,0,10,0" />
+                <Border Grid.Row="1" Grid.Column="1" Style="{StaticResource CodeBox}" Padding="0" Width="120" Height="36" Margin="0,0,8,0">
+                  <Grid>
+                    <Grid.ColumnDefinitions>
+                      <ColumnDefinition Width="*" />
+                      <ColumnDefinition Width="Auto" />
+                      <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBox x:Name="DownLimitValue" Style="{StaticResource Input}" BorderThickness="0" Background="Transparent" MinHeight="0" Padding="10,0" Text="10" />
+                    <Button Grid.Column="1" Style="{StaticResource StepButton}" Tag="{Binding ElementName=DownLimitValue}" Click="OnStepUp" ToolTip="More">
+                      <ui:LineIcon Width="14" Height="14" StrokeThickness="2" Data="{StaticResource I.Chevron}" RenderTransformOrigin="0.5,0.5">
+                        <ui:LineIcon.RenderTransform>
+                          <RotateTransform Angle="-90" />
+                        </ui:LineIcon.RenderTransform>
+                      </ui:LineIcon>
+                    </Button>
+                    <Button Grid.Column="2" Style="{StaticResource StepButton}" Tag="{Binding ElementName=DownLimitValue}" Click="OnStepDown" ToolTip="Less">
+                      <ui:LineIcon Width="14" Height="14" StrokeThickness="2" Data="{StaticResource I.Chevron}" RenderTransformOrigin="0.5,0.5">
+                        <ui:LineIcon.RenderTransform>
+                          <RotateTransform Angle="90" />
+                        </ui:LineIcon.RenderTransform>
+                      </ui:LineIcon>
+                    </Button>
+                  </Grid>
+                </Border>
+                <TextBlock Grid.Row="1" Grid.Column="2" Style="{StaticResource Muted}" Text="MB/s" VerticalAlignment="Center" />
+              </Grid>
+              <TextBlock Style="{StaticResource Help}" MaxWidth="560" HorizontalAlignment="Left" Margin="0,8,0,0"
+                         Text="Files from your other computers always come through the server, so the download limit covers them too. All files at once stay under the limit together." />
+            </StackPanel>
+          </Grid>
+        </Border>
+
+        <!-- Start over -->
+        <Border Style="{StaticResource Section}">
+          <Grid>
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="200" />
+              <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Style="{StaticResource SettingLabel}" Text="Start over" />
+            <Grid Grid.Column="1">
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+              </Grid.ColumnDefinitions>
+              <TextBlock Style="{StaticResource Help}" Margin="0,0,18,0" VerticalAlignment="Center"
+                         Text="Forgets every setting, signs this computer out of your nest and starts again from the sign-in screen. The files in your sync folder are never deleted." />
+              <Button x:Name="ResetButton" Grid.Column="1" Style="{StaticResource DangerButton}" Content="Reset this app…" VerticalAlignment="Center" Click="OnReset" />
+            </Grid>
+          </Grid>
+        </Border>
       </StackPanel>
-    </Border>
-
-    <!-- Start over -->
-    <Border Style="{StaticResource Card}" Margin="0,12,0,0">
-      <StackPanel>
-        <StackPanel Orientation="Horizontal">
-          <ui:LineIcon Style="{StaticResource CardIcon}" Data="{StaticResource I.Trash}" />
-          <TextBlock Style="{StaticResource H2}" Text="Start over" />
-        </StackPanel>
-        <TextBlock Style="{StaticResource MutedSmall}" TextWrapping="Wrap" Margin="0,8,0,0"
-                   Text="Forgets every setting, signs this computer out of your nest and starts again from the sign-in screen. The files in your sync folder are never deleted." />
-        <Button x:Name="ResetButton" Style="{StaticResource DangerButton}" Content="Reset this app…" HorizontalAlignment="Left" Margin="0,12,0,0" Click="OnReset" />
-      </StackPanel>
-    </Border>
-
-    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
-      <Button Style="{StaticResource SubtleButton}" Content="Cancel" Margin="0,0,8,0" Click="OnCancel" />
-      <Button x:Name="SaveButton" Style="{StaticResource AccentButton}" Content="Save" IsDefault="True" Click="OnSave" />
-    </StackPanel>
-  </StackPanel>
-  </ScrollViewer>
+    </ScrollViewer>
+  </DockPanel>
 </UserControl>

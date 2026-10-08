@@ -195,6 +195,42 @@ public sealed class TrayController : ITrayActions, IDisposable
                 "Pairnets", MessageBoxButton.OK, MessageBoxImage.Information);
     }
 
+    /// <summary>Opens the nest's website (or explains that it has none yet).</summary>
+    public void OpenNest()
+    {
+        if ((_session?.Status.NestUrl ?? NestFromSettings()) is { } url)
+            Shell(url);
+        else
+            MessageBox.Show("Your nest has no website yet. On the server, give it its own name with: sudo ./install.sh --public-url https://nest.example.com",
+                "Pairnets", MessageBoxButton.OK, MessageBoxImage.Information);
+    }
+
+    /// <summary>A notification switch on the Account page: saved at once.</summary>
+    public void SetNotify(NoticeKind kind, bool on)
+    {
+        switch (kind)
+        {
+            case NoticeKind.JoinRequest:
+                _settings.NotifyJoinRequests = on;
+                break;
+            case NoticeKind.Attention:
+                _settings.NotifyAttention = on;
+                break;
+            case NoticeKind.Update:
+                _settings.NotifyUpdates = on;
+                break;
+        }
+        SettingsStore.Save(SettingsStore.DefaultPath, _settings);
+    }
+
+    /// <summary>The main window, with the saved notification switches.</summary>
+    private MainWindow CreateMainWindow()
+    {
+        var window = new MainWindow(this) { ServerAddress = _settings.ServerUrl };
+        window.ShowNotifySettings(_settings.NotifyJoinRequests, _settings.NotifyAttention, _settings.NotifyUpdates);
+        return window;
+    }
+
     /// <summary>The nest's website when this computer already talks to it over HTTPS.</summary>
     private string? NestFromSettings() =>
         Uri.TryCreate(_settings.ServerUrl, UriKind.Absolute, out var url) && url.Scheme == Uri.UriSchemeHttps ? url.GetLeftPart(UriPartial.Authority) : null;
@@ -351,6 +387,7 @@ public sealed class TrayController : ITrayActions, IDisposable
         if (_window is { IsVisible: true })
         {
             DrawUpdateBanner();
+            _window.ServerAddress = _settings.ServerUrl;
             _window.ShowStatus(status, _settings.Folder, _settings.DeviceName);
             _window.ShowActivity(_session?.Activity.Items ?? []);
             _window.ShowAttention(BuildAttention(status));
@@ -403,9 +440,14 @@ public sealed class TrayController : ITrayActions, IDisposable
         _dirty = true;
     }
 
-    /// <summary>Balloon tips render as Windows 10/11 toast notifications. Same key at most once per 10 minutes.</summary>
+    /// <summary>
+    /// Balloon tips render as Windows 10/11 toast notifications. Same key at most once per 10 minutes, and
+    /// only the kinds left on in the Account page's notification switches.
+    /// </summary>
     private void Toast(string key, string title, string text, Forms.ToolTipIcon icon, Action? onClick)
     {
+        if (!NotifyPolicy.Allows(_settings, key))
+            return; // turned off on the Account page
         var now = DateTime.UtcNow;
         if (_lastToast.TryGetValue(key, out var last) && now - last < TimeSpan.FromMinutes(10))
             return;
@@ -424,7 +466,7 @@ public sealed class TrayController : ITrayActions, IDisposable
             return;
         }
         var opening = _window is not { IsVisible: true };
-        _window ??= new MainWindow(this);
+        _window ??= CreateMainWindow();
         _window.Show();
         if (_window.WindowState == WindowState.Minimized)
             _window.WindowState = WindowState.Normal;
@@ -605,9 +647,8 @@ public sealed class TrayController : ITrayActions, IDisposable
             ApplySettings(v.Result!, v.PlainToken);
             _window?.Navigate(MainPage.Overview);
         };
-        view.SignOutRequested += SignOut;
+        view.AccountRequested += () => _window?.Navigate(MainPage.Account);
         view.ResetRequested += ResetEverything;
-        view.ManageDevicesRequested += ManageDevices;
         view.Cancelled += () => _window?.Navigate(MainPage.Overview);
         _window.ShowSettingsPage(view);
     }
@@ -615,6 +656,7 @@ public sealed class TrayController : ITrayActions, IDisposable
     private void ApplySettings(ClientSettings settings, string? plainToken)
     {
         _settings = settings;
+        _window?.ShowNotifySettings(_settings.NotifyJoinRequests, _settings.NotifyAttention, _settings.NotifyUpdates);
         _fileLog.Minimum = _settings.DebugMode ? LogLevel.Debug : LogLevel.Information;
         SettingsStore.Save(SettingsStore.DefaultPath, _settings);
         SetAutoStart(_settings.StartWithWindows);

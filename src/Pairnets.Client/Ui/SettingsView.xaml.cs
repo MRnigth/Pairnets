@@ -1,8 +1,6 @@
 using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
 using Microsoft.Win32;
 using Pairnets.Client.Themes;
 using Pairnets.Core;
@@ -55,12 +53,14 @@ public partial class SettingsView : UserControl
             ServerHeading.Text = "Your nest";
             SignedInPanel.Visibility = Visibility.Visible;
             AddressFields.Visibility = Visibility.Collapsed;
-            SignedInText.Text = $"{(Uri.TryCreate(current.ServerUrl, UriKind.Absolute, out var nest) ? nest.Authority : current.ServerUrl)} · signed in as {current.DeviceName}";
+            SignedInText.Text = $"Signed in as {current.DeviceName} on {(Uri.TryCreate(current.ServerUrl, UriKind.Absolute, out var nest) ? nest.Authority : current.ServerUrl)}.";
         }
         ServerUrlBox.Text = current.ServerUrl ?? string.Empty;
+        Look.SetPlaceholder(TokenBox, current.ProtectedToken is null ? "printed by install.sh" : "(saved – leave empty to keep)");
         FolderBox.Text = current.Folder ?? string.Empty;
         DeviceBox.Text = current.DeviceName ?? Environment.MachineName;
         IgnoreBox.Text = string.Join(Environment.NewLine, current.ExtraIgnore);
+        ShowIgnore(current.ExtraIgnore.Count > 0); // open when there is something in it
         AutoStartBox.IsChecked = current.StartWithWindows;
         UpdateBox.IsChecked = current.CheckForUpdates;
         WaitBox.IsChecked = current.WaitForPeerBatches;
@@ -167,25 +167,25 @@ public partial class SettingsView : UserControl
     public void ShowTestResult(bool? ok, string text)
     {
         TestChip.Visibility = Visibility.Visible;
-        var (fg, bg) = ok switch
-        {
-            true => (Color.FromRgb(46, 160, 67), Color.FromArgb(40, 46, 160, 67)),
-            false => (Color.FromRgb(207, 34, 46), Color.FromArgb(36, 207, 34, 46)),
-            _ => (default(Color?), default(Color?)),
-        };
-        if (fg is { } f && bg is { } b)
-        {
-            TestResult.Foreground = new SolidColorBrush(f);
-            TestChip.Background = new SolidColorBrush(b);
-        }
-        else
-        {
-            TestResult.SetResourceReference(TextBlock.ForegroundProperty, "T.Muted");
-            TestChip.SetResourceReference(Border.BackgroundProperty, "T.Pill");
-        }
+        TestChip.SetResourceReference(StyleProperty, ok switch { true => "ChipOk", false => "ChipBad", _ => "Chip" });
+        TestResult.SetResourceReference(TextBlock.ForegroundProperty, ok switch { true => "T.OkText", false => "T.BadText", _ => "T.Muted" });
         TestResult.Text = (ok == true ? "✓ " : ok == false ? "✕ " : string.Empty) + text;
     }
 
+    /// <summary>The up and down buttons next to a speed limit: one MB/s more or less (at least 0.1).</summary>
+    private void OnStepUp(object sender, RoutedEventArgs e) => Step(sender, +1);
+
+    private void OnStepDown(object sender, RoutedEventArgs e) => Step(sender, -1);
+
+    private static void Step(object sender, double by)
+    {
+        if (sender is not Button { Tag: TextBox box })
+            return;
+        if (!double.TryParse(box.Text.Trim(), NumberStyles.Float, CultureInfo.CurrentCulture, out var v)
+            && !double.TryParse(box.Text.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out v))
+            v = 0;
+        box.Text = Number(Math.Clamp(v + by, 0.1, 10000));
+    }
 
     private string DeviceName() => string.IsNullOrWhiteSpace(DeviceBox.Text) ? Environment.MachineName : DeviceBox.Text.Trim();
 
@@ -260,6 +260,9 @@ public partial class SettingsView : UserControl
                 UploadLimitMBps = upLimit,
                 DownloadLimitMBps = downLimit,
                 SkippedServerVersion = _original.SkippedServerVersion,
+                NotifyJoinRequests = _original.NotifyJoinRequests, // the switches on the Account page
+                NotifyAttention = _original.NotifyAttention,
+                NotifyUpdates = _original.NotifyUpdates,
             };
             PlainToken = token;
             Saved?.Invoke(this);
@@ -284,11 +287,8 @@ public partial class SettingsView : UserControl
 
     private void OnCancel(object sender, RoutedEventArgs e) => Cancelled?.Invoke();
 
-    /// <summary>"Sign out of this computer" (the controller asks first).</summary>
-    public event Action? SignOutRequested;
-
-    /// <summary>"Manage devices on the web".</summary>
-    public event Action? ManageDevicesRequested;
+    /// <summary>"Account settings": signing out and the nest's devices live on the Account page.</summary>
+    public event Action? AccountRequested;
 
     /// <summary>Scrolls to the bottom of the page (screenshot tool).</summary>
     public void ScrollToEnd() => Scroller.ScrollToEnd();
@@ -298,9 +298,15 @@ public partial class SettingsView : UserControl
 
     private void OnReset(object sender, RoutedEventArgs e) => ResetRequested?.Invoke();
 
-    private void OnSignOut(object sender, RoutedEventArgs e) => SignOutRequested?.Invoke();
+    private void OnAccount(object sender, RoutedEventArgs e) => AccountRequested?.Invoke();
 
-    private void OnManageDevices(object sender, RoutedEventArgs e) => ManageDevicesRequested?.Invoke();
+    private void OnToggleIgnore(object sender, RoutedEventArgs e) => ShowIgnore(IgnorePanel.Visibility != Visibility.Visible);
+
+    private void ShowIgnore(bool open)
+    {
+        IgnorePanel.Visibility = open ? Visibility.Visible : Visibility.Collapsed;
+        IgnoreToggle.Content = open ? "Advanced: files to ignore ▾" : "Advanced: files to ignore ▸";
+    }
 
     private void OnShowAddress(object sender, RoutedEventArgs e)
     {

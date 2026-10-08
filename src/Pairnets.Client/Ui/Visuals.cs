@@ -7,7 +7,7 @@ using Pairnets.Core.Sync;
 
 namespace Pairnets.Client.Ui;
 
-/// <summary>Colours and icons for statuses and activity kinds (keys in Themes/Icons.xaml).</summary>
+/// <summary>Colours and icons for statuses and activity kinds (keys in Themes/Light.xaml, Dark.xaml and Icons.xaml).</summary>
 public static class Visuals
 {
     public static (string Brush, string Icon) ForStatus(RunnerStatus status) => status switch
@@ -15,7 +15,7 @@ public static class Visuals
         RunnerStatus.Idle => ("S.Green", "I.Check"),
         RunnerStatus.Syncing => ("S.Blue", "I.Sync"),
         RunnerStatus.Offline => ("S.Grey", "I.CloudOff"),
-        RunnerStatus.Paused => ("S.Yellow", "I.Pause"),
+        RunnerStatus.Paused => ("S.Grey", "I.Pause"),
         RunnerStatus.Blocked => ("S.Orange", "I.Bang"),
         _ => ("S.Red", "I.X"),
     };
@@ -33,17 +33,6 @@ public static class Visuals
     };
 
     public static T? Resource<T>(string key) where T : class => Application.Current?.TryFindResource(key) as T;
-
-    /// <summary>A soft wash of a status colour from the top, fading out by <paramref name="end"/> (0–1).</summary>
-    public static Brush Wash(string brushKey, byte alpha, double end)
-    {
-        var color = (Resource<SolidColorBrush>(brushKey))?.Color ?? Colors.Gray;
-        var brush = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(0, 1) };
-        brush.GradientStops.Add(new GradientStop(Color.FromArgb(alpha, color.R, color.G, color.B), 0));
-        brush.GradientStops.Add(new GradientStop(Color.FromArgb(0, color.R, color.G, color.B), end));
-        brush.Freeze();
-        return brush;
-    }
 }
 
 /// <summary>
@@ -57,14 +46,14 @@ public static class AppIcons
     /// <summary>For Window.Icon: the whole icon, so the taskbar and title bar pick their own size.</summary>
     public static ImageSource? WindowIcon => Frames.Value[0];
 
-    /// <summary>The largest size, for the sidebar and Settings headers.</summary>
+    /// <summary>The largest size, for the rail and the sign-in screen.</summary>
     public static ImageSource? Large => Frames.Value[1];
 
     private static System.Windows.Media.Imaging.BitmapFrame?[] Load()
     {
         try
         {
-            var info = Application.GetResourceStream(new Uri("pack://application:,,,/pairnets.ico"));
+            var info = Application.GetResourceStream(new Uri("pack://application:,,,/Pairnets;component/pairnets.ico"));
             if (info is null)
                 return [null, null];
             using var stream = info.Stream;
@@ -83,15 +72,6 @@ public static class AppIcons
     }
 }
 
-/// <summary>ActivityKind → status brush.</summary>
-public sealed class ActivityBrushConverter : IValueConverter
-{
-    public object? Convert(object value, Type targetType, object parameter, CultureInfo culture) =>
-        value is ActivityKind k ? Visuals.Resource<Brush>(Visuals.ForActivity(k).Brush) : null;
-
-    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) => throw new NotSupportedException();
-}
-
 /// <summary>ActivityKind → icon geometry.</summary>
 public sealed class ActivityIconConverter : IValueConverter
 {
@@ -101,11 +81,13 @@ public sealed class ActivityIconConverter : IValueConverter
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) => throw new NotSupportedException();
 }
 
-/// <summary>Upload (true) → green, download → blue: the colour of a file's progress bar.</summary>
-public sealed class DirectionBrushConverter : IValueConverter
+/// <summary>true → Visible, false → Collapsed (or the other way round with <see cref="Invert"/>).</summary>
+public sealed class VisibleConverter : IValueConverter
 {
-    public object? Convert(object value, Type targetType, object parameter, CultureInfo culture) =>
-        Visuals.Resource<Brush>(value is true ? "S.Green" : "S.Blue");
+    public bool Invert { get; set; }
+
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture) =>
+        (value is true) != Invert ? Visibility.Visible : Visibility.Collapsed;
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) => throw new NotSupportedException();
 }
