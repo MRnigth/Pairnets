@@ -8,7 +8,7 @@ namespace Pairnets.Client.Ui;
 
 /// <summary>
 /// Small, friendly animations (same as the Mac/Linux app): bob, spin, pulse, pop, travelling
-/// arrows, rows sliding in and bars gliding to new values. Each looping animation is started
+/// arrows, rows sliding in, chevrons turning and bars gliding to new values. Each looping animation is started
 /// once and kept running until it is switched off, so the 4-times-a-second refresh does not
 /// restart it. Everything stays still when Windows is set to show fewer animations.
 /// </summary>
@@ -71,24 +71,14 @@ public static class Motion
 
     /// <summary>Soft breathing (waiting for the other computer).</summary>
     public static void Pulse(UIElement e, bool on) => Loop(e, "pulse", on,
-        x =>
-        {
-            var s = Transforms(x).Scale;
-            s.BeginAnimation(ScaleTransform.ScaleXProperty, Wave(1, 1.08, 2));
-            s.BeginAnimation(ScaleTransform.ScaleYProperty, Wave(1, 1.08, 2));
-        },
-        x =>
-        {
-            var s = Transforms(x).Scale;
-            s.BeginAnimation(ScaleTransform.ScaleXProperty, null);
-            s.BeginAnimation(ScaleTransform.ScaleYProperty, null);
-        });
+        x => x.BeginAnimation(UIElement.OpacityProperty, Wave(1, 0.55, 2)),
+        x => x.BeginAnimation(UIElement.OpacityProperty, null));
 
     /// <summary>An arrow that keeps travelling up (uploading) or down (downloading), fading in and out.</summary>
     public static void Travel(UIElement e, bool? up)
     {
-        Loop(e, "rise", up == true, x => StartTravel(x, 5, -5), StopTravel);
-        Loop(e, "fall", up == false, x => StartTravel(x, -5, 5), StopTravel);
+        Loop(e, "rise", up == true, x => StartTravel(x, 3, -3), StopTravel);
+        Loop(e, "fall", up == false, x => StartTravel(x, -3, 3), StopTravel);
     }
 
     private static void StartTravel(UIElement e, double from, double to)
@@ -100,9 +90,9 @@ public static class Motion
             EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut },
         });
         var fade = new DoubleAnimationUsingKeyFrames { Duration = duration, RepeatBehavior = RepeatBehavior.Forever };
-        fade.KeyFrames.Add(new LinearDoubleKeyFrame(0, KeyTime.FromPercent(0)));
+        fade.KeyFrames.Add(new LinearDoubleKeyFrame(0.2, KeyTime.FromPercent(0)));
         fade.KeyFrames.Add(new LinearDoubleKeyFrame(1, KeyTime.FromPercent(0.35)));
-        fade.KeyFrames.Add(new LinearDoubleKeyFrame(0, KeyTime.FromPercent(1)));
+        fade.KeyFrames.Add(new LinearDoubleKeyFrame(0.2, KeyTime.FromPercent(1)));
         e.BeginAnimation(UIElement.OpacityProperty, fade);
     }
 
@@ -112,13 +102,13 @@ public static class Motion
         e.BeginAnimation(UIElement.OpacityProperty, null);
     }
 
-    /// <summary>One small pop when something changes (status badge, success).</summary>
+    /// <summary>One small pop when something changes (the overview's ring, success).</summary>
     public static void Pop(UIElement e)
     {
         if (!Enabled)
             return;
         var s = Transforms(e).Scale;
-        var pop = new DoubleAnimation(0.82, 1, TimeSpan.FromSeconds(0.38)) { EasingFunction = new BackEase { EasingMode = EasingMode.EaseOut, Amplitude = 0.6 } };
+        var pop = new DoubleAnimation(0.9, 1, TimeSpan.FromSeconds(0.38)) { EasingFunction = new BackEase { EasingMode = EasingMode.EaseOut, Amplitude = 0.6 } };
         s.BeginAnimation(ScaleTransform.ScaleXProperty, pop);
         s.BeginAnimation(ScaleTransform.ScaleYProperty, pop);
     }
@@ -135,16 +125,33 @@ public static class Motion
     }
 
     /// <summary>Moves a progress bar smoothly to <paramref name="value"/> instead of jumping.</summary>
-    public static void Glide(ProgressBar bar, double value)
+    public static void Glide(ProgressBar bar, double value) =>
+        GlideTo(bar, System.Windows.Controls.Primitives.RangeBase.ValueProperty, value, 0.35);
+
+    /// <summary>Moves a number (a bar's or the ring's value) smoothly to <paramref name="value"/>.</summary>
+    public static void GlideTo(UIElement e, DependencyProperty property, double value, double seconds)
     {
-        if (!Enabled || Math.Abs(bar.Value - value) < 0.01)
+        if (!Enabled || Math.Abs((double)e.GetValue(property) - value) < 0.01)
         {
-            bar.BeginAnimation(System.Windows.Controls.Primitives.RangeBase.ValueProperty, null);
-            bar.Value = value;
+            e.BeginAnimation(property, null);
+            e.SetValue(property, value);
             return;
         }
-        bar.BeginAnimation(System.Windows.Controls.Primitives.RangeBase.ValueProperty,
-            new DoubleAnimation(value, TimeSpan.FromSeconds(0.35)) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } });
+        e.BeginAnimation(property, new DoubleAnimation(value, TimeSpan.FromSeconds(seconds)) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } });
+    }
+
+    /// <summary>Turns a chevron to point right (closed) or down (open).</summary>
+    public static void Turn(UIElement e, bool open)
+    {
+        var rotate = Transforms(e).Rotate;
+        var angle = open ? 90 : 0;
+        if (!Enabled)
+        {
+            rotate.BeginAnimation(RotateTransform.AngleProperty, null);
+            rotate.Angle = angle;
+            return;
+        }
+        rotate.BeginAnimation(RotateTransform.AngleProperty, new DoubleAnimation(angle, TimeSpan.FromSeconds(0.18)));
     }
 
     /// <summary>Bind a bar's target value here (instead of Value) to make it glide: ui:Motion.SmoothValue="{Binding ...}".</summary>

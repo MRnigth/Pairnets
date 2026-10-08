@@ -22,15 +22,7 @@ public static class TrayIcons
         {
             if (Cache.TryGetValue(status, out var icon))
                 return icon;
-            var color = status switch
-            {
-                RunnerStatus.Idle => Color.FromArgb(46, 160, 67),
-                RunnerStatus.Syncing => Color.FromArgb(33, 118, 214),
-                RunnerStatus.Offline => Color.FromArgb(128, 128, 128),
-                RunnerStatus.Paused => Color.FromArgb(214, 160, 33),
-                RunnerStatus.Blocked => Color.FromArgb(230, 110, 20),
-                _ => Color.FromArgb(207, 34, 46),
-            };
+            var color = Fill(Ui.Visuals.ForStatus(status).Brush);
             using var bmp = new Bitmap(32, 32);
             using (var g = Graphics.FromImage(bmp))
             {
@@ -47,6 +39,19 @@ public static class TrayIcons
             return icon;
         }
     }
+
+    /// <summary>
+    /// The strong status colours of the light palette (S.* in Themes/Light.xaml), whatever the app's theme:
+    /// the taskbar has its own colours, and these read on both a light and a dark one.
+    /// </summary>
+    private static Color Fill(string brushKey) => brushKey switch
+    {
+        "S.Green" => Color.FromArgb(0x2D, 0x7A, 0x4B),
+        "S.Blue" => Color.FromArgb(0x2F, 0x47, 0xC4),
+        "S.Orange" => Color.FromArgb(0xA3, 0x54, 0x00),
+        "S.Red" => Color.FromArgb(0xB4, 0x23, 0x18),
+        _ => Color.FromArgb(0x8A, 0x85, 0x7C),
+    };
 
     /// <summary>Same shapes as the window icons (Themes/Icons.xaml), on a 32 px canvas with a 4 px margin.</summary>
     private static void DrawGlyph(Graphics g, RunnerStatus status)
