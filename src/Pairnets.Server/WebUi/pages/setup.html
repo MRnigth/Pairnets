@@ -29,9 +29,9 @@
   <div class="card" id="step-method" hidden>
     <div class="center">
       <h1>How will you sign in?</h1>
-      <p class="muted">Step 2 of 2 · <span class="pill ok" id="claimed-ok">✓ Setup link accepted</span></p>
+      <p class="muted" id="claimed" hidden>Step 2 of 2 · <span class="pill ok" id="claimed-ok">✓ Setup link accepted</span></p>
     </div>
-    <p id="has-methods" class="message info" hidden>You already have a way to sign in. You can set a new password here, or manage everything under Security.</p>
+    <p id="has-methods" class="message info" hidden>You already have a way to sign in. You can set a new password here, or manage everything under <a href="/security">Security</a>.</p>
     <div id="passkey-block" hidden>
       <button class="accent wide" type="button" id="add-passkey">Add a passkey</button>
       <p class="muted small center">Windows Hello, Face ID, Touch ID, your phone or a security key. No password to remember or leak. Recommended.</p>
@@ -39,7 +39,12 @@
     </div>
     <div id="passkey-error" class="message error" role="alert" hidden></div>
     <form id="new-password-form">
-      <label class="field"><span>Choose a password</span>
+      <h2 id="password-heading" hidden>Choose a new password</h2>
+      <p id="password-reset-note" class="muted small" hidden>It replaces your current password. You don't need the old one: the setup link proves it's you.</p>
+      <label class="field" id="setup-current-field" hidden><span>Current password</span>
+        <input type="password" id="setup-current-password" autocomplete="current-password">
+      </label>
+      <label class="field"><span id="new-password-label">Choose a password</span>
         <input type="password" id="new-password" autocomplete="new-password" minlength="10" required>
       </label>
       <label class="field"><span>Type it again</span>
@@ -47,7 +52,7 @@
       </label>
       <p class="muted small">At least 10 characters. A passphrase of a few words is easy to remember.</p>
       <div id="method-error" class="message error" role="alert" hidden></div>
-      <button class="accent wide" type="submit">Set password and continue</button>
+      <button class="accent wide" type="submit" id="new-password-submit">Set password and continue</button>
     </form>
     <p class="center small"><a href="/devices" id="skip" hidden>Skip, go to my devices →</a></p>
   </div>

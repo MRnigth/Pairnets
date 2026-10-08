@@ -24,7 +24,19 @@ public static class WebEndpoints
 
     public sealed record MethodsView(bool Password, int Passkeys, bool Email, bool Google);
 
-    public sealed record StateView(bool SignedIn, bool HasSignIn, MethodsView Methods, string? NestName, string? SessionMethod);
+    /// <param name="CanResetPassword">This browser may set a new password without the current one (see <see cref="MayResetPassword"/>).</param>
+    public sealed record StateView(bool SignedIn, bool HasSignIn, MethodsView Methods, string? NestName, string? SessionMethod,
+        bool CanResetPassword = false);
+
+    /// <summary>How a browser that opened a setup link is signed in (shown on the Security page).</summary>
+    public const string SetupLinkMethod = "setup link";
+
+    /// <summary>
+    /// How long after opening a setup link that browser may set a new password without the current one. The
+    /// setup link is the way back in for an owner who forgot the password (SSH, owner-link, open it, new
+    /// password); the limit keeps a browser that simply stays signed in from doing it weeks later.
+    /// </summary>
+    public static readonly TimeSpan SetupLinkPasswordWindow = TimeSpan.FromMinutes(30);
 
     public sealed record DeviceView(string? Id, string Name, string? System, string? AppVersion, bool Online,
         DateTimeOffset FirstSeen, DateTimeOffset LastSeen, DateTimeOffset? LastChange, bool OwnKey);
@@ -59,7 +71,8 @@ public static class WebEndpoints
         api.MapGet("/state", (HttpContext ctx, OwnerAuth owner) =>
         {
             var session = owner.Current(ctx);
-            return Json(new StateView(session is not null, owner.Store.HasSignInMethod, Methods(owner), ctx.Request.Host.Host, session?.Method));
+            return Json(new StateView(session is not null, owner.Store.HasSignInMethod, Methods(owner), ctx.Request.Host.Host, session?.Method,
+                session is not null && owner.Store.PasswordHash is not null && MayResetPassword(owner, session)));
         });
 
         api.MapPost("/setup", (HttpContext ctx, SetupBody? body, OwnerAuth owner, ILogger<OwnerAuth> log) =>
@@ -70,7 +83,7 @@ public static class WebEndpoints
                 return Error(StatusCodes.Status400BadRequest, ErrorCodes.BadRequest,
                     "This setup link was already used or has expired. Make a new one on the server: sudo -u pairnets /opt/pairnets/pairnets-server owner-link");
             }
-            owner.SignIn(ctx, "setup link");
+            owner.SignIn(ctx, SetupLinkMethod);
             log.LogInformation("Signed in to the nest's website with a setup link from {Address}", ctx.Connection.RemoteIpAddress);
             return Results.NoContent();
         });
@@ -176,19 +189,7 @@ public static class WebEndpoints
         });
 
         signedIn.MapPost("/password", (HttpContext ctx, PasswordBody? body, OwnerAuth owner, FailureThrottle throttle, ILogger<OwnerAuth> log) =>
-        {
-            // Changing a password needs the old one, so a browser left signed in cannot lock you out.
-            if (owner.Store.PasswordHash is not null && !owner.CheckPassword(body?.Current))
-            {
-                throttle.RecordFailure(ctx.Connection.RemoteIpAddress ?? IPAddress.None);
-                return Error(StatusCodes.Status400BadRequest, ErrorCodes.Unauthorized, "Your current password is not right.");
-            }
-            if (OwnerAuth.PasswordProblem(body?.Password) is { } problem)
-                return Error(StatusCodes.Status400BadRequest, ErrorCodes.BadRequest, problem);
-            owner.SetPassword(body!.Password!);
-            log.LogInformation("The nest's password was set");
-            return Results.NoContent();
-        });
+            SetPassword(ctx, body, owner, throttle, log));
 
         signedIn.MapDelete("/password", (OwnerAuth owner) =>
         {
@@ -209,6 +210,46 @@ public static class WebEndpoints
             return Results.NoContent();
         });
     }
+
+    /// <summary>
+    /// Sets or changes the password (signed in). Changing one needs the current one, so a browser left signed in
+    /// cannot lock you out, except right after opening a setup link: that is how an owner who forgot it gets back in.
+    /// </summary>
+    internal static IResult SetPassword(HttpContext ctx, PasswordBody? body, OwnerAuth owner, FailureThrottle throttle, ILogger log)
+    {
+        var session = owner.Current(ctx)!;
+        var withoutCurrent = string.IsNullOrEmpty(body?.Current);
+        var reset = false;
+        if (owner.Store.PasswordHash is not null)
+        {
+            // A current password that is given must be right; leaving it out works only for a fresh setup link.
+            reset = withoutCurrent && MayResetPassword(owner, session);
+            if (!reset && !owner.CheckPassword(body?.Current))
+            {
+                throttle.RecordFailure(ctx.Connection.RemoteIpAddress ?? IPAddress.None);
+                return Error(StatusCodes.Status400BadRequest, ErrorCodes.Unauthorized,
+                    !withoutCurrent ? "Your current password is not right."
+                    : session.Method == SetupLinkMethod && owner.Now - session.Created > SetupLinkPasswordWindow
+                        ? $"You opened the setup link more than {SetupLinkPasswordWindow.TotalMinutes:0} minutes ago. To set a new password without the old one, make a new link on the server: sudo -u pairnets /opt/pairnets/pairnets-server owner-link"
+                    : "Type your current password.");
+            }
+        }
+        if (OwnerAuth.PasswordProblem(body?.Password) is { } problem)
+            return Error(StatusCodes.Status400BadRequest, ErrorCodes.BadRequest, problem);
+        owner.SetPassword(body!.Password!);
+        log.LogInformation(reset ? "The nest's password was replaced after signing in with a setup link" : "The nest's password was set");
+        return Results.NoContent();
+    }
+
+    /// <summary>
+    /// True when this browser may replace the password without typing the current one: it signed in with a setup
+    /// link less than <see cref="SetupLinkPasswordWindow"/> ago, and the password is older than that sign-in. So
+    /// one setup link replaces a forgotten password once; a password this browser chose itself is known to it.
+    /// </summary>
+    internal static bool MayResetPassword(OwnerAuth owner, OwnerSession session) =>
+        session.Method == SetupLinkMethod
+        && owner.Now - session.Created <= SetupLinkPasswordWindow
+        && (owner.Store.PasswordSetAt is not { } setAt || setAt < session.Created);
 
     private static async Task<IResult> DecideAsync(string code, bool approve, HttpContext ctx, AuthStore auth, OwnerAuth owner, IHubContext<SyncHub> hub, ILogger log)
     {

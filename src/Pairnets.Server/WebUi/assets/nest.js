@@ -361,6 +361,7 @@
 
     $("step-claim").hidden = true;
     $("step-method").hidden = false;
+    $("claimed").hidden = !code; // only right after this page used a link, not for a browser that was signed in already
     $("passkey-block").hidden = !passkeysSupported();
     $("add-passkey").addEventListener("click", async () => {
       const button = $("add-passkey");
@@ -379,18 +380,30 @@
       $("has-methods").hidden = false;
       $("skip").hidden = false;
     }
+    // A password already exists: this form replaces it. Right after a setup link that works without the old
+    // one (that is how a forgotten password is reset); otherwise the old one is asked for, as under Security.
+    const replacing = state.methods.password;
+    const needCurrent = replacing && !state.canResetPassword;
+    $("password-heading").hidden = !replacing;
+    $("password-reset-note").hidden = !replacing || needCurrent;
+    $("setup-current-field").hidden = !needCurrent;
+    $("setup-current-password").required = needCurrent;
+    if (replacing) {
+      $("new-password-label").textContent = "New password";
+      $("new-password-submit").textContent = "Save new password and continue";
+    }
     $("new-password-form").addEventListener("submit", async (event) => {
       event.preventDefault();
       const first = $("new-password").value;
       if (first !== $("new-password-2").value) return showError(new Error("The two passwords are not the same."), "method-error");
       try {
-        await api("POST", "/password", { password: first });
+        await api("POST", "/password", { password: first, current: needCurrent ? $("setup-current-password").value : undefined });
         location.replace("/devices");
       } catch (error) {
         showError(error, "method-error");
       }
     });
-    $("new-password").focus();
+    (needCurrent ? $("setup-current-password") : $("new-password")).focus();
   }
 
   // ------------------------------------------------------------------ approve a computer
