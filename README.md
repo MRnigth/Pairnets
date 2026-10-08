@@ -7,8 +7,8 @@ No ports to open, no cloud storage, no telemetry. New computers join by signing 
 browser (a code you approve on **your own** server's website), not by copying secrets.
 
 > **Pairnets used to be called Tether.** Installing Pairnets takes over a Tether server and Tether
-> apps with everything they had (files, history, token, settings). Tether apps can't update
-> themselves into Pairnets, so install it by hand once: [Moving from Tether to Pairnets](docs/HOWTO.md#moving-from-tether-to-pairnets).
+> apps with everything they had (files, history, settings); each computer then signs in once.
+> Tether apps can't update themselves into Pairnets, so install it by hand once: [Moving from Tether to Pairnets](docs/HOWTO.md#moving-from-tether-to-pairnets).
 
 * Work on the desktop: changes flow to the server within seconds.
 * Switch to the laptop: it catches up on start (new files, edits and deletions), then keeps syncing.
@@ -58,34 +58,33 @@ More detail: [Architecture](docs/ARCHITECTURE.md) · [Deploy](docs/DEPLOY.md) ·
    curl -fsSL https://raw.githubusercontent.com/MRnigth/Pairnets/main/deploy/get.sh | sudo bash -s -- --public-url https://sync.example.com
    ```
 
-It asks for the tunnel token and prints the **server URL** (`https://sync.example.com/`) and a
-**token**. Save the token in your password manager; it is shown only once. Step by step, and what
-Cloudflare can see: [HOWTO sections 2 to 4](docs/HOWTO.md#2-create-a-cloudflare-tunnel).
+It asks for the tunnel token (nothing is shown while you paste it) and, at the end, prints a
+**one-time link** to set up your nest's website. Open it and add a passkey or a password (at least
+10 characters). Step by step, and what Cloudflare can see:
+[HOWTO sections 2 to 4](docs/HOWTO.md#2-create-a-cloudflare-tunnel).
 
-### Give the server a name (once, recommended)
+### Your nest's name
 
-With a domain on Cloudflare, for example `pairnets.app`, the server becomes your **nest**,
-`nest.pairnets.app`, reached through your Cloudflare Tunnel:
-
-```bash
-sudo ./install.sh --public-url https://nest.pairnets.app
-```
-
-It prints a one-time link to set up the nest's website, where you approve new computers, see them
-and remove them. See [DEPLOY.md](docs/DEPLOY.md#your-nests-own-name-https).
+The address you give with `--public-url` (here `sync.example.com`) is your **nest's** name. The apps
+find your server by it, and its website lives there: that is where you approve new computers, see
+them and remove them. Lost the setup link? On the server,
+`sudo -u pairnets /opt/pairnets/pairnets-server owner-link` prints a new one. See
+[DEPLOY.md](docs/DEPLOY.md#your-nests-own-name-https).
 
 ### Each PC
 
 1. Install Pairnets (see the table above).
-2. Open it, type your nest's name (`nest.pairnets.app`) and choose **Continue with Google**,
-   **Continue with email**, or **More ways to sign in in your browser**.
+2. Open it, type your nest's name (`sync.example.com`) and choose **Continue with Google**,
+   **Continue with email**, or **More ways to sign in in your browser** (the buttons match the ways
+   your nest offers).
    Check that the code matches and press **Allow** on your nest's website — it then sends you
    straight back to Pairnets.
 3. Choose the folder (for example `D:\Work`) and press **Start syncing**.
-   Optional: tick **Start with Windows**.
+   Optional: tick **Start Pairnets when I sign in to Windows** (on Mac and Linux: *when I log in*).
 
-There is no address-and-token form: give your server its own name first (the step above). To start
-over on a computer, use **Settings → Start over → Reset this app**.
+Each computer gets its own key; there is no address-and-token form. To start over on a computer,
+use **Settings → Start over → Reset this app…**: it removes Pairnets' settings, saved key and sync
+notes on that computer (and the computer from your nest), never your synced files.
 
 
 Pairnets has a window with a sidebar: **Overview** (status, a picture of this computer, the server
@@ -127,13 +126,14 @@ in the background.
 | Grey icon, "Offline" | The PC cannot reach the server. Check that the computer is online and that `sudo systemctl status pairnets-server pairnets-tunnel` shows both active. Pairnets retries by itself. Nothing is lost: local changes sync when it is back. |
 | "Cloudflare cannot reach your Pairnets server" / "blocked Pairnets with a browser check" | See [HOWTO section 4](docs/HOWTO.md#4-check-it-from-outside): the tunnel is down, or Bot Fight Mode is on for your domain. |
 | "Signed out of your nest" | This computer was removed on your nest (or you pressed *Sign out of this computer*). Its files are untouched. Press **Sign in again…** (it opens the sign-in window) to continue. |
-| "The server rejected the token" | The token in Settings does not match `/etc/pairnets/pairnets.env` (it was rotated, or mistyped). Enter it again in **Settings**. Read it on the server with `sudo grep SYNC_TOKEN /etc/pairnets/pairnets.env`. |
+| "Sign in to your nest" | This computer still used the old shared token, and your nest now lets computers in only with their own key. Press **Sign in with your browser…** and allow it on your nest. Files, folder and settings stay as they are. |
+| "The server rejected the token" | Only with an old server that has no name of its own: the token under **Settings → Advanced** does not match `/etc/pairnets/pairnets.env` (it was changed, or mistyped). Read it on the server with `sudo grep SYNC_TOKEN /etc/pairnets/pairnets.env`. |
 | "Deletions blocked" | A sync would delete many files. Right-click → **Allow these deletions…** shows exactly which ones. If that is not what you did, press No and check the folder; files are still on the server and in its history. |
 | "Folder is missing" / "no .pairnets-marker" | The drive is unplugged or the folder moved. Plug it in and **Sync now**, or use **Locate the sync folder…** to point Pairnets at its new location. |
 | "The server went back in time" / "not the one this folder was synced with" | The server was restored from a backup or reinstalled. Use **Re-link to this server…**: it merges without deleting or overwriting. |
 | A file named `… (conflict PC date time) …` appeared | Both PCs changed that file. Compare the two, keep the right content under the original name, delete the conflict copy. |
 | "Name collision" / "File name not allowed" | Two names differ only in letter case (`Report.txt` vs `report.txt`), a file and a folder have the same name, or a name is not valid on Windows (for example `CON.txt` or a trailing dot). Rename it; the **Needs attention** page lists them. |
-| Anything else | Right-click → **View log** (kept 14 days in `%LocalAppData%\Pairnets\logs`). Server: `sudo journalctl -u pairnets-server`. Logs never contain your token. |
+| Anything else | Right-click → **View log** (kept 14 days in `%LocalAppData%\Pairnets\logs`). Server: `sudo journalctl -u pairnets-server`. Logs never contain a key or token. |
 
 ## Building from source
 
@@ -144,7 +144,9 @@ dotnet publish src/Pairnets.Server -c Release -r linux-x64 --self-contained -p:P
 dotnet publish src/Pairnets.Client -c Release -r win-x64  --self-contained -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o publish/client
 ```
 
-Releases are built by `.github/workflows/release.yml` when a `v*` tag is pushed.
+`.github/workflows/release.yml` rebuilds the rolling **Latest build** release from every push to
+`main` (the download links above, the apps' update check and the server's self-update all use it),
+and attaches the same packages to `v*` tags.
 
 ## Roadmap (not in v1)
 

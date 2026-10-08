@@ -8,7 +8,7 @@ Allow about 30 minutes.
 > copy-and-paste prompts: one for the server and one for each computer.
 
 > Coming from **Tether** (Pairnets' old name)? See [Moving from Tether to Pairnets](#moving-from-tether-to-pairnets):
-> installing Pairnets takes over everything, with nothing to set up again.
+> installing Pairnets takes over everything; each computer then signs in once.
 
 **Contents**
 
@@ -48,10 +48,11 @@ router, at home or wherever your computers are.
 **Good to know first**
 
 * **Cloudflare can see the traffic.** It decrypts HTTPS at its edge before passing requests through
-  the tunnel, so in principle Cloudflare could see your token and your files. See
+  the tunnel, so in principle Cloudflare could see your computers' keys and your files. See
   [SECURITY.md](SECURITY.md).
-* The address is reachable from the internet. The long token is what keeps strangers out: keep it
-  in your password manager and never share it.
+* The address is reachable from the internet. What keeps strangers out: each computer has its own
+  long key, and a computer only gets one when you press **Allow** on your nest's website, which only
+  you can sign in to (with a passkey or password).
 * Cloudflare's free plan refuses any single upload over 100 MB. Pairnets sends big files in pieces
   automatically: between 4 and 50 MB each, sized so one piece takes about 30 seconds on your
   connection (smaller on a slow or busy network) and halved after a dropped connection, so a bad
@@ -115,21 +116,13 @@ sudo ./install.sh --public-url https://sync.example.com
   `pairnets-tunnel`;
 * creates a dedicated system user `pairnets` and the folders
   `/opt/pairnets` (program), `/var/lib/pairnets` (your data) and `/etc/pairnets` (settings);
-* creates a random **token**, a long password that the PCs must present;
+* remembers your nest's name (the `--public-url`), which turns on the nest's website;
+* makes the old shared **token**, which only older Pairnets apps use (new apps sign in instead);
 * installs and starts the background service `pairnets-server`; both services also start at boot.
 
-At the end it checks that `https://sync.example.com/api/health` answers, and prints something like:
-
-```
-Enter these settings in Pairnets on both PCs:
-  Server URL:  https://sync.example.com/
-  Token:       3f9c…(64 characters)…a1
-
-The token is shown only this once. Store it in your password manager.
-```
-
-**Copy both into your password manager now.** You need them on both PCs. If you lose the token
-you can read it again on the server with `sudo grep SYNC_TOKEN /etc/pairnets/pairnets.env`.
+At the end it checks that `https://sync.example.com/api/health` answers, and prints a **one-time
+setup link** for your nest's website (it looks like `https://sync.example.com/setup#code=…`) with the
+next steps. If the server itself does not start, it stops with an error and says where to look.
 
 Check that both services are running:
 
@@ -137,14 +130,37 @@ Check that both services are running:
 sudo systemctl status pairnets-server pairnets-tunnel    # both should say "active (running)"
 ```
 
+### Set up your nest's website (once)
+
+Your nest has a small website on its own name. That is where you let computers in, see them and
+remove them. Set it up now:
+
+1. Open the setup link from the installer in a browser, on any computer. It works once, within
+   24 hours.
+2. Choose how you will sign in: **Add a passkey** (Windows Hello, Face ID, Touch ID, your phone or a
+   security key; recommended) or **Choose a password** of at least 10 characters. You can add the
+   other one later.
+3. You land on the **Devices** page. It stays empty until your first computer signs in.
+
+Lost the link, or later lost every way to sign in? On the server, run this and open the new link it
+prints:
+
+```bash
+sudo -u pairnets /opt/pairnets/pairnets-server owner-link
+```
+
+Later, on the website's **Security** page, you can change the password, add passkeys, see where you
+are signed in, switch off the old shared token, and turn on sign-in by email link or with Google
+(both need a few settings on the server first, see [DEPLOY.md](DEPLOY.md#email-sign-in-links-optional)).
+
 ---
 
 ## 4. Check it from outside
 
 Open `https://sync.example.com/api/health` in a browser on any computer: it should show `ok`.
-Then go on with [section 5](#5-set-up-the-first-computer-for-example-the-desktop) and enter the
-`https://` address as the server address. (Always `https://`: the app refuses `http://` for a
-server behind Cloudflare, so the token is never sent unencrypted.)
+`https://sync.example.com` itself should open your nest's sign-in page (or its setup page, if you
+have not used the setup link yet). Then go on with
+[section 5](#5-set-up-the-first-computer-for-example-the-desktop).
 
 **If the app cannot connect**
 
@@ -152,13 +168,14 @@ server behind Cloudflare, so the token is never sent unencrypted.)
 |---------|-----------|
 | "Cloudflare cannot reach your Pairnets server (error 530)" (or 502) | On the server: `sudo systemctl status pairnets-tunnel` and `sudo journalctl -u pairnets-tunnel -n 50`. In the dashboard, the tunnel should say *Healthy* and its public hostname should point at `HTTP` `localhost:5075`. |
 | "Cloudflare blocked Pairnets with a browser check" | Turn off Bot Fight Mode (Security → Bots), or add a WAF custom rule that skips it for your Pairnets hostname. |
-| "This server is reached through Cloudflare. Use https://" | Type the address with `https://`, not `http://`. |
+| "This server is reached through Cloudflare. Use https://" | In **Settings → Advanced**, type the address with `https://`, not `http://`. |
+| "This nest has no website yet" | The server has no name of its own. Run the install command from section 3 with `--public-url https://sync.example.com`. |
 | A login page instead of `ok` in the browser | Cloudflare Access is protecting the hostname. Remove the Access application for it: the Pairnets app cannot sign in through it. |
 
 > **A server that was set up with Tailscale** (older versions)? Pairnets no longer uses Tailscale.
 > Create the tunnel (section 2), then run the install command from section 3 on the server. It
-> switches the server to the tunnel and keeps your token, files and history. Change the server
-> address in **Settings** on each computer to the `https://` one.
+> switches the server to the tunnel and keeps your files and history. Then sign each computer in
+> with the nest's name (section 5); its folder and files stay as they are.
 
 ---
 
@@ -198,8 +215,8 @@ curl -fsSL https://raw.githubusercontent.com/MRnigth/Pairnets/main/deploy/get.sh
 ```
 
 It installs into your home folder, adds Pairnets to the app menu and starts it. For the best
-experience also run `sudo apt install libsecret-tools libnotify-bin`. Pairnets then keeps the token
-in your keyring and can show notifications. On GNOME the tray icon needs the *AppIndicator*
+experience also run `sudo apt install libsecret-tools libnotify-bin`. Pairnets then keeps its
+sign-in key in your keyring and can show notifications. On GNOME the tray icon needs the *AppIndicator*
 extension, which Ubuntu enables by default.
 
 ### First-run setup: sign in
@@ -209,15 +226,17 @@ the same on Windows, Mac and Linux, and follows your system's light or dark mode
 
 ![Sign-in window](images/sign-in-welcome-light.png)
 
-1. Type your nest's name, for example `nest.pairnets.app`. Pairnets checks that it is yours and
-   shows which ways your nest offers.
+1. Type your nest's name: the one you gave the installer with `--public-url`, in this guide
+   `sync.example.com`. Pairnets checks that it is a Pairnets nest and shows which ways it offers.
 2. Choose **Continue with Google**, or type your email and choose **Continue with email**, or
-   choose **More ways to sign in in your browser** for a password or passkey. Your browser opens
+   choose **More ways to sign in in your browser** for a password or passkey (if your nest has no
+   email or Google sign-in, the button just says **Sign in with your browser**). Your browser opens
    your nest's website and signs you in there.
 3. Check that the code on the website matches the one in Pairnets and press **Allow**. The website
    sends you straight back to Pairnets.
 4. Choose the folder to sync, for example `D:\Work` (it may already contain your files), and press
-   **Start syncing**. Tick **Start Pairnets when I sign in** so syncing starts automatically.
+   **Start syncing**. Tick **Start Pairnets when I sign in to Windows** (on Mac and Linux: *when I log
+   in*) so syncing starts automatically.
 
 There is no form for a server address and token any more: a computer only gets in when you allow it
 on your nest. Your nest therefore needs its own public name first (see [section 3](#3-install-the-server)).
@@ -280,7 +299,9 @@ system, Pairnets version and last change (see [Updates](#updates) for details).
 **Needs attention** lists conflict copies and files that cannot be synced, each with a **Show in
 folder** button, and the decision Pairnets is waiting for, if any.
 
-**Settings** is the same form as the first-time setup. **Save** applies it at once.
+**Settings** has your nest (with **Manage devices on the web**, **Sign out of this computer**, and
+the server address and token under **Advanced**), the folder, this computer's name, ignore patterns,
+**Updates and speed** and **Start over**. **Save** applies it at once.
 
 **When an update is out**, a small card at the bottom of the sidebar says so, with **Update now**
 (Windows) or **Download** (Mac and Linux). See [Updates](#updates) below.
@@ -333,8 +354,11 @@ The icon colour always shows the state:
 
 ## 6. Set up the second computer (for example the laptop)
 
-Install Pairnets the same way and fill in the setup window with the **same server URL and token**,
-a **different device name**, and the folder you want on this PC.
+Install Pairnets the same way and sign in the same way: type your nest's name, check the code on
+your nest's website and press **Allow**. While it waits, your other computers show a "wants to join"
+notice that leads to the same page. Each computer gets its own key. Its name on the nest is the
+computer's name (the nest adds " (2)" if another computer already has it; rename it in **Settings**
+or on the nest). Then choose the folder you want on this computer.
 
 * **Empty folder** (most common): Pairnets downloads everything from the server.
 * **A folder that already holds a copy** (for example you copied it with a USB drive): Pairnets
@@ -375,7 +399,7 @@ You do not have to do anything. Just work in the folder on whichever PC you are 
 | **Open folder** | opens the synced folder in Explorer, Finder or your file manager |
 | **Allow these deletions (N)…** | only shown when Pairnets blocked a large deletion (see section 9) |
 | **Locate the sync folder… / Confirm this folder… / Re-link to this server…** | only shown when Pairnets stopped to ask you something (see section 9) |
-| **Settings…** | opens the window on the Settings page: server, token, folder, device name, ignore patterns |
+| **Settings…** | opens the window on the Settings page: your nest, folder, device name, ignore patterns |
 | **View log** | opens today's log (kept 14 days in `%LocalAppData%\Pairnets\logs`) |
 | **Report a bug…** | builds a report to send to whoever helps you (see [Updates](#updates)) |
 | **Pause syncing / Resume syncing** | temporarily stop syncing on this PC |
@@ -397,7 +421,7 @@ You do not have to do anything. Just work in the folder on whichever PC you are 
   └────────────┘   "something     │ manifest (list of │   "something    └────────────┘
                     changed" ◀──  │  every file)      │  ──▶ changed"
                                   └───────────────────┘
-   all traffic goes over HTTPS through your Cloudflare Tunnel and needs the token
+   all traffic goes over HTTPS through your Cloudflare Tunnel and needs each computer's own key
 ```
 
 The two PCs never talk to each other directly. Each one only compares itself with the server.
@@ -500,7 +524,9 @@ A renamed file is synced as "delete the old name, create the new name". The resu
 | You see | What it means and what to do |
 |---------|------------------------------|
 | **Grey icon, "Offline"** | This PC cannot reach the server. Check that the computer is online and the server is on. On the server: `sudo systemctl status pairnets-server pairnets-tunnel`. Pairnets keeps retrying; your changes are safe and sync when it is back. |
-| **"The server rejected the token"** | The token in Settings is wrong, or was changed on the server. Open **Settings…**, paste the token, and click **Test connection**. |
+| **"Sign in to your nest"** | This computer still used the old shared token, and your nest now lets computers in only with their own key. Click **Sign in with your browser…**, check the code and press **Allow** on your nest. The folder, files and settings stay as they are. |
+| **"Signed out of your nest"** | This computer was removed on your nest, the old shared token was switched off there, or you pressed **Sign out of this computer**. Its files are untouched. Click **Sign in again…** and allow it on your nest. |
+| **"The server rejected the token"** | Only with an old server that has no name of its own: the token under **Settings → Advanced** is wrong, or was changed on the server. Paste the right one and click **Test connection**. |
 | **"Deletions blocked"** (orange) | A sync would delete many files. Right-click → **Allow these deletions…** lists them, showing which PC loses what. If that is what you did, click **Yes** (it applies once). If not (wrong folder, unplugged drive), click **No** and investigate. Nothing has been deleted. |
 | **"The folder is missing" / "no .pairnets-marker"** (orange) | The drive is unplugged, or you moved or renamed the folder. Plug the drive in and choose **Sync now**. If you moved the folder, choose **Locate the sync folder…** and point to its new place; Pairnets recognizes it by its marker and continues without resyncing. |
 | **"This folder was already synced… Confirm"** | Pairnets finds a marker but no record of it on this PC (for example after reinstalling Windows). Choose **Confirm this folder…**. Pairnets then merges and deletes nothing. |
@@ -528,26 +554,25 @@ sudo systemctl start pairnets-server
 
 Files deleted on the *other* PC are also in this PC's **Recycle Bin**.
 
-### Changing the token
+### A lost or stolen computer
 
-Do this if a PC is lost, or you think the token leaked:
+Open your nest's website, go to **Devices**, and remove that computer from its **⋯** menu. Its key
+stops working at once; your other computers carry on as before. You can also do it on the server:
 
 ```bash
-NEW=$(openssl rand -hex 32)
-sudo sed -i "s/^SYNC_TOKEN=.*/SYNC_TOKEN=$NEW/" /etc/pairnets/pairnets.env
-sudo systemctl restart pairnets-server
-echo "$NEW"
+sudo -u pairnets /opt/pairnets/pairnets-server devices list
+sudo -u pairnets /opt/pairnets/pairnets-server devices remove "LAPTOP"
 ```
 
-Enter the new token in **Settings…** on both PCs. If a PC was lost, the new token is all it takes:
-the lost PC can no longer connect.
+If you think the old shared token leaked, switch it off on the website's **Security** page (or make a
+new one, see [SECURITY.md](SECURITY.md#a-lost-computer-or-a-leaked-secret)).
 
 ### Logs
 
 * PC: right-click → **View log**.
 * Server: `sudo journalctl -u pairnets-server -f`.
 
-Neither ever contains your token.
+Neither ever contains a key or token.
 
 ---
 
@@ -598,7 +623,7 @@ on the clipboard so you can send it to whoever helps you. Turn it off again when
 
 **Report a bug.** Click **⋯ → Report a bug…** at the top right of the window (or in the quick panel, or the
 tray / menu-bar menu). Pairnets
-builds a report with its version, your system, your settings (never the token), the sync status, the
+builds a report with its version, your system, your settings (never the key or token), the sync status, the
 server's update details, recent activity and the last 300 lines of the log. It copies the report to the
 clipboard and saves it as `bug-report-….txt` in the log folder, so you can paste it to whoever helps you;
 nothing is sent anywhere. After an unexpected error, Pairnets keeps running and offers the same report with
@@ -617,7 +642,7 @@ update is one click (or automatic):
 curl -fsSL https://raw.githubusercontent.com/MRnigth/Pairnets/main/deploy/get.sh | sudo bash
 ```
 
-Updates keep your token, address, settings and files.
+Updates keep your settings, your nest's name, the sign-ins and your files.
 
 ### Moving from Tether to Pairnets
 
@@ -633,12 +658,14 @@ apps and the other way round, so you can do one machine at a time.
    the Tether server and moves it: `/var/lib/tether` becomes `/var/lib/pairnets`, `/etc/tether`
    becomes `/etc/pairnets`, and the services become `pairnets-server` (and `pairnets-tunnel`). The
    server address and token stay the same. Check with `sudo systemctl status pairnets-server`.
+   Because your nest has its own name, each Pairnets app then asks you to sign in once ("Sign in to
+   your nest"): check the code and press **Allow** on your nest. Its folder and files stay as they
+   are.
 2. **Windows.** Download and run `PairnetsSetup.exe`. It removes the Tether program (not its
    settings) and starts Pairnets, which takes them over.
 3. **Mac.** Quit Tether (menu-bar icon → **Quit**), install Pairnets from its `.dmg`, move
    **Tether** from Applications to the Trash, and start Pairnets. macOS may ask whether Pairnets may
-   use the "Tether" item in your Keychain: click **Always Allow** (or enter the token again in
-   Settings).
+   use the "Tether" item in your Keychain: click **Always Allow** (or just sign in again).
 4. **Linux.** Run the desktop one-liner from [section 5](#5-set-up-the-first-computer-for-example-the-desktop).
    It stops and removes Tether, then starts Pairnets.
 
@@ -678,8 +705,8 @@ Use **Reset this app…** (above) first if you also want Pairnets' settings, sav
 gone, then uninstall.
 
 **Uninstall from a Mac**: menu-bar icon → **Quit Pairnets**, untick "Start at login" first if you
-had it on, then delete **Pairnets** from Applications. The token is in the *Keychain Access* app
-under "Pairnets" (Reset removes it).
+had it on, then delete **Pairnets** from Applications. The sign-in key is in the *Keychain Access*
+app under "Pairnets" (Reset removes it).
 
 **Uninstall from Linux**: quit Pairnets, then
 `rm -rf ~/.local/opt/pairnets ~/.local/bin/pairnets ~/.local/share/applications/pairnets.desktop ~/.config/autostart/pairnets.desktop`.
@@ -694,13 +721,17 @@ state, use **Reset this app…** before uninstalling (or delete `%AppData%\Pairn
 
 ```bash
 sudo systemctl disable --now pairnets-server
+sudo systemctl disable --now pairnets-update.path pairnets-update.timer 2>/dev/null
 sudo systemctl disable --now pairnets-tunnel 2>/dev/null   # only with a Cloudflare Tunnel
-sudo rm -f /etc/systemd/system/pairnets-server.service /etc/systemd/system/pairnets-tunnel.service
+sudo rm -f /etc/systemd/system/pairnets-server.service /etc/systemd/system/pairnets-tunnel.service \
+           /etc/systemd/system/pairnets-update.service /etc/systemd/system/pairnets-update.path \
+           /etc/systemd/system/pairnets-update.timer
 sudo systemctl daemon-reload
 sudo rm -rf /opt/pairnets /etc/pairnets
 # your files remain in /var/lib/pairnets until you delete that folder yourself
 ```
-(Delete the tunnel in the Cloudflare dashboard too.)
+This also removes the self-updater, which the server installer added. (Delete the tunnel in the
+Cloudflare dashboard too.)
 
 For backups, the technical design and the security model, see [DEPLOY.md](DEPLOY.md),
 [ARCHITECTURE.md](ARCHITECTURE.md) and [SECURITY.md](SECURITY.md).
