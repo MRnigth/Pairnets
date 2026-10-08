@@ -772,6 +772,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
     private void ApplySettings(ClientSettings settings, string? plainToken)
     {
         _settings = settings;
+        _window?.ShowNotifySettings(_settings.NotifyJoinRequests, _settings.NotifyAttention, _settings.NotifyUpdates);
         _fileLog.Minimum = _settings.DebugMode ? LogLevel.Debug : LogLevel.Information;
         SettingsStore.Save(SettingsStore.DefaultPath, _settings);
         SetAutoStart(_settings.StartWithWindows);

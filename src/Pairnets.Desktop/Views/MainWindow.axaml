@@ -20,6 +20,9 @@
     <Style Selector="v|LineIcon.tone[Tag=bad]">
       <Setter Property="Stroke" Value="{DynamicResource S.Red}" />
     </Style>
+    <Style Selector="v|LineIcon.tone[Tag=ok]">
+      <Setter Property="Stroke" Value="{DynamicResource S.Green}" />
+    </Style>
     <Style Selector="v|LineIcon.tone[Tag=muted]">
       <Setter Property="Stroke" Value="{DynamicResource T.Muted}" />
     </Style>
@@ -67,8 +70,12 @@
               <StackPanel Grid.Column="1" VerticalAlignment="Center">
                 <StackPanel Orientation="Horizontal" Spacing="6">
                   <TextBlock Text="{Binding Primary}" Classes="bold" TextTrimming="CharacterEllipsis" />
-                  <v:LineIcon Classes="icon muted chevron" Classes.open="{Binding #FolderToggle.IsChecked}" Width="12" Height="12"
-                              StrokeThickness="2.6" Data="{StaticResource I.Chevron}" VerticalAlignment="Center" />
+                  <Panel Width="12" Height="12" VerticalAlignment="Center">
+                    <v:LineIcon Classes="icon muted" Width="12" Height="12" StrokeThickness="2.6" Data="{StaticResource I.Chevron}"
+                                IsVisible="{Binding #FolderToggle.IsChecked, Converter={x:Static BoolConverters.Not}}" />
+                    <v:LineIcon Classes="icon muted" Width="12" Height="12" StrokeThickness="2.6" Data="{StaticResource I.ChevronDown}"
+                                IsVisible="{Binding #FolderToggle.IsChecked}" />
+                  </Panel>
                 </StackPanel>
                 <TextBlock Text="{Binding Secondary}" Classes="muted small" TextTrimming="CharacterEllipsis" />
               </StackPanel>
@@ -155,6 +162,7 @@
       <Grid ColumnDefinitions="Auto,*,Auto" RowDefinitions="Auto,Auto" Margin="36,24,36,0">
         <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
           <TextBlock x:Name="PageTitle" Classes="title" Text="Overview" VerticalAlignment="Center" />
+          <Panel x:Name="CalloutHost">
           <Button x:Name="AttentionCallout" Classes="callout" IsVisible="False" Click="OnReviewAttention" VerticalAlignment="Center">
             <StackPanel Orientation="Horizontal" Spacing="8">
               <Ellipse Width="7" Height="7" Fill="{DynamicResource T.WarnFill}" VerticalAlignment="Center" />
@@ -162,6 +170,7 @@
               <TextBlock Text="Review" FontSize="13" FontWeight="SemiBold" TextDecorations="Underline" VerticalAlignment="Center" />
             </StackPanel>
           </Button>
+          </Panel>
         </StackPanel>
         <TextBlock x:Name="PageSubtitle" Grid.Row="1" Grid.ColumnSpan="3" Classes="muted" Margin="0,4,0,0" TextWrapping="Wrap" IsVisible="False" />
         <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
@@ -259,8 +268,12 @@
                           <ToggleButton x:Name="GroupToggle" Classes="row-button" Background="Transparent" Padding="0,9">
                             <StackPanel Spacing="7">
                               <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto">
-                                <v:LineIcon Classes="icon muted chevron" Classes.open="{Binding #GroupToggle.IsChecked}" Width="12" Height="12"
-                                            StrokeThickness="2.6" Data="{StaticResource I.Chevron}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                <Panel Width="12" Height="12" VerticalAlignment="Center" Margin="0,0,8,0">
+                                  <v:LineIcon Classes="icon muted" Width="12" Height="12" StrokeThickness="2.6" Data="{StaticResource I.Chevron}"
+                                              IsVisible="{Binding #GroupToggle.IsChecked, Converter={x:Static BoolConverters.Not}}" />
+                                  <v:LineIcon Classes="icon muted" Width="12" Height="12" StrokeThickness="2.6" Data="{StaticResource I.ChevronDown}"
+                                              IsVisible="{Binding #GroupToggle.IsChecked}" />
+                                </Panel>
                                 <v:LineIcon Grid.Column="1" Classes="icon accent" StrokeThickness="1.9" Data="{StaticResource I.Folder}"
                                             VerticalAlignment="Center" Margin="0,0,8,0" />
                                 <TextBlock Grid.Column="2" Text="{Binding Title}" Classes="bold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
@@ -276,11 +289,11 @@
                                 <DataTemplate DataType="c:BatchFile">
                                   <Grid ColumnDefinitions="Auto,*,Auto" Height="26">
                                     <Panel Width="13" Height="13" Margin="0,0,10,0" VerticalAlignment="Center">
-                                      <v:LineIcon Classes="icon" Width="13" Height="13" StrokeThickness="2.6" Stroke="{DynamicResource S.Green}"
+                                      <v:LineIcon Classes="icon tone" Tag="ok" Width="13" Height="13" StrokeThickness="2.6"
                                                   Data="{StaticResource I.Check}" IsVisible="{Binding IsDone}" />
-                                      <v:LineIcon Classes="icon" Width="13" Height="13" StrokeThickness="2.6" Stroke="{DynamicResource S.Blue}"
+                                      <v:LineIcon Classes="icon tone" Tag="move" Width="13" Height="13" StrokeThickness="2.6"
                                                   Data="{StaticResource I.Up}" IsVisible="{Binding IsMovingUp}" />
-                                      <v:LineIcon Classes="icon" Width="13" Height="13" StrokeThickness="2.6" Stroke="{DynamicResource S.Blue}"
+                                      <v:LineIcon Classes="icon tone" Tag="move" Width="13" Height="13" StrokeThickness="2.6"
                                                   Data="{StaticResource I.Down}" IsVisible="{Binding IsMovingDown}" />
                                       <Ellipse Width="5" Height="5" Fill="{DynamicResource T.Muted}" IsVisible="{Binding IsWaiting}" />
                                     </Panel>
@@ -395,7 +408,7 @@
                           <Border Classes="glyph-circle" Width="30" Height="30" CornerRadius="15" Margin="0,0,12,0">
                             <Panel>
                               <v:LineIcon Classes="icon" Width="14" Height="14" StrokeThickness="2.1" Data="{StaticResource I.File}" IsVisible="{Binding !Deleted}" />
-                              <v:LineIcon Classes="icon" Width="14" Height="14" StrokeThickness="2.1" Stroke="{DynamicResource S.Red}" Data="{StaticResource I.Trash}" IsVisible="{Binding Deleted}" />
+                              <v:LineIcon Classes="icon tone" Tag="bad" Width="14" Height="14" StrokeThickness="2.1" Data="{StaticResource I.Trash}" IsVisible="{Binding Deleted}" />
                             </Panel>
                           </Border>
                           <StackPanel Grid.Column="1" VerticalAlignment="Center">

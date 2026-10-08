@@ -215,8 +215,7 @@ public partial class MainWindow : Window
         PageTitle.Classes.Set("muted", overview);
         PageTitle.FontSize = overview ? 15 : 26;
         PageTitle.FontWeight = FontWeight.SemiBold;
-        AttentionCallout.Opacity = overview ? 1 : 0;
-        AttentionCallout.IsHitTestVisible = overview;
+        CalloutHost.IsVisible = overview; // the pill itself keeps saying whether something waits
         PageSubtitle.IsVisible = PageSubtitle.Text.Length > 0;
         OverviewPage.IsVisible = overview;
         ActivityPage.IsVisible = page == MainPage.Activity;

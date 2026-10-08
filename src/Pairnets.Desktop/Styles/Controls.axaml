@@ -568,18 +568,6 @@
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="Foreground" Value="{DynamicResource T.Text}" />
   </Style>
-  <Style Selector="v|LineIcon.chevron">
-    <Setter Property="RenderTransform" Value="rotate(0deg)" />
-    <Setter Property="Transitions">
-      <Transitions>
-        <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.18" />
-      </Transitions>
-    </Setter>
-  </Style>
-  <Style Selector="v|LineIcon.chevron.open">
-    <Setter Property="RenderTransform" Value="rotate(90deg)" />
-  </Style>
-
   <!-- Coloured message chips (History: restored / failed) -->
   <Style Selector="Border.ok">
     <Setter Property="Background" Value="{DynamicResource T.OkPill}" />
