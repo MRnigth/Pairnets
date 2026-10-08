@@ -49,6 +49,15 @@ public sealed record StatusSnapshot(
     /// <summary>The uploads and downloads running right now.</summary>
     public IReadOnlyList<ActiveTransfer> Active { get; init; } = [];
 
+    /// <summary>
+    /// Every upload and download of the current sync with where it is (done, moving, waiting), in the order they
+    /// run. Empty between syncs. The "In progress" folder rows open to list these.
+    /// </summary>
+    public IReadOnlyList<BatchFile> Batch { get; init; } = [];
+
+    /// <summary>Who this computer belongs to on the nest (email, how they signed in), or null when not known.</summary>
+    public AccountInfo? Account { get; init; }
+
     /// <summary>Bytes moved and planned in this sync (several passes in a row count as one).</summary>
     public long PassBytesDone { get; init; }
 

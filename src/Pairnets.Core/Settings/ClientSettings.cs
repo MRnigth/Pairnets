@@ -60,6 +60,15 @@ public sealed class ClientSettings
     /// <summary>Debug mode: more detail in the log, and the server's update log in the update window.</summary>
     public bool DebugMode { get; set; }
 
+    /// <summary>Show a notification when another computer wants to join the nest.</summary>
+    public bool NotifyJoinRequests { get; set; } = true;
+
+    /// <summary>Show a notification when something needs the person (conflicts, blocked syncs, sign-in problems).</summary>
+    public bool NotifyAttention { get; set; } = true;
+
+    /// <summary>Show a notification when a new Pairnets version is out or the server was updated.</summary>
+    public bool NotifyUpdates { get; set; } = true;
+
     /// <summary><see cref="ParallelTransfers"/> limited to the offered choices.</summary>
     public int EffectiveParallelTransfers => ParallelTransfers is 1 or 2 or 4 or 8 ? ParallelTransfers : 4;
 

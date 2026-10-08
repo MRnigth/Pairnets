@@ -124,4 +124,19 @@ public static class ActivityDays
         }
         return rows;
     }
+
+    /// <summary>
+    /// Like <see cref="Rows"/>, with runs of same-folder files folded into <see cref="ActivityFolder"/> rows
+    /// (a run never crosses a day heading).
+    /// </summary>
+    public static IReadOnlyList<object> GroupedRows(IReadOnlyList<ActivityItem> items, DateTimeOffset now)
+    {
+        var rows = new List<object>(items.Count + 4);
+        foreach (var day in items.GroupBy(i => i.Time.ToLocalTime().Date))
+        {
+            rows.Add(new ActivityDay(Format.Day(day.Key, now), day.Key));
+            rows.AddRange(ActivityGroups.Group(day.ToList()));
+        }
+        return rows;
+    }
 }
