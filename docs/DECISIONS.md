@@ -83,6 +83,21 @@ what cannot lose or silently overwrite data.
   unit and `update.sh` watch `/var/lib/pairnets/update`, so DEPLOY.md copies the data, mounts the
   new place onto the old path through `/etc/fstab`, and adds a `RequiresMountsFor=` drop-in so the
   server never starts on an empty folder when the disk is missing.
+* **Only the newest setup link works.** `owner-link` cancels every older unused link. A link shown
+  to someone else (a shared terminal, a chat) would otherwise stay good for 24 hours, and on a nest
+  without an owner the first person to open it takes the nest.
+* **A setup link can replace a forgotten password, briefly.** The browser that opened a setup link
+  may set a new password without the old one for 30 minutes, and only if the password is older than
+  that sign-in (so once per link). Every other browser still needs the current password, so one left
+  signed in cannot lock you out. That keeps "SSH, `owner-link`, new password" a real way back in.
+* **Maintenance commands run as the data folder's owner.** On Linux and macOS the CLI compares the
+  folder's owner with the user running it and stops with the right `sudo -u pairnets …` line: run
+  as root, SQLite would leave root-owned `-wal`/`-shm` files the service can no longer write.
+* **Computers on the old shared token can be forgotten on the website.** They have no key to
+  remove, so "Forget this computer…" only clears their row; while the token is still on, the
+  computer shows up again when it next connects, and the dialog says so.
+* **Destructive switches ask first.** Turning off the shared token, removing the password and
+  removing a passkey each ask for a confirmation with one sentence about the consequence.
 
 ## Client
 
@@ -248,6 +263,15 @@ what cannot lose or silently overwrite data.
   stranger trying tokens would have slowed down everyone through the shared failure counter.
   `Sync:TrustProxyHeaders` takes `CF-Connecting-IP` (or the last `X-Forwarded-For` entry) instead,
   only on loopback connections and only when install.sh turned it on for a tunnel.
+* **The website trusts the tunnel by the connection, not the address.** Once the client address is
+  replaced, the request no longer looks local, so the middleware also marks that the connection
+  itself came from loopback, and only that mark lets `X-Forwarded-Proto: https` count. (Checking the
+  replaced address made the website redirect to itself forever behind every tunnel.)
+* **`install.sh` fails when the server does not answer.** It waits up to a minute for the local
+  health check and exits non-zero otherwise, so the self-updater reports a failed update instead of
+  a success. Giving `--public-url` removes old `PUBLIC_URL=` / `Sync__PublicUrl=` lines, which the
+  server reads first, so the given name always wins. On a terminal it prints the setup link at the
+  end; never into the updater's log.
 * **`Cache-Control: no-store, no-transform` on every response**, so no proxy ever caches a file or
   manifest, or recompresses a download whose hash the client checks.
 * **No token on the health check.** The apps leave the token off `/api/health`. If the answer comes
