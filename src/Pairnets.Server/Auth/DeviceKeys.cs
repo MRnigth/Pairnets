@@ -16,6 +16,8 @@ public sealed class DeviceKeys(AuthStore store, TimeProvider? clock = null)
 
     private readonly TimeProvider _clock = clock ?? TimeProvider.System;
     private readonly ConcurrentDictionary<string, (PairedDevice Device, DateTimeOffset Expires)> _byKeyHash = new(StringComparer.Ordinal);
+    private readonly object _gate = new();
+    private long _forgets; // a lookup that read the database before a Forget must not cache what it read
     private volatile CachedFlag? _allowShared;
 
     private sealed record CachedFlag(bool Value, DateTimeOffset Expires);
@@ -29,21 +31,30 @@ public sealed class DeviceKeys(AuthStore store, TimeProvider? clock = null)
         var now = _clock.GetUtcNow();
         if (_byKeyHash.TryGetValue(hash, out var hit) && hit.Expires > now)
             return hit.Device;
+        var forgets = Interlocked.Read(ref _forgets);
         var device = store.FindByKey(key);
         if (device is null)
         {
             _byKeyHash.TryRemove(hash, out _);
             return null;
         }
-        if (_byKeyHash.Count >= MaxEntries)
-            _byKeyHash.Clear();
-        _byKeyHash[hash] = (device, now + Lifetime);
+        lock (_gate)
+        {
+            if (_forgets == forgets)
+            {
+                if (_byKeyHash.Count >= MaxEntries)
+                    _byKeyHash.Clear();
+                _byKeyHash[hash] = (device, now + Lifetime);
+            }
+        }
         return device;
     }
 
     /// <summary>Drops cached entries of one computer after it was removed or renamed.</summary>
     public void Forget(string deviceId)
     {
+        lock (_gate)
+            _forgets++;
         foreach (var (hash, entry) in _byKeyHash)
         {
             if (entry.Device.Id == deviceId)
