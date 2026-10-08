@@ -66,6 +66,10 @@ public static class Program
         public void RefreshDevices() { }
         public void AddComputer() { }
         public void ManageDevices() { }
+        public void OpenNest() { }
+        public void SignOut() { }
+        public void ResetEverything() { }
+        public void SetNotify(NoticeKind kind, bool on) { }
         public void OpenWindow(MainPage page) { }
         public void Quit() { }
     }

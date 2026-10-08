@@ -33,17 +33,6 @@ public static class Visuals
     };
 
     public static T? Resource<T>(string key) where T : class => Application.Current?.TryFindResource(key) as T;
-
-    /// <summary>A soft wash of a status colour from the top, fading out by <paramref name="end"/> (0–1).</summary>
-    public static Brush Wash(string brushKey, byte alpha, double end)
-    {
-        var color = (Resource<SolidColorBrush>(brushKey))?.Color ?? Colors.Gray;
-        var brush = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(0, 1) };
-        brush.GradientStops.Add(new GradientStop(Color.FromArgb(alpha, color.R, color.G, color.B), 0));
-        brush.GradientStops.Add(new GradientStop(Color.FromArgb(0, color.R, color.G, color.B), end));
-        brush.Freeze();
-        return brush;
-    }
 }
 
 /// <summary>
@@ -83,15 +72,6 @@ public static class AppIcons
     }
 }
 
-/// <summary>ActivityKind → status brush.</summary>
-public sealed class ActivityBrushConverter : IValueConverter
-{
-    public object? Convert(object value, Type targetType, object parameter, CultureInfo culture) =>
-        value is ActivityKind k ? Visuals.Resource<Brush>(Visuals.ForActivity(k).Brush) : null;
-
-    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) => throw new NotSupportedException();
-}
-
 /// <summary>ActivityKind → icon geometry.</summary>
 public sealed class ActivityIconConverter : IValueConverter
 {
@@ -108,15 +88,6 @@ public sealed class VisibleConverter : IValueConverter
 
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture) =>
         (value is true) != Invert ? Visibility.Visible : Visibility.Collapsed;
-
-    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) => throw new NotSupportedException();
-}
-
-/// <summary>Upload (true) → green, download → blue: the colour of a file's progress bar.</summary>
-public sealed class DirectionBrushConverter : IValueConverter
-{
-    public object? Convert(object value, Type targetType, object parameter, CultureInfo culture) =>
-        Visuals.Resource<Brush>(value is true ? "S.Green" : "S.Blue");
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) => throw new NotSupportedException();
 }
