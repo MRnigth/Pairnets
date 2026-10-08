@@ -43,6 +43,13 @@
     </div>
 
     <details>
+      <summary>I just installed the server: how do I get in?</summary>
+      <p>At the end, the installer prints a one-time setup link for your nest. Open it in your browser: it works once, within 24 hours. Then add a passkey, or a password of at least 10 characters. After that, sign in at your nest's own name, for example <code>https://nest.pairnets.app</code>.</p>
+      <p>Lost the link, or it expired? On the server, make a new one and open it:</p>
+      <pre><code>sudo -u pairnets /opt/pairnets/pairnets-server owner-link</code></pre>
+      <p>Now add your computers: <a href="/add/">Add a computer</a>.</p>
+    </details>
+    <details>
       <summary>"Can't reach it" under "Your nest" in the app</summary>
       <p>Same causes: the name is mistyped, or your nest isn't running. Fix that, then change the name slightly and back, or press Sign in again; the line under the box checks the address as you type.</p>
     </details>
