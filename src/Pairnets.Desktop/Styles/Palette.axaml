@@ -1,74 +1,187 @@
 <ResourceDictionary xmlns="https://github.com/avaloniaui"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-  <!-- Theme colours follow the operating system (light / dark). -->
+  <!--
+    The "Quiet" palette: warm paper and ink, hairlines instead of cards. Colours follow the operating system
+    (light / dark). T.* are surfaces and text; S.* carry meaning (green up to date, blue syncing and uploads,
+    grey waiting or offline, orange needs a decision, red a problem) and differ per theme so they stay readable.
+  -->
   <ResourceDictionary.ThemeDictionaries>
     <ResourceDictionary x:Key="Light">
-      <SolidColorBrush x:Key="T.Bg" Color="#F3F5F8" />
+      <SolidColorBrush x:Key="T.Bg" Color="#F7F6F3" />
       <SolidColorBrush x:Key="T.Card" Color="#FFFFFF" />
-      <SolidColorBrush x:Key="T.Text" Color="#1B1F24" />
-      <SolidColorBrush x:Key="T.Muted" Color="#6B7280" />
-      <SolidColorBrush x:Key="T.Border" Color="#E3E7ED" />
-      <SolidColorBrush x:Key="T.Hover" Color="#F1F4F8" />
-      <SolidColorBrush x:Key="T.Subtle" Color="#E9EDF2" />
-      <SolidColorBrush x:Key="T.SubtleHover" Color="#DDE3EA" />
-      <SolidColorBrush x:Key="T.Accent" Color="#2563EB" />
-      <SolidColorBrush x:Key="T.AccentHover" Color="#1D4FC4" />
-      <SolidColorBrush x:Key="T.Track" Color="#E3E8EF" />
-      <SolidColorBrush x:Key="T.Pill" Color="#EEF2F7" />
-      <SolidColorBrush x:Key="T.Banner" Color="#EAF1FE" />
-      <SolidColorBrush x:Key="T.BannerBorder" Color="#C9DAFB" />
-      <SolidColorBrush x:Key="T.WarnPill" Color="#FFF1DE" />
-      <SolidColorBrush x:Key="T.WarnText" Color="#9A4A0B" />
-      <SolidColorBrush x:Key="T.Sidebar" Color="#E9EDF2" />
-      <SolidColorBrush x:Key="T.NavHover" Color="#DFE4EB" />
-      <SolidColorBrush x:Key="T.NavSelected" Color="#FFFFFF" />
-      <SolidColorBrush x:Key="T.Node" Color="#F4F6F9" />
-      <SolidColorBrush x:Key="T.NodeRing" Color="#D5DBE3" />
-      <SolidColorBrush x:Key="T.Line" Color="#C7CFDA" />
-      <SolidColorBrush x:Key="T.Selected" Color="#E8F0FE" />
-      <SolidColorBrush x:Key="T.OkPill" Color="#E3F4E7" />
-      <SolidColorBrush x:Key="T.OkText" Color="#1F7A35" />
-      <SolidColorBrush x:Key="T.BadPill" Color="#FBE4E6" />
-      <SolidColorBrush x:Key="T.BadText" Color="#A61B25" />
-      <SolidColorBrush x:Key="T.Panel" Color="#FBFCFD" />
+      <SolidColorBrush x:Key="T.Popover" Color="#FFFFFF" />
+      <SolidColorBrush x:Key="T.Text" Color="#1B1A17" />
+      <SolidColorBrush x:Key="T.Muted" Color="#69655D" />
+      <SolidColorBrush x:Key="T.Border" Color="#E3E0D9" />
+      <SolidColorBrush x:Key="T.Hover" Color="#EFEDE8" />
+      <SolidColorBrush x:Key="T.Subtle" Color="#ECE9E3" />
+      <SolidColorBrush x:Key="T.SubtleHover" Color="#E2DED6" />
+      <SolidColorBrush x:Key="T.Accent" Color="#2F47C4" />
+      <SolidColorBrush x:Key="T.AccentHover" Color="#263BA6" />
+      <SolidColorBrush x:Key="T.AccentInk" Color="#FFFFFF" />
+      <SolidColorBrush x:Key="T.AccentSoft" Color="#E7EAF9" />
+      <SolidColorBrush x:Key="T.Primary" Color="#1B1A17" />
+      <SolidColorBrush x:Key="T.PrimaryHover" Color="#37342F" />
+      <SolidColorBrush x:Key="T.PrimaryInk" Color="#F7F6F3" />
+      <SolidColorBrush x:Key="T.Track" Color="#E6E3DC" />
+      <SolidColorBrush x:Key="T.Pill" Color="#ECE9E3" />
+      <SolidColorBrush x:Key="T.Banner" Color="#FFFFFF" />
+      <SolidColorBrush x:Key="T.BannerBorder" Color="#E3E0D9" />
+      <SolidColorBrush x:Key="T.WarnPill" Color="#F5E9D6" />
+      <SolidColorBrush x:Key="T.WarnText" Color="#8A4B00" />
+      <SolidColorBrush x:Key="T.WarnFill" Color="#A35400" />
+      <SolidColorBrush x:Key="T.BadgeInk" Color="#FFFFFF" />
+      <SolidColorBrush x:Key="T.Sidebar" Color="#EFEDE8" />
+      <SolidColorBrush x:Key="T.NavHover" Color="#E7E4DE" />
+      <SolidColorBrush x:Key="T.NavSelected" Color="#E2DED6" />
+      <SolidColorBrush x:Key="T.Node" Color="#F7F6F3" />
+      <SolidColorBrush x:Key="T.NodeRing" Color="#E3E0D9" />
+      <SolidColorBrush x:Key="T.Line" Color="#D6D2CA" />
+      <SolidColorBrush x:Key="T.Selected" Color="#E2DED6" />
+      <SolidColorBrush x:Key="T.OkPill" Color="#E2EFE6" />
+      <SolidColorBrush x:Key="T.OkText" Color="#2D7A4B" />
+      <SolidColorBrush x:Key="T.BadPill" Color="#F7E2DF" />
+      <SolidColorBrush x:Key="T.BadText" Color="#B42318" />
+      <SolidColorBrush x:Key="T.Panel" Color="#FFFFFF" />
+      <SolidColorBrush x:Key="T.Input" Color="#FFFFFF" />
+      <SolidColorBrush x:Key="T.InputBorder" Color="#D6D2CA" />
+      <SolidColorBrush x:Key="T.SwitchOff" Color="#CFCBC2" />
+      <SolidColorBrush x:Key="T.Shadow" Color="#2E281C" />
+
+      <SolidColorBrush x:Key="S.Green" Color="#2D7A4B" />
+      <SolidColorBrush x:Key="S.Blue" Color="#2F47C4" />
+      <SolidColorBrush x:Key="S.Grey" Color="#8A857C" />
+      <SolidColorBrush x:Key="S.Orange" Color="#A35400" />
+      <SolidColorBrush x:Key="S.Red" Color="#B42318" />
+      <SolidColorBrush x:Key="S.Yellow" Color="#8A857C" />
+
+      <!-- Fluent's own controls (switches, text boxes, menus) in the same colours. -->
+      <SolidColorBrush x:Key="ToggleSwitchFillOn" Color="#1B1A17" />
+      <SolidColorBrush x:Key="ToggleSwitchFillOnPointerOver" Color="#37342F" />
+      <SolidColorBrush x:Key="ToggleSwitchFillOnPressed" Color="#37342F" />
+      <SolidColorBrush x:Key="ToggleSwitchKnobFillOn" Color="#F7F6F3" />
+      <SolidColorBrush x:Key="ToggleSwitchKnobFillOnPointerOver" Color="#F7F6F3" />
+      <SolidColorBrush x:Key="ToggleSwitchKnobFillOnPressed" Color="#F7F6F3" />
+      <SolidColorBrush x:Key="ToggleSwitchFillOff" Color="#CFCBC2" />
+      <SolidColorBrush x:Key="ToggleSwitchFillOffPointerOver" Color="#C4BFB5" />
+      <SolidColorBrush x:Key="ToggleSwitchFillOffPressed" Color="#C4BFB5" />
+      <SolidColorBrush x:Key="ToggleSwitchStrokeOff" Color="Transparent" />
+      <SolidColorBrush x:Key="ToggleSwitchStrokeOffPointerOver" Color="Transparent" />
+      <SolidColorBrush x:Key="ToggleSwitchStrokeOffPressed" Color="Transparent" />
+      <SolidColorBrush x:Key="ToggleSwitchKnobFillOff" Color="#F7F6F3" />
+      <SolidColorBrush x:Key="ToggleSwitchKnobFillOffPointerOver" Color="#F7F6F3" />
+      <SolidColorBrush x:Key="ToggleSwitchKnobFillOffPressed" Color="#F7F6F3" />
+      <SolidColorBrush x:Key="TextControlBackground" Color="#FFFFFF" />
+      <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="#FFFFFF" />
+      <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="#FFFFFF" />
+      <SolidColorBrush x:Key="TextControlBorderBrush" Color="#D6D2CA" />
+      <SolidColorBrush x:Key="TextControlBorderBrushPointerOver" Color="#BDB8AE" />
+      <SolidColorBrush x:Key="TextControlBorderBrushFocused" Color="#1B1A17" />
+      <SolidColorBrush x:Key="TextControlForeground" Color="#1B1A17" />
+      <SolidColorBrush x:Key="TextControlForegroundPointerOver" Color="#1B1A17" />
+      <SolidColorBrush x:Key="TextControlForegroundFocused" Color="#1B1A17" />
+      <SolidColorBrush x:Key="TextControlPlaceholderForeground" Color="#8A857C" />
+      <SolidColorBrush x:Key="TextControlPlaceholderForegroundPointerOver" Color="#8A857C" />
+      <SolidColorBrush x:Key="TextControlPlaceholderForegroundFocused" Color="#8A857C" />
+      <SolidColorBrush x:Key="MenuFlyoutPresenterBackground" Color="#FFFFFF" />
+      <SolidColorBrush x:Key="MenuFlyoutPresenterBorderBrush" Color="#E3E0D9" />
+      <SolidColorBrush x:Key="CheckBoxCheckBackgroundFillChecked" Color="#1B1A17" />
+      <SolidColorBrush x:Key="CheckBoxCheckBackgroundFillCheckedPointerOver" Color="#37342F" />
+      <SolidColorBrush x:Key="CheckBoxCheckBackgroundStrokeChecked" Color="#1B1A17" />
+      <SolidColorBrush x:Key="CheckBoxCheckGlyphForegroundChecked" Color="#F7F6F3" />
+      <SolidColorBrush x:Key="CheckBoxCheckGlyphForegroundCheckedPointerOver" Color="#F7F6F3" />
+      <SolidColorBrush x:Key="CheckBoxCheckBackgroundStrokeUnchecked" Color="#BDB8AE" />
     </ResourceDictionary>
     <ResourceDictionary x:Key="Dark">
-      <SolidColorBrush x:Key="T.Bg" Color="#14161A" />
-      <SolidColorBrush x:Key="T.Card" Color="#1D2026" />
-      <SolidColorBrush x:Key="T.Text" Color="#E8EAED" />
-      <SolidColorBrush x:Key="T.Muted" Color="#9AA1AB" />
-      <SolidColorBrush x:Key="T.Border" Color="#2B2F37" />
-      <SolidColorBrush x:Key="T.Hover" Color="#252930" />
-      <SolidColorBrush x:Key="T.Subtle" Color="#2A2E36" />
-      <SolidColorBrush x:Key="T.SubtleHover" Color="#343943" />
-      <SolidColorBrush x:Key="T.Accent" Color="#4C8DF6" />
-      <SolidColorBrush x:Key="T.AccentHover" Color="#6A9FF8" />
-      <SolidColorBrush x:Key="T.Track" Color="#2E333B" />
-      <SolidColorBrush x:Key="T.Pill" Color="#262A31" />
-      <SolidColorBrush x:Key="T.Banner" Color="#18243A" />
-      <SolidColorBrush x:Key="T.BannerBorder" Color="#2C4470" />
-      <SolidColorBrush x:Key="T.WarnPill" Color="#3A2A17" />
-      <SolidColorBrush x:Key="T.WarnText" Color="#F4B26A" />
-      <SolidColorBrush x:Key="T.Sidebar" Color="#0F1114" />
-      <SolidColorBrush x:Key="T.NavHover" Color="#1C1F25" />
-      <SolidColorBrush x:Key="T.NavSelected" Color="#23272F" />
-      <SolidColorBrush x:Key="T.Node" Color="#252931" />
-      <SolidColorBrush x:Key="T.NodeRing" Color="#3A404B" />
-      <SolidColorBrush x:Key="T.Line" Color="#3D4450" />
-      <SolidColorBrush x:Key="T.Selected" Color="#1E2A40" />
-      <SolidColorBrush x:Key="T.OkPill" Color="#16301F" />
-      <SolidColorBrush x:Key="T.OkText" Color="#7FD493" />
-      <SolidColorBrush x:Key="T.BadPill" Color="#3A1B1F" />
-      <SolidColorBrush x:Key="T.BadText" Color="#FF9AA2" />
-      <SolidColorBrush x:Key="T.Panel" Color="#1A1D22" />
+      <SolidColorBrush x:Key="T.Bg" Color="#161513" />
+      <SolidColorBrush x:Key="T.Card" Color="#22211E" />
+      <SolidColorBrush x:Key="T.Popover" Color="#22211E" />
+      <SolidColorBrush x:Key="T.Text" Color="#ECEAE4" />
+      <SolidColorBrush x:Key="T.Muted" Color="#A39E94" />
+      <SolidColorBrush x:Key="T.Border" Color="#2D2B27" />
+      <SolidColorBrush x:Key="T.Hover" Color="#1F1E1B" />
+      <SolidColorBrush x:Key="T.Subtle" Color="#262420" />
+      <SolidColorBrush x:Key="T.SubtleHover" Color="#2B2925" />
+      <SolidColorBrush x:Key="T.Accent" Color="#8D9DFF" />
+      <SolidColorBrush x:Key="T.AccentHover" Color="#A6B2FF" />
+      <SolidColorBrush x:Key="T.AccentInk" Color="#161513" />
+      <SolidColorBrush x:Key="T.AccentSoft" Color="#232843" />
+      <SolidColorBrush x:Key="T.Primary" Color="#ECEAE4" />
+      <SolidColorBrush x:Key="T.PrimaryHover" Color="#FFFFFF" />
+      <SolidColorBrush x:Key="T.PrimaryInk" Color="#161513" />
+      <SolidColorBrush x:Key="T.Track" Color="#2F2D29" />
+      <SolidColorBrush x:Key="T.Pill" Color="#262420" />
+      <SolidColorBrush x:Key="T.Banner" Color="#22211E" />
+      <SolidColorBrush x:Key="T.BannerBorder" Color="#2D2B27" />
+      <SolidColorBrush x:Key="T.WarnPill" Color="#2E2417" />
+      <SolidColorBrush x:Key="T.WarnText" Color="#E9A85A" />
+      <SolidColorBrush x:Key="T.WarnFill" Color="#D98418" />
+      <SolidColorBrush x:Key="T.BadgeInk" Color="#161513" />
+      <SolidColorBrush x:Key="T.Sidebar" Color="#1C1B18" />
+      <SolidColorBrush x:Key="T.NavHover" Color="#252421" />
+      <SolidColorBrush x:Key="T.NavSelected" Color="#2B2925" />
+      <SolidColorBrush x:Key="T.Node" Color="#161513" />
+      <SolidColorBrush x:Key="T.NodeRing" Color="#2D2B27" />
+      <SolidColorBrush x:Key="T.Line" Color="#3A3833" />
+      <SolidColorBrush x:Key="T.Selected" Color="#2B2925" />
+      <SolidColorBrush x:Key="T.OkPill" Color="#18271E" />
+      <SolidColorBrush x:Key="T.OkText" Color="#6CC991" />
+      <SolidColorBrush x:Key="T.BadPill" Color="#301B18" />
+      <SolidColorBrush x:Key="T.BadText" Color="#F0776B" />
+      <SolidColorBrush x:Key="T.Panel" Color="#1E1D1A" />
+      <SolidColorBrush x:Key="T.Input" Color="#1E1D1A" />
+      <SolidColorBrush x:Key="T.InputBorder" Color="#3A3833" />
+      <SolidColorBrush x:Key="T.SwitchOff" Color="#45423C" />
+      <SolidColorBrush x:Key="T.Shadow" Color="#000000" />
+
+      <SolidColorBrush x:Key="S.Green" Color="#6CC991" />
+      <SolidColorBrush x:Key="S.Blue" Color="#8D9DFF" />
+      <SolidColorBrush x:Key="S.Grey" Color="#7D786F" />
+      <SolidColorBrush x:Key="S.Orange" Color="#D98418" />
+      <SolidColorBrush x:Key="S.Red" Color="#F0776B" />
+      <SolidColorBrush x:Key="S.Yellow" Color="#7D786F" />
+
+      <SolidColorBrush x:Key="ToggleSwitchFillOn" Color="#ECEAE4" />
+      <SolidColorBrush x:Key="ToggleSwitchFillOnPointerOver" Color="#FFFFFF" />
+      <SolidColorBrush x:Key="ToggleSwitchFillOnPressed" Color="#FFFFFF" />
+      <SolidColorBrush x:Key="ToggleSwitchKnobFillOn" Color="#161513" />
+      <SolidColorBrush x:Key="ToggleSwitchKnobFillOnPointerOver" Color="#161513" />
+      <SolidColorBrush x:Key="ToggleSwitchKnobFillOnPressed" Color="#161513" />
+      <SolidColorBrush x:Key="ToggleSwitchFillOff" Color="#45423C" />
+      <SolidColorBrush x:Key="ToggleSwitchFillOffPointerOver" Color="#524E47" />
+      <SolidColorBrush x:Key="ToggleSwitchFillOffPressed" Color="#524E47" />
+      <SolidColorBrush x:Key="ToggleSwitchStrokeOff" Color="Transparent" />
+      <SolidColorBrush x:Key="ToggleSwitchStrokeOffPointerOver" Color="Transparent" />
+      <SolidColorBrush x:Key="ToggleSwitchStrokeOffPressed" Color="Transparent" />
+      <SolidColorBrush x:Key="ToggleSwitchKnobFillOff" Color="#161513" />
+      <SolidColorBrush x:Key="ToggleSwitchKnobFillOffPointerOver" Color="#161513" />
+      <SolidColorBrush x:Key="ToggleSwitchKnobFillOffPressed" Color="#161513" />
+      <SolidColorBrush x:Key="TextControlBackground" Color="#1E1D1A" />
+      <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="#1E1D1A" />
+      <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="#1E1D1A" />
+      <SolidColorBrush x:Key="TextControlBorderBrush" Color="#3A3833" />
+      <SolidColorBrush x:Key="TextControlBorderBrushPointerOver" Color="#4A4740" />
+      <SolidColorBrush x:Key="TextControlBorderBrushFocused" Color="#ECEAE4" />
+      <SolidColorBrush x:Key="TextControlForeground" Color="#ECEAE4" />
+      <SolidColorBrush x:Key="TextControlForegroundPointerOver" Color="#ECEAE4" />
+      <SolidColorBrush x:Key="TextControlForegroundFocused" Color="#ECEAE4" />
+      <SolidColorBrush x:Key="TextControlPlaceholderForeground" Color="#7D786F" />
+      <SolidColorBrush x:Key="TextControlPlaceholderForegroundPointerOver" Color="#7D786F" />
+      <SolidColorBrush x:Key="TextControlPlaceholderForegroundFocused" Color="#7D786F" />
+      <SolidColorBrush x:Key="MenuFlyoutPresenterBackground" Color="#22211E" />
+      <SolidColorBrush x:Key="MenuFlyoutPresenterBorderBrush" Color="#2D2B27" />
+      <SolidColorBrush x:Key="CheckBoxCheckBackgroundFillChecked" Color="#ECEAE4" />
+      <SolidColorBrush x:Key="CheckBoxCheckBackgroundFillCheckedPointerOver" Color="#FFFFFF" />
+      <SolidColorBrush x:Key="CheckBoxCheckBackgroundStrokeChecked" Color="#ECEAE4" />
+      <SolidColorBrush x:Key="CheckBoxCheckGlyphForegroundChecked" Color="#161513" />
+      <SolidColorBrush x:Key="CheckBoxCheckGlyphForegroundCheckedPointerOver" Color="#161513" />
+      <SolidColorBrush x:Key="CheckBoxCheckBackgroundStrokeUnchecked" Color="#4A4740" />
     </ResourceDictionary>
   </ResourceDictionary.ThemeDictionaries>
 
-  <!-- Status colours: the same in both themes. -->
-  <SolidColorBrush x:Key="S.Green" Color="#2EA043" />
-  <SolidColorBrush x:Key="S.Blue" Color="#2176D6" />
-  <SolidColorBrush x:Key="S.Grey" Color="#8A9099" />
-  <SolidColorBrush x:Key="S.Orange" Color="#E66E14" />
-  <SolidColorBrush x:Key="S.Red" Color="#CF222E" />
-  <SolidColorBrush x:Key="S.Yellow" Color="#D6A021" />
+  <!-- One typeface everywhere (embedded, so it looks the same on every computer). -->
+  <FontFamily x:Key="F.Ui">avares://Pairnets/Assets/Fonts#Instrument Sans</FontFamily>
+  <FontFamily x:Key="ContentControlThemeFontFamily">avares://Pairnets/Assets/Fonts#Instrument Sans</FontFamily>
+  <CornerRadius x:Key="ControlCornerRadius">10</CornerRadius>
+  <CornerRadius x:Key="OverlayCornerRadius">12</CornerRadius>
 </ResourceDictionary>

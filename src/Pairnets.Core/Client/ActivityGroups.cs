@@ -15,6 +15,16 @@ public sealed record ActivityFolder(string Folder, ActivityKind Kind, DateTimeOf
 
     public string TimeText => Time.ToLocalTime().ToString("HH:mm:ss", System.Globalization.CultureInfo.InvariantCulture);
 
+    /// <summary>The colour of the row's glyph, as for a single <see cref="ActivityItem"/>.</summary>
+    public string Tone => ActivityItem.ToneOf(Kind);
+
+    /// <summary>The same row only when it holds the very same items (so the lists keep it, open or closed, until it changes).</summary>
+    public bool Equals(ActivityFolder? other) =>
+        other is not null && Folder == other.Folder && Kind == other.Kind && Items.Count == other.Items.Count
+        && Items.Zip(other.Items).All(p => ReferenceEquals(p.First, p.Second));
+
+    public override int GetHashCode() => HashCode.Combine(Folder, Kind, Items.Count, Items.Count > 0 ? System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(Items[0]) : 0);
+
     private string Verb => Kind switch
     {
         ActivityKind.Uploaded => "uploaded",

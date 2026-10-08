@@ -163,7 +163,7 @@ public partial class SignInView : UserControl
         // With no button of its own on show, the browser is the one way in and takes the accent.
         BrowserButton.Content = google || email ? "More ways to sign in in your browser" : "Sign in with your browser";
         BrowserButton.Classes.Set("accent", !(google || email));
-        BrowserButton.Classes.Set("subtle", google || email);
+        BrowserButton.Classes.Set("flat", google || email);
         BrowserButton.IsEnabled = can;
     }
 
@@ -295,7 +295,7 @@ public partial class SignInView : UserControl
         WelcomeStep.IsVisible = false;
         WaitStep.IsVisible = false;
         FolderStep.IsVisible = true;
-        SignedInText.Text = $"✓ Signed in as {grant.Name}" + (nest is null ? string.Empty : $" on {nest.Host}");
+        SignedInText.Text = $"Signed in as {grant.Name}" + (nest is null ? string.Empty : $" on {nest.Host}");
     }
 
     /// <summary>The folder field (screenshot test).</summary>

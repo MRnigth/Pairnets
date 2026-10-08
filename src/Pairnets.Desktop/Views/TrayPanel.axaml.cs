@@ -24,8 +24,7 @@ public interface ITrayActions : IMainActions
 public partial class TrayPanel : Window
 {
     private readonly ITrayActions? _actions;
-    private readonly ObservableCollection<ActivityItem> _recent = [];
-    private string? _tintKey;
+    private readonly ObservableCollection<object> _recent = [];
     private bool _menuOpen;
 
     public TrayPanel()
@@ -87,14 +86,22 @@ public partial class TrayPanel : Window
 
     public void ShowStatus(StatusSnapshot s, string? device)
     {
-        var (brush, icon) = s.IsWaiting ? ("S.Grey", "I.Wait") : Visuals.ForStatus(s.Status);
-        StatusBadge.Fill = Visuals.Resource<IBrush>(brush);
-        StatusGlyph.Data = Visuals.Resource<Geometry>(icon);
-        StatusGlyph.Classes.Set("spin", s.Status == Pairnets.Core.Sync.RunnerStatus.Syncing && !s.IsWaiting);
-        StatusBadgeHost.Classes.Set("pulse", s.IsWaiting);
-        Tint(brush);
+        var ring = OverviewRing.From(s);
+        Visuals.Bind(Ring, ProgressRing.RingBrushProperty, ring.BrushKey);
+        Ring.Value = ring.Spins ? 25 : ring.Percent;
+        Ring.Classes.Set("spin", ring.Spins);
+        RingText.Text = ring.CenterText ?? string.Empty;
+        RingText.IsVisible = ring.CenterText is not null;
+        RingIcon.IsVisible = ring.CenterText is null && ring.IconKey is not null && !ring.Spins;
+        if (ring.IconKey is not null)
+            RingIcon.Data = Visuals.Resource<Geometry>(ring.IconKey);
+        Visuals.Bind(RingIcon, LineIcon.StrokeProperty, ring.BrushKey);
+        RingHost.Classes.Set("pulse", ring.Breathes);
         Headline.Text = s.Headline;
-        Detail.Text = s.DetailText.Length > 0 ? s.DetailText : s.LastSyncText;
+        Detail.Text = s.DetailText.Length > 0 && !s.IsTransferring ? s.DetailText : s.LastSyncText;
+        var uploading = s.Active.Count == 0 ? s.Operation != "download" : s.Active.Any(a => a.IsUpload);
+        SpeedLine.IsVisible = s.IsTransferring && s.BytesPerSecond >= 1;
+        SpeedLine.Text = (uploading ? "↑ " : "↓ ") + Format.Speed(s.BytesPerSecond);
         FixButton.IsVisible = s.FixLabel is not null;
         FixButton.Content = s.FixLabel;
         PauseText.Text = s.Paused ? "Resume" : "Pause";
@@ -105,39 +112,21 @@ public partial class TrayPanel : Window
         if (s.IsTransferring)
         {
             TransferTitle.Text = s.BatchTitle;
-            TransferSpeed.Text = s.BytesPerSecond >= 1 ? Format.Speed(s.BytesPerSecond) : string.Empty;
+            var speed = s.SpeedText;
+            var left = speed.IndexOf(" · ", StringComparison.Ordinal);
+            TransferSpeed.Text = left >= 0 ? speed[(left + 3)..] : string.Empty; // the speed itself is under the headline
             TransferProgress.IsIndeterminate = s.OverallPercent is null;
             TransferProgress.Value = s.OverallPercent ?? 0;
             TransferOverall.Text = s.OverallText;
-            var uploading = s.Active.Count == 0 ? s.Operation != "download" : s.Active.Any(a => a.IsUpload);
             TransferArrow.Data = Visuals.Resource<Geometry>(uploading ? "I.Up" : "I.Down");
-            TransferArrow.Stroke = Visuals.Resource<IBrush>(uploading ? "S.Green" : "S.Blue");
             TransferArrow.Classes.Set("rise", uploading);
             TransferArrow.Classes.Set("fall", !uploading);
         }
     }
 
-    private void Tint(string brushKey)
-    {
-        if (_tintKey == brushKey)
-            return;
-        _tintKey = brushKey;
-        var color = (Visuals.Resource<IBrush>(brushKey) as ISolidColorBrush)?.Color ?? Colors.Gray;
-        Head.Background = new LinearGradientBrush
-        {
-            StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
-            EndPoint = new RelativePoint(0, 1, RelativeUnit.Relative),
-            GradientStops =
-            {
-                new GradientStop(Color.FromArgb(0x26, color.R, color.G, color.B), 0),
-                new GradientStop(Color.FromArgb(0x00, color.R, color.G, color.B), 1),
-            },
-        };
-    }
-
     public void ShowActivity(IReadOnlyList<ActivityItem> items)
     {
-        LiveLists.Sync(_recent, items.Take(4).ToList());
+        LiveLists.Sync(_recent, ActivityGroups.Recent(items, 4));
         RecentEmpty.IsVisible = _recent.Count == 0;
     }
 

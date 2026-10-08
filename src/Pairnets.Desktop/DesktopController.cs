@@ -273,6 +273,41 @@ public sealed class DesktopController : ITrayActions, IDisposable
             await Dialogs.InfoAsync(_window, "Pairnets", "Your nest has no website yet. On the server, give it its own name with: sudo ./install.sh --public-url https://nest.example.com");
     }
 
+    /// <summary>Opens the nest's website (or explains that it has none yet).</summary>
+    public async void OpenNest()
+    {
+        if ((_session?.Status.NestUrl ?? NestFromSettings()) is { } url)
+            _platform.Open(url);
+        else
+            await Dialogs.InfoAsync(_window, "Pairnets", "Your nest has no website yet. On the server, give it its own name with: sudo ./install.sh --public-url https://nest.example.com");
+    }
+
+    /// <summary>A notification switch on the Account page: saved at once.</summary>
+    public void SetNotify(NoticeKind kind, bool on)
+    {
+        switch (kind)
+        {
+            case NoticeKind.JoinRequest:
+                _settings.NotifyJoinRequests = on;
+                break;
+            case NoticeKind.Attention:
+                _settings.NotifyAttention = on;
+                break;
+            case NoticeKind.Update:
+                _settings.NotifyUpdates = on;
+                break;
+        }
+        SettingsStore.Save(SettingsStore.DefaultPath, _settings);
+    }
+
+    /// <summary>The main window, with the saved notification switches.</summary>
+    private MainWindow CreateMainWindow()
+    {
+        var window = new MainWindow(this) { ServerAddress = _settings.ServerUrl };
+        window.ShowNotifySettings(_settings.NotifyJoinRequests, _settings.NotifyAttention, _settings.NotifyUpdates);
+        return window;
+    }
+
     /// <summary>The nest's website when this computer already talks to it over HTTPS.</summary>
     private string? NestFromSettings() =>
         Uri.TryCreate(_settings.ServerUrl, UriKind.Absolute, out var url) && url.Scheme == Uri.UriSchemeHttps ? url.GetLeftPart(UriPartial.Authority) : null;
@@ -398,6 +433,8 @@ public sealed class DesktopController : ITrayActions, IDisposable
 
     private void Notify(string key, string title, string text)
     {
+        if (!NotifyPolicy.Allows(_settings, key))
+            return; // turned off on the Account page
         lock (_lastNotice)
         {
             var now = DateTime.UtcNow;
@@ -445,6 +482,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
                     $"You have {PairnetsInfo.ProductVersion}. Download it and replace the app (your settings are kept).", "Download");
             else
                 _window.ShowUpdate(null, string.Empty, string.Empty);
+            _window.ServerAddress = _settings.ServerUrl;
             _window.ShowStatus(status, _settings.Folder, _settings.DeviceName);
             _window.ShowActivity(_session?.Activity.Items ?? []);
             _window.ShowAttention(BuildAttention(status));
@@ -491,7 +529,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
             return;
         }
         var opening = _window is not { IsVisible: true };
-        _window ??= new MainWindow(this);
+        _window ??= CreateMainWindow();
         _window.Show();
         _window.WindowState = WindowState.Normal;
         _window.Activate();
@@ -632,9 +670,8 @@ public sealed class DesktopController : ITrayActions, IDisposable
             ApplySettings(v.Result!, v.PlainToken);
             _window?.Navigate(MainPage.Overview);
         };
-        view.SignOutRequested += SignOut;
+        view.AccountRequested += () => _window?.Navigate(MainPage.Account);
         view.ResetRequested += ResetEverything;
-        view.ManageDevicesRequested += ManageDevices;
         view.Cancelled += () => _window?.Navigate(MainPage.Overview);
         _window!.ShowSettingsPage(view);
     }

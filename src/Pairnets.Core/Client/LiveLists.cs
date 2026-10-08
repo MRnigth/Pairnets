@@ -53,9 +53,128 @@ public sealed class ActiveFileView(string path, string operation) : INotifyPrope
     }
 }
 
+/// <summary>
+/// A row of "In progress" (a file, or a folder of this sync) as the screens show it. Updated in place, so its bar
+/// glides and a folder someone opened stays open while its files move.
+/// </summary>
+public sealed class TransferRowView(string key, bool isFolder) : INotifyPropertyChanged
+{
+    private string _title = string.Empty;
+    private string _detail = string.Empty;
+    private double _percent;
+    private string _percentText = string.Empty;
+    private bool _isUpload = true;
+    private IReadOnlyList<BatchFile> _files = [];
+
+    public string Key { get; } = key;
+
+    public bool IsFolder { get; } = isFolder;
+
+    public string Title
+    {
+        get => _title;
+        private set => Set(ref _title, value);
+    }
+
+    /// <summary>"2 of 18 files" for a folder, the folder for a file.</summary>
+    public string Detail
+    {
+        get => _detail;
+        private set => Set(ref _detail, value);
+    }
+
+    public double PercentValue
+    {
+        get => _percent;
+        private set => Set(ref _percent, value);
+    }
+
+    public string PercentText
+    {
+        get => _percentText;
+        private set => Set(ref _percentText, value);
+    }
+
+    public bool IsUpload
+    {
+        get => _isUpload;
+        private set => Set(ref _isUpload, value);
+    }
+
+    /// <summary>Every file of this sync in the folder (done, moving, waiting).</summary>
+    public IReadOnlyList<BatchFile> Files
+    {
+        get => _files;
+        private set
+        {
+            if (_files.SequenceEqual(value))
+                return;
+            _files = value;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Files)));
+        }
+    }
+
+    public event PropertyChangedEventHandler? PropertyChanged;
+
+    public void Update(TransferGroup g)
+    {
+        Title = g.Title;
+        Detail = g.Detail;
+        PercentValue = g.PercentValue;
+        PercentText = g.PercentText;
+        IsUpload = g.IsUpload;
+        Files = g.Files;
+    }
+
+    private void Set<T>(ref T field, T value, [CallerMemberName] string? name = null)
+    {
+        if (EqualityComparer<T>.Default.Equals(field, value))
+            return;
+        field = value;
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+    }
+}
+
 /// <summary>Keeps the screens' lists in step with the session without rebuilding them.</summary>
 public static class LiveLists
 {
+    /// <summary>"In progress" rows: kept by key and updated in place, in the order <paramref name="now"/> gives.</summary>
+    public static void Sync(ObservableCollection<TransferRowView> shown, IReadOnlyList<TransferGroup> now)
+    {
+        var wanted = now.Select(g => (g.IsFolder ? "d:" : "f:") + g.Key).ToList();
+        for (var i = shown.Count - 1; i >= 0; i--)
+        {
+            if (!wanted.Contains((shown[i].IsFolder ? "d:" : "f:") + shown[i].Key))
+                shown.RemoveAt(i);
+        }
+        for (var i = 0; i < now.Count; i++)
+        {
+            var g = now[i];
+            var at = -1;
+            for (var j = 0; j < shown.Count; j++)
+            {
+                if (shown[j].Key == g.Key && shown[j].IsFolder == g.IsFolder)
+                {
+                    at = j;
+                    break;
+                }
+            }
+            TransferRowView view;
+            if (at < 0)
+            {
+                view = new TransferRowView(g.Key, g.IsFolder);
+                shown.Insert(Math.Min(i, shown.Count), view);
+            }
+            else
+            {
+                view = shown[at];
+                if (at != i && i < shown.Count)
+                    shown.Move(at, i);
+            }
+            view.Update(g);
+        }
+    }
+
     /// <summary>Adds new transfers at the end, updates running ones in place, removes finished ones.</summary>
     public static void Sync(ObservableCollection<ActiveFileView> shown, IReadOnlyList<ActiveTransfer> now)
     {

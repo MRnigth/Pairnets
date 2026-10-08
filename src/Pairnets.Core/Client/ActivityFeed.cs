@@ -65,6 +65,17 @@ public sealed record ActivityItem(DateTimeOffset Time, ActivityKind Kind, string
 
     /// <summary>"2 min ago", computed when read (lists are redrawn regularly).</summary>
     public string WhenText => Format.RelativeTime(Time, DateTimeOffset.Now);
+
+    /// <summary>The colour of the row's glyph: "move" (uploads and downloads), "warn", "bad" or "muted".</summary>
+    public string Tone => ToneOf(Kind);
+
+    internal static string ToneOf(ActivityKind kind) => kind switch
+    {
+        ActivityKind.Uploaded or ActivityKind.Downloaded => "move",
+        ActivityKind.Conflict or ActivityKind.Blocked => "warn",
+        ActivityKind.DeletedHere or ActivityKind.DeletedOnServer or ActivityKind.Warning or ActivityKind.Error => "bad",
+        _ => "muted",
+    };
 }
 
 /// <summary>Bounded, thread-safe list of recent activity, newest first.</summary>

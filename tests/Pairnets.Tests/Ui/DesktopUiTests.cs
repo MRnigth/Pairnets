@@ -80,6 +80,14 @@ public sealed class SampleActions : IMainActions
     public void AddComputer() => Calls.Add("add-computer");
 
     public void ManageDevices() => Calls.Add("manage-devices");
+
+    public void OpenNest() => Calls.Add("open-nest");
+
+    public void SignOut() => Calls.Add("sign-out");
+
+    public void ResetEverything() => Calls.Add("reset");
+
+    public void SetNotify(NoticeKind kind, bool on) => Calls.Add($"notify:{kind}:{on}");
 }
 
 /// <summary>Loads the macOS/Linux windows headlessly: XAML parses, controls bind, states render.</summary>
@@ -352,6 +360,11 @@ public class DesktopUiTests
         feed.Add(new ActivityItem(now.AddMinutes(-5), ActivityKind.Conflict, "Projects/report (conflict LAPTOP 2026-10-02 141509).docx", "Conflict"));
         feed.Add(new ActivityItem(now.AddMinutes(-2), ActivityKind.Downloaded, "Photos/summer/beach.jpg", "Downloaded"));
         feed.Add(new ActivityItem(now.AddSeconds(-20), ActivityKind.Uploaded, "Photos/summer/holiday.jpg", "Uploaded"));
+        var batchFeed = new ActivityFeed();
+        foreach (var item in Enumerable.Reverse(feed.Items))
+            batchFeed.Add(item);
+        for (var i = 0; i < 18; i++)
+            batchFeed.Add(new ActivityItem(now.AddSeconds(-90 + i * 3), ActivityKind.Uploaded, $"Photos/summer/holiday-{410 + i:0000}.jpg", "Uploaded"));
         window.ShowActivity(feed.Items);
         var attention = new List<AttentionItem>
         {
@@ -376,7 +389,9 @@ public class DesktopUiTests
             Status = RunnerStatus.Syncing, Text = "Syncing", LastSyncAt = now.AddMinutes(-1),
             CurrentPath = "Videos/presentation-final.mp4", Operation = "upload", BytesDone = 67_108_864, BytesTotal = 104_857_600,
             FilesDone = 37, FilesTotal = 120, PassBytesDone = 412L << 20, PassBytesTotal = 1331L << 20, BytesPerSecond = 4.9 * (1 << 20),
-            LimitText = "Limited to 5 MB/s", Server = server, Devices = devices,
+            LimitText = "Limited to 5 MB/s", Server = server, Devices = devices, NestUrl = "https://nest.example.com",
+            Account = new AccountInfo("you@example.com", "google", utc.AddDays(-31)),
+            Batch = SampleBatch(),
             Active =
             [
                 new ActiveTransfer("Photos/summer/holiday-0412.jpg", "upload", 78, 100),
@@ -386,6 +401,15 @@ public class DesktopUiTests
             ],
         }, "/Users/me/Work", "MacBook");
         Save(window, outDir, $"main-window-syncing-{suffix}.png");
+        window.ExpandFirstFolder();
+        Save(window, outDir, $"main-window-syncing-folder-{suffix}.png");
+        window.OpenUpdateNotice();
+        Save(window, outDir, $"main-window-update-{suffix}.png");
+        window.OpenAccountMenu();
+        Save(window, outDir, $"main-window-account-menu-{suffix}.png");
+        window.Navigate(MainPage.Account);
+        Save(window, outDir, $"main-window-account-{suffix}.png");
+        window.Navigate(MainPage.Overview);
 
         window.ShowStatus(StatusSnapshot.Initial with
         {
@@ -398,6 +422,8 @@ public class DesktopUiTests
 
         window.ShowUpdate(null, string.Empty, string.Empty);
         window.ShowAttention([]);
+        window.ShowAttentionTab(true);
+        Save(window, outDir, $"main-window-attention-empty-{suffix}.png");
         window.ShowAttentionTab(false);
         window.ShowStatus(StatusSnapshot.Initial with { Status = RunnerStatus.Idle, Text = "Up to date", LastSyncAt = now, Server = server, Devices = devices }, "/Users/me/Work", "MacBook");
         Save(window, outDir, $"main-window-idle-{suffix}.png");
@@ -414,8 +440,10 @@ public class DesktopUiTests
             Status = RunnerStatus.Idle, Text = "Up to date", LastSyncAt = now.AddMinutes(-1), Server = server,
             Devices = [new("MacBook", utc.AddDays(-30), utc, true), new("DESKTOP", utc.AddHours(-3).AddDays(-30), utc.AddHours(-3), false, "1.0.58", "Windows")],
         }, "/Users/me/Work", "MacBook");
+        window.ShowActivity(batchFeed.Items);
         window.Navigate(MainPage.Activity);
         Save(window, outDir, $"main-window-activity-{suffix}.png");
+        window.ShowActivity(feed.Items);
 
         window.Navigate(MainPage.Devices);
         Save(window, outDir, $"main-window-devices-{suffix}.png");
@@ -485,6 +513,26 @@ public class DesktopUiTests
         serverUpdate.ShowResult(new ServerUpdateResult(false, "This server can't update itself yet.", "1.0.52", CanUpdateItself: false));
         Save(serverUpdate, outDir, $"server-update-manual-{suffix}.png");
         serverUpdate.Close();
+    }
+
+    /// <summary>The sync behind the "syncing" screenshot: 18 holiday photos (2 done, 2 moving) and two single files.</summary>
+    private static IReadOnlyList<BatchFile> SampleBatch()
+    {
+        var files = new List<BatchFile>();
+        for (var i = 0; i < 18; i++)
+        {
+            var path = $"Photos/summer/holiday-{410 + i:0000}.jpg";
+            files.Add(i switch
+            {
+                < 2 => new BatchFile(path, "upload", BatchFileState.Done),
+                2 => new BatchFile(path, "upload", BatchFileState.Moving, 78),
+                3 => new BatchFile(path, "upload", BatchFileState.Moving, 41),
+                _ => new BatchFile(path, "upload", BatchFileState.Waiting),
+            });
+        }
+        files.Add(new BatchFile("Videos/presentation-final.mp4", "upload", BatchFileState.Moving, 12));
+        files.Add(new BatchFile("Notes/meeting-2026-10-02.md", "upload", BatchFileState.Moving, 95));
+        return files;
     }
 
     private static void Save(Avalonia.Controls.Window window, string? outDir, string name)

@@ -4,74 +4,90 @@
         x:Class="Pairnets.Desktop.Views.ServerUpdateWindow"
         Title="Pairnets – update the server" Width="540" SizeToContent="Height" CanResize="False"
         WindowStartupLocation="CenterScreen" Icon="avares://Pairnets/Assets/pairnets-icon-256.png">
-  <StackPanel Margin="22" Spacing="14">
+  <Window.Styles>
+    <Style Selector="TextBlock.fact">
+      <Setter Property="FontSize" Value="13" />
+      <Setter Property="Margin" Value="0,8" />
+    </Style>
+  </Window.Styles>
+  <StackPanel Margin="28,26,28,26" Spacing="16">
     <Grid ColumnDefinitions="Auto,*">
-      <Grid Width="60" Height="60" Margin="0,0,12,0" VerticalAlignment="Top">
-        <!-- Spinning ring while the server updates -->
-        <Arc x:Name="Ring" Classes="spin" Width="60" Height="60" StartAngle="0" SweepAngle="110" StrokeThickness="3"
-             Stroke="{DynamicResource T.Accent}" StrokeLineCap="Round" IsVisible="False" />
+      <Grid Width="44" Height="44" Margin="0,0,16,0" VerticalAlignment="Top">
         <!-- The server badge: bobs while it waits for an answer, pops when done -->
         <Grid x:Name="BadgeHost" Classes="bob" Width="44" Height="44">
-          <Ellipse x:Name="Badge" Fill="{StaticResource S.Orange}" />
-          <v:LineIcon x:Name="BadgeIcon" Classes="icon white" Width="22" Height="22" StrokeThickness="2.2" Data="{StaticResource I.Server}" />
+          <Ellipse x:Name="Badge" Fill="{DynamicResource T.WarnPill}" />
+          <v:LineIcon x:Name="BadgeIcon" Classes="icon" Width="20" Height="20" StrokeThickness="1.9" Stroke="{DynamicResource T.WarnText}" Data="{StaticResource I.Server}" />
         </Grid>
+        <!-- A turning ring while the server updates -->
+        <Ellipse x:Name="RingTrack" Width="44" Height="44" Stroke="{DynamicResource T.Track}" StrokeThickness="4" IsVisible="False" />
+        <Arc x:Name="Ring" Classes="spin" Width="44" Height="44" StartAngle="0" SweepAngle="90" StrokeThickness="4"
+             Stroke="{DynamicResource T.Accent}" StrokeLineCap="Round" IsVisible="False" />
       </Grid>
       <StackPanel Grid.Column="1" Spacing="4" VerticalAlignment="Center">
-        <TextBlock x:Name="Heading" Classes="h2" FontSize="18" Text="Your server should be updated" />
-        <TextBlock x:Name="Explanation" Classes="muted" TextWrapping="Wrap" />
+        <TextBlock x:Name="Heading" FontSize="19" FontWeight="SemiBold" LetterSpacing="-0.2" TextWrapping="Wrap" Text="Your server should be updated" />
+        <TextBlock x:Name="Explanation" Classes="muted" LineHeight="20" TextWrapping="Wrap" />
       </StackPanel>
     </Grid>
 
     <!-- 1. Ask -->
-    <StackPanel x:Name="AskPanel" Spacing="14">
-      <Border Classes="pill" CornerRadius="10" Padding="12,10">
+    <StackPanel x:Name="AskPanel" Spacing="16">
+      <Border Classes="hairline">
         <Grid ColumnDefinitions="110,*" RowDefinitions="Auto,Auto,Auto">
-          <TextBlock Classes="muted small" Text="Server" />
-          <TextBlock x:Name="VersionsText" Grid.Column="1" Classes="strong small" />
-          <TextBlock Grid.Row="1" Classes="muted small" Text="Takes" Margin="0,4,0,0" />
-          <TextBlock Grid.Row="1" Grid.Column="1" Classes="small" Text="about 30 seconds" Margin="0,4,0,0" />
-          <TextBlock Grid.Row="2" Classes="muted small" Text="Your files" Margin="0,4,0,0" />
-          <TextBlock Grid.Row="2" Grid.Column="1" Classes="small" Text="stay as they are; syncing pauses briefly" Margin="0,4,0,0" />
+          <Border Grid.ColumnSpan="2" Classes="hairline-bottom" />
+          <Border Grid.Row="1" Grid.ColumnSpan="2" Classes="hairline-bottom" />
+          <Border Grid.Row="2" Grid.ColumnSpan="2" Classes="hairline-bottom" />
+          <TextBlock Classes="fact muted" Text="Server" />
+          <TextBlock x:Name="VersionsText" Grid.Column="1" Classes="fact" FontWeight="SemiBold" />
+          <TextBlock Grid.Row="1" Classes="fact muted" Text="Takes" />
+          <TextBlock Grid.Row="1" Grid.Column="1" Classes="fact" Text="about 30 seconds" />
+          <TextBlock Grid.Row="2" Classes="fact muted" Text="Your files" />
+          <TextBlock Grid.Row="2" Grid.Column="1" Classes="fact" Text="stay as they are; syncing pauses briefly" />
         </Grid>
       </Border>
       <CheckBox x:Name="AlwaysBox" Content="From now on, update the server automatically" />
       <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
-        <Button x:Name="SkipButton" Classes="flat" Content="Don't ask for this version" Click="OnSkip" />
-        <Button Classes="subtle" Content="Later" Click="OnLater" />
+        <Button x:Name="SkipButton" Classes="flat" Foreground="{DynamicResource T.Muted}" Content="Don't ask for this version" Click="OnSkip" />
+        <Button Content="Later" Click="OnLater" />
         <Button x:Name="UpdateButton" Classes="accent" Content="Update server" Click="OnUpdate" />
       </StackPanel>
     </StackPanel>
 
     <!-- 2. Updating -->
-    <StackPanel x:Name="BusyPanel" Spacing="6" IsVisible="False">
-      <TextBlock x:Name="StepText" Classes="strong small" />
-      <TextBlock Classes="muted small" Text="You can close this window. Pairnets reconnects by itself." />
+    <StackPanel x:Name="BusyPanel" Spacing="8" IsVisible="False">
+      <ProgressBar IsIndeterminate="True" Classes="thin" />
+      <TextBlock x:Name="StepText" Classes="small" FontWeight="Medium" />
+      <TextBlock Classes="muted small" Text="Syncing pauses briefly. Your files are not touched. You can close this window: Pairnets reconnects by itself." TextWrapping="Wrap" />
     </StackPanel>
 
     <!-- 3. Done, one-time setup, or not updated -->
-    <StackPanel x:Name="ResultPanel" Spacing="10" IsVisible="False">
-      <StackPanel x:Name="CommandPanel" Spacing="8" IsVisible="False">
-        <Border Classes="pill" CornerRadius="8" Padding="10,8">
-          <SelectableTextBlock x:Name="CommandText" FontFamily="Menlo, Consolas, DejaVu Sans Mono, monospace" FontSize="12" TextWrapping="Wrap"
+    <StackPanel x:Name="ResultPanel" Spacing="12" IsVisible="False">
+      <StackPanel x:Name="CommandPanel" Spacing="10" IsVisible="False">
+        <Border Background="{DynamicResource T.Input}" BorderBrush="{DynamicResource T.InputBorder}" BorderThickness="1" CornerRadius="10" Padding="14,12">
+          <SelectableTextBlock x:Name="CommandText" FontFamily="Menlo, Consolas, Cascadia Mono, DejaVu Sans Mono, monospace" FontSize="12.5" TextWrapping="Wrap"
                                Text="curl -fsSL https://raw.githubusercontent.com/MRnigth/Pairnets/main/deploy/get.sh | sudo bash" />
         </Border>
-        <Button Classes="subtle" Content="Copy command" HorizontalAlignment="Left" Click="OnCopy" />
+        <Button HorizontalAlignment="Left" Click="OnCopy">
+          <StackPanel Orientation="Horizontal" Spacing="7">
+            <v:LineIcon Classes="icon" Width="14" Height="14" Data="{StaticResource I.Copy}" />
+            <TextBlock Text="Copy command" />
+          </StackPanel>
+        </Button>
       </StackPanel>
       <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
-        <Button x:Name="RetryButton" Classes="subtle" Content="Try again" Click="OnUpdate" IsVisible="False" />
-        <Button Classes="accent" Content="Close" Click="OnLater" />
+        <Button x:Name="RetryButton" Content="Try again" Click="OnUpdate" IsVisible="False" />
+        <Button Classes="accent" Content="Close" Padding="18,0" Click="OnLater" />
       </StackPanel>
     </StackPanel>
 
     <!-- Debug mode: every step of the app and what the server's updater reports -->
     <StackPanel x:Name="DetailsPanel" Spacing="6" IsVisible="False">
       <TextBlock Classes="muted small" Text="Details (Debug mode)" />
-      <Border Classes="pill" CornerRadius="8" Padding="10,8">
+      <Border Background="{DynamicResource T.Input}" BorderBrush="{DynamicResource T.InputBorder}" BorderThickness="1" CornerRadius="10" Padding="10,8">
         <ScrollViewer x:Name="DetailsScroller" MaxHeight="220" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
-          <SelectableTextBlock x:Name="DetailsText" FontFamily="Menlo, Consolas, DejaVu Sans Mono, monospace" FontSize="11" />
+          <SelectableTextBlock x:Name="DetailsText" FontFamily="Menlo, Consolas, Cascadia Mono, DejaVu Sans Mono, monospace" FontSize="11" />
         </ScrollViewer>
       </Border>
-      <Button Classes="subtle" Content="Copy details" HorizontalAlignment="Left" Click="OnCopyDetails" />
+      <Button Content="Copy details" HorizontalAlignment="Left" Click="OnCopyDetails" />
     </StackPanel>
   </StackPanel>
 </Window>

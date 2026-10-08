@@ -50,10 +50,8 @@ public partial class ServerUpdateWindow : Window
             VersionsText.Text = serverVersion;
             SkipButton.IsVisible = false;
             UpdateButton.Content = "Check for update";
-            Badge.Fill = Visuals.Resource<IBrush>("S.Green"); // nothing is wrong: no warning colour
-            BadgeIcon.Data = Visuals.Resource<Geometry>("I.Check");
+            ShowBadge("S.Green", "I.Check"); // nothing is wrong: no warning colour
             BadgeHost.Classes.Remove("bob");
-            BadgeKey = "S.Green";
         }
     }
 
@@ -136,10 +134,10 @@ public partial class ServerUpdateWindow : Window
         ResultPanel.IsVisible = false;
         BusyPanel.IsVisible = true;
         Ring.IsVisible = true;
+        RingTrack.IsVisible = true;
+        BadgeHost.IsVisible = false; // the turning ring stands in for the badge
         BadgeHost.Classes.Remove("bob");
-        Badge.Fill = Visuals.Resource<IBrush>("S.Blue");
         BadgeKey = "S.Blue";
-        BadgeIcon.Data = Visuals.Resource<Geometry>("I.Server");
         Heading.Text = "Updating your server…";
         Explanation.Text = "It downloads the newest release, checks it, installs it and restarts.";
         StepText.Text = step;
@@ -151,6 +149,8 @@ public partial class ServerUpdateWindow : Window
         BusyPanel.IsVisible = false;
         ResultPanel.IsVisible = true;
         Ring.IsVisible = false;
+        RingTrack.IsVisible = false;
+        BadgeHost.IsVisible = true;
         BadgeHost.Classes.Remove("bob");
         RetryButton.IsVisible = false;
         CommandPanel.IsVisible = false;
@@ -182,13 +182,40 @@ public partial class ServerUpdateWindow : Window
             Explanation.Text = result.Message + " Nothing on the server was changed.";
             RetryButton.IsVisible = true;
         }
-        Badge.Fill = Visuals.Resource<IBrush>(brush);
-        BadgeKey = brush;
-        BadgeIcon.Data = Visuals.Resource<Geometry>(icon);
+        ShowBadge(brush, icon);
         BadgeHost.Classes.Remove("pop");
         Dispatcher.UIThread.Post(() => BadgeHost.Classes.Add("pop"), DispatcherPriority.Background);
         if (_debug && result.Details is { } details) // after the trace lines still queued for the window
             Dispatcher.UIThread.Post(() => AppendDetail("--- What the server reports ---" + Environment.NewLine + details), DispatcherPriority.Background);
+    }
+
+    /// <summary>
+    /// The badge in a status colour: a soft circle with the icon in the strong colour (S.Green up to date,
+    /// S.Orange needs doing, S.Blue setting up).
+    /// </summary>
+    private void ShowBadge(string key, string icon)
+    {
+        BadgeKey = key;
+        var (soft, strong) = key switch
+        {
+            "S.Green" => ("T.OkPill", "S.Green"),
+            "S.Blue" => ("T.AccentSoft", "S.Blue"),
+            _ => ("T.WarnPill", "T.WarnText"),
+        };
+        // Up to date is an outlined ring (as on the overview); the others a soft circle.
+        if (key == "S.Green")
+        {
+            Badge.Fill = Brushes.Transparent;
+            Visuals.Bind(Badge, Avalonia.Controls.Shapes.Shape.StrokeProperty, strong);
+            Badge.StrokeThickness = 3;
+        }
+        else
+        {
+            Visuals.Bind(Badge, Avalonia.Controls.Shapes.Shape.FillProperty, soft);
+            Badge.StrokeThickness = 0;
+        }
+        Visuals.Bind(BadgeIcon, LineIcon.StrokeProperty, strong);
+        BadgeIcon.Data = Visuals.Resource<Geometry>(icon);
     }
 
     private async void OnCopy(object? sender, RoutedEventArgs e)

@@ -16,7 +16,7 @@ public static class Visuals
         RunnerStatus.Idle => ("S.Green", "I.Check"),
         RunnerStatus.Syncing => ("S.Blue", "I.Sync"),
         RunnerStatus.Offline => ("S.Grey", "I.CloudOff"),
-        RunnerStatus.Paused => ("S.Yellow", "I.Pause"),
+        RunnerStatus.Paused => ("S.Grey", "I.Pause"),
         RunnerStatus.Blocked => ("S.Orange", "I.Bang"),
         _ => ("S.Red", "I.X"),
     };
@@ -35,6 +35,13 @@ public static class Visuals
 
     public static T? Resource<T>(string key) where T : class =>
         Application.Current?.TryFindResource(key, Application.Current.ActualThemeVariant, out var value) == true ? value as T : null;
+
+    /// <summary>
+    /// Points a property at a theme resource, so it follows a switch between light and dark (unlike
+    /// <see cref="Resource{T}"/>, which reads the colour once).
+    /// </summary>
+    public static void Bind(StyledElement element, AvaloniaProperty property, string key) =>
+        element.Bind(property, element.GetResourceObservable(key));
 }
 
 /// <summary>ActivityKind → status brush.</summary>

@@ -3,20 +3,20 @@
         x:Class="Pairnets.Desktop.Views.BugReportWindow"
         Title="Pairnets – report a bug" Width="680" Height="580" MinWidth="480" MinHeight="360"
         WindowStartupLocation="CenterScreen" Icon="avares://Pairnets/Assets/pairnets-icon-256.png">
-  <Grid Margin="22" RowDefinitions="Auto,*,Auto">
+  <Grid Margin="28,26" RowDefinitions="Auto,*,Auto">
     <StackPanel Spacing="4">
-      <TextBlock x:Name="Heading" Classes="h2" FontSize="18" TextWrapping="Wrap" Text="Building the bug report…" />
+      <TextBlock x:Name="Heading" FontSize="19" FontWeight="SemiBold" TextWrapping="Wrap" Text="Building the bug report…" />
       <TextBlock x:Name="Explanation" Classes="muted" TextWrapping="Wrap"
                  Text="It collects the versions, your settings (never the token), the sync status, the server's update details, recent activity and the last part of the log." />
     </StackPanel>
-    <Border Grid.Row="1" Classes="pill" CornerRadius="8" Padding="10,8" Margin="0,14,0,0">
+    <Border Grid.Row="1" Background="{DynamicResource T.Input}" BorderBrush="{DynamicResource T.InputBorder}" BorderThickness="1" CornerRadius="10" Padding="12,10" Margin="0,16,0,0">
       <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
-        <SelectableTextBlock x:Name="ReportText" FontFamily="Menlo, Consolas, DejaVu Sans Mono, monospace" FontSize="11" />
+        <SelectableTextBlock x:Name="ReportText" FontFamily="Menlo, Consolas, Cascadia Mono, DejaVu Sans Mono, monospace" FontSize="11" />
       </ScrollViewer>
     </Border>
-    <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="0,14,0,0">
-      <Button x:Name="OpenButton" Classes="subtle" Content="Open file" IsEnabled="False" Click="OnOpenFile" />
-      <Button x:Name="CopyButton" Classes="subtle" Content="Copy again" IsEnabled="False" Click="OnCopy" />
+    <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="0,16,0,0">
+      <Button x:Name="OpenButton" Content="Open file" IsEnabled="False" Click="OnOpenFile" />
+      <Button x:Name="CopyButton" Content="Copy again" IsEnabled="False" Click="OnCopy" />
       <Button Classes="accent" Content="Close" Click="OnClose" />
     </StackPanel>
   </Grid>

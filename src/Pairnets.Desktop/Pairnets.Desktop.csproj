@@ -24,6 +24,8 @@
 
   <ItemGroup>
     <AvaloniaResource Include="..\..\assets\pairnets-icon-256.png" Link="Assets\pairnets-icon-256.png" />
+    <!-- Instrument Sans (SIL Open Font License, assets/fonts/OFL.txt): the app's one typeface. -->
+    <AvaloniaResource Include="..\..\assets\fonts\*.ttf" Link="Assets\Fonts\%(Filename)%(Extension)" />
   </ItemGroup>
 
   <ItemGroup>

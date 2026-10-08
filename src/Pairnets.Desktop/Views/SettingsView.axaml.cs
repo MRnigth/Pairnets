@@ -58,13 +58,14 @@ public partial class SettingsView : UserControl
             ServerHeading.Text = "Your nest";
             SignedInPanel.IsVisible = true;
             AddressFields.IsVisible = false;
-            SignedInText.Text = $"{(Uri.TryCreate(current.ServerUrl, UriKind.Absolute, out var nest) ? nest.Authority : current.ServerUrl)} · signed in as {current.DeviceName}";
+            SignedInText.Text = $"Signed in as {current.DeviceName} on {(Uri.TryCreate(current.ServerUrl, UriKind.Absolute, out var nest) ? nest.Authority : current.ServerUrl)}.";
         }
         ServerUrlBox.Text = current.ServerUrl ?? string.Empty;
         TokenBox.Watermark = current.ProtectedToken is null ? "printed by install.sh" : "(saved – leave empty to keep)";
         FolderBox.Text = current.Folder ?? string.Empty;
         DeviceBox.Text = current.DeviceName ?? Environment.MachineName;
         IgnoreBox.Text = string.Join(Environment.NewLine, current.ExtraIgnore);
+        IgnorePanel.IsVisible = current.ExtraIgnore.Count > 0; // open when there is something in it
         AutoStartBox.IsChecked = autoStart;
         UpdateBox.IsChecked = current.CheckForUpdates;
         WaitBox.IsChecked = current.WaitForPeerBatches;
@@ -175,11 +176,8 @@ public partial class SettingsView : UserControl
 
     private void OnCancel(object? sender, RoutedEventArgs e) => Cancelled?.Invoke();
 
-    /// <summary>"Sign out of this computer" (the controller asks first).</summary>
-    public event Action? SignOutRequested;
-
-    /// <summary>"Manage devices on the web".</summary>
-    public event Action? ManageDevicesRequested;
+    /// <summary>"Account settings": signing out and the nest's devices live on the Account page.</summary>
+    public event Action? AccountRequested;
 
     /// <summary>Scrolls to the bottom of the page (screenshot test).</summary>
     internal void ScrollToEnd() => Scroller.ScrollToEnd();
@@ -189,9 +187,13 @@ public partial class SettingsView : UserControl
 
     private void OnReset(object? sender, RoutedEventArgs e) => ResetRequested?.Invoke();
 
-    private void OnSignOut(object? sender, RoutedEventArgs e) => SignOutRequested?.Invoke();
+    private void OnAccount(object? sender, RoutedEventArgs e) => AccountRequested?.Invoke();
 
-    private void OnManageDevices(object? sender, RoutedEventArgs e) => ManageDevicesRequested?.Invoke();
+    private void OnToggleIgnore(object? sender, RoutedEventArgs e)
+    {
+        IgnorePanel.IsVisible = !IgnorePanel.IsVisible;
+        IgnoreToggle.Content = IgnorePanel.IsVisible ? "Advanced: files to ignore ▾" : "Advanced: files to ignore ▸";
+    }
 
     private void OnShowAddress(object? sender, RoutedEventArgs e)
     {

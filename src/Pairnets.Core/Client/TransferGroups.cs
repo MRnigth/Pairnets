@@ -23,6 +23,10 @@ public sealed record BatchFile(string Path, string Operation, BatchFileState Sta
 
     public bool IsWaiting => State == BatchFileState.Waiting;
 
+    public bool IsMovingUp => IsMoving && IsUpload;
+
+    public bool IsMovingDown => IsMoving && !IsUpload;
+
     /// <summary>"Uploaded", "78%" or "Waiting".</summary>
     public string StateText => State switch
     {
