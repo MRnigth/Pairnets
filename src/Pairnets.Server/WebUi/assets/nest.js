@@ -634,6 +634,7 @@
       }
     });
     $("password-remove").addEventListener("click", async () => {
+      if (!confirm("Remove your password? You can no longer sign in to this nest with it, only with the other ways you set up.")) return;
       try {
         await api("DELETE", "/password");
         await load();
@@ -642,8 +643,13 @@
       }
     });
     $("shared-token").addEventListener("change", async (event) => {
+      const allowed = event.target.checked;
+      if (!allowed && !confirm("Turn off the old shared token? Computers that still use it stop syncing at once, until you sign each one in and approve it.")) {
+        event.target.checked = true;
+        return;
+      }
       try {
-        await api("POST", "/shared-token", { allowed: event.target.checked });
+        await api("POST", "/shared-token", { allowed });
         await load();
       } catch (error) {
         showError(error);
@@ -672,6 +678,7 @@
           h("div", { class: "title" }, k.name),
           h("div", { class: "detail" }, `Added ${day(k.created)} · ${k.lastUsed ? "used " + ago(k.lastUsed) : "never used"}`)),
         onlyWay ? null : h("button", { type: "button", class: "flat", onclick: async () => {
+          if (!confirm(`Remove the passkey “${k.name}”? The device or browser that holds it can no longer sign in to this nest with it.`)) return;
           try {
             await api("DELETE", "/passkeys/" + encodeURIComponent(k.id));
             await load();
