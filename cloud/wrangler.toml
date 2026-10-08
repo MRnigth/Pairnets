@@ -1,0 +1,47 @@
+# Pairnets Cloud account service (cloud/CONTRACT.md). NOTHING IS DEPLOYED.
+#
+# Every id below is a placeholder. Before a first deploy the owner creates the D1 database and puts its real id here,
+# sets the secrets listed at the bottom, and attaches the custom domain id.pairnets.app.
+# The tests never read this file's secrets: they generate every key while they run.
+
+name = "pairnets-id"
+main = "src/index.ts"
+compatibility_date = "2026-08-15"
+workers_dev = false
+
+# Later, when id.pairnets.app exists:
+# routes = [{ pattern = "id.pairnets.app", custom_domain = true }]
+
+[vars]
+PUBLIC_ORIGIN = "https://id.pairnets.app"
+GOOGLE_CLIENT_ID = "REPLACE_ME.apps.googleusercontent.com"
+TURNSTILE_SITE_KEY = "REPLACE_ME"
+MAIL_FROM = "Pairnets <noreply@pairnets.app>"
+EMAIL_DAILY_LIMIT = "80"
+# "1" = emergency switch: /nest-login refuses and heartbeats answer disableHostedLogin: true.
+HOSTED_LOGIN_DISABLED = "0"
+# Optional test seams (Google's real URLs are the defaults when these are not set):
+# GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
+# GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
+# GOOGLE_JWKS_URL = "https://www.googleapis.com/oauth2/v3/certs"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "pairnets-id"
+database_id = "00000000-0000-0000-0000-000000000000"
+migrations_dir = "migrations"
+
+[triggers]
+# Hourly sweep of expired rows and the 90-day audit (src/cron.ts).
+crons = ["17 * * * *"]
+
+# Secrets: set them in the Cloudflare dashboard (Workers > pairnets-id > Settings > Variables and Secrets) or with
+# `npx wrangler secret put NAME`. Locally they go in cloud/.dev.vars, which git ignores. Never put them in this file.
+#
+#   SIGNING_KEY           private ES256 JWK with "kid" ({"kty":"EC","crv":"P-256","x":..,"y":..,"d":..,"kid":..});
+#                         make it with `npm run keygen` (the public half goes into src/Pairnets.Server/Auth/HostedKeys.cs)
+#   HB_MASTER             base64url of 32 random bytes (derives each nest's heartbeat key); `npm run keygen -- --random`
+#   COOKIE_KEY            base64url of 32 random bytes (signs the Google flow cookie, keys the rate-limit buckets)
+#   GOOGLE_CLIENT_SECRET  from the Google Cloud OAuth client (redirect URI https://id.pairnets.app/login/google/callback)
+#   TURNSTILE_SECRET      from the Cloudflare Turnstile widget (its site key goes in TURNSTILE_SITE_KEY above)
+#   RESEND_API_KEY        from Resend (sending domain pairnets.app verified there)

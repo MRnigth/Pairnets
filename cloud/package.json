@@ -1,0 +1,20 @@
+{
+  "name": "pairnets-id",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Pairnets Cloud account service (Cloudflare Worker). Nothing is deployed.",
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "vectors": "vitest run --config vitest.vectors.config.ts",
+    "keygen": "node scripts/keygen.mjs"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "0.23.0",
+    "@cloudflare/workers-types": "5.20261008.1",
+    "typescript": "6.0.3",
+    "vitest": "4.1.11",
+    "wrangler": "4.124.0"
+  }
+}
