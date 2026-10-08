@@ -177,7 +177,7 @@ public static class WebEndpoints
         signedIn.MapGet("/pair/{code}", (string code, HttpContext ctx, AuthStore auth) =>
             auth.FindPairRequestByCode(code) is { } request
                 ? Json(View(request, ctx))
-                : Error(StatusCodes.Status404NotFound, ErrorCodes.NotFound, "There is no computer waiting with that code. Check the code, or press Sign in on the computer again."));
+                : Error(StatusCodes.Status404NotFound, ErrorCodes.NotFound, "There is no computer waiting with that code. Check the code, or press “Get a new code” in Pairnets on the computer."));
 
         signedIn.MapPost("/pair/{code}/approve", (string code, HttpContext ctx, AuthStore auth, OwnerAuth owner, IHubContext<SyncHub> hub, ILogger<OwnerAuth> log) =>
             DecideAsync(code, approve: true, ctx, auth, owner, hub, log));
@@ -269,7 +269,7 @@ public static class WebEndpoints
         if (!auth.DecidePairRequest(request.Id, approve, by))
             return Error(StatusCodes.Status409Conflict, ErrorCodes.Conflict, request.StatusAt(owner.Now) switch
             {
-                PairRequest.Expired => "This code has expired. Press Sign in on the computer again.",
+                PairRequest.Expired => "This code has expired. Press “Get a new code” in Pairnets on the computer.",
                 PairRequest.Denied => "This computer was already turned away.",
                 _ => "This computer was already let in.",
             });

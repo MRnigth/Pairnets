@@ -461,7 +461,7 @@
           : `✓ ${name} is let in. Go back to it: it finishes signing in by itself, then asks which folder to sync.`,
         delivered: `✓ ${name} is connected.`,
         denied: `${name} was not let in.`,
-        expired: "This code has expired (codes last 10 minutes). Press Sign in on the computer again.",
+        expired: "This code has expired (codes last 10 minutes). Press “Get a new code” in Pairnets on the computer.",
       }[status] || status;
       $("outcome-links").hidden = false;
       if (back) {
@@ -593,7 +593,7 @@
         const data = await api("GET", "/devices");
         sharedTokenAllowed = data.sharedTokenAllowed;
         const list = $("devices");
-        list.replaceChildren(...(data.devices.length ? data.devices.map(deviceRow) : [h("li", { class: "empty" }, "No computers yet. Add one: open Pairnets on it and press Sign in.")]));
+        list.replaceChildren(...(data.devices.length ? data.devices.map(deviceRow) : [h("li", { class: "empty" }, "No computers yet. Add one: open Pairnets on it and press “Sign in with your browser”.")]));
         $("pending-section").hidden = data.pending.length === 0;
         $("pending").replaceChildren(...data.pending.map(pendingRow));
       } catch (error) {
