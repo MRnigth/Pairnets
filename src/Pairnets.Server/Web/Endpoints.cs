@@ -232,10 +232,14 @@ public static class Endpoints
             return Json(store.ListHistory(path));
         });
 
-        app.MapPost("/api/history/restore", async (HttpContext ctx, SyncStore store, IHubContext<SyncHub> hub) =>
+        // A big version can take longer to copy than a proxy waits (Cloudflare: 100 s): then 202, and the app
+        // asks again with the same ticket until it is done (see RestoreJobs).
+        app.MapPost("/api/history/restore", async (HttpContext ctx, RestoreJobs restores, IHubContext<SyncHub> hub) =>
         {
             var path = ctx.Request.Query["path"].ToString();
-            var result = await store.RestoreAsync(path, ctx.Request.Query["id"].ToString(), ctx.RequestAborted);
+            var result = await restores.RunAsync(path, ctx.Request.Query["id"].ToString(), ctx.Request.Query["ticket"].ToString(), ctx.RequestAborted);
+            if (result is null)
+                return Results.Json(new ErrorBody(ErrorCodes.Restoring, "The version is still being restored; ask again in a moment."), PairnetsJson.Options, statusCode: StatusCodes.Status202Accepted);
             return await ToResultAsync(result, ctx, path, hub);
         });
 

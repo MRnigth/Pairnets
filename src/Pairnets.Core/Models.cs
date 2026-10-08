@@ -177,6 +177,9 @@ public static class ErrorCodes
     /// </summary>
     public const string UploadBusy = "upload-busy";
 
+    /// <summary>With 202: a history version is still being restored; ask again with the same ticket.</summary>
+    public const string Restoring = "restoring";
+
     /// <summary>An upload in pieces did not match the hash it was committed with; it was dropped.</summary>
     public const string UploadMismatch = "upload-mismatch";
 

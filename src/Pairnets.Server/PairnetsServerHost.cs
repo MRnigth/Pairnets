@@ -45,6 +45,7 @@ public static class PairnetsServerHost
         builder.Services.AddSingleton(new ServerPaths(options.DataDir));
         builder.Services.AddSingleton<SyncStore>();
         builder.Services.AddSingleton<UploadSessions>();
+        builder.Services.AddSingleton<RestoreJobs>();
         builder.Services.AddSingleton<FailureThrottle>();
         builder.Services.AddSingleton<ServerUpdater>();
         builder.Services.AddSingleton<BatchRegistry>();

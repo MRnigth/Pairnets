@@ -748,12 +748,28 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
         return await ReadJsonAsync<List<HistoryVersion>>(resp, timeout, ct).ConfigureAwait(false);
     }
 
+    /// <summary>How often to ask again while the server is still restoring a big version (it answers 202 within a minute).</summary>
+    internal TimeSpan RestorePollInterval { get; set; } = TimeSpan.FromSeconds(2);
+
+    /// <summary>
+    /// Restores a history version. A big one can take the server longer than a proxy waits for an answer, so it
+    /// answers 202 meanwhile and this asks again with the same ticket (which joins that restore) until it is done.
+    /// </summary>
     public async Task<ApiResult> RestoreAsync(string path, string id, CancellationToken ct)
     {
-        using var timeout = Linked(ct, _metadataTimeout);
-        var uri = $"api/history/restore?path={Uri.EscapeDataString(path)}&id={Uri.EscapeDataString(id)}";
-        using var resp = await SendAsync(new HttpRequestMessage(HttpMethod.Post, uri), HttpCompletionOption.ResponseContentRead, timeout, ct).ConfigureAwait(false);
-        return await ReadChangeResultAsync(resp, timeout, ct).ConfigureAwait(false);
+        var ticket = Convert.ToHexString(RandomNumberGenerator.GetBytes(16)).ToLowerInvariant();
+        var uri = $"api/history/restore?path={Uri.EscapeDataString(path)}&id={Uri.EscapeDataString(id)}&ticket={ticket}";
+        var giveUp = Stopwatch.GetTimestamp();
+        while (true)
+        {
+            using var timeout = Linked(ct, _metadataTimeout);
+            using var resp = await SendAsync(new HttpRequestMessage(HttpMethod.Post, uri), HttpCompletionOption.ResponseContentRead, timeout, ct).ConfigureAwait(false);
+            if (resp.StatusCode != HttpStatusCode.Accepted)
+                return await ReadChangeResultAsync(resp, timeout, ct).ConfigureAwait(false);
+            if (Stopwatch.GetElapsedTime(giveUp) > TimeSpan.FromHours(1))
+                throw new PairnetsNetworkException("The server is still restoring that version; look at History again later.");
+            await Task.Delay(RestorePollInterval, ct).ConfigureAwait(false);
+        }
     }
 
     // ------------------------------------------------------------------ plumbing
