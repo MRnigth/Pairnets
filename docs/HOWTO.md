@@ -238,8 +238,8 @@ the same on Windows, Mac and Linux, and follows your system's light or dark mode
    **Start syncing**. Tick **Start Pairnets when I sign in to Windows** (on Mac and Linux: *when I log
    in*) so syncing starts automatically.
 
-There is no form for a server address and token any more: a computer only gets in when you allow it
-on your nest. Your nest therefore needs its own public name first (see [section 3](#3-install-the-server)).
+There is no first-run form for a server address and token any more: a computer only gets in when
+you allow it on your nest. Your nest therefore needs its own public name first (see [section 3](#3-install-the-server)).
 Extra ignore patterns, speed limits and the device name are on the **Settings** page afterwards.
 
 The first sync uploads everything in the folder. A 20 GB folder takes a while; you can keep
@@ -648,7 +648,8 @@ Updates keep your settings, your nest's name, the sign-ins and your files.
 
 Pairnets used to be called **Tether**. Installing Pairnets takes over everything Tether had: the
 server's files, history, token, address and Cloudflare Tunnel, and on each computer the settings,
-saved token, synced folder and "start at login". Nothing has to be set up again.
+saved token, synced folder and "start at login". Nothing else has to be set up again: you only set
+up your nest's website once and sign each computer in once (step 1).
 
 Tether apps can't update themselves into Pairnets (their **Update now** fails), so install
 Pairnets by hand once on each machine. The order doesn't matter: a Pairnets server works with Tether
@@ -658,9 +659,10 @@ apps and the other way round, so you can do one machine at a time.
    the Tether server and moves it: `/var/lib/tether` becomes `/var/lib/pairnets`, `/etc/tether`
    becomes `/etc/pairnets`, and the services become `pairnets-server` (and `pairnets-tunnel`). The
    server address and token stay the same. Check with `sudo systemctl status pairnets-server`.
-   Because your nest has its own name, each Pairnets app then asks you to sign in once ("Sign in to
-   your nest"): check the code and press **Allow** on your nest. Its folder and files stay as they
-   are.
+   Open the setup link the installer prints to set up your nest's website
+   ([see section 3](#set-up-your-nests-website-once)). Because your nest has its own name, each
+   Pairnets app then asks you to sign in once ("Sign in to your nest"): check the code and press
+   **Allow** on your nest. Its folder and files stay as they are.
 2. **Windows.** Download and run `PairnetsSetup.exe`. It removes the Tether program (not its
    settings) and starts Pairnets, which takes them over.
 3. **Mac.** Quit Tether (menu-bar icon → **Quit**), install Pairnets from its `.dmg`, move
