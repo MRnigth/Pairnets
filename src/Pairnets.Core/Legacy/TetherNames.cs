@@ -21,10 +21,10 @@ public static class TetherNames
     public const string ClientHeader = "X-Tether-Client";
 
     /// <summary>The DPAPI entropy the Windows app used for the token.</summary>
-    public const string DpapiEntropy = "Pairnets.Client.Token.v1";
+    public const string DpapiEntropy = "Tether.Client.Token.v1";
 
     /// <summary>The Windows app's single-instance mutex, to tell whether the old app is still running.</summary>
-    public const string WindowsMutex = @"Local\Pairnets.Client.SingleInstance";
+    public const string WindowsMutex = @"Local\Tether.Client.SingleInstance";
 
     /// <summary>The Mac/Linux app's single-instance lock file, inside the old local app folder.</summary>
     public const string DesktopLockFile = "app.lock";

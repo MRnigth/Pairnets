@@ -7,7 +7,7 @@ namespace Pairnets.Client.Platform;
 /// <summary>Encrypts the token with Windows DPAPI for the current user only.</summary>
 public sealed class DpapiProtector : ISecretProtector
 {
-    private static readonly byte[] Entropy = Encoding.UTF8.GetBytes("Pairnets.Client.Token.v1");
+    private static readonly byte[] Entropy = Encoding.UTF8.GetBytes(Pairnets.Core.PairnetsInfo.DpapiEntropy);
     private static readonly byte[] TetherEntropy = Encoding.UTF8.GetBytes(Pairnets.Core.Legacy.TetherNames.DpapiEntropy);
 
     public string Protect(string plainText) =>

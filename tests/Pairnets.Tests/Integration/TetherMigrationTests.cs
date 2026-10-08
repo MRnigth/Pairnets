@@ -32,13 +32,24 @@ public class TetherMigrationTests
         Assert.Equal("X-Tether-Hash", TetherNames.HashHeader);
         Assert.Equal("X-Tether-Modified-Ms", TetherNames.ModifiedMsHeader);
         Assert.Equal("X-Tether-Client", TetherNames.ClientHeader);
-        Assert.Equal("Pairnets.Client.Token.v1", TetherNames.DpapiEntropy);
-        Assert.Equal(@"Local\Pairnets.Client.SingleInstance", TetherNames.WindowsMutex);
+        Assert.Equal("Tether.Client.Token.v1", TetherNames.DpapiEntropy);
+        Assert.Equal(@"Local\Tether.Client.SingleInstance", TetherNames.WindowsMutex);
         Assert.Equal("Tether", TetherNames.KeychainService);
         Assert.Equal("tether", TetherNames.SecretToolService);
         Assert.Equal("Tether", TetherNames.WindowsRunValue);
         Assert.Equal("app.tether.client.plist", TetherNames.MacLaunchAgentFile);
         Assert.Equal("tether.desktop", TetherNames.LinuxAutostartFile);
+    }
+
+    [Fact]
+    public void PairnetsDoesNotMistakeItselfForTether()
+    {
+        // With the same mutex the Windows app would find its own and say "Tether is still running" on every
+        // start with old Tether folders around; with the same entropy Tether's saved token could not be told apart.
+        Assert.Equal(@"Local\Pairnets.Client.SingleInstance", PairnetsInfo.WindowsMutex);
+        Assert.NotEqual(TetherNames.WindowsMutex, PairnetsInfo.WindowsMutex, StringComparer.OrdinalIgnoreCase);
+        Assert.Equal("Pairnets.Client.Token.v1", PairnetsInfo.DpapiEntropy);
+        Assert.NotEqual(TetherNames.DpapiEntropy, PairnetsInfo.DpapiEntropy);
     }
 
     [Fact]

@@ -1,4 +1,5 @@
 using System.Windows;
+using Pairnets.Core;
 using Pairnets.Core.Client;
 using Pairnets.Core.Legacy;
 
@@ -6,12 +7,10 @@ namespace Pairnets.Client;
 
 internal static class Program
 {
-    private const string MutexName = @"Local\Pairnets.Client.SingleInstance";
-
     [STAThread]
     private static int Main(string[] args)
     {
-        using var mutex = new Mutex(initiallyOwned: true, MutexName, out var createdNew);
+        using var mutex = new Mutex(initiallyOwned: true, PairnetsInfo.WindowsMutex, out var createdNew);
         if (!createdNew)
         {
             // Started for a pairnets:// link (the nest's website sending you back after approving

@@ -11,6 +11,15 @@ public static class PairnetsInfo
     /// <summary>Version of the HTTP API contract between client and server.</summary>
     public const int ApiVersion = 1;
 
+    /// <summary>
+    /// The Windows app's single-instance mutex. It must differ from the old app's (see the Legacy names): taking over
+    /// an old install looks for that one to tell whether the old app is still running.
+    /// </summary>
+    public const string WindowsMutex = @"Local\Pairnets.Client.SingleInstance";
+
+    /// <summary>The DPAPI entropy the Windows app saves its key with (the old app's is in the Legacy names).</summary>
+    public const string DpapiEntropy = "Pairnets.Client.Token.v1";
+
     /// <summary>This build's release version, e.g. "1.0.58" (main builds are numbered 1.0.&lt;run&gt;).</summary>
     public static string ProductVersion { get; } = FormatVersion(typeof(PairnetsInfo).Assembly.GetName().Version);
 
