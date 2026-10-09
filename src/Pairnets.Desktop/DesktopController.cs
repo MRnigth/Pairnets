@@ -256,19 +256,15 @@ public sealed class DesktopController : ITrayActions, IDisposable
 
     // ------------------------------------------------------------------ the nest: devices and signing out
 
-    public async void AddComputer() => await Dialogs.InfoAsync(_window, "Pairnets – add a computer", AddComputerSteps(_session?.Status.NestUrl ?? NestFromSettings()));
+    /// <summary>The two steps, with this nest's name (or, signed in with an account, the account) filled in.</summary>
+    public async void AddComputer() => await Dialogs.InfoAsync(_window, "Pairnets – add a computer",
+        Relay.AddComputerSteps(_settings.ServerUrl, _settings.AccountEmail, _session?.Status.NestUrl ?? NestFromSettings()));
 
-    /// <summary>The two steps, with this nest's name filled in.</summary>
-    public static string AddComputerSteps(string? nestUrl) =>
-        "On the computer you want to add:\n\n" +
-        "1. Install Pairnets (pairnets.app/add).\n" +
-        $"2. Open Pairnets, type {(Uri.TryCreate(nestUrl, UriKind.Absolute, out var u) ? u.Authority : "your nest's name")} and press \"Sign in with your browser\".\n\n" +
-        "Its request then pops up here and on your nest, where you allow it.";
-
+    /// <summary>The nest's Devices page, or the account page when this computer signed in with a Pairnets account.</summary>
     public async void ManageDevices()
     {
-        if ((_session?.Status.NestUrl ?? NestFromSettings()) is { } url)
-            _platform.Open(url + "/devices");
+        if (Relay.ManageComputersUrl(_settings.ServerUrl, _session?.Status.NestUrl ?? NestFromSettings()) is { } url)
+            _platform.Open(url);
         else
             await Dialogs.InfoAsync(_window, "Pairnets", "Your nest has no website yet. On the server, give it its own name with: sudo ./install.sh --public-url https://nest.example.com");
     }

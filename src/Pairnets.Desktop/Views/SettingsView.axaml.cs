@@ -256,6 +256,7 @@ public partial class SettingsView : UserControl
                 Folder = folder,
                 DeviceName = deviceName,
                 DeviceId = deviceId,
+                AccountEmail = OwnKey.AccountEmailAfterSave(_original, url, deviceId),
                 ExtraIgnore = Patterns(),
                 StartWithWindows = AutoStartBox.IsChecked == true,
                 FirstRunCompleted = true,
