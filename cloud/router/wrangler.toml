@@ -1,0 +1,17 @@
+# pairnets-router (cloud/RELAY.md section 5). NOTHING IS DEPLOYED.
+#
+# Reachable only through the ROUTER service binding of pairnets-sync (../wrangler.toml): no route, no workers.dev
+# address, no preview URLs.
+#
+# Its bindings, one per relayed server ({"type":"vpc_network","name":"N_<nestId>","tunnel_id":"<tunnel id>"}), are NOT
+# listed here: pairnets-sync sets the whole list through the Cloudflare API
+# (PATCH /accounts/{account}/workers/scripts/pairnets-router/settings) after every approval and removal and from its
+# hourly cron. Deploy this folder once, with `npx wrangler deploy` from cloud/router. A later code deploy from here
+# replaces the bindings with none; pairnets-sync puts them back by itself on the next relayed request (at most a minute
+# of "not connected"), or at once if you run the SQL in cloud/README.md.
+
+name = "pairnets-router"
+main = "src/index.ts"
+compatibility_date = "2026-08-15"
+workers_dev = false
+preview_urls = false
