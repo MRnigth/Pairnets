@@ -608,15 +608,16 @@ function Step-LinuxBox($Ctx) {
         $failedB = -not ($okB -and $okLint)
         Save-BoxJournal $Ctx 'phase-b'
     }
+    $kept = @()
+    if ($failedA) { $kept += $BoxName }
     if ($failedB -or $KeepBox) {
         $why = if ($failedB) { 'it failed' } else { '-KeepBox' }
         Add-Note $Ctx "the phase B box is kept ($why); open it with: wsl -d $script:CurrentBox"
+        if ($kept -notcontains $script:CurrentBox) { $kept += $script:CurrentBox }
     } else {
         Invoke-TestBox $Ctx '-Remove' | Out-Null
     }
-    if ($failedA -or $failedB -or $KeepBox) {
-        Add-Note $Ctx "remove a kept box with: scripts\wsl-testbox.ps1 -Remove [-Name $BoxName-b]"
-    }
+    foreach ($k in $kept) { Add-Note $Ctx "throw $k away when done: scripts\wsl-testbox.ps1 -Remove -Name $k" }
     $script:CurrentBox = $BoxName
 }
 

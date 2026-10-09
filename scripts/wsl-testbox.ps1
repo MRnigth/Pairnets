@@ -275,7 +275,7 @@ function Show-Status {
     $base = if (Test-Path $BaseTar) { "{0} ({1} MB, {2:u})" -f $BaseTar, [math]::Round((Get-Item $BaseTar).Length / 1MB), (Get-Item $BaseTar).LastWriteTimeUtc } else { 'missing (run -EnsureBase)' }
     Write-Host "base image: $base"
     Write-Host ("box {0}: {1}" -f $Name, $(if ($distros -contains $Name) { 'exists' } else { 'not there' }))
-    Write-Host ("keep-alive sessions: {0}" -f (Get-KeepAlive).Count)
+    Write-Host ("keep-alive sessions: {0}" -f @(Get-KeepAlive).Count)
     if ($distros -contains $BaseName) { Write-Host "leftover base distro $BaseName exists (re-run -EnsureBase -Rebuild)" }
 }
 

@@ -38,12 +38,21 @@ printf '%s\n' "$output" | tr '\r' '\n' | grep -Ev '^[-#=O ]*([0-9.,]+%)?$' | red
 [[ $rc -eq 0 ]] || die "the published installer exited with $rc"
 OLD_VERSION="$(installed_version)"
 ok "installed the published release $OLD_VERSION"
-version_newer "$NEW_VERSION" "$OLD_VERSION" || die "the feed's version $NEW_VERSION is not newer than the published $OLD_VERSION (update.sh would refuse it)"
 check "GET /api/health answers ok" health_ok
-
-step "put files on the nest through the API"
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
+if ! version_newer "$NEW_VERSION" "$OLD_VERSION"; then
+  # (A release run for a version that is already published.) update.sh only installs a newer version, so
+  # the same package goes in one version above the published one.
+  [[ "$OLD_VERSION" =~ ^[0-9]+(\.[0-9]+)*$ ]] || die "the published release has no usable version ($OLD_VERSION)"
+  if [[ "$OLD_VERSION" == *.* ]]; then bumped="${OLD_VERSION%.*}.$(( ${OLD_VERSION##*.} + 1 ))"; else bumped="$((OLD_VERSION + 1))"; fi
+  note "the published release $OLD_VERSION is not older than this package ($NEW_VERSION): the same package goes in as $bumped"
+  bash "$REPO_ROOT/scripts/make-feed.sh" "$FEED/$PACKAGE.tar.gz" "$bumped" "$work/feed" >/dev/null || die "could not repackage the feed as $bumped"
+  FEED="$work/feed"
+  NEW_VERSION="$bumped"
+fi
+
+step "put files on the nest through the API"
 printf 'Hello from the upgrade check, %s\n' "$(date -u +%FT%TZ)" > "$work/hello.txt"
 head -c 300000 /dev/urandom > "$work/random.bin"
 printf 'æøå ünïcödé\n' > "$work/unicode.txt"
