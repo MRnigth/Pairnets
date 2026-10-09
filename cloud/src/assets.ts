@@ -65,7 +65,7 @@ function pnApi(method, path, body) {
     if (r.status === 204) return { ok: true, status: 204, body: {} };
     return r.json().catch(function () { return {}; }).then(function (b) { return { ok: r.ok, status: r.status, body: b || {} }; });
   }, function () {
-    return { ok: false, status: 0, body: { message: "Could not reach the server. Check the connection and try again." } };
+    return { ok: false, status: 0, body: { message: "Could not reach Pairnets. Check the connection and try again." } };
   });
 }
 function pnShow(el, text, isError) {
@@ -176,7 +176,7 @@ const ACCOUNT_JS = String.raw`(function () {
     details.textContent = parts.join(" \u00b7 ");
     var list = li.querySelector("[data-field=devices]");
     while (list.firstChild) list.removeChild(list.firstChild);
-    if (!s.online) { list.appendChild(el("li", "muted", "Shown when the server is connected.")); return; }
+    if (!s.online) { list.appendChild(el("li", "muted", "Shown when the nest is connected.")); return; }
     if (!s.devices.length) { list.appendChild(el("li", "muted", "None yet.")); return; }
     s.devices.forEach(function (d) {
       var item = el("li");
@@ -220,7 +220,7 @@ const ACCOUNT_JS = String.raw`(function () {
         if (ok(res)) loadServers();
       });
     } else if (b.getAttribute("data-action") === "remove-server") {
-      if (!confirm("Remove this server from your account? Its computers stop syncing through Pairnets. The files stay on the server.")) return;
+      if (!confirm("Remove this nest from your account? Its computers stop syncing through Pairnets. The files stay on the nest.")) return;
       pnApi("DELETE", "/v1/servers/" + id).then(function (res) { if (ok(res)) location.reload(); });
     }
   });
@@ -271,16 +271,20 @@ const APP_JS = String.raw`(function () {
   function answer(approve) {
     var body = { userCode: code, approve: approve };
     if (approve) {
-      var chosen = box.querySelector("input[name=nest]:checked");
-      if (!chosen) { pnShow(status, "Choose a server first.", true); return; }
-      body.nestId = chosen.value;
+      // No choice at all: the account has no nest yet, and the app waits for one.
+      if (box.querySelector("input[name=nest]")) {
+        var chosen = box.querySelector("input[name=nest]:checked");
+        if (!chosen) { pnShow(status, "Choose a nest first.", true); return; }
+        body.nestId = chosen.value;
+      }
     }
     var buttons = box.querySelectorAll("button");
     for (var i = 0; i < buttons.length; i++) buttons[i].disabled = true;
     pnApi("POST", "/v1/app/approve", body).then(function (res) {
       if (res.body && res.body.error === "unauthorized") { location.href = "/login?next=" + encodeURIComponent("/app?code=" + code); return; }
       if (!res.ok) { pnShow(status, res.body.message || "That did not work.", true); return; }
-      pnShow(status, approve ? "Allowed. Go back to the app." : "Refused. The app will not be signed in.", false);
+      var waits = approve && !box.querySelector("input[name=nest]");
+      pnShow(status, waits ? "Allowed. The app waits for your nest; set it up now." : approve ? "Allowed. Go back to the app." : "Refused. The app will not be signed in.", false);
     });
   }
   var a = document.getElementById("approve");
@@ -302,7 +306,7 @@ const ADD_JS = String.raw`(function () {
     var label = document.getElementById("label");
     var body = { userCode: code, approve: approve };
     if (approve && label && label.value.trim()) body.label = label.value.trim();
-    if (approve) pnShow(status, "Adding the server...", false);
+    if (approve) pnShow(status, "Adding the nest...", false);
     pnApi("POST", "/v1/servers/approve", body).then(function (res) {
       if (res.body && res.body.error === "unauthorized") { location.href = "/login?next=" + encodeURIComponent("/add?code=" + code); return; }
       if (!res.ok) {
@@ -310,7 +314,7 @@ const ADD_JS = String.raw`(function () {
         if (res.status >= 500) for (var j = 0; j < buttons.length; j++) buttons[j].disabled = false;
         return;
       }
-      pnShow(status, approve ? "Added. The installer on the server finishes by itself in a minute or two." : "Refused. The server was not added.", false);
+      pnShow(status, approve ? "Added. The installer on the nest finishes by itself in a minute or two." : "Refused. The nest was not added.", false);
     });
   }
   var a = document.getElementById("approve");

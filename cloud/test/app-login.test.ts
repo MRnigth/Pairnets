@@ -162,7 +162,9 @@ describe("app-login", () => {
     const s = await app.call("POST", "/v1/app/start", { body: { name: "Laptop" } });
     const allow = (nestId: unknown) => b.call("POST", "/v1/app/approve", { body: { userCode: s.json.userCode, approve: true, nestId } });
 
+    // Without a nest only while the account has none; this one has one, so it must be chosen.
     expect((await allow(undefined)).json.error).toBe("bad_request");
+    expect((await allow(null)).json.error).toBe("bad_request");
     expect((await allow("garbage")).json.error).toBe("bad_request");
     expect((await allow(42)).json.error).toBe("bad_request");
     expect((await allow(theirs.nestId)).status).toBe(404);
@@ -240,11 +242,38 @@ describe("app-login", () => {
     expect((await stranger.call("GET", "/app")).text).toContain("Code shown by the app");
     expect((await stranger.call("GET", `/v1/app/requests/${s.json.userCode}`, { headers: {} })).status).toBe(200);
     expect((await h.client().call("GET", `/v1/app/requests/${s.json.userCode}`)).status).toBe(401);
-    // With no server yet, the page says so and offers no Allow button.
+    // With no nest yet, the page says so, says how to set one up, and still offers Allow (the app then waits).
     const none = await stranger.call("GET", `/app?code=${s.json.userCode}`);
-    expect(none.text).toContain("This account has no server yet.");
-    expect(none.text).not.toContain('id="approve"');
+    expect(none.text).toContain("This account has no nest yet.");
+    expect(none.text).toContain("curl -fsSL https://pairnets.app/get.sh | sudo bash");
+    expect(none.text).toContain('id="approve"');
     expect(none.text).toContain('id="deny"');
+  });
+
+  it("an account with no nest yet: the app is told and waits, then joins the nest the account adds", async () => {
+    const { h, b, app } = await setup();
+    const s = await app.call("POST", "/v1/app/start", { body: { name: "Laptop", system: "Windows 11" } });
+    expect((await b.call("POST", "/v1/app/approve", { body: { userCode: s.json.userCode, approve: true } })).json).toEqual({ status: "approved" });
+    // The login now has half an hour to wait for a nest.
+    const row = (await h.query<{ expires_at: number; nest_id: string | null }>("SELECT expires_at, nest_id FROM device_logins"))[0];
+    expect(row.nest_id).toBeNull();
+    expect(row.expires_at).toBe(h.clock.now + 1800);
+    const poll = () => app.call("POST", "/v1/app/poll", { body: { deviceCode: s.json.deviceCode } });
+    expect((await poll()).json).toEqual({ status: "no_nest", email: "you@example.com" });
+    h.advance(600);
+    expect((await poll()).json.status).toBe("no_nest");
+    // The account adds a nest (the installer's link); the next poll joins it and hands out the key, once.
+    h.advance(3);
+    const nest = await addServer(h, b);
+    h.advance(3);
+    const done = await poll();
+    expect(done.status, done.text).toBe(200);
+    expect(done.json.status).toBe("approved");
+    expect(done.json.nest.id).toBe(nest.nestId);
+    expect(done.json.device.name).toBe("Laptop");
+    expect((await h.query<{ nest_id: string }>("SELECT nest_id FROM device_logins"))[0].nest_id).toBe(nest.nestId);
+    h.advance(3);
+    expect((await poll()).json.error).toBe("expired");
   });
 
   it("the page lists every server of the account and picks the first", async () => {

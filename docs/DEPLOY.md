@@ -39,7 +39,7 @@ account (`pairnets-link.sh`; the design is in [cloud/RELAY.md](../cloud/RELAY.md
 
 1. It asks Pairnets for a code and prints a link such as `https://sync.pairnets.app/add?code=ABCD-EFGH`.
    Open it on any device, sign in to your Pairnets account, check that the page shows the same code
-   and press **Add this server**. Nothing is typed on the server. The link works for 15 minutes;
+   and press **Add this nest**. Nothing is typed on the server. The link works for 15 minutes;
    **Not mine**, or a link that runs out, changes nothing (run the command again).
 2. Pairnets makes a Cloudflare Tunnel for this server alone. It has no public hostname: only
    Pairnets' own service reaches it, through a private link. The tunnel's token, the server's id and
@@ -407,5 +407,5 @@ sudo rm -rf /opt/pairnets /etc/pairnets
 # cloudflared stays installed (sudo apt remove cloudflared); delete the tunnel in the Cloudflare dashboard.
 ```
 
-A server linked to your Pairnets account: also press **Remove this server** at
+A server linked to your Pairnets account: also press **Remove this nest from my account** at
 <https://sync.pairnets.app/account>, which deletes its tunnel. Its files stay on the server.

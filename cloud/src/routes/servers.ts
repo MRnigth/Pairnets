@@ -2,7 +2,7 @@
 // servers and their computers, and removing either.
 //
 //   POST /v1/servers/start               installer, no auth          -> device code + user code
-//   GET  /add?code=                      browser page                -> "Add this server" / "Not mine"
+//   GET  /add?code=                      browser page                -> "Add this nest" / "Not mine"
 //   GET  /v1/servers/requests/{code}     session                     -> what the page shows
 //   POST /v1/servers/approve             session + Origin            -> nest row, tunnel, router deploy
 //   POST /v1/servers/poll                installer, no auth          -> once: tunnel token + nest key

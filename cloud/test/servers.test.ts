@@ -48,7 +48,7 @@ describe("adding a server", () => {
     expect(page.text).toContain("<dd>1.0.48</dd>");
     expect(page.text).toContain(`<strong>${userCode}</strong>`);
     expect(page.text).toContain('<input id="label" maxlength="64" autocomplete="off" value="soro">');
-    expect(page.text).toContain(">Add this server</button>");
+    expect(page.text).toContain(">Add this nest</button>");
     expect(page.text).toContain(">Not mine</button>");
     expect(page.text).toContain('<script src="/assets/add.js" defer></script>');
 
@@ -67,7 +67,7 @@ describe("adding a server", () => {
     expect(rows).toEqual([
       { account_id: accountId, label: "Basement", public_url: "", status: "pending", mode: "relay", tunnel_id: tunnelId, hosted_login: 0, routed_version: 1 },
     ]);
-    expect(h.mailer.to("you@example.com").some((m) => m.subject === "A server was added to your account: Basement")).toBe(true);
+    expect(h.mailer.to("you@example.com").some((m) => m.subject === "A nest was added to your account: Basement")).toBe(true);
 
     h.advance(3);
     const done = await installer.call("POST", "/v1/servers/poll", { body: { deviceCode } });

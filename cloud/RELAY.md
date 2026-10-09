@@ -58,7 +58,7 @@ anything into the terminal: approving happens in a browser on any device.
     "verificationUriComplete":"https://sync.pairnets.app/add?code=ABCD-EFGH","expiresIn":900,"interval":3}
    ```
 2. The installer prints the link and the code and polls. The person opens `/add?code=…` (session required, else
-   `/login?next=/add?code=…`). The page shows the hostname, version and code, and **Add this server** / **Not mine**.
+   `/login?next=/add?code=…`). The page shows the hostname, version and code, and **Add this nest** / **Not mine**.
    It uses:
    - `GET /v1/servers/requests/{userCode}` (session) → 200 `{userCode, hostname, serverVersion, createdAt, expiresAt, status}` / 404.
    - `POST /v1/servers/approve` (session + Origin) `{userCode, approve: true|false, label?}` →
@@ -191,7 +191,7 @@ set for every nest included. The hourly cron redeploys when any relay nest's `ro
 
 **Sign in (CONTRACT §6.9, extended).** The app calls `POST /v1/app/start` as before; the page `/app?code=` now also
 lets the person choose which server this computer joins (default: their only one), then **Allow**.
-`POST /v1/app/approve` takes `{userCode, approve, nestId}` (`nestId` required when approving; it MUST be the
+`POST /v1/app/approve` takes `{userCode, approve, nestId}` (`nestId` required when approving, except when the account has no nest yet, below; it MUST be the
 account's relay nest). The first successful `POST /v1/app/poll` after approval asks the nest for a key
 (`POST /api/relay/devices` with the app's name and system) and answers, **once**:
 
@@ -203,6 +203,13 @@ account's relay nest). The first successful `POST /v1/app/poll` after approval a
 
 If the nest cannot be reached at that moment the poll answers **503** `nest_offline` and the login stays `approved`
 (the app keeps polling; the key is asked for again on the next poll). The service never stores the device key.
+
+**No nest yet.** If the account has no relay nest, the page says how to set one up and still offers **Allow**, which
+sends `{userCode, approve: true}` without `nestId` (allowed only while the account has none; otherwise 400
+`bad_request`). The login is then held for 30 minutes from that moment, and every poll answers
+`200 {"status":"no_nest","email":"you@example.com"}` until the account has a relay nest (`pending` or `active`); the next
+poll after that joins the newest one and continues as above. The app shows "Your account has no nest yet" and finishes
+by itself once the nest is added.
 
 **What the app stores:** `ServerUrl = nest.serverUrl`, the device key (protected as today), `DeviceId`, and the
 account email for display. Everything else works as for a nest on its own domain: all API paths are relative to the
@@ -218,7 +225,7 @@ server URL (`api/…`, `hub`), so the `/n/<nestId>/` prefix carries through.
 
 `/account` lists the account's servers: label, online (a relayed `GET /api/relay/status` within the last request,
 timeout 5 s), version, free space, and per server its computers (`GET /api/relay/devices`) with **Remove** (`DELETE
-/api/relay/devices/{id}`), plus **Remove this server** (deletes the router binding, the tunnel and the nest row; the
+/api/relay/devices/{id}`), plus **Remove this nest from my account** (deletes the router binding, the tunnel and the nest row; the
 nest itself keeps its files and stops being reachable). JSON for the page: `GET /v1/servers` (session) →
 `[{id,label,status,online,serverVersion,freeBytes,devices:[…]}]`, `DELETE /v1/servers/{id}/devices/{deviceId}`,
 `DELETE /v1/servers/{id}` (session + Origin).

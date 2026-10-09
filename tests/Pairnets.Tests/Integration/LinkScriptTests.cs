@@ -37,7 +37,7 @@ public class LinkScriptTests : IDisposable
         // What a person sees: one link to open anywhere, and the code to compare.
         Assert.Contains("Open this link on any device and sign in to your Pairnets account:", output);
         Assert.Contains($"    {service.Url}/add?code={FakeRelayService.UserCode}\n", output);
-        Assert.Contains($"check that the page shows the code {FakeRelayService.UserCode} and press \"Add this server\"", output);
+        Assert.Contains($"check that the page shows the code {FakeRelayService.UserCode} and press \"Add this nest\"", output);
         Assert.Contains("the link works for 15 minutes", output);
         Assert.Contains("Added to your Pairnets account as \"soro\".", output);
 
@@ -113,7 +113,7 @@ public class LinkScriptTests : IDisposable
         var (exit, _, error) = await Run(service);
 
         Assert.Equal(1, exit);
-        Assert.Contains("this server was not added (\"Not mine\" was pressed on the page). Nothing was changed", error);
+        Assert.Contains("this computer was not added (\"Not mine\" was pressed on the page). Nothing was changed", error);
         Assert.False(Directory.Exists(Conf) && Directory.EnumerateFiles(Conf).Any());
     }
 
@@ -128,7 +128,7 @@ public class LinkScriptTests : IDisposable
         var (exit, _, error) = await Run(service);
 
         Assert.Equal(1, exit);
-        Assert.Contains("the link expired before this server was added. Nothing was changed; run the installer again for a new link.", error);
+        Assert.Contains("the link expired before this computer was added. Nothing was changed; run the installer again for a new link.", error);
         Assert.False(Directory.Exists(Conf) && Directory.EnumerateFiles(Conf).Any());
     }
 
@@ -145,7 +145,7 @@ public class LinkScriptTests : IDisposable
         var (exit, output, error) = await Run(service);
 
         Assert.Equal(1, exit);
-        Assert.Contains("the link expired before this server was added", error);
+        Assert.Contains("the link expired before this computer was added", error);
         Assert.Contains("the link works for 1 minute;", output);
         Assert.InRange(service.Polls().Count, 1, 4);
         Assert.True(watch.Elapsed < TimeSpan.FromSeconds(20), $"took {watch.Elapsed}");

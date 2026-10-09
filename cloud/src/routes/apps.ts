@@ -19,6 +19,8 @@ export const DEVICE_LOGIN_LIFETIME = 600;
 export const POLL_INTERVAL = 3;
 /** While the server is being asked for a key, further polls of that login are told to slow down (at most this long). */
 const KEY_REQUEST_HOLD = 10;
+/** A computer allowed while its account had no nest waits this long for one (from the moment it was allowed). */
+export const NO_NEST_WAIT = 1800;
 
 interface DeviceLoginRow {
   id: string;
@@ -120,8 +122,10 @@ export async function appApproveRoute(ctx: Ctx): Promise<Response> {
   const s = await requireBrowser(ctx);
   const b = jsonBody(ctx);
   if (typeof b.userCode !== "string" || typeof b.approve !== "boolean") throw new HttpError(400, "bad_request");
-  // The server this computer joins: required when approving.
-  if (b.approve && (typeof b.nestId !== "string" || !NEST_ID_RE.test(b.nestId))) throw new HttpError(400, "bad_request");
+  // The nest this computer joins: required when approving, unless the account has no nest yet. Then the app is told
+  // so and waits; the login joins the first nest the account adds (RELAY.md §6, "No nest yet").
+  const withoutNest = b.approve && (b.nestId === undefined || b.nestId === null);
+  if (b.approve && !withoutNest && (typeof b.nestId !== "string" || !NEST_ID_RE.test(b.nestId))) throw new HttpError(400, "bad_request");
   const code = normaliseUserCode(b.userCode);
   if (!code) throw new HttpError(404, "not_found");
   const row = await ctx.env.DB.prepare("SELECT * FROM device_logins WHERE user_code = ?1").bind(code).first<DeviceLoginRow>();
@@ -132,7 +136,9 @@ export async function appApproveRoute(ctx: Ctx): Promise<Response> {
   }
   if (row.expires_at <= ctx.now) throw new HttpError(400, "expired");
   let nestId: string | null = null;
-  if (b.approve) {
+  if (withoutNest) {
+    if ((await serversOf(ctx, s.accountId)).length > 0) throw new HttpError(400, "bad_request"); // it has one: choose it
+  } else if (b.approve) {
     // It MUST be one of this account's relayed servers (another account's answers like an unknown one).
     const nest = await ctx.env.DB.prepare(
       "SELECT id FROM nests WHERE id = ?1 AND account_id = ?2 AND mode = 'relay' AND status IN ('pending', 'active')",
@@ -143,10 +149,12 @@ export async function appApproveRoute(ctx: Ctx): Promise<Response> {
     nestId = nest.id;
   }
   const status = b.approve ? "approved" : "denied";
+  // A login waiting for a nest gets time to set one up (installing it takes a few minutes).
+  const expires = withoutNest ? Math.max(row.expires_at, ctx.now + NO_NEST_WAIT) : row.expires_at;
   const r = await ctx.env.DB.prepare(
-    "UPDATE device_logins SET status = ?1, account_id = ?2, decided_at = ?3, nest_id = ?5 WHERE id = ?4 AND status = 'pending' AND expires_at > ?3",
+    "UPDATE device_logins SET status = ?1, account_id = ?2, decided_at = ?3, nest_id = ?5, expires_at = ?6 WHERE id = ?4 AND status = 'pending' AND expires_at > ?3",
   )
-    .bind(status, s.accountId, ctx.now, row.id, nestId)
+    .bind(status, s.accountId, ctx.now, row.id, nestId, expires)
     .run();
   if (r.meta.changes !== 1) throw new HttpError(409, "already_decided");
   await audit(ctx, b.approve ? "app_approved" : "app_denied", s.accountId, nestId, { name: row.name });
@@ -187,6 +195,20 @@ export async function appPollRoute(ctx: Ctx): Promise<Response> {
  */
 async function deliver(ctx: Ctx, row: DeviceLoginRow): Promise<Response> {
   const accountId = row.account_id!;
+  if (!row.nest_id) {
+    // Allowed while the account had no nest: the app waits until the account adds one, then joins it (the newest,
+    // which is the one just set up, if there are several by then).
+    const nests = await serversOf(ctx, accountId);
+    if (!nests.length) {
+      const account = await ctx.env.DB.prepare("SELECT email FROM accounts WHERE id = ?1").bind(accountId).first<{ email: string }>();
+      if (!account) throw new HttpError(400, "expired");
+      await ctx.env.DB.prepare("UPDATE device_logins SET last_poll_at = ?1 WHERE id = ?2 AND status = 'approved'").bind(ctx.now, row.id).run();
+      return json(200, { status: "no_nest", email: account.email });
+    }
+    const newest = nests[nests.length - 1];
+    await ctx.env.DB.prepare("UPDATE device_logins SET nest_id = ?2 WHERE id = ?1 AND status = 'approved' AND nest_id IS NULL").bind(row.id, newest.id).run();
+    row = { ...row, nest_id: newest.id };
+  }
   const nest = row.nest_id
     ? await ctx.env.DB.prepare("SELECT * FROM nests WHERE id = ?1 AND account_id = ?2 AND mode = 'relay' AND status IN ('pending', 'active')")
         .bind(row.nest_id, accountId)

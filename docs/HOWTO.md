@@ -56,12 +56,12 @@ Open this link on any device and sign in to your Pairnets account:
 
     https://sync.pairnets.app/add?code=ABCD-EFGH
 
-Then check that the page shows the code ABCD-EFGH and press "Add this server".
+Then check that the page shows the code ABCD-EFGH and press "Add this nest".
 ```
 
 1. Open the link on your phone or on any computer (type it in if you can't click it).
 2. Sign in to your Pairnets account, with your email address or with Google.
-3. Check that the page shows the same code as the server, and press **Add this server**. (If you
+3. Check that the page shows the same code as the server, and press **Add this nest**. (If you
    did not start this, press **Not mine**: nothing changes.)
 
 You don't type anything on the server: the installer notices by itself and carries on. The link
@@ -84,7 +84,7 @@ cd pairnets-server-linux-x64
 sudo ./install.sh
 ```
 
-Once you pressed **Add this server**, `install.sh` does the rest:
+Once you pressed **Add this nest**, `install.sh` does the rest:
 
 * keeps what Pairnets sent for this server, the token of a Cloudflare Tunnel made just for it and
   the server's own key, in `/etc/pairnets` (readable by root only). Neither is ever shown;
@@ -846,7 +846,7 @@ sudo rm -rf /opt/pairnets /etc/pairnets
 # your files remain in /var/lib/pairnets until you delete that folder yourself
 ```
 This also removes the self-updater, which the server installer added. If the server was linked to
-your Pairnets account, also press **Remove this server** at <https://sync.pairnets.app/account>
+your Pairnets account, also press **Remove this nest from my account** at <https://sync.pairnets.app/account>
 (that deletes its tunnel). With your own domain, delete the tunnel in the Cloudflare dashboard.
 
 To set a linked server up again later (its files are still there), run the one command from

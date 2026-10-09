@@ -4,7 +4,7 @@
 #
 #   sudo ./install.sh
 #       first install: links this server to your Pairnets account. It prints a link; open it on any device,
-#       sign in and press "Add this server" (pairnets-link.sh does this part). Your computers then reach the
+#       sign in and press "Add this nest" (pairnets-link.sh does this part). Your computers then reach the
 #       server through https://sync.pairnets.app: no open ports, no domain, nothing to set up in Cloudflare.
 #       On a server that is already installed it upgrades, keeping the data, settings, link or name and tunnel,
 #       and never starts a new link.
@@ -49,7 +49,7 @@ Usage: sudo ./install.sh [options]
 
   sudo ./install.sh
       First install: links this server to your Pairnets account. It prints a link to open on any
-      device; sign in there and press "Add this server". Nothing to set up in Cloudflare.
+      device; sign in there and press "Add this nest". Nothing to set up in Cloudflare.
       On a server that is already installed: upgrade, keeping the data, settings, link and tunnel.
   sudo ./install.sh --public-url https://sync.example.com
       Advanced, your own domain: the public name you gave your own Cloudflare Tunnel. Asks for the

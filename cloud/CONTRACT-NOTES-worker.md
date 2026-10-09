@@ -124,7 +124,7 @@ fold into `RELAY.md` or reverse.
   Cloudflare makes one). `nests.tunnel_id` is written only after the ingress is set, so a router deploy never names a
   half-made tunnel; when the undo fails, the row becomes `broken` with that tunnel id for the sweep. If the Worker dies
   between creating the tunnel and storing its id, the sweep finds the tunnel by its name (`pairnets-<nestId>`).
-- Approving sends a notice email ("A server was added to your account: <label>"), like version 1's "nest linked".
+- Approving sends a notice email ("A nest was added to your account: <label>"), like version 1's "nest linked".
   Adding needs a session, not a recent sign-in (RELAY.md says session + Origin). **(choice; owner question: should adding
   a server need a sign-in within the last 15 minutes, like creating a claim code did?)**
 - `POST /v1/servers/start` takes an empty body as `{}`. Every start counts against the 10 an hour, refused ones too.

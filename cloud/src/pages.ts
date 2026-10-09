@@ -134,14 +134,14 @@ export function accountPage(v: AccountView): string {
         .map(
           (n) => `<li class="server" data-server="${e(n.id)}">
 <div class="row"><strong>${e(n.label)}</strong> <span class="pill" data-field="online">checking</span></div>
-<div class="muted" data-field="details">${n.status === "pending" ? "Waiting for the server to connect for the first time." : ""}</div>
-<p class="muted">Computers using this server:</p>
+<div class="muted" data-field="details">${n.status === "pending" ? "Waiting for the nest to connect for the first time." : ""}</div>
+<p class="muted">Computers using this nest:</p>
 <ul class="list devices" data-field="devices"><li class="muted">Loading...</li></ul>
-<div class="actions"><button type="button" class="danger" data-action="remove-server">Remove this server</button></div>
+<div class="actions"><button type="button" class="danger" data-action="remove-server">Remove this nest from my account</button></div>
 </li>`,
         )
         .join("\n")
-    : `<li class="muted">No servers yet.</li>`;
+    : `<li class="muted">No nest yet.</li>`;
 
   const nests = v.nests.length
     ? v.nests
@@ -179,21 +179,21 @@ ${n.addressWarning ? `<p class="error">${e(n.addressWarning)}</p>` : ""}
 <p id="status" class="status" role="status" hidden></p>
 </section>
 <section class="card">
-<h2>Your servers</h2>
+<h2>${v.servers.length > 1 ? "Your nests" : "Your nest"}</h2>
 <ul class="list" id="servers">
 ${servers}
 </ul>
-<p class="muted">To add a server, install Pairnets on it. The installer shows a link and a code: open the link and choose Add this server.</p>
+<p class="muted">To add a nest: on the Linux computer that will keep your files, run <code>curl -fsSL https://pairnets.app/get.sh | sudo bash</code>. It shows a link and a code: open the link and choose Add this nest. Then, on each computer, install Pairnets and choose Continue with email (or Google) with this account.</p>
 </section>
 <details class="card"${v.nests.length ? " open" : ""}>
-<summary>Servers on their own address</summary>
-<p class="muted">Only for a server that has its own web address (installed with --public-url).</p>
+<summary>Nests on their own address</summary>
+<p class="muted">Only for a nest that has its own web address (installed with --public-url).</p>
 <ul class="list" id="nests">
 ${nests}
 </ul>
-<p><button type="button" id="add-nest">Link a server by its address</button></p>
+<p><button type="button" id="add-nest">Link a nest by its address</button></p>
 <div id="claim" hidden>
-<p>On the server, run this command within 10 minutes:</p>
+<p>On the nest, run this command within 10 minutes:</p>
 <pre id="claim-command"></pre>
 <p class="muted">Code <strong id="claim-code"></strong>, valid until <span id="claim-expires"></span>. The command shows which account it links to and asks before it changes anything.</p>
 <p><button type="button" id="cancel-codes" class="link">Cancel unused codes</button></p>
@@ -207,7 +207,7 @@ ${sessions}
 </section>
 <section class="card">
 <h2>Delete account</h2>
-<p>This removes your account, your servers' links to Pairnets and everything stored about you here. Your servers keep their files.</p>
+<p>This removes your account, your nests' links to Pairnets and everything stored about you here. Your nests keep their files.</p>
 <p><button type="button" id="delete-account" class="danger">Delete my account</button></p>
 </section>`,
     { scripts: ["account.js"] },
@@ -230,7 +230,9 @@ export interface ServerChoice {
 
 function serverChooser(servers: ServerChoice[]): string {
   if (!servers.length) {
-    return `<p class="notice">This account has no server yet. Add one first: install Pairnets on your server and open the link it shows. Then sign in the app again.</p>`;
+    return `<p class="notice">This account has no nest yet. Allow this computer now, and it waits for your nest: on the Linux computer that
+will keep your files, run <code>curl -fsSL https://pairnets.app/get.sh | sudo bash</code> and open the link it shows. The app
+carries on by itself.</p>`;
   }
   const options = servers
     .map(
@@ -238,7 +240,7 @@ function serverChooser(servers: ServerChoice[]): string {
         `<label class="choice"><input type="radio" name="nest" value="${e(n.id)}"${i === 0 ? " checked" : ""}> ${e(n.label)}</label>`,
     )
     .join("\n");
-  return `<fieldset id="servers"><legend>Which server should this computer use?</legend>
+  return `<fieldset id="servers"><legend>Which nest should this computer sync with?</legend>
 ${options}
 </fieldset>`;
 }
@@ -271,12 +273,12 @@ ${req.appVersion ? `<dt>App version</dt><dd>${e(req.appVersion)}</dd>` : ""}
     "Sign in an app",
     `<section class="card" id="app-request" data-code="${e(displayUserCode(req.userCode))}">
 <h1>Sign in an app?</h1>
-<p>A computer wants to use your Pairnets account and sync with your server. Allow it only if this is your computer and the code matches the one the app shows.</p>
+<p>A computer wants to use your Pairnets account and sync with your nest. Allow it only if this is your computer and the code matches the one the app shows.</p>
 ${details}
 ${
   pending
     ? `${serverChooser(servers)}
-<div class="actions">${servers.length ? `<button type="button" id="approve">Allow</button> ` : ""}<button type="button" id="deny" class="danger">Not me</button></div>`
+<div class="actions"><button type="button" id="approve">Allow</button> <button type="button" id="deny" class="danger">Not me</button></div>`
     : `<p class="notice">This sign-in was already answered.</p>`
 }
 <p id="status" class="status" role="status" hidden></p>
@@ -298,9 +300,9 @@ export function addPage(req: ServerRequestView | null, typed: string | null): st
   if (!req) {
     const msg = typed ? `<p class="error" role="alert">That code is not valid or has expired. Check the code the installer shows.</p>` : "";
     return layout(
-      "Add a server",
+      "Add a nest",
       `<section class="card">
-<h1>Add a server</h1>
+<h1>Add a nest</h1>
 ${msg}
 <form method="get" action="/add">
 <label for="code">Code shown by the installer</label>
@@ -311,23 +313,23 @@ ${msg}
     );
   }
   const details = `<dl>
-<dt>Server</dt><dd>${e(req.hostname ?? "unknown")}</dd>
+<dt>Nest</dt><dd>${e(req.hostname ?? "unknown")}</dd>
 ${req.serverVersion ? `<dt>Version</dt><dd>${e(req.serverVersion)}</dd>` : ""}
 <dt>Code</dt><dd><strong>${e(displayUserCode(req.userCode))}</strong></dd>
 <dt>Asked</dt><dd>${when(req.createdAt)}</dd>
 </dl>`;
   const pending = req.status === "pending";
   return layout(
-    "Add a server",
+    "Add a nest",
     `<section class="card" id="server-request" data-code="${e(displayUserCode(req.userCode))}">
-<h1>Add this server to your account?</h1>
-<p>A server where Pairnets is being installed wants to join your account. Your computers will reach it through Pairnets; its files stay on the server. Add it only if you are installing it yourself and the code matches the one the installer shows.</p>
+<h1>Add this nest to your account?</h1>
+<p>A computer where the Pairnets nest is being installed wants to join your account. Your files stay on it; Pairnets connects your other computers to it. Add it only if you are installing it yourself and the code matches the one the installer shows.</p>
 ${details}
 ${
   pending
     ? `<label for="label">Name</label>
-<input id="label" maxlength="64" autocomplete="off" value="${e(req.hostname ?? "My server")}">
-<div class="actions"><button type="button" id="approve">Add this server</button> <button type="button" id="deny" class="danger">Not mine</button></div>`
+<input id="label" maxlength="64" autocomplete="off" value="${e(req.hostname ?? "My nest")}">
+<div class="actions"><button type="button" id="approve">Add this nest</button> <button type="button" id="deny" class="danger">Not mine</button></div>`
     : `<p class="notice">This request was already answered.</p>`
 }
 <p id="status" class="status" role="status" hidden></p>

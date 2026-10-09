@@ -111,7 +111,7 @@ export type NoticeKind =
 
 /** `url` is the nest's address for own-domain nests, and the server's name for relayed servers. */
 export function noticeEmail(to: string, kind: NoticeKind, url?: string): MailMessage {
-  const help = "If this was not you, sign in at https://sync.pairnets.app/account, check your servers and signed-in browsers, and remove anything you do not know.";
+  const help = "If this was not you, sign in at https://sync.pairnets.app/account, check your nests and signed-in browsers, and remove anything you do not know.";
   let subject: string;
   let lines: string[];
   switch (kind) {
@@ -136,16 +136,16 @@ export function noticeEmail(to: string, kind: NoticeKind, url?: string): MailMes
       lines = [`The nest ${url} unlinked itself from your Pairnets account (someone ran "hosted unlink" on that server).`, help];
       break;
     case "server_added":
-      subject = `A server was added to your account: ${url}`;
-      lines = [`The server "${url}" was added to your Pairnets account. Computers you sign in with this account can now choose it.`, help];
+      subject = `A nest was added to your account: ${url}`;
+      lines = [`The nest "${url}" was added to your Pairnets account. Computers you sign in with this account can now sync with it.`, help];
       break;
     case "server_removed":
-      subject = `A server was removed from your account: ${url}`;
-      lines = [`The server "${url}" was removed from your Pairnets account. Its computers no longer reach it through Pairnets; its files stay on the server.`, help];
+      subject = `A nest was removed from your account: ${url}`;
+      lines = [`The nest "${url}" was removed from your Pairnets account. Its computers no longer reach it through Pairnets; its files stay on it.`, help];
       break;
     case "account_deleted":
       subject = "Your Pairnets account was deleted";
-      lines = ["Your Pairnets account and everything stored about it were deleted. Your servers keep their files."];
+      lines = ["Your Pairnets account and everything stored about it were deleted. Your nests keep their files."];
       break;
   }
   return { to, subject, text: `${lines.join("\n\n")}\n`, html: layout(subject, lines) };

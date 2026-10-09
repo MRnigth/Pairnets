@@ -25,6 +25,11 @@ public sealed record AccountSignInResult(Uri ServerUrl, string NestId, string Ne
 /// Allowed in the browser, but the chosen server is not connected right now, so it cannot hand out this computer's key
 /// yet. The flow keeps asking; <see cref="AccountSignInState.Message"/> says so.
 /// </param>
+/// <param name="NoNest">
+/// Allowed in the browser, but the account has no nest yet (cloud/RELAY.md §6, "No nest yet"). The flow keeps asking
+/// and finishes by itself once the account adds one; <see cref="AccountEmail"/> says which account.
+/// </param>
+/// <param name="AccountEmail">The account's address, known once the computer was allowed.</param>
 /// <param name="Result">Set once <see cref="Stage"/> is <see cref="PairingStage.Approved"/>.</param>
 public sealed record AccountSignInState(
     PairingStage Stage,
@@ -33,7 +38,9 @@ public sealed record AccountSignInState(
     DateTimeOffset? ExpiresAt = null,
     string? Message = null,
     bool ServerOffline = false,
-    AccountSignInResult? Result = null)
+    AccountSignInResult? Result = null,
+    bool NoNest = false,
+    string? AccountEmail = null)
 {
     /// <summary>"code expires in 9:41" while waiting.</summary>
     public string ExpiresText(DateTimeOffset now) => PairingState.ExpiresIn(ExpiresAt, now);
@@ -158,6 +165,15 @@ public sealed class AccountSignIn
                             return await FinishAsync(http, answer).ConfigureAwait(false);
                         case "denied":
                             return Set(State with { Stage = PairingStage.Denied, Message = "This computer was turned down in the browser.", ServerOffline = false });
+                        case "no_nest":
+                            // Allowed, but the account has no nest yet: the service holds the sign-in for half an hour
+                            // and this computer joins the nest as soon as the account adds one.
+                            if (!State.NoNest)
+                            {
+                                expires = _clock.GetUtcNow() + NoNestWait;
+                                Set(State with { NoNest = true, ServerOffline = false, AccountEmail = answer.Email?.Trim(), ExpiresAt = expires, Message = NoNestMessage });
+                            }
+                            break;
                         default: // pending
                             if (State.Message is not null || State.ServerOffline)
                                 Set(State with { Message = null, ServerOffline = false });
@@ -187,6 +203,12 @@ public sealed class AccountSignIn
         return State;
     }
 
+    /// <summary>How long the service holds a sign-in allowed for an account with no nest (cloud/RELAY.md §6).</summary>
+    public static readonly TimeSpan NoNestWait = TimeSpan.FromMinutes(30);
+
+    /// <summary>What the window says while the account has no nest yet.</summary>
+    public const string NoNestMessage = "Your account has no nest yet. Set one up, and this computer finishes signing in by itself.";
+
     /// <summary>What the window says while the server cannot be reached to hand out the key.</summary>
     public const string ServerOfflineMessage = "Allowed. " + ServiceErrors.NestOfflineMessage + " Pairnets keeps trying, so this finishes by itself once it answers.";
 
@@ -203,7 +225,7 @@ public sealed class AccountSignIn
                 return Set(State with { Stage = PairingStage.Failed, ServerOffline = false, Message = "Pairnets answered with a server address this app cannot use. Update Pairnets, then try again." });
             var result = new AccountSignInResult(serverUrl, nestId, string.IsNullOrWhiteSpace(nest.Label) ? "Your server" : nest.Label.Trim(),
                 new DeviceKeyGrant(device.Id, device.Name, device.Key), answer.Email?.Trim() ?? string.Empty);
-            return Set(State with { Stage = PairingStage.Approved, Message = null, ServerOffline = false, Result = result });
+            return Set(State with { Stage = PairingStage.Approved, Message = null, ServerOffline = false, NoNest = false, Result = result });
         }
         finally
         {

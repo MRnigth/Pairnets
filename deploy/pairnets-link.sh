@@ -7,7 +7,7 @@
 #   sudo ./install.sh --link     (link an installed server again)
 #
 # It prints a link and a code. Open the link on any device (a phone is fine), sign in to your Pairnets account,
-# check the code and press "Add this server". Nothing is typed into this terminal. Then it writes the tunnel token
+# check the code and press "Add this nest". Nothing is typed into this terminal. Then it writes the tunnel token
 # Pairnets made for this server to /etc/pairnets/tunnel.env, and the server's id and key at Pairnets to
 # /etc/pairnets/relay.env (install.sh moves those into pairnets.env), both root only (mode 600). The device code,
 # the tunnel token and the key are never printed or put on a command line (every local user can read command lines).
@@ -38,7 +38,7 @@ usage() {
 Usage: sudo pairnets-link.sh
 
 Links this server to your Pairnets account (install.sh runs it for you: on a first install, or with --link).
-It prints a link to open on any device; sign in there and press "Add this server".
+It prints a link to open on any device; sign in there and press "Add this nest".
 USAGE
 }
 
@@ -150,7 +150,7 @@ link() {
   echo
   echo "    $link"
   echo
-  echo "Then check that the page shows the code $user_code and press \"Add this server\"."
+  echo "Then check that the page shows the code $user_code and press \"Add this nest\"."
   local minutes=$(( (expires + 59) / 60 )) unit=minutes
   (( minutes != 1 )) || unit=minute
   echo "Waiting for you... (the link works for $minutes $unit; Ctrl+C stops)"
@@ -158,7 +158,7 @@ link() {
   # 3. Wait for the answer, as often as the service allows, until the code expires.
   local deadline=$(( SECONDS + expires )) offline=""
   while :; do
-    (( SECONDS + interval <= deadline )) || die "the link expired before this server was added. Nothing was changed; run the installer again for a new link."
+    (( SECONDS + interval <= deadline )) || die "the link expired before this computer was added. Nothing was changed; run the installer again for a new link."
     sleep "$interval"
     api /v1/servers/poll "{\"deviceCode\":\"$device_code\"}"
     case "$STATUS" in
@@ -166,14 +166,14 @@ link() {
         case "$(json_field status)" in
           pending) ;;
           approved) break ;;
-          denied) die "this server was not added (\"Not mine\" was pressed on the page). Nothing was changed; run the installer again to try once more." ;;
+          denied) die "this computer was not added (\"Not mine\" was pressed on the page). Nothing was changed; run the installer again to try once more." ;;
           *) die "Pairnets gave an answer this script does not understand" ;;
         esac ;;
       429)
         # slow_down: asked too often. Wait 5 seconds longer from now on (as in RFC 8628).
         interval=$(( interval + 5 )) ;;
       400)
-        [[ "$(json_field error)" != expired ]] || die "the link expired before this server was added. Nothing was changed; run the installer again for a new link."
+        [[ "$(json_field error)" != expired ]] || die "the link expired before this computer was added. Nothing was changed; run the installer again for a new link."
         die "$(answer_error)" ;;
       000|5[0-9][0-9])
         # No answer for a moment (the network, or the service is busy): keep trying until the code expires.

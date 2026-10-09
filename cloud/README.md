@@ -78,7 +78,7 @@ Do these in order; nothing here is done yet.
    (custom domain `sync.pairnets.app`) and deploy again.
 8. The public half of the signing key goes into `src/Pairnets.Server/Auth/HostedKeys.cs` (only for servers on their own
    domain); keep a second "next" key offline for rotation.
-9. **Try it** with one server: run the installer, open the link it prints, choose **Add this server**, and check that
+9. **Try it** with one server: run the installer, open the link it prints, choose **Add this nest**, and check that
    `https://sync.pairnets.app/n/<server id>/api/health` answers `ok` within about a minute.
 
 Later:

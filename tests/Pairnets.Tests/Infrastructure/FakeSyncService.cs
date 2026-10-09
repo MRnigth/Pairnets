@@ -160,6 +160,8 @@ public sealed class FakeSyncService : IAsyncDisposable
                 return Error(500, "server_error", "Something went wrong.");
             case "nest_offline":
                 return Error(503, "nest_offline", "Your server is not connected right now. Check that it is on.");
+            case "no_nest":
+                return Results.Json(new { status = "no_nest", email = Email });
             case "approved-without-key":
             {
                 _delivered = true;

@@ -395,7 +395,7 @@ The design is `cloud/RELAY.md`; these are the nest's and the installer's own cho
 * **The installer links on a first install only.** Without options, no `pairnets.env` and nothing
   of Tether's to take over, `install.sh` runs `pairnets-link.sh`; an installed server (it has
   `pairnets.env`) never starts a link, so the self-updater cannot. `--link` (not named in RELAY.md)
-  links an installed server again: after it was removed from the account (Remove this server deletes
+  links an installed server again: after it was removed from the account (Remove this nest from my account deletes
   its tunnel), or to move it from its own domain. It refuses `--public-url`, `--bind`,
   `--cloudflare-tunnel` and any port but 5075; `--cloudflare-tunnel` on a linked server is refused
   too, since only the service can make its tunnel.

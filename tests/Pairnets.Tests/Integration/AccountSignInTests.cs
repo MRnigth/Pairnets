@@ -74,6 +74,30 @@ public sealed class AccountSignInTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task AnAccountWithNoNestYetWaitsForOneThenFinishesByItself()
+    {
+        // Allowed in the browser while the account had no nest: the service says so until the account adds one.
+        foreach (var step in new[] { "pending", "no_nest", "no_nest", "no_nest" })
+            _service.PollScript.Enqueue(step);
+        var flow = Flow(method: "email");
+        var states = new ConcurrentQueue<AccountSignInState>();
+        flow.Changed += states.Enqueue;
+
+        var done = await flow.RunAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(30));
+
+        var waiting = states.First(s => s.NoNest);
+        Assert.Equal(PairingStage.Waiting, waiting.Stage);
+        Assert.Equal(FakeSyncService.Email, waiting.AccountEmail);
+        Assert.Equal(AccountSignIn.NoNestMessage, waiting.Message);
+        // The service holds such a sign-in for half an hour, and the window counts down from that.
+        Assert.StartsWith("code expires in 29:", waiting.ExpiresText(DateTimeOffset.UtcNow.AddSeconds(5)));
+        Assert.Equal(PairingStage.Approved, done.Stage);
+        Assert.False(done.NoNest);
+        Assert.Null(done.Message);
+        Assert.Equal(_service.RelayUrl, done.Result!.ServerUrl);
+    }
+
+    [Fact]
     public async Task TurnedDownInTheBrowserOrTooLateTheSignInSaysSo()
     {
         _service.PollScript.Enqueue("pending");

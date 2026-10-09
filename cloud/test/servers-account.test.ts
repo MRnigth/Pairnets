@@ -112,7 +112,7 @@ describe("the account's servers", () => {
     expect(await h.query("SELECT * FROM nests")).toHaveLength(0);
     expect((await b.call("GET", "/v1/servers")).json).toEqual([]);
     expect((await h.client().call("GET", `/n/${nest.nestId}/api/health`)).json.error).toBe("nest_unknown");
-    expect(h.mailer.to("you@example.com").some((m) => m.subject === "A server was removed from your account: soro")).toBe(true);
+    expect(h.mailer.to("you@example.com").some((m) => m.subject === "A nest was removed from your account: soro")).toBe(true);
     expect(await h.query("SELECT event FROM audit WHERE event = 'server_removed' AND account_id = ?1", accountId)).toHaveLength(1);
     expect((await b.call("DELETE", `/v1/servers/${nest.nestId}`)).status).toBe(404);
   });
@@ -120,15 +120,15 @@ describe("the account's servers", () => {
   it("the account page lists the servers for its script, and keeps own-domain nests in their own section", async () => {
     const { h, b } = await setup();
     const empty = await b.call("GET", "/account");
-    expect(empty.text).toContain("No servers yet.");
+    expect(empty.text).toContain("No nest yet.");
     const nest = await addServer(h, b, { label: "Basement <1>" });
     await linkNest(h, b);
     const page = await b.call("GET", "/account");
     expect(page.status).toBe(200);
     expect(page.text).toContain(`<li class="server" data-server="${nest.nestId}">`);
     expect(page.text).toContain("<strong>Basement &lt;1&gt;</strong>");
-    expect(page.text).toContain('data-action="remove-server">Remove this server</button>');
-    expect(page.text).toContain("Servers on their own address");
+    expect(page.text).toContain('data-action="remove-server">Remove this nest from my account</button>');
+    expect(page.text).toContain("Nests on their own address");
     expect(page.text).toContain("https://nest.example.com");
     expect(page.text).toContain('<script src="/assets/account.js" defer></script>');
     const script = (await b.call("GET", "/assets/account.js")).text;
