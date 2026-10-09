@@ -85,6 +85,9 @@ jobs:
       - name: Type check
         run: npx tsc --noEmit
 
+      - name: Type check the router Worker (cloud/router)
+        run: npx tsc --noEmit -p router
+
       - name: Test (Workers runtime, local D1, no network)
         run: npx vitest run
 
