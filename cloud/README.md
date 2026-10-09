@@ -71,7 +71,9 @@ Do these in order; nothing here is done yet.
 5. **Google:** a web OAuth client with redirect URI `https://sync.pairnets.app/login/google/callback` and scopes
    `openid email`; its id goes in `GOOGLE_CLIENT_ID`. **Turnstile:** a widget for `sync.pairnets.app` (site key in
    `TURNSTILE_SITE_KEY`). **Resend:** the sending domain for `noreply@pairnets.app` and an API key.
-6. **Secrets** (dashboard or `npx wrangler secret put NAME` in `cloud/`): `SIGNING_KEY` (from `npm run keygen`),
+6. **Secrets:** `cd cloud && node scripts/setup-secrets.mjs` makes the random ones and asks you to paste the others
+   (hidden as you type; nothing is shown or saved). Or by hand (dashboard or `npx wrangler secret put NAME` in
+   `cloud/`): `SIGNING_KEY` (from `npm run keygen`),
    `HB_MASTER` and `COOKIE_KEY` (each from `npm run keygen -- --random`), `GOOGLE_CLIENT_SECRET`, `TURNSTILE_SECRET`,
    `RESEND_API_KEY`, `CF_API_TOKEN` (step 2) and `CF_ACCOUNT_ID` (the account's id, on its Overview page).
 7. **Deploy** `pairnets-sync` (`npx wrangler deploy` in `cloud/`), then uncomment the `routes` line in `wrangler.toml`
