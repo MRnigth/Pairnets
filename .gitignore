@@ -499,3 +499,14 @@ screens/
 .dev.vars
 .wrangler/
 cloud/node_modules/
+
+# Local files that hold keys (server env files, certificates, downloaded OAuth clients): never commit them
+*.env
+.env.*
+!.env.example
+.dev.vars.*
+*.pem
+*.key
+*.p12
+client_secret*.json
+credentials.json

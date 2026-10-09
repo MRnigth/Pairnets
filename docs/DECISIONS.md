@@ -481,3 +481,17 @@ yet"), the same in both apps.
 * **Windows screenshots**: the render tool drew everything at 2.25× and cropped it (the bitmap's DPI
   and an extra scale both applied) and lost the logo (it looked for the icon in the tool's own
   files). Both fixed, so the Windows shots match the Mac/Linux ones.
+
+## No ids or keys in the Worker settings file (9 October 2026)
+
+* **The owner asked that no keys show anywhere in the code.** Real secrets were already only in
+  Cloudflare's secret store. Now the ids are too: the Google client id and the Turnstile site key
+  (public, but account-specific) are set with `setup-secrets.mjs` like the secrets, and the code reads
+  them the same way.
+* **The database is found by its name** (`pairnets-sync`), so `wrangler.toml` has no
+  `database_id`: the first `wrangler deploy` created it, later deploys and `d1 migrations apply`
+  look it up by name.
+* **First deploy, same day:** `pairnets-router`, then `pairnets-sync` on the custom domain
+  `sync.pairnets.app`; migrations 0001 and 0002 applied; the generated keys and the account and
+  Google client ids set. The outside keys (Cloudflare API token, Turnstile, Resend, Google client
+  secret) wait for the owner to paste them.

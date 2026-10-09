@@ -5,7 +5,7 @@
 // The API token (CF_API_TOKEN) never leaves the Worker and never appears in an error or a log line: errors carry only
 // the step, the HTTP status and Cloudflare's numeric error codes.
 
-import type { Env } from "./env";
+import { type Env, seamUrl } from "./env";
 
 export const CF_API = "https://api.cloudflare.com/client/v4";
 
@@ -76,7 +76,7 @@ export class CloudflareApi {
       payload = JSON.stringify(body);
     }
     try {
-      resp = await this.fetchFn((this.env.CF_API_URL || CF_API) + path, { method, headers, body: payload });
+      resp = await this.fetchFn(seamUrl(this.env.CF_API_URL, CF_API) + path, { method, headers, body: payload });
     } catch {
       throw new CloudflareError(step, 0, []);
     }

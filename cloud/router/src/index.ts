@@ -1,4 +1,4 @@
-// pairnets-router (RELAY.md section 5). NOTHING IS DEPLOYED.
+// pairnets-router (RELAY.md section 5).
 //
 // It has no route and no workers.dev address: the only way in is the ROUTER service binding of pairnets-sync. Its
 // bindings are one Workers VPC link per relayed nest, N_<nestId> -> that nest's Cloudflare Tunnel, set by pairnets-sync

@@ -30,6 +30,12 @@ patterns=(
   '-----BEGIN [A-Z ]*PRIVATE KEY-----'
   # Cloudflare Tunnel tokens: base64 of {"a":"<account>","t":"<tunnel>","s":"<secret>"}.
   'eyJhIjoi[A-Za-z0-9+/=_-]{20,}'
+  # Keys of the services the Worker uses (cloud/): Resend, a Google OAuth client secret, a real Turnstile key.
+  '(?<![A-Za-z0-9_])re_[A-Za-z0-9]{8,}_[A-Za-z0-9]{16,}'
+  'GOCSPX-[A-Za-z0-9_-]{20,}'
+  '0x4AAAAAAA[A-Za-z0-9_-]{8,}'
+  # The private part of a JSON Web Key.
+  '"d"\s*:\s*"[A-Za-z0-9_-]{40,}"'
 )
 
 case "$mode" in

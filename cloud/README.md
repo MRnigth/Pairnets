@@ -12,8 +12,10 @@ Files never stay on the service: they pass through it to the person's own server
 server's tunnel has no public hostname, so the only way in is the router's private link. Servers on their own domain
 (`install.sh --public-url`) keep working as before; linking them to an account (version 1) is still there.
 
-**Status: nothing is deployed.** There is no `sync.pairnets.app`, no database, no keys, no tunnels and no Google client
-yet. Released servers and apps do not talk to this service. Setting it up needs the owner (checklist below).
+**Status (9 October 2026): live at `https://sync.pairnets.app`.** Both Workers, the database and its tables, the
+generated keys and the two account ids are set. Still to paste in step 6: `CF_API_TOKEN`, `TURNSTILE_SITE_KEY`,
+`TURNSTILE_SECRET`, `RESEND_API_KEY` and `GOOGLE_CLIENT_SECRET`; until then adding a nest and email or Google sign-in
+do not work yet. Released servers and apps do not talk to this service.
 
 ## What is here
 

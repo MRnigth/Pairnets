@@ -5,6 +5,7 @@ import { b64urlEncode, isStrictB64url } from "../b64";
 import type { Ctx } from "../context";
 import { clearCookie, EMAIL_COOKIE, GOOGLE_COOKIE, readCookie, setCookie } from "../cookies";
 import { newId, randomToken, sha256, timingSafeEqual, timingSafeEqualText } from "../crypto";
+import { seamUrl } from "../env";
 import { normaliseEmail, safeNext } from "../formats";
 import {
   DEFAULT_GOOGLE_AUTH_URL,
@@ -110,7 +111,7 @@ export async function googleStartRoute(ctx: Ctx): Promise<Response> {
   const cookie = await signFlowCookie(ctx.env, { s: state, n: nonce, v: verifier, r: next, e: ctx.now + GOOGLE_FLOW_LIFETIME, ra: reauth ? 1 : 0 });
   ctx.setCookies.push(setCookie(GOOGLE_COOKIE, cookie, GOOGLE_FLOW_LIFETIME));
 
-  const u = new URL(ctx.env.GOOGLE_AUTH_URL || DEFAULT_GOOGLE_AUTH_URL);
+  const u = new URL(seamUrl(ctx.env.GOOGLE_AUTH_URL, DEFAULT_GOOGLE_AUTH_URL));
   u.searchParams.set("client_id", ctx.env.GOOGLE_CLIENT_ID ?? "");
   u.searchParams.set("redirect_uri", `${ctx.env.PUBLIC_ORIGIN}/login/google/callback`);
   u.searchParams.set("response_type", "code");
@@ -141,7 +142,7 @@ export async function googleCallbackRoute(ctx: Ctx): Promise<Response> {
 
   let idToken: unknown;
   try {
-    const resp = await ctx.deps.fetch(ctx.env.GOOGLE_TOKEN_URL || DEFAULT_GOOGLE_TOKEN_URL, {
+    const resp = await ctx.deps.fetch(seamUrl(ctx.env.GOOGLE_TOKEN_URL, DEFAULT_GOOGLE_TOKEN_URL), {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" },
       body: new URLSearchParams({

@@ -3,7 +3,7 @@
 
 import { b64urlDecodeStrict, b64urlEncode, b64urlEncodeText, utf8 } from "./b64";
 import type { Ctx } from "./context";
-import type { Env } from "./env";
+import { type Env, seamUrl } from "./env";
 import { timingSafeEqualText } from "./crypto";
 import { normaliseEmail } from "./formats";
 import { cookieKey } from "./ratelimit";
@@ -89,7 +89,7 @@ async function fetchJwks(ctx: Ctx, url: string): Promise<Map<string, CryptoKey>>
 }
 
 async function googleKey(ctx: Ctx, kid: string): Promise<CryptoKey | null> {
-  const url = ctx.env.GOOGLE_JWKS_URL || DEFAULT_GOOGLE_JWKS_URL;
+  const url = seamUrl(ctx.env.GOOGLE_JWKS_URL, DEFAULT_GOOGLE_JWKS_URL);
   if (!jwksCache || jwksCache.url !== url || ctx.now - jwksCache.fetchedAt >= JWKS_MAX_AGE || ctx.now < jwksCache.fetchedAt) {
     jwksCache = { url, fetchedAt: ctx.now, keys: await fetchJwks(ctx, url) };
   }

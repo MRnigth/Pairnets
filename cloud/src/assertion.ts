@@ -46,7 +46,16 @@ let cached: { source: string; key: Promise<SigningKey> } | null = null;
 /** The SIGNING_KEY secret, imported once per isolate. */
 export function signingKeyFromSecret(secret: string): Promise<SigningKey> {
   if (cached && cached.source === secret) return cached.key;
-  const key = (async () => importSigningJwk(JSON.parse(secret)))();
+  const key = (async () => {
+    let jwk: unknown;
+    try {
+      jwk = JSON.parse(secret);
+    } catch {
+      // A fixed message: JSON.parse's own one can quote part of the secret, and errors reach the Worker's logs.
+      throw new Error("SIGNING_KEY is not a JSON key");
+    }
+    return importSigningJwk(jwk);
+  })();
   cached = { source: secret, key };
   key.catch(() => {
     if (cached?.key === key) cached = null;

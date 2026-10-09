@@ -1,4 +1,4 @@
-# pairnets-router (cloud/RELAY.md section 5). NOTHING IS DEPLOYED.
+# pairnets-router (cloud/RELAY.md section 5).
 #
 # Reachable only through the ROUTER service binding of pairnets-sync (../wrangler.toml): no route, no workers.dev
 # address, no preview URLs.

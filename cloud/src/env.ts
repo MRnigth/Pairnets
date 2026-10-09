@@ -32,6 +32,24 @@ export interface Env {
   CF_API_URL?: string;
 }
 
+/**
+ * A test seam's address (CF_API_URL, GOOGLE_*_URL), used only when it points at this machine or a `.test` host;
+ * anything else gets the real address. A mistaken setting in production can then never send a secret (the Cloudflare
+ * token, the Google client secret) to another server, or take Google's signing keys from one.
+ */
+export function seamUrl(value: string | undefined, real: string): string {
+  if (!value) return real;
+  try {
+    const u = new URL(value);
+    const host = u.hostname.toLowerCase();
+    const local = host === "127.0.0.1" || host === "localhost" || host === "[::1]";
+    if ((local && (u.protocol === "http:" || u.protocol === "https:")) || (host.endsWith(".test") && u.protocol === "https:")) return value;
+  } catch {
+    // not a URL
+  }
+  return real;
+}
+
 /** A whole-number variable, or the fallback when it is missing or not a number. */
 export function intVar(value: string | undefined, fallback: number): number {
   const n = Number.parseInt(value ?? "", 10);
