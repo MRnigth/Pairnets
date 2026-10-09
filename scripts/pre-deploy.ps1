@@ -79,6 +79,7 @@ $StepNeeds = @{
 
 # ------------------------------------------------------------------------------------------- the commit
 $Repo = (Resolve-Path $Repo).Path
+if ($SummaryFile -and -not [System.IO.Path]::IsPathRooted($SummaryFile)) { $SummaryFile = Join-Path (Get-Location).Path $SummaryFile }
 $git = (Get-Command git.exe -ErrorAction SilentlyContinue)
 if (-not $git) { Write-Host 'pre-deploy: git is not installed' -ForegroundColor Red; exit 2 }
 function Git([string[]]$Arguments) {
