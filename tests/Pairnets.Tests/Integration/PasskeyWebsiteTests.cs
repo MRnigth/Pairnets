@@ -196,7 +196,10 @@ public sealed class PasskeyWebsiteTests : IAsyncLifetime
         Assert.Equal("nest.pairnets.app", plain.EffectiveRpId);
         Assert.Null(plain.ValidateForServe());
 
-        Assert.Null(new SyncOptions { Token = new string('x', 32), PublicUrl = "https://nest.pairnets.app", PasskeyRpId = "pairnets.app" }.ValidateForServe());
+        Assert.Null(new SyncOptions { Token = new string('x', 32), PublicUrl = "https://nest.example.com", PasskeyRpId = "example.com" }.ValidateForServe());
+        Assert.Null(new SyncOptions { Token = new string('x', 32), PublicUrl = "https://alice.pairnets.app", PasskeyRpId = "alice.pairnets.app" }.ValidateForServe());
+        // Every free name (alice.pairnets.app, bob.pairnets.app) is someone else's nest: never share passkeys across them.
+        Assert.Contains("cannot be pairnets.app", new SyncOptions { Token = new string('x', 32), PublicUrl = "https://alice.pairnets.app", PasskeyRpId = "Pairnets.app" }.ValidateForServe());
         Assert.Contains("PasskeyRpId", new SyncOptions { Token = new string('x', 32), PublicUrl = "https://nest.pairnets.app", PasskeyRpId = "evil.example" }.ValidateForServe());
         Assert.Contains("PasskeyRpId", new SyncOptions { Token = new string('x', 32), PasskeyRpId = "pairnets.app" }.ValidateForServe());
         Assert.Contains("PasskeyRpId", new SyncOptions { Token = new string('x', 32), PublicUrl = "https://nest.pairnets.app", PasskeyRpId = "ts.app" }.ValidateForServe());

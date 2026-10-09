@@ -64,10 +64,16 @@ public sealed class SyncOptions
 
     /// <summary>
     /// The passkey "relying party id" (Sync:PasskeyRpId): the domain passkeys are tied to. Default: the nest's own host name.
-    /// Set it to a parent domain (pairnets.app) only if something else on that domain should share the passkeys.
-    /// It must be the nest's host or a parent of it.
+    /// Set it to a parent domain (example.com) only if something else on that domain should share the passkeys.
+    /// It must be the nest's host or a parent of it, and never <see cref="FreeNameDomain"/>.
     /// </summary>
     public string? PasskeyRpId { get; set; }
+
+    /// <summary>
+    /// The domain of the free names (alice.pairnets.app, from the name service in names/). Each name under it is a
+    /// different person's nest, so passkeys may never be tied to the domain itself: they would work on all of them.
+    /// </summary>
+    public const string FreeNameDomain = "pairnets.app";
 
     // ---- email sign-in links (optional): any SMTP service, e.g. Resend (smtp.resend.com, user "resend", the API key as password)
 
@@ -166,6 +172,8 @@ public sealed class SyncOptions
             var rp = PasskeyRpId.Trim().ToLowerInvariant();
             if (host != rp && !host.EndsWith("." + rp, StringComparison.Ordinal))
                 return $"Sync:PasskeyRpId ({PasskeyRpId}) must be the nest's host name or a parent domain of it ({host}).";
+            if (rp == FreeNameDomain)
+                return $"Sync:PasskeyRpId cannot be {FreeNameDomain}: every name under it is someone else's nest, and a passkey tied to it would work on all of them. Leave it unset.";
         }
         return null;
     }
