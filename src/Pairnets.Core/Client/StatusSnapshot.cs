@@ -128,6 +128,17 @@ public sealed record StatusSnapshot(
     /// <summary>The page where a join request is approved, or null without a website.</summary>
     public string? ReviewUrl(JoinRequest request) => NestUrl is { } url ? $"{url}/link?code={Uri.EscapeDataString(request.Code)}" : null;
 
+    // ---- signed in with a Pairnets account
+
+    /// <summary>
+    /// True when this computer reaches its server through the Pairnets service (https://sync.pairnets.app/n/&lt;nest id&gt;/),
+    /// having signed in with a Pairnets account. Its computers are then managed on the account page (see <see cref="Relay"/>).
+    /// </summary>
+    public bool IsRelay { get; init; }
+
+    /// <summary>The Pairnets account this computer signed in with ("you@example.com"), or null.</summary>
+    public string? AccountEmail { get; init; }
+
     // ---- the server
 
     /// <summary>Last known server info (version, free space, updater), or null before the first answer.</summary>

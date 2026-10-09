@@ -28,6 +28,12 @@ public sealed class ClientSettings
 
     public string? DeviceName { get; set; }
 
+    /// <summary>
+    /// The Pairnets account this computer signed in with ("you@example.com"), for showing; null when it signed in on its
+    /// nest's own website, or uses the shared token. The account's token itself is never kept.
+    /// </summary>
+    public string? AccountEmail { get; set; }
+
     public List<string> ExtraIgnore { get; set; } = [];
 
     public bool StartWithWindows { get; set; }

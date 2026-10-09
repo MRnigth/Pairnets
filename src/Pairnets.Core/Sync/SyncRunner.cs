@@ -608,10 +608,16 @@ public sealed class SyncRunner : IAsyncDisposable
 
     // ------------------------------------------------------------------ SignalR
 
+    /// <summary>
+    /// The push channel's address: "hub" under the server's address, path included, so a relay address
+    /// (https://sync.pairnets.app/n/&lt;nest id&gt;/) gets https://sync.pairnets.app/n/&lt;nest id&gt;/hub.
+    /// </summary>
+    public static Uri HubAddress(Uri serverUrl) => new(Api.PairnetsApiClient.NormalizeBase(serverUrl), "hub");
+
     private async Task ConnectHubAsync(CancellationToken ct)
     {
         _hub = new HubConnectionBuilder()
-            .WithUrl(new Uri(Api.PairnetsApiClient.NormalizeBase(_options.ServerUrl), "hub"), o =>
+            .WithUrl(HubAddress(_options.ServerUrl), o =>
             {
                 o.AccessTokenProvider = () => Task.FromResult<string?>(_options.Token);
                 o.Headers[PairnetsHeaders.DeviceId] = Uri.EscapeDataString(_options.DeviceId);

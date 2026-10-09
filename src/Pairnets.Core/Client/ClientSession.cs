@@ -119,7 +119,8 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
     /// <list type="bullet">
     /// <item>On the shared token, when the nest signs computers in, syncing stops until a person signs this one in.</item>
     /// <item>With its own key, it adopts a name changed on the nest.</item>
-    /// <item>When the nest has an HTTPS name, it moves there, but only if that address is the same server.</item>
+    /// <item>When the nest has an HTTPS name, it moves there, but only if that address is the same server; never away from
+    /// a relay address (signed in with a Pairnets account, the service's address is the only way to the server).</item>
     /// </list>
     /// </summary>
     public async Task CheckAccountAsync(ServerInfo info, CancellationToken ct = default)
@@ -148,7 +149,7 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
                 (next.DeviceName, changed) = (me.Name, true);
                 Activity.Add(ActivityKind.Info, null, $"This computer is now called {me.Name}", _clock);
             }
-            if (!_moveTried && PairnetsApiClient.TryParseServerUrl(hello.PublicUrl, out var publicUrl) && publicUrl is not null
+            if (!_moveTried && !Status.IsRelay && PairnetsApiClient.TryParseServerUrl(hello.PublicUrl, out var publicUrl) && publicUrl is not null
                 && !SameAddress(publicUrl, Settings.ServerUrl))
             {
                 _moveTried = true;
@@ -259,9 +260,10 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
     public event Action<int>? CatchUpCompleted;
 
     /// <summary>Builds and starts a session. <paramref name="runnerOptions"/> overrides timings (tests).</summary>
+    /// <param name="serviceUrl">The Pairnets service whose relay addresses mean "signed in with an account" (tests; by default sync.pairnets.app).</param>
     public static ClientSession Start(ClientSettings settings, string token, ILocalTrash trash, ILoggerFactory? loggers = null,
         string? stateBaseDir = null, Func<RunnerOptions, RunnerOptions>? runnerOptions = null, TimeProvider? clock = null,
-        EngineHooks? hooks = null)
+        EngineHooks? hooks = null, Uri? serviceUrl = null)
     {
         if (!settings.IsComplete)
             throw new InvalidOperationException("Settings are incomplete.");
@@ -272,7 +274,7 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
         var state = new StateDb(Path.Combine(stateDir, "state.db"));
         state.SetMeta(StateDb.MetaFolder, Path.GetFullPath(folder));
         var url = new Uri(settings.ServerUrl!);
-        var api = new PairnetsApiClient(url, token, settings.DeviceName!);
+        var api = new PairnetsApiClient(url, token, settings.DeviceName!, serviceUrl: serviceUrl);
         api.UploadLimit.SetMegabytesPerSecond(settings.UploadLimitMBps);
         api.DownloadLimit.SetMegabytesPerSecond(settings.DownloadLimitMBps);
         var engine = new SyncEngine(new EngineOptions
@@ -289,7 +291,12 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
 
         var session = new ClientSession(settings, token, state, api, engine, runner, clock, loggers.CreateLogger("Pairnets.Session"));
         session.Wire();
-        session._status = session._status with { LimitText = settings.LimitText };
+        session._status = session._status with
+        {
+            LimitText = settings.LimitText,
+            IsRelay = api.IsRelay,
+            AccountEmail = string.IsNullOrWhiteSpace(settings.AccountEmail) ? null : settings.AccountEmail,
+        };
         runner.Start();
         session._infoTimer = new Timer(_ => _ = session.RefreshServerInfoAsync(), null, TimeSpan.Zero, ServerInfoInterval);
         session._devicesTimer = new Timer(_ => _ = session.RefreshDevicesAsync(), null, TimeSpan.Zero, DevicesInterval);
