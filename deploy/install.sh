@@ -2,6 +2,9 @@
 # Pairnets server installer for Ubuntu (the server is "the nest"). Idempotent: run it again to upgrade.
 # The self-updater (update.sh) runs it the same way on every upgrade, without a terminal.
 #
+#   sudo ./install.sh --name alice
+#       first install with a free name, alice.pairnets.app: asks for your email address and the code sent to it,
+#       and the Pairnets name service makes the Cloudflare Tunnel (pairnets-name.sh; nothing to set up in Cloudflare)
 #   sudo ./install.sh --public-url https://sync.example.com
 #       first install: the server listens on 127.0.0.1 only and a Cloudflare Tunnel gives it its public
 #       name, with no open ports (asks for the tunnel token, or reads it from TUNNEL_TOKEN; see docs/HOWTO.md)
@@ -20,12 +23,16 @@ BIND=""
 PORT_GIVEN=""
 TUNNEL=""
 PUBLIC_URL=""
+NAME=""
+EMAIL=""
+RELEASE_NAME=""
 SRC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 INSTALL_DIR=/opt/pairnets
 DATA_DIR=/var/lib/pairnets
 CONF_DIR=/etc/pairnets
 ENV_FILE=$CONF_DIR/pairnets.env
 TUNNEL_ENV=$CONF_DIR/tunnel.env
+NAME_ENV=$CONF_DIR/name.env
 SERVICE=pairnets-server
 TUNNEL_SERVICE=pairnets-tunnel
 
@@ -35,14 +42,20 @@ usage() {
   cat <<'USAGE'
 Usage: sudo ./install.sh [options]
 
+  sudo ./install.sh --name alice
+      First install with a free name: alice.pairnets.app. Asks for your email address and the code
+      sent to it; the tunnel is made for you, with nothing to set up in Cloudflare.
   sudo ./install.sh --public-url https://sync.example.com
-      First install, or a new name for the nest: the public name you gave your Cloudflare Tunnel.
-      Asks for the tunnel token (or reads it from TUNNEL_TOKEN). See docs/HOWTO.md.
+      First install with your own domain, or a new name for the nest: the public name you gave your
+      Cloudflare Tunnel. Asks for the tunnel token (or reads it from TUNNEL_TOKEN). See docs/HOWTO.md.
   sudo ./install.sh
       Upgrade: keeps the data, settings, name and tunnel already configured.
 
 Options:
-  --public-url https://<name>   the nest's public name (sets up the Cloudflare Tunnel)
+  --name <name>                 a free name for the nest: <name>.pairnets.app (sets up the tunnel)
+  --email <address>             with --name: where the code goes (asked for when left out)
+  --release-name                give the free name back (the nest cannot be reached until it has a new one)
+  --public-url https://<name>   your own domain as the nest's public name (sets up the Cloudflare Tunnel)
   --cloudflare-tunnel           set up the tunnel again (new token) for the name already configured
   --bind <ip>                   advanced: listen on this address instead of using the tunnel
   --port <port>                 the port the server listens on (default 5075)
@@ -57,6 +70,8 @@ missing_value() { # missing_value <option>
   case "$1" in
     --public-url) example=https://sync.example.com ;;
     --port) example=5075 ;;
+    --name) example=alice ;;
+    --email) example=you@example.com ;;
   esac
   echo "error: $1 needs a value, for example: $1 $example" >&2
   exit 2
@@ -68,28 +83,54 @@ set_option() { # set_option <option> <value>
     --bind) BIND="$2" ;;
     --port) PORT="$2"; PORT_GIVEN=1 ;;
     --public-url) PUBLIC_URL="$2" ;;
+    --name) NAME="$2" ;;
+    --email) EMAIL="$2" ;;
   esac
 }
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --bind|--port|--public-url)
+    --bind|--port|--public-url|--name|--email)
       # Last on the line, or followed by another option: the value is missing.
       if [[ $# -lt 2 || "$2" == -* ]]; then missing_value "$1"; fi
       set_option "$1" "$2"
       shift 2 ;;
-    --bind=*|--port=*|--public-url=*) set_option "${1%%=*}" "${1#*=}"; shift ;;
+    --bind=*|--port=*|--public-url=*|--name=*|--email=*) set_option "${1%%=*}" "${1#*=}"; shift ;;
     --cloudflare-tunnel) TUNNEL=1; shift ;;
+    --release-name) RELEASE_NAME=1; shift ;;
     -h|--help) usage; exit 0 ;;
     https://*) usage_error "unknown option: $1 (to give the nest this name use: --public-url $1)" ;;
     *) usage_error "unknown option: $1" ;;
   esac
 done
 
+# A free name (--name) and your own domain (--public-url) are two ways to the same thing: one at a time.
+if [[ -n "$NAME" ]]; then
+  [[ -z "$PUBLIC_URL" ]] || usage_error "use --name (a free name like $NAME.pairnets.app) or --public-url (your own domain), not both"
+  [[ -z "$BIND" ]] || usage_error "--name sets up the Cloudflare Tunnel, which listens on 127.0.0.1; leave out --bind"
+  NAME="${NAME,,}"
+  # The same rule as the name service (names/src/names.ts) and pairnets-name.sh.
+  if [[ ! "$NAME" =~ ^[a-z0-9][a-z0-9-]{1,30}[a-z0-9]$ || "$NAME" == *--* ]]; then
+    usage_error "--name takes 3 to 32 letters, digits or hyphens, with no hyphen at the start or end and no two in a row, like: --name alice"
+  fi
+fi
+[[ -z "$EMAIL" || -n "$NAME" ]] || usage_error "--email goes with --name (it is where the code for the free name is sent)"
+if [[ -n "$RELEASE_NAME" && -n "$NAME$EMAIL$PUBLIC_URL$BIND$PORT_GIVEN$TUNNEL" ]]; then
+  usage_error "--release-name goes on its own: sudo ./install.sh --release-name"
+fi
+
 [[ $EUID -eq 0 ]] || die "run as root (sudo $0)"
 [[ -x "$SRC_DIR/pairnets-server" ]] || die "pairnets-server binary not found next to install.sh"
 [[ "$PORT" =~ ^[0-9]+$ ]] || die "invalid port: $PORT"
 command -v systemctl >/dev/null || die "systemd is required"
+
+# Giving the free name back changes nothing else; the nest keeps running and is reached again once it has a name.
+if [[ -n "$RELEASE_NAME" ]]; then
+  NAME_TOOL="$INSTALL_DIR/pairnets-name.sh"
+  [[ -f "$NAME_TOOL" ]] || NAME_TOOL="$SRC_DIR/pairnets-name.sh"
+  [[ -f "$NAME_TOOL" ]] || die "pairnets-name.sh not found next to install.sh"
+  exec bash "$NAME_TOOL" release
+fi
 
 # env_value <key>: the value of <key> in $ENV_FILE, or nothing. Keys match without regard to case, as
 # the server reads them.
@@ -112,6 +153,11 @@ public_name() {
       return 0
     fi
   done
+}
+
+# name_value <key>: a value from $NAME_ENV (the free name, written by pairnets-name.sh), or nothing.
+name_value() {
+  grep -m1 "^$1=" "$NAME_ENV" 2>/dev/null | cut -d= -f2- || true
 }
 
 # 0. Pairnets used to be called Tether. The first time, take over a Tether server on this machine:
@@ -149,6 +195,36 @@ if [[ -f "$ENV_FILE" ]]; then
   EXISTING_URL="$(grep '^ASPNETCORE_URLS=' "$ENV_FILE" | head -n1 | cut -d= -f2- || true)"
 fi
 EXISTING_PUBLIC_URL="$(public_name)"
+
+# 0b. A free name from the Pairnets name service (--name). pairnets-name.sh asks for an email address and the code
+#     sent to it, and keeps the tunnel token (tunnel.env) and the name's key (name.env) in root-only files. From here
+#     on the name goes the same way as --public-url with a token. Upgrades keep both and never claim again.
+CURRENT_NAME="$(name_value PAIRNETS_NAME)"
+if [[ -n "$NAME" ]]; then
+  [[ -f "$SRC_DIR/pairnets-name.sh" ]] || die "pairnets-name.sh not found next to install.sh"
+  # The name service points every tunnel at localhost:5075.
+  [[ -z "$PORT_GIVEN" || "$PORT" == 5075 ]] || die "--name uses port 5075 (where the free name's tunnel delivers); leave out --port"
+  PORT=5075
+  PORT_GIVEN=1
+  if [[ -z "$CURRENT_NAME" ]]; then
+    NAME_ARGS=(claim "$NAME")
+    [[ -z "$EMAIL" ]] || NAME_ARGS+=(--email "$EMAIL")
+    bash "$SRC_DIR/pairnets-name.sh" "${NAME_ARGS[@]}"
+  elif [[ "$CURRENT_NAME" != "$NAME" ]]; then
+    die "this nest already has the name $(name_value PAIRNETS_NAME_URL); to change it, give that one back first: sudo $INSTALL_DIR/pairnets-name.sh release"
+  elif [[ ! -f "$TUNNEL_ENV" ]]; then
+    # The name is this nest's, but its token file is gone: ask the name service for a new token.
+    bash "$SRC_DIR/pairnets-name.sh" rotate
+  else
+    echo "Keeping this nest's name $(name_value PAIRNETS_NAME_URL)"
+  fi
+  PUBLIC_URL="$(name_value PAIRNETS_NAME_URL)"
+  TUNNEL_TOKEN="$(grep -m1 '^TUNNEL_TOKEN=' "$TUNNEL_ENV" 2>/dev/null | cut -d= -f2- || true)"
+  [[ -n "$PUBLIC_URL" && -n "$TUNNEL_TOKEN" ]] || die "the free name was not set up (see above); run this again"
+elif [[ -n "$CURRENT_NAME" && ( -n "$PUBLIC_URL" || -n "$TUNNEL" ) ]]; then
+  # The tunnel belongs to the free name: a token for another tunnel would leave the name pointing nowhere.
+  die "this nest has the free name $(name_value PAIRNETS_NAME_URL). For a new tunnel token use: sudo $INSTALL_DIR/pairnets-name.sh rotate. To use your own domain instead, give the name back first: sudo $INSTALL_DIR/pairnets-name.sh release"
+fi
 
 if [[ -n "$PUBLIC_URL" ]]; then
   PUBLIC_URL="${PUBLIC_URL%/}"
@@ -225,6 +301,10 @@ done
 # The self-updater (runs as root only when the server asks for it; see DEPLOY.md).
 if [[ -f "$SRC_DIR/update.sh" ]]; then
   install -m 0755 -o root -g root "$SRC_DIR/update.sh" "$INSTALL_DIR/update.sh"
+fi
+# The free name's tool (status, rotate, release), for later.
+if [[ -f "$SRC_DIR/pairnets-name.sh" ]]; then
+  install -m 0755 -o root -g root "$SRC_DIR/pairnets-name.sh" "$INSTALL_DIR/pairnets-name.sh"
 fi
 
 # 3. Environment file. The shared token (for older apps) is generated once, kept on upgrades and never
@@ -356,8 +436,13 @@ if [[ -n "$TUNNEL" && -n "$NEST_URL" && "$LOCAL_HEALTH" == ok ]]; then
   if [[ "$TUNNEL_HEALTH" == failed ]]; then
     echo "WARNING: $NEST_URL/api/health did not answer through the tunnel yet. Check:" >&2
     echo "         - the tunnel runs: sudo systemctl status $TUNNEL_SERVICE (log: sudo journalctl -u $TUNNEL_SERVICE -n 50)" >&2
-    echo "         - in the Cloudflare dashboard the tunnel has a public hostname $NEST_URL -> HTTP localhost:$PORT" >&2
-    echo "         - Bot Fight Mode is off for the domain (Security > Bots)" >&2
+    if [[ -f "$NAME_ENV" ]]; then
+      # A free name: Cloudflare is set up by the name service, so there is nothing to check in a dashboard.
+      echo "         - a brand-new name can take a few minutes to work everywhere; try: curl $NEST_URL/api/health" >&2
+    else
+      echo "         - in the Cloudflare dashboard the tunnel has a public hostname $NEST_URL -> HTTP localhost:$PORT" >&2
+      echo "         - Bot Fight Mode is off for the domain (Security > Bots)" >&2
+    fi
   fi
 fi
 
@@ -400,6 +485,9 @@ echo "  Updater: pairnets-update.path is ${UPDATER_STATE:-unknown} (should be: a
 if [[ -n "$TUNNEL_STATE" ]]; then
   echo "  Tunnel:  $TUNNEL_SERVICE is $TUNNEL_STATE (should be: active)"
 fi
+if [[ -f "$NAME_ENV" ]]; then
+  echo "  Name:    a free name; its key is in $NAME_ENV (root only: keep a copy somewhere safe)"
+fi
 echo
 if [[ "$LOCAL_HEALTH" == failed ]]; then
   [[ -z "$NEST_URL" ]] || echo "Your nest's address: $NEST_URL"
@@ -410,7 +498,7 @@ fi
 if [[ -z "$NEST_URL" ]]; then
   # Advanced --bind without a public name: no website, so only the shared token works.
   echo "This nest has no public name, so it has no website and the apps cannot sign in with the browser."
-  echo "Give it one with: sudo ./install.sh --public-url https://sync.example.com"
+  echo "Give it one with: sudo ./install.sh --name <name> (a free name), or --public-url https://sync.example.com"
   echo "Until then only older Pairnets apps connect, with the address http://$BIND:$PORT/ and the shared"
   echo "token kept in $ENV_FILE (show it with: sudo grep SYNC_TOKEN $ENV_FILE)."
   exit 0
