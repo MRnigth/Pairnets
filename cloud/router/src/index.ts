@@ -42,6 +42,8 @@ export async function route(req: Request, env: RouterEnv): Promise<Response> {
   const headers = new Headers(req.headers);
   headers.delete("X-Pairnets-Route");
   headers.delete("Host"); // the runtime sets it for 127.0.0.1:5075
+  // Hop-by-hop headers belong to the previous connection; Expect: 100-continue would draw a 1xx answer from the nest.
+  for (const name of ["Expect", "Keep-Alive", "Proxy-Connection", "TE", "Trailer", "Transfer-Encoding"]) headers.delete(name);
   const method = req.method.toUpperCase();
   try {
     return await link.fetch(`${NEST_ORIGIN}${url.pathname}${url.search}`, {

@@ -17,8 +17,15 @@ export const RELAY_PER_MINUTE = 600;
 /** Where relayed requests are addressed; the router uses only the path and query. */
 const ROUTER_BASE = "https://pairnets-router";
 
-/** Request headers that never reach the nest (plus every CF-* header). Host is the runtime's own. */
-const STRIP = new Set(["cookie", "host", "x-pairnets-client-ip", "x-pairnets-route", "x-pairnets-sig", "x-pairnets-nonce", "x-pairnets-ts", "x-pairnets-nest"]);
+/**
+ * Request headers that never reach the nest (plus every CF-* header). Host is the runtime's own. The hop-by-hop ones
+ * belong to the caller's connection only: `Expect: 100-continue` (the apps send it with every single-request upload)
+ * would make the nest answer "100 Continue" to the relay, which cannot pass a 1xx answer on.
+ */
+const STRIP = new Set([
+  "cookie", "host", "x-pairnets-client-ip", "x-pairnets-route", "x-pairnets-sig", "x-pairnets-nonce", "x-pairnets-ts", "x-pairnets-nest",
+  "expect", "keep-alive", "proxy-connection", "te", "trailer", "transfer-encoding",
+]);
 
 const RELAY_PATH_RE = /^\/n\/([^/]*)(?:\/(.*))?$/s;
 

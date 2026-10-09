@@ -33,6 +33,8 @@ describe("relay", () => {
         "X-Pairnets-Nonce": "forged",
         "X-Pairnets-Ts": "1",
         "X-Pairnets-Nest": "forged",
+        Expect: "100-continue",
+        TE: "trailers",
       },
     });
     expect(r.status, r.text).toBe(200);
@@ -42,7 +44,9 @@ describe("relay", () => {
     expect(got["x-custom"]).toBe("kept");
     expect(got["content-type"]).toBe("application/json");
     expect(got["x-pairnets-client-ip"]).toBe("198.51.100.80"); // Cloudflare's view of the caller, not what it sent
-    for (const gone of ["cookie", "cf-ray", "cf-ipcountry", "cf-connecting-ip", "x-pairnets-route", "x-pairnets-sig", "x-pairnets-nonce", "x-pairnets-ts", "x-pairnets-nest"]) {
+    // Expect: 100-continue (sent by the apps with every single-request upload) stays on the caller's side: the nest
+    // would answer 100 Continue, which a Worker cannot pass on (found in a local end-to-end run).
+    for (const gone of ["cookie", "cf-ray", "cf-ipcountry", "cf-connecting-ip", "x-pairnets-route", "x-pairnets-sig", "x-pairnets-nonce", "x-pairnets-ts", "x-pairnets-nest", "expect", "te"]) {
       expect(got[gone], gone).toBeUndefined();
     }
     // The router was asked for exactly this nest.

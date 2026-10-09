@@ -30,7 +30,7 @@ describe("the router Worker (cloud/router)", () => {
     const other = recordingLink(() => new Response("wrong nest"));
     const req = new Request("https://pairnets-router/api/files/a%20b?x=1&y=2", {
       method: "PUT",
-      headers: { "X-Pairnets-Route": NEST, Host: "sync.pairnets.app", Authorization: "Bearer k", "X-Pairnets-Client-IP": "198.51.100.1" },
+      headers: { "X-Pairnets-Route": NEST, Host: "sync.pairnets.app", Authorization: "Bearer k", "X-Pairnets-Client-IP": "198.51.100.1", Expect: "100-continue" },
       body: "payload",
     });
     const resp = await route(req, { [`N_${NEST}`]: link, N_nst_testnest000000000000000002: other });
@@ -47,6 +47,7 @@ describe("the router Worker (cloud/router)", () => {
     expect(sent.headers.get("Authorization")).toBe("Bearer k");
     expect(sent.headers.get("X-Pairnets-Client-IP")).toBe("198.51.100.1");
     expect(sent.headers.get("Host")).not.toBe("sync.pairnets.app");
+    expect(sent.headers.get("Expect")).toBeNull(); // hop-by-hop: it would draw a 100 Continue from the nest
   });
 
   it("answers 404 nest_unknown without a link, 503 nest_offline when the link fails, both marked as its own", async () => {
