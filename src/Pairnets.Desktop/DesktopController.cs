@@ -298,7 +298,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
         SettingsStore.Save(SettingsStore.DefaultPath, _settings);
         _dirty = true;
         if (!removed)
-            await Dialogs.InfoAsync(_window, "Pairnets", "Signed out here, but your nest could not be told. Remove this computer on your nest's Devices page so its key stops working there too.");
+            await Dialogs.InfoAsync(_window, "Pairnets", "Signed out here, but your nest could not be told. " + Relay.RemoveByHandHint(_settings.ServerUrl));
         _window?.Navigate(MainPage.Overview);
         ShowSignIn();
     }
@@ -321,6 +321,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
         try
         {
             var hadOwnKey = _settings.HasOwnKey;
+            var serverUrl = _settings.ServerUrl;
             var removed = false;
             try
             {
@@ -342,7 +343,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
                 notes.Add("Start at login could not be turned off: " + ex.Message);
             }
             if (hadOwnKey && !removed)
-                notes.Add("Your nest could not be told. Remove this computer on your nest's Devices page so its key stops working there too.");
+                notes.Add("Your nest could not be told. " + Relay.RemoveByHandHint(serverUrl));
             _log.LogInformation("Pairnets was reset on this computer ({Folders} sync folder(s) cleared, {Problems} problem(s))", result.StateFoldersRemoved, result.Problems.Count);
 
             _settings = new ClientSettings();

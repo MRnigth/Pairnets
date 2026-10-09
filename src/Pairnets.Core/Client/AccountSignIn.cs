@@ -68,6 +68,7 @@ public sealed class AccountSignIn
 
     private readonly string _name;
     private readonly string? _method;
+    private readonly string? _email;
     private readonly Uri _service;
     private readonly TimeProvider _clock;
     private readonly HttpMessageHandler? _handler;
@@ -77,15 +78,31 @@ public sealed class AccountSignIn
     /// <param name="method">"email" or "google": the button pressed in the app, so the page starts that way (anything else is left out).</param>
     /// <param name="service">The Pairnets service (by default <see cref="Relay.DefaultServiceUrl"/>; tests use a stand-in).</param>
     /// <param name="interval">How often to ask (tests); by default what the service says.</param>
+    /// <param name="email">
+    /// The address typed in the app next to "Continue with email", passed on to the page like the nest's own sign-in
+    /// does (<see cref="Nest.ApprovalLink"/>), so it need not be typed twice. Only with <paramref name="method"/> "email"
+    /// and only when it looks like an address.
+    /// </param>
     public AccountSignIn(string name, string? method = null, Uri? service = null, TimeProvider? clock = null,
-        HttpMessageHandler? handler = null, TimeSpan? interval = null)
+        HttpMessageHandler? handler = null, TimeSpan? interval = null, string? email = null)
     {
         _name = CleanName(name);
         _method = method is "email" or "google" ? method : null;
+        _email = _method == "email" && Nest.LooksLikeEmail(email) ? email!.Trim() : null;
         _service = PairnetsApiClient.NormalizeBase(service ?? Relay.DefaultServiceUrl);
         _clock = clock ?? TimeProvider.System;
         _handler = handler;
         _interval = interval;
+    }
+
+    /// <summary>"you@example.com" → "y•••@example.com": the account, as the "no nest yet" screen shows it. Null when there is none.</summary>
+    public static string? MaskEmail(string? address)
+    {
+        var trimmed = address?.Trim();
+        if (string.IsNullOrEmpty(trimmed))
+            return null;
+        var at = trimmed.IndexOf('@', StringComparison.Ordinal);
+        return at <= 0 ? "•••" : trimmed[0] + "•••" + trimmed[at..];
     }
 
     public AccountSignInState State { get; private set; } = new(PairingStage.Starting);
@@ -263,6 +280,8 @@ public sealed class AccountSignIn
             : $"{Relay.Origin(_service)}/app?code={Uri.EscapeDataString(start.UserCode!)}";
         if (_method is not null)
             link += (link.Contains('?', StringComparison.Ordinal) ? "&" : "?") + "method=" + _method;
+        if (_email is not null)
+            link += "&email=" + Uri.EscapeDataString(_email);
         return link;
     }
 

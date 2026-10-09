@@ -219,7 +219,7 @@ public sealed class TrayController : ITrayActions, IDisposable
         SettingsStore.Save(SettingsStore.DefaultPath, _settings);
         _dirty = true;
         if (!removed)
-            MessageBox.Show("Signed out here, but your nest could not be told. Remove this computer on your nest's Devices page so its key stops working there too.",
+            MessageBox.Show("Signed out here, but your nest could not be told. " + Relay.RemoveByHandHint(_settings.ServerUrl),
                 "Pairnets", MessageBoxButton.OK, MessageBoxImage.Warning);
         _window?.Navigate(MainPage.Overview);
         ShowSettings(firstRun: true);
@@ -244,6 +244,7 @@ public sealed class TrayController : ITrayActions, IDisposable
         try
         {
             var hadOwnKey = _settings.HasOwnKey;
+            var serverUrl = _settings.ServerUrl;
             var removed = false;
             try
             {
@@ -265,7 +266,7 @@ public sealed class TrayController : ITrayActions, IDisposable
                 notes.Add("Start with Windows could not be turned off: " + ex.Message);
             }
             if (hadOwnKey && !removed)
-                notes.Add("Your nest could not be told. Remove this computer on your nest's Devices page so its key stops working there too.");
+                notes.Add("Your nest could not be told. " + Relay.RemoveByHandHint(serverUrl));
             _log.LogInformation("Pairnets was reset on this computer ({Folders} sync folder(s) cleared, {Problems} problem(s))", result.StateFoldersRemoved, result.Problems.Count);
 
             _settings = new ClientSettings();
