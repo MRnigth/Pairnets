@@ -717,7 +717,9 @@ payload `{s: state, n: nonce, v: PKCE verifier, r: next, e: expiry, ra: reauth f
 Every `POST`, `PATCH`, `PUT` or `DELETE` MUST carry `Origin` exactly equal to `PUBLIC_ORIGIN`; missing or different →
 **403** `{error:"bad_origin"}`. Only these paths are exempt, and they MUST NOT read any cookie (they authenticate by
 code, HMAC or Bearer token): `/v1/claim`, `/v1/nest/confirm`, `/v1/nest/unlink`, `/v1/heartbeat`, `/v1/app/start`,
-`/v1/app/poll`, `/v1/app/logout`.
+`/v1/app/poll`, `/v1/app/logout`. Version 2 (`RELAY.md`) adds `/v1/servers/start` and `/v1/servers/poll` (the
+installer, authenticated by its device code). The relay `/n/*` is outside this rule altogether: it reads no cookie, passes
+none on (the `Cookie` header is removed) and is meant for apps, not browsers.
 
 `GET` never changes account state, except `GET /nest-login` (issues an assertion, delivered only to the registered
 address) and `GET /login/google/callback` (protected by state, nonce, PKCE and the signed cookie).
@@ -735,7 +737,7 @@ address) and `GET /login/google/callback` (protected by state, nonce, PKCE and t
 | `GET /nest-login` | 1A | §3.2 |
 
 `next` (everywhere on the service) MUST match `^/(account|app(\?code=[0-9A-Za-z-]{1,16})?|nest-login\?[^#\s]{1,600})$`;
-anything else becomes `/account`.
+anything else becomes `/account`. Version 2 adds `/add` and `/add?code=` (same code pattern as `/app`).
 
 ### 6.5 Browser sign-in `[1A]`
 
