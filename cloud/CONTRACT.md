@@ -2,6 +2,10 @@
 
 Status: **draft for building, nothing deployed.** Version 1 (2026-10-08).
 
+> **Version 2 (`RELAY.md`) takes precedence:** the service moves to `https://sync.pairnets.app`, and nests are reached
+> through the service instead of on names of their own. Version 1's nest login round trip (§3) and claim codes (§4)
+> remain only for nests on their own domain.
+
 This file is the single agreement between the two sides of Pairnets Cloud:
 
 - **the service**: a Cloudflare Worker `pairnets-id` at `https://id.pairnets.app` (TypeScript in `cloud/`, D1 database, Cron);
