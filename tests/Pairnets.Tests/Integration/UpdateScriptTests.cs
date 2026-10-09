@@ -68,10 +68,12 @@ public class UpdateScriptTests : IDisposable
             return;
         // Fake values only. The tunnel token is built here so no token-shaped text sits in the repo.
         var tunnelToken = "eyJ" + "hIjoi" + new string('Q', 64) + "==";
+        var deviceCode = "psd_" + new string('d', 43);
         string[] secrets =
         [
             "fake.shared.token", "fake.sync.value", "fake.tunnel.value", tunnelToken, "fake.setup.code",
             "fake.smtp.pass", "fake.google.secret", "first.fake.one", "second.fake.one", "fake.query.token",
+            "fake.relay.key", deviceCode,
         ];
         string[] lines =
         [
@@ -84,6 +86,8 @@ public class UpdateScriptTests : IDisposable
             "Sync__GoogleClientSecret=fake.google.secret",
             "SYNC_TOKEN=first.fake.one TUNNEL_TOKEN=second.fake.one",
             "https://sync.example.com/link?token=fake.query.token&code=fake.setup.code",
+            "Sync__RelayKey=fake.relay.key",
+            "polling with " + deviceCode,
             "Keeping the configured address 127.0.0.1:5075",
         ];
         var script = "#!/bin/sh\n" + string.Concat(lines.Select(l => $"echo '{l}'\n")) + "echo 'SYNC_TOKEN=fake.sync.value' >&2\n";
@@ -102,6 +106,8 @@ public class UpdateScriptTests : IDisposable
         Assert.Contains("/setup#code=(hidden)", log);
         Assert.Contains("Sync__SmtpPassword=(hidden)", log);
         Assert.Contains("Sync__GoogleClientSecret=(hidden)", log);
+        Assert.Contains("Sync__RelayKey=(hidden)", log);
+        Assert.Contains("polling with (hidden)", log);
         Assert.Contains("Keeping the configured address 127.0.0.1:5075", log); // everything else is kept as it was
     }
 

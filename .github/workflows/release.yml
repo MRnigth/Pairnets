@@ -47,10 +47,10 @@ jobs:
       - name: Package
         run: |
           cp deploy/install.sh deploy/update.sh deploy/pairnets-server.service deploy/pairnets-update.service deploy/pairnets-update.path deploy/pairnets-update.timer \
-             deploy/pairnets-tunnel.service deploy/pairnets.env.example dist/pairnets-server-linux-x64/
+             deploy/pairnets-tunnel.service deploy/pairnets.env.example deploy/pairnets-link.sh dist/pairnets-server-linux-x64/
           echo "${{ steps.v.outputs.version }}" > dist/pairnets-server-linux-x64/VERSION
           cp docs/DEPLOY.md dist/pairnets-server-linux-x64/DEPLOY.md
-          chmod +x dist/pairnets-server-linux-x64/install.sh dist/pairnets-server-linux-x64/update.sh dist/pairnets-server-linux-x64/pairnets-server
+          chmod +x dist/pairnets-server-linux-x64/install.sh dist/pairnets-server-linux-x64/update.sh dist/pairnets-server-linux-x64/pairnets-link.sh dist/pairnets-server-linux-x64/pairnets-server
           tar -C dist -czf dist/pairnets-server-linux-x64.tar.gz pairnets-server-linux-x64
       - uses: actions/upload-artifact@v4
         with:

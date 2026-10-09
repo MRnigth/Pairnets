@@ -28,14 +28,16 @@ log() { printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*"; }
 
 # Secrets never reach the log, however many share a line: the sync token (install.sh never prints it,
 # but be sure), the Cloudflare tunnel token (also bare: it is base64 JSON, so it starts with eyJ),
-# one-time setup and sign-in links, and the Cloudflare, mail and Google credentials install.sh may handle.
+# one-time setup and sign-in links, the Cloudflare, mail and Google credentials install.sh may handle,
+# and a linked server's key and device code from Pairnets (install.sh never prints those either).
 redact() {
   sed -E \
     -e 's/((token|secret|password)[[:space:]]*:[[:space:]]*)[^[:space:]]+/\1(hidden)/gI' \
     -e 's/([?&#][A-Za-z_]*(code|token|secret)=)[^[:space:]&]+/\1(hidden)/gI' \
-    -e 's/([A-Za-z0-9_]*(token|secret|password|passwd|api_?key)[A-Za-z0-9_]*[[:space:]]*=[[:space:]]*)[^[:space:]]+/\1(hidden)/gI' \
+    -e 's/([A-Za-z0-9_]*(token|secret|password|passwd|api_?key|relay_?key|nest_?key)[A-Za-z0-9_]*[[:space:]]*=[[:space:]]*)[^[:space:]]+/\1(hidden)/gI' \
     -e 's/(Bearer[[:space:]]+)[^[:space:]"]+/\1(hidden)/gI' \
-    -e 's%eyJ[A-Za-z0-9+/=_.-]{20,}%(hidden)%g'
+    -e 's%eyJ[A-Za-z0-9+/=_.-]{20,}%(hidden)%g' \
+    -e 's%psd_[A-Za-z0-9_-]{20,}%(hidden)%g'
 }
 
 json_escape() { local s=${1//\\/\\\\}; s=${s//\"/\\\"}; printf '%s' "${s//$'\n'/ }"; }
