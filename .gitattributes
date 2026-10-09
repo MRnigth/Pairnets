@@ -8,3 +8,4 @@
 *.timer                       text eol=lf
 deploy/pairnets.env.example   text eol=lf
 deploy/macos/Info.plist       text eol=lf
+scripts/deploy-gate/pre-push      text eol=lf
