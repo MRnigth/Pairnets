@@ -66,14 +66,14 @@
         <div class="card"><h3>Windows</h3><p class="muted small">Windows 10 and 11, 64-bit.</p><div class="row"><a class="button accent" href="/download/windows">Installer</a><a class="button" href="/download/windows-portable">No installer (.zip)</a></div></div>
         <div class="card"><h3>Mac</h3><p class="muted small">macOS 11 or newer. Not notarised yet: right-click → Open the first time, or use the one-line install.</p><div class="row"><a class="button accent" href="/download/mac-apple-silicon">Apple silicon</a><a class="button" href="/download/mac-intel">Intel</a></div></div>
         <div class="card"><h3>Linux desktop</h3><p class="muted small">64-bit, with a system tray.</p><div class="row"><a class="button accent" href="/download/linux">Download (.tar.gz)</a></div></div>
-        <div class="card"><h3>Your server (your nest)</h3><p class="muted small">Any always-on Ubuntu machine. Make a free Cloudflare Tunnel for its name, then one command:</p><pre><code>curl -fsSL https://pairnets.app/get.sh | sudo bash -s -- --public-url https://nest.pairnets.app</code></pre><p class="small"><a href="/docs">The guide</a> walks through the tunnel step (about 15 minutes in all).</p></div>
+        <div class="card"><h3>Your nest (your own server)</h3><p class="muted small">Any always-on Ubuntu computer. Run one command, then open the link it shows and add the nest to your Pairnets account. No domain, no Cloudflare account.</p><pre><code>curl -fsSL https://pairnets.app/get.sh | sudo bash</code></pre><p class="small"><a href="/docs">The guide</a> has the details, and a way to use your own domain instead.</p></div>
       </div>
     </section>
   </div>
 </main>
 <footer>
   <div class="wrap">
-    <p>pairnets.app only serves these pages. It has no accounts and never sees your files or your sign-in: your nest is your own server, and only computers you have approved can get in.</p>
+    <p>pairnets.app only serves these pages. Your Pairnets account lives at sync.pairnets.app, which connects your computers to your nest. Your files are stored only on your nest: they pass through sync.pairnets.app on the way and are never kept there. Only computers you have allowed can get in.</p>
     <p>© 2026 Pairnets · <a href="/source">Source code</a> · <a href="/docs">Guide</a> · MIT licence</p>
   </div>
 </footer>
