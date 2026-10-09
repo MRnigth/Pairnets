@@ -48,8 +48,7 @@ $Log = Join-Path $WslHome 'testbox.log'
 # own name (wsl --install --name/--location). Tried in order; the first that answers wins.
 $RootfsUrls = @(
     'https://cloud-images.ubuntu.com/wsl/releases/24.04/current/ubuntu-noble-wsl-amd64-24.04lts.rootfs.tar.gz',
-    'https://cloud-images.ubuntu.com/wsl/releases/noble/current/ubuntu-noble-wsl-amd64-wsl.rootfs.tar.gz',
-    'https://cloud-images.ubuntu.com/wsl/noble/current/ubuntu-noble-wsl-amd64-wsl.rootfs.tar.gz'
+    'https://cloud-images.ubuntu.com/wsl/releases/noble/current/ubuntu-noble-wsl-amd64-wsl.rootfs.tar.gz'
 )
 
 New-Item -ItemType Directory -Force -Path $WslHome | Out-Null

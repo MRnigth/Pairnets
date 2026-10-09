@@ -191,6 +191,13 @@ function Write-PdText([string]$Path, [string]$Text) {
     [System.IO.File]::WriteAllText($Path, ($Text -replace "`r`n", "`n"), (New-Object System.Text.UTF8Encoding($false)))
 }
 
+# Deletes a folder tree, also with paths longer than 260 characters (build output), never throwing.
+function Remove-PdTree([string]$Path) {
+    if (-not (Test-Path $Path)) { return }
+    $full = [System.IO.Path]::GetFullPath($Path)
+    Invoke-PdNative -File 'cmd.exe' -Arguments @('/d', '/c', 'rd', '/s', '/q', ('\\?\' + $full)) -Quiet -TimeoutSeconds 600 | Out-Null
+}
+
 # Git for Windows' bash (never C:\Windows\System32\bash.exe, which is WSL's).
 function Get-PdGitBash {
     $candidates = @()

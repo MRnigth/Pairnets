@@ -668,10 +668,10 @@ try {
     # A clean checkout of exactly this commit.
     if (Test-Path $Work) {
         Invoke-PdNative -File 'git.exe' -Arguments @('-C', $Repo, 'worktree', 'remove', '--force', $Work) -Quiet -Log $MainLog | Out-Null
-        if (Test-Path $Work) { & cmd.exe /d /c rd /s /q "\\?\$Work" 2>$null | Out-Null }
+        if (Test-Path $Work) { Remove-PdTree $Work }
     }
     Invoke-PdNative -File 'git.exe' -Arguments @('-C', $Repo, 'worktree', 'prune') -Quiet -Log $MainLog | Out-Null
-    $r = Invoke-PdNative -File 'git.exe' -Arguments @('-C', $Repo, 'worktree', 'add', '--detach', $Work, $Sha) -Quiet -Log $MainLog
+    $r =Invoke-PdNative -File 'git.exe' -Arguments @('-C', $Repo, 'worktree', 'add', '--detach', $Work, $Sha) -Quiet -Log $MainLog
     if ($r.ExitCode -ne 0) { throw "git worktree add failed: $($r.Output.Trim())" }
     $worktreeAdded = $true
 
@@ -726,7 +726,7 @@ try {
     if ($worktreeAdded -or (Test-Path $Work)) {
         Invoke-PdNative -File 'dotnet.exe' -Arguments @('build-server', 'shutdown') -Quiet -TimeoutSeconds 120 | Out-Null
         Invoke-PdNative -File 'git.exe' -Arguments @('-C', $Repo, 'worktree', 'remove', '--force', $Work) -Quiet -Log $MainLog -TimeoutSeconds 600 | Out-Null
-        if (Test-Path $Work) { & cmd.exe /d /c rd /s /q "\\?\$Work" 2>$null | Out-Null }
+        if (Test-Path $Work) { Remove-PdTree $Work }
         Invoke-PdNative -File 'git.exe' -Arguments @('-C', $Repo, 'worktree', 'prune') -Quiet -Log $MainLog | Out-Null
     }
 }
