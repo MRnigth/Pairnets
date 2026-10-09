@@ -494,3 +494,8 @@ publish/
 dist/
 logs/
 screens/
+
+# Name service Worker (names/)
+names/node_modules/
+names/.wrangler/
+names/.dev.vars

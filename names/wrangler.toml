@@ -1,0 +1,50 @@
+# Pairnets names (names/README.md): free names like alice.pairnets.app, each with its own Cloudflare Tunnel.
+# NOTHING IS DEPLOYED.
+#
+# Every id below is a placeholder. Before a first deploy the owner creates the D1 database and puts its real id here,
+# sets the secrets listed at the bottom, and attaches the custom domain names.pairnets.app.
+# The tests never read this file's secrets: they make up their own while they run.
+
+name = "pairnets-names"
+main = "src/index.ts"
+compatibility_date = "2026-08-15"
+workers_dev = false
+
+# Later, when names.pairnets.app exists:
+# routes = [{ pattern = "names.pairnets.app", custom_domain = true }]
+
+[vars]
+# The zone the names live in: <name>.BASE_DOMAIN. CF_ZONE_ID (a secret below) must be this zone's id.
+BASE_DOMAIN = "pairnets.app"
+MAIL_FROM = "Pairnets <noreply@pairnets.app>"
+# A Free zone made after 2024-09-01 holds 200 DNS records, and pairnets.app already uses some for the website and
+# email: stop well before that. (Pro: 3,500 records. Cloudflare: 1,000 tunnels per account, whatever the plan.)
+MAX_NAMES = "180"
+# New names per UTC day, all users together.
+DAILY_NAMES = "40"
+# Code emails per UTC day. Resend's free plan sends 100 a day, shared with the account service (id.pairnets.app).
+MAIL_DAILY_LIMIT = "40"
+# "1" = emergency switch: no new names (rotate and give back still work).
+NAMES_PAUSED = "0"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "pairnets-names"
+database_id = "00000000-0000-0000-0000-000000000000"
+migrations_dir = "migrations"
+
+[triggers]
+# Hourly: expired email codes, old counters and events, and any tunnel or DNS record a failed step left behind
+# (src/cron.ts).
+crons = ["23 * * * *"]
+
+# Secrets: set them in the Cloudflare dashboard (Workers > pairnets-names > Settings > Variables and Secrets) or with
+# `npx wrangler secret put NAME`. Locally they go in names/.dev.vars, which git ignores. Never put them in this file.
+#
+#   CF_API_TOKEN    a Cloudflare API token with exactly: Account > Cloudflare Tunnel > Edit, and
+#                   Zone > DNS > Edit for the BASE_DOMAIN zone only. It never leaves this Worker.
+#   CF_ACCOUNT_ID   the Cloudflare account that owns the tunnels
+#   CF_ZONE_ID      the BASE_DOMAIN zone's id (Overview page of the domain, right column)
+#   HASH_KEY        base64url of 32 random bytes: keys the email-code checks and the rate-limit buckets
+#                   (node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))")
+#   RESEND_API_KEY  a Resend sending key for pairnets.app (a separate key from the account service's)
