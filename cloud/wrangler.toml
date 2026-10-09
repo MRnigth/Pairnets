@@ -27,6 +27,7 @@ HOSTED_LOGIN_DISABLED = "0"
 # GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 # GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
 # GOOGLE_JWKS_URL = "https://www.googleapis.com/oauth2/v3/certs"
+# CF_API_URL = "http://127.0.0.1:8790/client/v4"   # local end-to-end runs only: a stand-in Cloudflare API
 
 [[d1_databases]]
 binding = "DB"

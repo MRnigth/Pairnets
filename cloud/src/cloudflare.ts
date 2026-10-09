@@ -76,7 +76,7 @@ export class CloudflareApi {
       payload = JSON.stringify(body);
     }
     try {
-      resp = await this.fetchFn(CF_API + path, { method, headers, body: payload });
+      resp = await this.fetchFn((this.env.CF_API_URL || CF_API) + path, { method, headers, body: payload });
     } catch {
       throw new CloudflareError(step, 0, []);
     }

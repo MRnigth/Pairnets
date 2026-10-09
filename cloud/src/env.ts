@@ -28,6 +28,8 @@ export interface Env {
   GOOGLE_AUTH_URL?: string;
   GOOGLE_TOKEN_URL?: string;
   GOOGLE_JWKS_URL?: string;
+  /** Test seam for local end-to-end runs (a stand-in Cloudflare API). Never set in production. */
+  CF_API_URL?: string;
 }
 
 /** A whole-number variable, or the fallback when it is missing or not a number. */
