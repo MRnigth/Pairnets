@@ -327,12 +327,33 @@ the same on Windows, Mac and Linux, and follows your system's light or dark mode
 
 ![Sign-in window](images/sign-in-welcome-light.png)
 
-**Your server is linked to your Pairnets account** (section 2): choose **Continue with email** (or
-**Continue with Google**) and sign in with the **same account** you added the server to. Pairnets
-finds your server through the account and the computer gets its own key; then choose the folder
-to sync (step 4 below).
+**Your server is linked to your Pairnets account** (section 2):
 
-**Your server has its own domain** (section 3):
+1. Choose **Continue with Google**, or type your email and choose **Continue with email**. Your
+   browser opens `sync.pairnets.app`.
+2. Sign in there with the **same account** you added the server to. Check that the page shows the
+   same code as Pairnets and press **Allow**. Pairnets finds your server through the account, and
+   the computer gets its own key.
+
+   ![Finish in your browser](images/sign-in-browser-light.png)
+
+3. Choose the folder to sync, for example `D:\Work` (it may already contain your files), and press
+   **Start syncing**. Tick **Start Pairnets when I sign in to Windows** (on Mac and Linux: *when I
+   log in*) so syncing starts automatically.
+
+   ![Choose the folder](images/sign-in-folder-light.png)
+
+No account yet? **Make an account** opens the same sign-in page: signing in makes one.
+
+If your account has no server yet, Pairnets says **Your account has no nest yet** and waits.
+**Show me how** opens your account page with the one command for the server
+([section 2](#2-install-the-server)). Once the server is added, this computer finishes signing in by
+itself. **Sign out** on that screen starts over.
+
+![Your account has no nest yet](images/sign-in-no-nest-light.png)
+
+**I run my own nest** (your server has its own domain, section 3): choose **I run my own nest on my
+own domain: use its address** at the bottom of the sign-in window. Then:
 
 1. Type your nest's name: the one you gave the installer with `--public-url`, in this guide
    `sync.example.com`. Pairnets checks that it is a Pairnets nest and shows which ways it offers.
@@ -342,9 +363,9 @@ to sync (step 4 below).
    your nest's website and signs you in there.
 3. Check that the code on the website matches the one in Pairnets and press **Allow**. The website
    sends you straight back to Pairnets.
-4. Choose the folder to sync, for example `D:\Work` (it may already contain your files), and press
-   **Start syncing**. Tick **Start Pairnets when I sign in to Windows** (on Mac and Linux: *when I log
-   in*) so syncing starts automatically.
+4. Choose the folder and press **Start syncing**, as above.
+
+(**Sign in with a Pairnets account instead**, at the bottom, goes back to the first screen.)
 
 There is no first-run form for a server address and token any more: a computer only gets in when
 you sign it in. Your server therefore needs to be linked to your Pairnets account first

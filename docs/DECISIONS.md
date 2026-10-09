@@ -446,3 +446,38 @@ The design is `cloud/RELAY.md`; these are the nest's and the installer's own cho
 * **The email is kept while the key is.** Saving Settings keeps the account email only with the same
   key on the same address; a typed token or another address drops it. Signing in on a nest directly
   clears it.
+
+## The apps' sign-in window: a Pairnets account first
+
+Built from the approved pictures (first screen, "Finish in your browser", "Your account has no nest
+yet"), the same in both apps.
+
+* **The account comes first, always.** The window opens on "Sign in to Pairnets" (Continue with
+  Google, or with email), also on a computer that used its own nest before. "I run my own nest on my
+  own domain: use its address" at the bottom leads to the nest's own sign-in, unchanged, with the
+  nest this computer used already filled in; "Sign in with a Pairnets account instead" leads back. A
+  relay address is never suggested there as a nest's name.
+* **The address typed next to "Continue with email" goes along** to the browser page as `&email=`,
+  as the nest's own sign-in does, so the page can start with it. The button stays as drawn (not
+  dimmed); pressed without an address it says "Type your email address first." instead.
+* **"Make an account"** opens the service's sign-in page (`/login`): accounts are made by signing in.
+* **Finish in your browser** shows the host it opened (sync.pairnets.app), the code, and the
+  countdown under the spinner; a note from the sign-in ("Allowed. Your server is not connected right
+  now…", "still trying…") takes the spinner's line while it lasts. The page opens once; "Open the
+  page again" reopens it.
+* **No nest yet** shows while the account has none (and its nest is not merely offline): the masked
+  account (`m•••@gmail.com`), "Show me how" (the account page), and a spinner until the account adds
+  a nest, then on to the folder by itself. "Sign out" there stops the sign-in (nothing was kept yet);
+  "I run my own nest" stops it too.
+* **Turned down, expired or failed** goes back to the first screen with the reason in a note. After
+  the 30-minute hold for a nest it says so, not "the code expired".
+* **The folder step is the old one**, saying "Signed in as LAPTOP on soro" (the nest's label), and
+  saves through `AccountSignIn.SettingsAfterSignIn`, the key protected as before.
+* **Colours and type are the apps' own**: the primary buttons use the apps' accent blue rather than
+  the near-black of the pictures, and the window opens at 460×660 inside, as drawn (it can be
+  resized; the bottom links stay at the bottom).
+* **Signed out or reset while the nest could not be told**: in relay mode the note says to remove
+  the computer on the account page (sync.pairnets.app/account), not on "your nest's Devices page".
+* **Windows screenshots**: the render tool drew everything at 2.25× and cropped it (the bitmap's DPI
+  and an extra scale both applied) and lost the logo (it looked for the icon in the tool's own
+  files). Both fixed, so the Windows shots match the Mac/Linux ones.
