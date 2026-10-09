@@ -150,7 +150,7 @@ public static class Screen
             ToggleSwitch s => TextOf(s.OnContent ?? s.Content),
             MenuItem m => TextOf(m.Header),
             HeaderedContentControl h => TextOf(h.Header),
-            Button or ListBoxItem => TextOf(((ContentControl)visual).Content),
+            Button or ListBoxItem => TextOf(((ContentControl)visual).Content) ?? TextOf(visual), // a data row reads as its texts
             TextBox t => t.Watermark ?? t.Name,
             TextBlock t => t.Text,
             _ => null,
@@ -168,8 +168,8 @@ public static class Screen
         string s => s,
         TextBlock t => t.Text,
         Visual v => string.Join(" ", v.GetVisualDescendants().Concat(v.GetLogicalDescendants().OfType<Visual>()).OfType<TextBlock>()
-            .Select(t => t.Text).Where(t => !string.IsNullOrWhiteSpace(t)).Distinct()),
-        _ => content.ToString(),
+            .Select(t => t.Text).Where(t => !string.IsNullOrWhiteSpace(t)).Distinct()) is { Length: > 0 } text ? text : null,
+        _ => null,
     };
 
     /// <summary>Every control of type <typeparamref name="T"/> on the screen of <paramref name="root"/>, open menus included.</summary>
