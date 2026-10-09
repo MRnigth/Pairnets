@@ -147,6 +147,26 @@ public sealed class AccountSignInTests : IAsyncLifetime
         _service.VerificationLink = null;
         Assert.Equal($"{Origin}/app?code={FakeSyncService.UserCode}", (await WaitingAsync(Flow(method: "passkey"))).VerifyUrl);
         Assert.Equal($"{Origin}/app?code={FakeSyncService.UserCode}&method=email", (await WaitingAsync(Flow(method: "email"))).VerifyUrl);
+
+        // The address typed next to "Continue with email" goes along, so it need not be typed twice; only with that button,
+        // and only when it is one.
+        Assert.Equal($"{Origin}/app?code={FakeSyncService.UserCode}&method=email&email=me%2Bpn%40example.com",
+            (await WaitingAsync(new AccountSignIn("LAPTOP", "email", _service.Url, interval: TimeSpan.FromMilliseconds(50), email: " me+pn@example.com "))).VerifyUrl);
+        Assert.Equal($"{Origin}/app?code={FakeSyncService.UserCode}&method=google",
+            (await WaitingAsync(new AccountSignIn("LAPTOP", "google", _service.Url, interval: TimeSpan.FromMilliseconds(50), email: "me@example.com"))).VerifyUrl);
+        Assert.Equal($"{Origin}/app?code={FakeSyncService.UserCode}&method=email",
+            (await WaitingAsync(new AccountSignIn("LAPTOP", "email", _service.Url, interval: TimeSpan.FromMilliseconds(50), email: "not an address"))).VerifyUrl);
+    }
+
+    [Fact]
+    public void TheAccountIsShownMasked()
+    {
+        Assert.Equal("m•••@gmail.com", AccountSignIn.MaskEmail("maria@gmail.com"));
+        Assert.Equal("y•••@example.com", AccountSignIn.MaskEmail(" you@example.com "));
+        Assert.Equal("•••", AccountSignIn.MaskEmail("@example.com"));
+        Assert.Equal("•••", AccountSignIn.MaskEmail("no-at-sign"));
+        Assert.Null(AccountSignIn.MaskEmail(null));
+        Assert.Null(AccountSignIn.MaskEmail("  "));
     }
 
     /// <summary>Runs a sign-in until it shows its code, then cancels it (which stops it quietly where it was).</summary>
