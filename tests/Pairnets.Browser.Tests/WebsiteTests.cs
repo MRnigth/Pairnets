@@ -2,6 +2,7 @@ using System.Text.RegularExpressions;
 using Microsoft.Playwright;
 using Pairnets.Core;
 using Pairnets.Server.Web;
+using Pairnets.Tests.E2E;
 using Pairnets.Tests.Infrastructure;
 using Xunit.Abstractions;
 using static Microsoft.Playwright.Assertions;
@@ -404,6 +405,9 @@ public sealed partial class WebsiteTests(WebsiteFixture site, ITestOutputHelper 
     [Fact, Step(99)]
     public async Task EveryButtonLinkFormAndApiCallOnTheWebsiteWasUsed()
     {
+        if (site.Target is ProcessTarget process)
+            process.Server.AssertNeverPrinted([site.Target.Token, Api.Watcher.Key, Api.Password]);
+
         var notRun = AllFlows.Where(f => !site.Log.FlowsDone.Contains(f)).ToList();
         if (notRun.Count > 0)
         {
