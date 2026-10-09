@@ -201,7 +201,8 @@ function ConvertTo-Words([string]$Name) {
     $n = $Name -replace '\(.*$', ''
     $n = $n.Substring($n.LastIndexOf('.') + 1)
     $n = $n -replace '_', ' '
-    $n = [regex]::Replace($n, '(?<=[a-z0-9])(?=[A-Z])', ' ')
+    # "APasswordSignsIn" -> "A Password Signs In", "HTTPSWorks" -> "HTTPS Works"
+    $n = [regex]::Replace($n, '(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])', ' ')
     $n = $n.Trim()
     if ($n.Length -gt 1) { $n = $n.Substring(0, 1).ToUpperInvariant() + $n.Substring(1).ToLowerInvariant() }
     return $n
