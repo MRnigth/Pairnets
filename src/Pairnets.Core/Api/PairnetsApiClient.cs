@@ -34,11 +34,14 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
     private readonly TimeSpan _metadataTimeout;
     private volatile bool _piecesUnsupported;
 
+    /// <param name="serviceUrl">The Pairnets service whose relay addresses this client recognises (tests; by default sync.pairnets.app).</param>
     public PairnetsApiClient(Uri serverUrl, string token, string deviceId, HttpMessageHandler? handler = null,
-        TimeSpan? stallTimeout = null, TimeSpan? metadataTimeout = null, long? pieceSize = null, long? minPieceSize = null)
+        TimeSpan? stallTimeout = null, TimeSpan? metadataTimeout = null, long? pieceSize = null, long? minPieceSize = null,
+        Uri? serviceUrl = null)
     {
         ArgumentNullException.ThrowIfNull(serverUrl);
         BaseAddress = NormalizeBase(serverUrl);
+        IsRelay = Client.Relay.IsRelayAddress(BaseAddress, serviceUrl);
         _token = token;
         _stallTimeout = stallTimeout ?? TimeSpan.FromSeconds(60);
         _metadataTimeout = metadataTimeout ?? TimeSpan.FromMinutes(5);
@@ -62,10 +65,20 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
 
     public Uri BaseAddress { get; }
 
+    /// <summary>
+    /// True when the server is reached through the Pairnets service (<c>https://sync.pairnets.app/n/&lt;nest id&gt;/</c>).
+    /// Every request still goes to a path relative to <see cref="BaseAddress"/>; only the words for Cloudflare's own
+    /// error pages differ (there is no tunnel of the person's own to check).
+    /// </summary>
+    public bool IsRelay { get; }
+
     /// <summary>How big the pieces of uploads are, learned from how fast the last ones went.</summary>
     internal PieceSizer Pieces { get; }
 
-    /// <summary>Ensures the base URL ends with '/', so relative API paths resolve under it.</summary>
+    /// <summary>
+    /// Ensures the base URL ends with '/', so relative API paths resolve under it, path included: a relay address
+    /// (https://sync.pairnets.app/n/&lt;nest id&gt;/) keeps its /n/&lt;nest id&gt;/ and "api/info" becomes /n/&lt;nest id&gt;/api/info.
+    /// </summary>
     public static Uri NormalizeBase(Uri url)
     {
         var s = url.ToString();
@@ -98,8 +111,15 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
     internal async Task<HealthCheck> CheckHealthAsync(CancellationToken ct)
     {
         using var timeout = Linked(ct, TimeSpan.FromSeconds(15));
-        using var resp = await SendAsync(new HttpRequestMessage(HttpMethod.Get, HealthPath), HttpCompletionOption.ResponseContentRead, timeout, ct).ConfigureAwait(false);
-        return new HealthCheck(resp.IsSuccessStatusCode, IsFromCloudflare(resp), DescribeCloudflareError(resp));
+        try
+        {
+            using var resp = await SendAsync(new HttpRequestMessage(HttpMethod.Get, HealthPath), HttpCompletionOption.ResponseContentRead, timeout, ct).ConfigureAwait(false);
+            return new HealthCheck(resp.IsSuccessStatusCode, IsFromCloudflare(resp), DescribeCloudflareError(resp, IsRelay));
+        }
+        catch (Exception ex) when (ex is PairnetsNetworkException { Code: not null } or PairnetsAuthException { Code: ServiceErrors.NestUnknown })
+        {
+            return new HealthCheck(false, false, ex.Message); // the Pairnets service answered for the server: "not connected", "not linked"
+        }
     }
 
     public async Task<ServerInfo> GetInfoAsync(CancellationToken ct)
@@ -253,7 +273,9 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
         }
         catch (PairnetsNetworkException ex)
         {
-            return new(ConnectionTestStatus.Unreachable, $"Cannot reach the server: {ex.Message}. Is the server running, and its Cloudflare Tunnel connected?");
+            return new(ConnectionTestStatus.Unreachable, client.IsRelay
+                ? $"Cannot reach Pairnets: {ex.Message}. Check that this computer is online."
+                : $"Cannot reach the server: {ex.Message}. Is the server running, and its Cloudflare Tunnel connected?");
         }
 
         try
@@ -557,7 +579,7 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
         }
     }
 
-    private static async Task ThrowForStatusAsync(HttpResponseMessage resp)
+    private async Task ThrowForStatusAsync(HttpResponseMessage resp)
     {
         if (resp.IsSuccessStatusCode)
             return;
@@ -568,7 +590,7 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
                 ? m
                 : "The server rejected the token (401).", reason?.Code);
         }
-        if (DescribeCloudflareError(resp) is { } cloudflare)
+        if (DescribeCloudflareError(resp, IsRelay) is { } cloudflare)
             throw new PairnetsNetworkException(cloudflare);
         if (resp.StatusCode == HttpStatusCode.RequestEntityTooLarge)
             throw new PairnetsProtocolException("The server, or a proxy in front of it such as Cloudflare, refused a request that was too large (413).");
@@ -580,13 +602,22 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
 
     /// <summary>
     /// A plain-words explanation when Cloudflare itself (not the Pairnets server behind it) answered with
-    /// an error page: the tunnel is down, or a bot check blocked the app. Null otherwise.
+    /// an error page: the tunnel is down, or a bot check blocked the app. Null otherwise. With <paramref name="relay"/>
+    /// the page came from in front of the Pairnets service, so the advice about the person's own tunnel does not apply.
     /// </summary>
-    internal static string? DescribeCloudflareError(HttpResponseMessage resp)
+    internal static string? DescribeCloudflareError(HttpResponseMessage resp, bool relay = false)
     {
         if (resp.IsSuccessStatusCode || !IsFromCloudflare(resp) || IsJson(resp))
             return null; // Pairnets's own errors are JSON, also when Cloudflare relays them
         var status = (int)resp.StatusCode;
+        if (relay)
+        {
+            if (status == 403 && resp.Headers.Contains("cf-mitigated"))
+                return "Pairnets turned this app away with a browser check. Try again in a few minutes.";
+            if (status is 502 or 503 or 504 or 530 or (>= 520 and <= 527))
+                return $"Pairnets is having trouble right now (error {status}). Syncing goes on by itself when it is back.";
+            return null;
+        }
         if (status == 403 && resp.Headers.Contains("cf-mitigated"))
             return "Cloudflare blocked Pairnets with a browser check. In the Cloudflare dashboard turn off Bot Fight Mode for this domain (Security > Bots), or add a rule that skips it for the Pairnets address.";
         if (status == 524)
@@ -647,7 +678,13 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
             req.Headers.TryAddWithoutValidation(PairnetsHeaders.Token, _token);
         try
         {
-            return await _http.SendAsync(req, completion, timeout.Token).ConfigureAwait(false);
+            var resp = await _http.SendAsync(req, completion, timeout.Token).ConfigureAwait(false);
+            if (await ServiceErrorAsync(resp).ConfigureAwait(false) is { } serviceError)
+            {
+                resp.Dispose();
+                throw serviceError;
+            }
+            return resp;
         }
         catch (Exception ex) when (FindLocalReadFailure(ex) is { } local)
         {
@@ -671,6 +708,32 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
                 req.Dispose();
         }
     }
+
+    /// <summary>
+    /// The Pairnets service's own answer for a server it cannot pass the request to ("not connected", "not linked any
+    /// more"), as the exception to throw; null for anything else, the server's own answers included. Checked on every
+    /// answer before anything reads a 404 as "a server too old for this" or "no such file".
+    /// </summary>
+    private static async Task<Exception?> ServiceErrorAsync(HttpResponseMessage resp)
+    {
+        if ((int)resp.StatusCode is not (404 or 502 or 503) || !IsJson(resp) || resp.Content.Headers.ContentLength > ServiceErrorMaxBytes)
+            return null;
+        try
+        {
+            // Kept in memory and read as bytes: a stream handed out here would be the one every later reader gets, closed.
+            // This way whoever reads this answer next (the nest's own error) still finds the whole body.
+            await resp.Content.LoadIntoBufferAsync(ServiceErrorMaxBytes).ConfigureAwait(false);
+            var bytes = await resp.Content.ReadAsByteArrayAsync().ConfigureAwait(false);
+            return ServiceErrors.ToException(JsonSerializer.Deserialize<ServiceErrorBody>(bytes, PairnetsJson.Options)?.Error);
+        }
+        catch (Exception ex) when (ex is JsonException or NotSupportedException or IOException or HttpRequestException or InvalidOperationException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>A service error is a short JSON line; anything bigger is not one.</summary>
+    private const int ServiceErrorMaxBytes = 16 * 1024;
 
     private static string Describe(HttpRequestException ex)
     {

@@ -40,6 +40,8 @@ public static class Nest
     /// <summary>
     /// "nest.pairnets.app" → https://nest.pairnets.app/ (names get HTTPS); "100.x.y.z" → http://100.x.y.z:5075/
     /// (a bare IP address is the old plain server address); full URLs stay as typed. Null when it cannot be an address.
+    /// Whatever follows the name is dropped (a link copied from the nest's website still finds the nest), except the
+    /// /n/&lt;nest id&gt; of a relay address, which is the address.
     /// </summary>
     public static Uri? ParseAddress(string? text)
     {
@@ -51,9 +53,12 @@ public static class Nest
         var hostPart = typed.Split('/')[0];
         var host = hostPart.Contains(':', StringComparison.Ordinal) && !hostPart.StartsWith('[') ? hostPart[..hostPart.LastIndexOf(':')] : hostPart;
         var isIp = IPAddress.TryParse(host.Trim('[', ']'), out _);
+        var path = typed[hostPart.Length..];
         var withScheme = isIp
             ? "http://" + (hostPart == host ? hostPart + ":5075" : hostPart)
             : "https://" + hostPart;
+        if (Uri.TryCreate(withScheme, UriKind.Absolute, out var origin) && Relay.IsRelayAddress(withScheme + path, origin))
+            withScheme += path; // a relay address on any service: the path is the server
         if (!host.Contains('.', StringComparison.Ordinal) && !isIp && host != "localhost")
             return null; // "nest" alone is not something the internet's DNS can find
         return PairnetsApiClient.TryParseServerUrl(withScheme, out var parsed) ? parsed : null;
@@ -101,14 +106,17 @@ public static class Nest
     }
 
     /// <summary>Checks the typed address: is there a Pairnets nest that lets this computer sign in? Never throws.</summary>
-    public static async Task<NestCheck> CheckAsync(string? text, HttpMessageHandler? handler = null, CancellationToken ct = default)
+    /// <param name="service">The Pairnets service (tests; by default sync.pairnets.app).</param>
+    public static async Task<NestCheck> CheckAsync(string? text, HttpMessageHandler? handler = null, CancellationToken ct = default, Uri? service = null)
     {
         if (string.IsNullOrWhiteSpace(text))
             return new(NestCheckStatus.Empty, null, null, string.Empty);
         var url = ParseAddress(text);
         if (url is null)
             return new(NestCheckStatus.Invalid, null, null, "That is not an address. Type your nest's name, such as nest.example.com.");
-        using var client = new PairnetsApiClient(url, string.Empty, Environment.MachineName, handler);
+        if (Relay.IsServiceAddress(url, service))
+            return new(NestCheckStatus.NoSignIn, url, null, AccountAddressMessage); // nothing here to approve on: the account is the way in
+        using var client = new PairnetsApiClient(url, string.Empty, Environment.MachineName, handler, serviceUrl: service);
         try
         {
             var hello = await client.GetHelloAsync(ct).ConfigureAwait(false);
@@ -128,18 +136,23 @@ public static class Nest
         }
     }
 
+    /// <summary>What the nest field says when someone types the Pairnets service's own address.</summary>
+    public const string AccountAddressMessage = "That is the Pairnets account address. Sign in with your Pairnets account instead (Continue with email or Google).";
+
     /// <summary>
     /// The settings after signing in: this computer's own key (to protect and keep), its name as the nest
     /// recorded it, the address that worked, and the chosen folder. Everything else carries over.
+    /// <paramref name="accountEmail"/> is the Pairnets account it signed in with (null when it signed in on the nest itself).
     /// </summary>
     public static ClientSettings SettingsAfterSignIn(ClientSettings? previous, Uri server, DeviceKeyGrant grant, string folder,
-        bool startAtLogin, string protectedKey)
+        bool startAtLogin, string protectedKey, string? accountEmail = null)
     {
         var next = previous?.Clone() ?? new ClientSettings();
         next.ServerUrl = PairnetsApiClient.NormalizeBase(server).ToString();
         next.ProtectedToken = protectedKey;
         next.DeviceId = grant.Id;
         next.DeviceName = grant.Name;
+        next.AccountEmail = string.IsNullOrWhiteSpace(accountEmail) ? null : accountEmail.Trim();
         next.Folder = folder;
         next.StartWithWindows = startAtLogin;
         next.FirstRunCompleted = true;
@@ -148,20 +161,20 @@ public static class Nest
     }
 }
 
-/// <summary>Where a sign-in stands.</summary>
+/// <summary>Where a sign-in stands (on a nest: <see cref="PairingFlow"/>; with a Pairnets account: <see cref="AccountSignIn"/>).</summary>
 public enum PairingStage
 {
-    /// <summary>Asking the nest for a code.</summary>
+    /// <summary>Asking the nest (or the Pairnets service) for a code.</summary>
     Starting,
 
-    /// <summary>Showing the code until someone approves it on the nest.</summary>
+    /// <summary>Showing the code until someone approves it in the browser.</summary>
     Waiting,
 
     Approved,
     Denied,
     Expired,
 
-    /// <summary>The nest could not be asked at all (see the message).</summary>
+    /// <summary>The nest (or the Pairnets service) could not be asked at all, or its answer could not be used (see the message).</summary>
     Failed,
 }
 
@@ -175,9 +188,12 @@ public sealed record PairingState(
     DeviceKeyGrant? Grant = null)
 {
     /// <summary>"code expires in 9:41" while waiting.</summary>
-    public string ExpiresText(DateTimeOffset now)
+    public string ExpiresText(DateTimeOffset now) => ExpiresIn(ExpiresAt, now);
+
+    /// <summary>"code expires in 9:41", "the code has expired", or nothing without an expiry.</summary>
+    internal static string ExpiresIn(DateTimeOffset? expiresAt, DateTimeOffset now)
     {
-        if (ExpiresAt is not { } at)
+        if (expiresAt is not { } at)
             return string.Empty;
         var left = at - now;
         if (left <= TimeSpan.Zero)
@@ -292,6 +308,6 @@ public sealed class PairingFlow
         return state;
     }
 
-    private static string SystemName() =>
+    internal static string SystemName() =>
         OperatingSystem.IsWindows() ? "Windows" : OperatingSystem.IsMacOS() ? "macOS" : OperatingSystem.IsLinux() ? "Linux" : "other";
 }

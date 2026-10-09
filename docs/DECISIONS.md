@@ -418,3 +418,31 @@ The design is `cloud/RELAY.md`; these are the nest's and the installer's own cho
 * **`InstallHintTests` reads the options of the argument loop.** It used to read the first
   `case "$1" in`, which is `missing_value`'s, so it only knew `--port` and `--public-url`; it now
   starts at the `while` loop (the same fix as on the names branch).
+
+## Pairnets Cloud version 2 in the apps: one address for everyone (shared logic only)
+
+* **Relay mode is read from the address alone.** A computer is "in relay mode" when its server address
+  is `https://sync.pairnets.app/n/<nest id>/`: the service's own origin, `/n/`, and a well-formed nest
+  id, nothing after it (`Relay` in Pairnets.Core; tests pass another service origin). No new setting
+  says so. Every API path and the push channel were already relative to the address, so the
+  `/n/<nest id>/` part carries through by itself; typing such an address without `https://` keeps its
+  path too (any other path after a typed name is still dropped, as before).
+* **The service's own errors are told apart by their body, not by the mode.** The service answers
+  `{"error":"nest_offline"}` (503) and `{"error":"nest_unknown"}` (404); a nest's errors are
+  `{"code":…}`. The API client checks every 404/502/503 for these two before anything reads a 404 as
+  "an old server" or "no such file". `nest_offline` is a network failure ("Your server is not
+  connected right now. Check that it is on."): the pass is offline and retried. `nest_unknown` counts
+  as signed out ("This server is not linked to Pairnets any more. Sign in again to choose a
+  server."): the pass stops with "Sign in again…". Neither is sticky: the next pass that gets through
+  syncs as normal. Cloudflare's own error pages in front of the service no longer send people to a
+  tunnel they do not have.
+* **Signing in with the account** (`AccountSignIn`): the browser link is the service's own (anything
+  pointing elsewhere is rebuilt from the service's address and the code), plus `&method=email` or
+  `&method=google` for the button pressed. "Slow down" makes the app ask half as often again (at most
+  every 30 s). An answer whose server address is not a relay address of this same service for the
+  server it names is refused. The account token in the answer is signed out of at once, whatever
+  happens next; the app keeps only the computer's own key and the account's email (for showing).
+* **Never moves away from a relay address**, even if the server one day names another address.
+* **The email is kept while the key is.** Saving Settings keeps the account email only with the same
+  key on the same address; a typed token or another address drops it. Signing in on a nest directly
+  clears it.

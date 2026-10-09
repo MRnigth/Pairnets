@@ -29,4 +29,18 @@ public static class OwnKey
             return (original.DeviceId, original.DeviceName ?? name);
         }
     }
+
+    /// <summary>
+    /// The account email to keep when the Settings form is saved: the one this computer signed in with, as long as it
+    /// keeps its own key (<paramref name="deviceId"/>) on the same server. A typed token or another address drops it.
+    /// </summary>
+    public static string? AccountEmailAfterSave(ClientSettings original, Uri serverUrl, string? deviceId)
+    {
+        if (string.IsNullOrEmpty(deviceId) || deviceId != original.DeviceId
+            || !PairnetsApiClient.TryParseServerUrl(original.ServerUrl, out var before) || before is null)
+            return null;
+        var same = Uri.Compare(PairnetsApiClient.NormalizeBase(serverUrl), before, UriComponents.SchemeAndServer | UriComponents.Path,
+            UriFormat.Unescaped, StringComparison.OrdinalIgnoreCase) == 0;
+        return same ? original.AccountEmail : null;
+    }
 }

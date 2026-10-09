@@ -176,20 +176,15 @@ public sealed class TrayController : ITrayActions, IDisposable
 
     // ------------------------------------------------------------------ the nest: devices and signing out
 
-    public void AddComputer() => MessageBox.Show(AddComputerSteps(_session?.Status.NestUrl ?? NestFromSettings()), "Pairnets – add a computer",
-        MessageBoxButton.OK, MessageBoxImage.Information);
+    /// <summary>The two steps, with this nest's name (or, signed in with an account, the account) filled in.</summary>
+    public void AddComputer() => MessageBox.Show(Relay.AddComputerSteps(_settings.ServerUrl, _settings.AccountEmail, _session?.Status.NestUrl ?? NestFromSettings()),
+        "Pairnets – add a computer", MessageBoxButton.OK, MessageBoxImage.Information);
 
-    /// <summary>The two steps, with this nest's name filled in.</summary>
-    public static string AddComputerSteps(string? nestUrl) =>
-        "On the computer you want to add:\n\n" +
-        "1. Install Pairnets (pairnets.app/add).\n" +
-        $"2. Open Pairnets, type {(Uri.TryCreate(nestUrl, UriKind.Absolute, out var u) ? u.Authority : "your nest's name")} and press \"Sign in with your browser\".\n\n" +
-        "Its request then pops up here and on your nest, where you allow it.";
-
+    /// <summary>The nest's Devices page, or the account page when this computer signed in with a Pairnets account.</summary>
     public void ManageDevices()
     {
-        if ((_session?.Status.NestUrl ?? NestFromSettings()) is { } url)
-            Shell(url + "/devices");
+        if (Relay.ManageComputersUrl(_settings.ServerUrl, _session?.Status.NestUrl ?? NestFromSettings()) is { } url)
+            Shell(url);
         else
             MessageBox.Show("Your nest has no website yet. On the server, give it its own name with: sudo ./install.sh --public-url https://nest.example.com",
                 "Pairnets", MessageBoxButton.OK, MessageBoxImage.Information);
