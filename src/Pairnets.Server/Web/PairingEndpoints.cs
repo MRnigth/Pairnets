@@ -28,6 +28,9 @@ public static class PairingEndpoints
     {
         app.MapPost("/api/pair/start", async (HttpContext ctx, PairStartRequest? body, AuthStore auth, SyncOptions options, IHubContext<SyncHub> hub, ILogger<PairStartRequest> log) =>
         {
+            if (options.RelayMode)
+                return Error(StatusCodes.Status409Conflict, ErrorCodes.BadRequest,
+                    "This nest is linked to a Pairnets account: sign this computer in with that account (Continue with email or Google).");
             if (options.PublicUrl is null)
                 return Error(StatusCodes.Status409Conflict, ErrorCodes.BadRequest,
                     "This nest has no website yet to approve computers on. Give it its own public name first (install.sh --public-url https://nest.example.com).");

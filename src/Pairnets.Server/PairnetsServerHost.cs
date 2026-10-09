@@ -52,6 +52,7 @@ public static class PairnetsServerHost
         builder.Services.AddSingleton<TlsCertificateStore>();
         builder.Services.AddSingleton(sp => new AuthStore(sp.GetRequiredService<ServerPaths>()));
         builder.Services.AddSingleton<DeviceKeys>();
+        builder.Services.AddSingleton(sp => new RelaySignature(sp.GetRequiredService<SyncOptions>()));
         builder.Services.AddSingleton<OwnerAuth>();
         builder.Services.AddSingleton<Pairnets.Server.Auth.WebAuthn.WebAuthnChallenges>();
         builder.Services.AddSingleton(sp => new GoogleSignIn(sp.GetRequiredService<SyncOptions>()));
@@ -96,8 +97,11 @@ public static class PairnetsServerHost
         WarnAboutBinding(app, options.HttpsUrl is null ? httpUrls : [.. httpUrls, options.HttpsUrl]);
         if (options.HttpsUrl is not null)
             app.Services.GetRequiredService<TlsCertificateStore>().Refresh();
+        if (options.RelayMode)
+            app.Logger.LogInformation("Linked to Pairnets: reached through {Service} as {NestId}", options.RelayServiceUrl, options.RelayNestId);
 
-        if (options.TrustProxyHeaders)
+        // A linked nest is always behind the service's tunnel on this machine, so it takes the caller's address the same way.
+        if (options.TrustProxyHeaders || options.RelayMode)
             app.UseMiddleware<ProxyClientAddressMiddleware>();
         app.UseMiddleware<RequestLoggingMiddleware>();
         app.Use((ctx, next) =>
@@ -109,6 +113,7 @@ public static class PairnetsServerHost
         });
         app.UseWebSockets();
         app.UseMiddleware<TokenAuthMiddleware>();
+        app.UseMiddleware<RelayAuthMiddleware>(); // /api/relay: the Pairnets service's signed calls, nothing else
         var devices = app.Services.GetRequiredService<DeviceRegistry>();
         app.Use(async (ctx, next) =>
         {
@@ -120,6 +125,7 @@ public static class PairnetsServerHost
         app.UseRateLimiter();
         Endpoints.Map(app);
         PairingEndpoints.Map(app);
+        RelayEndpoints.Map(app);
         WebUi.Map(app);
         WebEndpoints.Map(app);
         app.Lifetime.ApplicationStopped.Register(store.Dispose);

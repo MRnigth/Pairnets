@@ -100,9 +100,15 @@ public sealed record DeviceInfo(
 /// the nest's own HTTPS name when it has one; <see cref="DeviceKeys"/> says computers can get their own key.
 /// </summary>
 /// <remarks><see cref="SignIn"/>: new computers can ask to join and be approved on the nest's website.
-/// <see cref="Methods"/> is how the owner can sign in there (null on servers from before it was told).</remarks>
+/// <see cref="Methods"/> is how the owner can sign in there (null on servers from before it was told).
+/// <see cref="Relay"/> is only sent by a nest linked to a Pairnets account (cloud/RELAY.md §3): the apps reach it
+/// through the service then, and it has no public name of its own.</remarks>
 public sealed record ServerHello(string Product, int ApiVersion, string? ServerVersion, string? PublicUrl, bool DeviceKeys, bool SignIn,
-    SignInMethods? Methods = null);
+    SignInMethods? Methods = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] RelayHello? Relay = null);
+
+/// <summary>A nest in relay mode: its id at the Pairnets service and the service's address (https://sync.pairnets.app).</summary>
+public sealed record RelayHello(string NestId, string ServiceUrl);
 
 /// <summary>The ways the owner can sign in on the nest's website (the apps show matching buttons).</summary>
 public sealed record SignInMethods(bool Password, bool Passkeys, bool Email, bool Google);

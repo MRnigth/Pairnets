@@ -195,7 +195,9 @@ public sealed class DeviceKeyTests : IAsyncLifetime
                 using var request = new HttpRequestMessage(new HttpMethod(method), url);
                 var status = (await anonymous.SendAsync(request)).StatusCode;
                 throttle.RecordSuccess(IPAddress.Loopback); // so the brute-force delay does not slow this test down
-                if (TokenAuthMiddleware.IsPublic(new Microsoft.AspNetCore.Http.PathString(pattern)))
+                if (RelayAuthMiddleware.IsRelayPath(new Microsoft.AspNetCore.Http.PathString(pattern)))
+                    Assert.True(status == HttpStatusCode.Unauthorized, $"{method} {pattern} answered {status} without the service's signature");
+                else if (TokenAuthMiddleware.IsPublic(new Microsoft.AspNetCore.Http.PathString(pattern)))
                     Assert.NotEqual(HttpStatusCode.Unauthorized, status);
                 else
                     Assert.True(status == HttpStatusCode.Unauthorized, $"{method} {pattern} answered {status} without a key");
