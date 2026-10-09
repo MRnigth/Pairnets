@@ -18,6 +18,8 @@ public class InstallScriptTests : IDisposable
     [InlineData("--public-url")]
     [InlineData("--bind")]
     [InlineData("--port")]
+    [InlineData("--name")]
+    [InlineData("--email")]
     public async Task AnOptionWithoutItsValueSaysSo(string option)
     {
         if (!OperatingSystem.IsLinux())
@@ -66,6 +68,45 @@ public class InstallScriptTests : IDisposable
         Assert.Equal(0, exit);
         Assert.Contains("Usage: sudo ./install.sh", output);
         Assert.Contains("--public-url https://<name>", output);
+        Assert.Contains("--name <name>", output);
+        Assert.Contains("--release-name", output);
+    }
+
+    [Fact]
+    public async Task AFreeNameAndYourOwnDomainAreOneAtATime()
+    {
+        if (!OperatingSystem.IsLinux())
+            return;
+        var (exit, _, error) = await RunInstall("--name", "alice", "--public-url", "https://sync.example.com");
+        Assert.Equal(2, exit);
+        Assert.Contains("error: use --name (a free name like alice.pairnets.app) or --public-url (your own domain), not both", error);
+
+        (exit, _, error) = await RunInstall("--name=alice", "--bind", "192.0.2.10");
+        Assert.Equal(2, exit);
+        Assert.Contains("leave out --bind", error);
+
+        (exit, _, error) = await RunInstall("--email", "you@example.com");
+        Assert.Equal(2, exit);
+        Assert.Contains("--email goes with --name", error);
+
+        (exit, _, error) = await RunInstall("--release-name", "--name", "alice");
+        Assert.Equal(2, exit);
+        Assert.Contains("--release-name goes on its own", error);
+    }
+
+    [Theory]
+    [InlineData("ab")]
+    [InlineData("alice-")]
+    [InlineData("a--b")]
+    [InlineData("al_ice")]
+    [InlineData("abcdefghijklmnopqrstuvwxyz0123456")]
+    public async Task ANameTheNameServiceWouldRefuseIsRefusedBeforeAnythingElse(string name)
+    {
+        if (!OperatingSystem.IsLinux())
+            return;
+        var (exit, _, error) = await RunInstall("--name", name);
+        Assert.Equal(2, exit);
+        Assert.Contains("--name takes 3 to 32 letters, digits or hyphens", error);
     }
 
     [Fact]
@@ -79,6 +120,13 @@ public class InstallScriptTests : IDisposable
         Assert.DoesNotContain("needs a value", error);
         Assert.DoesNotContain("unknown option", error);
         Assert.True(error.Contains("run as root") || error.Contains("pairnets-server binary not found"), error);
+
+        foreach (var args in new[] { new[] { "--name", "Alice", "--email", "you@example.com" }, ["--release-name"] })
+        {
+            (exit, _, error) = await RunInstall(args);
+            Assert.Equal(1, exit);
+            Assert.True(error.Contains("run as root") || error.Contains("pairnets-server binary not found"), error);
+        }
     }
 
     private async Task<(int Exit, string Output, string Error)> RunInstall(params string[] args)
