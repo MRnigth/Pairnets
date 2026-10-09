@@ -90,8 +90,16 @@ export function emailLandingPage(): string {
 export interface AccountView {
   accountId: string;
   email: string;
+  servers: ServerView[];
   nests: NestView[];
   sessions: SessionView[];
+}
+
+/** A relayed server; the page's script fills in online, version, free space and computers from GET /v1/servers. */
+export interface ServerView {
+  id: string;
+  label: string;
+  status: "pending" | "active";
 }
 
 export interface NestView {
@@ -121,6 +129,20 @@ function when(sec: number | null): string {
 }
 
 export function accountPage(v: AccountView): string {
+  const servers = v.servers.length
+    ? v.servers
+        .map(
+          (n) => `<li class="server" data-server="${e(n.id)}">
+<div class="row"><strong>${e(n.label)}</strong> <span class="pill" data-field="online">checking</span></div>
+<div class="muted" data-field="details">${n.status === "pending" ? "Waiting for the server to connect for the first time." : ""}</div>
+<p class="muted">Computers using this server:</p>
+<ul class="list devices" data-field="devices"><li class="muted">Loading...</li></ul>
+<div class="actions"><button type="button" class="danger" data-action="remove-server">Remove this server</button></div>
+</li>`,
+        )
+        .join("\n")
+    : `<li class="muted">No servers yet.</li>`;
+
   const nests = v.nests.length
     ? v.nests
         .map(
@@ -136,7 +158,7 @@ ${n.addressWarning ? `<p class="error">${e(n.addressWarning)}</p>` : ""}
 </li>`,
         )
         .join("\n")
-    : `<li class="muted">No nests yet.</li>`;
+    : `<li class="muted">None.</li>`;
 
   const sessions = v.sessions
     .map(
@@ -157,18 +179,26 @@ ${n.addressWarning ? `<p class="error">${e(n.addressWarning)}</p>` : ""}
 <p id="status" class="status" role="status" hidden></p>
 </section>
 <section class="card">
-<h2>Your nests</h2>
+<h2>Your servers</h2>
+<ul class="list" id="servers">
+${servers}
+</ul>
+<p class="muted">To add a server, install Pairnets on it. The installer shows a link and a code: open the link and choose Add this server.</p>
+</section>
+<details class="card"${v.nests.length ? " open" : ""}>
+<summary>Servers on their own address</summary>
+<p class="muted">Only for a server that has its own web address (installed with --public-url).</p>
 <ul class="list" id="nests">
 ${nests}
 </ul>
-<p><button type="button" id="add-nest">Add a nest</button></p>
+<p><button type="button" id="add-nest">Link a server by its address</button></p>
 <div id="claim" hidden>
 <p>On the server, run this command within 10 minutes:</p>
 <pre id="claim-command"></pre>
 <p class="muted">Code <strong id="claim-code"></strong>, valid until <span id="claim-expires"></span>. The command shows which account it links to and asks before it changes anything.</p>
 <p><button type="button" id="cancel-codes" class="link">Cancel unused codes</button></p>
 </div>
-</section>
+</details>
 <section class="card">
 <h2>Signed-in browsers and apps</h2>
 <ul class="list" id="sessions">
@@ -177,7 +207,7 @@ ${sessions}
 </section>
 <section class="card">
 <h2>Delete account</h2>
-<p>This removes your account, the list of your nests and everything stored about you here. Your nests keep working with their own sign-in methods.</p>
+<p>This removes your account, your servers' links to Pairnets and everything stored about you here. Your servers keep their files.</p>
 <p><button type="button" id="delete-account" class="danger">Delete my account</button></p>
 </section>`,
     { scripts: ["account.js"] },
@@ -193,7 +223,27 @@ export interface AppRequestView {
   status: string;
 }
 
-export function appPage(req: AppRequestView | null, typed: string | null): string {
+export interface ServerChoice {
+  id: string;
+  label: string;
+}
+
+function serverChooser(servers: ServerChoice[]): string {
+  if (!servers.length) {
+    return `<p class="notice">This account has no server yet. Add one first: install Pairnets on your server and open the link it shows. Then sign in the app again.</p>`;
+  }
+  const options = servers
+    .map(
+      (n, i) =>
+        `<label class="choice"><input type="radio" name="nest" value="${e(n.id)}"${i === 0 ? " checked" : ""}> ${e(n.label)}</label>`,
+    )
+    .join("\n");
+  return `<fieldset id="servers"><legend>Which server should this computer use?</legend>
+${options}
+</fieldset>`;
+}
+
+export function appPage(req: AppRequestView | null, typed: string | null, servers: ServerChoice[] = []): string {
   if (!req) {
     const msg = typed ? `<p class="error" role="alert">That code is not valid or has expired. Check the code the app shows.</p>` : "";
     return layout(
@@ -221,15 +271,67 @@ ${req.appVersion ? `<dt>App version</dt><dd>${e(req.appVersion)}</dd>` : ""}
     "Sign in an app",
     `<section class="card" id="app-request" data-code="${e(displayUserCode(req.userCode))}">
 <h1>Sign in an app?</h1>
-<p>An app wants to use your Pairnets account to list your nests. Allow it only if this is your computer and the code matches the one the app shows.</p>
+<p>A computer wants to use your Pairnets account and sync with your server. Allow it only if this is your computer and the code matches the one the app shows.</p>
 ${details}
 ${
   pending
-    ? `<div class="actions"><button type="button" id="approve">Allow</button> <button type="button" id="deny" class="danger">Not me</button></div>`
+    ? `${serverChooser(servers)}
+<div class="actions">${servers.length ? `<button type="button" id="approve">Allow</button> ` : ""}<button type="button" id="deny" class="danger">Not me</button></div>`
     : `<p class="notice">This sign-in was already answered.</p>`
 }
 <p id="status" class="status" role="status" hidden></p>
 </section>`,
     { scripts: ["app.js"] },
+  );
+}
+
+export interface ServerRequestView {
+  userCode: string;
+  hostname: string | null;
+  serverVersion: string | null;
+  createdAt: number;
+  status: string;
+}
+
+/** /add?code= (RELAY.md 2): approve a server that runs the installer. Unknown codes are answered with status 404. */
+export function addPage(req: ServerRequestView | null, typed: string | null): string {
+  if (!req) {
+    const msg = typed ? `<p class="error" role="alert">That code is not valid or has expired. Check the code the installer shows.</p>` : "";
+    return layout(
+      "Add a server",
+      `<section class="card">
+<h1>Add a server</h1>
+${msg}
+<form method="get" action="/add">
+<label for="code">Code shown by the installer</label>
+<input id="code" name="code" required maxlength="16" autocomplete="off" placeholder="XXXX-XXXX">
+<button type="submit" class="wide">Continue</button>
+</form>
+</section>`,
+    );
+  }
+  const details = `<dl>
+<dt>Server</dt><dd>${e(req.hostname ?? "unknown")}</dd>
+${req.serverVersion ? `<dt>Version</dt><dd>${e(req.serverVersion)}</dd>` : ""}
+<dt>Code</dt><dd><strong>${e(displayUserCode(req.userCode))}</strong></dd>
+<dt>Asked</dt><dd>${when(req.createdAt)}</dd>
+</dl>`;
+  const pending = req.status === "pending";
+  return layout(
+    "Add a server",
+    `<section class="card" id="server-request" data-code="${e(displayUserCode(req.userCode))}">
+<h1>Add this server to your account?</h1>
+<p>A server where Pairnets is being installed wants to join your account. Your computers will reach it through Pairnets; its files stay on the server. Add it only if you are installing it yourself and the code matches the one the installer shows.</p>
+${details}
+${
+  pending
+    ? `<label for="label">Name</label>
+<input id="label" maxlength="64" autocomplete="off" value="${e(req.hostname ?? "My server")}">
+<div class="actions"><button type="button" id="approve">Add this server</button> <button type="button" id="deny" class="danger">Not mine</button></div>`
+    : `<p class="notice">This request was already answered.</p>`
+}
+<p id="status" class="status" role="status" hidden></p>
+</section>`,
+    { scripts: ["add.js"] },
   );
 }

@@ -1,10 +1,14 @@
-// Identifiers and formats, CONTRACT.md section 1 (and the `next` rule of section 6.4).
+// Identifiers and formats, CONTRACT.md section 1 and RELAY.md section 1 (and the `next` rule of section 6.4).
 
 export const ACCOUNT_ID_RE = /^acc_[0-9a-hjkmnp-tv-z]{26}$/;
 export const NEST_ID_RE = /^nst_[0-9a-hjkmnp-tv-z]{26}$/;
 export const SESSION_ID_RE = /^ses_[0-9a-hjkmnp-tv-z]{26}$/;
 export const NONCE_RE = /^[A-Za-z0-9_-]{22,64}$/;
 export const KID_RE = /^[A-Za-z0-9._-]{1,64}$/;
+/** The installer's device code (RELAY.md 1): psd_ + base64url(32 bytes). */
+export const SERVER_DEVICE_CODE_RE = /^psd_[A-Za-z0-9_-]{43}$/;
+/** A device id as the nest hands it out (checked loosely: it only ever goes back to that nest in a path). */
+export const DEVICE_ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
 
 const B32_UPPER_RE = /^[0-9ABCDEFGHJKMNPQRSTVWXYZ]+$/;
 
@@ -28,7 +32,7 @@ export function normaliseClaimCode(input: unknown): string | null {
   return `PN-${s.slice(0, 4)}-${s.slice(4, 8)}-${s.slice(8, 12)}`;
 }
 
-/** App user code normalisation (section 1.4). Returns the 8 characters without hyphen, or null. */
+/** App and server user code normalisation (section 1.4). Returns the 8 characters without hyphen, or null. */
 export function normaliseUserCode(input: unknown): string | null {
   if (typeof input !== "string" || input.length > 32) return null;
   const s = mapLookAlikes(stripAndUpper(input));
@@ -40,15 +44,15 @@ export function displayUserCode(code: string): string {
   return `${code.slice(0, 4)}-${code.slice(4, 8)}`;
 }
 
-const NEXT_RE = /^\/(account|app(\?code=[0-9A-Za-z-]{1,16})?|nest-login\?[^#\s]{1,600})$/;
+const NEXT_RE = /^\/(account|app(\?code=[0-9A-Za-z-]{1,16})?|add(\?code=[0-9A-Za-z-]{1,16})?|nest-login\?[^#\s]{1,600})$/;
 
-/** The `next` allow-list (section 6.4); anything else becomes "/account". */
+/** The `next` allow-list (section 6.4, plus RELAY.md's /add?code=); anything else becomes "/account". */
 export function safeNext(next: unknown): string {
   return typeof next === "string" && NEXT_RE.test(next) ? next : "/account";
 }
 
 const IPV4_RE = /^\d{1,3}(\.\d{1,3}){3}$/;
-const REFUSED_HOSTS = new Set(["localhost", "pairnets.app", "www.pairnets.app", "id.pairnets.app"]);
+const REFUSED_HOSTS = new Set(["localhost", "pairnets.app", "www.pairnets.app", "id.pairnets.app", "sync.pairnets.app"]);
 
 /**
  * Normalised public URL check (section 1.8): the input must already equal `new URL(input).origin`, be https, and not be

@@ -49,7 +49,7 @@ describe("headers on every response", () => {
 
   it("serves the page scripts and stylesheet", async () => {
     const h = await Harness.create();
-    for (const f of ["style.css", "login.js", "email.js", "account.js", "app.js"]) {
+    for (const f of ["style.css", "login.js", "email.js", "account.js", "app.js", "add.js"]) {
       const r = await h.browser().call("GET", `/assets/${f}`);
       expect(r.status, f).toBe(200);
       expect(r.text.length).toBeGreaterThan(100);

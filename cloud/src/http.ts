@@ -1,4 +1,4 @@
-// Responses, uniform errors and the headers every response carries (CONTRACT.md sections 6.1 and 6.8).
+// Responses, uniform errors and the headers every response carries (CONTRACT.md sections 6.1 and 6.8, RELAY.md 5).
 
 export const CSP =
   "default-src 'none'; script-src 'self' https://challenges.cloudflare.com; style-src 'self'; img-src 'self' data:; " +
@@ -36,6 +36,10 @@ export type ErrorCode =
   | "bad_signature"
   | "stale"
   | "not_confirmed"
+  | "nest_unknown"
+  | "nest_offline"
+  | "full"
+  | "cloudflare_failed"
   | "server_error";
 
 export const MESSAGES: Record<ErrorCode, string> = {
@@ -52,7 +56,7 @@ export const MESSAGES: Record<ErrorCode, string> = {
   used: "That code was already used.",
   wrong_browser: "Open the link in the browser where you asked for it.",
   bad_url: "That is not a public https address for a nest (like https://nest.example.com).",
-  nest_limit: "This account already has 3 nests. Remove one first.",
+  nest_limit: "This account already has 3 servers. Remove one first.",
   too_many_codes: "Too many link codes. Use or cancel the ones you have, or try again tomorrow.",
   already_decided: "This sign-in was already answered.",
   slow_down: "Asking too often. Wait a few seconds.",
@@ -60,6 +64,10 @@ export const MESSAGES: Record<ErrorCode, string> = {
   bad_signature: "The request signature did not check out.",
   stale: "The request is too old or was already used.",
   not_confirmed: "This nest has not finished linking.",
+  nest_unknown: "This server is not linked to Pairnets any more.",
+  nest_offline: "Your server is not connected right now. Check that it is on.",
+  full: "Pairnets cannot take more servers right now. Try again later.",
+  cloudflare_failed: "Cloudflare did not finish setting up the server, so nothing was kept. Try again in a few minutes.",
   server_error: "Something went wrong on our side.",
 };
 
@@ -111,6 +119,29 @@ export function finalize(resp: Response, isAsset: boolean, setCookies: string[])
   }
   for (const c of setCookies) headers.append("Set-Cookie", c);
   return new Response(resp.body, { status: resp.status, statusText: resp.statusText, headers });
+}
+
+/**
+ * Relayed answers come from people's own servers but are served on this service's origin. So nothing a server sends
+ * may act on that origin: its cookies, Clear-Site-Data and CORS headers are dropped, and the CSP makes any document a
+ * sandbox without scripts (an app ignores all of this; a browser that opens a relayed URL gets an inert page).
+ */
+export const RELAY_CSP = "default-src 'none'; sandbox; frame-ancestors 'none'";
+
+const NULL_BODY = new Set([101, 204, 205, 304]);
+
+export function finalizeRelay(resp: Response): Response {
+  // A WebSocket upgrade is handed back untouched (its headers no longer matter and the socket must stay attached).
+  if (resp.status === 101 || resp.webSocket) return resp;
+  const headers = new Headers(resp.headers);
+  for (const name of [...headers.keys()]) {
+    const n = name.toLowerCase();
+    if (n === "set-cookie" || n === "clear-site-data" || n.startsWith("access-control-")) headers.delete(name);
+  }
+  for (const [k, v] of Object.entries(SECURITY_HEADERS)) headers.set(k, v);
+  headers.set("Content-Security-Policy", RELAY_CSP);
+  headers.set("Cache-Control", "no-store");
+  return new Response(NULL_BODY.has(resp.status) ? null : resp.body, { status: resp.status, statusText: resp.statusText, headers });
 }
 
 export function escapeHtml(s: string | null | undefined): string {

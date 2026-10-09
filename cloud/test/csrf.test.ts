@@ -13,6 +13,9 @@ const MUTATIONS: [string, string][] = [
   ["DELETE", "/v1/sessions/ses_testsess000000000000000001"],
   ["POST", "/v1/logout"],
   ["POST", "/v1/app/approve"],
+  ["POST", "/v1/servers/approve"],
+  ["DELETE", "/v1/servers/nst_testnest000000000000000001"],
+  ["DELETE", "/v1/servers/nst_testnest000000000000000001/devices/dev1"],
   ["PUT", "/v1/me"],
   ["POST", "/account"],
   ["POST", "/login"],
@@ -24,7 +27,7 @@ describe("csrf", () => {
     const b = h.browser();
     await b.signInByEmail("you@example.com");
     for (const [method, path] of MUTATIONS) {
-      for (const origin of [null, "https://nest.pairnets.app", "http://id.pairnets.app", "https://id.pairnets.app.evil.example", "null", "https://ID.pairnets.app"]) {
+      for (const origin of [null, "https://nest.pairnets.app", "https://id.pairnets.app", "http://sync.pairnets.app", "https://sync.pairnets.app.evil.example", "null", "https://SYNC.pairnets.app"]) {
         const r = await b.call(method, path, { origin, body: {} });
         expect(r.status, `${method} ${path} from ${origin}`).toBe(403);
         if (path.startsWith("/v1/")) expect(r.json).toEqual({ error: "bad_origin", message: expect.any(String) });
@@ -36,7 +39,17 @@ describe("csrf", () => {
 
   it("only the server and app endpoints are exempt, and they work without Origin", async () => {
     expect([...ORIGIN_EXEMPT].sort()).toEqual(
-      ["/v1/app/logout", "/v1/app/poll", "/v1/app/start", "/v1/claim", "/v1/heartbeat", "/v1/nest/confirm", "/v1/nest/unlink"].sort(),
+      [
+        "/v1/app/logout",
+        "/v1/app/poll",
+        "/v1/app/start",
+        "/v1/claim",
+        "/v1/heartbeat",
+        "/v1/nest/confirm",
+        "/v1/nest/unlink",
+        "/v1/servers/poll",
+        "/v1/servers/start",
+      ].sort(),
     );
     const h = await Harness.create();
     const c = h.client();
@@ -47,6 +60,8 @@ describe("csrf", () => {
     expect((await c.call("POST", "/v1/heartbeat", { body: {} })).status).toBe(410);
     expect((await c.call("POST", "/v1/nest/confirm", { body: {} })).status).toBe(410);
     expect((await c.call("POST", "/v1/nest/unlink", { body: {} })).status).toBe(410);
+    expect((await c.call("POST", "/v1/servers/start", { body: {} })).status).toBe(200);
+    expect((await c.call("POST", "/v1/servers/poll", { body: { deviceCode: "x" } })).status).toBe(400);
   });
 
   it("exempt endpoints never act on the browser's cookie", async () => {

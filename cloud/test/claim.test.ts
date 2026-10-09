@@ -104,7 +104,7 @@ describe("claim", () => {
     const h = await Harness.create();
     const { b } = await signedIn(h);
     const code = (await b.call("POST", "/v1/nests/claim-codes", { body: {} })).json.code;
-    for (const bad of ["https://nest.example.com/", "http://nest.example.com", "https://localhost", "https://192.0.2.1", "https://id.pairnets.app"]) {
+    for (const bad of ["https://nest.example.com/", "http://nest.example.com", "https://localhost", "https://192.0.2.1", "https://id.pairnets.app", "https://sync.pairnets.app"]) {
       const r = await h.client().call("POST", "/v1/claim", { body: { code, publicUrl: bad, serverVersion: "1" } });
       expect(r.status, bad).toBe(400);
       expect(r.json.error, bad).toBe("bad_url");

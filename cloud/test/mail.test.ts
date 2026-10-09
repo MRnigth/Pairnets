@@ -29,9 +29,9 @@ describe("mail", () => {
     const send = async () => {
       const ctx = createExecutionContext();
       const r = await worker.fetch!(
-        new Request("https://id.pairnets.app/v1/login/email", {
+        new Request("https://sync.pairnets.app/v1/login/email", {
           method: "POST",
-          headers: { Origin: "https://id.pairnets.app", "Content-Type": "application/json", "CF-Connecting-IP": "203.0.113.9" },
+          headers: { Origin: "https://sync.pairnets.app", "Content-Type": "application/json", "CF-Connecting-IP": "203.0.113.9" },
           body: JSON.stringify({ email: "you@example.com", turnstile: "ok" }),
         }) as Request<unknown, IncomingRequestCfProperties>,
         h.env,

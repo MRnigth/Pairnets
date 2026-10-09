@@ -26,8 +26,9 @@ export async function nestLoginRoute(ctx: Ctx): Promise<Response> {
   const s = await loadBrowserSession(ctx);
   if (!s) return redirect(`/login?next=${encodeURIComponent(`/nest-login?${ctx.url.search.slice(1)}`)}`);
 
-  // 3. The nest exists and is this account's (one answer for both).
-  const nest = await ctx.env.DB.prepare("SELECT * FROM nests WHERE id = ?1").bind(nestId).first<NestRow>();
+  // 3. The nest exists and is this account's (one answer for both). Only nests on their own domain have a website to
+  //    sign in to; a relayed one (RELAY.md) gets the same answer as an unknown nest.
+  const nest = await ctx.env.DB.prepare("SELECT * FROM nests WHERE id = ?1 AND mode = 'url'").bind(nestId).first<NestRow>();
   if (!nest || nest.account_id !== s.accountId) {
     return htmlResponse(404, errorPage("Not your nest", "This nest is not linked to your Pairnets account."));
   }

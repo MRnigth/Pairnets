@@ -98,6 +98,7 @@ describe("public URL (section 1.8)", () => {
       "https://pairnets.app",
       "https://www.pairnets.app",
       "https://id.pairnets.app",
+      "https://sync.pairnets.app",
       "https://pairnets.app.",
       "https://a.localhost",
       `https://${"a".repeat(190)}.example.com`,

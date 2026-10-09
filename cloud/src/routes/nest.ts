@@ -25,9 +25,12 @@ interface Verified {
 
 /** Steps 1-5 of section 5.2, in order. */
 async function verifySigned(ctx: Ctx, purpose: NestPurpose): Promise<Verified> {
-  // 1. The nest exists (a pending nest older than 1 hour counts as gone: it is swept by the hourly cron).
+  // 1. The nest exists (a pending nest older than 1 hour counts as gone: it is swept by the hourly cron). These requests
+  //    belong to nests on their own domain; a relayed nest (RELAY.md) never sends them and counts as unknown here.
   const nestId = ctx.req.headers.get("X-Pairnets-Nest") ?? "";
-  const nest = NEST_ID_RE.test(nestId) ? await ctx.env.DB.prepare("SELECT * FROM nests WHERE id = ?1").bind(nestId).first<NestRow>() : null;
+  const nest = NEST_ID_RE.test(nestId)
+    ? await ctx.env.DB.prepare("SELECT * FROM nests WHERE id = ?1 AND mode = 'url'").bind(nestId).first<NestRow>()
+    : null;
   if (!nest || (nest.status === "pending" && nest.created_at <= ctx.now - PENDING_LIFETIME)) throw new HttpError(410, "unlinked");
 
   // 2. Signature over the header's exact ts text and the exact body bytes.

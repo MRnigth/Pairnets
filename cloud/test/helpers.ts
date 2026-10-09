@@ -1,18 +1,21 @@
-// Test harness: the real Worker with a fake mailer, a fake outside world (Google, Turnstile, Resend), a controllable
-// clock and keys generated at run time. Nothing here ever reaches the network.
+// Test harness: the real Worker with a fake mailer, a fake outside world (Google, Turnstile, Resend, Cloudflare's API),
+// a fake router with fake nests behind it (test/fake-relay.ts), a controllable clock and keys generated at run time.
+// Nothing here ever reaches the network.
 
 import { createExecutionContext, createScheduledController, waitOnExecutionContext } from "cloudflare:test";
 import { env as baseEnv } from "cloudflare:workers";
 import { expect } from "vitest";
 import { createWorker } from "../src/app";
 import { b64urlDecodeStrict, b64urlEncode, b64urlEncodeText, utf8 } from "../src/b64";
+import { CF_API } from "../src/cloudflare";
 import { randomBytes } from "../src/crypto";
 import type { Env } from "../src/env";
 import type { MailMessage, Mailer } from "../src/mail";
 import { signRequest, type NestPurpose } from "../src/nestsig";
 import { TURNSTILE_VERIFY_URL } from "../src/turnstile";
+import { CF_ACCOUNT, CF_TOKEN, FakeCloudflare, type FakeNestServer, RelayWorld } from "./fake-relay";
 
-export const ORIGIN = "https://id.pairnets.app";
+export const ORIGIN = "https://sync.pairnets.app";
 /** 2026-10-09T00:00:00Z, the contract's T. */
 export const T0 = 1791504000;
 
@@ -119,6 +122,8 @@ export class Harness {
   readonly net = new FakeNet();
   readonly clock = { now: T0 };
   readonly worker = createWorker({ mailer: this.mailer, fetch: this.net.fetch, now: () => this.clock.now });
+  readonly cf = new FakeCloudflare();
+  readonly world = new RelayWorld(this.cf, this.clock);
   turnstileAnswer = true;
 
   private constructor(
@@ -127,6 +132,7 @@ export class Harness {
     public readonly hbMaster: Uint8Array,
   ) {
     this.net.on(TURNSTILE_VERIFY_URL, () => jsonResponse(200, { success: this.turnstileAnswer }));
+    this.net.on(CF_API, this.cf.handle);
   }
 
   static async create(overrides: Partial<Env> = {}): Promise<Harness> {
@@ -150,9 +156,14 @@ export class Harness {
       GOOGLE_AUTH_URL: GOOGLE_AUTH,
       GOOGLE_TOKEN_URL: GOOGLE_TOKEN,
       GOOGLE_JWKS_URL: GOOGLE_JWKS,
+      CF_API_TOKEN: CF_TOKEN,
+      CF_ACCOUNT_ID: CF_ACCOUNT,
+      MAX_NESTS: "900",
       ...overrides,
     };
-    return new Harness(env, signing, hbMaster);
+    const h = new Harness(env, signing, hbMaster);
+    if (!overrides.ROUTER) h.env.ROUTER = h.world.binding();
+    return h;
   }
 
   async fetch(req: Request): Promise<Res> {
@@ -336,3 +347,41 @@ export function decodeJwsPart(part: string): any {
 }
 
 export { b64urlEncodeText };
+
+export interface ServerStart {
+  deviceCode: string;
+  userCode: string;
+}
+
+/** The installer's first call (RELAY.md 2.1). */
+export async function startServer(h: Harness, hostname = "soro", ip = "198.51.100.40"): Promise<{ res: Res; installer: Browser } & ServerStart> {
+  const installer = h.client(ip);
+  const res = await installer.call("POST", "/v1/servers/start", { body: { hostname, serverVersion: "1.0.48" } });
+  return { res, installer, deviceCode: res.json?.deviceCode, userCode: res.json?.userCode };
+}
+
+/**
+ * The whole "add a server" flow: the installer starts, the browser approves, the installer polls once and the fake nest
+ * starts with what it was given (tunnel token, nest key). Returns that nest.
+ */
+export async function addServer(h: Harness, browser: Browser, opts: { hostname?: string; label?: string; ip?: string } = {}): Promise<FakeNestServer> {
+  const { installer, deviceCode, userCode } = await startServer(h, opts.hostname ?? "soro", opts.ip);
+  const approved = await browser.call("POST", "/v1/servers/approve", { body: { userCode, approve: true, label: opts.label } });
+  expect(approved.status, approved.text).toBe(200);
+  h.advance(3);
+  const poll = await installer.call("POST", "/v1/servers/poll", { body: { deviceCode } });
+  expect(poll.status, poll.text).toBe(200);
+  return h.world.install(poll.json);
+}
+
+/** An app signs in for a server (RELAY.md 6): start, the browser allows it for that server, the first poll. */
+export async function appSignIn(h: Harness, browser: Browser, nestId: string, name = "Laptop", ip = "198.51.100.80"): Promise<{ app: Browser; poll: Res; deviceCode: string }> {
+  const app = h.client(ip);
+  const start = await app.call("POST", "/v1/app/start", { body: { name, system: "Windows 11", appVersion: "1.0.48" } });
+  expect(start.status, start.text).toBe(200);
+  const ok = await browser.call("POST", "/v1/app/approve", { body: { userCode: start.json.userCode, approve: true, nestId } });
+  expect(ok.status, ok.text).toBe(200);
+  h.advance(3);
+  const poll = await app.call("POST", "/v1/app/poll", { body: { deviceCode: start.json.deviceCode } });
+  return { app, poll, deviceCode: start.json.deviceCode };
+}

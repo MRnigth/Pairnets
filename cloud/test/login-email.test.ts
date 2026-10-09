@@ -17,7 +17,7 @@ describe("login-email", () => {
     const mails = h.mailer.to("you@example.com");
     expect(mails).toHaveLength(1);
     expect(mails[0].subject).toBe("Your Pairnets sign-in link");
-    expect(mails[0].text).toMatch(/https:\/\/id\.pairnets\.app\/login\/email#code=[A-Za-z0-9_-]{32}\n/);
+    expect(mails[0].text).toMatch(/https:\/\/sync\.pairnets\.app\/login\/email#code=[A-Za-z0-9_-]{32}\n/);
     expect(mails[0].text).not.toContain("next");
 
     const page = await b.call("GET", "/login/email");

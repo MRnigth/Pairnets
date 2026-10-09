@@ -17,6 +17,10 @@ export default defineConfig(async () => {
         wrangler: { configPath: "./wrangler.toml" },
         miniflare: {
           bindings: { TEST_MIGRATIONS: migrations },
+          // wrangler.toml binds ROUTER to the pairnets-router Worker, which is not part of this test runtime. Each
+          // test gives the Worker its own fake router instead (test/fake-relay.ts); this stand-in only lets the
+          // runtime start.
+          serviceBindings: { ROUTER: () => new Response("not used: the tests use a fake router", { status: 500 }) },
         },
       }),
     ],

@@ -1,4 +1,5 @@
-// Request pipeline and routing (CONTRACT.md section 6).
+// Request pipeline and routing (CONTRACT.md section 6, RELAY.md). /n/* is the relay to people's own servers and has a
+// pipeline of its own (relay.ts): it never reaches the body reader, the JSON rule or the Origin rule below.
 
 import { ASSETS } from "./assets";
 import { type Ctx, defaultDeps, type Deps } from "./context";
@@ -8,6 +9,7 @@ import { apiError, finalize, HttpError, htmlResponse, MESSAGES, redirect } from 
 import { ResendMailer } from "./mail";
 import { errorPage } from "./pages";
 import { hit, MINUTE } from "./ratelimit";
+import { relay } from "./relay";
 import {
   accountPageRoute,
   cancelClaimCodesRoute,
@@ -33,10 +35,23 @@ import {
 } from "./routes/login";
 import { heartbeatRoute, nestConfirmRoute, nestUnlinkRoute } from "./routes/nest";
 import { nestLoginRoute } from "./routes/nestlogin";
+import {
+  addPageRoute,
+  listServersRoute,
+  removeDeviceRoute,
+  removeServerRoute,
+  serverApproveRoute,
+  serverPollRoute,
+  serverRequestRoute,
+  serverStartRoute,
+} from "./routes/servers";
 
 export const MAX_BODY = 16 * 1024;
 
-/** These authenticate by code, HMAC or Bearer token, need no Origin and never read a cookie (section 6.3). */
+/**
+ * These authenticate by code, HMAC or Bearer token, need no Origin and never read a cookie (section 6.3). The relay
+ * (/n/*) is outside this rule altogether: it reads no cookie and passes none on.
+ */
 export const ORIGIN_EXEMPT = new Set([
   "/v1/claim",
   "/v1/nest/confirm",
@@ -45,11 +60,13 @@ export const ORIGIN_EXEMPT = new Set([
   "/v1/app/start",
   "/v1/app/poll",
   "/v1/app/logout",
+  "/v1/servers/start",
+  "/v1/servers/poll",
 ]);
 
 const MUTATING = new Set(["POST", "PATCH", "PUT", "DELETE"]);
 
-type Handler = (ctx: Ctx, param: string) => Promise<Response> | Response;
+type Handler = (ctx: Ctx, param: string, param2: string) => Promise<Response> | Response;
 
 interface Route {
   method: string;
@@ -79,6 +96,13 @@ const API_ROUTES: Route[] = [
   { method: "POST", pattern: /^\/v1\/app\/approve$/, handler: appApproveRoute },
   { method: "POST", pattern: /^\/v1\/app\/poll$/, handler: appPollRoute },
   { method: "POST", pattern: /^\/v1\/app\/logout$/, handler: appLogoutRoute },
+  { method: "POST", pattern: /^\/v1\/servers\/start$/, handler: serverStartRoute },
+  { method: "GET", pattern: /^\/v1\/servers\/requests\/([^/]+)$/, handler: serverRequestRoute },
+  { method: "POST", pattern: /^\/v1\/servers\/approve$/, handler: serverApproveRoute },
+  { method: "POST", pattern: /^\/v1\/servers\/poll$/, handler: serverPollRoute },
+  { method: "GET", pattern: /^\/v1\/servers$/, handler: listServersRoute },
+  { method: "DELETE", pattern: /^\/v1\/servers\/([^/]+)\/devices\/([^/]+)$/, handler: removeDeviceRoute },
+  { method: "DELETE", pattern: /^\/v1\/servers\/([^/]+)$/, handler: removeServerRoute },
 ];
 
 const PAGE_ROUTES: Route[] = [
@@ -89,17 +113,18 @@ const PAGE_ROUTES: Route[] = [
   { method: "GET", pattern: /^\/login\/google\/callback$/, handler: googleCallbackRoute },
   { method: "GET", pattern: /^\/account$/, handler: accountPageRoute },
   { method: "GET", pattern: /^\/app$/, handler: appPageRoute },
+  { method: "GET", pattern: /^\/add$/, handler: addPageRoute },
   { method: "GET", pattern: /^\/privacy$/, handler: () => redirect("https://pairnets.app/privacy") },
   { method: "GET", pattern: /^\/nest-login$/, handler: nestLoginRoute },
 ];
 
-function match(routes: Route[], method: string, path: string): { handler: Handler; param: string } | null {
+function match(routes: Route[], method: string, path: string): { handler: Handler; param: string; param2: string } | null {
   for (const r of routes) {
     if (r.method !== method) continue;
     const m = r.pattern.exec(path);
     if (!m) continue;
     try {
-      return { handler: r.handler, param: m[1] ? decodeURIComponent(m[1]) : "" };
+      return { handler: r.handler, param: m[1] ? decodeURIComponent(m[1]) : "", param2: m[2] ? decodeURIComponent(m[2]) : "" };
     } catch {
       return null; // malformed percent-encoding: no such thing
     }
@@ -166,7 +191,7 @@ async function route(ctx: Ctx, isApi: boolean): Promise<Response> {
     }
     const m = match(API_ROUTES, method, path);
     if (!m) throw new HttpError(404, "not_found");
-    return m.handler(ctx, m.param);
+    return m.handler(ctx, m.param, m.param2);
   }
 
   if (method === "GET" && path.startsWith("/assets/")) {
@@ -176,7 +201,12 @@ async function route(ctx: Ctx, isApi: boolean): Promise<Response> {
   }
   const m = match(PAGE_ROUTES, method, path);
   if (!m) throw new HttpError(404, "not_found", "There is no such page.");
-  return m.handler(ctx, m.param);
+  return m.handler(ctx, m.param, m.param2);
+}
+
+/** /n/<nestId>/... (and /n itself, so every answer under it is JSON). */
+export function isRelayPath(path: string): boolean {
+  return path === "/n" || path.startsWith("/n/");
 }
 
 /** Builds the Worker. Tests pass their own mailer, outbound fetch and clock. */
@@ -200,6 +230,7 @@ export function createWorker(overrides: Partial<Deps> = {}): ExportedHandler<Env
         mailer: deps.mailer ?? new ResendMailer(env.RESEND_API_KEY ?? "", env.MAIL_FROM ?? "", deps.fetch),
         defer: (p) => exec.waitUntil(p),
       };
+      if (isRelayPath(url.pathname)) return relay(ctx);
       let resp: Response;
       try {
         resp = await route(ctx, isApi);
@@ -215,7 +246,7 @@ export function createWorker(overrides: Partial<Deps> = {}): ExportedHandler<Env
     },
 
     async scheduled(_controller: ScheduledController, env: Env): Promise<void> {
-      const counts = await sweep(env, deps.now());
+      const counts = await sweep(env, deps.now(), deps.fetch);
       console.log("sweep", JSON.stringify(counts));
     },
   };

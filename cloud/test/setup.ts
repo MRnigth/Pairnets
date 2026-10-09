@@ -13,6 +13,8 @@ export const TABLES = [
   "login_challenges",
   "device_logins",
   "claim_codes",
+  "server_links",
+  "router_state",
   "nests",
   "accounts",
 ];

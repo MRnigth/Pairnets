@@ -45,6 +45,13 @@ pre { white-space: pre-wrap; word-break: break-all; background: var(--bg); borde
 dl { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; }
 dt { color: var(--muted); }
 dd { margin: 0; }
+fieldset { border: 1px solid var(--line); border-radius: 8px; margin: 12px 0; padding: 8px 12px; }
+legend { color: var(--muted); padding: 0 4px; }
+label.choice { display: flex; gap: 8px; align-items: center; margin: 6px 0; }
+label.choice input { width: auto; }
+details.card > summary { font-size: 1.1rem; font-weight: 600; cursor: pointer; }
+details.card[open] > summary { margin-bottom: 12px; }
+.devices > li { padding: 8px 0; }
 `;
 
 const SHARED_JS = String.raw`
@@ -143,6 +150,81 @@ const ACCOUNT_JS = String.raw`(function () {
       if (ok(res)) { document.getElementById("claim").hidden = true; pnShow(status, "Unused codes cancelled.", false); }
     });
   });
+  function bytes(n) {
+    if (typeof n !== "number") return "unknown";
+    var units = ["bytes", "KB", "MB", "GB", "TB"];
+    var i = 0;
+    while (n >= 1000 && i < units.length - 1) { n = n / 1000; i++; }
+    return (i === 0 ? n : n.toFixed(1)) + " " + units[i];
+  }
+  function el(tag, cls, text) {
+    var x = document.createElement(tag);
+    if (cls) x.className = cls;
+    if (text !== undefined) x.textContent = text;
+    return x;
+  }
+  var servers = document.getElementById("servers");
+  function fillServer(li, s) {
+    var pill = li.querySelector("[data-field=online]");
+    pill.textContent = s.online ? "online" : "offline";
+    pill.className = "pill " + (s.online ? "online" : "offline");
+    var details = li.querySelector("[data-field=details]");
+    var parts = [];
+    if (s.serverVersion) parts.push("Version " + s.serverVersion);
+    if (s.online) parts.push(bytes(s.freeBytes) + " free");
+    else parts.push("Not connected right now" + (s.lastSeenAt ? " (last seen " + new Date(s.lastSeenAt).toLocaleString() + ")" : ""));
+    details.textContent = parts.join(" \u00b7 ");
+    var list = li.querySelector("[data-field=devices]");
+    while (list.firstChild) list.removeChild(list.firstChild);
+    if (!s.online) { list.appendChild(el("li", "muted", "Shown when the server is connected.")); return; }
+    if (!s.devices.length) { list.appendChild(el("li", "muted", "None yet.")); return; }
+    s.devices.forEach(function (d) {
+      var item = el("li");
+      item.setAttribute("data-device", d.id);
+      var line = el("div");
+      line.appendChild(el("strong", "", d.name || "Computer"));
+      if (d.system) line.appendChild(el("span", "muted", " " + d.system));
+      item.appendChild(line);
+      item.appendChild(el("div", "muted", d.lastSeen ? "Last synced " + new Date(d.lastSeen).toLocaleString() : "Not synced yet"));
+      var actions = el("div", "actions");
+      var b = el("button", "danger", "Remove");
+      b.type = "button";
+      b.setAttribute("data-action", "remove-device");
+      actions.appendChild(b);
+      item.appendChild(actions);
+      list.appendChild(item);
+    });
+  }
+  function loadServers() {
+    if (!servers || !servers.querySelector("[data-server]")) return;
+    pnApi("GET", "/v1/servers").then(function (res) {
+      if (!ok(res) || !Array.isArray(res.body)) return;
+      res.body.forEach(function (s) {
+        var li = servers.querySelector('[data-server="' + s.id + '"]');
+        if (li) fillServer(li, s);
+      });
+    });
+  }
+  if (servers) servers.addEventListener("click", function (ev) {
+    var b = ev.target.closest("button[data-action]");
+    if (!b) return;
+    var li = b.closest("[data-server]");
+    var id = li && li.getAttribute("data-server");
+    if (!id) return;
+    if (b.getAttribute("data-action") === "remove-device") {
+      var dev = b.closest("[data-device]");
+      if (!dev || !confirm("Remove this computer? It stops syncing until it signs in again.")) return;
+      b.disabled = true;
+      pnApi("DELETE", "/v1/servers/" + id + "/devices/" + encodeURIComponent(dev.getAttribute("data-device"))).then(function (res) {
+        b.disabled = false;
+        if (ok(res)) loadServers();
+      });
+    } else if (b.getAttribute("data-action") === "remove-server") {
+      if (!confirm("Remove this server from your account? Its computers stop syncing through Pairnets. The files stay on the server.")) return;
+      pnApi("DELETE", "/v1/servers/" + id).then(function (res) { if (ok(res)) location.reload(); });
+    }
+  });
+  loadServers();
   var nests = document.getElementById("nests");
   if (nests) nests.addEventListener("click", function (ev) {
     var b = ev.target.closest("button[data-action]");
@@ -187,12 +269,48 @@ const APP_JS = String.raw`(function () {
   var code = box.getAttribute("data-code");
   var status = document.getElementById("status");
   function answer(approve) {
+    var body = { userCode: code, approve: approve };
+    if (approve) {
+      var chosen = box.querySelector("input[name=nest]:checked");
+      if (!chosen) { pnShow(status, "Choose a server first.", true); return; }
+      body.nestId = chosen.value;
+    }
     var buttons = box.querySelectorAll("button");
     for (var i = 0; i < buttons.length; i++) buttons[i].disabled = true;
-    pnApi("POST", "/v1/app/approve", { userCode: code, approve: approve }).then(function (res) {
+    pnApi("POST", "/v1/app/approve", body).then(function (res) {
       if (res.body && res.body.error === "unauthorized") { location.href = "/login?next=" + encodeURIComponent("/app?code=" + code); return; }
       if (!res.ok) { pnShow(status, res.body.message || "That did not work.", true); return; }
       pnShow(status, approve ? "Allowed. Go back to the app." : "Refused. The app will not be signed in.", false);
+    });
+  }
+  var a = document.getElementById("approve");
+  var d = document.getElementById("deny");
+  if (a) a.addEventListener("click", function () { answer(true); });
+  if (d) d.addEventListener("click", function () { answer(false); });
+})();
+`;
+
+const ADD_JS = String.raw`(function () {
+  "use strict";
+  var box = document.getElementById("server-request");
+  if (!box) return;
+  var code = box.getAttribute("data-code");
+  var status = document.getElementById("status");
+  function answer(approve) {
+    var buttons = box.querySelectorAll("button");
+    for (var i = 0; i < buttons.length; i++) buttons[i].disabled = true;
+    var label = document.getElementById("label");
+    var body = { userCode: code, approve: approve };
+    if (approve && label && label.value.trim()) body.label = label.value.trim();
+    if (approve) pnShow(status, "Adding the server...", false);
+    pnApi("POST", "/v1/servers/approve", body).then(function (res) {
+      if (res.body && res.body.error === "unauthorized") { location.href = "/login?next=" + encodeURIComponent("/add?code=" + code); return; }
+      if (!res.ok) {
+        pnShow(status, res.body.message || "That did not work.", true);
+        if (res.status >= 500) for (var j = 0; j < buttons.length; j++) buttons[j].disabled = false;
+        return;
+      }
+      pnShow(status, approve ? "Added. The installer on the server finishes by itself in a minute or two." : "Refused. The server was not added.", false);
     });
   }
   var a = document.getElementById("approve");
@@ -208,4 +326,5 @@ export const ASSETS: Record<string, { type: string; body: string }> = {
   "email.js": { type: "text/javascript; charset=utf-8", body: SHARED_JS + EMAIL_JS },
   "account.js": { type: "text/javascript; charset=utf-8", body: SHARED_JS + ACCOUNT_JS },
   "app.js": { type: "text/javascript; charset=utf-8", body: SHARED_JS + APP_JS },
+  "add.js": { type: "text/javascript; charset=utf-8", body: SHARED_JS + ADD_JS },
 };

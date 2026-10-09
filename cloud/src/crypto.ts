@@ -24,7 +24,7 @@ export function randomBase32(n: number, alphabet: string): string {
   return s;
 }
 
-export function newId(prefix: "acc" | "nst" | "ses" | "chl" | "dvl"): string {
+export function newId(prefix: "acc" | "nst" | "ses" | "chl" | "dvl" | "svl"): string {
   return `${prefix}_${randomBase32(26, B32_LOWER)}`;
 }
 

@@ -1,4 +1,5 @@
-// The account page and account API (CONTRACT.md section 6.7).
+// The account page and account API (CONTRACT.md section 6.7). Servers reached through the service (RELAY.md) have
+// their own API in servers.ts; the /v1/nests endpoints here are about nests on their own domain ('url' mode) only.
 
 import { audit } from "../audit";
 import type { Ctx } from "../context";
@@ -7,6 +8,7 @@ import { cleanLabel, iso, NEST_ID_RE, SESSION_ID_RE } from "../formats";
 import { HttpError, htmlResponse, json, noContent, redirect } from "../http";
 import { sendNotice } from "../mail";
 import { accountPage, type NestView } from "../pages";
+import { runRouterLogged } from "../router";
 import { DAY, hit } from "../ratelimit";
 import { jsonBody } from "../request";
 import {
@@ -18,8 +20,10 @@ import {
   requireBrowserOrApp,
   requireRecent,
 } from "../sessions";
+import { serversOf } from "./servers";
 
-export const MAX_NESTS = 3;
+/** Nests per account, both kinds together (pending ones count). */
+export const MAX_NESTS_PER_ACCOUNT = 3;
 export const MAX_UNUSED_CODES = 5;
 export const MAX_CODES_PER_DAY = 20;
 export const CLAIM_CODE_LIFETIME = 600;
@@ -30,7 +34,7 @@ export interface NestRow {
   account_id: string;
   label: string;
   public_url: string;
-  status: "pending" | "active";
+  status: "pending" | "active" | "broken";
   key_version: number;
   hosted_login: number;
   created_at: number;
@@ -41,6 +45,9 @@ export interface NestRow {
   last_ready: number | null;
   last_public_host: string | null;
   last_hosted_login: number | null;
+  mode: "url" | "relay";
+  tunnel_id: string | null;
+  routed_version: number | null;
 }
 
 export function isOnline(n: NestRow, now: number): boolean {
@@ -65,8 +72,9 @@ export function nestJson(n: NestRow, now: number): Record<string, unknown> {
   };
 }
 
+/** The account's nests on their own domain (the version 1 kind). */
 async function nestsOf(ctx: Ctx, accountId: string): Promise<NestRow[]> {
-  const r = await ctx.env.DB.prepare("SELECT * FROM nests WHERE account_id = ?1 ORDER BY created_at, id").bind(accountId).all<NestRow>();
+  const r = await ctx.env.DB.prepare("SELECT * FROM nests WHERE account_id = ?1 AND mode = 'url' ORDER BY created_at, id").bind(accountId).all<NestRow>();
   return r.results;
 }
 
@@ -88,12 +96,13 @@ export async function accountPageRoute(ctx: Ctx): Promise<Response> {
   const account = await accountRow(ctx, s.accountId);
   if (!account) return redirect("/login?next=/account");
   const nests = await nestsOf(ctx, s.accountId);
+  const servers = await serversOf(ctx, s.accountId);
   const sessions = await sessionRows(ctx, s.accountId);
   const view: NestView[] = nests.map((n) => ({
     nestId: n.id,
     label: n.label,
     publicUrl: n.public_url,
-    status: n.status,
+    status: n.status === "active" ? "active" : "pending",
     online: n.status !== "active" || n.last_seen_at === null ? "unknown" : isOnline(n, ctx.now) ? "online" : "offline",
     serverVersion: n.last_version,
     lastSeenAt: n.last_seen_at,
@@ -105,6 +114,7 @@ export async function accountPageRoute(ctx: Ctx): Promise<Response> {
     accountPage({
       accountId: account.id,
       email: account.email,
+      servers: servers.map((n) => ({ id: n.id, label: n.label, status: n.status === "active" ? "active" : "pending" })),
       nests: view,
       sessions: sessions.map((r) => ({
         id: r.id,
@@ -146,6 +156,11 @@ export async function deleteMeRoute(ctx: Ctx): Promise<Response> {
   if (account) await sendNotice(ctx, null, account.email, "account_deleted");
   const db = ctx.env.DB;
   const id = s.accountId;
+  // The account's relayed servers: their rows go with the account; the router deploy that follows drops their links
+  // and then deletes their tunnels (the hourly cron deletes any tunnel left over).
+  const tunnels = (
+    await db.prepare("SELECT tunnel_id FROM nests WHERE account_id = ?1 AND mode = 'relay' AND tunnel_id IS NOT NULL").bind(id).all<{ tunnel_id: string }>()
+  ).results.map((r) => r.tunnel_id);
   // Foreign keys cascade from accounts; the explicit deletes make the result independent of that setting.
   await db.batch([
     db.prepare("DELETE FROM sessions WHERE account_id = ?1").bind(id),
@@ -153,11 +168,13 @@ export async function deleteMeRoute(ctx: Ctx): Promise<Response> {
     db.prepare("DELETE FROM nests WHERE account_id = ?1").bind(id),
     db.prepare("DELETE FROM claim_codes WHERE account_id = ?1").bind(id),
     db.prepare("DELETE FROM device_logins WHERE account_id = ?1").bind(id),
+    db.prepare("DELETE FROM server_links WHERE account_id = ?1").bind(id),
     db.prepare("DELETE FROM audit WHERE account_id = ?1").bind(id),
     db.prepare("DELETE FROM login_challenges WHERE email = ?1").bind(account?.email ?? ""),
     db.prepare("DELETE FROM accounts WHERE id = ?1").bind(id),
   ]);
   clearSessionCookie(ctx);
+  if (tunnels.length) ctx.defer(runRouterLogged(ctx.env, ctx.now, ctx.deps.fetch, { alsoDelete: tunnels }));
   return noContent();
 }
 
@@ -179,7 +196,7 @@ export async function createClaimCodeRoute(ctx: Ctx): Promise<Response> {
   if (label === "invalid") throw new HttpError(400, "bad_request");
 
   const nests = await ctx.env.DB.prepare("SELECT COUNT(*) AS n FROM nests WHERE account_id = ?1").bind(s.accountId).first<{ n: number }>();
-  if ((nests?.n ?? 0) >= MAX_NESTS) throw new HttpError(409, "nest_limit");
+  if ((nests?.n ?? 0) >= MAX_NESTS_PER_ACCOUNT) throw new HttpError(409, "nest_limit");
   const unused = await ctx.env.DB.prepare("SELECT COUNT(*) AS n FROM claim_codes WHERE account_id = ?1 AND used_at IS NULL AND expires_at > ?2")
     .bind(s.accountId, ctx.now)
     .first<{ n: number }>();
@@ -208,7 +225,7 @@ export async function cancelClaimCodesRoute(ctx: Ctx): Promise<Response> {
 
 async function ownNest(ctx: Ctx, accountId: string, nestId: string): Promise<NestRow> {
   if (!NEST_ID_RE.test(nestId)) throw new HttpError(404, "not_found");
-  const n = await ctx.env.DB.prepare("SELECT * FROM nests WHERE id = ?1 AND account_id = ?2").bind(nestId, accountId).first<NestRow>();
+  const n = await ctx.env.DB.prepare("SELECT * FROM nests WHERE id = ?1 AND account_id = ?2 AND mode = 'url'").bind(nestId, accountId).first<NestRow>();
   if (!n) throw new HttpError(404, "not_found");
   return n;
 }

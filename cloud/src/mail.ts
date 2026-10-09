@@ -80,7 +80,7 @@ function layout(title: string, before: string[], link?: { href: string; text: st
 ${paragraphsHtml(before)}
 ${button}
 ${paragraphsHtml(after)}
-<p style="color:#555555;font-size:13px">Pairnets account service (id.pairnets.app)</p>
+<p style="color:#555555;font-size:13px">Pairnets account service (sync.pairnets.app)</p>
 </body></html>`;
 }
 
@@ -99,10 +99,19 @@ export function loginEmail(to: string, link: string): MailMessage {
   };
 }
 
-export type NoticeKind = "identity_added_google" | "identity_added_email" | "nest_linked" | "nest_removed" | "nest_unlinked" | "account_deleted";
+export type NoticeKind =
+  | "identity_added_google"
+  | "identity_added_email"
+  | "nest_linked"
+  | "nest_removed"
+  | "nest_unlinked"
+  | "server_added"
+  | "server_removed"
+  | "account_deleted";
 
+/** `url` is the nest's address for own-domain nests, and the server's name for relayed servers. */
 export function noticeEmail(to: string, kind: NoticeKind, url?: string): MailMessage {
-  const help = "If this was not you, sign in at https://id.pairnets.app/account, check your nests and signed-in browsers, and remove anything you do not know.";
+  const help = "If this was not you, sign in at https://sync.pairnets.app/account, check your servers and signed-in browsers, and remove anything you do not know.";
   let subject: string;
   let lines: string[];
   switch (kind) {
@@ -126,9 +135,17 @@ export function noticeEmail(to: string, kind: NoticeKind, url?: string): MailMes
       subject = `A nest was unlinked from your account: ${url}`;
       lines = [`The nest ${url} unlinked itself from your Pairnets account (someone ran "hosted unlink" on that server).`, help];
       break;
+    case "server_added":
+      subject = `A server was added to your account: ${url}`;
+      lines = [`The server "${url}" was added to your Pairnets account. Computers you sign in with this account can now choose it.`, help];
+      break;
+    case "server_removed":
+      subject = `A server was removed from your account: ${url}`;
+      lines = [`The server "${url}" was removed from your Pairnets account. Its computers no longer reach it through Pairnets; its files stay on the server.`, help];
+      break;
     case "account_deleted":
       subject = "Your Pairnets account was deleted";
-      lines = ["Your Pairnets account and everything stored about it were deleted. Your nests keep working with their own sign-in methods."];
+      lines = ["Your Pairnets account and everything stored about it were deleted. Your servers keep their files."];
       break;
   }
   return { to, subject, text: `${lines.join("\n\n")}\n`, html: layout(subject, lines) };

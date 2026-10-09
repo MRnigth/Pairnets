@@ -14,7 +14,7 @@ describe("login-google", () => {
     expect(start.status).toBe(302);
     const p = auth.searchParams;
     expect(p.get("client_id")).toBe(GOOGLE_CLIENT_ID);
-    expect(p.get("redirect_uri")).toBe("https://id.pairnets.app/login/google/callback");
+    expect(p.get("redirect_uri")).toBe("https://sync.pairnets.app/login/google/callback");
     expect(p.get("response_type")).toBe("code");
     expect(p.get("scope")).toBe("openid email");
     expect(p.get("state")).toMatch(/^[A-Za-z0-9_-]{22}$/);
@@ -28,7 +28,7 @@ describe("login-google", () => {
     expect(t.get("code")).toBe("test-auth-code");
     expect(t.get("client_id")).toBe(GOOGLE_CLIENT_ID);
     expect(t.get("client_secret")).toBe("test-google-secret");
-    expect(t.get("redirect_uri")).toBe("https://id.pairnets.app/login/google/callback");
+    expect(t.get("redirect_uri")).toBe("https://sync.pairnets.app/login/google/callback");
     expect(b64urlEncode(await sha256(t.get("code_verifier")!))).toBe(p.get("code_challenge"));
 
     expect(callback.status).toBe(302);

@@ -1,4 +1,5 @@
-// pairnets-id: the Pairnets Cloud account service (cloud/CONTRACT.md). Nothing is deployed.
+// pairnets-sync: Pairnets Cloud accounts, pages and the relay to people's own servers (cloud/CONTRACT.md,
+// cloud/RELAY.md). Nothing is deployed.
 
 import { createWorker } from "./app";
 
