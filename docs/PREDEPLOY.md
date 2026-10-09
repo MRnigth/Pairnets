@@ -40,7 +40,14 @@ Environment for `installed-linux` (all set by the runner):
 | `PAIRNETS_E2E_DATA_DIR` | `/var/lib/pairnets` | for the server CLI (`runuser -u pairnets -- /opt/pairnets/pairnets-server <cmd> --data-dir <dir>`) |
 | `PAIRNETS_E2E_SERVICE` | `pairnets-server` | stopped and started with `systemctl` around CLI commands that need the server stopped |
 | `PAIRNETS_E2E_MAIL_DIR` | `/var/lib/pairnets-e2e/mail` | where the box's fake SMTP server writes each message (raw DATA) as `<unix-ms>-<n>.eml` |
-| `PAIRNETS_E2E_REPORT` | `C:\...\tour-installed-linux.json` | the tour writes what it covered here; the runner fails when the file is missing |
+| `PAIRNETS_E2E_REPORT` | `C:\...\tour-installed-linux.json` | the tour writes what it covered here, only once it passed; the runner fails when the file is missing |
+
+For any target, `PAIRNETS_E2E_ARTIFACTS` (optional) is where the browser tests keep a screenshot and a Playwright
+trace of a flow that failed (default `tests/Pairnets.Browser.Tests/TestResults/browser`).
+
+On the box, run the browser tests before the API tour. The browser tests restart the service first
+(`systemctl stop`/`start`, which also resets the nest's limit of five emails an hour), and the tour's last step is a
+real "Update server" that the runner then checks.
 
 On the box, the test-only settings are: `Sync__HttpsUrl=https://127.0.0.1:15443`, a run-time "localhost"
 certificate in `Sync__TlsDir`, `Sync__PublicUrl=https://localhost:15443`, SMTP `127.0.0.1:15025` without TLS
