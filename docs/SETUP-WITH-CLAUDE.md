@@ -21,14 +21,14 @@ needed.
 ## Prompt 1: install the server (paste into Claude Code on the Ubuntu server)
 
 First create the tunnel and its public hostname in the Cloudflare dashboard yourself
-([HOWTO section 2](HOWTO.md#2-create-a-cloudflare-tunnel)), and have the hostname ready. It becomes
+([HOWTO section 3](HOWTO.md#create-a-cloudflare-tunnel)), and have the hostname ready. It becomes
 your nest's name. Keep the tunnel token to yourself: you paste it into the installer, not into
 Claude.
 
 ```text
 Please install the Pairnets sync server on this Ubuntu machine for me. It is reached through a
 Cloudflare Tunnel. Pairnets is in the public GitHub repo MRnigth/Pairnets; its install guide is
-docs/HOWTO.md (sections 2-4) and the installer is install.sh inside the release file
+docs/HOWTO.md (sections 3 and 4, "Advanced: your own domain") and the installer is install.sh inside the release file
 pairnets-server-linux-x64.tar.gz. My tunnel's public hostname (my nest's name) is: <https://sync.example.com>
 
 Work step by step, explain each step in one sentence before you do it, and stop and ask me if

@@ -2,15 +2,22 @@
 # Pairnets server installer for Ubuntu (the server is "the nest"). Idempotent: run it again to upgrade.
 # The self-updater (update.sh) runs it the same way on every upgrade, without a terminal.
 #
-#   sudo ./install.sh --public-url https://sync.example.com
-#       first install: the server listens on 127.0.0.1 only and a Cloudflare Tunnel gives it its public
-#       name, with no open ports (asks for the tunnel token, or reads it from TUNNEL_TOKEN; see docs/HOWTO.md)
 #   sudo ./install.sh
-#       upgrade: keeps the data, settings, name and tunnel already configured
+#       first install: links this server to your Pairnets account. It prints a link; open it on any device,
+#       sign in and press "Add this server" (pairnets-link.sh does this part). Your computers then reach the
+#       server through https://sync.pairnets.app: no open ports, no domain, nothing to set up in Cloudflare.
+#       On a server that is already installed it upgrades, keeping the data, settings, link or name and tunnel,
+#       and never starts a new link.
+#   sudo ./install.sh --link
+#       link an installed server to your Pairnets account again (after it was removed from the account, or to
+#       move it from its own domain to sync.pairnets.app)
+#   sudo ./install.sh --public-url https://sync.example.com
+#       advanced, your own domain: the server listens on 127.0.0.1 only and your own Cloudflare Tunnel gives it
+#       its public name (asks for the tunnel token, or reads it from TUNNEL_TOKEN; see docs/HOWTO.md)
 #
-# At the end it prints the nest's address and, on a terminal, a one-time link to set up the nest's
-# website. Then each computer installs the Pairnets app, types the nest's name and signs in with the
-# browser. Exits non-zero when the server does not answer after the install. More options: --help.
+# At the end it prints the next steps: for a linked server, sign in on each computer with the same Pairnets
+# account; with your own domain, a one-time link (on a terminal) to set up the nest's website. Exits non-zero
+# when the server does not answer after the install. More options: --help.
 #
 # Run it from the extracted release folder (it must contain pairnets-server).
 set -euo pipefail
@@ -20,14 +27,19 @@ BIND=""
 PORT_GIVEN=""
 TUNNEL=""
 PUBLIC_URL=""
+LINK=""
 SRC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 INSTALL_DIR=/opt/pairnets
 DATA_DIR=/var/lib/pairnets
 CONF_DIR=/etc/pairnets
 ENV_FILE=$CONF_DIR/pairnets.env
 TUNNEL_ENV=$CONF_DIR/tunnel.env
+RELAY_ENV=$CONF_DIR/relay.env
 SERVICE=pairnets-server
 TUNNEL_SERVICE=pairnets-tunnel
+# Pairnets reaches a linked server on this port, always (cloud/RELAY.md, section 5).
+RELAY_PORT=5075
+DEFAULT_RELAY_SERVICE=https://sync.pairnets.app
 
 die() { echo "error: $*" >&2; exit 1; }
 
@@ -35,14 +47,18 @@ usage() {
   cat <<'USAGE'
 Usage: sudo ./install.sh [options]
 
-  sudo ./install.sh --public-url https://sync.example.com
-      First install, or a new name for the nest: the public name you gave your Cloudflare Tunnel.
-      Asks for the tunnel token (or reads it from TUNNEL_TOKEN). See docs/HOWTO.md.
   sudo ./install.sh
-      Upgrade: keeps the data, settings, name and tunnel already configured.
+      First install: links this server to your Pairnets account. It prints a link to open on any
+      device; sign in there and press "Add this server". Nothing to set up in Cloudflare.
+      On a server that is already installed: upgrade, keeping the data, settings, link and tunnel.
+  sudo ./install.sh --public-url https://sync.example.com
+      Advanced, your own domain: the public name you gave your own Cloudflare Tunnel. Asks for the
+      tunnel token (or reads it from TUNNEL_TOKEN). See docs/HOWTO.md.
 
 Options:
-  --public-url https://<name>   the nest's public name (sets up the Cloudflare Tunnel)
+  --link                        link this server to your Pairnets account (again); a first install
+                                without options does this by itself
+  --public-url https://<name>   your own domain as the nest's public name (sets up your Cloudflare Tunnel)
   --cloudflare-tunnel           set up the tunnel again (new token) for the name already configured
   --bind <ip>                   advanced: listen on this address instead of using the tunnel
   --port <port>                 the port the server listens on (default 5075)
@@ -79,12 +95,20 @@ while [[ $# -gt 0 ]]; do
       set_option "$1" "$2"
       shift 2 ;;
     --bind=*|--port=*|--public-url=*) set_option "${1%%=*}" "${1#*=}"; shift ;;
+    --link) LINK=asked; shift ;;
     --cloudflare-tunnel) TUNNEL=1; shift ;;
     -h|--help) usage; exit 0 ;;
     https://*) usage_error "unknown option: $1 (to give the nest this name use: --public-url $1)" ;;
     *) usage_error "unknown option: $1" ;;
   esac
 done
+
+# Linked to Pairnets (--link) and your own domain (--public-url) are two ways to the same thing: one at a time.
+if [[ -n "$LINK" ]]; then
+  [[ -z "$PUBLIC_URL" ]] || usage_error "use --link (your Pairnets account, sync.pairnets.app) or --public-url (your own domain), not both"
+  [[ -z "$BIND" && -z "$TUNNEL" ]] || usage_error "--link sets up the tunnel itself, which listens on 127.0.0.1; leave out --bind and --cloudflare-tunnel"
+  [[ -z "$PORT_GIVEN" || "$PORT" == "$RELAY_PORT" ]] || usage_error "--link uses port $RELAY_PORT (where Pairnets reaches the server); leave out --port"
+fi
 
 [[ $EUID -eq 0 ]] || die "run as root (sudo $0)"
 [[ -x "$SRC_DIR/pairnets-server" ]] || die "pairnets-server binary not found next to install.sh"
@@ -112,6 +136,11 @@ public_name() {
       return 0
     fi
   done
+}
+
+# relay_value <key>: a value from $RELAY_ENV (written by pairnets-link.sh), or nothing.
+relay_value() {
+  grep -m1 "^$1=" "$RELAY_ENV" 2>/dev/null | cut -d= -f2- || true
 }
 
 # 0. Pairnets used to be called Tether. The first time, take over a Tether server on this machine:
@@ -149,10 +178,57 @@ if [[ -f "$ENV_FILE" ]]; then
   EXISTING_URL="$(grep '^ASPNETCORE_URLS=' "$ENV_FILE" | head -n1 | cut -d= -f2- || true)"
 fi
 EXISTING_PUBLIC_URL="$(public_name)"
+EXISTING_RELAY="$(env_value Sync__RelayNestId)"
+EXISTING_RELAY_SERVICE="$(env_value Sync__RelayServiceUrl)"
+EXISTING_RELAY_SERVICE="${EXISTING_RELAY_SERVICE:-$DEFAULT_RELAY_SERVICE}"
 
 if [[ -n "$PUBLIC_URL" ]]; then
   PUBLIC_URL="${PUBLIC_URL%/}"
   [[ "$PUBLIC_URL" =~ ^https://[A-Za-z0-9.-]+(:[0-9]+)?$ ]] || die "--public-url must look like https://sync.example.com (https, no path)"
+fi
+
+# 0b. Linking to a Pairnets account (cloud/RELAY.md, section 2). A first install without options does it, and --link. It
+#     never happens on an upgrade: an installed server (it has $ENV_FILE) keeps what it has. pairnets-link.sh prints
+#     a link and a code, waits until the owner approves the server on any device, and writes the tunnel token
+#     (tunnel.env) and the server's id and key at Pairnets (relay.env), both root only. From here on the tunnel goes
+#     the same way as with --public-url, except that Pairnets made it and there is no name of our own.
+if [[ -z "$LINK" && -z "$PUBLIC_URL" && -z "$BIND" && -z "$TUNNEL" && ! -f "$ENV_FILE" ]]; then
+  LINK=first
+fi
+RELAY_ID=""
+RELAY_KEY=""
+RELAY_SERVICE=""
+TUNNEL_TOKEN="${TUNNEL_TOKEN:-}"
+if [[ -n "$LINK" ]]; then
+  [[ -z "$PORT_GIVEN" || "$PORT" == "$RELAY_PORT" ]] || die "Pairnets reaches the server on port $RELAY_PORT; leave out --port (or use --public-url for your own domain)"
+  PORT=$RELAY_PORT
+  PORT_GIVEN=1
+  # What the rest needs is checked first, so a link is not made for an install that cannot finish.
+  [[ -f "$SRC_DIR/pairnets-link.sh" ]] || die "pairnets-link.sh not found next to install.sh"
+  [[ -f "$SRC_DIR/$TUNNEL_SERVICE.service" ]] || die "$TUNNEL_SERVICE.service not found next to install.sh"
+  command -v curl >/dev/null || die "curl is required to link this server to Pairnets (sudo apt install curl)"
+  if [[ ! -f "$ENV_FILE" ]]; then
+    command -v openssl >/dev/null || die "openssl is required to generate a token (apt install openssl)"
+  fi
+  # A first install that stopped after the link was made (a failed download, say) picks up from there, as long as
+  # the link is fresh: Pairnets forgets a server that never connected within an hour.
+  if [[ "$LINK" == first && -f "$TUNNEL_ENV" && -n "$(find "$RELAY_ENV" -mmin -50 2>/dev/null || true)" ]]; then
+    echo "Using the link to your Pairnets account made a moment ago"
+  else
+    bash "$SRC_DIR/pairnets-link.sh"
+  fi
+  RELAY_ID="$(relay_value Sync__RelayNestId)"
+  RELAY_KEY="$(relay_value Sync__RelayKey)"
+  RELAY_SERVICE="$(relay_value Sync__RelayServiceUrl)"
+  RELAY_SERVICE="${RELAY_SERVICE:-$DEFAULT_RELAY_SERVICE}"
+  TUNNEL_TOKEN="$(grep -m1 '^TUNNEL_TOKEN=' "$TUNNEL_ENV" 2>/dev/null | cut -d= -f2- || true)"
+  if [[ ! "$RELAY_ID" =~ ^nst_[0-9a-hjkmnp-tv-z]{26}$ || ! "$RELAY_KEY" =~ ^[A-Za-z0-9_-]{43}$ || -z "$TUNNEL_TOKEN" ]]; then
+    die "the link to your Pairnets account was not finished (see above); run this again"
+  fi
+  TUNNEL=1
+elif [[ -n "$EXISTING_RELAY" && -n "$TUNNEL" && -z "$PUBLIC_URL" ]]; then
+  # Pairnets made this server's tunnel; a token for another one would cut it off.
+  die "this server is linked to your Pairnets account, which made its tunnel. To get a new one, link it again: sudo ./install.sh --link"
 fi
 
 # cloudflared, from Cloudflare's signed package repository (for the tunnel).
@@ -170,8 +246,7 @@ install_cloudflared() {
   DEBIAN_FRONTEND=noninteractive apt-get install -y -qq cloudflared
 }
 
-TUNNEL_TOKEN="${TUNNEL_TOKEN:-}"
-# The Cloudflare Tunnel is the way in: a new public address, or a first install, sets it up.
+# The Cloudflare Tunnel is the way in: a link, a new public address, or a first install, sets it up.
 if [[ -n "$PUBLIC_URL" ]] || [[ -z "$BIND" && -z "$EXISTING_URL" ]]; then
   TUNNEL=1
 fi
@@ -182,12 +257,14 @@ if [[ -n "$TUNNEL" ]]; then
   if [[ -z "$PORT_GIVEN" && "$EXISTING_URL" =~ :([0-9]+)/?$ ]]; then
     PORT="${BASH_REMATCH[1]}"
   fi
-  [[ -n "$PUBLIC_URL" || -n "$EXISTING_PUBLIC_URL" ]] || die "add --public-url https://<the public hostname you gave the tunnel>"
-  if [[ -z "$TUNNEL_TOKEN" ]]; then
-    echo "Paste the tunnel token from the Cloudflare dashboard (Networks > Tunnels > your tunnel > the long"
-    echo "text at the end of the install command; the whole command works too). It is not shown as you paste:"
-    { read -rs TUNNEL_TOKEN < /dev/tty; } 2>/dev/null || die "no terminal to ask for the token; run with TUNNEL_TOKEN=<token> in the environment instead"
-    echo
+  if [[ -z "$RELAY_ID" ]]; then
+    [[ -n "$PUBLIC_URL" || -n "$EXISTING_PUBLIC_URL" ]] || die "add --public-url https://<the public hostname you gave the tunnel>, or link this server to your Pairnets account instead: sudo ./install.sh --link"
+    if [[ -z "$TUNNEL_TOKEN" ]]; then
+      echo "Paste the tunnel token from the Cloudflare dashboard (Networks > Tunnels > your tunnel > the long"
+      echo "text at the end of the install command; the whole command works too). It is not shown as you paste:"
+      { read -rs TUNNEL_TOKEN < /dev/tty; } 2>/dev/null || die "no terminal to ask for the token; run with TUNNEL_TOKEN=<token> in the environment instead"
+      echo
+    fi
   fi
   # Accept the whole "cloudflared service install <token>" command as well as the bare token.
   TUNNEL_TOKEN="$(printf '%s' "$TUNNEL_TOKEN" | awk '{print $NF}')"
@@ -202,8 +279,8 @@ if [[ -z "$BIND" && "$EXISTING_URL" =~ ^http://([^/:]+):([0-9]+)/?$ ]]; then
   PORT="${BASH_REMATCH[2]}"
   echo "Keeping the configured address $BIND:$PORT"
 fi
-[[ -n "$BIND" ]] || die "nothing to listen on: run with --public-url https://<the public hostname of your Cloudflare Tunnel> (see docs/HOWTO.md)"
-[[ "$BIND" != "0.0.0.0" && "$BIND" != "::" ]] || die "refusing to listen on all interfaces; use the Cloudflare Tunnel (--public-url)"
+[[ -n "$BIND" ]] || die "nothing to listen on: run with --link to link this server to your Pairnets account, or --public-url https://<the public hostname of your Cloudflare Tunnel> (see docs/HOWTO.md)"
+[[ "$BIND" != "0.0.0.0" && "$BIND" != "::" ]] || die "refusing to listen on all interfaces; use the Cloudflare Tunnel (--link or --public-url)"
 
 # 1. Service account and directories.
 if ! id pairnets >/dev/null 2>&1; then
@@ -222,10 +299,12 @@ install -m 0755 -o root -g root "$SRC_DIR/pairnets-server" "$INSTALL_DIR/pairnet
 for f in "$SRC_DIR"/*.so "$SRC_DIR"/appsettings.json "$SRC_DIR"/VERSION; do
   [[ -e "$f" ]] && install -m 0644 -o root -g root "$f" "$INSTALL_DIR/"
 done
-# The self-updater (runs as root only when the server asks for it; see DEPLOY.md).
-if [[ -f "$SRC_DIR/update.sh" ]]; then
-  install -m 0755 -o root -g root "$SRC_DIR/update.sh" "$INSTALL_DIR/update.sh"
-fi
+# The self-updater (runs as root only when the server asks for it; see DEPLOY.md) and the link helper.
+for f in update.sh pairnets-link.sh; do
+  if [[ -f "$SRC_DIR/$f" ]]; then
+    install -m 0755 -o root -g root "$SRC_DIR/$f" "$INSTALL_DIR/$f"
+  fi
+done
 
 # 3. Environment file. The shared token (for older apps) is generated once, kept on upgrades and never
 #    printed: it stays in this root-only file.
@@ -256,26 +335,50 @@ set_env() { # set_env <key> <value>: replace or add one line of $ENV_FILE.tmp
   { grep -v "^$1=" "$ENV_FILE.tmp" || true; echo "$1=$2"; } > "$ENV_FILE.tmp.new"
   mv "$ENV_FILE.tmp.new" "$ENV_FILE.tmp"
 }
+# drop_env <keys>: removes the lines of these keys (an extended regex) from $ENV_FILE.tmp, in any spelling, since the
+# server reads names without regard to case; prints the keys it removed, comma-separated.
+drop_env() {
+  local pattern="^[[:space:]]*($1)="
+  grep -iE "$pattern" "$ENV_FILE.tmp" | cut -d= -f1 | tr -d '[:blank:]' | paste -sd, - || true
+  { grep -viE "$pattern" "$ENV_FILE.tmp" || true; } > "$ENV_FILE.tmp.new"
+  mv "$ENV_FILE.tmp.new" "$ENV_FILE.tmp"
+}
 if [[ -n "$TUNNEL" ]]; then
   # Behind the tunnel every request comes from 127.0.0.1; take the client's address from Cloudflare.
   set_env Sync__TrustProxyHeaders true
+fi
+LEFT_OWN_NAME=""
+LEFT_RELAY=""
+if [[ -n "$RELAY_ID" ]]; then
+  # Linked to Pairnets: the apps reach the server through the service, which signs its own calls to the server with
+  # the key. A linked server has no public name of its own (and so no website), so an older name goes.
+  LEFT_OWN_NAME="$(drop_env 'PUBLIC_URL|PAIRNETS_PUBLIC_URL|Sync__PublicUrl')"
+  drop_env 'Sync__Relay[A-Za-z]*' >/dev/null
+  set_env Sync__RelayNestId "$RELAY_ID"
+  set_env Sync__RelayKey "$RELAY_KEY"
+  set_env Sync__RelayServiceUrl "$RELAY_SERVICE"
+  if [[ -n "$LEFT_OWN_NAME" ]]; then
+    echo "This server is now reached through $RELAY_SERVICE; its own name ($EXISTING_PUBLIC_URL) is no longer used."
+  fi
 fi
 if [[ -n "$PUBLIC_URL" ]]; then
   # The nest's public name: the server builds its website, sign-in links and passkeys on it, and the
   # apps type it to sign in. The server reads Sync__PublicUrl and PUBLIC_URL before PAIRNETS_PUBLIC_URL,
   # so those lines go: the name given here always wins.
-  OVERRIDES='^[[:space:]]*(PUBLIC_URL|Sync__PublicUrl)='
-  REPLACED="$(grep -iE "$OVERRIDES" "$ENV_FILE.tmp" | cut -d= -f1 | tr -d '[:blank:]' | paste -sd, - || true)"
+  REPLACED="$(drop_env 'PUBLIC_URL|Sync__PublicUrl')"
   if [[ -n "$REPLACED" ]]; then
-    { grep -viE "$OVERRIDES" "$ENV_FILE.tmp" || true; } > "$ENV_FILE.tmp.new"
-    mv "$ENV_FILE.tmp.new" "$ENV_FILE.tmp"
     echo "Replaced ${REPLACED//,/ and } in $ENV_FILE: the nest's name is now PAIRNETS_PUBLIC_URL=$PUBLIC_URL"
   fi
   set_env PAIRNETS_PUBLIC_URL "$PUBLIC_URL"
+  # Its own name and tunnel replace a link to Pairnets (whose tunnel token was just replaced).
+  LEFT_RELAY="$(drop_env 'Sync__Relay[A-Za-z]*')"
 fi
 chown root:root "$ENV_FILE.tmp"
 chmod 600 "$ENV_FILE.tmp"
 mv "$ENV_FILE.tmp" "$ENV_FILE"
+# The link's settings are in $ENV_FILE now (root only, like relay.env was); nothing needs the key any more.
+rm -f "$RELAY_ENV"
+unset RELAY_KEY
 
 # 4. systemd unit.
 install -m 0644 -o root -g root "$SRC_DIR/pairnets-server.service" /etc/systemd/system/pairnets-server.service
@@ -286,7 +389,7 @@ fi
 if [[ -f "$SRC_DIR/pairnets-update.timer" ]]; then
   install -m 0644 -o root -g root "$SRC_DIR/pairnets-update.timer" /etc/systemd/system/pairnets-update.timer
 fi
-# 4b. Cloudflare Tunnel (only with --cloudflare-tunnel; upgrades keep an existing one as it is).
+# 4b. Cloudflare Tunnel (a link, --public-url or --cloudflare-tunnel; upgrades keep an existing one as it is).
 if [[ -n "$TUNNEL" ]]; then
   # The token stays in a root-only file: unit files are readable by every local user.
   printf 'TUNNEL_TOKEN=%s\n' "$TUNNEL_TOKEN" > "$TUNNEL_ENV.tmp"
@@ -344,6 +447,9 @@ fi
 SERVER_DATA_DIR="$(env_value Sync__DataDir)"
 SERVER_DATA_DIR="${SERVER_DATA_DIR:-$DATA_DIR}"
 NEST_URL="$(public_name)"
+LINKED_ID="$(env_value Sync__RelayNestId)"
+LINKED_SERVICE="$(env_value Sync__RelayServiceUrl)"
+LINKED_SERVICE="${LINKED_SERVICE:-$DEFAULT_RELAY_SERVICE}"
 
 # Then through a new tunnel: it needs a few seconds to connect, and DNS for a new hostname a little longer.
 TUNNEL_HEALTH=""
@@ -361,8 +467,27 @@ if [[ -n "$TUNNEL" && -n "$NEST_URL" && "$LOCAL_HEALTH" == ok ]]; then
   fi
 fi
 
+# A newly linked server, through Pairnets: the service starts routing to a new server within about 30 seconds.
+RELAY_HEALTH=""
+if [[ -n "$RELAY_ID" && "$LOCAL_HEALTH" == ok ]]; then
+  RELAY_HEALTH=failed
+  echo "Waiting for Pairnets to reach this server (usually about 30 seconds, at most 3 minutes)..."
+  SECONDS=0
+  while (( SECONDS < 180 )); do
+    if [[ "$(curl -fsS --max-time 10 "$LINKED_SERVICE/n/$RELAY_ID/api/health" 2>/dev/null || true)" == ok ]]; then RELAY_HEALTH=ok; break; fi
+    sleep 3
+  done
+  if [[ "$RELAY_HEALTH" == failed ]]; then
+    echo "WARNING: Pairnets could not reach this server yet. Check:" >&2
+    echo "         - the tunnel runs: sudo systemctl status $TUNNEL_SERVICE (log: sudo journalctl -u $TUNNEL_SERVICE -n 50)" >&2
+    echo "         - this server is listed on $LINKED_SERVICE/account; if it is not, link it again: sudo ./install.sh --link" >&2
+    echo "         It may also just need a few more minutes: try again with curl $LINKED_SERVICE/n/$RELAY_ID/api/health" >&2
+  fi
+fi
+
 # 6. The one-time link to set up the nest's website, only for a person at a terminal (never into the
 #    self-updater's log), once the server runs (it reads the nest's name from what the server saved).
+#    Only with a name of its own: a server linked to Pairnets has no website.
 OWNER_LINK_CMD="sudo -u pairnets $INSTALL_DIR/pairnets-server owner-link"
 if [[ "$SERVER_DATA_DIR" != "$DATA_DIR" ]]; then
   OWNER_LINK_CMD="$OWNER_LINK_CMD --data-dir $SERVER_DATA_DIR"
@@ -370,7 +495,7 @@ fi
 OWNER_LINK=""
 OWNER_LINK_STATE=""
 OWNER_ERROR=""
-if [[ -t 1 && "$LOCAL_HEALTH" == ok && -n "$NEST_URL" ]]; then
+if [[ -t 1 && "$LOCAL_HEALTH" == ok && -n "$NEST_URL" && -z "$LINKED_ID" ]]; then
   # --if-new prints nothing when the owner already has a way to sign in.
   if OWNER_OUT="$(cd / && timeout 60 runuser -u pairnets -- "$INSTALL_DIR/pairnets-server" owner-link --if-new --data-dir "$SERVER_DATA_DIR" 2>&1)"; then
     OWNER_LINK="$(printf '%s\n' "$OWNER_OUT" | grep -E '^https://' | tail -n1 || true)"
@@ -400,6 +525,9 @@ echo "  Updater: pairnets-update.path is ${UPDATER_STATE:-unknown} (should be: a
 if [[ -n "$TUNNEL_STATE" ]]; then
   echo "  Tunnel:  $TUNNEL_SERVICE is $TUNNEL_STATE (should be: active)"
 fi
+if [[ -n "$LINKED_ID" ]]; then
+  echo "  Linked:  to your Pairnets account at $LINKED_SERVICE (this server is $LINKED_ID)"
+fi
 echo
 if [[ "$LOCAL_HEALTH" == failed ]]; then
   [[ -z "$NEST_URL" ]] || echo "Your nest's address: $NEST_URL"
@@ -407,10 +535,32 @@ if [[ "$LOCAL_HEALTH" == failed ]]; then
   exit 1
 fi
 
+if [[ -n "$LINKED_ID" ]]; then
+  # Linked to Pairnets: the computers sign in with the same account, and the service brings them here.
+  echo "This server is linked to your Pairnets account. Your files stay on this server; Pairnets only"
+  echo "passes your computers' traffic on to it."
+  echo
+  echo "Next steps:"
+  echo "  On each computer: install Pairnets and choose Continue with email, with the same account."
+  echo "  (Get the app at https://pairnets.app/add. Continue with Google works too, with the same account.)"
+  echo "  Your computers and this server are listed at $LINKED_SERVICE/account"
+  if [[ -n "$LEFT_OWN_NAME" ]]; then
+    echo "  Computers that used $EXISTING_PUBLIC_URL sign in again the same way."
+  fi
+  exit 0
+fi
+
+if [[ -n "$LEFT_RELAY" ]]; then
+  echo "This server was linked to your Pairnets account; now it uses its own name. Remove it from your"
+  echo "account at $EXISTING_RELAY_SERVICE/account, and sign each computer in again with the name below."
+  echo
+fi
+
 if [[ -z "$NEST_URL" ]]; then
   # Advanced --bind without a public name: no website, so only the shared token works.
   echo "This nest has no public name, so it has no website and the apps cannot sign in with the browser."
-  echo "Give it one with: sudo ./install.sh --public-url https://sync.example.com"
+  echo "Link it to your Pairnets account with: sudo ./install.sh --link"
+  echo "(or give it your own domain with: sudo ./install.sh --public-url https://sync.example.com)."
   echo "Until then only older Pairnets apps connect, with the address http://$BIND:$PORT/ and the shared"
   echo "token kept in $ENV_FILE (show it with: sudo grep SYNC_TOKEN $ENV_FILE)."
   exit 0

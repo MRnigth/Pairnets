@@ -116,6 +116,13 @@ public sealed class ManifestStore
         return (list, version);
     }
 
+    /// <summary>The size of all current files together (old versions in history/ not counted).</summary>
+    public long LiveBytes()
+    {
+        using var conn = Open();
+        return Convert.ToInt64(Scalar(conn, "SELECT COALESCE(SUM(size), 0) FROM files WHERE deleted=0"), CultureInfo.InvariantCulture);
+    }
+
     public List<ManifestEntry> AllLive()
     {
         using var conn = Open();

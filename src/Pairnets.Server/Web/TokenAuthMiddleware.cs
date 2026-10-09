@@ -43,15 +43,18 @@ public sealed class TokenAuthMiddleware
     };
 
     /// <summary>
-    /// What needs no key: the endpoints above, and the nest's website (<see cref="WebUi"/> pages and assets, and
-    /// /web/api, which has its own sign-in). Everything else is denied without a key or token.
+    /// What needs no key: the endpoints above, the nest's website (<see cref="WebUi"/> pages and assets, and
+    /// /web/api, which has its own sign-in), and the Pairnets service's calls under /api/relay, every one of which
+    /// must carry the service's signature instead (<see cref="RelayAuthMiddleware"/>). Everything else is denied
+    /// without a key or token.
     /// </summary>
     public static bool IsPublic(PathString path) =>
         PublicPaths.Contains(path.Value ?? string.Empty)
         || WebUi.Pages.ContainsKey(path.Value ?? string.Empty)
         || path.StartsWithSegments("/assets", StringComparison.OrdinalIgnoreCase)
         || path.StartsWithSegments("/auth", StringComparison.OrdinalIgnoreCase) // sign in with Google (browser redirects)
-        || path.StartsWithSegments("/web/api", StringComparison.OrdinalIgnoreCase);
+        || path.StartsWithSegments("/web/api", StringComparison.OrdinalIgnoreCase)
+        || RelayAuthMiddleware.IsRelayPath(path); // signed by the service, not anonymous
 
     public async Task InvokeAsync(HttpContext context)
     {

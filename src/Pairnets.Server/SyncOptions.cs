@@ -1,7 +1,10 @@
+using System.Text.RegularExpressions;
+using Pairnets.Server.Auth;
+
 namespace Pairnets.Server;
 
 /// <summary>Server configuration (section "Sync", environment variables Sync__X, or SYNC_TOKEN).</summary>
-public sealed class SyncOptions
+public sealed partial class SyncOptions
 {
     public const int MinimumTokenLength = 16;
 
@@ -42,7 +45,8 @@ public sealed class SyncOptions
     /// <summary>
     /// The server sits behind a tunnel or reverse proxy on this machine (install.sh --public-url
     /// sets it): take the client's address from CF-Connecting-IP / X-Forwarded-For on loopback
-    /// connections. Leave it off when clients connect directly.
+    /// connections. Leave it off when clients connect directly. In relay mode the client's address is always taken
+    /// this way (the service's tunnel is on this machine), from X-Pairnets-Client-IP first.
     /// </summary>
     public bool TrustProxyHeaders { get; set; }
 
@@ -102,6 +106,37 @@ public sealed class SyncOptions
 
     public bool GoogleConfigured => PublicUrl is not null && !string.IsNullOrWhiteSpace(GoogleClientId) && !string.IsNullOrWhiteSpace(GoogleClientSecret);
 
+    // ---- relay mode (Pairnets Cloud, cloud/RELAY.md §3): the apps reach the nest through https://sync.pairnets.app.
+    //      install.sh writes these when it links the server to a Pairnets account.
+
+    public const string DefaultRelayServiceUrl = "https://sync.pairnets.app";
+
+    /// <summary>
+    /// This nest's id at the Pairnets service, "nst_" and 26 characters (Sync:RelayNestId). Together with
+    /// <see cref="RelayKey"/> it turns on relay mode: the apps reach the nest through the service, which signs its own
+    /// calls to the nest (/api/relay/*). Then the nest has no public name, so no website of its own either.
+    /// </summary>
+    public string? RelayNestId { get; set; }
+
+    /// <summary>The nest key, base64url of 32 bytes (Sync:RelayKey), that the service signs its calls with. A secret: never logged.</summary>
+    public string? RelayKey { get; set; }
+
+    /// <summary>The service the apps reach this nest through (Sync:RelayServiceUrl). Told in /api/hello.</summary>
+    public string RelayServiceUrl { get; set; } = DefaultRelayServiceUrl;
+
+    /// <summary>Linked to the Pairnets service: both relay settings are set (<see cref="ValidateCommon"/> checks them).</summary>
+    public bool RelayMode => RelayNestId is not null && RelayKey is not null;
+
+    /// <summary>The host the relay runs on ("sync.pairnets.app"), for the computers' "approved by …" notes.</summary>
+    public string RelayServiceHost =>
+        Uri.TryCreate(RelayServiceUrl, UriKind.Absolute, out var uri) ? uri.IdnHost.ToLowerInvariant() : RelayServiceUrl;
+
+    /// <summary>A nest id as the service makes them (cloud/CONTRACT.md §1.2).</summary>
+    public static bool IsNestId(string? id) => id is not null && NestIdPattern().IsMatch(id);
+
+    [GeneratedRegex(@"^nst_[0-9a-hjkmnp-tv-z]{26}\z")]
+    private static partial Regex NestIdPattern();
+
     /// <summary>The domain passkeys are bound to, or null without a public name.</summary>
     public string? EffectiveRpId => string.IsNullOrWhiteSpace(PasskeyRpId) ? PublicHost : PasskeyRpId.Trim().ToLowerInvariant();
 
@@ -125,6 +160,9 @@ public sealed class SyncOptions
             options.PublicUrl = configuration["PAIRNETS_PUBLIC_URL"];
         options.PublicUrl = string.IsNullOrWhiteSpace(options.PublicUrl) ? null : options.PublicUrl.Trim().TrimEnd('/');
         options.HttpsUrl = string.IsNullOrWhiteSpace(options.HttpsUrl) ? null : options.HttpsUrl.Trim();
+        options.RelayNestId = string.IsNullOrWhiteSpace(options.RelayNestId) ? null : options.RelayNestId.Trim();
+        options.RelayKey = string.IsNullOrWhiteSpace(options.RelayKey) ? null : options.RelayKey.Trim();
+        options.RelayServiceUrl = string.IsNullOrWhiteSpace(options.RelayServiceUrl) ? DefaultRelayServiceUrl : options.RelayServiceUrl.Trim().TrimEnd('/');
         return options;
     }
 
@@ -167,8 +205,32 @@ public sealed class SyncOptions
             if (host != rp && !host.EndsWith("." + rp, StringComparison.Ordinal))
                 return $"Sync:PasskeyRpId ({PasskeyRpId}) must be the nest's host name or a parent domain of it ({host}).";
         }
+        return ValidateRelay();
+    }
+
+    /// <summary>The relay settings: both or neither, each in its exact shape. The key itself is never repeated in a message.</summary>
+    private string? ValidateRelay()
+    {
+        if ((RelayNestId is null) != (RelayKey is null))
+            return "Sync:RelayNestId and Sync:RelayKey go together: set both (install.sh writes them when it links this server to a Pairnets account) or neither.";
+        if (!IsServiceUrl(RelayServiceUrl))
+            return $"Sync:RelayServiceUrl must look like {DefaultRelayServiceUrl} (got {RelayServiceUrl}).";
+        if (RelayNestId is null)
+            return null;
+        if (!IsNestId(RelayNestId))
+            return $"Sync:RelayNestId must be nst_ and 26 lowercase letters and digits, as Pairnets made it (got {RelayNestId}).";
+        if (!StrictBase64Url.IsBytes(RelayKey, 32))
+            return "Sync:RelayKey must be the key Pairnets gave this server: 43 characters of base64url (32 bytes). Link the server again with: sudo ./install.sh --link";
+        if (PublicUrl is not null)
+            return $"Sync:PublicUrl ({PublicUrl}) must stay unset on a nest linked to Pairnets (Sync:RelayNestId): it is reached through {RelayServiceUrl} or on its own name, not both.";
         return null;
     }
+
+    /// <summary>https without a path; plain http only to this machine (a test service).</summary>
+    private static bool IsServiceUrl(string url) =>
+        Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.AbsolutePath == "/" && uri.Query.Length == 0 && uri.Fragment.Length == 0
+        && uri.UserInfo.Length == 0
+        && (uri.Scheme == Uri.UriSchemeHttps || (uri.Scheme == Uri.UriSchemeHttp && uri.IsLoopback));
 
     /// <summary>
     /// Splits a listen address such as "http://100.x.y.z:5075", "https://[::1]:443", "http://localhost:0" or

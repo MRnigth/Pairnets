@@ -26,7 +26,9 @@ public sealed partial class InstallHintTests
     private static HashSet<string> InstallOptions()
     {
         var script = File.ReadAllText(Path.Combine(RepoRoot, "deploy", "install.sh")).ReplaceLineEndings("\n");
-        var start = script.IndexOf("case \"$1\" in", StringComparison.Ordinal);
+        var loop = script.IndexOf("while [[ $# -gt 0 ]]; do", StringComparison.Ordinal);
+        Assert.True(loop >= 0, "install.sh no longer reads its options in a while [[ $# -gt 0 ]] loop");
+        var start = script.IndexOf("case \"$1\" in", loop, StringComparison.Ordinal);
         Assert.True(start >= 0, "install.sh no longer parses its options with case \"$1\" in");
         var end = script.IndexOf("esac", start, StringComparison.Ordinal);
         var options = new HashSet<string>(StringComparer.Ordinal);

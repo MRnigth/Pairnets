@@ -13,8 +13,8 @@ Allow about 30 minutes.
 **Contents**
 
 1. [What you need](#1-what-you-need)
-2. [Create a Cloudflare Tunnel](#2-create-a-cloudflare-tunnel)
-3. [Install the server](#3-install-the-server)
+2. [Install the server](#2-install-the-server) (linked to your Pairnets account)
+3. [Advanced: your own domain](#3-advanced-your-own-domain)
 4. [Check it from outside](#4-check-it-from-outside)
 5. [Set up the first PC](#5-set-up-the-first-computer-for-example-the-desktop)
 6. [Set up the second PC](#6-set-up-the-second-computer-for-example-the-laptop)
@@ -31,14 +31,112 @@ Allow about 30 minutes.
 |---|---|
 | **A server** | Any always-on Ubuntu machine (22.04 or newer): a mini PC, an old laptop, a Raspberry Pi-class x64 box or a VM. It needs enough disk for your folder **plus history** (old versions are kept 30 days). Rule of thumb: twice the size of your folder. |
 | **Your computers** | Windows 10/11 (64-bit), macOS 11 or newer (Apple Silicon or Intel), or a Linux desktop (64-bit, e.g. Ubuntu). Pairnets is built for using one at a time. |
-| **A Cloudflare account and a domain** | The account is free: <https://dash.cloudflare.com>. The domain costs about $10 to $15 a year (buy it at Cloudflare, or move one you have there). Your computers reach the server at an address on it, such as `https://sync.example.com`, from anywhere. No ports are opened on any router. |
+| **A Pairnets account** | Free. You sign in to it with your email address or your Google account. Your computers then reach your server through `https://sync.pairnets.app`, from anywhere. No ports are opened on any router, and there is nothing to set up at Cloudflare and no domain to buy. Your files stay on your server. |
 | **The Pairnets release** | From <https://github.com/MRnigth/Pairnets/releases/latest>, or let the one-line commands below fetch it for you. |
 
-Nothing else: no cloud storage, no extra accounts, no .NET installation.
+Nothing else: no cloud storage, no .NET installation. (Prefer an address on your own domain instead of
+Pairnets' one? That needs a Cloudflare account and a domain: see
+[Advanced: your own domain](#3-advanced-your-own-domain).)
 
 ---
 
-## 2. Create a Cloudflare Tunnel
+## 2. Install the server
+
+**One command.** On the Ubuntu server:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/MRnigth/Pairnets/main/deploy/get.sh | sudo bash
+```
+
+It downloads the latest release, checks its SHA-256 checksum (it refuses a damaged or altered
+download) and runs `install.sh`. After a moment it shows something like this:
+
+```
+Open this link on any device and sign in to your Pairnets account:
+
+    https://sync.pairnets.app/add?code=ABCD-EFGH
+
+Then check that the page shows the code ABCD-EFGH and press "Add this server".
+```
+
+1. Open the link on your phone or on any computer (type it in if you can't click it).
+2. Sign in to your Pairnets account, with your email address or with Google.
+3. Check that the page shows the same code as the server, and press **Add this server**. (If you
+   did not start this, press **Not mine**: nothing changes.)
+
+You don't type anything on the server: the installer notices by itself and carries on. The link
+works for 15 minutes; if it runs out, just run the command again.
+
+**Or step by step**, if you prefer to see each file:
+
+```bash
+# 1. Download the server package and its checksums
+cd ~
+curl -LO https://github.com/MRnigth/Pairnets/releases/latest/download/pairnets-server-linux-x64.tar.gz
+curl -LO https://github.com/MRnigth/Pairnets/releases/latest/download/SHA256SUMS.txt
+
+# 2. Check the download is intact (must print "pairnets-server-linux-x64.tar.gz: OK")
+sha256sum --check --ignore-missing SHA256SUMS.txt
+
+# 3. Unpack and install
+tar xzf pairnets-server-linux-x64.tar.gz
+cd pairnets-server-linux-x64
+sudo ./install.sh
+```
+
+Once you pressed **Add this server**, `install.sh` does the rest:
+
+* keeps what Pairnets sent for this server, the token of a Cloudflare Tunnel made just for it and
+  the server's own key, in `/etc/pairnets` (readable by root only). Neither is ever shown;
+* makes the server listen **only** on `127.0.0.1` (port 5075), so nothing on your network can reach
+  it directly, and installs `cloudflared` from Cloudflare's own package repository. It connects
+  out to Cloudflare (the background service `pairnets-tunnel`). The tunnel has no address of its
+  own on the internet: only Pairnets can reach your server through it, to pass your computers'
+  requests on;
+* creates a dedicated system user `pairnets` and the folders `/opt/pairnets` (program),
+  `/var/lib/pairnets` (your data) and `/etc/pairnets` (settings);
+* makes the old shared **token**, which only older Pairnets apps use;
+* installs and starts the background service `pairnets-server`; both services also start at boot.
+
+At the end it waits until Pairnets can reach your server (usually about 30 seconds, at most 3
+minutes) and prints the next step: **on each computer, install Pairnets and choose Continue with
+email, with the same account** ([section 5](#5-set-up-the-first-computer-for-example-the-desktop)).
+If the server itself does not start, it stops with an error and says where to look.
+
+Check that both services are running:
+
+```bash
+sudo systemctl status pairnets-server pairnets-tunnel    # both should say "active (running)"
+```
+
+**Good to know**
+
+* **Your files stay on your server.** Pairnets only passes your computers' requests on to it. On
+  the way, HTTPS ends at Cloudflare, which Pairnets runs on, so in principle the traffic could be
+  seen there (see [SECURITY.md](SECURITY.md)).
+* **Your computers and your server are listed at <https://sync.pairnets.app/account>.** That is
+  where you remove a computer, or the server itself. A server linked this way has no website of its
+  own.
+* **What keeps strangers out:** each computer has its own long key, and a computer only gets one
+  when you sign it in with your Pairnets account.
+* Cloudflare refuses any single upload over 100 MB. Pairnets sends big files in pieces
+  automatically: between 4 and 50 MB each, sized so one piece takes about 30 seconds on your
+  connection, and an interrupted upload continues where it stopped. There is nothing to set.
+* Updates keep the link. To link the server again (for example after you removed it from your
+  account), run the one command with `-s -- --link` at the end:
+  `curl -fsSL https://raw.githubusercontent.com/MRnigth/Pairnets/main/deploy/get.sh | sudo bash -s -- --link`.
+
+---
+
+## 3. Advanced: your own domain
+
+Instead of Pairnets' address, your server can have its own name on a domain you own, such as
+`https://sync.example.com`, through your own Cloudflare Tunnel. It then also gets its own small
+website, where you let computers in and see them, with a passkey or a password. You need a
+Cloudflare account (free: <https://dash.cloudflare.com>) and a domain (about $10 to $15 a year; buy
+it at Cloudflare, or move one you have there). Pairnets' service is not involved at all.
+
+### Create a Cloudflare Tunnel
 
 The server never accepts connections from the internet itself. It keeps one outgoing connection
 open to Cloudflare (a *tunnel*), and Cloudflare passes your computers' requests for your address,
@@ -76,11 +174,9 @@ router, at home or wherever your computers are.
 (Cloudflare moves its menus now and then. If something looks different, look for "Tunnels" under
 Zero Trust → Networks.)
 
----
+### Install the server with your own domain
 
-## 3. Install the server
-
-**The quick way: one command.** On the Ubuntu server, with your address from step 2.4:
+**The quick way: one command.** On the Ubuntu server, with your address from step 4 above:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/MRnigth/Pairnets/main/deploy/get.sh | sudo bash -s -- --public-url https://sync.example.com
@@ -157,25 +253,30 @@ are signed in, switch off the old shared token, and turn on sign-in by email lin
 
 ## 4. Check it from outside
 
-Open `https://sync.example.com/api/health` in a browser on any computer: it should show `ok`.
-`https://sync.example.com` itself should open your nest's sign-in page (or its setup page, if you
-have not used the setup link yet). Then go on with
-[section 5](#5-set-up-the-first-computer-for-example-the-desktop).
+**Linked to your Pairnets account** (section 2): the installer already checked that Pairnets can
+reach your server. On <https://sync.pairnets.app/account> it shows as online.
+
+**With your own domain** (section 3): open `https://sync.example.com/api/health` in a browser on any
+computer: it should show `ok`. `https://sync.example.com` itself should open your nest's sign-in page
+(or its setup page, if you have not used the setup link yet).
+
+Then go on with [section 5](#5-set-up-the-first-computer-for-example-the-desktop).
 
 **If the app cannot connect**
 
 | You see | What to do |
 |---------|-----------|
+| "Your server is not connected right now" (linked to your Pairnets account) | Check that the server is on and online. On the server: `sudo systemctl status pairnets-server pairnets-tunnel` and `sudo journalctl -u pairnets-tunnel -n 50`. If the server is not listed at <https://sync.pairnets.app/account> any more, link it again (section 2). |
 | "Cloudflare cannot reach your Pairnets server (error 530)" (or 502) | On the server: `sudo systemctl status pairnets-tunnel` and `sudo journalctl -u pairnets-tunnel -n 50`. In the dashboard, the tunnel should say *Healthy* and its public hostname should point at `HTTP` `localhost:5075`. |
 | "Cloudflare blocked Pairnets with a browser check" | Turn off Bot Fight Mode (Security → Bots), or add a WAF custom rule that skips it for your Pairnets hostname. |
 | "This server is reached through Cloudflare. Use https://" | In **Settings → Advanced**, type the address with `https://`, not `http://`. |
-| "This nest has no website yet" | The server has no name of its own. Run the install command from section 3 with `--public-url https://sync.example.com`. |
+| "This nest has no website yet" | The server has no name of its own. Link it to your Pairnets account (section 2, with `--link`), or give it your own domain (section 3). |
 | A login page instead of `ok` in the browser | Cloudflare Access is protecting the hostname. Remove the Access application for it: the Pairnets app cannot sign in through it. |
 
 > **A server that was set up with Tailscale** (older versions)? Pairnets no longer uses Tailscale.
-> Create the tunnel (section 2), then run the install command from section 3 on the server. It
-> switches the server to the tunnel and keeps your files and history. Then sign each computer in
-> with the nest's name (section 5); its folder and files stay as they are.
+> Run the one command from section 2 with `-s -- --link` at the end on the server. It links the
+> server to your Pairnets account, switches it to a tunnel and keeps your files and history. Then
+> sign each computer in with the same account (section 5); its folder and files stay as they are.
 
 ---
 
@@ -226,6 +327,13 @@ the same on Windows, Mac and Linux, and follows your system's light or dark mode
 
 ![Sign-in window](images/sign-in-welcome-light.png)
 
+**Your server is linked to your Pairnets account** (section 2): choose **Continue with email** (or
+**Continue with Google**) and sign in with the **same account** you added the server to. Pairnets
+finds your server through the account and the computer gets its own key; then choose the folder
+to sync (step 4 below).
+
+**Your server has its own domain** (section 3):
+
 1. Type your nest's name: the one you gave the installer with `--public-url`, in this guide
    `sync.example.com`. Pairnets checks that it is a Pairnets nest and shows which ways it offers.
 2. Choose **Continue with Google**, or type your email and choose **Continue with email**, or
@@ -239,7 +347,8 @@ the same on Windows, Mac and Linux, and follows your system's light or dark mode
    in*) so syncing starts automatically.
 
 There is no first-run form for a server address and token any more: a computer only gets in when
-you allow it on your nest. Your nest therefore needs its own public name first (see [section 3](#3-install-the-server)).
+you sign it in. Your server therefore needs to be linked to your Pairnets account first
+([section 2](#2-install-the-server)), or have its own name ([section 3](#3-advanced-your-own-domain)).
 Extra ignore patterns, speed limits and the device name are on the **Settings** page afterwards.
 
 The first sync uploads everything in the folder. A 20 GB folder takes a while; you can keep
@@ -354,8 +463,9 @@ The icon colour always shows the state:
 
 ## 6. Set up the second computer (for example the laptop)
 
-Install Pairnets the same way and sign in the same way: type your nest's name, check the code on
-your nest's website and press **Allow**. While it waits, your other computers show a "wants to join"
+Install Pairnets the same way and sign in the same way: with the same Pairnets account (a server
+linked to it), or with your nest's name, checking the code on your nest's website and pressing
+**Allow** (your own domain). While it waits, your other computers show a "wants to join"
 notice that leads to the same page. Each computer gets its own key. Its name on the nest is the
 computer's name (the nest adds " (2)" if another computer already has it; rename it in **Settings**
 or on the nest). Then choose the folder you want on this computer.
@@ -556,7 +666,8 @@ Files deleted on the *other* PC are also in this PC's **Recycle Bin**.
 
 ### A lost or stolen computer
 
-Open your nest's website, go to **Devices**, and remove that computer from its **⋯** menu. Its key
+Open <https://sync.pairnets.app/account> and press **Remove** next to that computer (with your own
+domain: open your nest's website, go to **Devices**, and remove it from its **⋯** menu). Its key
 stops working at once; your other computers carry on as before. You can also do it on the server:
 
 ```bash
@@ -642,7 +753,8 @@ update is one click (or automatic):
 curl -fsSL https://raw.githubusercontent.com/MRnigth/Pairnets/main/deploy/get.sh | sudo bash
 ```
 
-Updates keep your settings, your nest's name, the sign-ins and your files.
+Updates keep your settings, the link to your Pairnets account or your nest's name, the sign-ins and
+your files.
 
 ### Moving from Tether to Pairnets
 
@@ -655,10 +767,11 @@ Tether apps can't update themselves into Pairnets (their **Update now** fails), 
 Pairnets by hand once on each machine. The order doesn't matter: a Pairnets server works with Tether
 apps and the other way round, so you can do one machine at a time.
 
-1. **The server.** Run the one-line install from [section 3](#3-install-the-server). It finds
+1. **The server.** Run the one-line install from [section 2](#2-install-the-server). It finds
    the Tether server and moves it: `/var/lib/tether` becomes `/var/lib/pairnets`, `/etc/tether`
    becomes `/etc/pairnets`, and the services become `pairnets-server` (and `pairnets-tunnel`). The
    server address and token stay the same. Check with `sudo systemctl status pairnets-server`.
+   It keeps the Tether server's own name and tunnel (it does not link it to a Pairnets account).
    Open the setup link the installer prints to set up your nest's website
    ([see section 3](#set-up-your-nests-website-once)). Because your nest has its own name, each
    Pairnets app then asks you to sign in once ("Sign in to your nest"): check the code and press
@@ -732,8 +845,12 @@ sudo systemctl daemon-reload
 sudo rm -rf /opt/pairnets /etc/pairnets
 # your files remain in /var/lib/pairnets until you delete that folder yourself
 ```
-This also removes the self-updater, which the server installer added. (Delete the tunnel in the
-Cloudflare dashboard too.)
+This also removes the self-updater, which the server installer added. If the server was linked to
+your Pairnets account, also press **Remove this server** at <https://sync.pairnets.app/account>
+(that deletes its tunnel). With your own domain, delete the tunnel in the Cloudflare dashboard.
+
+To set a linked server up again later (its files are still there), run the one command from
+[section 2](#2-install-the-server) again.
 
 For backups, the technical design and the security model, see [DEPLOY.md](DEPLOY.md),
 [ARCHITECTURE.md](ARCHITECTURE.md) and [SECURITY.md](SECURITY.md).

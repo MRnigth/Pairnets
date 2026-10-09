@@ -61,7 +61,7 @@ More detail: [Architecture](docs/ARCHITECTURE.md) · [Deploy](docs/DEPLOY.md) ·
 It asks for the tunnel token (nothing is shown while you paste it) and, at the end, prints a
 **one-time link** to set up your nest's website. Open it and add a passkey or a password (at least
 10 characters). Step by step, and what Cloudflare can see:
-[HOWTO sections 2 to 4](docs/HOWTO.md#2-create-a-cloudflare-tunnel).
+[HOWTO sections 3 and 4](docs/HOWTO.md#3-advanced-your-own-domain).
 
 ### Your nest's name
 

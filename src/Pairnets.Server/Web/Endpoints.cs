@@ -20,12 +20,14 @@ public static class Endpoints
 
         // No sign-in needed: lets an app (or the nest's web page) recognise a Pairnets server and find its HTTPS name.
         // The sign-in ways are told too, so the apps can show matching buttons (the sign-in page lists them anyway).
+        // A nest linked to Pairnets says so (relay): it has no name of its own then, and computers sign in with the account.
         app.MapGet("/api/hello", (SyncOptions options, Auth.OwnerAuth owner) =>
         {
             var (password, passkeys, email, google) = owner.UsableMethods();
             return Json(new ServerHello(PairnetsInfo.ProductName, PairnetsInfo.ApiVersion,
                 PairnetsInfo.ProductVersion, options.PublicUrl, DeviceKeys: true, SignIn: options.PublicUrl is not null,
-                new SignInMethods(password, passkeys > 0, email, google)));
+                new SignInMethods(password, passkeys > 0, email, google),
+                options.RelayMode ? new RelayHello(options.RelayNestId!, options.RelayServiceUrl) : null));
         });
 
         // Who the server thinks this computer is (the apps adopt a name changed on the nest).

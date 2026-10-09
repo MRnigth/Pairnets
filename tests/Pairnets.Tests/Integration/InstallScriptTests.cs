@@ -66,19 +66,45 @@ public class InstallScriptTests : IDisposable
         Assert.Equal(0, exit);
         Assert.Contains("Usage: sudo ./install.sh", output);
         Assert.Contains("--public-url https://<name>", output);
+        Assert.Contains("--link ", output);
+        Assert.Contains("First install: links this server to your Pairnets account", output);
     }
 
-    [Fact]
-    public async Task ValidOptionsGetPastTheChecks()
+    [Theory]
+    [InlineData("--port 5075 --public-url=https://sync.example.com --cloudflare-tunnel")]
+    [InlineData("")] // a first install links the server to a Pairnets account
+    [InlineData("--link")]
+    [InlineData("--link --port 5075")]
+    public async Task ValidOptionsGetPastTheChecks(string line)
     {
         if (!OperatingSystem.IsLinux())
             return;
         // Not root (or, as root, no server binary next to the script): it stops at the next check.
-        var (exit, _, error) = await RunInstall("--port", "5075", "--public-url=https://sync.example.com", "--cloudflare-tunnel");
+        var (exit, _, error) = await RunInstall(line.Split(' ', StringSplitOptions.RemoveEmptyEntries));
         Assert.Equal(1, exit);
         Assert.DoesNotContain("needs a value", error);
         Assert.DoesNotContain("unknown option", error);
         Assert.True(error.Contains("run as root") || error.Contains("pairnets-server binary not found"), error);
+    }
+
+    [Theory]
+    [InlineData("--public-url", "https://sync.example.com", "use --link (your Pairnets account, sync.pairnets.app) or --public-url (your own domain), not both")]
+    [InlineData("--bind", "192.0.2.10", "--link sets up the tunnel itself, which listens on 127.0.0.1; leave out --bind and --cloudflare-tunnel")]
+    [InlineData("--cloudflare-tunnel", null, "--link sets up the tunnel itself")]
+    [InlineData("--port", "6000", "--link uses port 5075 (where Pairnets reaches the server); leave out --port")]
+    public async Task LinkingGoesWithoutTheOwnDomainOptions(string option, string? value, string message)
+    {
+        if (!OperatingSystem.IsLinux())
+            return;
+        var (exit, _, error) = await RunInstall(value is null ? ["--link", option] : ["--link", option, value]);
+        Assert.Equal(2, exit);
+        Assert.Contains("error: " + message, error);
+        Assert.Contains("Usage: sudo ./install.sh", error);
+
+        // --link takes no value.
+        (exit, _, error) = await RunInstall("--link=yes");
+        Assert.Equal(2, exit);
+        Assert.Contains("unknown option: --link=yes", error);
     }
 
     private async Task<(int Exit, string Output, string Error)> RunInstall(params string[] args)

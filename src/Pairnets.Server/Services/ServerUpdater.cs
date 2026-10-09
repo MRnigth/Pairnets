@@ -209,11 +209,11 @@ public sealed class ServerUpdater(ServerPaths paths, SyncOptions options, TimePr
 
     /// <summary>
     /// What never leaves the server in the update log (as in update.sh's own redact): "Token: …", any
-    /// …_TOKEN=… (sync, tunnel, Cloudflare), passwords, secrets and API keys in NAME=value form, Bearer and
-    /// --token values, and the code or token in a link (?code=, &amp;code=, #code=, ?token=, …).
+    /// …_TOKEN=… (sync, tunnel, Cloudflare), passwords, secrets, API keys and the Pairnets relay key in NAME=value
+    /// form, Bearer and --token values, and the code or token in a link (?code=, &amp;code=, #code=, ?token=, …).
     /// </summary>
     private static readonly System.Text.RegularExpressions.Regex Secrets = new(
-        @"(?<keep>Token:\s*|\b[A-Z_]*_TOKEN\s*=\s*|\b[A-Z_]*(?:SECRET|PASSWORD|API_KEY)[A-Z_]*\s*=\s*|\bBearer\s+|--token[=\s]\s*)\S+"
+        @"(?<keep>Token:\s*|\b[A-Z_]*_TOKEN\s*=\s*|\b[A-Z_]*(?:SECRET|PASSWORD|API_KEY|RELAY_?KEY|NEST_?KEY)[A-Z_]*\s*=\s*|\bBearer\s+|--token[=\s]\s*)\S+"
         + @"|(?<keep>[?&#](?:code|token|access_token)=)[^&#\s""'<>]+",
         System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.CultureInvariant);
 

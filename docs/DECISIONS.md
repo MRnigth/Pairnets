@@ -347,3 +347,74 @@ what cannot lose or silently overwrite data.
   user name's hash (a long user name plus macOS's long temp folder passed the 104-byte socket path
   limit, which made every poke fail and could crash the app on a pairnets:// launch), and the next
   listening instance opens before the current one closes (a poke arriving in the gap was lost).
+
+## Pairnets Cloud version 2: the nest side (one address for everyone)
+
+The design is `cloud/RELAY.md`; these are the nest's and the installer's own choices.
+
+* **Relay mode is two settings, both or neither.** `Sync:RelayNestId` and `Sync:RelayKey` turn it on;
+  one without the other, an id that is not `nst_` and 26 base32 characters, or a key that is not
+  strict base64url of exactly 32 bytes stops the server at start, with a message like the other
+  settings' (the key itself is never repeated). `Sync:RelayServiceUrl` defaults to
+  `https://sync.pairnets.app`; https only (plain http only to this machine, for tests).
+* **A linked nest has no name of its own, enforced.** RELAY.md says `Sync:PublicUrl` stays unset in
+  relay mode; with both set the server refuses to start rather than silently preferring one, and
+  `install.sh` removes whichever does not fit (a link removes the own-name lines, `--public-url`
+  removes the relay lines).
+* **The caller's address in relay mode.** `X-Pairnets-Client-IP` is read before `CF-Connecting-IP`
+  and `X-Forwarded-For`, only on loopback connections and only in relay mode. Relay mode also turns
+  the address middleware on by itself, even without `Sync:TrustProxyHeaders` (which `install.sh`
+  writes anyway): a linked nest is always behind the service's tunnel on this machine, and without
+  it one stranger would slow down every computer through the shared failure counter.
+* **The "ra1" check.** In RELAY.md's order: the nest id, the signature (43 characters of strict
+  base64url, compared in constant time), the time (120 s either way), the nonce (10 minutes, at most
+  10,000, oldest dropped first). The time must be plain decimal seconds and the nonce strict
+  base64url of 16 bytes; both are checked with the signature, before anything is computed. A nonce
+  is only remembered once every other check passed, so nobody without the key can fill the memory
+  and push real nonces out. Every failure is the same 401 `{"error":"bad_signature"}`; the log says
+  which check failed, never a header's value. The signed path is the request target exactly as it
+  arrived (still escaped), which is what the Worker builds from `url.pathname + url.search`. Worked
+  examples made with openssl are in `RelaySignatureTests` for the Worker to check against.
+* **Nothing under `/api/relay` is open.** `TokenAuthMiddleware` lets the whole path through (no
+  computer key is needed or accepted there), a middleware checks the signature of every request under
+  it, known route or not, and the endpoint group checks again that it was verified, so no spelling of
+  a path can reach an endpoint unchecked. The route test that walks every endpoint now expects 401
+  there.
+* **Small additions to RELAY.md's answers.** Bodies over 4 KiB are refused before the signature with
+  413 `{"error":"too_large"}` (that reveals nothing), and an add request that is not JSON gets 400
+  `{"error":"bad_request"}`. These endpoints answer in RELAY.md's `{"error":…}` shape, not the nest's
+  `{code, message}`.
+* **What the service is told.** `dataBytes` is the size of the current files from the manifest (old
+  versions in history/ are not counted; walking the folder would be slow on a big nest). `lastSeen`
+  comes from the devices list in memory and is null for a computer that never connected yet. A
+  computer added by the service is noted as "approved by <masked email> on sync.pairnets.app" (the
+  host of `Sync:RelayServiceUrl`), and named, made unique and adopted exactly like **Allow** on the
+  nest's website; removing one goes through the same code as `DELETE /api/devices/{id}`.
+* **`/api/hello` of a nest that is not linked is unchanged.** The `relay` field is left out (not
+  `null`) when there is none. `/api/pair/start` on a linked nest says to sign in with the account.
+* **The installer links on a first install only.** Without options, no `pairnets.env` and nothing
+  of Tether's to take over, `install.sh` runs `pairnets-link.sh`; an installed server (it has
+  `pairnets.env`) never starts a link, so the self-updater cannot. `--link` (not named in RELAY.md)
+  links an installed server again: after it was removed from the account (Remove this server deletes
+  its tunnel), or to move it from its own domain. It refuses `--public-url`, `--bind`,
+  `--cloudflare-tunnel` and any port but 5075; `--cloudflare-tunnel` on a linked server is refused
+  too, since only the service can make its tunnel.
+* **`relay.env` between the helper and `install.sh`.** The helper writes the tunnel token
+  (`tunnel.env`) first and `relay.env` last, both root only (600); `install.sh` moves the id and key
+  into `pairnets.env` and deletes `relay.env`. A first install that stopped after the link (a failed
+  download, say) uses a `relay.env` younger than 50 minutes instead of linking again: the service
+  forgets a server that never connected within an hour.
+* **The helper waits politely.** It polls at the service's interval, 5 s slower from each
+  `slow_down` on (as RFC 8628 says), keeps trying through a missing answer or a 5xx until the code
+  expires, and stops with a plain message on Not mine or an expired code, having written nothing. It
+  shows only a link on the service itself, checks every value's shape (the key's last character
+  included) before writing it, and keeps the device code, token and key off the screen and off
+  curl's command line (JSON on standard input, as the names helper does).
+* **The installer waits for the relay, but does not fail on it.** After the local health check it
+  waits up to 3 minutes for `/n/<id>/api/health` through the service and warns if it does not answer,
+  like the own-domain tunnel check: the server itself runs, and a new route can take a little longer.
+* **Logs.** `update.sh` and the server's update-log reader also hide `…RelayKey=` values and device
+  codes, although `install.sh` never prints them.
+* **`InstallHintTests` reads the options of the argument loop.** It used to read the first
+  `case "$1" in`, which is `missing_value`'s, so it only knew `--port` and `--public-url`; it now
+  starts at the `while` loop (the same fix as on the names branch).

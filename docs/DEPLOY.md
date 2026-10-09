@@ -1,17 +1,19 @@
 # Deploying Pairnets
 
-## 1. Server (Ubuntu, behind a Cloudflare Tunnel)
+## 1. Server (Ubuntu)
 
-The server listens only on `127.0.0.1:5075`. `cloudflared` keeps an outbound connection to
-Cloudflare and carries requests for your public hostname (`https://sync.example.com`) to it, so no
-port is opened anywhere. That hostname is also your nest's own name: the apps find the nest by it,
-and the nest's website lives there. Step by step with the dashboard:
-[HOWTO sections 2 to 4](HOWTO.md#2-create-a-cloudflare-tunnel).
+The server (your *nest*) keeps your files. It listens only on `127.0.0.1:5075`: `cloudflared` keeps
+an outbound connection to Cloudflare and brings requests to it, so no port is opened anywhere. Your
+computers find it in one of two ways:
 
-Prerequisites: Ubuntu 22.04 or newer, `curl` and `openssl` (`sudo apt install curl openssl`), a
-domain on Cloudflare, and a tunnel created in the dashboard (Zero Trust → Networks → Tunnels →
-*Cloudflared*) with its token copied and a public hostname → `HTTP` `localhost:5075`. Turn off Bot
-Fight Mode for the domain. No .NET runtime is needed: the server is self-contained.
+* **Linked to your Pairnets account** (the usual way, [below](#linked-to-your-pairnets-account)):
+  they reach it through `https://sync.pairnets.app` and sign in with the same account. No domain,
+  and nothing to set up at Cloudflare.
+* **Your own domain** ([Advanced: your own domain](#advanced-your-own-domain)): it has its own name,
+  such as `https://sync.example.com`, through your own Cloudflare Tunnel, and its own website.
+
+Prerequisites for both: Ubuntu 22.04 or newer (x64) and `curl` and `openssl`
+(`sudo apt install curl openssl`). No .NET runtime is needed: the server is self-contained.
 
 The newest release is always the rolling **Latest build** on GitHub (rebuilt from every change to the
 `main` branch), so these links never change:
@@ -24,6 +26,61 @@ sha256sum --check --ignore-missing SHA256SUMS.txt
 
 tar xzf pairnets-server-linux-x64.tar.gz
 cd pairnets-server-linux-x64
+sudo ./install.sh
+```
+
+(`curl -fsSL https://raw.githubusercontent.com/MRnigth/Pairnets/main/deploy/get.sh | sudo bash` does
+the same in one line; options for `install.sh` go after `-s --`.)
+
+### Linked to your Pairnets account
+
+On a machine without Pairnets, `install.sh` without options links the server to your Pairnets
+account (`pairnets-link.sh`; the design is in [cloud/RELAY.md](../cloud/RELAY.md)):
+
+1. It asks Pairnets for a code and prints a link such as `https://sync.pairnets.app/add?code=ABCD-EFGH`.
+   Open it on any device, sign in to your Pairnets account, check that the page shows the same code
+   and press **Add this server**. Nothing is typed on the server. The link works for 15 minutes;
+   **Not mine**, or a link that runs out, changes nothing (run the command again).
+2. Pairnets makes a Cloudflare Tunnel for this server alone. It has no public hostname: only
+   Pairnets' own service reaches it, through a private link. The tunnel's token, the server's id and
+   its key (with which Pairnets signs its own calls to the server) come back once.
+   `pairnets-link.sh` keeps them in `/etc/pairnets/tunnel.env` and `/etc/pairnets/relay.env` (root,
+   mode 600) and never shows them or puts them on a command line; `install.sh` moves the id and key
+   into `pairnets.env`.
+3. The rest is as with your own domain ([below](#advanced-your-own-domain)): `cloudflared`, the
+   `pairnets` user and folders, `/etc/pairnets/pairnets.env` (here with `Sync__RelayNestId`,
+   `Sync__RelayKey`, `Sync__RelayServiceUrl` and `Sync__TrustProxyHeaders=true`, listening on
+   `127.0.0.1:5075`, the port Pairnets always uses), the self-updater and the services.
+4. It waits for `/api/health` on this machine, then up to 3 minutes until
+   `https://sync.pairnets.app/n/<server id>/api/health` answers through Pairnets (a new server is
+   reachable after about 30 seconds).
+5. It prints the next step: **on each computer, install Pairnets and choose Continue with email
+   (or Google), with the same account.**
+
+Upgrades (`sudo ./install.sh` again, or the self-updater) keep the link and never start a new one.
+`sudo ./install.sh --link` links an installed server again: after it was removed from your account,
+or to move a server from its own domain to Pairnets' address (its own name, and so its website, is
+then no longer used, and each computer signs in again with the account). A first install that
+stopped after the link was made picks the link up again for the next 50 minutes; after that Pairnets
+has forgotten a server that never connected, so it asks for a new link.
+
+A linked server has no website of its own: your computers and the server are listed, and removed, at
+<https://sync.pairnets.app/account>. Pairnets passes on only requests under `/api/` and `/hub`. Its
+own calls (`/api/relay/…`: how the server is doing, and its computers) are signed with the server's
+key; the server refuses every other call there.
+
+### Advanced: your own domain
+
+The server gets its own public hostname (`https://sync.example.com`) from your own Cloudflare Tunnel.
+That hostname is also your nest's own name: the apps find the nest by it, and the nest's website
+lives there. Step by step with the dashboard:
+[HOWTO section 3](HOWTO.md#3-advanced-your-own-domain).
+
+Prerequisites: a domain on Cloudflare, and a tunnel created in the dashboard (Zero Trust → Networks →
+Tunnels → *Cloudflared*) with its token copied and a public hostname → `HTTP` `localhost:5075`. Turn
+off Bot Fight Mode for the domain. Then, from the release folder above:
+
+```bash
 sudo ./install.sh --public-url https://sync.example.com
 ```
 
@@ -45,9 +102,9 @@ unset TUNNEL_TOKEN
    and `/etc/pairnets` (config, root only).
 3. Writes `/etc/pairnets/pairnets.env` with mode 600: listen on `127.0.0.1`, `Sync__TrustProxyHeaders=true`,
    and the nest's name from `--public-url` (`PAIRNETS_PUBLIC_URL`; it replaces any older
-   `PUBLIC_URL` or `Sync__PublicUrl` line). The first time it also makes the old shared token
-   (`SYNC_TOKEN`, from `openssl rand -hex 32`), which only older Pairnets apps use. Upgrades keep the
-   existing token and settings. It never listens on `0.0.0.0`.
+   `PUBLIC_URL` or `Sync__PublicUrl` line, and the settings of a link to Pairnets). The first time it
+   also makes the old shared token (`SYNC_TOKEN`, from `openssl rand -hex 32`), which only older
+   Pairnets apps use. Upgrades keep the existing token and settings. It never listens on `0.0.0.0`.
 4. Writes the tunnel token to `/etc/pairnets/tunnel.env` (root, mode 600) and installs
    `pairnets-tunnel.service`, which runs `cloudflared tunnel run` as a dynamic, unprivileged user.
    The token is not put in the unit file or on a command line, where other local users could read
@@ -64,21 +121,24 @@ unset TUNNEL_TOKEN
 
 To upgrade, run `sudo ./install.sh` again from a new release (or let the self-updater do it): the
 settings, the nest's name, the sign-ins and the tunnel stay as they are. Running it with
-`--public-url` again asks for a new tunnel token and replaces it.
+`--public-url` again asks for a new tunnel token and replaces it. On a server linked to your
+Pairnets account, `--public-url` moves it to your own domain (remove it from your account page
+afterwards).
 
-Useful commands:
+Useful commands (both ways):
 
 ```bash
 sudo systemctl status pairnets-server pairnets-tunnel
 sudo journalctl -u pairnets-server -f          # logs (never contain keys or tokens)
 sudo journalctl -u pairnets-tunnel -f
-curl https://sync.example.com/api/health
+curl https://sync.example.com/api/health       # your own domain
 ```
 
-Big uploads are sent in pieces of 4 to 50 MB, sized to the connection (Cloudflare's free plan
-refuses request bodies over 100 MB). See [SECURITY.md](SECURITY.md) for what Cloudflare can see.
+Big uploads are sent in pieces of 4 to 50 MB, sized to the connection (Cloudflare refuses request
+bodies over 100 MB). See [SECURITY.md](SECURITY.md) for what Cloudflare (and Pairnets' service, for a
+linked server) can see.
 
-### Your nest's own name (HTTPS)
+#### Your nest's own name (HTTPS)
 
 The name you give with `--public-url` (for example `https://sync.example.com`) is how everything
 finds your nest:
@@ -118,13 +178,15 @@ Upgrades keep every line.
 |----------|---------|---------|
 | `SYNC_TOKEN` | – (required, ≥ 16 chars; `install.sh` makes one) | the old shared token. Only older apps use it; switch it off on the website's Security page. The server still needs a value to start. |
 | `ASPNETCORE_URLS` | `http://127.0.0.1:5075` | listen address: keep it on `127.0.0.1`, the tunnel brings the computers in |
-| `PAIRNETS_PUBLIC_URL` (or `PUBLIC_URL`, or `Sync__PublicUrl`) | – (set by `install.sh --public-url`) | the nest's own name, `https://` without a path. It turns on the website and signing in. If more than one is set, `Sync__PublicUrl` wins, then `PUBLIC_URL`. |
+| `PAIRNETS_PUBLIC_URL` (or `PUBLIC_URL`, or `Sync__PublicUrl`) | – (set by `install.sh --public-url`) | the nest's own name, `https://` without a path. It turns on the website and signing in. If more than one is set, `Sync__PublicUrl` wins, then `PUBLIC_URL`. It must stay unset on a server linked to Pairnets. |
+| `Sync__RelayNestId`, `Sync__RelayKey` | – (set by `install.sh` when it links the server to your Pairnets account) | the server's id at Pairnets (`nst_` and 26 characters) and its key (base64url of 32 bytes; root only, never logged). Both or neither: with one missing or malformed the server does not start. Together they turn on relay mode: no website of its own, `/api/hello` says `relay`, and Pairnets' signed calls under `/api/relay/` are accepted. |
+| `Sync__RelayServiceUrl` | `https://sync.pairnets.app` | the Pairnets service a linked server is reached through |
 | `Sync__PasskeyRpId` | the nest's host name | the domain passkeys are tied to. Set a parent domain (`example.com`) only if other sites on it should share the passkeys; it must be the nest's host or a parent of it. |
 | `Sync__DataDir` | `/var/lib/pairnets` | data directory. Keep it there: the hardened service and the updater expect that path (to use another disk, see [Moving the nest's data to another disk](#moving-the-nests-data-to-another-disk)). |
 | `Sync__UpdateDir` | `/var/lib/pairnets/update` (set by install.sh) | where update requests go; must be the folder the root updater watches |
 | `Sync__HistoryRetentionDays` | 30 | delete history versions older than this... |
 | `Sync__HistoryMinVersions` | 5 | ...but always keep this many per file |
-| `Sync__TrustProxyHeaders` | `false` (`true` set by install.sh) | the client address comes from `CF-Connecting-IP` (or the last `X-Forwarded-For` entry), and HTTPS from `X-Forwarded-Proto`, believed only on loopback connections |
+| `Sync__TrustProxyHeaders` | `false` (`true` set by install.sh) | the client address comes from `CF-Connecting-IP` (or the last `X-Forwarded-For` entry), and HTTPS from `X-Forwarded-Proto`, believed only on loopback connections. On a linked server this is always on, and Pairnets' `X-Pairnets-Client-IP` comes first |
 | `Sync__UploadStallTimeout` | `00:01:00` | drop an upload that sends nothing for this long |
 | `Sync__SmtpHost`, `Sync__SmtpPort` (587), `Sync__SmtpUser`, `Sync__SmtpPassword`, `Sync__SmtpFrom`, `Sync__SmtpUseTls` (`true`) | – | email sign-in links, see [below](#email-sign-in-links-optional) |
 | `Sync__GoogleClientId`, `Sync__GoogleClientSecret` | – | sign in with Google, see [below](#sign-in-with-google-optional) |
@@ -132,7 +194,8 @@ Upgrades keep every line.
 
 ### Email sign-in links (optional)
 
-With mail settings, the nest can email you a sign-in link, and the apps offer **Continue with email**.
+Only with your own domain (a server linked to Pairnets has no website of its own; there, Continue
+with email and Google are your Pairnets account's). With mail settings, the nest can email you a sign-in link, and the apps offer **Continue with email**.
 Any SMTP service works, for example Resend (`smtp.resend.com`, user `resend`, an API key as the
 password). Add to `/etc/pairnets/pairnets.env`:
 
@@ -151,7 +214,8 @@ nest sends sign-in links to that address only (each works once, for 15 minutes).
 
 ### Sign in with Google (optional)
 
-This uses your own Google sign-in client, so nothing goes through anyone else's account.
+Only with your own domain, like email links above. This uses your own Google sign-in client, so
+nothing goes through anyone else's account.
 
 1. In the Google Cloud console (APIs & Services → Credentials), create an **OAuth client ID** of
    type **Web application**. Add `https://sync.example.com/auth/google/callback` as an authorised
@@ -173,9 +237,11 @@ This uses your own Google sign-in client, so nothing goes through anyone else's 
    Windows, the `.dmg` on a Mac, `pairnets-desktop-linux-x64.tar.gz` on Linux, all from
    <https://github.com/MRnigth/Pairnets/releases/latest>. Details per system:
    [HOWTO section 5](HOWTO.md#5-set-up-the-first-computer-for-example-the-desktop).
-2. Start it. The first-run window is a sign-in window: type your nest's name (`sync.example.com`)
-   and sign in. Your browser opens the nest's website; check that the code matches the one in the
-   app and press **Allow**. The computer gets its own key.
+2. Start it. The first-run window is a sign-in window. **Linked to your Pairnets account:** choose
+   **Continue with email** (or Google) and sign in with the same account; Pairnets asks your server
+   for this computer's own key and hands it over once. **Your own domain:** type your nest's name
+   (`sync.example.com`) and sign in; your browser opens the nest's website, check that the code
+   matches the one in the app and press **Allow**. Either way the computer gets its own key.
 3. Choose the folder to sync, for example `D:\Work`, and press **Start syncing**. If the server
    already has files and the folder is not empty, Pairnets merges them (nothing is deleted).
 
@@ -340,3 +406,6 @@ sudo rm -rf /opt/pairnets /etc/pairnets
 # Your data stays in /var/lib/pairnets until you delete it yourself.
 # cloudflared stays installed (sudo apt remove cloudflared); delete the tunnel in the Cloudflare dashboard.
 ```
+
+A server linked to your Pairnets account: also press **Remove this server** at
+<https://sync.pairnets.app/account>, which deletes its tunnel. Its files stay on the server.
