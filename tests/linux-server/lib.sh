@@ -154,12 +154,19 @@ get_file_hash() { api GET "/api/file?path=$(urlencode "$1")" | sha256sum | cut -
 # JSON field from stdin: json_field <name>
 json_field() { python3 -c 'import json, sys; v = json.load(sys.stdin).get(sys.argv[1]); print("" if v is None else v)' "$1"; }
 
-# Warnings and errors the Pairnets units logged since a moment (unix seconds).
+# A mark in the journal (the cursor of its newest entry): later checks look only at what came after it.
+journal_mark() { journalctl -q -n 1 -o export 2>/dev/null | sed -n 's/^__CURSOR=//p' | head -n1; }
+
+# Warnings and errors the Pairnets units logged after a journal mark.
 journal_problems() {
-  journalctl --no-pager -q -o short-iso -p warning --since "@$1" -u 'pairnets-*' 2>/dev/null || true
+  if [[ -n "$1" ]]; then
+    journalctl --no-pager -q -o short-iso -p warning --after-cursor "$1" -u 'pairnets-*' 2>/dev/null || true
+  else
+    journalctl --no-pager -q -o short-iso -p warning -u 'pairnets-*' 2>/dev/null || true
+  fi
 }
 
-check_journal_clean() { # check_journal_clean <since> <description> [<regex of known, harmless lines>]
+check_journal_clean() { # check_journal_clean <journal mark> <description> [<regex of known, harmless lines>]
   local problems ignored=""
   problems="$(journal_problems "$1" | redact)"
   if [[ -n "${3:-}" && -n "$problems" ]]; then

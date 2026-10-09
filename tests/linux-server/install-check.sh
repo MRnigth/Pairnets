@@ -23,7 +23,7 @@ FEED="$(cd "$FEED" && pwd)"
 EXPECTED_VERSION="$(feed_version "$FEED")"
 
 step "install $EXPECTED_VERSION with get.sh (--bind 127.0.0.1 --port $E2E_HTTP_PORT)"
-since=$(date +%s)
+mark="$(journal_mark)"
 set +e
 output="$(PAIRNETS_BASE_URL="$FEED" bash "$REPO_ROOT/deploy/get.sh" --bind 127.0.0.1 --port "$E2E_HTTP_PORT" 2>&1)"
 rc=$?
@@ -69,7 +69,7 @@ step "health and logs"
 check "GET /api/health answers ok" health_ok
 check "GET /api/hello answers without a token" curl -fsS --max-time 10 "$API/api/hello"
 expect "the API takes the shared token" "$(api_status GET /api/info)" "200"
-check_journal_clean "$since" "no warnings or errors from the Pairnets units in the journal"
+check_journal_clean "$mark" "no warnings or errors from the Pairnets units in the journal"
 # (After the journal check: the server rightly logs a warning for this one.)
 expect "the API refuses a request without the token" "$(curl -s -o /dev/null -w '%{http_code}' "$API/api/info")" "401"
 
@@ -78,8 +78,7 @@ hash_before="$(token_hash)"
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 tar -xzf "$FEED/$PACKAGE.tar.gz" -C "$work"
-since=$(date +%s)
-sleep 1 # the journal check below starts at a whole second
+mark="$(journal_mark)"
 set +e
 output="$("$work/$PACKAGE/install.sh" 2>&1)"
 rc=$?
@@ -92,6 +91,6 @@ expect "pairnets.env is still 600 root" "$(perms "$ENV_FILE")" "600 root root"
 expect "pairnets-server is enabled and running" "$(unit_state pairnets-server)" "enabled/active"
 expect "pairnets-update.path is enabled and watching" "$(unit_state pairnets-update.path)" "enabled/active"
 check "GET /api/health answers ok" health_ok
-check_journal_clean "$since" "no warnings or errors in the journal after the second install"
+check_journal_clean "$mark" "no warnings or errors in the journal after the second install"
 
 finish

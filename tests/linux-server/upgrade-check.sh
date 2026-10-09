@@ -76,7 +76,7 @@ fingerprint="$(files_fingerprint)"
 step "update to $NEW_VERSION with the server's own updater"
 staged="$(stage_feed "$FEED" upgrade)"
 point_updater_at "$staged"
-since=$(date +%s)
+mark="$(journal_mark)"
 rm -f "$UPDATE_DIR/status.json"
 request_update
 if final="$(wait_update_done "$TIMEOUT")"; then
@@ -107,6 +107,6 @@ expect "pairnets-update.path is enabled and watching" "$(unit_state pairnets-upd
 expect "pairnets-update.timer is enabled and running" "$(unit_state pairnets-update.timer)" "enabled/active"
 t="$(token)"
 if [[ -n "$t" ]] && grep -qF "$t" "$UPDATE_DIR"/update.log* 2>/dev/null; then bad "update.log contains the shared token"; else ok "update.log does not contain the shared token"; fi
-check_journal_clean "$since" "no warnings or errors from the Pairnets units since the update"
+check_journal_clean "$mark" "no warnings or errors from the Pairnets units since the update"
 
 finish

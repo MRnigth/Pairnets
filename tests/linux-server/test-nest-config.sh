@@ -63,8 +63,7 @@ set_env Sync__GoogleTokenUrl "http://127.0.0.1:$E2E_GOOGLE_PORT/token"
 expect "pairnets.env is still 600 root" "$(perms "$ENV_FILE")" "600 root root"
 
 step "restart the server"
-since=$(date +%s)
-sleep 1
+mark="$(journal_mark)"
 systemctl restart pairnets-server
 check "http://127.0.0.1:$E2E_HTTP_PORT/api/health answers" wait_http "$API/api/health" 120
 check "https://localhost:$E2E_HTTPS_PORT/api/health answers with the test certificate" \
@@ -74,7 +73,7 @@ hello="$(curl -fsS --max-time 10 "$API/api/hello" || true)"
 expect "the nest knows its public name" "$(json_field publicUrl <<<"$hello")" "https://localhost:$E2E_HTTPS_PORT"
 check "the website's front page answers" curl -fsS --max-time 10 --cacert "$E2E_TLS_DIR/fullchain.pem" "https://localhost:$E2E_HTTPS_PORT/"
 # With Sync__HttpsUrl the server binds every address itself, and Kestrel says so as a warning.
-check_journal_clean "$since" "no warnings or errors from the Pairnets units in the journal" \
+check_journal_clean "$mark" "no warnings or errors from the Pairnets units in the journal" \
   "Kestrel\[0\] Overriding address\(es\) 'http://127\.0\.0\.1:$E2E_HTTP_PORT'"
 
 finish
