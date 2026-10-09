@@ -219,9 +219,16 @@ jobs:
         run: |
           token="$(sudo sed -n 's/^SYNC_TOKEN=//p' /etc/pairnets/pairnets.env)"
           echo "::add-mask::$token"
-          PAIRNETS_E2E_TOKEN="$token" dotnet test Pairnets.sln -c Release --no-build \
+          # The website tests first: they restart the server (which also resets its email limit), and the
+          # tour ends with a real "Update server".
+          if [ -d tests/Pairnets.Browser.Tests ]; then
+            PAIRNETS_E2E_TOKEN="$token" dotnet test tests/Pairnets.Browser.Tests -c Release --no-build \
+              --logger "trx;LogFilePrefix=installed-linux-website" --logger "console;verbosity=normal" \
+              --results-directory TestResults --blame-hang-timeout 10m
+          fi
+          PAIRNETS_E2E_TOKEN="$token" dotnet test tests/Pairnets.Tests -c Release --no-build \
             --filter "FullyQualifiedName~InstalledLinux" \
-            --logger "trx;LogFilePrefix=installed-linux" --logger "console;verbosity=normal" \
+            --logger "trx;LogFilePrefix=installed-linux-tour" --logger "console;verbosity=normal" \
             --results-directory TestResults --blame-hang-timeout 10m
           if [ ! -s "$PAIRNETS_E2E_REPORT" ]; then
             echo "::error::the installed-linux API tour did not run (it wrote no report)"

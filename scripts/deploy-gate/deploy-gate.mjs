@@ -432,13 +432,20 @@ export async function runCheck(top, sha) {
     return { ok: false, lines: [`Commit ${short(sha)} does not have the pre-deploy check yet (scripts/pre-deploy.ps1). Bring main into this branch first, then deploy.`] };
   }
   const work = path.join(STATE, 'gate');
-  fs.mkdirSync(work, { recursive: true });
+  const scripts = path.join(work, `${short(sha)}-${process.pid}`);
+  fs.mkdirSync(scripts, { recursive: true });
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-  const runner = path.join(work, `pre-deploy-${short(sha)}-${process.pid}.ps1`);
+  const runner = path.join(scripts, 'pre-deploy.ps1');
   const summaryFile = path.join(work, `summary-${short(sha)}-${process.pid}.json`);
   const log = path.join(work, `run-${short(sha)}-${stamp}.log`);
-  // Windows PowerShell 5.1 reads a file without a byte-order mark as ANSI.
+  // The runner and the helpers it loads from its own folder, as they are in that commit. Windows PowerShell 5.1
+  // reads a file without a byte-order mark as ANSI.
   fs.writeFileSync(runner, '\uFEFF' + script.out + '\n', 'utf8');
+  for (const name of git(top, ['ls-tree', '--name-only', `${sha}:scripts`]).out.split(/\r?\n/)) {
+    if (!/\.ps1$/i.test(name) || name === 'pre-deploy.ps1') continue;
+    const helper = git(top, ['show', `${sha}:scripts/${name}`], 30_000);
+    if (helper.ok) fs.writeFileSync(path.join(scripts, name), '\uFEFF' + helper.out + '\n', 'utf8');
+  }
   fs.rmSync(summaryFile, { force: true });
   const fd = fs.openSync(log, 'a');
   const exe = process.platform === 'win32' ? 'powershell.exe' : 'pwsh';
@@ -455,7 +462,7 @@ export async function runCheck(top, sha) {
     child.on('exit', (c) => { clearTimeout(timer); resolve(c); });
   });
   fs.closeSync(fd);
-  fs.rmSync(runner, { force: true });
+  fs.rmSync(scripts, { recursive: true, force: true });
   let summary = null;
   try {
     summary = JSON.parse(fs.readFileSync(summaryFile, 'utf8').replace(/^\uFEFF/, ''));

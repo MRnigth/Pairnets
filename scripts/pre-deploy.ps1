@@ -492,27 +492,8 @@ function Step-RenderScreens($Ctx) {
     }
 }
 
-# Chromium for the website tests (Microsoft.Playwright), when that test project is in the commit.
-function Install-Playwright($Ctx) {
-    $project = Join-Path $Work 'tests\Pairnets.Browser.Tests'
-    if (-not (Test-Path $project)) { return }
-    $ps1 = Join-Path $project 'bin\Release\net8.0\playwright.ps1'
-    if (-not (Test-Path $ps1)) { Add-Problem $Ctx 'the website tests are built, but playwright.ps1 is missing'; return }
-    $pwsh = Get-Command pwsh.exe -ErrorAction SilentlyContinue
-    $pwshPath = if ($pwsh) { $pwsh.Source } else { Join-Path $script:PdHome 'tools\pwsh.exe' }
-    if (-not (Test-Path $pwshPath)) {
-        # playwright.ps1 needs PowerShell 7; a private copy as a .NET tool (Microsoft's, made for .NET 8).
-        Invoke-StepTool -Ctx $Ctx -What 'install PowerShell 7 for playwright.ps1 (once)' -File 'dotnet.exe' -TimeoutSeconds 900 -Arguments @(
-            'tool', 'install', 'PowerShell', '--version', '7.4.6', '--tool-path', (Join-Path $script:PdHome 'tools')) | Out-Null
-    }
-    if (Test-Path $pwshPath) {
-        Invoke-StepTool -Ctx $Ctx -What 'install Chromium for the website tests' -File $pwshPath -TimeoutSeconds 1800 -Arguments @(
-            '-NoProfile', '-File', $ps1, 'install', 'chromium') | Out-Null
-    }
-}
-
+# The website tests install Chromium themselves the first time (Microsoft.Playwright, about 300 MB, once).
 function Step-Tests($Ctx) {
-    Install-Playwright $Ctx
     $server = Join-Path $Dist 'pairnets-server-win-x64\pairnets-server.exe'
     $r = Invoke-StepTool -Ctx $Ctx -What 'dotnet test Pairnets.sln' -File 'dotnet.exe' -TimeoutSeconds 7200 -AllowFail -Arguments @(
         'test', 'Pairnets.sln', '-c', 'Release', '--no-build',
@@ -563,7 +544,6 @@ function Step-LinuxBox($Ctx) {
         if (Test-Path $TourReport) { Remove-Item -Force $TourReport }
         if (-not $token) { Add-Problem $Ctx 'could not read the token from the box'; $failedA = $true }
         else {
-            Install-Playwright $Ctx
             $e2e = @{
                 'PAIRNETS_E2E_TARGET' = 'installed-linux'
                 'PAIRNETS_E2E_URL' = 'http://127.0.0.1:15075/'
@@ -576,12 +556,21 @@ function Step-LinuxBox($Ctx) {
                 'PAIRNETS_E2E_REPORT' = $TourReport
                 'PAIRNETS_E2E_SERVER' = $null
             }
-            $r = Invoke-StepTool -Ctx $Ctx -What 'dotnet test (installed-linux)' -File 'dotnet.exe' -TimeoutSeconds 3600 -AllowFail -Quiet -Environment $e2e -Arguments @(
-                'test', 'Pairnets.sln', '-c', 'Release', '--no-build', '--filter', 'FullyQualifiedName~InstalledLinux',
-                '--logger', 'trx;LogFilePrefix=installed-linux', '--logger', 'console;verbosity=normal',
-                '--results-directory', $TestResults, '--blame-hang-timeout', '10m')
             $before = $Ctx.Problems.Count
-            Add-TestProblems $Ctx 'installed-linux*.trx' $r 'the installed-linux tests'
+            # The website tests first: they restart the server (which also resets its email limit), and the tour
+            # ends with a real "Update server".
+            if (Test-Path (Join-Path $Work 'tests\Pairnets.Browser.Tests')) {
+                $r = Invoke-StepTool -Ctx $Ctx -What 'website tests (installed-linux)' -File 'dotnet.exe' -TimeoutSeconds 3600 -AllowFail -Quiet -Environment $e2e -Arguments @(
+                    'test', 'tests\Pairnets.Browser.Tests', '-c', 'Release', '--no-build',
+                    '--logger', 'trx;LogFilePrefix=installed-linux-website', '--logger', 'console;verbosity=normal',
+                    '--results-directory', $TestResults, '--blame-hang-timeout', '10m')
+                Add-TestProblems $Ctx 'installed-linux-website*.trx' $r 'the website tests on the box' -RequireTests
+            }
+            $r = Invoke-StepTool -Ctx $Ctx -What 'API tour (installed-linux)' -File 'dotnet.exe' -TimeoutSeconds 3600 -AllowFail -Quiet -Environment $e2e -Arguments @(
+                'test', 'tests\Pairnets.Tests', '-c', 'Release', '--no-build', '--filter', 'FullyQualifiedName~InstalledLinux',
+                '--logger', 'trx;LogFilePrefix=installed-linux-tour', '--logger', 'console;verbosity=normal',
+                '--results-directory', $TestResults, '--blame-hang-timeout', '10m')
+            Add-TestProblems $Ctx 'installed-linux-tour*.trx' $r 'the API tour on the box'
             if (-not (Test-Path $TourReport)) {
                 Add-Problem $Ctx "the installed-linux API tour did not run: it wrote no report ($TourReport)"
             } else {
@@ -655,6 +644,19 @@ while (-not $lock) {
 }
 $lockText = [System.Text.Encoding]::UTF8.GetBytes("pid=$PID`nsha=$Sha`nstarted=$((Get-Date).ToUniversalTime().ToString('o'))`n")
 $lock.SetLength(0); $lock.Write($lockText, 0, $lockText.Length); $lock.Flush()
+
+# Two deploys of one commit at once: the second waited above, and the first one's pass counts for it too.
+$existing = Join-Path $StampDir "$Sha.pass"
+if (-not $onlyMode -and (Test-Path $existing) -and ((Get-Content -Path $existing -Encoding UTF8) -contains "sha=$Sha")) {
+    $previous = ((Get-Content -Path $existing -Encoding UTF8) | Where-Object { $_ -like 'report=*' } | Select-Object -First 1) -replace '^report=', ''
+    Say "Commit $Sha8 already passed the pre-deploy check (report: $previous)" 'Green'
+    if ($SummaryFile) {
+        Write-PdText $SummaryFile (ConvertTo-Json -Depth 4 -InputObject ([ordered]@{ passed = $true; sha = $Sha; report = $previous; partial = $false; steps = @() }))
+    }
+    Remove-Item -Recurse -Force $ReportDir -ErrorAction SilentlyContinue
+    $lock.Dispose()
+    exit 0
+}
 
 $oldOut = $null
 try { $oldOut = [Console]::OutputEncoding; [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false) } catch { $oldOut = $null }
