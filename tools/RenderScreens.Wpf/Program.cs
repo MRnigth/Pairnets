@@ -197,18 +197,29 @@ public static class Program
         Save(panel, outDir, $"windows-tray-panel-{suffix}.png", print);
         panel.Close();
 
+        // Signing in with a Pairnets account: the first screen, the browser step, "no nest yet", the folder.
         var signIn = new SettingsWindow(new ClientSettings { DeviceName = "DESKTOP" }, new NoProtector());
         Place(signIn);
-        signIn.SignIn!.ShowAddress("nest.pairnets.app", new NestCheck(NestCheckStatus.Found, new Uri("https://nest.pairnets.app/"),
+        Save(signIn, outDir, $"windows-sign-in-welcome-{suffix}.png", print);
+        const string page = "https://sync.pairnets.app/app?code=KQ7M-4PXD&method=email";
+        signIn.SignIn!.ShowAccount(new AccountSignInState(PairingStage.Waiting, "KQ7M-4PXD", page, DateTimeOffset.UtcNow.AddMinutes(9).AddSeconds(41)), openBrowser: false);
+        Save(signIn, outDir, $"windows-sign-in-browser-{suffix}.png", print);
+        signIn.SignIn.ShowAccount(new AccountSignInState(PairingStage.Waiting, "KQ7M-4PXD", page, DateTimeOffset.UtcNow.AddMinutes(30),
+            AccountSignIn.NoNestMessage, NoNest: true, AccountEmail: "maria@example.com"), openBrowser: false);
+        Save(signIn, outDir, $"windows-sign-in-no-nest-{suffix}.png", print);
+        const string nestId = "nst_7f3k9q2m8v4c6x1t5r0p2n9b3d";
+        signIn.SignIn.ShowFolderStep(new AccountSignInResult(Relay.AddressOf(nestId), nestId, "soro", new DeviceKeyGrant("id", "DESKTOP", "unused"), "maria@example.com"));
+        signIn.SignIn.Folder = @"D:\Work";
+        Save(signIn, outDir, $"windows-sign-in-folder-{suffix}.png", print);
+
+        // "I run my own nest": its address, then approving this computer on it.
+        signIn.SignIn.ShowAddress("nest.pairnets.app", new NestCheck(NestCheckStatus.Found, new Uri("https://nest.pairnets.app/"),
             new ServerHello("Pairnets", 1, "1.0.80", "https://nest.pairnets.app", true, true, new SignInMethods(true, true, true, true)),
             "Found it (Pairnets server 1.0.80)"));
-        Save(signIn, outDir, $"windows-sign-in-welcome-{suffix}.png", print);
+        Save(signIn, outDir, $"windows-sign-in-own-nest-{suffix}.png", print);
         signIn.SignIn.ShowPairing(new PairingState(PairingStage.Waiting, "KQ7M-4PXD", "https://nest.pairnets.app/link?code=KQ7M-4PXD",
             DateTimeOffset.UtcNow.AddMinutes(9).AddSeconds(41)), openBrowser: false);
         Save(signIn, outDir, $"windows-sign-in-waiting-{suffix}.png", print);
-        signIn.SignIn.ShowFolderStep(new DeviceKeyGrant("id", "DESKTOP", "unused"), new Uri("https://nest.pairnets.app/"));
-        signIn.SignIn.Folder = @"D:\Work";
-        Save(signIn, outDir, $"windows-sign-in-folder-{suffix}.png", print);
         signIn.Close();
 
         var serverUpdate = new ServerUpdateWindow(null, "1.0.52", "1.0.58");
@@ -255,14 +266,21 @@ public static class Program
         var content = (FrameworkElement)window.Content;
         var width = content.ActualWidth + content.Margin.Left + content.Margin.Right;
         var height = content.ActualHeight + content.Margin.Top + content.Margin.Bottom;
+        // The bitmap's DPI does the 1.5× (no extra transform), and the brush shows the content's whole layout box, empty
+        // edges included (by default a VisualBrush crops to what is drawn, which shifts a page with margins).
         const double scale = 1.5;
         var visual = new DrawingVisual();
         using (var dc = visual.RenderOpen())
         {
-            dc.PushTransform(new ScaleTransform(scale, scale));
             dc.DrawRectangle(window.Background, null, new Rect(0, 0, width, height));
-            dc.DrawRectangle(new VisualBrush(content) { Stretch = Stretch.None, AlignmentX = AlignmentX.Left, AlignmentY = AlignmentY.Top },
-                null, new Rect(content.Margin.Left, content.Margin.Top, content.ActualWidth, content.ActualHeight));
+            dc.DrawRectangle(new VisualBrush(content)
+            {
+                Stretch = Stretch.None,
+                AlignmentX = AlignmentX.Left,
+                AlignmentY = AlignmentY.Top,
+                ViewboxUnits = BrushMappingMode.Absolute,
+                Viewbox = new Rect(0, 0, content.ActualWidth, content.ActualHeight),
+            }, null, new Rect(content.Margin.Left, content.Margin.Top, content.ActualWidth, content.ActualHeight));
         }
         var bitmap = new RenderTargetBitmap((int)Math.Ceiling(width * scale), (int)Math.Ceiling(height * scale), 96 * scale, 96 * scale, PixelFormats.Pbgra32);
         bitmap.Render(visual);

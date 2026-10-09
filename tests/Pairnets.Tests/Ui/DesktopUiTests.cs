@@ -318,6 +318,9 @@ public class DesktopUiTests
         Assert.Contains("sign in", window.Title);
         Assert.NotNull(window.SignIn);
         Assert.Same(window.SignIn, window.Host.Content); // no form for a server address and token behind it
+        Assert.Equal(SignInStep.Account, window.SignIn.Step); // "Sign in to Pairnets" first; your own nest is behind a link
+        Assert.True(window.SignIn.AccountStep.IsVisible);
+        Assert.False(window.SignIn.WelcomeStep.IsVisible);
         window.Close();
     }
 
@@ -457,12 +460,25 @@ public class DesktopUiTests
         Save(panel, outDir, $"tray-panel-idle-{suffix}.png");
         panel.Close();
 
+        // Signing in with a Pairnets account: the first screen, the browser step, "no nest yet", the folder.
         var signIn = new SettingsWindow(new ClientSettings { DeviceName = "MacBook" }, null, autoStart: true);
         signIn.Show();
+        Save(signIn, outDir, $"sign-in-welcome-{suffix}.png");
+        const string page = "https://sync.pairnets.app/app?code=KQ7M-4PXD&method=email";
+        signIn.SignIn.ShowAccount(new AccountSignInState(PairingStage.Waiting, "KQ7M-4PXD", page, DateTimeOffset.UtcNow.AddMinutes(9).AddSeconds(41)), openBrowser: false);
+        Save(signIn, outDir, $"sign-in-browser-{suffix}.png");
+        signIn.SignIn.ShowAccount(new AccountSignInState(PairingStage.Waiting, "KQ7M-4PXD", page, DateTimeOffset.UtcNow.AddMinutes(30),
+            AccountSignIn.NoNestMessage, NoNest: true, AccountEmail: "maria@example.com"), openBrowser: false);
+        Save(signIn, outDir, $"sign-in-no-nest-{suffix}.png");
+        signIn.SignIn.ShowFolderStep(SampleAccountResult("MacBook"));
+        signIn.SignIn.Folder = "/Users/me/Work";
+        Save(signIn, outDir, $"sign-in-folder-{suffix}.png");
+
+        // "I run my own nest": its address, then approving this computer on it.
         signIn.SignIn.ShowAddress("nest.pairnets.app", new NestCheck(NestCheckStatus.Found, new Uri("https://nest.pairnets.app/"),
             new ServerHello("Pairnets", 1, "1.0.80", "https://nest.pairnets.app", true, true, new SignInMethods(true, true, true, true)),
             "Found it (Pairnets server 1.0.80)"));
-        Save(signIn, outDir, $"sign-in-welcome-{suffix}.png");
+        Save(signIn, outDir, $"sign-in-own-nest-{suffix}.png");
         signIn.SignIn.ShowAddress("nest.pairnets.app", new NestCheck(NestCheckStatus.Unreachable, new Uri("https://nest.pairnets.app/"), null, "Can't reach it. Check the name, and that this computer is online."));
         Save(signIn, outDir, $"sign-in-unreachable-{suffix}.png");
         signIn.SignIn.ShowPairing(new PairingState(PairingStage.Waiting, "KQ7M-4PXD", "https://nest.pairnets.app/link?code=KQ7M-4PXD",
@@ -470,9 +486,6 @@ public class DesktopUiTests
         Save(signIn, outDir, $"sign-in-waiting-{suffix}.png");
         signIn.SignIn.ShowPairing(new PairingState(PairingStage.Denied, "KQ7M-4PXD", "https://nest.pairnets.app/link?code=KQ7M-4PXD"), openBrowser: false);
         Save(signIn, outDir, $"sign-in-denied-{suffix}.png");
-        signIn.SignIn.ShowFolderStep(new DeviceKeyGrant("id", "MacBook", "unused"), new Uri("https://nest.pairnets.app/"));
-        signIn.SignIn.Folder = "/Users/me/Work";
-        Save(signIn, outDir, $"sign-in-folder-{suffix}.png");
         signIn.Close();
 
         var serverUpdate = new ServerUpdateWindow(null, "1.0.52", "1.0.58");
@@ -485,6 +498,13 @@ public class DesktopUiTests
         serverUpdate.ShowResult(new ServerUpdateResult(false, "This server can't update itself yet.", "1.0.52", CanUpdateItself: false));
         Save(serverUpdate, outDir, $"server-update-manual-{suffix}.png");
         serverUpdate.Close();
+    }
+
+    /// <summary>What an account sign-in hands back for the screenshots: a computer on the account's nest "soro".</summary>
+    private static AccountSignInResult SampleAccountResult(string name)
+    {
+        const string nestId = "nst_7f3k9q2m8v4c6x1t5r0p2n9b3d";
+        return new AccountSignInResult(Relay.AddressOf(nestId), nestId, "soro", new DeviceKeyGrant("id", name, "unused"), "maria@example.com");
     }
 
     private static void Save(Avalonia.Controls.Window window, string? outDir, string name)

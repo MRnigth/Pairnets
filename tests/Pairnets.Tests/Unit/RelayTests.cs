@@ -64,6 +64,22 @@ public class RelayTests
     }
 
     [Fact]
+    public void ANestThatCouldNotBeToldPointsToTheAccountPageInRelayMode()
+    {
+        // Signing out or resetting while the nest cannot be reached: where to remove this computer by hand.
+        Assert.Equal("Remove this computer on your account page (https://sync.pairnets.app/account) so its key stops working there too.",
+            Relay.RemoveByHandHint(Address));
+        Assert.Equal("Remove this computer on your nest's Devices page so its key stops working there too.",
+            Relay.RemoveByHandHint("https://nest.example.com/"));
+        Assert.Contains("Devices page", Relay.RemoveByHandHint(null));
+        Assert.Contains("(http://127.0.0.1:5/account)", Relay.RemoveByHandHint("http://127.0.0.1:5/n/" + Id + "/", new Uri("http://127.0.0.1:5/")));
+
+        // "Make an account" in the apps: accounts are made by signing in.
+        Assert.Equal("https://sync.pairnets.app/login", Relay.LoginUrl());
+        Assert.Equal("http://127.0.0.1:5/login", Relay.LoginUrl(new Uri("http://127.0.0.1:5/")));
+    }
+
+    [Fact]
     public void AddAnotherComputerSaysToSignInWithTheSameAccountInRelayMode()
     {
         var relay = Relay.AddComputerSteps(Address, "you@example.com", null);

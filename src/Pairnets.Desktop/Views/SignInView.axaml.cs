@@ -1,4 +1,5 @@
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
@@ -12,10 +13,32 @@ using Pairnets.Core.Sync;
 
 namespace Pairnets.Desktop.Views;
 
+/// <summary>The steps of the sign-in window, one shown at a time.</summary>
+internal enum SignInStep
+{
+    /// <summary>"Sign in to Pairnets": Continue with Google or email.</summary>
+    Account,
+
+    /// <summary>"Finish in your browser": the code, until the computer is allowed.</summary>
+    AccountWait,
+
+    /// <summary>Allowed, but the account has no nest yet.</summary>
+    NoNest,
+
+    /// <summary>"I run my own nest": its address and the ways to sign in there.</summary>
+    Address,
+
+    /// <summary>"Approve this computer" on the nest.</summary>
+    Wait,
+
+    /// <summary>Signed in: choose the folder.</summary>
+    Folder,
+}
+
 /// <summary>
-/// Setting up a computer by signing in: type your nest, approve this computer in the browser, pick the
-/// folder. The steps and their network work live in <see cref="PairingFlow"/> and <see cref="Nest"/>;
-/// this view only draws them.
+/// Setting up a computer by signing in: with a Pairnets account (Google or email) in the browser, or on your own nest
+/// from its address, then pick the folder. The steps and their network work live in <see cref="AccountSignIn"/>,
+/// <see cref="PairingFlow"/> and <see cref="Nest"/>; this view only draws them.
 /// </summary>
 public partial class SignInView : UserControl
 {
@@ -25,12 +48,16 @@ public partial class SignInView : UserControl
     private readonly DispatcherTimer _clock = new() { Interval = TimeSpan.FromSeconds(1) };
     private CancellationTokenSource? _checking;
     private CancellationTokenSource? _flowStop;
+    private CancellationTokenSource? _accountStop;
     private NestCheck? _check;
     private PairingState? _state;
+    private AccountSignInState? _account;
+    private AccountSignInResult? _accountResult;
     private Uri? _nest;
     private string? _method;
     private string? _email;
     private bool _browserOpened;
+    private bool _accountBrowserOpened;
     private bool _quiet;
     private string? _shownAddress;
 
@@ -57,13 +84,23 @@ public partial class SignInView : UserControl
         };
         EmailBox.TextChanged += (_, _) =>
             EmailButton.IsEnabled = _check is { CanSignIn: true } && Nest.LooksLikeEmail(EmailBox.Text);
+        AccountEmailBox.TextChanged += (_, _) => AccountEmailProblem.IsVisible = false;
+        AccountEmailBox.KeyDown += (_, e) =>
+        {
+            if (e.Key != Key.Enter)
+                return;
+            e.Handled = true;
+            ContinueWithEmail();
+        };
         _clock.Tick += (_, _) => DrawWaiting();
         DetachedFromVisualTree += (_, _) =>
         {
             _clock.Stop();
             _flowStop?.Cancel();
+            _accountStop?.Cancel();
             _checking?.Cancel();
         };
+        ShowStep(SignInStep.Account);
         if (!string.IsNullOrWhiteSpace(AddressBox.Text))
             CheckSoon(TimeSpan.Zero);
     }
@@ -71,20 +108,172 @@ public partial class SignInView : UserControl
     /// <summary>Signed in and a folder chosen: the settings to save (key protected) and the plain key for this session.</summary>
     public event Action<ClientSettings, string>? SignedIn;
 
+    /// <summary>The Pairnets service to sign in with (tests use a stand-in); by default sync.pairnets.app.</summary>
+    internal Uri? Service { get; set; }
+
+    /// <summary>How often the account sign-in asks how it went (tests); by default what the service says.</summary>
+    internal TimeSpan? AccountPollInterval { get; set; }
+
+    /// <summary>The step on show.</summary>
+    internal SignInStep Step { get; private set; }
+
     private Window? Owner => TopLevel.GetTopLevel(this) as Window;
 
     /// <summary>
     /// The nest this computer used before (signing in again), as people type it. An old install may still
     /// point at a plain address; the nest's own name, learned while syncing, then fills the field instead.
+    /// A relay address is not a nest's own name: signing in again goes through the account.
     /// </summary>
     private static string SuggestedAddress(ClientSettings current, string? nestHint) =>
-        Uri.TryCreate(current.ServerUrl, UriKind.Absolute, out var url) && url.Scheme == Uri.UriSchemeHttps
+        Uri.TryCreate(current.ServerUrl, UriKind.Absolute, out var url) && url.Scheme == Uri.UriSchemeHttps && !Relay.IsRelayAddress(url)
             ? url.IsDefaultPort ? url.Host : url.Authority
             : Uri.TryCreate(nestHint, UriKind.Absolute, out var nest) && nest.Scheme == Uri.UriSchemeHttps
                 ? nest.IsDefaultPort ? nest.Host : nest.Authority
                 : string.Empty;
 
-    // ------------------------------------------------------------------ 1. which nest
+    /// <summary>Shows one step (and its bottom line); the spinners turn only while theirs is on show.</summary>
+    private void ShowStep(SignInStep step)
+    {
+        Step = step;
+        AccountStep.IsVisible = step == SignInStep.Account;
+        AccountWaitStep.IsVisible = step == SignInStep.AccountWait;
+        NoNestStep.IsVisible = step == SignInStep.NoNest;
+        WelcomeStep.IsVisible = step == SignInStep.Address;
+        WaitStep.IsVisible = step == SignInStep.Wait;
+        FolderStep.IsVisible = step == SignInStep.Folder;
+        AccountFooter.IsVisible = AccountStep.IsVisible;
+        AccountWaitFooter.IsVisible = AccountWaitStep.IsVisible;
+        NoNestFooter.IsVisible = NoNestStep.IsVisible;
+        AddressFooter.IsVisible = WelcomeStep.IsVisible;
+        Footer.IsVisible = step is SignInStep.Account or SignInStep.AccountWait or SignInStep.NoNest or SignInStep.Address;
+        AccountRing.Classes.Set("spin", step == SignInStep.AccountWait);
+        NoNestRing.Classes.Set("spin", step == SignInStep.NoNest);
+    }
+
+    private string ThisName() => _current.DeviceName ?? Environment.MachineName;
+
+    // ------------------------------------------------------------------ 1. sign in to Pairnets
+
+    private void OnAccountGoogle(object? sender, RoutedEventArgs e) => StartAccount("google", null);
+
+    private void OnAccountEmail(object? sender, RoutedEventArgs e) => ContinueWithEmail();
+
+    private void ContinueWithEmail()
+    {
+        if (!Nest.LooksLikeEmail(AccountEmailBox.Text))
+        {
+            AccountEmailProblem.IsVisible = true;
+            AccountEmailBox.Focus();
+            return;
+        }
+        StartAccount("email", (AccountEmailBox.Text ?? string.Empty).Trim());
+    }
+
+    /// <summary>Accounts are made by signing in: "Make an account" opens the service's sign-in page.</summary>
+    private void OnMakeAccount(object? sender, RoutedEventArgs e) => _openUrl(Relay.LoginUrl(Service));
+
+    private void OnOwnNest(object? sender, RoutedEventArgs e) => ShowAddressStep();
+
+    private void OnBackToAccount(object? sender, RoutedEventArgs e) => ShowAccountStep(null);
+
+    /// <summary>The first step, with why the last sign-in did not finish (if it did not).</summary>
+    internal void ShowAccountStep(string? message)
+    {
+        _accountStop?.Cancel();
+        _flowStop?.Cancel();
+        _clock.Stop();
+        AccountOutcomeBox.IsVisible = message is not null;
+        AccountOutcomeText.Text = message ?? string.Empty;
+        ShowStep(SignInStep.Account);
+    }
+
+    /// <summary>"I run my own nest": the nest's own sign-in, from its address. An account sign-in under way stops.</summary>
+    internal void ShowAddressStep()
+    {
+        _accountStop?.Cancel();
+        _clock.Stop();
+        ShowStep(SignInStep.Address);
+    }
+
+    private void StartAccount(string method, string? email)
+    {
+        _accountStop?.Cancel();
+        var stop = _accountStop = new CancellationTokenSource();
+        _accountBrowserOpened = false;
+        var flow = new AccountSignIn(ThisName(), method, Service, interval: AccountPollInterval, email: email);
+        flow.Changed += s => Dispatcher.UIThread.Post(() =>
+        {
+            if (!stop.IsCancellationRequested)
+                ShowAccount(s);
+        });
+        ShowAccount(new AccountSignInState(PairingStage.Starting));
+        _ = Task.Run(() => flow.RunAsync(stop.Token));
+    }
+
+    // ------------------------------------------------------------------ 2. finish in the browser (and: no nest yet)
+
+    /// <summary>Draws an account sign-in: the browser step, "no nest yet", the folder once allowed, or back to the start.</summary>
+    internal void ShowAccount(AccountSignInState state, bool openBrowser = true)
+    {
+        _account = state;
+        if (state.Stage == PairingStage.Approved && state.Result is { } result)
+        {
+            _clock.Stop();
+            ShowFolderStep(result);
+            return;
+        }
+        if (state.IsFinished)
+        {
+            ShowAccountStep(AccountOutcome(state));
+            return;
+        }
+        if (state.Stage == PairingStage.Waiting && openBrowser && !_accountBrowserOpened && state.VerifyUrl is { } link)
+        {
+            _accountBrowserOpened = true;
+            _openUrl(link);
+        }
+        if (state.NoNest && !state.ServerOffline)
+        {
+            _clock.Stop();
+            NoNestAccountText.Text = AccountSignIn.MaskEmail(state.AccountEmail) is { } masked ? $"Signed in as {masked}" : "Signed in";
+            NoNestWaitText.Text = state.Message is { } trouble && trouble != AccountSignIn.NoNestMessage ? trouble : "Waiting for your nest…";
+            ShowStep(SignInStep.NoNest);
+            return;
+        }
+        var starting = state.Stage == PairingStage.Starting;
+        AccountWaitIntro.IsVisible = !starting;
+        AccountStartingText.IsVisible = starting;
+        AccountServiceRun.Text = Uri.TryCreate(state.VerifyUrl, UriKind.Absolute, out var page) ? page.Host : (Service ?? Relay.DefaultServiceUrl).Host;
+        AccountCodeText.Text = state.Code ?? "····-····";
+        AccountWaitText.Text = starting ? "Asking Pairnets for a code…" : state.Message ?? "Waiting for you to allow this computer…";
+        AccountOpenAgainButton.IsEnabled = state.VerifyUrl is not null;
+        ShowStep(SignInStep.AccountWait);
+        _clock.Start();
+        DrawWaiting();
+    }
+
+    /// <summary>Why an account sign-in ended without this computer getting in, for the first step.</summary>
+    private static string AccountOutcome(AccountSignInState state) => state.Stage switch
+    {
+        PairingStage.Denied => "This computer was turned down in the browser. If that was a mistake, try again and press Allow.",
+        PairingStage.Expired when state.NoNest => "Pairnets stopped waiting for your nest after 30 minutes. Sign in again once your nest is set up.",
+        PairingStage.Expired => "The code expired before this computer was allowed (codes last 10 minutes). Try again.",
+        _ => state.Message ?? "Signing in did not finish. Try again.",
+    };
+
+    private void OnAccountOpenAgain(object? sender, RoutedEventArgs e)
+    {
+        if (_account?.VerifyUrl is { } link)
+            _openUrl(link);
+    }
+
+    /// <summary>"Cancel" while waiting, "Sign out" while there is no nest yet: stop, and back to the first step.</summary>
+    private void OnAccountCancel(object? sender, RoutedEventArgs e) => ShowAccountStep(null);
+
+    /// <summary>"Show me how": the account page says how to set up a nest.</summary>
+    private void OnShowMeHow(object? sender, RoutedEventArgs e) => _openUrl(Relay.AccountUrl(Service));
+
+    // ------------------------------------------------------------------ 4. which nest
 
     private void CheckSoon(TimeSpan? delay = null)
     {
@@ -125,6 +314,7 @@ public partial class SignInView : UserControl
         AddressBox.Text = text;
         _quiet = false;
         ShowCheck(check);
+        ShowAddressStep();
     }
 
     /// <summary>Draws the line under "Your nest" (also used by the screenshot test).</summary>
@@ -185,9 +375,7 @@ public partial class SignInView : UserControl
         StartFlow(url, ThisName(), method, email);
     }
 
-    private string ThisName() => _current.DeviceName ?? Environment.MachineName;
-
-    // ------------------------------------------------------------------ 2. waiting for approval
+    // ------------------------------------------------------------------ 5. waiting for approval
 
     private void StartFlow(Uri url, string name, string? method, string? email)
     {
@@ -215,9 +403,7 @@ public partial class SignInView : UserControl
             ShowFolderStep(grant, _nest);
             return;
         }
-        WelcomeStep.IsVisible = false;
-        FolderStep.IsVisible = false;
-        WaitStep.IsVisible = true;
+        ShowStep(SignInStep.Wait);
         CodeText.Text = state.Code ?? "····-····";
         if (state.Stage == PairingStage.Waiting && openBrowser && !_browserOpened && state.VerifyUrl is { } link)
         {
@@ -249,8 +435,15 @@ public partial class SignInView : UserControl
         DrawWaiting();
     }
 
+    /// <summary>The countdown under the code, on whichever waiting step is on show.</summary>
     private void DrawWaiting()
     {
+        if (Step == SignInStep.AccountWait && _account is { } account)
+        {
+            var left = account.ExpiresText(DateTimeOffset.UtcNow);
+            AccountExpiresText.Text = left.Length == 0 ? string.Empty : char.ToUpperInvariant(left[0]) + left[1..];
+            return;
+        }
         if (_state is not { } state)
             return;
         WaitText.Text = state.Stage == PairingStage.Starting ? "Asking your nest…" : $"Waiting for approval… {state.ExpiresText(DateTimeOffset.UtcNow)}";
@@ -281,21 +474,27 @@ public partial class SignInView : UserControl
     {
         _flowStop?.Cancel();
         _clock.Stop();
-        WaitStep.IsVisible = false;
-        WelcomeStep.IsVisible = true;
+        ShowStep(SignInStep.Address);
     }
 
-    // ------------------------------------------------------------------ 3. the folder
+    // ------------------------------------------------------------------ 6. the folder
 
-    /// <summary>Signed in: on to the folder (also used by the screenshot test).</summary>
+    /// <summary>Signed in on the nest: on to the folder (also used by the screenshot test).</summary>
     internal void ShowFolderStep(DeviceKeyGrant grant, Uri? nest)
     {
         _state = new PairingState(PairingStage.Approved, Grant: grant);
+        _accountResult = null;
         _nest = nest;
-        WelcomeStep.IsVisible = false;
-        WaitStep.IsVisible = false;
-        FolderStep.IsVisible = true;
+        ShowStep(SignInStep.Folder);
         SignedInText.Text = $"✓ Signed in as {grant.Name}" + (nest is null ? string.Empty : $" on {nest.Host}");
+    }
+
+    /// <summary>Signed in with the account: on to the folder, for the nest the account chose.</summary>
+    internal void ShowFolderStep(AccountSignInResult result)
+    {
+        ShowFolderStep(result.Device, result.ServerUrl);
+        _accountResult = result;
+        SignedInText.Text = $"✓ Signed in as {result.Device.Name} on {result.NestLabel}";
     }
 
     /// <summary>The folder field (screenshot test).</summary>
@@ -348,7 +547,10 @@ public partial class SignInView : UserControl
                 // The preview is a courtesy; syncing itself never deletes or overwrites on a first pass.
             }
             var protectedKey = _protector?.Protect(grant.Key) ?? throw new InvalidOperationException("No secret store to keep this computer's key in.");
-            var settings = Nest.SettingsAfterSignIn(_current, nest, grant, folder, AutoStartBox.IsChecked == true, protectedKey);
+            var startAtLogin = AutoStartBox.IsChecked == true;
+            var settings = _accountResult is { } account
+                ? AccountSignIn.SettingsAfterSignIn(_current, account, folder, startAtLogin, protectedKey)
+                : Nest.SettingsAfterSignIn(_current, nest, grant, folder, startAtLogin, protectedKey);
             SignedIn?.Invoke(settings, grant.Key);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)

@@ -1,8 +1,9 @@
 <Window x:Class="Pairnets.Client.Ui.SettingsWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Pairnets" Width="620" Height="780" MinHeight="420" ResizeMode="CanResize"
+        Title="Pairnets" SizeToContent="WidthAndHeight" MinWidth="400" MinHeight="420" ResizeMode="CanResize"
         WindowStartupLocation="CenterScreen">
-  <!-- First-time setup (later, Settings is a page of the main window). The form is SettingsView. -->
-  <ContentControl x:Name="Host" Focusable="False" />
+  <!-- First-time setup (later, Settings is a page of the main window). The steps are SignInView.
+       It opens 460×660 inside, like the approved pictures; after that it can be resized. -->
+  <ContentControl x:Name="Host" Focusable="False" Width="460" Height="660" />
 </Window>

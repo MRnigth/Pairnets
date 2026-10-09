@@ -54,6 +54,18 @@ public static partial class Relay
     /// <summary>The account page on the service: the servers, and the computers that use each, with Remove.</summary>
     public static string AccountUrl(Uri? service = null) => Origin(service) + "/account";
 
+    /// <summary>The service's sign-in page. Accounts are made by signing in, so it is also where "Make an account" goes.</summary>
+    public static string LoginUrl(Uri? service = null) => Origin(service) + "/login";
+
+    /// <summary>
+    /// What to do by hand when the nest could not be told that this computer signed out (or was reset): remove it where
+    /// the nest's computers are listed, the account page in relay mode or the nest's own Devices page otherwise.
+    /// </summary>
+    public static string RemoveByHandHint(string? serverUrl, Uri? service = null) =>
+        IsRelayAddress(serverUrl, service)
+            ? $"Remove this computer on your account page ({AccountUrl(service)}) so its key stops working there too."
+            : "Remove this computer on your nest's Devices page so its key stops working there too.";
+
     /// <summary>
     /// Where "Manage computers" goes: the account page in relay mode (a relayed nest has no website of its own), the
     /// nest's own Devices page otherwise, or null when there is neither (a nest without its own name yet).

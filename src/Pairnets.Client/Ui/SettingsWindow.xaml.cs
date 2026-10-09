@@ -25,6 +25,13 @@ public partial class SettingsWindow : Window
             DialogResult = true;
         };
         Host.Content = SignIn;
+        // Sized to the content once (460×660), then free to resize: the steps follow the window.
+        ContentRendered += (_, _) =>
+        {
+            SizeToContent = SizeToContent.Manual;
+            Host.Width = double.NaN;
+            Host.Height = double.NaN;
+        };
         KeyDown += (_, e) =>
         {
             if (e.Key == System.Windows.Input.Key.Escape)

@@ -64,7 +64,8 @@ public static class AppIcons
     {
         try
         {
-            var info = Application.GetResourceStream(new Uri("pack://application:,,,/pairnets.ico"));
+            // Named with its assembly, so it is also found when another program (the screenshot tool) shows these windows.
+            var info = Application.GetResourceStream(new Uri("pack://application:,,,/Pairnets;component/pairnets.ico"));
             if (info is null)
                 return [null, null];
             using var stream = info.Stream;

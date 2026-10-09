@@ -74,13 +74,25 @@ them and remove them. Lost the setup link? On the server,
 ### Each PC
 
 1. Install Pairnets (see the table above).
-2. Open it, type your nest's name (`sync.example.com`) and choose **Continue with Google**,
-   **Continue with email**, or **More ways to sign in in your browser** (the buttons match the ways
-   your nest offers).
-   Check that the code matches and press **Allow** on your nest's website — it then sends you
-   straight back to Pairnets.
+2. Open it and choose **Continue with Google**, or type your email and choose **Continue with
+   email**. Your browser opens `sync.pairnets.app`: sign in there with the account your nest is
+   linked to, check that the code matches the one in Pairnets, and press **Allow**.
+   New here? **Make an account** opens the same page: signing in makes one.
 3. Choose the folder (for example `D:\Work`) and press **Start syncing**.
    Optional: tick **Start Pairnets when I sign in to Windows** (on Mac and Linux: *when I log in*).
+
+<p>
+  <img src="docs/images/sign-in-welcome-light.png" alt="Sign in to Pairnets: Continue with Google or with email" width="32%">
+  <img src="docs/images/sign-in-browser-light.png" alt="Finish in your browser: the code to compare" width="32%">
+  <img src="docs/images/sign-in-folder-light.png" alt="Choose the folder to keep in sync" width="32%">
+</p>
+
+If your account has no nest yet, Pairnets says so and waits. **Show me how** opens your account
+page; once your nest is added, the computer finishes signing in by itself.
+
+**I run my own nest** (on your own domain, as in *Server (once)* above): choose **I run my own nest
+on my own domain: use its address** at the bottom of the window, type your nest's name
+(`sync.example.com`), sign in on your nest's website and press **Allow** there.
 
 Each computer gets its own key; there is no address-and-token form. To start over on a computer,
 use **Settings → Start over → Reset this app…**: it removes Pairnets' settings, saved key and sync
