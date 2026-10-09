@@ -66,7 +66,7 @@ api() {
   STATUS="$(printf '%s' "$2" | curl --silent --show-error --max-time 30 --proto "$proto" --user-agent "pairnets-link/1" \
     --request POST --header "Content-Type: application/json" --data-binary @- \
     --output "$WORK/answer" --write-out "%{http_code}" "$SERVICE$1" 2>"$WORK/curl-error")" || STATUS=000
-  ANSWER="$(tr -d '\r\n' < "$WORK/answer" 2>/dev/null || true)"
+  ANSWER="$({ tr -d '\r\n' < "$WORK/answer"; } 2>/dev/null || true)"
   rm -f "$WORK/answer"
 }
 
@@ -114,7 +114,7 @@ server_facts() {
   host="$(uname -n 2>/dev/null || true)"
   host="${host%%.*}"
   host="$(printf '%s' "$host" | tr -cd 'A-Za-z0-9_-' | cut -c1-64)"
-  version="$(tr -d '[:space:]' < "$SCRIPT_DIR/VERSION" 2>/dev/null || true)"
+  version="$({ tr -d '[:space:]' < "$SCRIPT_DIR/VERSION"; } 2>/dev/null || true)"
   [[ "$version" =~ ^[0-9]+(\.[0-9]+){0,3}$ ]] || version=""
   printf '{"hostname":"%s"' "${host:-server}"
   [[ -z "$version" ]] || printf ',"serverVersion":"%s"' "$version"
