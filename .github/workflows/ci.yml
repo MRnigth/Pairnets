@@ -63,6 +63,31 @@ jobs:
           path: TestResults
           if-no-files-found: ignore
 
+  names:
+    name: Name service Worker (names/)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: names
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: names/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+      - name: Test (a local Workers runtime; the Cloudflare API and email are fakes)
+        run: npx vitest run
+
   windows:
     name: Build client and test (windows)
     runs-on: windows-latest
