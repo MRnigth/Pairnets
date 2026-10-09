@@ -27,7 +27,8 @@ yet. Released servers and apps do not talk to this service. Setting it up needs 
 | `migrations/` | D1 migrations. `0001_init.sql` is exactly the SQL of `CONTRACT.md` section 7 (a test checks this); `0002_relay.sql` adds the relay columns, `server_links` and `router_state`. |
 | `test/` | vitest tests in the Workers runtime (Miniflare, local D1). `test/fake-relay.ts` is a fake Cloudflare API, the real router code with fake VPC links, and fake servers that check the signed calls with their own code. `test/vectors/assertion-v1.json` holds the golden vectors that the C# tests also read. |
 | `scripts/keygen.mjs` | `npm run keygen`: prints a new ES256 signing key pair (nothing is written to disk). |
-| `wrangler.toml` | `pairnets-sync` settings with placeholder ids, the variables, the `ROUTER` binding, the hourly Cron, and the list of secrets. |
+| `scripts/setup-secrets.mjs` | Sets every secret and id in Cloudflare's secret store: makes the random ones, asks you to paste the rest (hidden). |
+| `wrangler.toml` | `pairnets-sync` settings: the address, the variables, the database by name, the `ROUTER` binding, the hourly Cron, and the list of secrets. It holds no keys and no ids. |
 
 ## Running the tests
 
@@ -64,20 +65,23 @@ Do these in order; nothing here is done yet.
    - the Connectivity Directory permission that binding VPC networks needs (Account > Connectivity Directory > Edit,
      or the name the dashboard shows for Workers VPC).
    It goes into the secret `CF_API_TOKEN` below and nowhere else.
-3. **Database.** `npx wrangler d1 create pairnets-sync`, put its id in `wrangler.toml`, then
+3. **Database.** Nothing to do by hand: the first deploy (step 7) creates `pairnets-sync` and later deploys find it by
+   its name, so its id is never written in the code. After that first deploy, run
    `npx wrangler d1 migrations apply pairnets-sync --remote`.
 4. **Router first.** `cd router && npx wrangler deploy`. It needs no secrets and gets no route. Its links are set by
    `pairnets-sync`, not by this deploy.
 5. **Google:** a web OAuth client with redirect URI `https://sync.pairnets.app/login/google/callback` and scopes
-   `openid email`; its id goes in `GOOGLE_CLIENT_ID`. **Turnstile:** a widget for `sync.pairnets.app` (site key in
-   `TURNSTILE_SITE_KEY`). **Resend:** the sending domain for `noreply@pairnets.app` and an API key.
+   `openid email`. **Turnstile:** a widget for `sync.pairnets.app`. **Resend:** the sending domain for
+   `noreply@pairnets.app` and an API key. Their ids and keys all go in at step 6, not in any file.
 6. **Secrets:** `cd cloud && node scripts/setup-secrets.mjs` makes the random ones and asks you to paste the others
    (hidden as you type; nothing is shown or saved). Or by hand (dashboard or `npx wrangler secret put NAME` in
    `cloud/`): `SIGNING_KEY` (from `npm run keygen`),
    `HB_MASTER` and `COOKIE_KEY` (each from `npm run keygen -- --random`), `GOOGLE_CLIENT_SECRET`, `TURNSTILE_SECRET`,
-   `RESEND_API_KEY`, `CF_API_TOKEN` (step 2) and `CF_ACCOUNT_ID` (the account's id, on its Overview page).
-7. **Deploy** `pairnets-sync` (`npx wrangler deploy` in `cloud/`), then uncomment the `routes` line in `wrangler.toml`
-   (custom domain `sync.pairnets.app`) and deploy again.
+   `RESEND_API_KEY`, `CF_API_TOKEN` (step 2), `CF_ACCOUNT_ID` (the account's id, on its Overview page), and the two
+   public ids `GOOGLE_CLIENT_ID` and `TURNSTILE_SITE_KEY` (kept out of the code all the same). The script needs the
+   Worker to exist, so for a very first setup run step 7 once before it.
+7. **Deploy** `pairnets-sync` (`npx wrangler deploy` in `cloud/`). It makes the database (first time only) and the
+   custom domain `sync.pairnets.app` with its certificate.
 8. The public half of the signing key goes into `src/Pairnets.Server/Auth/HostedKeys.cs` (only for servers on their own
    domain); keep a second "next" key offline for rotation.
 9. **Try it** with one server: run the installer, open the link it prints, choose **Add this nest**, and check that

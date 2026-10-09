@@ -2,9 +2,11 @@
 //
 //   cd cloud && node scripts/setup-secrets.mjs            only the secrets that are not set yet
 //   cd cloud && node scripts/setup-secrets.mjs --all      every secret again
+//   cd cloud && node scripts/setup-secrets.mjs --only CF_API_TOKEN,TURNSTILE_SECRET   just these (set or not)
 //
 // The random ones (SIGNING_KEY, HB_MASTER, COOKIE_KEY) are made here and go straight to Cloudflare: they are never shown
-// and never written to a file. The ones from other services are pasted by you, hidden as you type. Each value reaches
+// and never written to a file. The ones from other services are pasted by you, hidden as you type. The two public ids
+// (GOOGLE_CLIENT_ID, TURNSTILE_SITE_KEY) go here too, so that no id or key is in the code at all. Each value reaches
 // `wrangler secret put` on its standard input, never on a command line. Needs `npx wrangler login` first.
 //
 // Changing HB_MASTER later breaks every linked nest (their keys are derived from it); the script asks before it does.
@@ -15,6 +17,8 @@ import process from "node:process";
 
 const WRANGLER = process.platform === "win32" ? "npx.cmd" : "npx";
 const all = process.argv.includes("--all");
+const onlyAt = process.argv.indexOf("--only");
+const only = onlyAt >= 0 ? new Set((process.argv[onlyAt + 1] ?? "").split(",").map((n) => n.trim()).filter(Boolean)) : null;
 
 function wrangler(args, input) {
   return spawnSync(WRANGLER, ["wrangler", ...args], { input, encoding: "utf8", shell: process.platform === "win32" });
@@ -98,15 +102,25 @@ const SECRETS = [
   { name: "CF_ACCOUNT_ID", kind: "paste", hint: "the Cloudflare account id (dash.cloudflare.com > the account > Overview, right column)" },
   { name: "CF_API_TOKEN", kind: "paste", hint: "the API token from step 2 of cloud/README.md" },
   { name: "RESEND_API_KEY", kind: "paste", hint: "a Resend sending key for pairnets.app (re_...)" },
-  { name: "TURNSTILE_SECRET", kind: "paste", hint: "the secret key of the Turnstile widget for sync.pairnets.app" },
-  { name: "GOOGLE_CLIENT_SECRET", kind: "paste", hint: "the Google OAuth client secret (press Enter to skip until Google sign-in is set up)", optional: true },
+  { name: "TURNSTILE_SITE_KEY", kind: "paste", hint: "the site key of the Turnstile widget for sync.pairnets.app" },
+  { name: "TURNSTILE_SECRET", kind: "paste", hint: "the secret key of the same Turnstile widget" },
+  { name: "GOOGLE_CLIENT_ID", kind: "paste", hint: "the Google OAuth client id (...apps.googleusercontent.com; Enter skips)", optional: true },
+  { name: "GOOGLE_CLIENT_SECRET", kind: "paste", hint: "the Google OAuth client secret (Enter skips until Google sign-in is set up)", optional: true },
 ];
 
 const have = existing();
 console.log("Secrets of pairnets-sync. Nothing you paste is shown or saved on this computer.\n");
+if (only) {
+  const unknown = [...only].filter((n) => !SECRETS.some((s) => s.name === n));
+  if (unknown.length) {
+    console.error(`Unknown name(s): ${unknown.join(", ")}. Known: ${SECRETS.map((s) => s.name).join(", ")}`);
+    process.exit(2);
+  }
+}
 for (const s of SECRETS) {
+  if (only && !only.has(s.name)) continue;
   const isSet = have.has(s.name);
-  if (isSet && !all) {
+  if (isSet && !all && !only) {
     console.log(`  ${s.name}: already set (run with --all to set it again)`);
     continue;
   }

@@ -1,22 +1,20 @@
 # Pairnets Cloud: accounts, pages and the relay to people's own servers (cloud/CONTRACT.md, cloud/RELAY.md).
-# NOTHING IS DEPLOYED.
 #
-# Every id below is a placeholder. Before a first deploy the owner creates the D1 database and puts its real id here,
-# deploys the router (cloud/router) first, sets the secrets listed at the bottom, and attaches the custom domain
-# sync.pairnets.app. The tests never read this file's secrets: they generate every key while they run.
+# This file holds no keys and no ids. Every private value, and the account-specific ones, live only in Cloudflare's
+# secret store (listed at the bottom; `node scripts/setup-secrets.mjs` sets them). The database is found by its name:
+# the first `npx wrangler deploy` creates it, later ones reuse it. Deploy the router (cloud/router) first. The tests
+# never read this file's secrets: they generate every key while they run.
 
 name = "pairnets-sync"
 main = "src/index.ts"
 compatibility_date = "2026-08-15"
 workers_dev = false
 
-# Later, when sync.pairnets.app exists (a custom domain on the pairnets.app zone):
-# routes = [{ pattern = "sync.pairnets.app", custom_domain = true }]
+# A custom domain on the pairnets.app zone: the deploy makes its DNS record and certificate.
+routes = [{ pattern = "sync.pairnets.app", custom_domain = true }]
 
 [vars]
 PUBLIC_ORIGIN = "https://sync.pairnets.app"
-GOOGLE_CLIENT_ID = "REPLACE_ME.apps.googleusercontent.com"
-TURNSTILE_SITE_KEY = "REPLACE_ME"
 MAIL_FROM = "Pairnets <noreply@pairnets.app>"
 EMAIL_DAILY_LIMIT = "80"
 # Relayed servers in all. Cloudflare allows 1,000 tunnels per account; stay well under it.
@@ -32,7 +30,6 @@ HOSTED_LOGIN_DISABLED = "0"
 [[d1_databases]]
 binding = "DB"
 database_name = "pairnets-sync"
-database_id = "00000000-0000-0000-0000-000000000000"
 migrations_dir = "migrations"
 
 # The router Worker (cloud/router): it holds one Workers VPC link per relayed server and has no route of its own.
@@ -53,9 +50,14 @@ crons = ["17 * * * *"]
 #   HB_MASTER             base64url of 32 random bytes (derives each nest's key); `npm run keygen -- --random`
 #   COOKIE_KEY            base64url of 32 random bytes (signs the Google flow cookie, keys the rate-limit buckets)
 #   GOOGLE_CLIENT_SECRET  from the Google Cloud OAuth client (redirect URI https://sync.pairnets.app/login/google/callback)
-#   TURNSTILE_SECRET      from the Cloudflare Turnstile widget (its site key goes in TURNSTILE_SITE_KEY above)
+#   TURNSTILE_SECRET      from the Cloudflare Turnstile widget for sync.pairnets.app
 #   RESEND_API_KEY        from Resend (sending domain pairnets.app verified there)
 #   CF_API_TOKEN          a Cloudflare API token for this account with exactly: Account > Cloudflare Tunnel > Edit,
 #                         Account > Workers Scripts > Edit, and the Connectivity Directory permission that binding
 #                         VPC networks needs. It never leaves this Worker.
 #   CF_ACCOUNT_ID         the Cloudflare account that owns the tunnels and the pairnets-router Worker
+#
+# Not private, but kept out of the code all the same (set the same way):
+#
+#   GOOGLE_CLIENT_ID      the Google OAuth client id (...apps.googleusercontent.com)
+#   TURNSTILE_SITE_KEY    the Turnstile widget's site key

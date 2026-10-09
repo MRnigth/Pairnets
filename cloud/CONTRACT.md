@@ -1228,7 +1228,7 @@ also covered by unit tests of the pure verifier and the HMAC helpers.
 | `TURNSTILE_SECRET` | secret | |
 | `RESEND_API_KEY` | secret | |
 | `PUBLIC_ORIGIN` | variable | `https://id.pairnets.app` |
-| `GOOGLE_CLIENT_ID`, `TURNSTILE_SITE_KEY` | variables | |
+| `GOOGLE_CLIENT_ID`, `TURNSTILE_SITE_KEY` | secrets | public values, kept in the secret store so no id is in the code |
 | `MAIL_FROM` | variable | `Pairnets <noreply@pairnets.app>` |
 | `EMAIL_DAILY_LIMIT` | variable | `80` |
 | `HOSTED_LOGIN_DISABLED` | variable | `"1"` = emergency: `/nest-login` refuses, heartbeats answer `disableHostedLogin: true` |
