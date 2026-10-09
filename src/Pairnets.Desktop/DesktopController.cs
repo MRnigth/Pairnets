@@ -3,7 +3,6 @@ using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
-using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using Microsoft.Extensions.Logging;
 using Pairnets.Core;
@@ -18,14 +17,26 @@ using Pairnets.Desktop.Views;
 namespace Pairnets.Desktop;
 
 /// <summary>
+/// What the controller needs from the desktop lifetime: the open windows, and quitting. Avalonia's own lifetime
+/// interface cannot be implemented outside Avalonia, so the tests hand in a desktop of their own through this.
+/// </summary>
+internal interface IDesktopLifetime
+{
+    IReadOnlyList<Window> Windows { get; }
+
+    void Shutdown();
+}
+
+/// <summary>
 /// Menu-bar (macOS) / system-tray (Linux) icon, main window and notifications around a
 /// <see cref="ClientSession"/>. Mirrors the Windows TrayController; all sync logic is in Pairnets.Core.
 /// </summary>
 public sealed class DesktopController : ITrayActions, IDisposable
 {
     private readonly Application _app;
-    private readonly IClassicDesktopStyleApplicationLifetime _lifetime;
+    private readonly IDesktopLifetime _lifetime;
     private readonly IPlatformServices _platform;
+    private readonly ClientEnvironment _env;
     private readonly RollingFileLoggerProvider _fileLog;
     private bool _reportingError;
     private readonly ILoggerFactory _loggers;
@@ -38,6 +49,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
     private MainWindow? _window;
     private TrayPanel? _panel;
     private TrayIcon? _tray;
+    private NativeMenu? _trayMenu;
     private NativeMenuItem? _statusItem;
     private NativeMenuItem? _fixItem;
     private NativeMenuItem? _pauseItem;
@@ -50,19 +62,27 @@ public sealed class DesktopController : ITrayActions, IDisposable
     private bool _lowSpaceNoticed;
     private IDisposable? _activation;
 
-    public DesktopController(Application app, IClassicDesktopStyleApplicationLifetime lifetime, IPlatformServices platform)
+    /// <param name="environment">Where the settings, sync notes and logs live and where updates come from
+    /// (<see cref="ClientEnvironment.Default"/> unless a test gives the app folders of its own).</param>
+    public DesktopController(Application app, IClassicDesktopStyleApplicationLifetime lifetime, IPlatformServices platform, ClientEnvironment? environment = null)
+        : this(app, new AvaloniaDesktop(lifetime), platform, environment)
+    {
+    }
+
+    internal DesktopController(Application app, IDesktopLifetime lifetime, IPlatformServices platform, ClientEnvironment? environment)
     {
         _app = app;
         _lifetime = lifetime;
         _platform = platform;
-        _fileLog = new RollingFileLoggerProvider(PairnetsPaths.LogsDir, retentionDays: 14);
+        _env = environment ?? ClientEnvironment.Default;
+        _fileLog = new RollingFileLoggerProvider(_env.LogsDir, retentionDays: 14);
         _loggers = LoggerFactory.Create(b => b.AddProvider(_fileLog).SetMinimumLevel(LogLevel.Debug));
         _log = _loggers.CreateLogger("Pairnets.Desktop");
-        _settings = SettingsStore.Load(SettingsStore.DefaultPath);
+        _settings = SettingsStore.Load(_env.SettingsPath);
         Dispatcher.UIThread.UnhandledException += OnUnhandledException;
         _fileLog.Minimum = _settings.DebugMode ? LogLevel.Debug : LogLevel.Information; // Debug mode: more detail in the log
         _refresh = new DispatcherTimer(TimeSpan.FromMilliseconds(250), DispatcherPriority.Background, (_, _) => RefreshIfDirty());
-        _updates = new UpdateService(new UpdateChecker(new HttpClient()), PairnetsInfo.ProductVersion, UpdateChecker.AssetForThisPlatform());
+        _updates = new UpdateService(_env.CreateUpdateChecker(), PairnetsInfo.ProductVersion, UpdateChecker.AssetForThisPlatform());
         _updates.UpdateAvailable += u =>
         {
             _updateDismissed = false;
@@ -76,7 +96,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
         _log.LogInformation("Pairnets {Version} starting on {Platform}", typeof(DesktopController).Assembly.GetName().Version, _platform.Name);
         // A pairnets:// link (the nest's website after approving this computer) starts a second
         // Pairnets, which pokes this one through the pipe and quits; come to the front for it.
-        _activation = AppActivation.Listen(() => Dispatcher.UIThread.Post(ComeToFront));
+        _activation = AppActivation.Listen(() => Dispatcher.UIThread.Post(ComeToFront), _env.ActivationPipeName);
         CreateTray();
         _refresh.Start();
         _updates.SetEnabled(_settings.CheckForUpdates);
@@ -133,6 +153,9 @@ public sealed class DesktopController : ITrayActions, IDisposable
         foreach (var item in new NativeMenuItemBase[] { quick, open, _statusItem, new NativeMenuItemSeparator(), sync, folder, _fixItem,
                      new NativeMenuItemSeparator(), settings, log, report, _pauseItem, _autoStartItem, new NativeMenuItemSeparator(), quit })
             menu.Items.Add(item);
+        _trayMenu = menu;
+        if (!_env.ShowTrayIcon)
+            return; // tests: the menu works the same, but no icon appears in the real menu bar or tray
 
         _tray = new TrayIcon
         {
@@ -143,9 +166,11 @@ public sealed class DesktopController : ITrayActions, IDisposable
         };
         // A click opens the quick-look panel where the desktop reports clicks (most Linux trays;
         // the macOS menu bar always shows the menu, which starts with "Quick status…").
-        _tray.Clicked += (_, _) => TogglePanel();
+        _tray.Clicked += OnTrayClicked;
         TrayIcon.SetIcons(_app, [_tray]);
     }
+
+    private void OnTrayClicked(object? sender, EventArgs e) => TogglePanel();
 
     private void TogglePanel()
     {
@@ -221,7 +246,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
             return;
         }
 
-        var session = ClientSession.Start(_settings, plainToken, _platform.CreateTrash(_loggers.CreateLogger("Pairnets.Trash")), _loggers);
+        var session = ClientSession.Start(_settings, plainToken, _platform.CreateTrash(_loggers.CreateLogger("Pairnets.Trash")), _loggers, stateBaseDir: _env.LocalDir);
         session.StatusChanged += _ => _dirty = true;
         session.Activity.Added += _ => _dirty = true;
         session.ConflictCreated += c => Notify("conflict:" + c.Path, "Conflict: both computers changed a file",
@@ -299,7 +324,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
         _settings.ProtectedToken = null;
         _settings.DeviceId = null;
         _settings.FirstRunCompleted = false;
-        SettingsStore.Save(SettingsStore.DefaultPath, _settings);
+        SaveSettings();
         _dirty = true;
         if (!removed)
             await Dialogs.InfoAsync(_window, "Pairnets", "Signed out here, but your nest could not be told. Remove this computer on your nest's Devices page so its key stops working there too.");
@@ -335,7 +360,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
                 _log.LogWarning("Could not remove this computer on the nest: {Error}", ex.Message);
             }
             StopSession(); // the sync notes are only free to delete once the session is gone
-            var result = LocalReset.Run(_settings, _platform.Secrets);
+            var result = LocalReset.Run(_settings, _platform.Secrets, _env.SettingsPath, _env.LocalDir);
             var notes = new List<string>(result.Problems);
             try
             {
@@ -422,17 +447,20 @@ public sealed class DesktopController : ITrayActions, IDisposable
             return;
         _dirty = false;
         var status = _session?.Status ?? StatusSnapshot.Initial with { Text = "Not set up yet: open Settings" };
-        if (_tray is not null)
+        if (_trayMenu is not null)
         {
-            if (_shownStatus != status.Status)
-            {
-                _tray.Icon = IconFor(status.Status);
-                _shownStatus = status.Status;
-            }
             var line = status.IsTransferring
                 ? $"{PathRules.FileName(status.CurrentPath!)}{(status.Percent is { } p ? $" {p}%" : string.Empty)}"
                 : status.Text;
-            _tray.ToolTipText = $"Pairnets: {line} ({status.LastSyncText.ToLowerInvariant()})";
+            if (_tray is not null)
+            {
+                if (_shownStatus != status.Status)
+                {
+                    _tray.Icon = IconFor(status.Status);
+                    _shownStatus = status.Status;
+                }
+                _tray.ToolTipText = $"Pairnets: {line} ({status.LastSyncText.ToLowerInvariant()})";
+            }
             _statusItem!.Header = line.Length > 60 ? line[..57] + "..." : line;
             _fixItem!.Header = status.FixLabel ?? "No action needed";
             _fixItem.IsEnabled = status.FixLabel is not null;
@@ -550,7 +578,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
         else
             _session.Pause();
         _settings.Paused = _session.Settings.Paused;
-        SettingsStore.Save(SettingsStore.DefaultPath, _settings);
+        SaveSettings();
     }
 
     public async void FixBlocked()
@@ -592,8 +620,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
     {
         await Dialogs.InfoAsync(_window, "Pairnets", message + "\n\nIf the drive is unplugged, plug it in and choose Sync now. If you moved or renamed the folder, choose its new location next.");
         var host = _window ?? new MainWindow(this);
-        var picked = await host.StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions { Title = "Where is your Pairnets folder now?" });
-        if (picked.Count == 0 || picked[0].TryGetLocalPath() is not { } newFolder || _session is null)
+        if (await Dialogs.PickFolderAsync(host, "Where is your Pairnets folder now?") is not { } newFolder || _session is null)
             return;
         var error = _session.CheckMovedFolder(newFolder);
         if (error is not null)
@@ -605,14 +632,14 @@ public sealed class DesktopController : ITrayActions, IDisposable
         StopSession();
         try
         {
-            StateLocator.AdoptState(oldStateDir, newFolder);
+            StateLocator.AdoptState(oldStateDir, newFolder, _env.LocalDir);
         }
         catch (IOException ex)
         {
             await Dialogs.InfoAsync(_window, "Pairnets", ex.Message);
         }
         _settings.Folder = newFolder;
-        SettingsStore.Save(SettingsStore.DefaultPath, _settings);
+        SaveSettings();
         StartSession(null);
     }
 
@@ -712,7 +739,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
             if (dialog.AlwaysUpdate)
                 _settings.AutoUpdateServer = true;
             if (dialog.Skipped || dialog.AlwaysUpdate)
-                SettingsStore.Save(SettingsStore.DefaultPath, _settings);
+                SaveSettings();
         };
         dialog.Show();
     }
@@ -736,11 +763,13 @@ public sealed class DesktopController : ITrayActions, IDisposable
     {
         _settings = settings;
         _fileLog.Minimum = _settings.DebugMode ? LogLevel.Debug : LogLevel.Information;
-        SettingsStore.Save(SettingsStore.DefaultPath, _settings);
+        SaveSettings();
         SetAutoStart(_settings.StartWithWindows);
         _updates.SetEnabled(_settings.CheckForUpdates);
         StartSession(plainToken);
     }
+
+    private void SaveSettings() => SettingsStore.Save(_env.SettingsPath, _settings);
 
     public void OpenFolder()
     {
@@ -758,7 +787,8 @@ public sealed class DesktopController : ITrayActions, IDisposable
         var settings = _settings;
         var session = _session;
         var app = OperatingSystem.IsMacOS() ? "Mac app" : "Linux app";
-        var window = new BugReportWindow(() => BugReport.BuildAsync(settings, session, _fileLog.CurrentFile, error, app), _platform.Open, afterError: error is not null);
+        var window = new BugReportWindow(() => BugReport.BuildAsync(settings, session, _fileLog.CurrentFile, error, app), _platform.Open,
+            afterError: error is not null, saveDirectory: _env.LogsDir);
         window.Show();
         window.Activate();
     }
@@ -803,7 +833,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
         {
             _platform.SetAutoStart(enabled);
             _settings.StartWithWindows = enabled;
-            SettingsStore.Save(SettingsStore.DefaultPath, _settings);
+            SaveSettings();
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -826,6 +856,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
 
     public void Dispose()
     {
+        Dispatcher.UIThread.UnhandledException -= OnUnhandledException;
         _activation?.Dispose();
         _updates.Dispose();
         _refresh.Stop();
@@ -834,5 +865,37 @@ public sealed class DesktopController : ITrayActions, IDisposable
             _tray.IsVisible = false;
         _loggers.Dispose();
         _fileLog.Dispose();
+    }
+
+    private sealed class AvaloniaDesktop(IClassicDesktopStyleApplicationLifetime lifetime) : IDesktopLifetime
+    {
+        public IReadOnlyList<Window> Windows => lifetime.Windows;
+
+        public void Shutdown() => lifetime.Shutdown();
+    }
+
+    // ------------------------------------------------------------------ for the tests that press every button
+
+    /// <summary>The menu of the tray / menu-bar icon (also when no icon is shown).</summary>
+    internal NativeMenu? TrayMenu => _trayMenu;
+
+    /// <summary>A click on the tray icon, through the same handler the icon uses.</summary>
+    internal void ClickTrayIcon() => OnTrayClicked(_tray, EventArgs.Empty);
+
+    internal MainWindow? Window => _window;
+
+    internal TrayPanel? Panel => _panel;
+
+    internal ClientSession? Session => _session;
+
+    internal ClientSettings Settings => _settings;
+
+    internal string LogFile => _fileLog.CurrentFile;
+
+    /// <summary>Redraws the windows and the menu now instead of at the next tick.</summary>
+    internal void RefreshNow()
+    {
+        _dirty = true;
+        RefreshIfDirty();
     }
 }
