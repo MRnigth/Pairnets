@@ -204,6 +204,18 @@ public class RelaySignatureTests
     }
 
     [Fact]
+    public void TheSignatureMatchesTheServicesOwnExamples()
+    {
+        // The Worker's examples (cloud/test/nestadmin.test.ts, made with Node's crypto): the key is cloud/CONTRACT.md
+        // §5.6's derived key. Both sides were built separately; this proves they sign the same bytes the same way.
+        Assert.True(StrictBase64Url.TryDecode("n4Tr_MkavyYVcV4JYFqyLo4V_3SdAf5UYSdjq0Gzw9g", out var key));
+        Assert.Equal("dGVhzZGCRgzy9J5LNwbHrbfC9t0gpTh87O3sp5SprzY",
+            RelaySignature.Sign(key, RelaySignature.Message(NestId, "1791504000", "TestNonce000000000000A", "GET", "/api/relay/status", [])));
+        Assert.Equal("CS_In_osTtvilvMxr0yOzlxNjkN8UCQGfs9hGNbb8-4",
+            RelaySignature.Sign(key, RelaySignature.Message(NestId, "1791504001", "TestNonce000000000000B", "POST", "/api/relay/devices", Body)));
+    }
+
+    [Fact]
     public void AGoodCallPasses()
     {
         var clock = new ManualClock(Now);

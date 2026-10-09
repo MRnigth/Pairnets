@@ -39,6 +39,17 @@ describe("signed admin calls (ra1)", () => {
     expect(await signAdmin(key, NEST, v.ts, v.nonce, "get", v.path, utf8(""))).toBe(v.sig);
   });
 
+  it("the Worker also signs the nest's own examples exactly (made separately with openssl)", async () => {
+    // tests/Pairnets.Tests/Unit/RelaySignatureTests.cs: key = bytes 00..1f, nonces = bytes 00..0f and 10..1f.
+    const key = Uint8Array.from({ length: 32 }, (_, i) => i);
+    expect(await signAdmin(key, NEST, "1791504000", "AAECAwQFBgcICQoLDA0ODw", "POST", "/api/relay/devices", utf8(POST_BODY))).toBe(
+      "k40tvOTQMypQF3ThgisEKHCdjLJCkP495Wbrh1ZQP7M",
+    );
+    expect(await signAdmin(key, NEST, "1791504001", "EBESExQVFhcYGRobHB0eHw", "GET", "/api/relay/status", utf8(""))).toBe(
+      "GxyX-jrLv6v9uZpV5k0n_JnZSiH6I8He2oKOnVdRvQo",
+    );
+  });
+
   it("a nest that checks them the documented way accepts each once, inside 120 s, and nothing else", async () => {
     const clock = { now: 1791504000 };
     const nest = new FakeNestServer(NEST, fromB64url(KEY)!, "tunnel", clock);
