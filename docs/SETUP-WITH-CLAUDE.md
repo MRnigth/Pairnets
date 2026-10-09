@@ -20,8 +20,12 @@ needed.
 
 ## Prompt 1: install the server (paste into Claude Code on the Ubuntu server)
 
+No domain of your own? You do not need this prompt: run the one-line install with a free name from
+[HOWTO section 3](HOWTO.md#3-install-the-server) yourself (`--name alice`; it asks for a code sent to
+your email, which only you can type). The prompt below is for your own domain.
+
 First create the tunnel and its public hostname in the Cloudflare dashboard yourself
-([HOWTO section 2](HOWTO.md#2-create-a-cloudflare-tunnel)), and have the hostname ready. It becomes
+([HOWTO: your own domain](HOWTO.md#advanced-your-own-domain-and-tunnel)), and have the hostname ready. It becomes
 your nest's name. Keep the tunnel token to yourself: you paste it into the installer, not into
 Claude.
 

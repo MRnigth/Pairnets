@@ -3,15 +3,22 @@
 ## 1. Server (Ubuntu, behind a Cloudflare Tunnel)
 
 The server listens only on `127.0.0.1:5075`. `cloudflared` keeps an outbound connection to
-Cloudflare and carries requests for your public hostname (`https://sync.example.com`) to it, so no
-port is opened anywhere. That hostname is also your nest's own name: the apps find the nest by it,
-and the nest's website lives there. Step by step with the dashboard:
-[HOWTO sections 2 to 4](HOWTO.md#2-create-a-cloudflare-tunnel).
+Cloudflare and carries requests for your public hostname (`https://alice.pairnets.app`, or
+`https://sync.example.com` on your own domain) to it, so no port is opened anywhere. That hostname
+is also your nest's own name: the apps find the nest by it, and the nest's website lives there.
+Step by step: [HOWTO sections 2 to 4](HOWTO.md#2-choose-your-nests-name).
 
-Prerequisites: Ubuntu 22.04 or newer, `curl` and `openssl` (`sudo apt install curl openssl`), a
-domain on Cloudflare, and a tunnel created in the dashboard (Zero Trust → Networks → Tunnels →
-*Cloudflared*) with its token copied and a public hostname → `HTTP` `localhost:5075`. Turn off Bot
-Fight Mode for the domain. No .NET runtime is needed: the server is self-contained.
+There are two ways to get the hostname and its tunnel:
+
+* **A free name** (`--name alice`): the Pairnets name service makes a tunnel and the name
+  `alice.pairnets.app` for this nest, after a code emailed to you. Nothing to set up in Cloudflare.
+  See [A free name](#a-free-name---name) below.
+* **Your own domain** (`--public-url https://sync.example.com`): a domain on Cloudflare and a tunnel
+  you create in the dashboard (Zero Trust → Networks → Tunnels → *Cloudflared*) with its token copied
+  and a public hostname → `HTTP` `localhost:5075`. Turn off Bot Fight Mode for the domain.
+
+Prerequisites: Ubuntu 22.04 or newer and `curl` and `openssl` (`sudo apt install curl openssl`). No
+.NET runtime is needed: the server is self-contained.
 
 The newest release is always the rolling **Latest build** on GitHub (rebuilt from every change to the
 `main` branch), so these links never change:
@@ -24,11 +31,12 @@ sha256sum --check --ignore-missing SHA256SUMS.txt
 
 tar xzf pairnets-server-linux-x64.tar.gz
 cd pairnets-server-linux-x64
-sudo ./install.sh --public-url https://sync.example.com
+sudo ./install.sh --name alice                              # a free name: alice.pairnets.app
+# or: sudo ./install.sh --public-url https://sync.example.com  (your own domain and tunnel)
 ```
 
-`install.sh` asks you to paste the tunnel token; nothing is shown while you paste, and it never ends
-up in your shell history. To run it without the prompt (in a script), read the token into the
+With `--public-url`, `install.sh` asks you to paste the tunnel token; nothing is shown while you
+paste, and it never ends up in your shell history. To run it without the prompt (in a script), read the token into the
 environment first, still without showing it or typing it on a command line:
 
 ```bash
@@ -39,8 +47,9 @@ unset TUNNEL_TOKEN
 
 `install.sh` does the following:
 
-1. Asks for the tunnel token and installs `cloudflared` from `pkg.cloudflare.com` (signed apt
-   repository) if `/usr/bin/cloudflared` is missing.
+1. With `--name`, claims the free name (below). With `--public-url`, asks for the tunnel token.
+   Then installs `cloudflared` from `pkg.cloudflare.com` (signed apt repository) if
+   `/usr/bin/cloudflared` is missing.
 2. Creates the system user `pairnets`, `/opt/pairnets` (program), `/var/lib/pairnets` (data, mode 700)
    and `/etc/pairnets` (config, root only).
 3. Writes `/etc/pairnets/pairnets.env` with mode 600: listen on `127.0.0.1`, `Sync__TrustProxyHeaders=true`,
@@ -56,15 +65,53 @@ unset TUNNEL_TOKEN
    `pairnets-update.service` and `pairnets-update.timer` (see [4b](#4b-updating-the-server)).
 6. Installs and starts `pairnets-server.service` and waits for `/api/health` locally. If the server
    does not answer, `install.sh` stops with an error and tells you where to look
-   (`sudo journalctl -u pairnets-server -n 50`). Then it checks `https://sync.example.com` through the
-   tunnel.
+   (`sudo journalctl -u pairnets-server -n 50`). Then it checks the nest's name through the tunnel.
 7. When run in a terminal, prints a **one-time link to set up your nest's website** and the next
    steps: open the link, add a passkey or a password, then on each computer install the app, type
    the nest's name and sign in with the browser.
 
 To upgrade, run `sudo ./install.sh` again from a new release (or let the self-updater do it): the
-settings, the nest's name, the sign-ins and the tunnel stay as they are. Running it with
-`--public-url` again asks for a new tunnel token and replaces it.
+settings, the nest's name, the sign-ins and the tunnel stay as they are, and a free name is never
+claimed again. Running it with `--public-url` again asks for a new tunnel token and replaces it.
+
+### A free name (`--name`)
+
+`sudo ./install.sh --name alice [--email you@example.com]` runs `pairnets-name.sh claim alice`
+before anything on the machine changes. That script talks to the Pairnets name service
+(`https://names.pairnets.app`, the Worker in `names/` of this repo):
+
+1. `POST /v1/claim/start` with the name and your email address. The service checks the name
+   (3 to 32 of `a-z`, `0-9` and single hyphens, not a kept-back name, not taken) and emails a 6-digit
+   code. The script asks for the address when `--email` is left out, and for the code; both are
+   read from the terminal, so a free name needs one (the self-updater never claims).
+2. `POST /v1/claim` with the code. The service creates a Cloudflare Tunnel for this nest only,
+   points it at `http://localhost:5075` (so `--name` always uses port 5075), adds the DNS record
+   `alice.pairnets.app` → the tunnel, and answers the **tunnel token** and the name's **manage key**,
+   once. If any Cloudflare step fails, it deletes what it made and nothing is kept.
+3. The script writes the key to `/etc/pairnets/name.env` and the token to `/etc/pairnets/tunnel.env`
+   (both root, mode 600) and prints neither. From there `install.sh` carries on exactly as with
+   `--public-url` and a pasted token.
+
+The key is sent to the service only as an `Authorization` header (through a root-only curl config
+file, never on a command line). `pairnets-name.sh` is installed to `/opt/pairnets` for later:
+
+```bash
+sudo /opt/pairnets/pairnets-name.sh status    # name, service, tunnel state
+sudo /opt/pairnets/pairnets-name.sh rotate    # POST /v1/rotate: a new tunnel token; old connections are cut
+sudo /opt/pairnets/pairnets-name.sh release   # DELETE /v1/name: DNS record and tunnel deleted, name free
+sudo ./install.sh --release-name              # the same as release
+```
+
+A nest has one free name at a time: `--name` with another name, `--public-url` or
+`--cloudflare-tunnel` on a nest that has one says to `release` it first (or to `rotate` for a new
+token). If `tunnel.env` is lost, `install.sh --name <its name>` gets a new token with the key.
+
+What the name service keeps: the name, your email address (one name per address; also how abuse
+reports reach you), the tunnel and DNS record ids, a SHA-256 of the manage key, and a keyed hash of
+the internet address it was claimed from (at most 3 names per address). Never the tunnel token,
+the key itself or your files. Limits: 5 codes an hour per internet address, 3 a day per email
+address, 5 wrong codes per claim, and a daily cap on new names. Abuse: support@pairnets.app.
+Running the service yourself: [names/README.md](../names/README.md).
 
 Useful commands:
 
@@ -119,7 +166,7 @@ Upgrades keep every line.
 | `SYNC_TOKEN` | – (required, ≥ 16 chars; `install.sh` makes one) | the old shared token. Only older apps use it; switch it off on the website's Security page. The server still needs a value to start. |
 | `ASPNETCORE_URLS` | `http://127.0.0.1:5075` | listen address: keep it on `127.0.0.1`, the tunnel brings the computers in |
 | `PAIRNETS_PUBLIC_URL` (or `PUBLIC_URL`, or `Sync__PublicUrl`) | – (set by `install.sh --public-url`) | the nest's own name, `https://` without a path. It turns on the website and signing in. If more than one is set, `Sync__PublicUrl` wins, then `PUBLIC_URL`. |
-| `Sync__PasskeyRpId` | the nest's host name | the domain passkeys are tied to. Set a parent domain (`example.com`) only if other sites on it should share the passkeys; it must be the nest's host or a parent of it. |
+| `Sync__PasskeyRpId` | the nest's host name | the domain passkeys are tied to. Set a parent domain (`example.com`) only if other sites on it should share the passkeys; it must be the nest's host or a parent of it. Never `pairnets.app` (refused): every free name is someone else's nest. |
 | `Sync__DataDir` | `/var/lib/pairnets` | data directory. Keep it there: the hardened service and the updater expect that path (to use another disk, see [Moving the nest's data to another disk](#moving-the-nests-data-to-another-disk)). |
 | `Sync__UpdateDir` | `/var/lib/pairnets/update` (set by install.sh) | where update requests go; must be the folder the root updater watches |
 | `Sync__HistoryRetentionDays` | 30 | delete history versions older than this... |
@@ -203,6 +250,10 @@ sudo rsync -a --delete --exclude 'manifest.db*' --exclude 'auth.db*' --exclude '
 For a fully consistent snapshot, stop the service for the minute it takes
 (`sudo systemctl stop pairnets-server`, back up, `sudo systemctl start pairnets-server`). Computers
 simply retry while it is down. Keep backups private: they hold your files.
+
+With a free name, also keep a copy of `/etc/pairnets/name.env` (its key) and `/etc/pairnets/tunnel.env`
+somewhere private, for example in your password manager: a new server with the same two files (and
+the data) takes over the name. Without `name.env` the name cannot be changed or given back.
 
 ### Restore
 
@@ -328,6 +379,7 @@ self-update itself is broken, update by hand once with the command above.
 ## 5. Uninstall
 
 ```bash
+sudo /opt/pairnets/pairnets-name.sh release   # only with a free name: give it back first
 sudo systemctl disable --now pairnets-server
 sudo systemctl disable --now pairnets-update.path pairnets-update.timer 2>/dev/null
 sudo systemctl disable --now pairnets-tunnel 2>/dev/null   # only with a Cloudflare Tunnel

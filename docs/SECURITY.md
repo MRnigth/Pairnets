@@ -3,13 +3,15 @@
 ## Threat model
 
 Pairnets is for one person with a few computers and one server (the *nest*), reached through a
-Cloudflare Tunnel on the owner's domain.
+Cloudflare Tunnel: under a free name like `alice.pairnets.app` from the Pairnets name service, or
+on the owner's own domain.
 
 **What protects your files**
 
 | Layer | Protection |
 |-------|------------|
 | Network | The server listens **only** on `127.0.0.1` (never `0.0.0.0`; `install.sh` refuses it). `cloudflared` (service `pairnets-tunnel`, an unprivileged dynamic user) connects out to Cloudflare; no port is open on the server or any router. Computers connect with HTTPS to your hostname. The tunnel token is kept in `/etc/pairnets/tunnel.env` (root, mode 600), never in the world-readable unit file or on a command line. With `Sync__TrustProxyHeaders` the server takes the client address from `CF-Connecting-IP` on loopback connections only, so the failure throttle and the logs see each client, not cloudflared. The apps refuse a plain `http://` address that turns out to be behind Cloudflare, before they send a key or token. |
+| A free name | The name service (`names.pairnets.app`, the Worker in `names/`) only makes a name: one Cloudflare Tunnel per nest, never shared (a tunnel token lets its holder receive that tunnel's traffic), a DNS record for it, and nothing else. Its Cloudflare API token stays inside the service; a nest only ever gets its own tunnel token, once, in the answer to the claim. The name's manage key (`pnk_` plus 256 random bits) is kept on the nest in `/etc/pairnets/name.env` (root, mode 600); the service keeps only its SHA-256, and the key is sent only in an `Authorization` header, never on a command line. Claiming needs a 6-digit code emailed to the claimer (5 tries, 15 minutes, stored as a keyed hash). One name per email address, at most 3 per internet address, rate limits on codes and wrong keys. Files and keys never go to the name service. Every nest's website and passkeys stay on its own name: the session cookie is `__Host-` (a sibling name cannot set or read it), changes must come from the nest's own origin, and passkeys are never tied to `pairnets.app` itself (the server refuses that setting), so `bob.pairnets.app` cannot use or ask for `alice.pairnets.app`'s passkeys. |
 | A key per computer | Every computer has its own key (`pn_` plus 256 random bits). The nest shows it to the app once and keeps only its SHA-256 hash, in `/var/lib/pairnets/auth.db`. Removing a computer on the nest's **Devices** page stops its key at once and closes its live connection (removed with `pairnets-server devices remove` on the server: within 30 seconds). Every endpoint needs a key, except the health check, `/api/hello`, the two sign-in calls below and the nest's website, which has its own sign-in. After 5 bad keys from one address, answers are delayed (up to 10 s each). |
 | Signing a computer in | The app asks the nest to join (`POST /api/pair/start`) and shows a code such as `KQ7M-4PXD`. You sign in on the nest's website, check that the code matches and press **Allow**. Only then can the app collect its key, with a secret only it knows (sent in the request body, never in a web address). A code lasts 10 minutes, an approved key must be collected within 5, at most 3 requests can wait per address (20 in all), and these calls are limited to 120 a minute per address. The `pairnets://` link that brings the app back to the front carries nothing: the key only travels through the app's own request. |
 | The old shared token | Before per-computer keys, all computers used one shared token (`SYNC_TOKEN`). The nest still accepts it from older apps (compared in constant time over SHA-256 digests) until you switch it off on the website's **Security** page; switching it off also cuts computers that are still connected with it. A current app that only has the shared token stops syncing on a nest with its own name and asks you to sign in; it never trades the token for a key by itself. |
@@ -36,12 +38,23 @@ Cloudflare Tunnel on the owner's domain.
   the tunnel, so Cloudflare (and anyone who controls your Cloudflare account) can see keys, sign-ins
   and file contents in transit. Use end-to-end encryption, once it exists, for files that must stay
   private from it.
+* **With a free name, Pairnets' operator could too.** The name and its tunnel live in the Cloudflare
+  account of whoever runs the name service (for `*.pairnets.app`: the Pairnets project). Whoever
+  controls that account could in principle see the traffic in transit, or point the name somewhere
+  else. Your files are still stored only on your own server, and nothing is copied or kept on the
+  way. If that is not acceptable, use your own domain (`--public-url`); end-to-end encryption is the
+  long-term fix for both.
+* **A free name can be taken back.** The service can delete a name used for abuse. Your nest and its
+  files stay as they are, but computers cannot reach it until it has a name again.
 * **The server is on the internet.** Anyone can reach `https://<your hostname>`. What keeps them out
   is a computer key (guessing a 256-bit key is not feasible, and repeated failures are slowed down
   per address) or, on the website, your own sign-in. Whoever has the *tunnel* token can run a
-  connector for your hostname and receive its traffic: keep it secret, and if it leaks, refresh it in
-  the Cloudflare dashboard and run `install.sh --public-url https://<your hostname>` again (it asks
-  for the new token).
+  connector for your hostname and receive its traffic: keep it secret. If it leaks with a free name,
+  run `sudo /opt/pairnets/pairnets-name.sh rotate` (the old token stops working and its connections
+  are cut). With your own domain, refresh it in the Cloudflare dashboard and run
+  `install.sh --public-url https://<your hostname>` again (it asks for the new token). Whoever has
+  the free name's *manage key* can do the same, or give the name away: keep `name.env` as private
+  as the tunnel token.
 * **Your Windows account.** DPAPI ties the key to your Windows login, so malware running as you can
   read it. The same goes for the Keychain and keyring on Mac and Linux.
 

@@ -23,6 +23,9 @@ themselves only run on Windows, where CI renders every one of them in light and 
 which also renders the screenshots in `docs/images`
 (`PAIRNETS_SCREENSHOT_DIR=docs/images dotnet test --filter RenderScreenshots`).
 
+The name service (`names/`, a Cloudflare Worker in TypeScript) has its own tests, run with Node 22
+or newer: `cd names && npm ci && npx tsc --noEmit && npm test`. CI runs them in a separate job.
+
 ## What is covered
 
 | Suite | Folder | Highlights |
@@ -34,6 +37,8 @@ which also renders the screenshots in `docs/images`
 | Keys and pairing | `Integration/DeviceKeyTests.cs`, `PairingTests.cs`, `SignInFlowTests.cs`, `Unit/AuthStoreTests.cs`, `PairRequestTests.cs` | A computer's own key (shown once, only its hash stored), removal that closes the live push connection, no endpoint hands out a key without a person, a computer on the shared token stops until someone signs it in (and keeps syncing against an old server without sign-in), switching the shared token off, "every endpoint needs a key" over all routes, the ask → approve → collect flow with codes, expiry, rate limits and the apps' shared sign-in logic (`Nest`, `PairingFlow`) against the real server. |
 | Nest website | `Integration/NestWebsiteTests.cs`, `PasskeyWebsiteTests.cs`, `EmailLinkTests.cs`, `GoogleSignInTests.cs`, `Unit/WebAuthnTests.cs` | Setup link, password, cookie flags, same-origin checks, CSP; passkeys against a **software authenticator** (ES256 and RS256; wrong challenge, origin, relying party, missing presence, tampered signature, cloned counter); email links with a fake mail sender and a fake SMTP server; Google against a fake token endpoint that also checks PKCE. These run against a real HTTPS listener with throwaway certificates (`Infrastructure/TestCertificates.cs`). |
 | Tunnel and updater | `Integration/CloudflareTunnelTests.cs`, `UpdateScriptTests.cs` | Client addresses from a local proxy only, Cloudflare's error pages in plain words, plain `http://` through Cloudflare refused before a token is sent; `update.sh` checks, logs and refuses a bad checksum (Linux only). Separate migration tests cover the move from the app's old name. |
+| Install scripts | `Integration/InstallScriptTests.cs`, `NameScriptTests.cs`, `Unit/InstallHintTests.cs` | `install.sh` options (missing values, `--name` with `--public-url` refused, names the service would refuse); `pairnets-name.sh` against a fake name service (`Infrastructure/FakeNameService.cs`): the tunnel token and the name's key end up only in `tunnel.env` and `name.env` (mode 600), never on screen or on curl's command line (a recording curl stand-in), a wrong code typed again, refusals shown with nothing written, rotate and release with the key as a header (Linux only); every `install.sh --option` the repo mentions exists. |
+| Name service | `names/test/` (vitest, run with `npm test` in `names/`) | The Worker in a local Workers runtime with a fake Cloudflare API that keeps its own tunnels and DNS records: the claim makes exactly one tunnel, its ingress and a proxied CNAME, and stores no token, key or code; a failure at each step leaves nothing behind (and a failed undo is finished by the hourly sweep); names and addresses checked; duplicate names and addresses; every rate limit and cap; rotate and release only with the key. |
 | Public site | `Unit/SiteTests.cs` | Every local link exists, downloads point at files `release.yml` builds, pages obey their own CSP. |
 | Convergence | `Convergence/` | Seeded random simulation: two devices create, edit, delete and rename files, with sync passes at random points (so both accumulate offline edits). At the end both folders and the server are byte-identical, and **every content any pass ever saw still exists** in a folder, `files/` or `history/`. |
 
@@ -54,6 +59,8 @@ symlinks (Developer Mode). CI runs them all.
   from a real browser.
 * The Cloudflare Tunnel and the systemd units on a real Ubuntu host (`install.sh` is checked
   with shellcheck in CI, and the units with `systemd-analyze verify` in development).
+* The name service against the real Cloudflare API and real email (the tests use fakes; the
+  checklist in `names/README.md` covers a first real run).
 * Very large trees (100k+ files) and multi-gigabyte files over a slow link.
 
 Check those by hand after a change that touches them.

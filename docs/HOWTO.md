@@ -13,7 +13,7 @@ Allow about 30 minutes.
 **Contents**
 
 1. [What you need](#1-what-you-need)
-2. [Create a Cloudflare Tunnel](#2-create-a-cloudflare-tunnel)
+2. [Choose your nest's name](#2-choose-your-nests-name)
 3. [Install the server](#3-install-the-server)
 4. [Check it from outside](#4-check-it-from-outside)
 5. [Set up the first PC](#5-set-up-the-first-computer-for-example-the-desktop)
@@ -31,25 +31,26 @@ Allow about 30 minutes.
 |---|---|
 | **A server** | Any always-on Ubuntu machine (22.04 or newer): a mini PC, an old laptop, a Raspberry Pi-class x64 box or a VM. It needs enough disk for your folder **plus history** (old versions are kept 30 days). Rule of thumb: twice the size of your folder. |
 | **Your computers** | Windows 10/11 (64-bit), macOS 11 or newer (Apple Silicon or Intel), or a Linux desktop (64-bit, e.g. Ubuntu). Pairnets is built for using one at a time. |
-| **A Cloudflare account and a domain** | The account is free: <https://dash.cloudflare.com>. The domain costs about $10 to $15 a year (buy it at Cloudflare, or move one you have there). Your computers reach the server at an address on it, such as `https://sync.example.com`, from anywhere. No ports are opened on any router. |
+| **A name for your nest** | Nothing to buy: Pairnets gives your server a free name such as `https://alice.pairnets.app`, with its own Cloudflare Tunnel, after a code sent to your email. Your computers reach the server at that address from anywhere, and no ports are opened on any router. Or, if you prefer, use a domain of your own on a free Cloudflare account (see [Advanced](#advanced-your-own-domain-and-tunnel)). |
 | **The Pairnets release** | From <https://github.com/MRnigth/Pairnets/releases/latest>, or let the one-line commands below fetch it for you. |
 
 Nothing else: no cloud storage, no extra accounts, no .NET installation.
 
 ---
 
-## 2. Create a Cloudflare Tunnel
+## 2. Choose your nest's name
 
 The server never accepts connections from the internet itself. It keeps one outgoing connection
-open to Cloudflare (a *tunnel*), and Cloudflare passes your computers' requests for your address,
-for example `https://sync.example.com`, through it. That is why nothing has to be opened on any
-router, at home or wherever your computers are.
+open to Cloudflare (a *tunnel*), and Cloudflare passes your computers' requests for your nest's
+name, for example `https://alice.pairnets.app`, through it. That is why nothing has to be opened on
+any router, at home or wherever your computers are.
 
 **Good to know first**
 
 * **Cloudflare can see the traffic.** It decrypts HTTPS at its edge before passing requests through
-  the tunnel, so in principle Cloudflare could see your computers' keys and your files. See
-  [SECURITY.md](SECURITY.md).
+  the tunnel, so in principle Cloudflare could see your computers' keys and your files. With a free
+  name, the same goes for Pairnets, which runs the Cloudflare account the name and its tunnel live
+  in. Your files are only ever stored on your own server. See [SECURITY.md](SECURITY.md).
 * The address is reachable from the internet. What keeps strangers out: each computer has its own
   long key, and a computer only gets one when you press **Allow** on your nest's website, which only
   you can sign in to (with a passkey or password).
@@ -58,6 +59,27 @@ router, at home or wherever your computers are.
   connection (smaller on a slow or busy network) and halved after a dropped connection, so a bad
   connection loses little. An interrupted upload continues where it stopped. There is nothing to
   set.
+
+### A free name (the easy way)
+
+Pick a name: 3 to 32 letters, digits or hyphens, like `alice` or `smith-family`. Your nest becomes
+`https://alice.pairnets.app`. You claim it in the next section, with the install command: it asks
+for your email address and for the 6-digit code the Pairnets name service sends to it. That is all;
+skip to [section 3](#3-install-the-server).
+
+* One email address has one name, and the code works once, for 15 minutes.
+* The name comes with its **own** Cloudflare Tunnel; no one else's server can receive its traffic.
+* The installer keeps the name's **key** in `/etc/pairnets/name.env`, readable by root only. It is
+  what lets you get a new tunnel token or give the name back later
+  ([Your free name](#your-free-name)). Keep a copy, for example in your password manager.
+* Some names are kept back (like `www`, `mail` or anything with `pairnets` in it), and a name that
+  is taken is taken. Names used for abuse can be taken back; report abuse to support@pairnets.app.
+
+### Advanced: your own domain and tunnel
+
+If you have a domain on Cloudflare (a free account is enough: <https://dash.cloudflare.com>; a
+domain costs about $10 to $15 a year), you can make the tunnel yourself and use an address on your
+own domain, such as `https://sync.example.com`. Then Pairnets' name service is not involved at all.
 
 **In the Cloudflare dashboard:**
 
@@ -80,15 +102,27 @@ Zero Trust → Networks.)
 
 ## 3. Install the server
 
-**The quick way: one command.** On the Ubuntu server, with your address from step 2.4:
+**The quick way: one command.** On the Ubuntu server, with the name you picked:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/MRnigth/Pairnets/main/deploy/get.sh | sudo bash -s -- --name alice
+```
+
+It downloads the latest release, checks its SHA-256 checksum (it refuses a damaged or altered
+download), and runs `install.sh`, which is described below. It asks for your email address (or add
+`--email you@example.com`), then for the 6-digit code that arrives there (look in the spam folder
+too). A wrong code can be typed again. When the code is right, the name and its tunnel exist and
+the install carries on by itself.
+
+With your own domain (from [Advanced](#advanced-your-own-domain-and-tunnel)), give your address
+instead of a name:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/MRnigth/Pairnets/main/deploy/get.sh | sudo bash -s -- --public-url https://sync.example.com
 ```
 
-It downloads the latest release, checks its SHA-256 checksum (it refuses a damaged or altered
-download), and runs `install.sh`, which is described below. It asks you to paste the tunnel token
-(pasting the whole copied command works too; nothing is shown while you paste).
+That asks you to paste the tunnel token (pasting the whole copied command works too; nothing is
+shown while you paste).
 
 **Or step by step**, if you prefer to see each file:
 
@@ -104,11 +138,13 @@ sha256sum --check --ignore-missing SHA256SUMS.txt
 # 3. Unpack and install
 tar xzf pairnets-server-linux-x64.tar.gz
 cd pairnets-server-linux-x64
-sudo ./install.sh --public-url https://sync.example.com
+sudo ./install.sh --name alice      # or, with your own domain: --public-url https://sync.example.com
 ```
 
 `install.sh` does everything for you:
 
+* with `--name`, claims the free name from the Pairnets name service (the emailed code) and gets its
+  tunnel token, keeping the name's key in `/etc/pairnets/name.env` (readable by root only);
 * makes the server listen **only** on `127.0.0.1` (port 5075), so nothing on your network can
   reach it directly;
 * installs `cloudflared` from Cloudflare's own package repository, keeps the tunnel token in
@@ -116,12 +152,13 @@ sudo ./install.sh --public-url https://sync.example.com
   `pairnets-tunnel`;
 * creates a dedicated system user `pairnets` and the folders
   `/opt/pairnets` (program), `/var/lib/pairnets` (your data) and `/etc/pairnets` (settings);
-* remembers your nest's name (the `--public-url`), which turns on the nest's website;
+* remembers your nest's name (`alice.pairnets.app`, or the `--public-url`), which turns on the
+  nest's website;
 * makes the old shared **token**, which only older Pairnets apps use (new apps sign in instead);
 * installs and starts the background service `pairnets-server`; both services also start at boot.
 
-At the end it checks that `https://sync.example.com/api/health` answers, and prints a **one-time
-setup link** for your nest's website (it looks like `https://sync.example.com/setup#code=…`) with the
+At the end it checks that `https://alice.pairnets.app/api/health` answers, and prints a **one-time
+setup link** for your nest's website (it looks like `https://alice.pairnets.app/setup#code=…`) with the
 next steps. If the server itself does not start, it stops with an error and says where to look.
 
 Check that both services are running:
@@ -157,19 +194,19 @@ are signed in, switch off the old shared token, and turn on sign-in by email lin
 
 ## 4. Check it from outside
 
-Open `https://sync.example.com/api/health` in a browser on any computer: it should show `ok`.
-`https://sync.example.com` itself should open your nest's sign-in page (or its setup page, if you
-have not used the setup link yet). Then go on with
+Open `https://alice.pairnets.app/api/health` (or your own address) in a browser on any computer: it
+should show `ok`. `https://alice.pairnets.app` itself should open your nest's sign-in page (or its
+setup page, if you have not used the setup link yet). Then go on with
 [section 5](#5-set-up-the-first-computer-for-example-the-desktop).
 
 **If the app cannot connect**
 
 | You see | What to do |
 |---------|-----------|
-| "Cloudflare cannot reach your Pairnets server (error 530)" (or 502) | On the server: `sudo systemctl status pairnets-tunnel` and `sudo journalctl -u pairnets-tunnel -n 50`. In the dashboard, the tunnel should say *Healthy* and its public hostname should point at `HTTP` `localhost:5075`. |
-| "Cloudflare blocked Pairnets with a browser check" | Turn off Bot Fight Mode (Security → Bots), or add a WAF custom rule that skips it for your Pairnets hostname. |
+| "Cloudflare cannot reach your Pairnets server (error 530)" (or 502) | On the server: `sudo systemctl status pairnets-tunnel` and `sudo journalctl -u pairnets-tunnel -n 50`. With a free name there is no dashboard to check; if the log says the token is not valid, get a new one with `sudo /opt/pairnets/pairnets-name.sh rotate`. With your own domain, the tunnel should say *Healthy* in the dashboard and its public hostname should point at `HTTP` `localhost:5075`. |
+| "Cloudflare blocked Pairnets with a browser check" | Own domain: turn off Bot Fight Mode (Security → Bots), or add a WAF custom rule that skips it for your Pairnets hostname. Free name: write to support@pairnets.app. |
 | "This server is reached through Cloudflare. Use https://" | In **Settings → Advanced**, type the address with `https://`, not `http://`. |
-| "This nest has no website yet" | The server has no name of its own. Run the install command from section 3 with `--public-url https://sync.example.com`. |
+| "This nest has no website yet" | The server has no name of its own. Run the install command from section 3 with `--name alice` (or `--public-url https://sync.example.com`). |
 | A login page instead of `ok` in the browser | Cloudflare Access is protecting the hostname. Remove the Access application for it: the Pairnets app cannot sign in through it. |
 
 > **A server that was set up with Tailscale** (older versions)? Pairnets no longer uses Tailscale.
@@ -226,8 +263,9 @@ the same on Windows, Mac and Linux, and follows your system's light or dark mode
 
 ![Sign-in window](images/sign-in-welcome-light.png)
 
-1. Type your nest's name: the one you gave the installer with `--public-url`, in this guide
-   `sync.example.com`. Pairnets checks that it is a Pairnets nest and shows which ways it offers.
+1. Type your nest's name: the one the installer printed, in this guide `alice.pairnets.app` (or
+   your own address, like `sync.example.com`). Pairnets checks that it is a Pairnets nest and shows
+   which ways it offers.
 2. Choose **Continue with Google**, or type your email and choose **Continue with email**, or
    choose **More ways to sign in in your browser** for a password or passkey (if your nest has no
    email or Google sign-in, the button just says **Sign in with your browser**). Your browser opens
@@ -701,6 +739,28 @@ uses). Pairnets then opens the sign-in window. When you choose the same folder a
 that folder with your nest as on a first sync: nothing is deleted, and files that differ become
 conflict copies.
 
+### Your free name
+
+If your nest has a free name (`--name`), the tool `pairnets-name.sh` on the server looks after it:
+
+```bash
+sudo /opt/pairnets/pairnets-name.sh status    # the name, and whether its tunnel runs
+sudo /opt/pairnets/pairnets-name.sh rotate    # a new tunnel token; the old one stops working
+sudo /opt/pairnets/pairnets-name.sh release   # give the name back (asks you to type it first)
+```
+
+* **rotate** is for when the tunnel token may have leaked (for example a copy of `/etc/pairnets`
+  went somewhere it should not). Whoever still has the old token is cut off at once; your nest
+  restarts its tunnel with the new one and carries on.
+* **release** makes the name free for anyone. Your nest keeps running with all its files, but no
+  computer can reach it until you give it a name again: `sudo ./install.sh --name <name>` (from the
+  release folder) or `--public-url` with your own domain. `sudo ./install.sh --release-name` does the
+  same as `release`.
+* To move a nest to a new server, copy `/etc/pairnets/name.env` and `/etc/pairnets/tunnel.env` along
+  with the data (see [DEPLOY.md](DEPLOY.md#3-backups)).
+* Both commands need the name's key from `/etc/pairnets/name.env`. Without it the name cannot be
+  changed; write to support@pairnets.app from the email address you claimed it with.
+
 ### Uninstalling
 
 Use **Reset this app…** (above) first if you also want Pairnets' settings, saved key and sync notes
@@ -719,9 +779,10 @@ Your synced folder and its files stay where they are. To also remove Pairnets's 
 state, use **Reset this app…** before uninstalling (or delete `%AppData%\Pairnets` and
 `%LocalAppData%\Pairnets` by hand).
 
-**Uninstall the server**:
+**Uninstall the server**. With a free name, give it back first so it does not stay taken:
 
 ```bash
+sudo /opt/pairnets/pairnets-name.sh release 2>/dev/null   # only with a free name (--name)
 sudo systemctl disable --now pairnets-server
 sudo systemctl disable --now pairnets-update.path pairnets-update.timer 2>/dev/null
 sudo systemctl disable --now pairnets-tunnel 2>/dev/null   # only with a Cloudflare Tunnel
@@ -732,8 +793,8 @@ sudo systemctl daemon-reload
 sudo rm -rf /opt/pairnets /etc/pairnets
 # your files remain in /var/lib/pairnets until you delete that folder yourself
 ```
-This also removes the self-updater, which the server installer added. (Delete the tunnel in the
-Cloudflare dashboard too.)
+This also removes the self-updater, which the server installer added. (With your own domain,
+delete the tunnel in the Cloudflare dashboard too.)
 
 For backups, the technical design and the security model, see [DEPLOY.md](DEPLOY.md),
 [ARCHITECTURE.md](ARCHITECTURE.md) and [SECURITY.md](SECURITY.md).

@@ -347,3 +347,74 @@ what cannot lose or silently overwrite data.
   user name's hash (a long user name plus macOS's long temp folder passed the 104-byte socket path
   limit, which made every poke fail and could crash the app on a pairnets:// launch), and the next
   listening instance opens before the current one closes (a poke arriving in the gap was lost).
+
+## Free names: alice.pairnets.app (the name service)
+
+* **Why.** Setting up a nest needed a domain, a Cloudflare account, a tunnel made in the dashboard
+  and a pasted token: the hardest part of Pairnets for anyone who is not a developer. A small
+  service we run (`names/`, a Cloudflare Worker at `names.pairnets.app`) now gives each nest a free
+  name and a ready tunnel, so setup is one command: `get.sh … --name alice`. Everything else stays
+  self-hosted: files are stored only on the owner's server, and the service never relays or keeps
+  them. `--public-url` with your own domain and tunnel works exactly as before (the advanced path).
+* **One Cloudflare Tunnel per nest.** A tunnel token lets whoever holds it receive that tunnel's
+  traffic, so nests can never share one. The cost is Cloudflare's limits: 1,000 tunnels per account,
+  and DNS records per zone (a Free zone made after 2024-09-01 holds 200, Pro 3,500). `MAX_NAMES`
+  (180) stops well before pairnets.app's limit, which its website and email records share. More
+  names need the Pro plan, more accounts or Enterprise.
+* **Under pairnets.app itself, not a separate domain (your choice).** Nothing to buy. What that
+  costs, and how it is handled: every free name is "same site" with `id.pairnets.app` and with every
+  other free name, so nothing may trust a sibling. The account service and every nest use `__Host-`
+  cookies (a sibling can neither set nor read them) and exact Origin checks; passkeys are tied to
+  each nest's own name, and the server refuses `Sync__PasskeyRpId=pairnets.app`. Names Pairnets uses
+  or may use (`www`, `id`, `names`, `nest`, mail names, anything containing `pairnets`) are kept back,
+  and a name already in the zone's DNS is refused by Cloudflare. A user hosting something harmful
+  could get the whole domain flagged, so there is an abuse contact and names can be taken back.
+* **An emailed code before a name is made (your choice).** Turnstile cannot work from `curl`, and
+  without a check one script could take every name. The installer asks for an address and the
+  6-digit code sent to it (Resend, `noreply@pairnets.app`, a separate key from the account
+  service's; 15 minutes, 5 tries, kept as an HMAC). One name per email address, which also gives a
+  way to reach the owner about abuse. Whether an address already has a name is only said after its
+  code, so the service does not tell strangers who has one. Further limits: 5 codes an hour per
+  internet address and 3 a day per email address, at most 3 names per internet address (kept as a
+  keyed hash), `DAILY_NAMES` new names a day, a mail budget under Resend's 100 a day, 10 wrong
+  manage keys an hour per address, and `NAMES_PAUSED` to stop new names at once.
+* **A name is never half made.** The claim reserves the name in D1, then creates the tunnel, reads
+  its token, sets its ingress (`http://localhost:5075`, then a required 404 catch-all) and adds the
+  proxied CNAME, saving each id as soon as it exists. If any step fails, everything made so far is
+  deleted again; if even that fails, the row stays `broken` (the name is not handed out) and the
+  hourly sweep finishes the job. A `creating` or `releasing` row older than an hour (its request
+  died) is swept the same way. Only then is the row deleted.
+* **The tunnel token is handed out once; the service keeps neither it nor the key.** The answer to
+  the claim is the only time the token travels. The manage key (`pnk_` + 32 random bytes,
+  base64url, not hex: the secret scanner flags 64-hex strings) is stored only as a SHA-256. With it
+  the owner can get a new token (`rotate`: a new tunnel secret, then the tunnel's connections are
+  closed, so whoever had the old token is cut off) or give the name back (`release`: DNS record,
+  connections, tunnel, then the row; a 202 if Cloudflare is slow, and the sweep finishes).
+* **`pairnets-name.sh` does the talking, `install.sh` stays as it was.** The script claims, writes
+  `name.env` (name, address, service, key) and then `tunnel.env` (root, 600; the name's file first,
+  so an interrupted install picks up from it: `install.sh --name` with a lost `tunnel.env` rotates).
+  After that `install.sh` carries on through its existing tunnel path unchanged. Upgrades never
+  claim. One name at a time: another `--name`, `--public-url` or `--cloudflare-tunnel` on a nest with
+  a free name says to release it (or rotate) first. `--name` fixes the port at 5075, where the
+  service points every tunnel.
+* **No secret on a command line.** Every local user can read command lines. The JSON body reaches
+  curl on its standard input; the manage key goes in a root-only curl config file (`--config`) that
+  is deleted right after; secrets are written with bash's built-in `printf`. A test runs the script
+  with a curl stand-in that records its arguments, and checks the code and the key are never there.
+* **A tiny JSON reader instead of `jq`.** The service answers one line of JSON whose strings never
+  hold quotes or backslashes (a Worker test checks every message), so `sed` can read it, and each
+  value is then checked against its own pattern (the token like `install.sh` checks a pasted one, the
+  address must be `https://<the name asked for>.…`). No extra package, one code path to test.
+* **The service's own address is fixed in the script** (`https://names.pairnets.app`), stored in
+  `name.env` with the name, and plain `http` is only accepted for this machine (the tests).
+  `PAIRNETS_CONF_DIR`, `PAIRNETS_NAMES_URL` and `PAIRNETS_TTY` exist for the tests, like
+  `update.sh`'s overrides.
+* **Releases skip name-service-only pushes.** `release.yml` ignores `names/**`, since the Worker is
+  deployed on its own and a push to main would otherwise rebuild "Latest build" for nothing. CI tests
+  it in its own job (Node 22, `tsc`, vitest in a local Workers runtime with the Cloudflare API and
+  Resend as fakes).
+* **Not yet decided: Cloudflare's terms.** Their CDN terms say that customers below Enterprise must
+  use specific paid services "to serve video and other large files via the CDN". Traffic through a
+  tunnel's public hostname is CDN traffic, and a free name puts all of it under the Pairnets
+  account. The question went to Cloudflare on 2026-10-08; the service should not be opened to the
+  public before their answer (or a paid plan).

@@ -2,7 +2,8 @@
 
 Pairnets keeps **one folder identical on your computers** (built for two Windows PCs, also available
 for Mac and Linux desktops) that you use one at a time, through a
-small server you own, reached from anywhere through a **Cloudflare Tunnel** on your own domain.
+small server you own, reached from anywhere through a **Cloudflare Tunnel**: with a free name like
+`alice.pairnets.app`, or on your own domain.
 No ports to open, no cloud storage, no telemetry. New computers join by signing in with your
 browser (a code you approve on **your own** server's website), not by copying secrets.
 
@@ -37,7 +38,7 @@ Or let Claude do it: copy a ready-made prompt from [Set Pairnets up with Claude]
 
 | Install on | How |
 |-----------|-----|
-| **Ubuntu server** | `curl -fsSL https://raw.githubusercontent.com/MRnigth/Pairnets/main/deploy/get.sh \| sudo bash -s -- --public-url https://sync.example.com` |
+| **Ubuntu server** | `curl -fsSL https://raw.githubusercontent.com/MRnigth/Pairnets/main/deploy/get.sh \| sudo bash -s -- --name alice` (your nest becomes `alice.pairnets.app`; [own domain instead](#advanced-your-own-domain)) |
 | **Windows** | **[Download PairnetsSetup.exe](https://github.com/MRnigth/Pairnets/releases/download/latest/PairnetsSetup.exe)** (installer) or [pairnets-client-win-x64.zip](https://github.com/MRnigth/Pairnets/releases/download/latest/pairnets-client-win-x64.zip) (just `Pairnets.exe`) |
 | **macOS** | [Pairnets-macos-arm64.dmg](https://github.com/MRnigth/Pairnets/releases/download/latest/Pairnets-macos-arm64.dmg) (Apple Silicon) / [Pairnets-macos-x64.dmg](https://github.com/MRnigth/Pairnets/releases/download/latest/Pairnets-macos-x64.dmg) (Intel), or `curl -fsSL https://raw.githubusercontent.com/MRnigth/Pairnets/main/deploy/get.sh \| bash -s -- --mac` |
 | **Linux desktop** | [pairnets-desktop-linux-x64.tar.gz](https://github.com/MRnigth/Pairnets/releases/download/latest/pairnets-desktop-linux-x64.tar.gz) or `curl -fsSL https://raw.githubusercontent.com/MRnigth/Pairnets/main/deploy/get.sh \| bash -s -- --desktop` |
@@ -49,6 +50,27 @@ More detail: [Architecture](docs/ARCHITECTURE.md) · [Deploy](docs/DEPLOY.md) ·
 
 ### Server (once)
 
+Pick a name for your nest (3 to 32 letters, digits or hyphens; here `alice`) and run this on the
+Ubuntu machine:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/MRnigth/Pairnets/main/deploy/get.sh | sudo bash -s -- --name alice
+```
+
+It asks for your email address, the Pairnets name service emails you a 6-digit code, you type it in,
+and your nest is `alice.pairnets.app`. The name comes with its own
+Cloudflare Tunnel, so there is no account, domain or dashboard to set up. Your files stay on your
+server; the name service only makes the name. At the end the installer prints a **one-time link**
+to set up your nest's website. Open it and add a passkey or a password (at least 10 characters).
+
+The name's key (to get a new tunnel token or give the name back) is kept in `/etc/pairnets/name.env`;
+keep a copy of it. Step by step, and what Cloudflare and Pairnets can see:
+[HOWTO sections 2 to 4](docs/HOWTO.md#2-choose-your-nests-name).
+
+#### Advanced: your own domain
+
+With a domain of your own on Cloudflare, make the tunnel yourself instead:
+
 1. In the Cloudflare dashboard create a tunnel (Zero Trust → Networks → Tunnels → *Cloudflared*),
    copy its token, and give it a public hostname such as `sync.example.com` pointing at
    `HTTP localhost:5075`. Turn off Bot Fight Mode for the domain.
@@ -58,23 +80,21 @@ More detail: [Architecture](docs/ARCHITECTURE.md) · [Deploy](docs/DEPLOY.md) ·
    curl -fsSL https://raw.githubusercontent.com/MRnigth/Pairnets/main/deploy/get.sh | sudo bash -s -- --public-url https://sync.example.com
    ```
 
-It asks for the tunnel token (nothing is shown while you paste it) and, at the end, prints a
-**one-time link** to set up your nest's website. Open it and add a passkey or a password (at least
-10 characters). Step by step, and what Cloudflare can see:
-[HOWTO sections 2 to 4](docs/HOWTO.md#2-create-a-cloudflare-tunnel).
+It asks for the tunnel token (nothing is shown while you paste it). See
+[HOWTO: your own domain](docs/HOWTO.md#advanced-your-own-domain-and-tunnel).
 
 ### Your nest's name
 
-The address you give with `--public-url` (here `sync.example.com`) is your **nest's** name. The apps
-find your server by it, and its website lives there: that is where you approve new computers, see
-them and remove them. Lost the setup link? On the server,
-`sudo -u pairnets /opt/pairnets/pairnets-server owner-link` prints a new one. See
+Your nest's name is `alice.pairnets.app` (with `--name alice`) or the address you gave with
+`--public-url` (like `sync.example.com`). The apps find your server by it, and its website lives
+there: that is where you approve new computers, see them and remove them. Lost the setup link? On
+the server, `sudo -u pairnets /opt/pairnets/pairnets-server owner-link` prints a new one. See
 [DEPLOY.md](docs/DEPLOY.md#your-nests-own-name-https).
 
 ### Each PC
 
 1. Install Pairnets (see the table above).
-2. Open it, type your nest's name (`sync.example.com`) and choose **Continue with Google**,
+2. Open it, type your nest's name (`alice.pairnets.app`) and choose **Continue with Google**,
    **Continue with email**, or **More ways to sign in in your browser** (the buttons match the ways
    your nest offers).
    Check that the code matches and press **Allow** on your nest's website — it then sends you
