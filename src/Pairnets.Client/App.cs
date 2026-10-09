@@ -1,9 +1,10 @@
 using System.Windows;
 using System.Windows.Threading;
 using Microsoft.Extensions.Logging;
+using Pairnets.Client.Platform;
+using Pairnets.Client.Ui;
 using Pairnets.Core.Client;
 using Pairnets.Core.Logging;
-using Pairnets.Core.Settings;
 
 namespace Pairnets.Client;
 
@@ -21,7 +22,8 @@ public sealed class App : Application
         ShutdownMode = ShutdownMode.OnExplicitShutdown;
         Themes.ThemeManager.Apply(this);
 
-        _fileLog = new RollingFileLoggerProvider(PairnetsPaths.LogsDir, retentionDays: 14);
+        var env = ClientEnvironment.Default;
+        _fileLog = new RollingFileLoggerProvider(env.LogsDir, retentionDays: 14);
         _loggerFactory = LoggerFactory.Create(b => b.AddProvider(_fileLog).SetMinimumLevel(LogLevel.Debug));
         var log = _loggerFactory.CreateLogger("Pairnets.Client");
         log.LogInformation("Pairnets {Version} starting", typeof(App).Assembly.GetName().Version);
@@ -30,7 +32,7 @@ public sealed class App : Application
         {
             log.LogError(args.Exception, "Unhandled UI exception");
             args.Handled = true;
-            var answer = MessageBox.Show("Pairnets hit an unexpected error and will keep running:\n" + args.Exception.Message
+            var answer = Dialogs.Ask(null, "Pairnets hit an unexpected error and will keep running:\n" + args.Exception.Message
                 + "\n\nCreate a bug report? It is copied to the clipboard so you can paste it to whoever helps you; nothing is sent anywhere.",
                 "Pairnets", MessageBoxButton.YesNo, MessageBoxImage.Error);
             if (answer == MessageBoxResult.Yes)
@@ -52,11 +54,11 @@ public sealed class App : Application
             args.SetObserved();
         };
 
-        _tray = new TrayController(this, _loggerFactory, _fileLog);
+        _tray = new TrayController(_loggerFactory, _fileLog, new WindowsPlatform(), env, Dispatcher, Shutdown);
         _tray.Start();
         // A pairnets:// link (the nest's website after approving this computer) starts a second
         // Pairnets, which pokes this one through the pipe and quits; come to the front for it.
-        _activation = AppActivation.Listen(() => RunOnUi(() => _tray?.ComeToFront()));
+        _activation = AppActivation.Listen(() => RunOnUi(() => _tray?.ComeToFront()), env.ActivationPipeName);
     }
 
     protected override void OnExit(ExitEventArgs e)
