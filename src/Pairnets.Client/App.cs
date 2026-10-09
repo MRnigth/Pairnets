@@ -14,7 +14,6 @@ public sealed class App : Application
     private TrayController? _tray;
     private ILoggerFactory? _loggerFactory;
     private RollingFileLoggerProvider? _fileLog;
-    private IDisposable? _activation;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -54,27 +53,16 @@ public sealed class App : Application
             args.SetObserved();
         };
 
+        // The tray also answers the pairnets:// "come to the front" pokes (it starts listening before the sign-in window).
         _tray = new TrayController(_loggerFactory, _fileLog, new WindowsPlatform(), env, Dispatcher, Shutdown);
         _tray.Start();
-        // A pairnets:// link (the nest's website after approving this computer) starts a second
-        // Pairnets, which pokes this one through the pipe and quits; come to the front for it.
-        _activation = AppActivation.Listen(() => RunOnUi(() => _tray?.ComeToFront()), env.ActivationPipeName);
     }
 
     protected override void OnExit(ExitEventArgs e)
     {
-        _activation?.Dispose();
         _tray?.Dispose();
         _loggerFactory?.Dispose();
         _fileLog?.Dispose();
         base.OnExit(e);
-    }
-
-    public void RunOnUi(Action action)
-    {
-        if (Dispatcher.CheckAccess())
-            action();
-        else
-            Dispatcher.BeginInvoke(DispatcherPriority.Normal, action);
     }
 }

@@ -39,6 +39,7 @@ public sealed class TrayController : ITrayActions, IDisposable
     private volatile bool _dirty = true;
     private RunnerStatus? _shownStatus;
     private readonly UpdateService _updates;
+    private IDisposable? _activation;
     private bool _updateDismissed;
     private double? _updateProgress;
     private string? _updateError;
@@ -149,6 +150,10 @@ public sealed class TrayController : ITrayActions, IDisposable
 
     public void Start()
     {
+        // A pairnets:// link (the nest's website after approving this computer) starts a second Pairnets,
+        // which pokes this one through the pipe and quits; come to the front for it. Listening starts before
+        // the sign-in window below opens (and waits), because that is when the link comes.
+        _activation = AppActivation.Listen(() => RunOnUi(ComeToFront), _env.ActivationPipeName);
         _updates.UpdateAvailable += u => RunOnUi(() =>
         {
             _updateDismissed = false;
@@ -913,6 +918,7 @@ public sealed class TrayController : ITrayActions, IDisposable
 
     public void Dispose()
     {
+        _activation?.Dispose();
         _updates.Dispose();
         _refresh.Stop();
         SystemEvents.PowerModeChanged -= OnPowerModeChanged;
