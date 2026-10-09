@@ -1,5 +1,4 @@
 using System.IO;
-using System.Runtime.InteropServices;
 using System.Windows;
 using Pairnets.Client.Themes;
 using Pairnets.Core.Client;
@@ -12,18 +11,21 @@ public partial class BugReportWindow : Window
 {
     private readonly Func<Task<string>> _build;
     private readonly Action<string> _open;
+    private readonly string _logsDir;
     private string? _path;
 
     /// <param name="build">Builds the report text (see <see cref="BugReport.BuildAsync"/>).</param>
     /// <param name="open">Opens the saved file.</param>
     /// <param name="afterError">True when Pairnets opened this after an unexpected error.</param>
-    public BugReportWindow(Func<Task<string>> build, Action<string> open, bool afterError = false)
+    /// <param name="logsDir">Where the report is saved: the log folder (null is the usual one).</param>
+    public BugReportWindow(Func<Task<string>> build, Action<string> open, bool afterError = false, string? logsDir = null)
     {
         ThemeManager.Attach(this);
         InitializeComponent();
         Icon = AppIcons.WindowIcon;
         _build = build;
         _open = open;
+        _logsDir = logsDir ?? PairnetsPaths.LogsDir;
         if (afterError)
             Heading.Text = "Pairnets hit an unexpected error and kept running. Building a bug report…";
         Loaded += async (_, _) => await BuildAsync();
@@ -43,7 +45,7 @@ public partial class BugReportWindow : Window
         ReportText.Text = report;
         try
         {
-            _path = BugReport.Save(report, PairnetsPaths.LogsDir);
+            _path = BugReport.Save(report, _logsDir);
             OpenButton.IsEnabled = true;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -58,18 +60,7 @@ public partial class BugReportWindow : Window
             + ". Paste it to whoever helps you; nothing was sent anywhere.";
     }
 
-    private static bool Copy(string text)
-    {
-        try
-        {
-            Clipboard.SetText(text);
-            return true;
-        }
-        catch (COMException)
-        {
-            return false; // another app holds the clipboard
-        }
-    }
+    private static bool Copy(string text) => Dialogs.CopyText(text); // false: another app holds the clipboard
 
     private void OnCopy(object sender, RoutedEventArgs e)
     {

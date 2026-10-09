@@ -19,6 +19,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Pairnets.Desktop", "src\Pai
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Pairnets.Browser.Tests", "tests\Pairnets.Browser.Tests\Pairnets.Browser.Tests.csproj", "{8C72F0AA-EE3A-4AB2-B8FD-63EA537D9199}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Pairnets.Client.Tests", "tests\Pairnets.Client.Tests\Pairnets.Client.Tests.csproj", "{A6B06723-11BB-46B9-99C9-57B501356752}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -52,6 +54,10 @@ Global
 		{8C72F0AA-EE3A-4AB2-B8FD-63EA537D9199}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{8C72F0AA-EE3A-4AB2-B8FD-63EA537D9199}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{8C72F0AA-EE3A-4AB2-B8FD-63EA537D9199}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A6B06723-11BB-46B9-99C9-57B501356752}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A6B06723-11BB-46B9-99C9-57B501356752}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A6B06723-11BB-46B9-99C9-57B501356752}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A6B06723-11BB-46B9-99C9-57B501356752}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{730E6F44-1B47-4333-8C9A-E6B60F41A151} = {BED0F6B3-AB41-4333-9D5D-8B4C4422BDF9}
@@ -60,5 +66,6 @@ Global
 		{5A3BFFC0-B09F-40A7-BEB0-0796E1786657} = {0E490874-AAC0-439A-9DD1-3225CD85FA4A}
 		{3C497D24-13A0-4DCA-8CD5-968627846063} = {BED0F6B3-AB41-4333-9D5D-8B4C4422BDF9}
 		{8C72F0AA-EE3A-4AB2-B8FD-63EA537D9199} = {0E490874-AAC0-439A-9DD1-3225CD85FA4A}
+		{A6B06723-11BB-46B9-99C9-57B501356752} = {0E490874-AAC0-439A-9DD1-3225CD85FA4A}
 	EndGlobalSection
 EndGlobal
