@@ -71,7 +71,7 @@ function hookEntry() {
     type: 'command',
     command: `node "${fwd(path.join(hookDir, 'deploy-gate.mjs'))}"`,
     timeout: 7200,
-    statusMessage: 'Pairnets deploy gate (a deploy is tested first: about 25 minutes)',
+    statusMessage: 'Pairnets deploy gate (a deploy is tested first: about 15 minutes)',
   };
   if (atLeast(claudeVersion(), ON_FAILURE_SINCE)) handler.onFailure = 'block';
   return { matcher: 'Bash|PowerShell|Write|Edit|MultiEdit|NotebookEdit', hooks: [handler] };

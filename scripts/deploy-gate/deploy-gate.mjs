@@ -6,7 +6,7 @@
 //   (no arguments)        Claude Code PreToolUse hook: reads the tool call as JSON on stdin. Exit 0 lets it run,
 //                         exit 2 blocks it (stderr says why). Runs the check itself when a deploy needs one.
 //   --pre-push <remote>   git pre-push hook: refuses to push main or a v* tag without a pass record. Never runs
-//                         the check (that takes 25 minutes); it says how to.
+//                         the check (that takes about 15 minutes); it says how to.
 //   --dry-classify        like the hook, but only says what it would do, and blocks anything that deploys.
 //   --status [<commit>]   shows the pass records.
 //
@@ -581,7 +581,7 @@ export function prePush(lines, top) {
   for (const r of refused) out.push(`- ${r}`);
   if (missing.length) {
     out.push(`These commits have not passed the pre-deploy check: ${missing.join(', ')}.`);
-    out.push('Run the check first (about 25 minutes), then push again:');
+    out.push('Run the check first (about 15 minutes), then push again:');
     for (const m of missing) out.push(`  powershell -ExecutionPolicy Bypass -File scripts/pre-deploy.ps1 -Repo . -Commit ${m.split(' ')[0]}`);
   }
   io.err(out.join('\n') + '\n');

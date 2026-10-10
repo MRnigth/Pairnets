@@ -250,8 +250,11 @@ function Get-FailedTests([string]$Pattern) {
                 $class = $classes[$r.GetAttribute('testId')]
                 if (-not $class) { $class = 'Unknown' }
                 $msgNode = $r.SelectSingleNode('t:Output/t:ErrorInfo/t:Message', $ns)
-                $msg = if ($msgNode) { ($msgNode.InnerText -split "`r?`n" | Where-Object { $_.Trim() } | Select-Object -First 1) } else { 'no message' }
-                if ($msg.Length -gt 220) { $msg = $msg.Substring(0, 217) + '...' }
+                $msgLines = if ($msgNode) { @($msgNode.InnerText -split "`r?`n" | ForEach-Object { $_.Trim() } | Where-Object { $_ }) } else { @('no message') }
+                if (-not $msgLines.Count) { $msgLines = @('no message') }
+                # "2 presses went wrong:" is followed by the presses themselves: keep a few of them.
+                $msg = if ($msgLines[0].EndsWith(':')) { ($msgLines | Select-Object -First 4) -join ' ' } else { $msgLines[0] }
+                if ($msg.Length -gt 400) { $msg = $msg.Substring(0, 397) + '...' }
                 $area = Get-Area $class
                 if (-not $byArea.Contains($area)) { $byArea[$area] = New-Object System.Collections.Generic.List[string] }
                 $short = $class.Substring($class.LastIndexOf('.') + 1)
