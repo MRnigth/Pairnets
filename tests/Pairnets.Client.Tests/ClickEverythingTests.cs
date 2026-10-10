@@ -144,7 +144,10 @@ internal sealed record Screen(string Window, string State, Func<Bench, Window> B
 /// <summary>What the press of a control should do, and how to see that it did (checked on the WPF thread).</summary>
 internal sealed record Rule(Func<Target, bool> Matches, string Should, Func<Check, bool> Done, int Seconds = 5);
 
-internal sealed record Check(Bench Bench, Window Window, Target Target, bool? WasChecked);
+/// <param name="Item">
+/// The row the pressed control belonged to, read before the press: a closed menu can lose it while the check waits.
+/// </param>
+internal sealed record Check(Bench Bench, Window Window, Target Target, bool? WasChecked, object? Item);
 
 /// <summary>
 /// Presses every button, switch, radio button, menu item and clickable card in every window of the Windows app, in
@@ -350,6 +353,7 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
         bench.ResetLogs();
         Wpf.TakeCrashes();
         var wasChecked = await Wpf.Ui(() => (target.Element as ToggleButton)?.IsChecked ?? (target.Element as Expander)?.IsExpanded);
+        var item = await Wpf.Ui(() => (target.MenuOwner ?? target.Element).DataContext);
         try
         {
             var ran = await Wpf.Ui(() => Presser.Press(target));
@@ -360,7 +364,7 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
         {
             return $"Pressing '{label}' on {screen} crashed: {ex.GetBaseException()}";
         }
-        var check = new Check(bench, window, target, wasChecked);
+        var check = new Check(bench, window, target, wasChecked, item);
         var deadline = DateTime.UtcNow.AddSeconds(rule.Seconds);
         while (true)
         {
@@ -531,10 +535,10 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
             c => c.Bench.History.Restored.Items.Contains((((VersionRow)((Button)c.Target.Element).CommandParameter).Path, ((VersionRow)((Button)c.Target.Element).CommandParameter).Version.Id))
                 && ((MainWindow)c.Window).RestoreMessage.IsVisible),
         new(t => t.Kind == PressKind.MenuItem && t.Label == "Show in folder", "show that file in Explorer",
-            c => c.Bench.Actions.Calls.Items.Contains($"RevealFile({((ActivityItem)c.Target.Element.DataContext).Path})")),
+            c => c.Bench.Actions.Calls.Items.Contains($"RevealFile({((ActivityItem)c.Item!).Path})")),
         new(t => t.Kind == PressKind.MenuItem && t.Label == "Show versions…", "open History on that file",
             c => ((MainWindow)c.Window).Page == MainPage.History
-                && (((MainWindow)c.Window).FileList.SelectedItem as ServerFile)?.Path == ((ActivityItem)c.Target.Element.DataContext).Path),
+                && (((MainWindow)c.Window).FileList.SelectedItem as ServerFile)?.Path == ((ActivityItem)c.Item!).Path),
 
         // The sidebar.
         On("Overview", "show the Overview page", OnPage(MainPage.Overview)),
