@@ -170,7 +170,16 @@ does (revoke, forget the cached key, `DeviceRemoved` on the hub, close the devic
    **503** `{"error":"nest_offline","message":"Your server is not connected right now. Check that it is on."}`.
    Every relay error is JSON (apps read non-JSON errors as "old server" or "tunnel down").
 5. The first successful answer from a `pending` nest marks it `active` (`confirmed_at`), at most one write per minute.
-6. Per-IP limit on the relay: 600 requests a minute. Bodies are not limited beyond Cloudflare's own 100 MB.
+6. Rate limits on the relay, two budgets (`relay.ts`; reasons in `docs/DECISIONS.md`, "Sync feedback"):
+   - per address, 600 requests a minute for everything without a computer's key (`X-Sync-Token`, `Authorization:
+     Bearer`, or `access_token` on the hub) and everything that fails: an unknown nest, a refused path, a key the nest
+     answers 401/403, a nest that is offline. Over it, every relayed request from that address gets 429 until the minute
+     is over. This is checked first, before the nest is looked up.
+   - per nest and computer key, 6,000 requests a minute: what a signed-in app sends. Each computer has its own, so
+     two computers behind one home address do not share one budget. The key is only ever hashed.
+   Every 429 is `{"error":"rate_limited",...}` with `Retry-After` (seconds to the end of the minute). The apps wait that
+   long, send the same request again and go on one at a time for a while. Bodies are not limited beyond Cloudflare's
+   own 100 MB.
 
 **Router** (`pairnets-router`, `workers_dev = false`, no routes; reachable only by the `ROUTER` service binding):
 reads `X-Pairnets-Route`, picks binding `N_<nestId>`, removes the header, fetches
