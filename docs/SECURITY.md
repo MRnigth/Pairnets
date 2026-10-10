@@ -22,7 +22,7 @@ through a Cloudflare Tunnel on the owner's own domain.
 | Names | The server rejects path traversal (`..`, rooted paths, drive letters, backslashes), Windows-hostile names (`< > : " \| ? *`, control characters, trailing dots/spaces, `CON`, `NUL`, `COM1`… with or without extension), paths over 1024 characters and names that differ only in letter case from existing ones. It canonicalizes every path, checks it stays inside `files/`, and refuses any path through a symlink. Clients never follow symlinks, junctions or reparse points. |
 | Process | The service runs as the unprivileged `pairnets` user under systemd hardening: `NoNewPrivileges`, `ProtectSystem=strict` with write access only to `/var/lib/pairnets`, `ProtectHome`, `PrivateTmp`, `PrivateDevices`, no capabilities, restricted address families and namespaces. |
 | Data loss | The server never destroys data outside the history purge. Every overwritten or deleted file is kept in `history/` for 30 days and at least the last 5 versions. Clients refuse to run when the folder looks wrong (missing marker, empty folder) or a pass would delete many files. |
-| Privacy | No telemetry or analytics. The apps talk to your nest, and to GitHub to look for new versions (at start-up and once a day; you can turn this off in **Settings → Updates and speed**) and to download them. The server talks to Cloudflare (the tunnel) and to GitHub only when it is asked to update itself. Only if you set them up: the server sends sign-in emails through your mail service and asks Google to confirm a Google sign-in. |
+| Privacy | No telemetry or analytics. What Pairnets keeps about people (the account service at sync.pairnets.app: email, Google id, sessions, nests, a 90-day activity log) is in the [Privacy Policy](https://pairnets.app/privacy/). The apps talk to your nest (directly or through sync.pairnets.app), to sync.pairnets.app to sign in, and to GitHub to look for new versions (at start-up and once a day; you can turn this off in **Settings → Updates and speed**) and to download them. The server talks to Cloudflare (the tunnel) and to GitHub only when it is asked to update itself. Only if you set them up: the server sends sign-in emails through your mail service and asks Google to confirm a Google sign-in. |
 | Computer list | For the Devices page and the overview, the server keeps in `devices.json` the device name each computer sends, its Pairnets version and system (`X-Pairnets-Client`), when it was first and last seen, and its last change. Only requests that passed the key check count (the health check never does), and over-long version or system values are ignored. It is shown, never trusted: syncing does not depend on it. |
 
 **What is not protected**
@@ -105,5 +105,7 @@ service itself keeps all its systemd hardening and never gets root. Turn it off 
 
 ## Reporting
 
-This is a personal project. Open an issue on the repository without including tokens, keys, IPs or
-file contents.
+Report security problems privately: email support@pairnets.app with "Security" in the subject, not a
+public issue. <https://pairnets.app/security/> has the rules for testing and what is not covered
+(also listed in `/.well-known/security.txt`). Other bugs: open an issue on the repository, without
+tokens, keys, sign-in links, IPs or file contents.

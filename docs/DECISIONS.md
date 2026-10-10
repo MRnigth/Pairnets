@@ -495,3 +495,47 @@ yet"), the same in both apps.
   `sync.pairnets.app`; migrations 0001 and 0002 applied; the generated keys and the account and
   Google client ids set. The outside keys (Cloudflare API token, Turnstile, Resend, Google client
   secret) wait for the owner to paste them.
+
+## Legal and help pages (10 October 2026)
+
+* **Nine real pages on pairnets.app**: Privacy, Terms, Guidelines, FAQ, Cookie settings, Security,
+  Delete my account, Open-source licences and Contact. They are hand-written like the other pages and
+  linked from a new three-column footer on every page. `/.well-known/security.txt` points at the
+  Security page. Its `Expires` date must be moved on within a year; a test fails when it runs out.
+* **Who runs Pairnets**: "MRnigth, a private person in Denmark". The owner chose the GitHub name over
+  their full name. Danish law and the GDPR apply, and complaints go to Datatilsynet. One address
+  covers help, privacy requests, abuse and security: support@pairnets.app. Users must be 13 or older,
+  the Danish age for agreeing on your own.
+* **The texts only say what the code does.** The pages state:
+  * what sync.pairnets.app stores and for how long (taken from the D1 schema and the hourly sweep);
+  * that IPs are never stored raw;
+  * that files pass through and are never kept;
+  * that HTTPS is unwrapped at Cloudflare, and there is no end-to-end encryption yet;
+  * that the service itself can let a computer in;
+  * that database backups (D1 Time Travel) keep deleted rows for up to 30 days.
+
+  A change to what the service stores needs the Privacy Policy and Cookie settings pages changed with
+  it.
+* **Google sign-in**: the Privacy Policy carries Google's "Limited Use" statement and is linked from
+  the home page. Google's Branding page needs both before the app can leave Testing.
+* **The API**: the Terms say the `/v1/` API and the relay are made for the Pairnets apps, nests and
+  installer. People may use them with their own tools, for their own account and within the limits,
+  and they may change without notice.
+  * sync.pairnets.app answers `/privacy`, `/terms`, `/guidelines`, `/cookies`, `/security`, `/faq`,
+    `/help`, `/contact`, `/delete-account` and `/licenses` with a redirect to the website.
+  * Every page there links them.
+  * The sign-in page says that continuing means agreeing to the Terms and the Privacy Policy.
+  * Every email ends with a Privacy link.
+* **Cookie banner**: only necessary cookies are used, so the law asks for no consent. The owner still
+  wanted a banner. Both sites show a small notice ("only cookies that are needed to sign you in")
+  with an OK button and a Cookie settings link. OK is remembered in the browser's local storage
+  (`pn-cookie-notice`), never in a cookie. The Cookie settings page shows the three kinds with their
+  switches: Necessary is always on; Analytics and Advertising are not used.
+* **In the apps** (both, page for page):
+  * The sign-in screen's first step has the same small print, with Terms and Privacy Policy links.
+  * Settings ends with an "About Pairnets" card: version, licence, who makes it, and links to the
+    website's help and legal pages.
+  * The addresses are fixed in `PairnetsLinks` (Core) and do not follow the account service's
+    address.
+  * The nest's own sign-in page links Privacy and Terms too.
+* **Not a lawyer's work**: the texts are standard and careful, but no lawyer has read them.
