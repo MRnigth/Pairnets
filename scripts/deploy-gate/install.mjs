@@ -2,7 +2,7 @@
 // Installs the Pairnets deploy gate on this computer (see docs/PREDEPLOY.md):
 //   1. copies deploy-gate.mjs and classify.mjs to ~/.claude/hooks/pairnets-deploy-gate/
 //   2. adds its PreToolUse hook to ~/.claude/settings.json (the old file is kept as settings.json.bak-<time>),
-//      so every Claude Code session on this computer, in every worktree, goes through it
+//      so every coding-assistant session on this computer, in every worktree, goes through it
 //   3. puts the git pre-push hook into this repository's hooks folder, which all its worktrees share
 //
 //   node scripts/deploy-gate/install.mjs              install or update
@@ -16,12 +16,12 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const claudeDir = process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude');
-const hookDir = path.join(claudeDir, 'hooks', 'pairnets-deploy-gate');
-const settingsFile = path.join(claudeDir, 'settings.json');
+const assistantDir = process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude');
+const hookDir = path.join(assistantDir, 'hooks', 'pairnets-deploy-gate');
+const settingsFile = path.join(assistantDir, 'settings.json');
 const FILES = ['deploy-gate.mjs', 'classify.mjs'];
 const MARK = 'pairnets-deploy-gate';
-// Claude Code versions from this one on can be told to block (not allow) a tool call when the hook itself fails.
+// Coding-assistant versions from this one on can be told to block (not allow) a tool call when the hook itself fails.
 const ON_FAILURE_SINCE = [2, 1, 295];
 
 const fwd = p => p.replace(/\\/g, '/');
@@ -32,7 +32,7 @@ function git(args, cwd = process.cwd()) {
   return r.status === 0 ? r.stdout.trim() : null;
 }
 
-function claudeVersion() {
+function assistantVersion() {
   const r = spawnSync('claude', ['--version'], { encoding: 'utf8', windowsHide: true, shell: process.platform === 'win32' });
   const m = /(\d+)\.(\d+)\.(\d+)/.exec(r.stdout || '');
   return m ? m.slice(1).map(Number) : null;
@@ -50,7 +50,7 @@ function writeSettings(settings) {
     const stamp = new Date().toISOString().replace(/[:.]/g, '-');
     fs.copyFileSync(settingsFile, `${settingsFile}.bak-${stamp}`);
   }
-  fs.mkdirSync(claudeDir, { recursive: true });
+  fs.mkdirSync(assistantDir, { recursive: true });
   fs.writeFileSync(`${settingsFile}.tmp`, JSON.stringify(settings, null, 2) + '\n');
   fs.renameSync(`${settingsFile}.tmp`, settingsFile);
 }
@@ -73,7 +73,7 @@ function hookEntry() {
     timeout: 7200,
     statusMessage: 'Pairnets deploy gate (a deploy is tested first: about 15 minutes)',
   };
-  if (atLeast(claudeVersion(), ON_FAILURE_SINCE)) handler.onFailure = 'block';
+  if (atLeast(assistantVersion(), ON_FAILURE_SINCE)) handler.onFailure = 'block';
   return { matcher: 'Bash|PowerShell|Write|Edit|MultiEdit|NotebookEdit', hooks: [handler] };
 }
 
@@ -97,7 +97,7 @@ function install() {
   const entry = hookEntry();
   settings.hooks.PreToolUse.push(entry);
   writeSettings(settings);
-  console.log(`Added the hook to ${settingsFile}${entry.hooks[0].onFailure ? '' : ' (update Claude Code to 2.1.295 or later, then run this again, so a hook that fails to start blocks too)'}`);
+  console.log(`Added the hook to ${settingsFile}${entry.hooks[0].onFailure ? '' : ' (update the coding assistant to 2.1.295 or later with "claude update", then run this again, so a hook that fails to start blocks too)'}`);
 
   const target = prePushTarget();
   if (!target) {
@@ -127,7 +127,7 @@ function check() {
   }
   const entry = (readSettings().hooks?.PreToolUse || []).find(ours);
   say(!!entry, `the PreToolUse hook in ${settingsFile}`);
-  if (entry) say(entry.hooks[0].onFailure === 'block' || !atLeast(claudeVersion(), ON_FAILURE_SINCE), 'blocks when the hook fails to start (onFailure)');
+  if (entry) say(entry.hooks[0].onFailure === 'block' || !atLeast(assistantVersion(), ON_FAILURE_SINCE), 'blocks when the hook fails to start (onFailure)');
   const target = prePushTarget();
   say(!!target && fs.existsSync(target) && fs.readFileSync(target, 'utf8').includes(MARK), `the git pre-push hook${target ? ` (${target})` : ''}`);
   const node = spawnSync('node', ['--version'], { encoding: 'utf8', windowsHide: true });

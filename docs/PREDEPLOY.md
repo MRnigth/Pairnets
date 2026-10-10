@@ -24,7 +24,7 @@ invisible browser, and the Linux test computer runs in the background. You can k
 
 **What it guards.** Pushing to `main` (that is a release), a `v…` tag, merging a pull request into `main`, a
 GitHub release, running the release workflow, a Cloudflare deploy, and installing on a server. This works both when
-Claude does it and when you push from a terminal.
+the coding assistant does it and when you push from a terminal.
 
 **When it says no.** You get a short list of what broke, and nothing is deployed. The full report is a text file
 you can open in Notepad:
@@ -46,14 +46,14 @@ powershell -ExecutionPolicy Bypass -File scripts\pre-deploy.ps1 -Repo . -Commit 
 It tests the last commit (not changes that are not committed yet). At the end it says PASSED or FAILED and where the
 report is.
 
-**Turning the guard on or off.** `node scripts/deploy-gate/install.mjs` turns it on (for every Claude Code session on
+**Turning the guard on or off.** `node scripts/deploy-gate/install.mjs` turns it on (for every coding-assistant session on
 this PC, and for `git push` from a terminal). `--check` says whether it is on, and `--uninstall` turns it off.
 
 ## How the parts fit together (for developers)
 
 | Part | Where | What |
 |---|---|---|
-| Gate | `scripts/deploy-gate/` (Node), installed by `node scripts/deploy-gate/install.mjs` (`--check`, `--uninstall`) | Claude Code `PreToolUse` hook (in `~/.claude/settings.json`, so every session and worktree) plus a git `pre-push` hook (in the shared `.git/hooks`). Spots deploy commands and demands a pass record for the exact commit; without one, the hook runs the check itself and blocks when it fails. The `pre-push` hook only looks for the record. Outside a Pairnets checkout it does nothing. |
+| Gate | `scripts/deploy-gate/` (Node), installed by `node scripts/deploy-gate/install.mjs` (`--check`, `--uninstall`) | Coding-assistant `PreToolUse` hook (in `~/.claude/settings.json`, so every session and worktree) plus a git `pre-push` hook (in the shared `.git/hooks`). Spots deploy commands and demands a pass record for the exact commit; without one, the hook runs the check itself and blocks when it fails. The `pre-push` hook only looks for the record. Outside a Pairnets checkout it does nothing. |
 | Runner | `scripts/pre-deploy.ps1` | Runs every step below in a clean temporary checkout of the commit and writes the pass record and a report. |
 | API tour | `tests/Pairnets.Tests/E2E/` | Calls every HTTP route, hub method/event and server CLI command, against three kinds of test server. Guard tests fail when something exists that the tour does not call. |
 | Avalonia buttons | `tests/Pairnets.Tests/Ui/` | Presses every button, toggle and menu item in every window (headless), and drives the real `DesktopController` against a real test server. |

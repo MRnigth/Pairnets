@@ -3,7 +3,7 @@
 // has passed the pre-deploy check (scripts/pre-deploy.ps1: every API request, every button, the real Linux
 // install). See docs/PREDEPLOY.md.
 //
-//   (no arguments)        Claude Code PreToolUse hook: reads the tool call as JSON on stdin. Exit 0 lets it run,
+//   (no arguments)        coding-assistant PreToolUse hook: reads the tool call as JSON on stdin. Exit 0 lets it run,
 //                         exit 2 blocks it (stderr says why). Runs the check itself when a deploy needs one.
 //   --pre-push <remote>   git pre-push hook: refuses to push main or a v* tag without a pass record. Never runs
 //                         the check (that takes about 15 minutes); it says how to.
