@@ -56,6 +56,20 @@ describe("headers on every response", () => {
     }
   });
 
+  it("every page has a Home button to the website", async () => {
+    const h = await Harness.create();
+    const b = h.browser();
+    const check = async (path: string) => {
+      const page = await b.call("GET", path);
+      expect(page.headers.get("content-type"), path).toContain("text/html");
+      expect(page.text, path).toContain('<a class="button home" href="https://pairnets.app/">← Home</a>');
+      expect(page.text, path).toContain('<a class="brand" href="https://pairnets.app/">Pairnets</a>');
+    };
+    for (const path of ["/login", "/login/email"]) await check(path);
+    await b.signInByEmail("you@example.com");
+    for (const path of ["/account", "/app", "/add", "/app?code=XXXX-XXXX", "/add?code=XXXX-XXXX"]) await check(path);
+  });
+
   it("/ goes to the account page and /privacy to the website", async () => {
     const h = await Harness.create();
     expect((await h.browser().call("GET", "/")).location).toBe("/account");

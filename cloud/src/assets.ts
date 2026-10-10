@@ -10,8 +10,8 @@ const STYLE = String.raw`
 }
 * { box-sizing: border-box; }
 body { margin: 0; font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); }
-header.top { padding: 14px 20px; border-bottom: 1px solid var(--line); }
-.brand { font-weight: 700; }
+header.top { display: flex; align-items: center; gap: 6px; padding: 14px 20px; border-bottom: 1px solid var(--line); }
+.brand { font-weight: 700; color: var(--text); text-decoration: none; }
 main { max-width: 640px; margin: 0 auto; padding: 16px; }
 footer { max-width: 640px; margin: 0 auto; padding: 16px; font-size: 14px; }
 .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 18px 20px; margin: 16px 0; }
@@ -24,6 +24,7 @@ a { color: var(--accent); }
 button:disabled { opacity: 0.5; cursor: default; }
 button.link { background: none; border: none; color: var(--accent); padding: 0; text-decoration: underline; }
 button.danger { background: transparent; color: var(--danger); border-color: var(--danger); }
+.button.home { margin-left: auto; padding: 5px 12px; font-size: 0.9rem; background: transparent; color: var(--accent); }
 .wide { width: 100%; }
 label { display: block; margin: 8px 0 4px; }
 input { width: 100%; font: inherit; padding: 9px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--text); }
