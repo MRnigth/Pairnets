@@ -14,7 +14,7 @@ describe("account", () => {
   it("GET /v1/me has the contract's shape", async () => {
     const { b, accountId } = await setup();
     const me = await b.call("GET", "/v1/me");
-    expect(Object.keys(me.json)).toEqual(["accountId", "email", "createdAt", "identities", "session"]);
+    expect(Object.keys(me.json)).toEqual(["accountId", "email", "username", "createdAt", "identities", "session"]);
     expect(me.json.accountId).toBe(accountId);
     expect(Object.keys(me.json.session)).toEqual(["id", "kind", "authTime", "amr", "recentAuth"]);
     expect(me.json.session.id).toMatch(/^ses_[0-9a-hjkmnp-tv-z]{26}$/);

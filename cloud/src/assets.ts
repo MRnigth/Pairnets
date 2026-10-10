@@ -29,6 +29,9 @@ button.danger { background: transparent; color: var(--danger); border-color: var
 label { display: block; margin: 8px 0 4px; }
 input { width: 100%; font: inherit; padding: 9px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--text); }
 form button { margin-top: 12px; }
+.input-row { display: flex; gap: 8px; }
+.input-row input { flex: 1; min-width: 0; }
+.input-row button { margin-top: 0; }
 .cf-turnstile { margin-top: 12px; }
 .or { text-align: center; color: var(--muted); margin: 16px 0 4px; }
 .error { color: var(--danger); }
@@ -273,6 +276,19 @@ const ACCOUNT_JS = String.raw`(function () {
   var logout = document.getElementById("logout");
   if (logout) logout.addEventListener("click", function () {
     pnApi("POST", "/v1/logout").then(function () { location.href = "/login"; });
+  });
+  var nameForm = document.getElementById("username-form");
+  if (nameForm) nameForm.addEventListener("submit", function (ev) {
+    ev.preventDefault();
+    var input = document.getElementById("username");
+    var save = nameForm.querySelector("button[type=submit]");
+    save.disabled = true;
+    pnApi("PATCH", "/v1/me", { username: input.value }).then(function (res) {
+      save.disabled = false;
+      if (!ok(res)) return;
+      input.value = res.body.username || "";
+      pnShow(status, res.body.username ? "Saved. You are shown as " + res.body.username + "." : "Saved. You are shown as " + input.placeholder + ".", false);
+    });
   });
   var del = document.getElementById("delete-account");
   if (del) del.addEventListener("click", function () {

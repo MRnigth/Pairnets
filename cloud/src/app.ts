@@ -5,7 +5,7 @@ import { ASSETS } from "./assets";
 import { type Ctx, defaultDeps, type Deps } from "./context";
 import { sweep } from "./cron";
 import type { Env } from "./env";
-import { apiError, finalize, HttpError, htmlResponse, MESSAGES, redirect } from "./http";
+import { apiError, finalize, HttpError, htmlResponse, MESSAGES, redirect, SIGNED_IN_PATH } from "./http";
 import { ResendMailer } from "./mail";
 import { errorPage } from "./pages";
 import { hit, MINUTE } from "./ratelimit";
@@ -20,7 +20,9 @@ import {
   listNestsRoute,
   listSessionsRoute,
   meRoute,
+  patchMeRoute,
   patchNestRoute,
+  signedInRoute,
 } from "./routes/account";
 import { appApproveRoute, appLogoutRoute, appPageRoute, appPollRoute, appRequestRoute, appStartRoute } from "./routes/apps";
 import { claimRoute } from "./routes/claim";
@@ -82,7 +84,9 @@ const API_ROUTES: Route[] = [
   { method: "POST", pattern: /^\/v1\/login\/email$/, handler: loginEmailRoute },
   { method: "POST", pattern: /^\/v1\/login\/email\/confirm$/, handler: loginEmailConfirmRoute },
   { method: "GET", pattern: /^\/v1\/me$/, handler: meRoute },
+  { method: "PATCH", pattern: /^\/v1\/me$/, handler: patchMeRoute },
   { method: "DELETE", pattern: /^\/v1\/me$/, handler: deleteMeRoute },
+  { method: "GET", pattern: /^\/v1\/signed-in$/, handler: signedInRoute },
   { method: "GET", pattern: /^\/v1\/nests$/, handler: listNestsRoute },
   { method: "POST", pattern: /^\/v1\/nests\/claim-codes$/, handler: createClaimCodeRoute },
   { method: "DELETE", pattern: /^\/v1\/nests\/claim-codes$/, handler: cancelClaimCodesRoute },
@@ -250,7 +254,8 @@ export function createWorker(overrides: Partial<Deps> = {}): ExportedHandler<Env
           resp = errorFor(new HttpError(500, "server_error", MESSAGES.server_error), isApi);
         }
       }
-      return finalize(resp, isAsset && resp.status === 200, ctx.setCookies);
+      const website = url.pathname === SIGNED_IN_PATH ? { origin: req.headers.get("Origin") } : null;
+      return finalize(resp, isAsset && resp.status === 200, ctx.setCookies, website);
     },
 
     async scheduled(_controller: ScheduledController, env: Env): Promise<void> {

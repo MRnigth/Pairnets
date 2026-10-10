@@ -111,6 +111,14 @@ export function cleanLabel(input: unknown): string | null | "invalid" {
   return s;
 }
 
+/** Usernames are a display name only (never used to sign in), so they need not be unique. */
+export const MAX_USERNAME = 32;
+
+/** The part of an email address before the @: what an account without a username is called. */
+export function emailName(email: string): string {
+  return email.slice(0, email.lastIndexOf("@"));
+}
+
 /** A short free-text field from an app or nest (name, system, version): same cleaning as labels, max length given. */
 export function cleanText(input: unknown, max: number): string | null | "invalid" {
   if (input === undefined || input === null) return null;

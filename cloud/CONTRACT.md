@@ -694,7 +694,8 @@ key); the service needs all four.
   Cross-Origin-Opener-Policy: same-origin
   Permissions-Policy: camera=(), microphone=(), geolocation=()
   ```
-  and `Cache-Control: no-store` on everything except `/assets/*`. No CORS headers anywhere.
+  and `Cache-Control: no-store` on everything except `/assets/*`. No CORS headers anywhere, except on
+  `GET /v1/signed-in` (section 6.7).
 - No inline scripts or styles; page scripts are plain JavaScript files under `/assets/`.
 
 ### 6.2 Cookies
@@ -783,8 +784,10 @@ anything else becomes `/account`. Version 2 adds `/add` and `/add?code=` (same c
 
 | Method and path | Request | Success | Errors |
 |---|---|---|---|
-| `GET /v1/me` | — | 200 `{accountId, email, createdAt, identities:[{provider, email, createdAt, lastUsedAt}], session:{id, kind, authTime, amr, recentAuth}}` | 401 `unauthorized` |
+| `GET /v1/me` | — | 200 `{accountId, email, username, createdAt, identities:[{provider, email, createdAt, lastUsedAt}], session:{id, kind, authTime, amr, recentAuth}}` | 401 `unauthorized` |
+| `PATCH /v1/me` | `{username}`: 1 to 32 characters, or `null`/`""` to clear | 200 like `GET /v1/me`; audit `username_changed` | 400 `bad_request`, 401 `unauthorized` |
 | `DELETE /v1/me` | — | 204, cookie cleared, everything cascades | 401 `unauthorized`, 401 `reauth_required` |
+| `GET /v1/signed-in` | — (cookie only, never an app token) | 200 `{signedIn:false}` or `{signedIn:true, name}`: the username, else the part of the email before the @. pairnets.app shows it in its top bar. The only route with CORS: `Access-Control-Allow-Origin` (echoed) and `Access-Control-Allow-Credentials: true` for `https://pairnets.app` and `https://www.pairnets.app` only; `Vary: Origin` always. | — |
 | `GET /v1/nests` | — (session **or** app token) | 200 `{nests:[Nest]}` | 401 `unauthorized` |
 | `POST /v1/nests/claim-codes` | `{label?}` | 201 `{code:"PN-XXXX-XXXX-XXXX", expiresAt, command}` | 401 `reauth_required`, 409 `nest_limit`, 429 `too_many_codes` |
 | `DELETE /v1/nests/claim-codes` | — | 204 (cancels all unused codes) | 401 |
@@ -884,7 +887,9 @@ old `rate_counters`, and `audit` rows older than 90 days.
 ## 7. D1 schema (migration `cloud/migrations/0001_init.sql`)
 
 All times are Unix seconds. `*_hash` columns are 32-byte BLOBs: SHA-256 of the UTF-8 secret (whole string, prefix
-included). D1 enforces foreign keys, so deleting an account removes everything that belongs to it.
+included). D1 enforces foreign keys, so deleting an account removes everything that belongs to it. Later migrations
+add to it: `0002_relay.sql` (RELAY.md) and `0003_username.sql` (`accounts.username TEXT`; NULL = not set; a display
+name only, not unique, never used to sign in).
 
 ```sql
 -- Pairnets Cloud, migration 0001. Additive migrations only from here on.

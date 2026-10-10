@@ -4,7 +4,7 @@
 import { audit } from "../audit";
 import type { Ctx } from "../context";
 import { B32_UPPER, randomBase32, sha256 } from "../crypto";
-import { cleanLabel, iso, NEST_ID_RE, SESSION_ID_RE } from "../formats";
+import { cleanLabel, cleanText, emailName, iso, MAX_USERNAME, NEST_ID_RE, SESSION_ID_RE } from "../formats";
 import { HttpError, htmlResponse, json, noContent, redirect } from "../http";
 import { sendNotice } from "../mail";
 import { accountPage, type NestView } from "../pages";
@@ -19,6 +19,7 @@ import {
   requireBrowser,
   requireBrowserOrApp,
   requireRecent,
+  type Session,
 } from "../sessions";
 import { serversOf } from "./servers";
 
@@ -78,8 +79,20 @@ async function nestsOf(ctx: Ctx, accountId: string): Promise<NestRow[]> {
   return r.results;
 }
 
-async function accountRow(ctx: Ctx, accountId: string): Promise<{ id: string; email: string; created_at: number } | null> {
-  return ctx.env.DB.prepare("SELECT id, email, created_at FROM accounts WHERE id = ?1").bind(accountId).first();
+interface AccountRow {
+  id: string;
+  email: string;
+  username: string | null;
+  created_at: number;
+}
+
+async function accountRow(ctx: Ctx, accountId: string): Promise<AccountRow | null> {
+  return ctx.env.DB.prepare("SELECT id, email, username, created_at FROM accounts WHERE id = ?1").bind(accountId).first();
+}
+
+/** What the account is called: its username, or else the part of its email before the @. */
+function shownName(account: AccountRow): string {
+  return account.username ?? emailName(account.email);
 }
 
 function addressWarning(n: NestRow): string | null {
@@ -114,6 +127,7 @@ export async function accountPageRoute(ctx: Ctx): Promise<Response> {
     accountPage({
       accountId: account.id,
       email: account.email,
+      username: account.username,
       servers: servers.map((n) => ({ id: n.id, label: n.label, status: n.status === "active" ? "active" : "pending" })),
       nests: view,
       sessions: sessions.map((r) => ({
@@ -134,18 +148,44 @@ export async function meRoute(ctx: Ctx): Promise<Response> {
   const s = await requireBrowserOrApp(ctx);
   const account = await accountRow(ctx, s.accountId);
   if (!account) throw new HttpError(401, "unauthorized");
+  return json(200, await meJson(ctx, s, account));
+}
+
+// PATCH /v1/me {username}: set (1 to 32 characters) or clear (null or "") the username.
+export async function patchMeRoute(ctx: Ctx): Promise<Response> {
+  const s = await requireBrowser(ctx);
+  const b = jsonBody(ctx);
+  if (!("username" in b)) throw new HttpError(400, "bad_request");
+  const username = cleanText(b.username, MAX_USERNAME);
+  if (username === "invalid") throw new HttpError(400, "bad_request", `A username is at most ${MAX_USERNAME} characters.`);
+  await ctx.env.DB.prepare("UPDATE accounts SET username = ?1, updated_at = ?2 WHERE id = ?3").bind(username, ctx.now, s.accountId).run();
+  const account = await accountRow(ctx, s.accountId);
+  if (!account) throw new HttpError(401, "unauthorized");
+  await audit(ctx, "username_changed", s.accountId);
+  return json(200, await meJson(ctx, s, account));
+}
+
+// GET /v1/signed-in: lets pairnets.app show who is signed in (the only route with CORS, see http.ts).
+export async function signedInRoute(ctx: Ctx): Promise<Response> {
+  const s = await loadBrowserSession(ctx);
+  const account = s ? await accountRow(ctx, s.accountId) : null;
+  return json(200, account ? { signedIn: true, name: shownName(account) } : { signedIn: false });
+}
+
+async function meJson(ctx: Ctx, s: Session, account: AccountRow): Promise<Record<string, unknown>> {
   const ids = await ctx.env.DB.prepare(
     "SELECT provider, email, created_at, last_used_at FROM identities WHERE account_id = ?1 ORDER BY created_at, provider",
   )
     .bind(s.accountId)
     .all<{ provider: string; email: string; created_at: number; last_used_at: number }>();
-  return json(200, {
+  return {
     accountId: account.id,
     email: account.email,
+    username: account.username,
     createdAt: iso(account.created_at),
     identities: ids.results.map((i) => ({ provider: i.provider, email: i.email, createdAt: iso(i.created_at), lastUsedAt: iso(i.last_used_at) })),
     session: { id: s.id, kind: s.kind, authTime: iso(s.authTime), amr: s.amr, recentAuth: s.kind === "browser" && isRecent(ctx, s) },
-  });
+  };
 }
 
 // DELETE /v1/me

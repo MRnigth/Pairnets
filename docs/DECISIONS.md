@@ -539,3 +539,20 @@ yet"), the same in both apps.
     address.
   * The nest's own sign-in page links Privacy and Terms too.
 * **Not a lawyer's work**: the texts are standard and careful, but no lawyer has read them.
+
+## A username, and pairnets.app shows who is signed in (10 October 2026)
+
+* **What the owner asked for**: pairnets.app's top bar should not always say "Sign in". When you are signed in it
+  shows a round letter, your username and an "Account →" button (on a phone only the letter and the button).
+  The username is yours to set and change on the account page.
+* **The username is a display name**, not a login: 1 to 32 characters, not unique, never used to sign in. Empty means
+  not set, and then the part of the email before the @ is shown. Stored in `accounts.username` (migration 0003).
+  `PATCH /v1/me {username}` sets it; the audit log records that it changed, not the name.
+* **How the website knows**: the sign-in cookie belongs to sync.pairnets.app (`__Host-`, so no other site can read
+  it). pairnets.app's script asks `GET https://sync.pairnets.app/v1/signed-in` with the browser's credentials.
+  Both are the same site, so the SameSite=Lax cookie goes along, and the answer is only `{signedIn, name}`. It is the
+  one route with CORS, and only for `https://pairnets.app` and `https://www.pairnets.app`. Every change still needs
+  the account page's own Origin. The website sets no new cookie and stores nothing; its CSP allows `connect-src`
+  to sync.pairnets.app only. If the check fails (offline, blocked), the page keeps "Sign in".
+* **Not a hint cookie on `.pairnets.app`**: one would be simpler but goes stale (a session signed out from another
+  browser would still show as signed in), and it would be a new cookie for the cookie page.

@@ -1,7 +1,7 @@
 // Server-rendered HTML pages (no frameworks, no inline scripts or styles: CSP in http.ts).
 
 import { escapeHtml as e } from "./http";
-import { displayUserCode, iso } from "./formats";
+import { displayUserCode, emailName, iso, MAX_USERNAME } from "./formats";
 
 interface LayoutOptions {
   scripts?: string[];
@@ -92,6 +92,8 @@ export function emailLandingPage(): string {
 export interface AccountView {
   accountId: string;
   email: string;
+  /** The username the owner chose, or null (then the part of the email before the @ is shown). */
+  username: string | null;
   servers: ServerView[];
   nests: NestView[];
   sessions: SessionView[];
@@ -178,6 +180,11 @@ ${n.addressWarning ? `<p class="error">${e(n.addressWarning)}</p>` : ""}
     `<section class="card">
 <h1>Your Pairnets account</h1>
 <p>Signed in as <strong>${e(v.email)}</strong>. <button type="button" id="logout" class="link">Sign out</button></p>
+<form id="username-form">
+<label for="username">Username</label>
+<div class="input-row"><input id="username" name="username" maxlength="${MAX_USERNAME}" autocomplete="nickname" value="${e(v.username ?? "")}" placeholder="${e(emailName(v.email))}"><button type="submit">Save</button></div>
+<p class="muted">Shown on pairnets.app while you are signed in. Leave it empty to be shown as <strong>${e(emailName(v.email))}</strong>.</p>
+</form>
 <p id="status" class="status" role="status" hidden></p>
 </section>
 <section class="card">

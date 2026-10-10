@@ -170,3 +170,14 @@ td code { white-space: nowrap; }
   .setting { flex-direction: column; gap: 10px; }
   .cookie-notice { left: 16px; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); width: auto; max-width: none; }
 }
+
+/* Signed in (site.js): a round letter and the username before the Account button. */
+.account-chip { display: inline-flex; align-items: center; gap: 8px; min-width: 0; max-width: 220px; color: var(--text); font-weight: 500; padding: 4px 10px 4px 4px; border-radius: 999px; }
+.account-chip:hover { background: var(--subtle); text-decoration: none; }
+.account-letter { flex: none; width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: var(--banner); color: var(--accent); border: 1px solid var(--banner-border); font-weight: 700; font-size: 14px; }
+.account-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.account-chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (max-width: 760px) {
+  .account-chip { padding: 2px; }
+  .account-name { display: none; }
+}

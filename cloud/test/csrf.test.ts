@@ -6,6 +6,7 @@ const MUTATIONS: [string, string][] = [
   ["POST", "/v1/login/email"],
   ["POST", "/v1/login/email/confirm"],
   ["DELETE", "/v1/me"],
+  ["PATCH", "/v1/me"],
   ["POST", "/v1/nests/claim-codes"],
   ["DELETE", "/v1/nests/claim-codes"],
   ["PATCH", "/v1/nests/nst_testnest000000000000000001"],

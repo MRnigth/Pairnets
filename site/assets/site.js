@@ -58,3 +58,33 @@
   document.addEventListener("keydown", onKey);
   document.body.prepend(box); // first in the tab order, so keyboard users reach it at once
 })();
+
+// Signed in at sync.pairnets.app? Then the top bar shows your username (a round letter and the name) and an
+// "Account" button instead of "Sign in". sync.pairnets.app answers this one question for pairnets.app only; the
+// browser sends its sign-in cookie with it, and pairnets.app itself stores nothing. Any failure keeps "Sign in".
+(() => {
+  const button = document.getElementById("account-button");
+  if (!button || !window.fetch) return;
+  const ACCOUNT = "https://sync.pairnets.app/account";
+  fetch("https://sync.pairnets.app/v1/signed-in", { credentials: "include", cache: "no-store" })
+    .then((res) => (res.ok ? res.json() : null))
+    .then((me) => {
+      if (!me || me.signedIn !== true || typeof me.name !== "string" || me.name.length === 0) return;
+      const chip = document.createElement("a");
+      chip.className = "account-chip";
+      chip.href = ACCOUNT;
+      chip.title = `Signed in as ${me.name}`;
+      const letter = document.createElement("span");
+      letter.className = "account-letter";
+      letter.setAttribute("aria-hidden", "true");
+      letter.textContent = Array.from(me.name)[0].toUpperCase();
+      const name = document.createElement("span");
+      name.className = "account-name";
+      name.textContent = me.name;
+      chip.append(letter, name);
+      button.before(chip);
+      button.href = ACCOUNT;
+      button.textContent = "Account →";
+    })
+    .catch(() => { /* offline, blocked or not deployed yet: keep "Sign in" */ });
+})();

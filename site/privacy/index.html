@@ -21,7 +21,7 @@
       <a href="/help/">Help</a>
     </nav>
     <span class="grow"></span>
-    <a class="button accent" href="https://nest.pairnets.app">Sign in →</a>
+    <a class="button accent" id="account-button" href="https://nest.pairnets.app">Sign in →</a>
   </div>
 </header>
 <main>
@@ -36,7 +36,7 @@
 <h3>The short version</h3>
 <ul>
 <li>Your files are stored only on your nest, your own server. They pass through sync.pairnets.app on the way and are never kept there.</li>
-<li>Your Pairnets account stores your email address, how you sign in, and which computers and nests you have linked.</li>
+<li>Your Pairnets account stores your email address, your username if you set one, how you sign in, and which computers and nests you have linked.</li>
 <li>No ads, no tracking, no analytics. We never sell your data or share it for marketing.</li>
 <li>This website, pairnets.app, sets no cookies and collects nothing.</li>
 <li>You can see most of it on your account page, and delete all of it with one button.</li>
@@ -83,6 +83,7 @@
 <thead><tr><th>What</th><th>Why</th></tr></thead>
 <tbody>
 <tr><td>Your <strong>email address</strong></td><td>To know which account is yours, send you sign-in links and send important notices (for example, that your account was deleted).</td></tr>
+<tr><td>Your <strong>username</strong>, only if you set one</td><td>To show it on your account page, and in the top bar of pairnets.app while you are signed in. You can change or clear it on your account page at any time. Without one, the part of your email address before the @ is shown.</td></tr>
 <tr><td>Your <strong>Google account ID</strong>, only if you use “Continue with Google”</td><td>To recognise you the next time. We only ask Google for your email address and account ID: never your name, photo, contacts or files.</td></tr>
 <tr><td><strong>Signed-in browsers and apps</strong>: the browser type, the computer's name, when it signed in and when it was last used</td><td>So you can see them on your account page and sign them out.</td></tr>
 <tr><td><strong>Computers asking to join</strong>: the computer's name, its system (for example Windows) and its Pairnets version</td><td>So you can recognise the computer before you press Allow. When you allow it, your nest gets the same details.</td></tr>
@@ -122,6 +123,7 @@
 <h2 id="website">7. This website (pairnets.app)</h2>
 <ul>
 <li>Plain pages: no cookies, no analytics, no tracking, no scripts or fonts from other sites. The only thing it keeps is a note in your browser that you closed the cookie notice (<code>pn-cookie-notice</code>, never sent anywhere). Nothing else.</li>
+<li>To show whether you're signed in, each page asks sync.pairnets.app who is signed in in this browser. Your browser sends its sync.pairnets.app sign-in cookie with that question, and the answer is only your username (or the part of your email address before the @). pairnets.app never sees the cookie and keeps none of it.</li>
 <li>Cloudflare Pages delivers the site. Cloudflare handles your IP address and the pages you ask for, to deliver and protect it.</li>
 <li>Download links go to GitHub, where <a href="https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement">GitHub's privacy statement</a> applies.</li>
 </ul>

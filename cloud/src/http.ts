@@ -106,16 +106,28 @@ export function htmlResponse(status: number, body: string, headers: Record<strin
   return new Response(body, { status, headers: { "Content-Type": "text/html; charset=utf-8", ...headers } });
 }
 
+/** The one route the website (pairnets.app) may read, with the sign-in cookie: it shows who is signed in. */
+export const SIGNED_IN_PATH = "/v1/signed-in";
+export const WEBSITE_ORIGINS: ReadonlySet<string> = new Set(["https://pairnets.app", "https://www.pairnets.app"]);
+
 /**
  * Adds the security headers (and Cache-Control) to a response and appends the Set-Cookie lines collected while
- * handling the request. CORS headers are never sent.
+ * handling the request. CORS headers are only sent for SIGNED_IN_PATH (`website` is then the request's Origin), and
+ * only to the website's own origins.
  */
-export function finalize(resp: Response, isAsset: boolean, setCookies: string[]): Response {
+export function finalize(resp: Response, isAsset: boolean, setCookies: string[], website: { origin: string | null } | null = null): Response {
   const headers = new Headers(resp.headers);
   for (const [k, v] of Object.entries(SECURITY_HEADERS)) headers.set(k, v);
   if (!isAsset) headers.set("Cache-Control", "no-store");
   for (const name of [...headers.keys()]) {
     if (name.toLowerCase().startsWith("access-control-")) headers.delete(name);
+  }
+  if (website) {
+    headers.set("Vary", "Origin");
+    if (website.origin !== null && WEBSITE_ORIGINS.has(website.origin)) {
+      headers.set("Access-Control-Allow-Origin", website.origin);
+      headers.set("Access-Control-Allow-Credentials", "true");
+    }
   }
   for (const c of setCookies) headers.append("Set-Cookie", c);
   return new Response(resp.body, { status: resp.status, statusText: resp.statusText, headers });

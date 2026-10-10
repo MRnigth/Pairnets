@@ -136,6 +136,29 @@ public sealed class SiteTests
     }
 
     [Fact]
+    public void EveryPageHasTheSignInButtonThatShowsWhoIsSignedIn()
+    {
+        // site.js turns this button into "Account →" (and puts the username before it) when you are signed in.
+        foreach (var page in Pages())
+        {
+            var header = Regex.Match(File.ReadAllText(page), "<header class=\"top\">.*?</header>", RegexOptions.Singleline);
+            Assert.True(header.Success, $"{Path.GetRelativePath(Root, page)} has no top bar");
+            Assert.Contains("<a class=\"button accent\" id=\"account-button\" href=\"https://nest.pairnets.app\">Sign in →</a>", header.Value);
+        }
+        var script = File.ReadAllText(Path.Combine(Root, "assets", "site.js"));
+        Assert.Contains("fetch(\"https://sync.pairnets.app/v1/signed-in\", { credentials: \"include\"", script);
+        Assert.DoesNotContain("innerHTML", script); // the username is only ever set as text
+    }
+
+    [Fact]
+    public void ThePagesMayOnlyTalkToTheAccountService()
+    {
+        var csp = File.ReadAllLines(Path.Combine(Root, "_headers")).Single(l => l.Contains("Content-Security-Policy:", StringComparison.Ordinal));
+        Assert.Contains("connect-src https://sync.pairnets.app;", csp);
+        Assert.Single(Regex.Matches(csp, "connect-src"));
+    }
+
+    [Fact]
     public void TheSignInLinkGoesToTheNest()
     {
         Assert.Contains("href=\"https://nest.pairnets.app\"", File.ReadAllText(Path.Combine(Root, "index.html")));

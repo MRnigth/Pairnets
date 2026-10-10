@@ -26,7 +26,7 @@ do not work yet. Released servers and apps do not talk to this service.
 | `CONTRACT-NOTES-worker.md` | Where the Worker had to fill a gap in either document, and the few deliberate differences. |
 | `src/` | `pairnets-sync` (TypeScript, no runtime dependencies, WebCrypto only). `app.ts` routes; `routes/` holds the endpoints; `relay.ts` is the relay; `router.ts` deploys the router's links; `nestadmin.ts` signs the calls to servers; `cloudflare.ts` is the Cloudflare API client. |
 | `router/` | `pairnets-router`: its code (`src/index.ts`), its own `wrangler.toml` and `tsconfig.json`. |
-| `migrations/` | D1 migrations. `0001_init.sql` is exactly the SQL of `CONTRACT.md` section 7 (a test checks this); `0002_relay.sql` adds the relay columns, `server_links` and `router_state`. |
+| `migrations/` | D1 migrations. `0001_init.sql` is exactly the SQL of `CONTRACT.md` section 7 (a test checks this); `0002_relay.sql` adds the relay columns, `server_links` and `router_state`; `0003_username.sql` adds `accounts.username`. |
 | `test/` | vitest tests in the Workers runtime (Miniflare, local D1). `test/fake-relay.ts` is a fake Cloudflare API, the real router code with fake VPC links, and fake servers that check the signed calls with their own code. `test/vectors/assertion-v1.json` holds the golden vectors that the C# tests also read. |
 | `scripts/keygen.mjs` | `npm run keygen`: prints a new ES256 signing key pair (nothing is written to disk). |
 | `scripts/setup-secrets.mjs` | Sets every secret and id in Cloudflare's secret store: makes the random ones, asks you to paste the rest (hidden). |
