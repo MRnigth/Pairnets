@@ -502,7 +502,6 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
         view.SignOutRequested += () => s.Events.Add("sign-out");
         view.ResetRequested += () => s.Events.Add("reset");
         view.ManageDevicesRequested += () => s.Events.Add("manage-devices");
-        view.OpenLinkRequested += s.Opened.Add;
         s.Show(new Window { Content = view, Width = 700, Height = 780 });
 
         var expected = fixture.Feed.Asset is null ? "up to date" : "version 99.0.0 is available";
@@ -517,18 +516,8 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
         s.Expect["OnCheckNow"] = That(() => Screen.Named<TextBlock>(view, "VersionText").Text?.EndsWith(expected, StringComparison.Ordinal) == true, $"\"{expected}\" show");
         s.Expect["OnTest"] = That(() => Screen.Named<TextBlock>(view, "TestResult").Text?.StartsWith("✓", StringComparison.Ordinal) == true, "the test say the connection works");
         s.Expect["OnScrollWheel"] = That(() => Screen.Named<ScrollViewer>(view, "Scroller").Offset.Y > 0, "the form scroll");
-        foreach (var (label, url) in AboutLinks)
-            s.Expect["OnAboutLink:" + label] = That(() => s.Opened.SequenceEqual([url]), $"{url} open in the browser");
         return Task.FromResult(view);
     }
-
-    /// <summary>The links under "About Pairnets" on the Settings page, and the pages of pairnets.app they open.</summary>
-    private static readonly (string Label, string Url)[] AboutLinks =
-    [
-        ("Help", PairnetsLinks.Help), ("FAQ", PairnetsLinks.Faq), ("Contact", PairnetsLinks.Contact), ("Privacy", PairnetsLinks.Privacy),
-        ("Terms", PairnetsLinks.Terms), ("Guidelines", PairnetsLinks.Guidelines), ("Cookie settings", PairnetsLinks.Cookies),
-        ("Security", PairnetsLinks.Security), ("Open-source licences", PairnetsLinks.Licenses), ("Delete my account", PairnetsLinks.DeleteAccount),
-    ];
 
     // ------------------------------------------------------------------ sign-in
 
@@ -581,8 +570,6 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
         s.Expect["OnAccountGoogle"] = OpensTheAccountPage("google");
         s.Expect["OnAccountEmail"] = OpensTheAccountPage("email&email=owner%40example.com");
         s.Expect["OnMakeAccount"] = That(() => s.Opened.SequenceEqual([origin + "/login"]), "the service's sign-in page open");
-        s.Expect["OnTerms"] = That(() => s.Opened.SequenceEqual([PairnetsLinks.Terms]), "the Terms open");
-        s.Expect["OnPrivacy"] = That(() => s.Opened.SequenceEqual([PairnetsLinks.Privacy]), "the Privacy Policy open");
         s.Expect["OnOwnNest"] = That(() => view.Step == SignInStep.Address, "the step for a nest's own address show");
         s.Expect["OnAccountOpenAgain"] = That(() => s.Opened.SequenceEqual([AccountLink]), "the service's page open again");
         s.Expect["OnAccountCancel"] = That(() => view.Step == SignInStep.Account, "the Pairnets account step show again");

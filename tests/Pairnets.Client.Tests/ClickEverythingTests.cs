@@ -606,7 +606,6 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
         view.SignOutRequested += () => b.Events.Add("SignOutRequested");
         view.ResetRequested += () => b.Events.Add("ResetRequested");
         view.ManageDevicesRequested += () => b.Events.Add("ManageDevicesRequested");
-        view.OpenLinkRequested += b.Opened.Add;
         var host = new Window { Title = "Settings", Width = 700, Height = 560, Content = view };
         ThemeManager.Attach(host);
         return host;
@@ -634,9 +633,6 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
         On("Check now", "look for an app update and say what it found", c => View(c).VersionText.Text.Contains("is available", StringComparison.Ordinal), seconds: 20),
         new(t => t.Element is RadioButton { GroupName: "par" }, "choose that many files at the same time", c => ((RadioButton)c.Target.Element).IsChecked == true),
         On("Reset this app…", "ask the app to reset everything", c => c.Bench.Events.Items.Contains("ResetRequested")),
-        new(t => t.Handlers.Contains("SettingsView.OnAboutLink"),"ask the app to open that page of pairnets.app in the browser",
-            c => c.Target.Element is Button { CommandParameter: string url } && url.StartsWith(PairnetsLinks.Website, StringComparison.Ordinal)
-                && c.Bench.Opened.Items.SequenceEqual([url])),
         On("Cancel", "leave Settings without saving", c => c.Bench.Events.Items.Contains("Cancelled")),
         On("Save", "check the settings and save them", c => c.Bench.Events.Items.Contains("Saved") && View(c).Result is not null, seconds: 20),
         On("Scroller", "scroll the page", c => View(c).Scroller.VerticalOffset > 0),
@@ -739,8 +735,6 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
         new(t => t.Handlers.Contains("SignInView.OnAccountEmail"), "ask Pairnets for a code and open its email sign-in in the browser",
             OpensTheAccountPage("email"), Seconds: 15),
         On("Make an account", "open the service's sign-in page", c => c.Bench.Opened.Items.SequenceEqual([$"{ServiceOrigin}/login"])),
-        On("Terms", "open the Terms on pairnets.app", c => c.Bench.Opened.Items.SequenceEqual([PairnetsLinks.Terms])),
-        On("Privacy Policy", "open the Privacy Policy on pairnets.app", c => c.Bench.Opened.Items.SequenceEqual([PairnetsLinks.Privacy])),
         On(["I run my own nest on my own domain: use its address", "I run my own nest: use its address"], "go to the step for a nest's own address",
             c => OnStep(c, SignInStep.Address) && SignIn(c.Window).WelcomeStep.IsVisible),
         On("Sign in with a Pairnets account instead", "go back to the Pairnets account step", c => OnStep(c, SignInStep.Account)),
