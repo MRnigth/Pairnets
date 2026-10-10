@@ -539,3 +539,27 @@ yet"), the same in both apps.
     address.
   * The nest's own sign-in page links Privacy and Terms too.
 * **Not a lawyer's work**: the texts are standard and careful, but no lawyer has read them.
+
+## The "Sign in an app?" page (10 October 2026)
+
+The page where you press Allow so a computer can sign in (sync.pairnets.app/app) now has the apps' "Quiet" look. The
+owner picked option A from three designed options.
+* **One calm column, and the code is the question**: "Does Pairnets on PC-1 show this code?", with the code in big
+  letters. System, app version and times are folded under "Details". The buttons say "Yes, allow PC-1" and "No, this
+  isn't me".
+* **Every answer has a screen of its own** (signed in, waiting for your nest, not let in, code ran out) instead of a
+  line under greyed-out buttons. A reload draws the answered screen and says which answer was given and when.
+* **Errors can be retried**: the error is said in plain words and both buttons work again.
+* **The look is scoped to this page** (`app.css` on `<body class="q-page">`); the other pages keep theirs. Its
+  colours are the apps' Quiet palette and follow the system's light or dark setting.
+* **Instrument Sans comes from the Worker itself**: Latin-only WOFF2 files (about 15 KB each, regular, medium and
+  semibold) under `/assets/fonts/`, with their copyright and licence kept inside. That needed one addition to the
+  CSP, `font-src 'self'`: fonts from this site only, nothing from elsewhere.
+* **Bringing the app to the front**: after Allow, the page opens `pairnets://signed-in` by itself only when the
+  browser looks like it runs on the computer that asked: not a phone or tablet, and the same system (Windows, macOS
+  or Linux, as the app reports). The link carries nothing, so a wrong guess exposes nothing; it only spares people an
+  error on a phone. Everyone else gets an "Open Pairnets" button. A true same-computer check would mean storing
+  something about the asking computer's address, so it was left out.
+* **The cookie notice** sits in the page's flow under the content on this page, so it can never cover the buttons.
+* Nothing about the security changed: the session requirement, the Origin check, the code check and the rate limits
+  are the same.
