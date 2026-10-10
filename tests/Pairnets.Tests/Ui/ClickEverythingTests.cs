@@ -134,6 +134,9 @@ public sealed class Stage : IAsyncDisposable
         return window;
     }
 
+    /// <summary>Presses go to <paramref name="window"/> (a question the stage's window opened).</summary>
+    public void PressIn(Window window) => Window = window;
+
     public async ValueTask DisposeAsync()
     {
         _tracking.Dispose();
@@ -227,6 +230,7 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
     private void Pass(ClickReport report)
     {
         output.WriteLine($"{report.Presses} presses, {report.Pressed.Count} handlers: {string.Join(", ", report.Pressed.Order())}");
+        Assert.True(report.Presses > 0, "Nothing was pressed: the windows did not show any button.");
         Assert.True(report.Problems.Count == 0, string.Join(Environment.NewLine, report.Problems));
     }
 
@@ -459,7 +463,7 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
 
     // ------------------------------------------------------------------ settings
 
-    private async Task<SettingsView> SettingsStage(Stage s, bool ownKey)
+    private Task<SettingsView> SettingsStage(Stage s, bool ownKey)
     {
         var secrets = new MemorySecrets();
         var key = ownKey ? fixture.Nest.MintKey("MACBOOK-" + Guid.NewGuid().ToString("N")[..6]) : null;
@@ -485,7 +489,6 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
         view.ResetRequested += () => s.Events.Add("reset");
         view.ManageDevicesRequested += () => s.Events.Add("manage-devices");
         s.Show(new Window { Content = view, Width = 700, Height = 780 });
-        await Task.CompletedTask;
 
         var expected = fixture.Feed.Asset is null ? "up to date" : "version 99.0.0 is available";
         s.Expect["OnManageDevices"] = Raised(s, "manage-devices");
@@ -499,7 +502,7 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
         s.Expect["OnCheckNow"] = That(() => Screen.Named<TextBlock>(view, "VersionText").Text?.EndsWith(expected, StringComparison.Ordinal) == true, $"\"{expected}\" show");
         s.Expect["OnTest"] = That(() => Screen.Named<TextBlock>(view, "TestResult").Text?.StartsWith("✓", StringComparison.Ordinal) == true, "the test say the connection works");
         s.Expect["OnScrollWheel"] = That(() => Screen.Named<ScrollViewer>(view, "Scroller").Offset.Y > 0, "the form scroll");
-        return view;
+        return Task.FromResult(view);
     }
 
     // ------------------------------------------------------------------ sign-in
@@ -585,6 +588,7 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
         var owner = s.Show(new Window { Title = "Owner", Width = 600, Height = 400 });
         var answer = confirm ? Dialogs.ConfirmAsync(owner, "Pairnets – a question", "Continue?", "Continue", "Cancel") : Dialogs.InfoAsync(owner, "Pairnets", "Done.").ContinueWith(_ => true, TaskScheduler.Default);
         var dialog = await Wait.For(() => s.Windows.FirstOrDefault(w => w != owner && w.IsVisible), "the question to show");
+        s.PressIn(dialog);
         s.Expect[":Continue"] = That(() => answer.IsCompleted && answer.Result && !dialog.IsVisible, "the question close with yes");
         s.Expect[":Cancel"] = That(() => answer.IsCompleted && !answer.Result && !dialog.IsVisible, "the question close with no");
         s.Expect[":OK"] = That(() => answer.IsCompleted && !dialog.IsVisible, "the message close");
@@ -843,8 +847,8 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
         var found = new List<Pressable>();
         foreach (var control in Screen.All<Control>(window))
         {
-            if (control.TemplatedParent is not null || !control.IsEffectivelyVisible || !control.IsEffectivelyEnabled)
-                continue; // parts of a built-in control (scroll bars, spinners) are not the app's buttons
+            if (control.TemplatedParent is not null || !control.IsAttachedToVisualTree() || !control.IsEffectivelyVisible || !control.IsEffectivelyEnabled)
+                continue; // parts of a built-in control (scroll bars, spinners) are not the app's buttons; nor is what is not on screen
             if (WhatAPressDoes(control) is not var (k, handlers))
                 continue;
             var label = control is ListBoxItem || k == Kind.RightClick ? "a row" : Screen.Describe(control);
@@ -890,7 +894,7 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
     /// <summary>A shown button or menu item with no handler, command or menu behind it.</summary>
     private static void DeadButtons(Stage stage, ClickReport report)
     {
-        foreach (var control in Screen.All<Control>(stage.Window).Where(c => c is Button or MenuItem && c.TemplatedParent is null && c.IsEffectivelyVisible))
+        foreach (var control in Screen.All<Control>(stage.Window).Where(c => c is Button or MenuItem && c.TemplatedParent is null && c.IsVisible))
         {
             if (control is not ToggleButton && !Screen.DoesSomething(control))
                 report.Problems.Add($"'{Screen.Describe(control)}' on {stage.Where} is a dead button: nothing happens when it is pressed.");

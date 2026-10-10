@@ -59,7 +59,7 @@ public static class Person
 
     /// <summary>Opens or closes an expander by clicking its header.</summary>
     public static void Expand(Expander expander) =>
-        Click(expander.GetVisualDescendants().OfType<Avalonia.Controls.Primitives.ToggleButton>().FirstOrDefault()
+        Click(expander.GetVisualDescendants().OfType<ToggleButton>().FirstOrDefault()
             ?? throw new CannotPressException($"'{Screen.Describe(expander)}' has no header to click."));
 
     /// <summary>Turns the mouse wheel over a control (negative notches scroll down).</summary>
@@ -172,13 +172,17 @@ public static class Screen
         _ => null,
     };
 
-    /// <summary>Every control of type <typeparamref name="T"/> on the screen of <paramref name="root"/>, open menus included.</summary>
-    public static IEnumerable<T> All<T>(Visual root) where T : Visual => root.GetSelfAndVisualDescendants().OfType<T>();
+    /// <summary>
+    /// Every control of type <typeparamref name="T"/> in <paramref name="root"/>: its visual tree (open menus included)
+    /// and its logical tree (content that is not shown yet, such as a closed expander's).
+    /// </summary>
+    public static IEnumerable<T> All<T>(Visual root) where T : Visual =>
+        root.GetSelfAndVisualDescendants().Concat(root.GetSelfAndLogicalDescendants().OfType<Visual>()).Distinct().OfType<T>();
 
     /// <summary>The one shown control of type <typeparamref name="T"/> that says <paramref name="label"/>.</summary>
     public static T Find<T>(Visual root, string label) where T : Control
     {
-        var found = All<T>(root).Where(c => c.IsEffectivelyVisible && Describe(c) == label).ToList();
+        var found = All<T>(root).Where(c => c.IsAttachedToVisualTree() && c.IsEffectivelyVisible && Describe(c) == label).ToList();
         return found.Count switch
         {
             1 => found[0],
