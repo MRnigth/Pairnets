@@ -4,7 +4,9 @@ using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using System.Web;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http.Connections;
+using Microsoft.Extensions.DependencyInjection;
 using Pairnets.Core;
 using Pairnets.Core.Hashing;
 using Pairnets.Server.Storage;
@@ -43,6 +45,7 @@ public sealed partial class ApiTour
             await RenamingAsync();
             await RemovingAsync();
             await SharedTokenAsync();
+            await LinkedNestAsync();
             await MaintenanceCommandsAsync();
             await EmailLinksAsync();
             await GoogleAsync();
@@ -69,6 +72,7 @@ public sealed partial class ApiTour
             (hello.Product, hello.ApiVersion, hello.PublicUrl, hello.DeviceKeys, hello.SignIn));
         Assert.False(string.IsNullOrEmpty(hello.ServerVersion));
         await Refused(HttpMethod.Get, "api/info");
+
     }
 
     // ------------------------------------------------------------------ the website, the setup link, the password
@@ -472,6 +476,59 @@ public sealed partial class ApiTour
     }
 
     // ------------------------------------------------------------------ the maintenance commands
+
+    // ------------------------------------------------------------------ a nest linked to a Pairnets account
+
+    /// <summary>
+    /// The Pairnets service's signed calls (Web/RelayEndpoints.cs) only answer on a nest linked to an account, and such a
+    /// nest has no website, so they cannot run on the tour's own nest. That nest must turn every one of them away; then
+    /// they run for real on a second nest, linked, inside the test process whatever the target (what it answered counts
+    /// as the server's own account). RelayModeTests covers every way a call can be wrongly signed.
+    /// </summary>
+    private async Task LinkedNestAsync()
+    {
+        Step("A nest that is not linked to a Pairnets account turns away the service's calls");
+        var anon = Api();
+        var shared = Api(_target.Token);
+        foreach (var (method, url, body) in new (HttpMethod, string, object?)[]
+                 {
+                     (HttpMethod.Get, "api/relay/status", null),
+                     (HttpMethod.Get, "api/relay/devices", null),
+                     (HttpMethod.Post, "api/relay/devices", new { name = "LAPTOP", system = "Windows" }),
+                     (HttpMethod.Delete, "api/relay/devices/dev-1", null),
+                 })
+        {
+            foreach (var who in new[] { anon, shared })
+            {
+                var refused = await Call(who, method, url, body, HttpStatusCode.Unauthorized);
+                Assert.Equal("bad_signature", (await refused.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("error").GetString());
+            }
+        }
+
+        Step("A nest linked to a Pairnets account: the service's signed calls add, list and remove a computer");
+        await using var linked = await TestServer.StartAsync(config: RelayFixtures.Config(), configureBuilder: builder =>
+            builder.Services.AddSingleton<IStartupFilter>(new AnsweredRoutesFilter(Record.ServerSaw)));
+        using var service = new HttpClient(new RecordingHandler(Record, new SocketsHttpHandler { UseProxy = false })) { BaseAddress = linked.Url };
+        async Task<JsonElement> Signed(HttpMethod method, string path, string? json = null)
+        {
+            using var response = await service.SendAsync(RelayFixtures.Signed(method, path, json));
+            var text = await response.Content.ReadAsStringAsync();
+            Assert.True(response.StatusCode == HttpStatusCode.OK, $"{method} {path} answered {(int)response.StatusCode}. {Shorten(text)}");
+            using var doc = JsonDocument.Parse(text);
+            return doc.RootElement.Clone();
+        }
+
+        Assert.Equal(0, (await Signed(HttpMethod.Get, "/api/relay/status")).GetProperty("devices").GetInt32());
+        var added = await Signed(HttpMethod.Post, "/api/relay/devices", """{"name":"LAPTOP","system":"Windows 11","approvedBy":"o***@example.com"}""");
+        var id = added.GetProperty("id").GetString()!;
+        Assert.Equal("LAPTOP", added.GetProperty("name").GetString());
+        Assert.StartsWith(AuthStore.KeyPrefix, added.GetProperty("key").GetString());
+        Assert.Equal(1, (await Signed(HttpMethod.Get, "/api/relay/status")).GetProperty("devices").GetInt32());
+        var listed = (await Signed(HttpMethod.Get, "/api/relay/devices")).GetProperty("devices").EnumerateArray().Single();
+        Assert.Equal((id, "LAPTOP", "Windows 11"), (listed.GetProperty("id").GetString(), listed.GetProperty("name").GetString(), listed.GetProperty("system").GetString()));
+        Assert.True((await Signed(HttpMethod.Delete, $"/api/relay/devices/{Uri.EscapeDataString(id)}")).GetProperty("removed").GetBoolean());
+        Assert.Equal(0, (await Signed(HttpMethod.Get, "/api/relay/status")).GetProperty("devices").GetInt32());
+    }
 
     private async Task MaintenanceCommandsAsync()
     {

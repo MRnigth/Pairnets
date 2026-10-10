@@ -33,7 +33,8 @@ public sealed class DesktopControllerTests
         var signIn = await app.WindowAsync("Pairnets – sign in");
         Assert.Null(app.App.Window); // nothing but the sign-in before signing in
 
-        // Which nest: its address, then "Sign in with your browser".
+        // The window opens on a Pairnets account; this nest has its own address, then "Sign in with your browser".
+        Person.Click(Screen.Named<Button>(signIn, "OwnNestButton"));
         Person.Type(Screen.Named<TextBox>(signIn, "AddressBox"), app.Nest.Url.ToString());
         var browser = Screen.Named<Button>(signIn, "BrowserButton");
         await Wait.Until(() => browser.IsEffectivelyEnabled, "the nest to be found");
@@ -81,6 +82,7 @@ public sealed class DesktopControllerTests
         await using var app = await AppUnderTest.StartAsync(signedIn: false, nestConfig: AppUnderTest.GoogleAndEmail);
         app.OwnerUsesGoogleAndEmail();
         var signIn = await app.WindowAsync("Pairnets – sign in");
+        Person.Click(Screen.Named<Button>(signIn, "OwnNestButton")); // the window opens on a Pairnets account
         Person.Type(Screen.Named<TextBox>(signIn, "AddressBox"), app.Nest.Url.ToString());
         var google = Screen.Named<Button>(signIn, "GoogleButton");
         await Wait.Until(() => google.IsEffectivelyVisible && google.IsEffectivelyEnabled, "\"Continue with Google\" to show");

@@ -34,6 +34,9 @@ public sealed class ClickEverythingFixture : IAsyncLifetime
     /// <summary>A release feed with a newer version on it ("Check now").</summary>
     public FakeReleaseFeed Feed { get; private set; } = null!;
 
+    /// <summary>A stand-in for sync.pairnets.app: an account sign-in started here keeps waiting for Allow.</summary>
+    public FakeSyncService Service { get; private set; } = null!;
+
     /// <summary>The synced folder the sample settings use (kept empty).</summary>
     public string Folder => _dir.Combine("Work");
 
@@ -61,6 +64,8 @@ public sealed class ClickEverythingFixture : IAsyncLifetime
         auth.SetOwnerEmail("owner@example.com");
         auth.SetGoogleAccount("e2e-google-user", "owner@example.com");
         Feed = await FakeReleaseFeed.StartAsync("99.0.0");
+        Service = await FakeSyncService.StartAsync(Nest);
+        Service.AfterScript = "pending";
     }
 
     public async Task DisposeAsync()
@@ -68,6 +73,7 @@ public sealed class ClickEverythingFixture : IAsyncLifetime
         await Nest.DisposeAsync();
         await Website.DisposeAsync();
         await Feed.DisposeAsync();
+        await Service.DisposeAsync();
         _dir.Dispose();
     }
 }
@@ -301,6 +307,14 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
         ],
         ["sign-in"] =
         [
+            new("the sign-in window (a Pairnets account first, an email typed)", s => AccountStage(s, view =>
+                Screen.Named<TextBox>(view, "AccountEmailBox").Text = "owner@example.com")),
+            new("the sign-in window (finish in your browser)", s => AccountStage(s, view =>
+                view.ShowAccount(new AccountSignInState(PairingStage.Waiting, FakeSyncService.UserCode, AccountLink, DateTimeOffset.UtcNow.AddMinutes(9)),
+                    openBrowser: false))),
+            new("the sign-in window (signed in, no nest yet)", s => AccountStage(s, view =>
+                view.ShowAccount(new AccountSignInState(PairingStage.Waiting, FakeSyncService.UserCode, AccountLink, DateTimeOffset.UtcNow.AddMinutes(29),
+                    NoNest: true, AccountEmail: FakeSyncService.Email), openBrowser: false))),
             new("the sign-in window (nest found)", s => SignInStage(s)),
             new("the sign-in window (email typed)", s => SignInStage(s, view =>
             {
@@ -488,6 +502,7 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
         view.SignOutRequested += () => s.Events.Add("sign-out");
         view.ResetRequested += () => s.Events.Add("reset");
         view.ManageDevicesRequested += () => s.Events.Add("manage-devices");
+        view.OpenLinkRequested += s.Opened.Add;
         s.Show(new Window { Content = view, Width = 700, Height = 780 });
 
         var expected = fixture.Feed.Asset is null ? "up to date" : "version 99.0.0 is available";
@@ -502,8 +517,18 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
         s.Expect["OnCheckNow"] = That(() => Screen.Named<TextBlock>(view, "VersionText").Text?.EndsWith(expected, StringComparison.Ordinal) == true, $"\"{expected}\" show");
         s.Expect["OnTest"] = That(() => Screen.Named<TextBlock>(view, "TestResult").Text?.StartsWith("✓", StringComparison.Ordinal) == true, "the test say the connection works");
         s.Expect["OnScrollWheel"] = That(() => Screen.Named<ScrollViewer>(view, "Scroller").Offset.Y > 0, "the form scroll");
+        foreach (var (label, url) in AboutLinks)
+            s.Expect["OnAboutLink:" + label] = That(() => s.Opened.SequenceEqual([url]), $"{url} open in the browser");
         return Task.FromResult(view);
     }
+
+    /// <summary>The links under "About Pairnets" on the Settings page, and the pages of pairnets.app they open.</summary>
+    private static readonly (string Label, string Url)[] AboutLinks =
+    [
+        ("Help", PairnetsLinks.Help), ("FAQ", PairnetsLinks.Faq), ("Contact", PairnetsLinks.Contact), ("Privacy", PairnetsLinks.Privacy),
+        ("Terms", PairnetsLinks.Terms), ("Guidelines", PairnetsLinks.Guidelines), ("Cookie settings", PairnetsLinks.Cookies),
+        ("Security", PairnetsLinks.Security), ("Open-source licences", PairnetsLinks.Licenses), ("Delete my account", PairnetsLinks.DeleteAccount),
+    ];
 
     // ------------------------------------------------------------------ sign-in
 
@@ -534,11 +559,39 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
         s.Expect["OnCopy"] = All(That(() => Screen.Named<Button>(view, "CopyButton").Content as string == "Copied", "the button say \"Copied\""),
             Clipboard(window, () => s.Opened[0]));
         s.Expect["OnBack"] = That(() => Screen.Named<StackPanel>(view, "WelcomeStep").IsEffectivelyVisible, "the first step show again");
+        s.Expect["OnBackToAccount"] = That(() => view.Step == SignInStep.Account, "the Pairnets account step show");
         s.Expect["OnRetry"] = That(() => Waiting() && Screen.Named<TextBlock>(view, "CodeText").Text != shownCode, "a new code show");
         s.Expect["OnBrowse"] = That(() => view.Folder == fixture.PickedFolder, "the picked folder fill the field");
         s.Expect["OnStart"] = That(() => window.Result is { } r && r.Folder == fixture.Folder && r.FirstRunCompleted && !window.IsVisible,
             "the window close with this computer signed in");
     }
+
+    /// <summary>The sign-in window on its first step, a Pairnets account (the stand-in service), arranged by <paramref name="arrange"/>.</summary>
+    private Task AccountStage(Stage s, Action<SignInView>? arrange = null)
+    {
+        var window = s.Show(new SettingsWindow(new ClientSettings { DeviceName = "MACBOOK" }, new MemorySecrets(), autoStart: false, s.Opened.Add));
+        var view = window.SignIn;
+        view.Service = fixture.Service.Url;
+        arrange?.Invoke(view);
+        Dispatcher.UIThread.RunJobs();
+        var origin = fixture.Service.Url.GetLeftPart(UriPartial.Authority);
+        Check OpensTheAccountPage(string method) => That(() => view.Step == SignInStep.AccountWait && s.Opened.Count == 1
+            && s.Opened[0].Contains($"/app?code={FakeSyncService.UserCode}&method={method}", StringComparison.Ordinal),
+            $"\"Finish in your browser\" show, with the service's page open ({method})");
+        s.Expect["OnAccountGoogle"] = OpensTheAccountPage("google");
+        s.Expect["OnAccountEmail"] = OpensTheAccountPage("email&email=owner%40example.com");
+        s.Expect["OnMakeAccount"] = That(() => s.Opened.SequenceEqual([origin + "/login"]), "the service's sign-in page open");
+        s.Expect["OnTerms"] = That(() => s.Opened.SequenceEqual([PairnetsLinks.Terms]), "the Terms open");
+        s.Expect["OnPrivacy"] = That(() => s.Opened.SequenceEqual([PairnetsLinks.Privacy]), "the Privacy Policy open");
+        s.Expect["OnOwnNest"] = That(() => view.Step == SignInStep.Address, "the step for a nest's own address show");
+        s.Expect["OnAccountOpenAgain"] = That(() => s.Opened.SequenceEqual([AccountLink]), "the service's page open again");
+        s.Expect["OnAccountCancel"] = That(() => view.Step == SignInStep.Account, "the Pairnets account step show again");
+        s.Expect["OnShowMeHow"] = That(() => s.Opened.SequenceEqual([origin + "/account"]), "the account page open");
+        return Task.CompletedTask;
+    }
+
+    /// <summary>The page an account sign-in opens: the service's approval page for this computer's code.</summary>
+    private string AccountLink => $"{fixture.Service.Url.GetLeftPart(UriPartial.Authority)}/app?code={FakeSyncService.UserCode}";
 
     /// <summary>"Sign in with your browser": waits until the code shows.</summary>
     private static async Task StartSignInAsync(Stage s, SignInView view)

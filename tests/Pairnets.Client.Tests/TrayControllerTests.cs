@@ -29,6 +29,9 @@ public sealed class TrayControllerTests
 
     private static AuthStore Auth(TestServer nest) => nest.Services.GetRequiredService<AuthStore>();
 
+    /// <summary>The sign-in window's way from its first step (a Pairnets account) to a nest's own address.</summary>
+    private const string OwnNest = "I run my own nest on my own domain: use its address";
+
     [Fact]
     public async Task FirstRun_SignInWithBrowser_ApproveOnNest_PickFolder_Start()
     {
@@ -41,6 +44,8 @@ public sealed class TrayControllerTests
         // The browser comes back through a pairnets:// link, which pokes the running app: it already listens.
         Assert.True(AppActivation.TrySignalRunning(app.Env.ActivationPipeName), "The sign-in window does not hear the browser's pairnets:// link.");
 
+        // The window opens on a Pairnets account; this nest has its own address.
+        await app.Press(signIn, OwnNest);
         await app.Type(signIn.SignIn.AddressBox, nest.Url.ToString());
         await app.WaitUntil(() => signIn.SignIn.BrowserButton.IsEnabled, "the sign-in window to find the nest");
         await app.Press(signIn, "Sign in with your browser");
@@ -85,6 +90,7 @@ public sealed class TrayControllerTests
         var signIn = await app.Showing<SettingsWindow>("the sign-in window on the first start");
         using var site = TrayHarness.Website(nest);
 
+        await app.Press(signIn, OwnNest);
         await app.Type(signIn.SignIn.AddressBox, nest.Url.ToString());
         await app.WaitUntil(() => signIn.SignIn.GoogleButton.IsVisible && signIn.SignIn.GoogleButton.IsEnabled, "the Google button for a nest with Google sign-in");
         await app.Press(signIn, "Continue with Google");
