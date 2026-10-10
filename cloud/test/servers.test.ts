@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { assetUrl } from "../src/assets";
 import { b64urlEncode } from "../src/b64";
 import { fakeTunnelToken, fromB64url, toB64url } from "./fake-relay";
 import { addServer, FakeNest, Harness, linkNest, startServer } from "./helpers";
@@ -50,7 +51,7 @@ describe("adding a server", () => {
     expect(page.text).toContain('<input id="label" maxlength="64" autocomplete="off" value="soro">');
     expect(page.text).toContain(">Add this nest</button>");
     expect(page.text).toContain(">Not mine</button>");
-    expect(page.text).toContain('<script src="/assets/add.js" defer></script>');
+    expect(page.text).toContain(`<script src="${assetUrl("add.js")}" defer></script>`);
 
     const approved = await b.call("POST", "/v1/servers/approve", { body: { userCode, approve: true, label: "Basement" } });
     expect(approved.status, approved.text).toBe(200);

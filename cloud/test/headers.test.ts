@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { assetUrl, fingerprint } from "../src/assets";
 import { CSP } from "../src/http";
 import { loginEmail, noticeEmail } from "../src/mail";
 import { Harness, type Res } from "./helpers";
@@ -45,7 +46,7 @@ describe("headers on every response", () => {
     expect(page.text).not.toMatch(/<script(?![^>]*\bsrc=)[^>]*>/);
     expect(page.text).not.toMatch(/<style/);
     expect(page.text).not.toMatch(/\sstyle=/);
-    expect(page.text).toContain('<script src="/assets/login.js" defer></script>');
+    expect(page.text).toContain(`<script src="${assetUrl("login.js")}" defer></script>`);
   });
 
   it("serves the page scripts and stylesheet", async () => {
@@ -55,6 +56,33 @@ describe("headers on every response", () => {
       expect(r.status, f).toBe(200);
       expect(r.text.length).toBeGreaterThan(100);
     }
+  });
+
+  it("pages link their stylesheet and scripts with a version, so a deploy shows at once", async () => {
+    const h = await Harness.create();
+    const visitor = h.browser();
+    const b = h.browser();
+    await b.signInByEmail("you@example.com");
+    const pages: [typeof b, string][] = [
+      [visitor, "/login"],
+      [visitor, "/login/email"],
+      [b, "/account"],
+      [b, "/app"],
+      [b, "/add"],
+    ];
+    for (const [who, path] of pages) {
+      const page = await who.call("GET", path);
+      expect(page.status, path).toBe(200);
+      const links = [...page.text.matchAll(/(?:href|src)="(\/assets\/[^"]*)"/g)].map((m) => m[1]);
+      expect(links.length, path).toBeGreaterThanOrEqual(2);
+      for (const link of links) {
+        expect(link, path).toMatch(/^\/assets\/[a-z-]+\.(css|js)\?v=[0-9a-z]+$/);
+        const asset = await b.call("GET", link);
+        expect(asset.status, link).toBe(200);
+        expect(fingerprint(asset.text), link).toBe(link.split("?v=")[1]);
+      }
+    }
+    expect(fingerprint("a")).not.toBe(fingerprint("b"));
   });
 
   it("every page has a Home button to the website", async () => {

@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
+import { assetUrl } from "../src/assets";
 import { Harness } from "./helpers";
 
-const TAG = '<script src="/assets/cookie-notice.js" defer></script>';
+const TAG = `<script src="${assetUrl("cookie-notice.js")}" defer></script>`;
 
 describe("cookie notice", () => {
   it("every HTML page loads it once", async () => {

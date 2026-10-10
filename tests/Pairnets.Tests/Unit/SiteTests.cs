@@ -159,6 +159,15 @@ public sealed class SiteTests
     }
 
     [Fact]
+    public void BrowsersCheckForANewStylesheetAndScriptOnEveryVisit()
+    {
+        // The pages link /assets/site.css and site.js without a version, so a long cache would show the old ones after
+        // a deploy. Pages answers the check with 304 when nothing changed.
+        var headers = File.ReadAllText(Path.Combine(Root, "_headers"));
+        Assert.Matches(@"/assets/\*\r?\n  Cache-Control: public, max-age=0, must-revalidate", headers);
+    }
+
+    [Fact]
     public void TheSignInLinkGoesToTheNest()
     {
         Assert.Contains("href=\"https://nest.pairnets.app\"", File.ReadAllText(Path.Combine(Root, "index.html")));

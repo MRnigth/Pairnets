@@ -410,3 +410,30 @@ export const ASSETS: Record<string, { type: string; body: string }> = {
   "add.js": { type: "text/javascript; charset=utf-8", body: SHARED_JS + ADD_JS },
   "cookie-notice.js": { type: "text/javascript; charset=utf-8", body: COOKIE_NOTICE_JS },
 };
+
+const versions = new Map<string, string>();
+
+/** A short fingerprint of a file's text (32-bit FNV-1a, base 36). */
+export function fingerprint(text: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) {
+    h ^= text.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return (h >>> 0).toString(36);
+}
+
+/**
+ * The address pages link an asset by: `/assets/<name>?v=<fingerprint>`. Assets are cached for an hour, so a changed
+ * file needs a new address, or browsers keep showing the old one after a deploy. Serving ignores the query.
+ */
+export function assetUrl(name: string): string {
+  let v = versions.get(name);
+  if (v === undefined) {
+    const asset = ASSETS[name];
+    if (!asset) throw new Error(`There is no asset ${name}.`);
+    v = fingerprint(asset.body);
+    versions.set(name, v);
+  }
+  return `/assets/${name}?v=${v}`;
+}

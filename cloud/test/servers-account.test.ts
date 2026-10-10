@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { assetUrl } from "../src/assets";
 import { addServer, appSignIn, Harness, linkNest } from "./helpers";
 
 async function setup() {
@@ -130,7 +131,7 @@ describe("the account's servers", () => {
     expect(page.text).toContain('data-action="remove-server">Remove this nest from my account</button>');
     expect(page.text).toContain("Nests on their own address");
     expect(page.text).toContain("https://nest.example.com");
-    expect(page.text).toContain('<script src="/assets/account.js" defer></script>');
+    expect(page.text).toContain(`<script src="${assetUrl("account.js")}" defer></script>`);
     const script = (await b.call("GET", "/assets/account.js")).text;
     for (const piece of ['"/v1/servers"', '"/v1/servers/" + id + "/devices/"', "remove-server", "remove-device"]) expect(script).toContain(piece);
     // A removed server leaves the page at once.

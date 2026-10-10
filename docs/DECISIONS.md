@@ -556,3 +556,7 @@ yet"), the same in both apps.
   to sync.pairnets.app only. If the check fails (offline, blocked), the page keeps "Sign in".
 * **Not a hint cookie on `.pairnets.app`**: one would be simpler but goes stale (a session signed out from another
   browser would still show as signed in), and it would be a new cookie for the cookie page.
+* **Updates show at once**: after the first deploy the owner saw the new Home button with the old styles, because
+  browsers keep `/assets/*` for an hour. sync.pairnets.app now links every stylesheet and script as
+  `/assets/<name>?v=<fingerprint of its text>`, so a changed file has a new address. pairnets.app (plain files, no
+  build step) has its `/assets/*` checked on every visit instead (`max-age=0, must-revalidate`; unchanged files get a 304).

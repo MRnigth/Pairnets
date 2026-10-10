@@ -1,5 +1,6 @@
 // Server-rendered HTML pages (no frameworks, no inline scripts or styles: CSP in http.ts).
 
+import { assetUrl } from "./assets";
 import { escapeHtml as e } from "./http";
 import { displayUserCode, emailName, iso, MAX_USERNAME } from "./formats";
 
@@ -10,7 +11,7 @@ interface LayoutOptions {
 
 export function layout(title: string, main: string, opts: LayoutOptions = {}): string {
   // Every page gets the cookie notice (assets.ts), after its own scripts.
-  const scripts = [...(opts.scripts ?? []), "cookie-notice.js"].map((s) => `<script src="/assets/${e(s)}" defer></script>`).join("\n");
+  const scripts = [...(opts.scripts ?? []), "cookie-notice.js"].map((s) => `<script src="${e(assetUrl(s))}" defer></script>`).join("\n");
   const turnstile = opts.turnstile ? `<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>` : "";
   return `<!doctype html>
 <html lang="en">
@@ -19,7 +20,7 @@ export function layout(title: string, main: string, opts: LayoutOptions = {}): s
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
 <title>${e(title)} · Pairnets</title>
-<link rel="stylesheet" href="/assets/style.css">
+<link rel="stylesheet" href="${e(assetUrl("style.css"))}">
 ${turnstile}
 ${scripts}
 </head>
