@@ -495,3 +495,78 @@ yet"), the same in both apps.
   `sync.pairnets.app`; migrations 0001 and 0002 applied; the generated keys and the account and
   Google client ids set. The outside keys (Cloudflare API token, Turnstile, Resend, Google client
   secret) wait for the owner to paste them.
+
+## Sync feedback: real speeds, saying what it does, "too many requests" (10 October 2026)
+
+The owner's first real use (PC-1 on Windows and PC-2 on Linux behind one home address, a server, all through
+sync.pairnets.app) showed three problems: about 37 of PC-1's 38,206 uploads failed with 429, the app said only
+"Syncing" for 8 minutes while it fingerprinted 114 GB, and the picture *guessed* that the other computer was sending.
+
+### The live report: one message for every computer's live state
+
+* **Message.** App → server `ReportTransfer(TransferReport)`; server → the other apps `PeerTransfer(name,
+  TransferReport)` (names in `PushNames`, Core `Models.cs`). `TransferReport` is
+  `(upBytesPerSecond, downBytesPerSecond, filesDone, filesTotal, bytesDone, bytesTotal, uploading, downloading,
+  stalled, ageSeconds)`:
+  * speeds: bytes really moved in each direction over the last 5 s, measured by the app that moves them;
+  * files and bytes done of its current batch (back-to-back passes count as one batch, as on its own screen);
+  * `uploading` / `downloading`: files in flight in that direction now, true also while stalled, so a stalled line
+    still knows its direction;
+  * `stalled`: files in flight but no byte for 5 s, or held by a 429;
+  * `ageSeconds`: set by the server only; 0 when pushed live, the report's age when replayed to an app that connects
+    later. "Last seen" = arrival time minus this (no clock skew between computers matters).
+* **Cadence.** About once a second while the app transfers, and once all zero when it stops. The server passes on at
+  most 5 a second per connection (a change between moving and not moving always goes through), keeps only the latest
+  per connection in memory (`LiveTransfers`), replays the ones from the last 10 s to a new connection, and sends an
+  all-zero report for a computer that disconnects while moving files. Apps drop a report after 10 s without a newer one.
+* **One source.** `StatusSnapshot.LiveOf(name)` gives the same thing for this computer (its own numbers) and for the
+  others (their reports); the picture (`DeviceMap`), the Devices page and the "waiting for PC-1" progress all read it.
+  The 8-second "a change arrived, so it is sending" guess and "this one uploads, so the other receives" are gone: a
+  line moves only for a computer that reports moving bytes. The animation work (`feature/live-transfers`) can draw
+  direction, speed and stalled from this report without a second message.
+* **Why the apps report and the server does not count.** The app knows what the server cannot: files left in its
+  batch, that it is held by a 429, which direction is stalled. The server could measure bytes on `GET`/`PUT
+  /api/file`, which would add only computers running an app too old to report; those show no speed rather than a
+  wrong one, and the apps update themselves. It also keeps the file-transfer path untouched. If wanted later, the
+  server can fill in a report for a computer that has not sent one for 10 s, on the same `PeerTransfer` message.
+* **Old servers and apps.** A server without `ReportTransfer` answers the call with an error; the app then stops
+  sending on that connection (tries again after a reconnect) and shows no live data, with no error anywhere. An old
+  app ignores `PeerTransfer` (SignalR drops unknown messages).
+
+### Saying what it does
+
+* Priority of the status: Paused, then "Slowed down by the server", then "Waiting for PC-1 to finish uploading",
+  then the pass's stage: "Reading the server's list", "Checking files · 12,000 of 38,206", "Uploading" / "Downloading"
+  / "Uploading and downloading" with "37 of 120 files · 4.90 MB/s · about 3 min left". Everything else keeps its old
+  words. `StatusLine` is the same in one line for the tray icon's tip and menu, in both apps.
+* **Checking lists the folder first** (a second or two for 38,000 files), so the total is known before any file is
+  read. Fingerprints are saved every 500 files or 5 s and when the check is cancelled; before, a pause threw away
+  everything read so far, so the check after Resume started again from zero.
+* **While checking, the wait for another computer's batch is not shown**: the status says what this computer does.
+* **Resume says "Syncing…"** at once (it used to say "Up to date" until the pass began).
+* **Motion was left alone** (the badge, the dots): the live-transfers work owns it. While "slowed down" the badge
+  still turns; the snapshot says `Stalled` and `IsSlowedDown` for that work to show. The one exception: this
+  computer's line stops while requests are held, because no bytes move.
+
+### "Too many requests" is back-pressure
+
+* **In the apps.** One gate per client (`BackPressure`): a 429 holds every request until its `Retry-After` (capped at
+  10 minutes; without one 5 s, doubling to a minute while 429s go on), the same request is sent again (a single
+  upload from the start of the file with a fresh hash, a piece from its own start), and then one request runs at a
+  time, doubling every 15 s without another 429 until there is no limit. A request's own timeout does not run while it
+  waits. Nothing counts as a failed file. After 30 refusals of one request the pass ends as offline ("Too many
+  requests to …; Pairnets keeps trying") and the runner retries with its usual backoff. The nest's own 429s on
+  joining and on "update the server" keep their meaning; only the service's `rate_limited` is waited out there.
+* **In the Worker (relay).** Two budgets instead of one 600-a-minute per address:
+  * **per address, 600 a minute** (the old number) for requests without a computer's key, and for everything that
+    fails: unknown nest, refused path, a key the nest answers 401/403, an offline nest. Checked first, before the
+    nest is looked up. This is the abuse guard: a caller without a working key never gets more than this.
+  * **per nest and computer key, 6,000 a minute (100 a second)**: what a signed-in app sends. Two computers at home
+    each have their own. A made-up key costs one request to the nest, gets 401, and counts against the address.
+  * **Why 6,000.** A small-file upload is one request. With 4 transfers at once and 40–150 ms per request through
+    the relay, one computer makes about 1,600–6,000 a minute; the owner's PC-1 hit 600 after 383 files. 6,000 covers
+    a fast connection with 4 at once; 8 at once on a very fast link can touch it, and then the app slows down for a
+    moment instead of failing. Each relayed request still costs one D1 write (the counter), as before; the per-address
+    check adds one read.
+  * **Owner's call:** the two numbers (600 per address, 6,000 per computer). Higher per computer is cheap to allow; a
+    lower one would make big first syncs slow down more often.

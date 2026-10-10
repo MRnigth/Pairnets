@@ -118,6 +118,28 @@ becomes the hash the server returns.
 Only one pass runs at a time; requests during a pass are merged into one follow-up pass. Offline:
 retry after 2, 5, 10, 30, 60 s; SignalR reconnects forever (0, 2, 5, 10, 30 s).
 
+**What a pass says it does.** The engine raises `StageChanged`: *reading the server's list*, *checking files*
+(the folder is listed first, so the total is known: "Checking files · 12,000 of 38,206"), *transferring*. The session
+puts it in `StatusSnapshot` (`Stage`, `CheckedFiles`, `CheckTotal`), whose `Headline`, `DetailText` and one-line
+`StatusLine` both apps show. A check saves the fingerprints it made every 500 files or 5 s and when it is paused, so a
+check after Resume goes on where the last one stopped.
+
+**"Too many requests" (429) slows down, it does not fail.** Every request of `PairnetsApiClient` goes through one
+`BackPressure` gate. A 429 holds every request until its `Retry-After` (without one: 5 s, doubling to a minute), the
+refused request is built and sent again, then only one request runs at a time; that limit doubles every 15 s without
+another 429. Nothing counts as a failed file; after 30 refusals of one request the pass ends as offline and the runner
+tries again later. The status says "Too many requests to sync.pairnets.app; continuing in 30 s". The nest's own 429s
+with a meaning of their own (too many computers waiting to join, an update a moment ago) stay answers.
+
+**Live speeds of every computer.** Once a second while it transfers, and once when it stops, the session sends
+`ReportTransfer(report)`: `TransferReport(upBytesPerSecond, downBytesPerSecond, filesDone, filesTotal, bytesDone,
+bytesTotal, uploading, downloading, stalled, ageSeconds)`. The server keeps the latest per connection in memory
+(`LiveTransfers`), passes each on as `PeerTransfer(name, report)` to the other apps (at most 5 a second per
+connection), replays the ones from the last 10 s to an app that connects (with `ageSeconds`), and sends an all-zero
+report when a computer disconnects while it moved files. The apps treat a report older than 10 s as "moving nothing".
+The overview's picture and the Devices page draw only from these reports and this computer's own numbers; a server
+without `ReportTransfer` means no live data and no errors.
+
 ## Server
 
 Storage under `DataDir` (default `/var/lib/pairnets`):
@@ -212,7 +234,7 @@ JSON is camelCase; errors are `{"code","message"}`.
 | `GET /api/history?path=` | key | `[{id, storedAtUtc, size, hash8}]` newest first |
 | `POST /api/history/restore?path=&id=` | key | restores the version as a normal new version |
 | `GET /api/devices` | key | `[{name, firstSeen, lastSeen, online, appVersion, system, lastChange, id}]`: every computer that sent an authenticated request (`X-Device-Id`, plus `X-Pairnets-Client` such as "1.0.38; Windows"); `online` while its push channel is open or it was seen in the last 2 minutes; `id` only for computers with their own key |
-| `/hub` (SignalR) | key | server → clients: `Changed(deviceId, path)`, `PeerBatch` (another computer's big upload starts or ends), `DeviceRemoved`, `DeviceRenamed`, `PairRequested(code, name, system)`, `PairDecided(code, approved)`; clients → server: `BatchStarted(count)`, `BatchFinished()` |
+| `/hub` (SignalR) | key | server → clients: `Changed(deviceId, path)`, `PeerBatch` (another computer's big upload starts or ends), `DeviceRemoved`, `DeviceRenamed`, `PairRequested(code, name, system)`, `PairDecided(code, approved)`, `PeerTransfer(name, report)` (another computer's live speeds and batch, see below); clients → server: `BatchStarted(count)`, `BatchFinished()`, `ReportTransfer(report)` |
 
 Every API response carries `Cache-Control: no-store, no-transform`, so a proxy in between
 (Cloudflare) never caches or rewrites files, manifests or errors. (The website's pages are
