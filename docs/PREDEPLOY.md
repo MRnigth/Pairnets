@@ -4,17 +4,60 @@ Before anything is deployed (a push to `main`, which is a release; a `v*` tag; a
 deploy; an install on a server), every part of Pairnets is tested on test servers first. If anything fails,
 the deploy is blocked.
 
-*(The plain-English part of this page is written when the check is finished; below is how the parts fit together.)*
+## In plain words
+
+**What it checks.** Before a new version can reach your computers, the website or a server, this PC tests all of it:
+
+- **Every request** the server answers, on three test servers. The last of them is a real Linux install.
+- **Every button**, switch and menu item in the Windows app, the Mac/Linux app and the website. Each one is pressed,
+  and the test checks it did the right thing.
+- **A real Linux install**: a throwaway Linux computer inside this PC installs the server the way a real server
+  does and updates it. It also installs the version that is out now and checks that it updates itself to the new one.
+- **Nothing new slips through**: a new button or request without a test makes the check fail.
+- **No secrets** (passwords, keys) in the files.
+
+**How long it takes.** About 15 minutes. The first time on a new PC it takes a few minutes more, to set up the
+Linux test computer. If the same version already passed, the deploy goes ahead at once.
+
+**Nothing appears on your screen.** The apps open their windows on a hidden desktop, the website is clicked by an
+invisible browser, and the Linux test computer runs in the background. You can keep working; the PC is just busier.
+
+**What it guards.** Pushing to `main` (that is a release), a `v…` tag, merging a pull request into `main`, a
+GitHub release, running the release workflow, a Cloudflare deploy, and installing on a server. This works both when
+Claude does it and when you push from a terminal.
+
+**When it says no.** You get a short list of what broke, and nothing is deployed. The full report is a text file
+you can open in Notepad:
+
+```
+%LOCALAPPDATA%\Pairnets-predeploy\reports\<commit>-<date and time>\report.txt
+```
+
+It starts with PASSED or FAILED, then each step and how long it took, then what went wrong in plain words. Fix
+what it names, commit, and deploy again. If the Linux test computer failed, it is kept so someone can look inside;
+throw it away afterwards with `scripts\wsl-testbox.ps1 -Remove`.
+
+**Running it by hand.** In PowerShell, in the Pairnets folder:
+
+```
+powershell -ExecutionPolicy Bypass -File scripts\pre-deploy.ps1 -Repo . -Commit HEAD
+```
+
+It tests the last commit (not changes that are not committed yet). At the end it says PASSED or FAILED and where the
+report is.
+
+**Turning the guard on or off.** `node scripts/deploy-gate/install.mjs` turns it on (for every Claude Code session on
+this PC, and for `git push` from a terminal). `--check` says whether it is on, and `--uninstall` turns it off.
 
 ## How the parts fit together (for developers)
 
 | Part | Where | What |
 |---|---|---|
-| Gate | `scripts/deploy-gate/` (Node), installed by `scripts/install-deploy-gate.ps1` | Claude Code `PreToolUse` hook plus a git `pre-push` hook. Spots deploy commands and demands a pass record for the exact commit. |
+| Gate | `scripts/deploy-gate/` (Node), installed by `node scripts/deploy-gate/install.mjs` (`--check`, `--uninstall`) | Claude Code `PreToolUse` hook (in `~/.claude/settings.json`, so every session and worktree) plus a git `pre-push` hook (in the shared `.git/hooks`). Spots deploy commands and demands a pass record for the exact commit; without one, the hook runs the check itself and blocks when it fails. The `pre-push` hook only looks for the record. Outside a Pairnets checkout it does nothing. |
 | Runner | `scripts/pre-deploy.ps1` | Runs every step below in a clean temporary checkout of the commit and writes the pass record and a report. |
 | API tour | `tests/Pairnets.Tests/E2E/` | Calls every HTTP route, hub method/event and server CLI command, against three kinds of test server. Guard tests fail when something exists that the tour does not call. |
 | Avalonia buttons | `tests/Pairnets.Tests/Ui/` | Presses every button, toggle and menu item in every window (headless), and drives the real `DesktopController` against a real test server. |
-| WPF buttons | `tests/Pairnets.Client.Tests/` (Windows only) | The same for the Windows app and its `TrayController`. |
+| WPF buttons | `tests/Pairnets.Client.Tests/` (Windows only) | The same for the Windows app and its `TrayController`. Its windows (and `tools/RenderScreens.Wpf`'s) open on a hidden desktop (`HiddenDesktop.cs`), so nothing shows on the screen. |
 | Website buttons | `tests/Pairnets.Browser.Tests/` | A real Chromium (Microsoft.Playwright) clicks every button on every page of the nest's website. |
 | Linux test box | `scripts/wsl-testbox.ps1`, `tests/linux-server/` | A throwaway WSL Ubuntu with systemd: installs the server package the real way, runs the tour and the browser tests against it, then updates it and upgrades from the published release. |
 
@@ -69,8 +112,9 @@ token in `update.log`); when the tour did not ask for one, it asks itself.
 
 **Order on the box** (`scripts/pre-deploy.ps1` step 8 and the `linux-install` CI job, phase A):
 `install-check.sh --feed feed1` → `test-nest-config.sh` → `update-check.sh prepare --feed feed2` → the
-tests with `--filter "FullyQualifiedName~InstalledLinux"` (the runner fails when `PAIRNETS_E2E_REPORT` was
-not written) → `update-check.sh verify`. Phase B, on a fresh box: `upgrade-check.sh --feed feed1` (the
+website tests (`tests/Pairnets.Browser.Tests`) → the API tour (`tests/Pairnets.Tests` with
+`--filter "FullyQualifiedName~InstalledLinux"`; the runner fails when `PAIRNETS_E2E_REPORT` was not written) →
+`update-check.sh verify`. Phase B, on a fresh box: `upgrade-check.sh --feed feed1` (the
 published release from the real one-liner, files put on it through the API, then its own updater
 installs feed 1), then `lint.sh` (shellcheck).
 
