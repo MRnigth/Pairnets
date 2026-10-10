@@ -856,7 +856,8 @@ so no raw IP or address is stored there.
 
 | What | Per | Limit | Answer when exceeded |
 |---|---|---|---|
-| any request | IP | 300 / minute | 429 `rate_limited` |
+| any request (except the relay `/n/*`) | IP | 300 / minute | 429 `rate_limited` |
+| relayed request `/n/*` (version 2, `RELAY.md` §5) | IP | 6,000 / minute, counted by the Workers Rate Limiting binding `RELAY_LIMIT`, not in D1 | 429 `rate_limited`, `Retry-After: 60` |
 | `GET /login/google` | IP | 30 / 10 min | 429 page |
 | `POST /v1/login/email` | IP | 10 / hour | 429 `rate_limited` |
 | `POST /v1/login/email` | address | 3 / hour and 10 / day | **silent** (202, nothing sent) |
