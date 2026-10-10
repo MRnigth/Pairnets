@@ -33,7 +33,9 @@ describe("app-login", () => {
     expect(page.text).toContain("Marcus&#39; laptop");
     expect(page.text).toContain("Windows 11");
     expect(page.text).toContain(userCode);
-    expect(page.text).toContain(`<input type="radio" name="nest" value="${nest.nestId}" checked> soro`);
+    // One nest: nothing to choose, the page names it and app.js sends it.
+    expect(page.text).toContain(`data-nest="${nest.nestId}"`);
+    expect(page.text).toContain("It will sync with <b>soro</b>");
     expect(page.text).toContain('id="approve"');
     const req = await b.call("GET", `/v1/app/requests/${userCode.toLowerCase()}`);
     expect(req.json).toEqual({
@@ -238,13 +240,13 @@ describe("app-login", () => {
     expect((await stranger.call("GET", "/app?code=<script>")).location).toBe("/login?next=%2Fapp");
     await stranger.signInByEmail("stranger@example.com");
     const page = await stranger.call("GET", "/app?code=NOPE-NOPE");
-    expect(page.text).toContain("That code is not valid or has expired.");
-    expect((await stranger.call("GET", "/app")).text).toContain("Code shown by the app");
+    expect(page.text).toContain("That code didn't work");
+    expect((await stranger.call("GET", "/app")).text).toContain("Code shown by Pairnets");
     expect((await stranger.call("GET", `/v1/app/requests/${s.json.userCode}`, { headers: {} })).status).toBe(200);
     expect((await h.client().call("GET", `/v1/app/requests/${s.json.userCode}`)).status).toBe(401);
     // With no nest yet, the page says so, says how to set one up, and still offers Allow (the app then waits).
     const none = await stranger.call("GET", `/app?code=${s.json.userCode}`);
-    expect(none.text).toContain("This account has no nest yet.");
+    expect(none.text).toContain("You don't have a nest yet.");
     expect(none.text).toContain("curl -fsSL https://pairnets.app/get.sh | sudo bash");
     expect(none.text).toContain('id="approve"');
     expect(none.text).toContain('id="deny"');
@@ -282,8 +284,8 @@ describe("app-login", () => {
     const two = await addServer(h, b, { label: "Office <NAS>", ip: "198.51.100.42" });
     const s = await app.call("POST", "/v1/app/start", { body: { name: "Laptop" } });
     const page = await b.call("GET", `/app?code=${s.json.userCode}`);
-    expect(page.text).toContain(`<input type="radio" name="nest" value="${one.nestId}" checked> Basement`);
-    expect(page.text).toContain(`<input type="radio" name="nest" value="${two.nestId}"> Office &lt;NAS&gt;`);
+    expect(page.text).toContain(`<input type="radio" name="nest" value="${one.nestId}" data-label="Basement" checked> Basement`);
+    expect(page.text).toContain(`<input type="radio" name="nest" value="${two.nestId}" data-label="Office &lt;NAS&gt;"> Office &lt;NAS&gt;`);
   });
 
   it("start checks the name and is limited to 10 an hour per IP", async () => {

@@ -685,8 +685,8 @@ key); the service needs all four.
   reading):
   ```
   Content-Security-Policy: default-src 'none'; script-src 'self' https://challenges.cloudflare.com; style-src 'self';
-    img-src 'self' data:; connect-src 'self'; frame-src https://challenges.cloudflare.com; form-action 'self';
-    base-uri 'none'; frame-ancestors 'none'
+    img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-src https://challenges.cloudflare.com;
+    form-action 'self'; base-uri 'none'; frame-ancestors 'none'
   Strict-Transport-Security: max-age=31536000
   X-Content-Type-Options: nosniff
   X-Frame-Options: DENY

@@ -1,6 +1,8 @@
 // Static files under /assets/ (plain CSS and JavaScript; pages have no inline scripts or styles).
 // Kept as strings so the Worker has no build step and no asset binding.
 
+import { FONT_ASSETS } from "./fonts";
+
 const STYLE = String.raw`
 :root { color-scheme: light dark; --bg: #f6f7f9; --card: #ffffff; --text: #16181d; --muted: #5b6270; --line: #d9dde3;
   --accent: #1f6feb; --accent-text: #ffffff; --danger: #c62828; --ok: #2e7d32; --warn: #b26a00; }
@@ -282,35 +284,235 @@ const ACCOUNT_JS = String.raw`(function () {
 })();
 `;
 
+// The apps' "Quiet" look, for the "Sign in an app?" page only (pages.ts: <body class="q-page">, after style.css).
+// Warm paper and ink, hairlines instead of cards, Instrument Sans (fonts.ts). Colours follow the system's light or dark.
+const APP_STYLE = String.raw`
+@font-face { font-family: "Instrument Sans"; font-style: normal; font-weight: 400; font-display: swap; src: url(/assets/fonts/InstrumentSans-Regular.woff2) format("woff2"); }
+@font-face { font-family: "Instrument Sans"; font-style: normal; font-weight: 500; font-display: swap; src: url(/assets/fonts/InstrumentSans-Medium.woff2) format("woff2"); }
+@font-face { font-family: "Instrument Sans"; font-style: normal; font-weight: 600; font-display: swap; src: url(/assets/fonts/InstrumentSans-SemiBold.woff2) format("woff2"); }
+
+.q-page {
+  --q-bg: #F7F6F3; --q-card: #FFFFFF; --q-text: #1B1A17; --q-muted: #69655D; --q-line: #E3E0D9; --q-field-line: #D6D2CA;
+  --q-hover: #EFEDE8; --q-subtle: #ECE9E3; --q-accent: #2F47C4; --q-track: #E6E3DC;
+  --q-primary: #1B1A17; --q-primary-hover: #37342F; --q-primary-ink: #F7F6F3;
+  --q-ok: #2D7A4B; --q-ok-soft: #E2EFE6; --q-warn: #8A4B00; --q-warn-soft: #F5E9D6; --q-bad: #B42318; --q-bad-soft: #F7E2DF;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  .q-page {
+    --q-bg: #161513; --q-card: #22211E; --q-text: #ECEAE4; --q-muted: #A39E94; --q-line: #2D2B27; --q-field-line: #3A3833;
+    --q-hover: #1F1E1B; --q-subtle: #262420; --q-accent: #8D9DFF; --q-track: #2F2D29;
+    --q-primary: #ECEAE4; --q-primary-hover: #FFFFFF; --q-primary-ink: #161513;
+    --q-ok: #6CC991; --q-ok-soft: #18271E; --q-warn: #E9A85A; --q-warn-soft: #2E2417; --q-bad: #F0776B; --q-bad-soft: #301B18;
+    color-scheme: dark;
+  }
+}
+.q-page { min-height: 100vh; display: flex; flex-direction: column; background: var(--q-bg); color: var(--q-text);
+  font: 15px/1.55 "Instrument Sans", "Segoe UI", system-ui, -apple-system, sans-serif; font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased; }
+.q-page [hidden] { display: none !important; }
+.q-page a { color: inherit; }
+.q-page :focus-visible { outline: 2px solid var(--q-accent); outline-offset: 2px; }
+
+/* The shared top bar and footer, in this look. */
+.q-page header.top { gap: 10px; padding: 14px 28px; border-bottom-color: var(--q-line); }
+.q-page header.top .brand { display: inline-flex; align-items: center; gap: 10px; font-size: 17px; font-weight: 600; letter-spacing: -0.01em; color: var(--q-text); }
+.q-page header.top .brand::before { content: ""; width: 28px; height: 28px; background: url(/assets/logo.svg) center / contain no-repeat; }
+.q-page header.top .muted { color: var(--q-muted); font-size: 14px; }
+.q-page header.top .button.home { padding: 6px 12px; border-radius: 10px; border-color: var(--q-field-line); color: var(--q-text); font-size: 13.5px; font-weight: 500; }
+.q-page header.top .button.home:hover { background: var(--q-hover); }
+.q-page main { flex: 1; box-sizing: border-box; width: 100%; max-width: none; margin: 0; padding: 56px 16px 32px; display: flex; justify-content: center; }
+.q-page footer { order: 4; box-sizing: border-box; width: 100%; max-width: none; padding: 18px 16px 22px; text-align: center; font-size: 12.5px; }
+.q-page footer nav, .q-page footer a { color: var(--q-muted); }
+.q-page footer a { text-decoration: none; }
+.q-page footer a:hover { text-decoration: underline; }
+
+/* The cookie notice sits in the page, under the content, so it never covers the buttons (on a phone above all). */
+.q-page .cookie-notice { position: static; order: 3; box-sizing: border-box; width: calc(100% - 32px); max-width: 440px; margin: 8px auto 4px;
+  background: var(--q-card); color: var(--q-text); border-color: var(--q-line); border-radius: 12px; box-shadow: none; }
+.q-page .cookie-notice-actions button { background: var(--q-primary); border-color: var(--q-primary); color: var(--q-primary-ink); border-radius: 10px; }
+.q-page .cookie-notice-actions a { color: var(--q-text); }
+
+/* One column; each answer is a screen of its own. */
+.q-col { width: 100%; max-width: 440px; }
+.q-screen { display: flex; flex-direction: column; }
+.q-icon { display: block; }
+.q-badge { align-self: center; width: 56px; height: 56px; border-radius: 28px; display: grid; place-items: center; background: var(--q-subtle); color: var(--q-text); }
+.q-badge .q-icon { width: 26px; height: 26px; }
+.q-badge.q-warn { background: var(--q-warn-soft); color: var(--q-warn); }
+.q-page h1 { margin: 18px 0 0; text-align: center; font-size: 28px; line-height: 1.2; font-weight: 600; letter-spacing: -0.02em; overflow-wrap: anywhere; }
+.q-page h1:focus { outline: none; }
+.q-lead { margin: 8px 0 0; text-align: center; color: var(--q-muted); overflow-wrap: anywhere; text-wrap: balance; }
+.q-lead b { color: var(--q-text); font-weight: 600; }
+.q-earlier { align-self: center; margin: 12px 0 0; padding: 3px 12px; border-radius: 999px; background: var(--q-subtle); color: var(--q-muted); font-size: 13px; }
+.q-codebox { margin-top: 26px; padding: 20px 16px 22px; border: 1px solid var(--q-line); border-radius: 14px; background: var(--q-card); text-align: center; }
+.q-q { margin: 0; font-size: 14px; color: var(--q-muted); overflow-wrap: anywhere; }
+.q-code { margin: 6px 0 0; font-size: 40px; line-height: 1.1; font-weight: 600; letter-spacing: 0.14em; padding-left: 0.14em; white-space: nowrap; }
+.q-syncwith { margin: 14px 0 0; display: flex; align-items: center; gap: 10px; padding: 12px 14px; border: 1px solid var(--q-line); border-radius: 12px; font-size: 14px; overflow-wrap: anywhere; }
+.q-syncwith .q-icon { width: 18px; height: 18px; flex-shrink: 0; color: var(--q-muted); }
+.q-nests { margin: 14px 0 0; padding: 0; border: 0; min-width: 0; }
+.q-nests legend { margin-bottom: 8px; padding: 0; color: var(--q-text); font-size: 13px; font-weight: 600; }
+.q-choices { border: 1px solid var(--q-line); border-radius: 12px; overflow: hidden; background: var(--q-card); }
+.q-page label.q-choice { display: flex; align-items: center; gap: 12px; margin: 0; padding: 12px 14px; font-size: 14px; cursor: pointer; overflow-wrap: anywhere; }
+.q-choice + .q-choice { border-top: 1px solid var(--q-line); }
+.q-page .q-choice input { flex-shrink: 0; width: 16px; height: 16px; margin: 0; padding: 0; accent-color: var(--q-primary); }
+.q-note { margin: 14px 0 0; padding: 12px 14px; border-radius: 12px; background: var(--q-warn-soft); color: var(--q-warn); font-size: 13.5px; }
+.q-note b { font-weight: 600; }
+.q-error { margin: 14px 0 0; padding: 12px 14px; border-radius: 12px; background: var(--q-bad-soft); color: var(--q-bad); font-size: 14px; }
+
+.q-actions { margin-top: 22px; display: flex; flex-direction: column; gap: 10px; }
+.q-page .q-btn { box-sizing: border-box; width: 100%; min-height: 46px; margin: 0; padding: 10px 18px; border-radius: 10px; font: inherit; font-size: 15px;
+  font-weight: 600; line-height: 1.3; display: flex; align-items: center; justify-content: center; text-align: center; text-decoration: none; cursor: pointer; }
+.q-page .q-primary { border: 1px solid var(--q-primary); background: var(--q-primary); color: var(--q-primary-ink); }
+.q-page .q-primary:hover { background: var(--q-primary-hover); border-color: var(--q-primary-hover); }
+.q-page .q-ghost { border: 1px solid var(--q-field-line); background: transparent; color: var(--q-text); font-weight: 500; }
+.q-page .q-ghost:hover { background: var(--q-hover); }
+.q-page .q-btn:disabled { opacity: 0.5; cursor: default; }
+.q-page .q-btn.q-working { opacity: 0.7; cursor: progress; }
+
+.q-more { margin-top: 18px; text-align: center; font-size: 13px; color: var(--q-muted); }
+.q-more summary { cursor: pointer; }
+.q-more p { margin: 6px 0 0; overflow-wrap: anywhere; }
+.q-fine { margin: 18px 0 0; text-align: center; font-size: 13px; color: var(--q-muted); text-wrap: balance; }
+.q-close { margin: 14px 0 0; text-align: center; font-size: 13.5px; color: var(--q-muted); text-wrap: balance; }
+.q-sep { margin: 26px 0 0; padding-top: 16px; border-top: 1px solid var(--q-line); text-align: center; font-size: 12.5px; color: var(--q-muted); }
+.q-cmd { margin: 8px 0 0; padding: 10px 12px; border: 1px solid var(--q-line); border-radius: 10px; background: var(--q-card); color: var(--q-text);
+  font: 13px/1.5 "Cascadia Mono", Consolas, Menlo, monospace; white-space: pre-wrap; word-break: break-all; }
+
+.q-ring { align-self: center; width: 76px; height: 76px; display: block; }
+.q-ring-fill { fill: var(--q-ok-soft); }
+.q-ring-line { fill: none; stroke: var(--q-ok); stroke-width: 3; }
+.q-ring-mark { fill: none; stroke: var(--q-ok); stroke-width: 3.4; stroke-linecap: round; stroke-linejoin: round; }
+.q-ring-track { fill: none; stroke: var(--q-track); stroke-width: 3; }
+.q-ring-arc { fill: none; stroke: var(--q-accent); stroke-width: 3; stroke-linecap: round; }
+.q-ring-glyph { fill: none; stroke: var(--q-text); stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.q-next { margin-top: 24px; padding: 16px 18px; border: 1px solid var(--q-line); border-radius: 14px; background: var(--q-card); display: flex; gap: 14px; align-items: flex-start; }
+.q-next-icon { width: 34px; height: 34px; flex-shrink: 0; border-radius: 10px; display: grid; place-items: center; background: var(--q-subtle); }
+.q-next-icon .q-icon { width: 18px; height: 18px; }
+.q-next-title { margin: 0; font-size: 14.5px; font-weight: 600; overflow-wrap: anywhere; }
+.q-next-text { margin: 2px 0 0; font-size: 13.5px; color: var(--q-muted); }
+
+.q-field { margin-top: 26px; display: flex; flex-direction: column; gap: 6px; }
+.q-page .q-field label { margin: 0; font-size: 13px; font-weight: 600; }
+.q-row { display: flex; gap: 10px; }
+.q-page .q-field input { flex: 1; min-width: 0; height: 46px; padding: 0 14px; border-radius: 10px; border: 1px solid var(--q-field-line); background: var(--q-card);
+  color: var(--q-text); font: inherit; font-size: 16px; letter-spacing: 0.12em; text-transform: uppercase; }
+.q-page .q-field input::placeholder { color: var(--q-muted); opacity: 0.7; }
+.q-page .q-field .q-btn { width: auto; flex-shrink: 0; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .q-screen { animation: q-in 0.3s cubic-bezier(0.33, 1, 0.68, 1) both; }
+  @keyframes q-in { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
+}
+@media (max-width: 560px) {
+  .q-page header.top { padding: 12px 16px; }
+  .q-page main { padding-top: 32px; }
+  .q-page h1 { font-size: 25px; }
+  .q-code { font-size: 34px; }
+}
+`;
+
+// The ring logo (assets/pairnets-logo.svg), for the top bar of pages in that look.
+const LOGO_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120" viewBox="0 0 120 120"><defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#6aa5ff"/><stop offset="1" stop-color="#2a63d8"/></linearGradient></defs><circle cx="60" cy="60" r="60" fill="url(#bg)"/><path d="M75.2,92.6 A36,36 0 1 1 92.6,75.2" fill="none" stroke="#ffffff" stroke-opacity=".72" stroke-width="9" stroke-linecap="round"/><path d="M47,38 L47,84" fill="none" stroke="#ffffff" stroke-width="11" stroke-linecap="round"/><path d="M47,38 L61,38 A14,14 0 0 1 61,66 L47,66" fill="none" stroke="#ffffff" stroke-width="11" stroke-linecap="round" stroke-linejoin="round"/><circle cx="94" cy="92" r="7" fill="#ffffff"/></svg>
+`;
+
+// The "Sign in an app?" page (pages.ts appPage). Allow or "This isn't me" swaps in that answer's own screen. An error
+// says what went wrong in plain words and leaves both buttons working, so the person can simply try again.
 const APP_JS = String.raw`(function () {
   "use strict";
   var box = document.getElementById("app-request");
-  if (!box) return;
+  var allow = document.getElementById("approve");
+  var deny = document.getElementById("deny");
+  if (!box || !allow || !deny) return;
   var code = box.getAttribute("data-code");
-  var status = document.getElementById("status");
-  function answer(approve) {
-    var body = { userCode: code, approve: approve };
-    if (approve) {
-      // No choice at all: the account has no nest yet, and the app waits for one.
-      if (box.querySelector("input[name=nest]")) {
-        var chosen = box.querySelector("input[name=nest]:checked");
-        if (!chosen) { pnShow(status, "Choose a nest first.", true); return; }
-        body.nestId = chosen.value;
-      }
+  var error = document.getElementById("app-error");
+  var SCREENS = ["ask", "allowed", "allowed-nonest", "refused", "expired"];
+  var SAY = {
+    not_found: "Pairnets could not find this sign-in or that nest any more. Reload the page and try again.",
+    bad_request: "That did not work. Reload the page and try again.",
+    rate_limited: "That was a lot of tries in a short time. Wait a minute, then try again.",
+    server_error: "Something went wrong on our side. Try again in a moment."
+  };
+  var busy = false;
+
+  function show(name) {
+    for (var i = 0; i < SCREENS.length; i++) {
+      var s = document.getElementById("screen-" + SCREENS[i]);
+      if (s) s.hidden = SCREENS[i] !== name;
     }
-    var buttons = box.querySelectorAll("button");
-    for (var i = 0; i < buttons.length; i++) buttons[i].disabled = true;
+    var title = document.getElementById("screen-" + name + "-title");
+    if (title) title.focus();
+  }
+  function setBusy(on, button) {
+    busy = on;
+    allow.disabled = on;
+    deny.disabled = on;
+    if (on) button.classList.add("q-working");
+    else { allow.classList.remove("q-working"); deny.classList.remove("q-working"); }
+  }
+  function fail(text) {
+    error.textContent = text;
+    error.hidden = false;
+  }
+  // pairnets://signed-in brings Pairnets to the front. It carries nothing (the key only travels through the app's own
+  // poll), but on a computer without Pairnets, or on a phone, a browser may show an error for it. So it is only tried
+  // by itself when this browser looks like it runs on the computer that asked: not a phone or tablet, and the same
+  // system. Otherwise the "Open Pairnets" button is there to press.
+  function sameComputer() {
+    var ua = navigator.userAgent || "";
+    if (/Android|iPhone|iPad|iPod|Mobile/i.test(ua)) return false;
+    if (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1) return false;
+    var system = box.getAttribute("data-system");
+    if (system === "Windows") return /Windows/.test(ua);
+    if (system === "macOS") return /Macintosh|Mac OS X/.test(ua);
+    if (system === "Linux") return /Linux|X11/.test(ua) && !/CrOS/.test(ua);
+    return false;
+  }
+  function chosenNest() {
+    var radios = document.getElementsByName("nest");
+    for (var i = 0; i < radios.length; i++) if (radios[i].checked) return radios[i];
+    return null;
+  }
+  function answer(approve, button) {
+    if (busy) return;
+    error.hidden = true;
+    var body = { userCode: code, approve: approve };
+    var label = null;
+    if (approve) {
+      if (document.getElementsByName("nest").length) {
+        var chosen = chosenNest();
+        if (!chosen) { fail("Choose a nest first."); return; }
+        body.nestId = chosen.value;
+        label = chosen.getAttribute("data-label");
+      } else if (box.getAttribute("data-nest")) {
+        body.nestId = box.getAttribute("data-nest");
+      } // else the account has no nest yet: the app waits for one
+    }
+    setBusy(true, button);
     pnApi("POST", "/v1/app/approve", body).then(function (res) {
-      if (res.body && res.body.error === "unauthorized") { location.href = "/login?next=" + encodeURIComponent("/app?code=" + code); return; }
-      if (!res.ok) { pnShow(status, res.body.message || "That did not work.", true); return; }
-      var waits = approve && !box.querySelector("input[name=nest]");
-      pnShow(status, waits ? "Allowed. The app waits for your nest; set it up now." : approve ? "Allowed. Go back to the app." : "Refused. The app will not be signed in.", false);
+      var err = res.body && res.body.error;
+      if (err === "unauthorized" || err === "reauth_required") {
+        location.href = "/login?next=" + encodeURIComponent("/app?code=" + code);
+        return;
+      }
+      if (res.ok) {
+        if (!approve) { show("refused"); return; }
+        var field = document.getElementById("allowed-nest");
+        if (field && label) field.textContent = label;
+        show(body.nestId ? "allowed" : "allowed-nonest");
+        if (body.nestId && sameComputer()) setTimeout(function () { location.href = "pairnets://signed-in"; }, 600);
+        return;
+      }
+      if (err === "expired") { show("expired"); return; }
+      // Answered meanwhile (in another tab, or by an earlier try whose reply got lost): the page then says which answer.
+      if (err === "already_decided") { location.reload(); return; }
+      setBusy(false, button);
+      var said = typeof err === "string" && Object.prototype.hasOwnProperty.call(SAY, err) ? SAY[err] : null;
+      fail(said || (res.body && res.body.message) || "That did not work. Try again.");
     });
   }
-  var a = document.getElementById("approve");
-  var d = document.getElementById("deny");
-  if (a) a.addEventListener("click", function () { answer(true); });
-  if (d) d.addEventListener("click", function () { answer(false); });
+  allow.addEventListener("click", function () { answer(true, allow); });
+  deny.addEventListener("click", function () { answer(false, deny); });
 })();
 `;
 
@@ -385,12 +587,15 @@ const COOKIE_NOTICE_JS = String.raw`(function () {
 })();
 `;
 
-export const ASSETS: Record<string, { type: string; body: string }> = {
+export const ASSETS: Record<string, { type: string; body: string | Uint8Array }> = {
   "style.css": { type: "text/css; charset=utf-8", body: STYLE },
   "login.js": { type: "text/javascript; charset=utf-8", body: SHARED_JS + LOGIN_JS },
   "email.js": { type: "text/javascript; charset=utf-8", body: SHARED_JS + EMAIL_JS },
   "account.js": { type: "text/javascript; charset=utf-8", body: SHARED_JS + ACCOUNT_JS },
   "app.js": { type: "text/javascript; charset=utf-8", body: SHARED_JS + APP_JS },
   "add.js": { type: "text/javascript; charset=utf-8", body: SHARED_JS + ADD_JS },
+  "app.css": { type: "text/css; charset=utf-8", body: APP_STYLE },
+  "logo.svg": { type: "image/svg+xml", body: LOGO_SVG },
+  ...FONT_ASSETS,
   "cookie-notice.js": { type: "text/javascript; charset=utf-8", body: COOKIE_NOTICE_JS },
 };
