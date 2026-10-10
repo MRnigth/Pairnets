@@ -1,7 +1,7 @@
 // node --test scripts/deploy-gate
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { classify, lexBash, lexPowerShell, tampers } from './classify.mjs';
+import { classify, lexBash, lexPowerShell, tagMade, tampers } from './classify.mjs';
 
 const types = (command, shell = 'bash') => classify(command, shell).intents.map(i => i.type);
 const pushes = (command, shell = 'bash') => classify(command, shell).intents.filter(i => i.type === 'git-push');
@@ -136,6 +136,19 @@ test('aliases and odd git subcommands are handed to the gate', () => {
   assert.deepEqual(types('git p origin main'), ['git-alias']);
   assert.deepEqual(types('git send-pack origin main'), ['unparsed']);
   assert.deepEqual(types('git subtree push --prefix cloud origin main'), ['git-push']);
+});
+
+test('a tag made in the same command as a push is found', () => {
+  assert.deepEqual(types('git tag v1.2.3 && git push origin v1.2.3'), ['git-tag', 'git-push']);
+  assert.equal(tagMade(['v1.2.3']), 'v1.2.3');
+  assert.equal(tagMade(['-a', '-m', 'the release', 'v1.2.3', 'HEAD~1']), 'v1.2.3');
+  assert.equal(tagMade(['-am', 'the release', 'v1.2.3']), 'v1.2.3');
+  assert.equal(tagMade(['-f', '--message=x', 'v1.2.3']), 'v1.2.3');
+  assert.equal(tagMade([]), null);
+  assert.equal(tagMade(['-l', 'v*']), null);
+  assert.equal(tagMade(['-d', 'v1.2.3']), null);
+  assert.equal(tagMade(['--contains', 'HEAD']), null);
+  assert.equal(tagMade(['-n5']), null);
 });
 
 test('the lexers', () => {

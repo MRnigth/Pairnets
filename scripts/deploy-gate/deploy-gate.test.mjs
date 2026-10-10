@@ -105,6 +105,7 @@ test('release tags', () => {
   assert.deepEqual(targets('git push origin tag v9.9.9'), ['tag']);
   assert.deepEqual(targets('git push origin refs/tags/v9.9.9'), ['tag']);
   assert.deepEqual(targets('git push origin not-a-release'), []);
+  assert.deepEqual(targets('git push origin v1.2.3'), ['unknown']); // not a tag yet: which commit is unknown
   assert.deepEqual(targets('git push --tags origin'), ['tag']);
   run(repo, 'push', '-q', 'origin', 'v9.9.9');
   assert.deepEqual(targets('git push --tags origin'), []); // already on the remote
@@ -154,6 +155,12 @@ test('bypasses are refused', async () => {
   assert.equal((await hook(`echo x > "${process.env.PAIRNETS_PREDEPLOY_HOME}/stamps/abc.pass"`)).code, 2);
   assert.equal((await hook(path.join(process.env.PAIRNETS_PREDEPLOY_HOME, 'stamps', 'abc.pass'), { tool: 'Write' })).code, 2);
   assert.equal((await hook('git push --no-verify origin feature')).code, 0, 'skipping hooks is fine where nothing deploys');
+  const tagAndPush = await hook('git tag v7.0.0 && git push --no-verify origin v7.0.0');
+  assert.equal(tagAndPush.code, 2, 'a tag made in the same command cannot be checked');
+  assert.match(tagAndPush.err, /makes the release tag v7\.0\.0 and pushes in one go/);
+  assert.equal((await hook('git tag -a v7.0.0 -m x; git push --follow-tags --no-verify')).code, 2);
+  assert.equal((await hook('git tag not-a-release && git push origin feature')).code, 0);
+  assert.equal((await hook('git tag v7.0.0 && git push origin v7.0.0', { cwd: other })).code, 0, 'other repositories are left alone');
 });
 
 test('aliases are followed', async () => {

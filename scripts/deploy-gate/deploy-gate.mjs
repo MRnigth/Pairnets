@@ -162,6 +162,11 @@ export function pushTargets(intent, top) {
       }
     }
     if (dst === null) continue; // git refuses this push itself
+    if (/^v\d/i.test(dst) && !revParse(top, `refs/tags/${dst}`) && !revParse(top, `refs/heads/${dst}`)) {
+      // Looks like a release tag that is not here yet (made later in the same command, or by a script).
+      targets.push({ kind: 'unknown', label: `${dst} looks like a release tag that does not exist yet, so the check cannot tell which commit it is` });
+      continue;
+    }
     const releaseTag = /^(refs\/)?tags\/v[^/]*$/.test(dst) || (/^v[^/]*$/.test(dst) && !!revParse(top, `refs/tags/${dst}`) && !revParse(top, `refs/heads/${dst}`));
     if (isMainRef(dst)) {
       const sha = revParse(top, `${src}^{commit}`);
@@ -253,6 +258,12 @@ export async function decide(intents, cwd, command) {
     switch (it.type) {
       case 'tamper':
         blocks.push('This command writes to the pre-deploy check\'s own files (its pass records or its hook). Only the check itself writes them.');
+        break;
+      case 'git-tag':
+        // The tag does not exist yet when this runs, so a push later in the same command cannot be checked.
+        if (/^v/i.test(it.name) && intents.some(x => x.type === 'git-push' || x.type === 'git-alias') && relevant(top, uncertain)) {
+          blocks.push(`This command makes the release tag ${it.name} and pushes in one go. Make the tag in a command of its own first, then push it, so the check can see which commit it is.`);
+        }
         break;
       case 'unparsed':
         if (cwdIsPairnets || mentionsPairnets) blocks.push(`This command could not be read safely (${it.detail}), and it looks like it may deploy. Split it into simpler commands.`);

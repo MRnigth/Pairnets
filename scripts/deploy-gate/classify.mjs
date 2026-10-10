@@ -270,6 +270,12 @@ function git(args, ctx, intents, depth, shell) {
     intents.push({ type: 'unparsed', detail: 'git send-pack pushes without the usual checks' });
     return;
   }
+  if (sub === 'tag') {
+    // A tag made in the same command as a push does not exist yet when the gate looks at the push.
+    const name = tagMade(rest);
+    if (name) intents.push({ type: 'git-tag', dir, name });
+    return;
+  }
   if (['commit', 'add', 'status', 'log', 'diff', 'show', 'fetch', 'pull', 'merge', 'rebase', 'checkout', 'switch', 'branch', 'tag',
     'stash', 'reset', 'restore', 'rev-parse', 'remote', 'config', 'worktree', 'cherry-pick', 'revert', 'clone', 'init', 'ls-files',
     'ls-remote', 'grep', 'blame', 'describe', 'for-each-ref', 'show-ref', 'cat-file', 'merge-base', 'notes', 'clean', 'mv', 'rm',
@@ -277,6 +283,20 @@ function git(args, ctx, intents, depth, shell) {
     'archive', 'bundle', 'format-patch', 'name-rev', 'range-diff', 'rev-list', 'sparse-checkout', 'maintenance', 'lfs'].includes(sub)) return;
   // Possibly an alias ("git p" for push): deploy-gate.mjs looks it up in the repository's config.
   intents.push({ type: 'git-alias', dir, gitDir, alias: sub, args: rest, hooksOverride, shell });
+}
+
+const TAG_VALUE_OPTIONS = new Set(['-m', '--message', '-F', '--file', '-u', '--local-user', '--cleanup', '--sort', '--format', '--contains', '--no-contains', '--merged', '--no-merged', '--points-at', '--trailer']);
+
+/** The name of the tag "git tag ..." makes, or null when it lists, checks or deletes tags. */
+export function tagMade(rest) {
+  for (let i = 0; i < rest.length; i++) {
+    const a = rest[i];
+    if (a === '--') return rest[i + 1] ?? null;
+    if (!a.startsWith('-')) return a;
+    if (/^(-d|--delete|-l|--list|-v|--verify|-n\d*)$/.test(a) || a.startsWith('--contains') || a.startsWith('--points-at')) return null;
+    if (TAG_VALUE_OPTIONS.has(a) || /^-[a-zA-Z]*[mFu]$/.test(a)) i++; // -am "text": the last bundled option takes the value
+  }
+  return null;
 }
 
 /** What a "git push" would update. */
