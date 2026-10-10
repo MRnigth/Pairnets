@@ -403,6 +403,11 @@ public class DesktopUiTests
             Status = RunnerStatus.Syncing, Text = "Syncing", LastSyncAt = now.AddMinutes(-1),
             CurrentPath = "Videos/presentation-final.mp4", Operation = "upload", BytesDone = 67_108_864, BytesTotal = 104_857_600,
             FilesDone = 37, FilesTotal = 120, PassBytesDone = 412L << 20, PassBytesTotal = 1331L << 20, BytesPerSecond = 4.9 * (1 << 20),
+            UploadBytesPerSecond = 4.9 * (1 << 20), MyChangeVersion = 120,
+            Peers = new Dictionary<string, PeerActivity>
+            {
+                ["DESKTOP"] = new(new Pairnets.Core.Sync.PeerTransfer(0, 3_400_000, false, true), utc, 80, utc.AddMinutes(-2)),
+            },
             LimitText = "Limited to 5 MB/s", Server = server, Devices = devices,
             Active =
             [
