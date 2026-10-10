@@ -558,4 +558,39 @@ public class DesktopUiTests
         Assert.Equal(1, asked);
         window.Close();
     }
+
+    [AvaloniaFact]
+    public void TheSettingsPageLinksTheWebsitesHelpAndLegalPages()
+    {
+        var view = new SettingsView(new ClientSettings { ServerUrl = "http://example.invalid:5075/", Folder = "/tmp/x", DeviceName = "mac" }, null, autoStart: false);
+        var window = new Avalonia.Controls.Window { Content = view };
+        window.Show();
+        var opened = new List<string>();
+        view.OpenLinkRequested += opened.Add;
+
+        Assert.Contains(Pairnets.Core.PairnetsInfo.ProductVersion, view.AboutText.Text);
+        Assert.Contains("MIT licence", view.AboutText.Text);
+        var expected = new (Avalonia.Controls.Button Link, string Url)[]
+        {
+            (view.HelpLink, "https://pairnets.app/help/"),
+            (view.FaqLink, "https://pairnets.app/faq/"),
+            (view.ContactLink, "https://pairnets.app/contact/"),
+            (view.PrivacyLink, "https://pairnets.app/privacy/"),
+            (view.TermsLink, "https://pairnets.app/terms/"),
+            (view.GuidelinesLink, "https://pairnets.app/guidelines/"),
+            (view.CookiesLink, "https://pairnets.app/cookies/"),
+            (view.SecurityLink, "https://pairnets.app/security/"),
+            (view.LicensesLink, "https://pairnets.app/licenses/"),
+            (view.DeleteAccountLink, "https://pairnets.app/delete-account/"),
+        };
+        Assert.Equal(expected.Length, view.AboutLinks.Children.Count); // a new link needs a line here too
+        foreach (var (link, url) in expected)
+        {
+            Assert.True(link.IsVisible, link.Name);
+            link.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Avalonia.Controls.Button.ClickEvent));
+            Assert.Equal(url, opened.Last());
+        }
+        Assert.Equal(expected.Length, opened.Count);
+        window.Close();
+    }
 }

@@ -76,6 +76,7 @@ public partial class SettingsView : UserControl
         UpLimitValue.Value = (decimal)(current.UploadLimitMBps is > 0 ? current.UploadLimitMBps.Value : 5);
         DownLimitBox.IsChecked = current.DownloadLimitMBps is > 0;
         DownLimitValue.Value = (decimal)(current.DownloadLimitMBps is > 0 ? current.DownloadLimitMBps.Value : 10);
+        AboutText.Text = PairnetsLinks.AboutLine;
         ShowVersion(null);
     }
 
@@ -192,6 +193,15 @@ public partial class SettingsView : UserControl
     private void OnSignOut(object? sender, RoutedEventArgs e) => SignOutRequested?.Invoke();
 
     private void OnManageDevices(object? sender, RoutedEventArgs e) => ManageDevicesRequested?.Invoke();
+
+    /// <summary>A link under "About Pairnets": the address of one of the website's pages (<see cref="PairnetsLinks"/>).</summary>
+    public event Action<string>? OpenLinkRequested;
+
+    private void OnAboutLink(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button { CommandParameter: string url })
+            OpenLinkRequested?.Invoke(url);
+    }
 
     private void OnShowAddress(object? sender, RoutedEventArgs e)
     {

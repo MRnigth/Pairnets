@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
+using Pairnets.Core;
 using Pairnets.Core.Client;
 using Pairnets.Core.Settings;
 using Pairnets.Desktop.Views;
@@ -229,5 +230,24 @@ public class AccountSignInUiTests
         // A computer that signed in with the account has no nest name of its own to suggest.
         using var relayed = new Harness(service, new ClientSettings { ServerUrl = Relay.AddressOf(FakeSyncService.NestId).ToString() });
         Assert.Equal(string.Empty, relayed.View.AddressBox.Text);
+    }
+
+    [AvaloniaFact]
+    public async Task TheSmallPrintOpensTheTermsAndThePrivacyPolicyOnTheWebsite()
+    {
+        await using var service = await FakeSyncService.StartAsync();
+        using var window = new Harness(service);
+        var view = window.View;
+        Assert.Equal(SignInStep.Account, view.Step);
+        Assert.Empty(window.Opened); // nothing opens until a link is pressed
+
+        Click(view.TermsButton);
+        Assert.Equal("https://pairnets.app/terms/", window.Opened.Last());
+        Click(view.PrivacyButton);
+        Assert.Equal("https://pairnets.app/privacy/", window.Opened.Last());
+        Assert.Equal(SignInStep.Account, view.Step); // and the sign-in stays where it was
+
+        // The website is fixed: a different account service (here the stand-in) does not move it.
+        Assert.Equal(PairnetsLinks.Terms, window.Opened.First());
     }
 }

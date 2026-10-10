@@ -4,6 +4,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
 using Microsoft.Win32;
+using Pairnets.Core;
 using Pairnets.Core.Api;
 using Pairnets.Core.Client;
 using Pairnets.Core.Paths;
@@ -173,6 +174,11 @@ public partial class SignInView : UserControl
 
     /// <summary>Accounts are made by signing in: "Make an account" opens the service's sign-in page.</summary>
     private void OnMakeAccount(object sender, RoutedEventArgs e) => _openUrl(Relay.LoginUrl(Service));
+
+    /// <summary>The small print under the sign-in buttons: the website's Terms and Privacy Policy.</summary>
+    private void OnTerms(object sender, RoutedEventArgs e) => _openUrl(PairnetsLinks.Terms);
+
+    private void OnPrivacy(object sender, RoutedEventArgs e) => _openUrl(PairnetsLinks.Privacy);
 
     private void OnOwnNest(object sender, RoutedEventArgs e) => ShowAddressStep();
 

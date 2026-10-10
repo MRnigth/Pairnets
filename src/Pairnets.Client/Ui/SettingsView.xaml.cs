@@ -67,6 +67,7 @@ public partial class SettingsView : UserControl
         AutoServerBox.IsChecked = current.AutoUpdateServer;
         DebugBox.IsChecked = current.DebugMode;
         ServerVersionText.Text = serverVersionText ?? "Server: not connected yet";
+        AboutText.Text = PairnetsLinks.AboutLine;
         (current.EffectiveParallelTransfers switch { 1 => Par1, 2 => Par2, 8 => Par8, _ => Par4 }).IsChecked = true;
         UpLimitBox.IsChecked = current.UploadLimitMBps is > 0;
         UpLimitValue.Text = Number(current.UploadLimitMBps is > 0 ? current.UploadLimitMBps.Value : 5);
@@ -302,6 +303,15 @@ public partial class SettingsView : UserControl
     private void OnSignOut(object sender, RoutedEventArgs e) => SignOutRequested?.Invoke();
 
     private void OnManageDevices(object sender, RoutedEventArgs e) => ManageDevicesRequested?.Invoke();
+
+    /// <summary>A link under "About Pairnets": the address of one of the website's pages (<see cref="PairnetsLinks"/>).</summary>
+    public event Action<string>? OpenLinkRequested;
+
+    private void OnAboutLink(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button { CommandParameter: string url })
+            OpenLinkRequested?.Invoke(url);
+    }
 
     private void OnShowAddress(object sender, RoutedEventArgs e)
     {

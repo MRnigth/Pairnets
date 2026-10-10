@@ -604,6 +604,7 @@ public sealed class TrayController : ITrayActions, IDisposable
         view.SignOutRequested += SignOut;
         view.ResetRequested += ResetEverything;
         view.ManageDevicesRequested += ManageDevices;
+        view.OpenLinkRequested += Shell;
         view.Cancelled += () => _window?.Navigate(MainPage.Overview);
         _window.ShowSettingsPage(view);
     }

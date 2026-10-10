@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:v="using:Pairnets.Desktop.Views"
+             xmlns:core="using:Pairnets.Core"
              x:Class="Pairnets.Desktop.Views.SettingsView">
   <ScrollViewer x:Name="Scroller" HorizontalScrollBarVisibility="Disabled" PointerWheelChanged="OnScrollWheel">
   <!-- Inside the main window, which has its own margins. -->
@@ -153,6 +154,29 @@
         <TextBlock Classes="muted small" TextWrapping="Wrap"
                    Text="Forgets every setting, signs this computer out of your nest and starts again from the sign-in screen. The files in your sync folder are never deleted." />
         <Button x:Name="ResetButton" Classes="danger" HorizontalAlignment="Left" Content="Reset this app…" Click="OnReset" />
+      </StackPanel>
+    </Border>
+
+    <!-- About: version and licence, and the website's help and legal pages (each link's CommandParameter is its address) -->
+    <Border Classes="card">
+      <StackPanel Spacing="10">
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <v:LineIcon Classes="icon" Width="17" Height="17" Data="{StaticResource I.Info}" />
+          <TextBlock Classes="h2" Text="About Pairnets" />
+        </StackPanel>
+        <TextBlock x:Name="AboutText" Classes="muted small" TextWrapping="Wrap" />
+        <WrapPanel x:Name="AboutLinks" Margin="-6,0,0,0">
+          <Button x:Name="HelpLink" Classes="link" Content="Help" CommandParameter="{x:Static core:PairnetsLinks.Help}" Click="OnAboutLink" />
+          <Button x:Name="FaqLink" Classes="link" Content="FAQ" CommandParameter="{x:Static core:PairnetsLinks.Faq}" Click="OnAboutLink" />
+          <Button x:Name="ContactLink" Classes="link" Content="Contact" CommandParameter="{x:Static core:PairnetsLinks.Contact}" Click="OnAboutLink" />
+          <Button x:Name="PrivacyLink" Classes="link" Content="Privacy" CommandParameter="{x:Static core:PairnetsLinks.Privacy}" Click="OnAboutLink" />
+          <Button x:Name="TermsLink" Classes="link" Content="Terms" CommandParameter="{x:Static core:PairnetsLinks.Terms}" Click="OnAboutLink" />
+          <Button x:Name="GuidelinesLink" Classes="link" Content="Guidelines" CommandParameter="{x:Static core:PairnetsLinks.Guidelines}" Click="OnAboutLink" />
+          <Button x:Name="CookiesLink" Classes="link" Content="Cookie settings" CommandParameter="{x:Static core:PairnetsLinks.Cookies}" Click="OnAboutLink" />
+          <Button x:Name="SecurityLink" Classes="link" Content="Security" CommandParameter="{x:Static core:PairnetsLinks.Security}" Click="OnAboutLink" />
+          <Button x:Name="LicensesLink" Classes="link" Content="Open-source licences" CommandParameter="{x:Static core:PairnetsLinks.Licenses}" Click="OnAboutLink" />
+          <Button x:Name="DeleteAccountLink" Classes="link" Content="Delete my account" CommandParameter="{x:Static core:PairnetsLinks.DeleteAccount}" Click="OnAboutLink" />
+        </WrapPanel>
       </StackPanel>
     </Border>
 

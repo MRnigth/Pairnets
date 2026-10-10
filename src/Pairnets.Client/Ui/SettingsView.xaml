@@ -1,7 +1,8 @@
 <UserControl x:Class="Pairnets.Client.Ui.SettingsView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:ui="clr-namespace:Pairnets.Client.Ui">
+             xmlns:ui="clr-namespace:Pairnets.Client.Ui"
+             xmlns:core="clr-namespace:Pairnets.Core;assembly=Pairnets.Core">
   <UserControl.Resources>
     <Style x:Key="CardIcon" TargetType="ui:LineIcon">
       <Setter Property="Width" Value="17" />
@@ -178,6 +179,29 @@
         <TextBlock Style="{StaticResource MutedSmall}" TextWrapping="Wrap" Margin="0,8,0,0"
                    Text="Forgets every setting, signs this computer out of your nest and starts again from the sign-in screen. The files in your sync folder are never deleted." />
         <Button x:Name="ResetButton" Style="{StaticResource DangerButton}" Content="Reset this app…" HorizontalAlignment="Left" Margin="0,12,0,0" Click="OnReset" />
+      </StackPanel>
+    </Border>
+
+    <!-- About: version and licence, and the website's help and legal pages (each link's CommandParameter is its address) -->
+    <Border Style="{StaticResource Card}" Margin="0,12,0,0">
+      <StackPanel>
+        <StackPanel Orientation="Horizontal">
+          <ui:LineIcon Style="{StaticResource CardIcon}" Data="{StaticResource I.Info}" />
+          <TextBlock Style="{StaticResource H2}" Text="About Pairnets" />
+        </StackPanel>
+        <TextBlock x:Name="AboutText" Style="{StaticResource MutedSmall}" TextWrapping="Wrap" Margin="0,8,0,0" />
+        <WrapPanel x:Name="AboutLinks" Margin="-6,8,0,0">
+          <Button x:Name="HelpLink" Style="{StaticResource LinkButton}" Content="Help" CommandParameter="{x:Static core:PairnetsLinks.Help}" Click="OnAboutLink" />
+          <Button x:Name="FaqLink" Style="{StaticResource LinkButton}" Content="FAQ" CommandParameter="{x:Static core:PairnetsLinks.Faq}" Click="OnAboutLink" />
+          <Button x:Name="ContactLink" Style="{StaticResource LinkButton}" Content="Contact" CommandParameter="{x:Static core:PairnetsLinks.Contact}" Click="OnAboutLink" />
+          <Button x:Name="PrivacyLink" Style="{StaticResource LinkButton}" Content="Privacy" CommandParameter="{x:Static core:PairnetsLinks.Privacy}" Click="OnAboutLink" />
+          <Button x:Name="TermsLink" Style="{StaticResource LinkButton}" Content="Terms" CommandParameter="{x:Static core:PairnetsLinks.Terms}" Click="OnAboutLink" />
+          <Button x:Name="GuidelinesLink" Style="{StaticResource LinkButton}" Content="Guidelines" CommandParameter="{x:Static core:PairnetsLinks.Guidelines}" Click="OnAboutLink" />
+          <Button x:Name="CookiesLink" Style="{StaticResource LinkButton}" Content="Cookie settings" CommandParameter="{x:Static core:PairnetsLinks.Cookies}" Click="OnAboutLink" />
+          <Button x:Name="SecurityLink" Style="{StaticResource LinkButton}" Content="Security" CommandParameter="{x:Static core:PairnetsLinks.Security}" Click="OnAboutLink" />
+          <Button x:Name="LicensesLink" Style="{StaticResource LinkButton}" Content="Open-source licences" CommandParameter="{x:Static core:PairnetsLinks.Licenses}" Click="OnAboutLink" />
+          <Button x:Name="DeleteAccountLink" Style="{StaticResource LinkButton}" Content="Delete my account" CommandParameter="{x:Static core:PairnetsLinks.DeleteAccount}" Click="OnAboutLink" />
+        </WrapPanel>
       </StackPanel>
     </Border>
 

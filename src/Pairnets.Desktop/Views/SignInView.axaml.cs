@@ -172,6 +172,11 @@ public partial class SignInView : UserControl
     /// <summary>Accounts are made by signing in: "Make an account" opens the service's sign-in page.</summary>
     private void OnMakeAccount(object? sender, RoutedEventArgs e) => _openUrl(Relay.LoginUrl(Service));
 
+    /// <summary>The small print under the sign-in buttons: the website's Terms and Privacy Policy.</summary>
+    private void OnTerms(object? sender, RoutedEventArgs e) => _openUrl(PairnetsLinks.Terms);
+
+    private void OnPrivacy(object? sender, RoutedEventArgs e) => _openUrl(PairnetsLinks.Privacy);
+
     private void OnOwnNest(object? sender, RoutedEventArgs e) => ShowAddressStep();
 
     private void OnBackToAccount(object? sender, RoutedEventArgs e) => ShowAccountStep(null);

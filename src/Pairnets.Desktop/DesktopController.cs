@@ -632,6 +632,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
         view.SignOutRequested += SignOut;
         view.ResetRequested += ResetEverything;
         view.ManageDevicesRequested += ManageDevices;
+        view.OpenLinkRequested += url => _platform.Open(url);
         view.Cancelled += () => _window?.Navigate(MainPage.Overview);
         _window!.ShowSettingsPage(view);
     }

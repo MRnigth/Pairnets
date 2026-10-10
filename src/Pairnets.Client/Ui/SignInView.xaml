@@ -68,6 +68,19 @@
               <TextBlock Text="Make an account" FontSize="13.5" FontWeight="SemiBold" Foreground="{DynamicResource T.Text}" TextDecorations="Underline" />
             </Button>
           </StackPanel>
+
+          <!-- The small print: continuing means agreeing to the Terms and the Privacy Policy (pages on pairnets.app) -->
+          <WrapPanel HorizontalAlignment="Center" Margin="0,10,0,0">
+            <TextBlock Style="{StaticResource MutedSmall}" Text="By continuing, you agree to the" VerticalAlignment="Center" />
+            <Button x:Name="TermsButton" Style="{StaticResource LinkButton}" Padding="3,2" VerticalAlignment="Center" Click="OnTerms">
+              <TextBlock Style="{StaticResource MutedSmall}" Text="Terms" Foreground="{DynamicResource T.Text}" TextDecorations="Underline" />
+            </Button>
+            <TextBlock Style="{StaticResource MutedSmall}" Text="and the" VerticalAlignment="Center" />
+            <Button x:Name="PrivacyButton" Style="{StaticResource LinkButton}" Padding="3,2,0,2" VerticalAlignment="Center" Click="OnPrivacy">
+              <TextBlock Style="{StaticResource MutedSmall}" Text="Privacy Policy" Foreground="{DynamicResource T.Text}" TextDecorations="Underline" />
+            </Button>
+            <TextBlock Style="{StaticResource MutedSmall}" Text="." VerticalAlignment="Center" />
+          </WrapPanel>
         </StackPanel>
 
         <!-- 2. Finish in your browser: the code to compare, until this computer is allowed there -->
