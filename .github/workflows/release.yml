@@ -36,6 +36,14 @@ jobs:
         shell: bash
         run: |
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"; else echo "version=1.0.${{ github.run_number }}" >> "$GITHUB_OUTPUT"; fi
+      - name: Chromium for the website tests
+        run: |
+          if [ -d tests/Pairnets.Browser.Tests ]; then
+            dotnet build tests/Pairnets.Browser.Tests -c Release
+            pwsh tests/Pairnets.Browser.Tests/bin/Release/net8.0/playwright.ps1 install --with-deps chromium
+          else
+            echo "tests/Pairnets.Browser.Tests is not here yet"
+          fi
       - name: Test
         run: dotnet test Pairnets.sln -c Release
       - name: Publish
@@ -44,13 +52,8 @@ jobs:
           -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=false -p:DebugType=none
           -p:Version=${{ steps.v.outputs.version }} -o dist/pairnets-server-linux-x64
       - name: Package
-        run: |
-          cp deploy/install.sh deploy/update.sh deploy/pairnets-server.service deploy/pairnets-update.service deploy/pairnets-update.path deploy/pairnets-update.timer \
-             deploy/pairnets-tunnel.service deploy/pairnets.env.example dist/pairnets-server-linux-x64/
-          echo "${{ steps.v.outputs.version }}" > dist/pairnets-server-linux-x64/VERSION
-          cp docs/DEPLOY.md dist/pairnets-server-linux-x64/DEPLOY.md
-          chmod +x dist/pairnets-server-linux-x64/install.sh dist/pairnets-server-linux-x64/update.sh dist/pairnets-server-linux-x64/pairnets-server
-          tar -C dist -czf dist/pairnets-server-linux-x64.tar.gz pairnets-server-linux-x64
+        # The same script makes the package for the pre-deploy check (scripts/pre-deploy.ps1).
+        run: bash scripts/package-server.sh dist/pairnets-server-linux-x64 "${{ steps.v.outputs.version }}" dist
       - uses: actions/upload-artifact@v4
         with:
           name: server
@@ -69,6 +72,13 @@ jobs:
         shell: bash
         run: |
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"; else echo "version=1.0.${{ github.run_number }}" >> "$GITHUB_OUTPUT"; fi
+      - name: Test the Windows app
+        shell: pwsh
+        run: |
+          if (Test-Path tests/Pairnets.Client.Tests) {
+            dotnet test tests/Pairnets.Client.Tests -c Release
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          } else { Write-Host "tests/Pairnets.Client.Tests is not here yet" }
       - name: Publish
         run: >
           dotnet publish src/Pairnets.Client/Pairnets.Client.csproj -c Release -r win-x64 --self-contained true
@@ -149,10 +159,108 @@ jobs:
           name: macos
           path: dist/*
 
+  # The server package of this run, installed the real way under systemd before it is released (as in
+  # ci.yml and the pre-deploy check, docs/PREDEPLOY.md). Phase A: install, the API tour and website
+  # tests against it, the self-update. Phase B: the published release upgraded to this package.
+  linux-install:
+    name: Install on Linux (${{ matrix.check }})
+    needs: [server]
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        check: [install-and-update, upgrade-from-release]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - uses: actions/download-artifact@v4
+        with:
+          name: server
+          path: dist
+      - name: Update feeds from this run's package
+        run: |
+          v="$(tar -xOzf dist/pairnets-server-linux-x64.tar.gz pairnets-server-linux-x64/VERSION | tr -d '[:space:]')"
+          bash scripts/make-feed.sh dist/pairnets-server-linux-x64.tar.gz "$v" dist/feed1 "$GITHUB_SHA"
+          bash scripts/make-feed.sh dist/feed1/pairnets-server-linux-x64.tar.gz next dist/feed2 "$GITHUB_SHA"
+      - name: Build (for the tests against the installed server)
+        if: matrix.check == 'install-and-update'
+        run: dotnet build Pairnets.sln -c Release
+      - name: Install with get.sh (phase A)
+        if: matrix.check == 'install-and-update'
+        run: sudo bash tests/linux-server/install-check.sh --feed dist/feed1
+      - name: Test-only nest settings (HTTPS, fake mail and Google)
+        if: matrix.check == 'install-and-update'
+        run: sudo bash tests/linux-server/test-nest-config.sh
+      - name: Point the updater at feed 2
+        if: matrix.check == 'install-and-update'
+        run: sudo bash tests/linux-server/update-check.sh prepare --feed dist/feed2
+      - name: Chromium for the website tests
+        if: matrix.check == 'install-and-update'
+        run: |
+          if [ -d tests/Pairnets.Browser.Tests ]; then
+            pwsh tests/Pairnets.Browser.Tests/bin/Release/net8.0/playwright.ps1 install --with-deps chromium
+          else
+            echo "tests/Pairnets.Browser.Tests is not here yet"
+          fi
+      - name: API tour and website tests against the installed server
+        if: matrix.check == 'install-and-update'
+        env:
+          PAIRNETS_E2E_TARGET: installed-linux
+          PAIRNETS_E2E_URL: http://127.0.0.1:15075/
+          PAIRNETS_E2E_WEBSITE_URL: https://localhost:15443/
+          PAIRNETS_E2E_SHELL: sudo
+          PAIRNETS_E2E_DATA_DIR: /var/lib/pairnets
+          PAIRNETS_E2E_SERVICE: pairnets-server
+          PAIRNETS_E2E_MAIL_DIR: /var/lib/pairnets-e2e/mail
+          PAIRNETS_E2E_REPORT: ${{ runner.temp }}/tour-installed-linux.json
+        run: |
+          token="$(sudo sed -n 's/^SYNC_TOKEN=//p' /etc/pairnets/pairnets.env)"
+          echo "::add-mask::$token"
+          # The website tests first: they restart the server (which also resets its email limit), and the
+          # tour ends with a real "Update server".
+          if [ -d tests/Pairnets.Browser.Tests ]; then
+            PAIRNETS_E2E_TOKEN="$token" dotnet test tests/Pairnets.Browser.Tests -c Release --no-build \
+              --logger "trx;LogFilePrefix=installed-linux-website" --logger "console;verbosity=normal" \
+              --results-directory TestResults --blame-hang-timeout 10m
+          fi
+          PAIRNETS_E2E_TOKEN="$token" dotnet test tests/Pairnets.Tests -c Release --no-build \
+            --filter "FullyQualifiedName~InstalledLinux" \
+            --logger "trx;LogFilePrefix=installed-linux-tour" --logger "console;verbosity=normal" \
+            --results-directory TestResults --blame-hang-timeout 10m
+          if [ ! -s "$PAIRNETS_E2E_REPORT" ]; then
+            echo "::error::the installed-linux API tour did not run (it wrote no report)"
+            exit 1
+          fi
+      - name: Update (after the tour)
+        if: matrix.check == 'install-and-update'
+        run: sudo bash tests/linux-server/update-check.sh verify
+      - name: Upgrade from the published release (phase B)
+        if: matrix.check == 'upgrade-from-release'
+        run: sudo bash tests/linux-server/upgrade-check.sh --feed dist/feed1
+      - name: Server logs
+        # Only for a failed run: every artifact of a successful run becomes a release asset.
+        if: failure()
+        run: |
+          mkdir -p TestResults
+          { sudo journalctl --no-pager -o short-iso -u 'pairnets-*'; echo '--- update.log'; sudo cat /var/lib/pairnets/update/update.log; } > TestResults/server-journal.log 2>&1 || true
+          token="$(sudo sed -n 's/^SYNC_TOKEN=//p' /etc/pairnets/pairnets.env 2>/dev/null || true)"
+          if [ -n "$token" ]; then sed -i "s/$token/(token hidden)/g" TestResults/server-journal.log; fi
+          if [ -f "${{ runner.temp }}/tour-installed-linux.json" ]; then cp "${{ runner.temp }}/tour-installed-linux.json" TestResults/; fi
+      - name: Upload results
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-install-${{ matrix.check }}
+          path: TestResults
+          if-no-files-found: ignore
+
   release:
     name: GitHub release
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [server, client, desktop-linux, macos]
+    needs: [server, client, desktop-linux, macos, linux-install]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -183,7 +291,7 @@ jobs:
   latest:
     name: Latest build (main)
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    needs: [server, client, desktop-linux, macos]
+    needs: [server, client, desktop-linux, macos, linux-install]
     runs-on: ubuntu-latest
     concurrency:
       group: latest-build

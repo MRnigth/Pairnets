@@ -33,7 +33,16 @@ jobs:
           bash scripts/check-secrets.sh --history
 
       - name: Lint shell scripts
-        run: shellcheck deploy/*.sh deploy/linux-desktop/*.sh deploy/macos/*.sh scripts/*.sh
+        # The same list tests/linux-server/lint.sh checks in the pre-deploy test box.
+        run: shellcheck deploy/*.sh deploy/*/*.sh scripts/*.sh tests/linux-server/*.sh
+
+      - name: Deploy gate self-test
+        run: |
+          if [ -d scripts/deploy-gate ]; then
+            node --test "scripts/deploy-gate/*.test.mjs"
+          else
+            echo "scripts/deploy-gate is not here yet"
+          fi
 
       - uses: actions/setup-dotnet@v4
         with:
@@ -44,6 +53,14 @@ jobs:
 
       - name: Build (client included via EnableWindowsTargeting)
         run: dotnet build Pairnets.sln -c Release --no-restore
+
+      - name: Chromium for the website tests
+        run: |
+          if [ -d tests/Pairnets.Browser.Tests ]; then
+            pwsh tests/Pairnets.Browser.Tests/bin/Release/net8.0/playwright.ps1 install --with-deps chromium
+          else
+            echo "tests/Pairnets.Browser.Tests is not here yet"
+          fi
 
       - name: Test
         env:
@@ -60,6 +77,112 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: test-results-linux
+          path: TestResults
+          if-no-files-found: ignore
+
+  # The server installed the real way under systemd on this runner, as in the pre-deploy check's Linux
+  # test box (docs/PREDEPLOY.md, tests/linux-server). Phase A: install, the API tour and website tests
+  # against it, the self-update. Phase B: the published release upgraded to this build.
+  linux-install:
+    name: Install on Linux (${{ matrix.check }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        check: [install-and-update, upgrade-from-release]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Build
+        if: matrix.check == 'install-and-update'
+        run: dotnet build Pairnets.sln -c Release
+
+      - name: Server package and update feeds
+        run: |
+          dotnet publish src/Pairnets.Server/Pairnets.Server.csproj -c Release -r linux-x64 --self-contained true \
+            -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=false -p:DebugType=none \
+            -p:Version=1.0.65000 -o dist/pairnets-server-linux-x64
+          bash scripts/make-feed.sh dist/pairnets-server-linux-x64 1.0.65000 dist/feed1 "$GITHUB_SHA"
+          bash scripts/make-feed.sh dist/feed1/pairnets-server-linux-x64.tar.gz next dist/feed2 "$GITHUB_SHA"
+
+      - name: Install with get.sh (phase A)
+        if: matrix.check == 'install-and-update'
+        run: sudo bash tests/linux-server/install-check.sh --feed dist/feed1
+
+      - name: Test-only nest settings (HTTPS, fake mail and Google)
+        if: matrix.check == 'install-and-update'
+        run: sudo bash tests/linux-server/test-nest-config.sh
+
+      - name: Point the updater at feed 2
+        if: matrix.check == 'install-and-update'
+        run: sudo bash tests/linux-server/update-check.sh prepare --feed dist/feed2
+
+      - name: Chromium for the website tests
+        if: matrix.check == 'install-and-update'
+        run: |
+          if [ -d tests/Pairnets.Browser.Tests ]; then
+            pwsh tests/Pairnets.Browser.Tests/bin/Release/net8.0/playwright.ps1 install --with-deps chromium
+          else
+            echo "tests/Pairnets.Browser.Tests is not here yet"
+          fi
+
+      - name: API tour and website tests against the installed server
+        if: matrix.check == 'install-and-update'
+        env:
+          PAIRNETS_E2E_TARGET: installed-linux
+          PAIRNETS_E2E_URL: http://127.0.0.1:15075/
+          PAIRNETS_E2E_WEBSITE_URL: https://localhost:15443/
+          PAIRNETS_E2E_SHELL: sudo
+          PAIRNETS_E2E_DATA_DIR: /var/lib/pairnets
+          PAIRNETS_E2E_SERVICE: pairnets-server
+          PAIRNETS_E2E_MAIL_DIR: /var/lib/pairnets-e2e/mail
+          PAIRNETS_E2E_REPORT: ${{ runner.temp }}/tour-installed-linux.json
+        run: |
+          token="$(sudo sed -n 's/^SYNC_TOKEN=//p' /etc/pairnets/pairnets.env)"
+          echo "::add-mask::$token"
+          # The website tests first: they restart the server (which also resets its email limit), and the
+          # tour ends with a real "Update server".
+          if [ -d tests/Pairnets.Browser.Tests ]; then
+            PAIRNETS_E2E_TOKEN="$token" dotnet test tests/Pairnets.Browser.Tests -c Release --no-build \
+              --logger "trx;LogFilePrefix=installed-linux-website" --logger "console;verbosity=normal" \
+              --results-directory TestResults --blame-hang-timeout 10m
+          fi
+          PAIRNETS_E2E_TOKEN="$token" dotnet test tests/Pairnets.Tests -c Release --no-build \
+            --filter "FullyQualifiedName~InstalledLinux" \
+            --logger "trx;LogFilePrefix=installed-linux-tour" --logger "console;verbosity=normal" \
+            --results-directory TestResults --blame-hang-timeout 10m
+          if [ ! -s "$PAIRNETS_E2E_REPORT" ]; then
+            echo "::error::the installed-linux API tour did not run (it wrote no report)"
+            exit 1
+          fi
+
+      - name: Update (after the tour)
+        if: matrix.check == 'install-and-update'
+        run: sudo bash tests/linux-server/update-check.sh verify
+
+      - name: Upgrade from the published release (phase B)
+        if: matrix.check == 'upgrade-from-release'
+        run: sudo bash tests/linux-server/upgrade-check.sh --feed dist/feed1
+
+      - name: Server logs
+        if: always()
+        run: |
+          mkdir -p TestResults
+          { sudo journalctl --no-pager -o short-iso -u 'pairnets-*'; echo '--- update.log'; sudo cat /var/lib/pairnets/update/update.log; } > TestResults/server-journal.log 2>&1 || true
+          token="$(sudo sed -n 's/^SYNC_TOKEN=//p' /etc/pairnets/pairnets.env 2>/dev/null || true)"
+          if [ -n "$token" ]; then sed -i "s/$token/(token hidden)/g" TestResults/server-journal.log; fi
+          if [ -f "${{ runner.temp }}/tour-installed-linux.json" ]; then cp "${{ runner.temp }}/tour-installed-linux.json" TestResults/; fi
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-install-${{ matrix.check }}
           path: TestResults
           if-no-files-found: ignore
 
@@ -96,6 +219,14 @@ jobs:
         with:
           name: windows-ui-screenshots
           path: screens
+
+      - name: Chromium for the website tests
+        shell: pwsh
+        run: |
+          if (Test-Path tests/Pairnets.Browser.Tests) {
+            pwsh tests/Pairnets.Browser.Tests/bin/Release/net8.0/playwright.ps1 install chromium
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          } else { Write-Host "tests/Pairnets.Browser.Tests is not here yet" }
 
       - name: Test
         env:
