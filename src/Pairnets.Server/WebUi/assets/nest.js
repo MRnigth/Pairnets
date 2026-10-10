@@ -652,6 +652,7 @@
         await api("POST", "/shared-token", { allowed });
         await load();
       } catch (error) {
+        event.target.checked = !allowed; // not saved: the switch shows what the nest still does
         showError(error);
       }
     });

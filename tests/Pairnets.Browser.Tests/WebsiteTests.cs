@@ -364,15 +364,18 @@ public sealed partial class WebsiteTests(WebsiteFixture site, ITestOutputHelper 
 
         Step("the old shared token: Cancel keeps it, OK turns it off, and on again");
         var shared = page.Page.Locator("#shared-token");
+        // The switch moves at once; the nest has the change only once the page's request is answered.
+        Task FlipAndSaveAsync() => page.Page.RunAndWaitForResponseAsync(() => page.ClickAsync("label.switch .track"),
+            r => r.Request.Method == "POST" && r.Url.EndsWith("/web/api/shared-token", StringComparison.Ordinal));
         await Expect(shared).ToBeCheckedAsync();
         page.DismissNextQuestion();
         await page.ClickAsync("label.switch .track");
         await Expect(shared).ToBeCheckedAsync();
         Assert.Equal("ok", await Api.AnswerToAsync(site.Target.Token, "SHARED-CHECK"));
-        await page.ClickAsync("label.switch .track");
+        await FlipAndSaveAsync();
         await Expect(shared).Not.ToBeCheckedAsync();
         Assert.Equal(ErrorCodes.SharedTokenOff, await Api.AnswerToAsync(site.Target.Token, "SHARED-CHECK"));
-        await page.ClickAsync("label.switch .track");
+        await FlipAndSaveAsync();
         await Expect(shared).ToBeCheckedAsync();
         Assert.Equal("ok", await Api.AnswerToAsync(site.Target.Token, "SHARED-CHECK"));
         Assert.Contains(page.Dialogs, q => q.StartsWith("Turn off the old shared token", StringComparison.Ordinal));
