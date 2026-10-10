@@ -119,4 +119,62 @@ public class StateDbTests
         db.ClearWarning("A.txt");
         Assert.Empty(db.LoadWarnings());
     }
+
+    [Fact]
+    public void UnfinishedTransfersRoundTripAndGoWithARelink()
+    {
+        using var dir = new TempDir();
+        var path = dir.Combine("s.db");
+        using (var db = new StateDb(path))
+        {
+            db.SetUpload(new UploadCheckpoint("v.mp4", "id1", "https://sync.example.com/", "none", 10, 20, "h", 30));
+            db.SetUpload(new UploadCheckpoint("v.mp4", "id2", "https://sync.example.com/", "none", 10, 20, "h", 31));
+            db.SetDownload(new PartialDownload("m.mkv", "abc.part", "https://sync.example.com/", "h2", 99, 40));
+        }
+        using (var db = new StateDb(path))
+        {
+            Assert.Equal("id2", db.GetUpload("v.mp4")!.UploadId);
+            Assert.Single(db.LoadUploads());
+            db.RemoveUpload("v.mp4", "id1"); // another session's: kept
+            Assert.NotNull(db.GetUpload("v.mp4"));
+            Assert.Equal(new PartialDownload("m.mkv", "abc.part", "https://sync.example.com/", "h2", 99, 40), db.GetDownload("m.mkv"));
+            db.ClearAllBases();
+            Assert.Empty(db.LoadUploads());
+            Assert.Empty(db.LoadDownloads());
+        }
+    }
+
+    [Fact]
+    public void AStateDatabaseFromTheVersionBeforeIsUpgradedInPlace()
+    {
+        using var dir = new TempDir();
+        var path = dir.Combine("s.db");
+        // The schema as the previous release left it (user_version 1, no transfer tables).
+        using (var conn = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={path};Pooling=False"))
+        {
+            conn.Open();
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = """
+                CREATE TABLE files(path TEXT PRIMARY KEY NOT NULL, baseHash TEXT NULL, size INTEGER NOT NULL DEFAULT -1,
+                    mtimeTicks INTEGER NOT NULL DEFAULT 0, hash TEXT NULL, hashedAtTicks INTEGER NOT NULL DEFAULT 0);
+                CREATE TABLE remote(path TEXT PRIMARY KEY NOT NULL, hash TEXT NULL, size INTEGER NOT NULL, modifiedMs INTEGER NOT NULL,
+                    deleted INTEGER NOT NULL, version INTEGER NOT NULL);
+                CREATE TABLE warnings(path TEXT PRIMARY KEY NOT NULL, code TEXT NOT NULL, message TEXT NULL, localHash TEXT NULL,
+                    serverCursor INTEGER NOT NULL, createdMs INTEGER NOT NULL);
+                CREATE TABLE pendingDeletes(side TEXT NOT NULL, path TEXT NOT NULL, PRIMARY KEY(side, path));
+                CREATE TABLE approvedDeletes(side TEXT NOT NULL, path TEXT NOT NULL, PRIMARY KEY(side, path));
+                CREATE TABLE meta(key TEXT PRIMARY KEY NOT NULL, value TEXT NOT NULL);
+                INSERT INTO files(path, baseHash) VALUES('kept.txt', 'base');
+                INSERT INTO meta(key, value) VALUES('marker', 'm1');
+                PRAGMA user_version=1;
+                """;
+            cmd.ExecuteNonQuery();
+        }
+
+        using var db = new StateDb(path);
+        Assert.Equal("base", db.GetFile("kept.txt")!.BaseHash);
+        Assert.Equal("m1", db.MarkerId);
+        db.SetUpload(new UploadCheckpoint("a", "id", "s", "none", 1, 2, "h", 3));
+        Assert.NotNull(db.GetUpload("a"));
+    }
 }

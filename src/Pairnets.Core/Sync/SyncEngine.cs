@@ -341,6 +341,7 @@ public sealed class SyncEngine
             _log.LogWarning("Executing {Count} deletion(s) approved by the user", wanted.Count);
         }
         _state.ClearPendingDeletes();
+        await DropStaleTransfersAsync(plan, scan).ConfigureAwait(false);
 
         // ---- 6. Execute. Deletions first so file/folder replacements never collide.
         var taken = new HashSet<string>(StringComparer.Ordinal);
@@ -496,9 +497,9 @@ public sealed class SyncEngine
                 _state.RemoveFile(item.Path);
                 return Task.CompletedTask;
             case SyncAction.Upload:
-                return UploadAsync(item.Path, item.Server ?? ContentHash.NoneBase, ctx, ct);
+                return UploadAsync(item.Path, item.Server ?? ContentHash.NoneBase, item.Local, ctx, ct);
             case SyncAction.Download:
-                return DownloadAsync(item.Path, item.Local, ctx, ct);
+                return DownloadAsync(item.Path, item.Local, item.Server, ctx, ct);
             case SyncAction.Conflict:
                 return ConflictAsync(item, ctx, ct);
             case SyncAction.DeleteLocal:
@@ -512,7 +513,7 @@ public sealed class SyncEngine
 
     // ------------------------------------------------------------------ upload
 
-    private async Task UploadAsync(string path, string baseHash, PassContext ctx, CancellationToken ct)
+    private async Task UploadAsync(string path, string baseHash, string? localHash, PassContext ctx, CancellationToken ct)
     {
         var full = ResolveLocal(path);
         FileStream stream;
@@ -535,9 +536,26 @@ public sealed class SyncEngine
             var mtimeTicks = info.LastWriteTimeUtc.Ticks;
             var mtimeMs = new DateTimeOffset(info.LastWriteTimeUtc).ToUnixTimeMilliseconds();
             var total = stream.Length;
+            var resume = await ResumeForAsync(path, baseHash, localHash, total, mtimeTicks).ConfigureAwait(false);
             Report(path, "upload", 0, total, ctx);
-            var (res, sentHash, sentBytes) = await _api.UploadAsync(path, baseHash, mtimeMs, stream,
-                bytes => Report(path, "upload", bytes, total, ctx), ct).ConfigureAwait(false);
+            (ApiResult Result, string SentHash, long SentBytes) sent;
+            try
+            {
+                sent = await _api.UploadAsync(path, baseHash, mtimeMs, stream,
+                    bytes => Report(path, "upload", bytes, total, ctx), ct, resume).ConfigureAwait(false);
+            }
+            finally
+            {
+                // Kept while the server holds the unfinished upload (a broken connection, Pause, closing the app),
+                // so the next pass continues it; forgotten once it is finished or the server no longer has it.
+                if (resume.Id is null)
+                    _state.RemoveUpload(path);
+                else
+                    _log.LogInformation("Upload of {Path} stopped before it was finished; the next pass continues it", path);
+            }
+            if (resume.ResumedFrom > 0)
+                _log.LogInformation("Continued the upload of {Path} at {Bytes} of {Size} bytes", path, resume.ResumedFrom, total);
+            var (res, sentHash, sentBytes) = sent;
             switch (res.Outcome)
             {
                 case ApiOutcome.Ok:
@@ -571,22 +589,140 @@ public sealed class SyncEngine
         }
     }
 
+    /// <summary>
+    /// The unfinished upload a pass before this one left for exactly this content (same size, modification time and
+    /// content hash), base and server, to be continued; one for anything else is given up. A session the upload
+    /// opens is written to state.db at once, so it survives Pause and a restart of the app.
+    /// </summary>
+    private async Task<UploadResume> ResumeForAsync(string path, string baseHash, string? localHash, long size, long mtimeTicks)
+    {
+        var server = _api.ServerKey;
+        string? id = null;
+        if (_state.GetUpload(path) is { } saved)
+        {
+            if (localHash is not null && saved.Server == server && saved.BaseHash == baseHash
+                && saved.Size == size && saved.MtimeTicks == mtimeTicks && saved.Hash == localHash)
+                id = saved.UploadId;
+            else
+                await AbandonUploadAsync(saved, "the file, or its version on the server, changed since").ConfigureAwait(false);
+        }
+        return new UploadResume(id, localHash is null ? null : newId =>
+            _state.SetUpload(new UploadCheckpoint(path, newId, server, baseHash, size, mtimeTicks, localHash, _clock.GetUtcNow().ToUnixTimeMilliseconds())));
+    }
+
+    /// <summary>Gives up an unfinished upload for good: the server drops its part, and the next upload of the file starts from the beginning.</summary>
+    private async Task AbandonUploadAsync(UploadCheckpoint saved, string why)
+    {
+        _log.LogInformation("Giving up the unfinished upload of {Path}: {Why}", saved.Path, why);
+        if (string.Equals(saved.Server, _api.ServerKey, StringComparison.Ordinal))
+            await _api.AbandonUploadAsync(saved.UploadId).ConfigureAwait(false);
+        _state.RemoveUpload(saved.Path, saved.UploadId);
+    }
+
+    /// <summary>
+    /// Unfinished transfers this pass does not continue are given up: the file was deleted or changed, is in sync
+    /// now, or the server has another version. Those of files that are unknown this pass (locked, still being
+    /// written, in a folder that could not be read) wait for a later pass.
+    /// </summary>
+    private async Task DropStaleTransfersAsync(List<PlannedAction> plan, ScanResult scan)
+    {
+        var uploads = _state.LoadUploads();
+        var downloads = _state.LoadDownloads();
+        if (uploads.Count == 0 && downloads.Count == 0)
+            return;
+        var uploading = plan.Where(p => p.Action == SyncAction.Upload).Select(p => p.Path).ToHashSet(StringComparer.Ordinal);
+        var downloading = plan.Where(p => p.Action is SyncAction.Download or SyncAction.Conflict).Select(p => p.Path).ToHashSet(StringComparer.Ordinal);
+        bool Unknown(string path) => scan.IsUnderUnknownPrefix(path) || (scan.Files.TryGetValue(path, out var f) && !f.Stable);
+        foreach (var saved in uploads)
+        {
+            if (!uploading.Contains(saved.Path) && !Unknown(saved.Path))
+                await AbandonUploadAsync(saved, "it is no longer sent").ConfigureAwait(false);
+        }
+        foreach (var partial in downloads)
+        {
+            if (!downloading.Contains(partial.Path) && !Unknown(partial.Path))
+                DropPartialDownload(partial, "it is no longer downloaded");
+        }
+    }
+
     // ------------------------------------------------------------------ download
 
-    private async Task DownloadAsync(string path, string? expectedLocalHash, PassContext ctx, CancellationToken ct)
+    private async Task DownloadAsync(string path, string? expectedLocalHash, string? serverHash, PassContext ctx, CancellationToken ct)
+    {
+        var size = ctx.Sizes.GetValueOrDefault(path);
+        // Big files keep what arrived when the connection breaks, and later ask only for the rest of the same version.
+        if (serverHash is null || size < _options.ResumeDownloadsFrom || _hooks.WrapDownloadStream is not null)
+        {
+            await DownloadOnceAsync(path, expectedLocalHash, null, ctx, ct).ConfigureAwait(false);
+            return;
+        }
+        try
+        {
+            await DownloadOnceAsync(path, expectedLocalHash, PartialFor(path, serverHash, size), ctx, ct).ConfigureAwait(false);
+        }
+        catch (StartAgainException ex)
+        {
+            // What a try before this one left was not usable (it is deleted): download the whole file instead.
+            _log.LogWarning("{Message} Downloading all of {Path} again", ex.Message, path);
+            await DownloadOnceAsync(path, expectedLocalHash, PartialFor(path, serverHash, size), ctx, ct).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    /// One download into a temp file in .pairnets-tmp, verified against the server's length and hash, then moved
+    /// into place. With <paramref name="partial"/> the temp file is kept when the download is cut off (and recorded
+    /// in state.db with the version its bytes belong to), and continued if it already holds a start.
+    /// </summary>
+    private async Task DownloadOnceAsync(string path, string? expectedLocalHash, PartialDownload? partial, PassContext ctx, CancellationToken ct)
     {
         var full = ResolveLocal(path);
-        var tmp = Path.Combine(EnsureTempDirectory(), Guid.NewGuid().ToString("N") + ".part");
+        var tmp = Path.Combine(EnsureTempDirectory(), partial?.TmpName ?? Guid.NewGuid().ToString("N") + ".part");
+        var keep = false;
         try
         {
             DownloadResult dl;
-            await using (var fs = new FileStream(tmp, FileMode.CreateNew, FileAccess.Write, FileShare.None, ContentHash.BufferSize, FileOptions.Asynchronous))
+            await using (var fs = new FileStream(tmp, partial is null ? FileMode.CreateNew : FileMode.OpenOrCreate, FileAccess.ReadWrite,
+                FileShare.None, ContentHash.BufferSize, FileOptions.Asynchronous))
             {
+                DownloadResume? resume = null;
+                if (partial is not null)
+                {
+                    // What a try before this one left (one that is complete or longer is suspect: start again).
+                    var have = fs.Length < partial.Size ? fs.Length : 0;
+                    fs.SetLength(have);
+                    fs.Position = have;
+                    resume = new DownloadResume(partial.Hash, have);
+                }
                 var target = _hooks.WrapDownloadStream?.Invoke(fs) ?? fs;
-                Report(path, "download", 0, 0, ctx);
-                dl = await _api.DownloadAsync(path, target, bytes => Report(path, "download", bytes, 0, ctx), ct).ConfigureAwait(false);
-                await target.FlushAsync(ct).ConfigureAwait(false);
-                fs.Flush(flushToDisk: true);
+                Report(path, "download", resume?.Offset ?? 0, 0, ctx);
+                try
+                {
+                    dl = await _api.DownloadAsync(path, target, bytes => Report(path, "download", bytes, 0, ctx), ct, resume).ConfigureAwait(false);
+                    await target.FlushAsync(ct).ConfigureAwait(false);
+                    fs.Flush(flushToDisk: true);
+                }
+                catch (Exception ex) when (partial is not null && KeepsPartial(ex))
+                {
+                    // Cut off, paused or closing: keep what arrived, recorded with the version it belongs to.
+                    fs.Flush(flushToDisk: true);
+                    if (fs.Length > 0)
+                    {
+                        _state.SetDownload(partial with
+                        {
+                            Hash = resume!.ServedHash ?? partial.Hash,
+                            Size = resume.ServedSize ?? partial.Size,
+                        });
+                        keep = true;
+                        _log.LogInformation("Download of {Path} stopped at {Bytes} bytes; the next pass continues it", path, fs.Length);
+                    }
+                    throw;
+                }
+                catch (Exception ex) when (resume is { Offset: > 0 } && ex is DownloadMismatchException or PairnetsProtocolException)
+                {
+                    throw new StartAgainException(ex.Message, ex);
+                }
+                if (resume is { ContinuedFrom: > 0 })
+                    _log.LogInformation("Continued the download of {Path} at {Bytes} bytes", path, resume.ContinuedFrom);
             }
 
             if (!dl.Found)
@@ -613,9 +749,52 @@ public sealed class SyncEngine
         }
         finally
         {
-            TryDeleteFile(tmp);
+            if (!keep)
+            {
+                TryDeleteFile(tmp);
+                if (partial is not null)
+                    _state.RemoveDownload(path);
+            }
         }
     }
+
+    /// <summary>A cut connection, Pause or closing the app keeps a partial download; a wrong answer or a local error does not.</summary>
+    private static bool KeepsPartial(Exception ex) =>
+        ex is OperationCanceledException or PairnetsAuthException
+        || (ex is PairnetsNetworkException && ex is not DownloadMismatchException);
+
+    /// <summary>
+    /// The partial download of <paramref name="path"/> to continue: the one a pass before this one left for this
+    /// server and exactly this version, or a new one (recorded before any byte arrives). One of another version is deleted.
+    /// </summary>
+    private PartialDownload PartialFor(string path, string serverHash, long size)
+    {
+        var server = _api.ServerKey;
+        if (_state.GetDownload(path) is { } saved)
+        {
+            if (saved.Server == server && saved.Hash == serverHash && IsTempName(saved.TmpName))
+                return saved;
+            DropPartialDownload(saved, "the file changed on the server since");
+        }
+        var fresh = new PartialDownload(path, Guid.NewGuid().ToString("N") + ".part", server, serverHash, size, _clock.GetUtcNow().ToUnixTimeMilliseconds());
+        _state.SetDownload(fresh);
+        return fresh;
+    }
+
+    private void DropPartialDownload(PartialDownload partial, string why)
+    {
+        _log.LogInformation("Deleting the unfinished download of {Path}: {Why}", partial.Path, why);
+        if (IsTempName(partial.TmpName))
+            TryDeleteFile(Path.Combine(TempDirectory, partial.TmpName));
+        _state.RemoveDownload(partial.Path);
+    }
+
+    /// <summary>A plain file name in .pairnets-tmp (never a path that could point elsewhere).</summary>
+    private static bool IsTempName(string name) =>
+        name.Length > 0 && string.Equals(Path.GetFileName(name), name, StringComparison.Ordinal) && name.EndsWith(".part", StringComparison.Ordinal);
+
+    /// <summary>A partial download could not be continued (its bytes did not match, or the server answered oddly); it was deleted.</summary>
+    private sealed class StartAgainException(string message, Exception inner) : Exception(message, inner);
 
     /// <summary>
     /// Safety guard (d): before the engine overwrites a local file, verify it still has the content
@@ -653,10 +832,10 @@ public sealed class SyncEngine
         RaiseConflict(item.Path, copy, ctx);
 
         // 2. Upload the copy as a new file so it reaches the other PC too.
-        await UploadAsync(copy, ContentHash.NoneBase, ctx, ct).ConfigureAwait(false);
+        await UploadAsync(copy, ContentHash.NoneBase, item.Local, ctx, ct).ConfigureAwait(false);
 
         // 3. Bring the server version to the original name.
-        await DownloadAsync(item.Path, expectedLocalHash: null, ctx, ct).ConfigureAwait(false);
+        await DownloadAsync(item.Path, expectedLocalHash: null, item.Server, ctx, ct).ConfigureAwait(false);
     }
 
     // ------------------------------------------------------------------ deletes
@@ -859,13 +1038,18 @@ public sealed class SyncEngine
         return dir;
     }
 
+    /// <summary>Empties .pairnets-tmp, except the partial downloads that state.db says a later pass may continue.</summary>
     private void CleanTempDirectory()
     {
         var dir = TempDirectory;
         if (!Directory.Exists(dir))
             return;
+        var kept = _state.LoadDownloads().Select(d => d.TmpName).ToHashSet(StringComparer.Ordinal);
         foreach (var file in Directory.EnumerateFiles(dir))
-            TryDeleteFile(file);
+        {
+            if (!kept.Contains(Path.GetFileName(file)))
+                TryDeleteFile(file);
+        }
     }
 
     private void TryDeleteFile(string path)

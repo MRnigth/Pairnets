@@ -157,9 +157,11 @@ public sealed record HistoryVersion(string Id, DateTimeOffset StoredAtUtc, long 
 
 /// <summary>
 /// An upload that arrives in pieces (<c>POST /api/upload</c>, <c>PUT /api/upload/{id}</c>): its id and how
-/// many bytes the server has, which is where the next piece starts.
+/// many bytes the server has, which is where the next piece starts. <see cref="Busy"/>: the server is still
+/// taking in an earlier piece (or checking what it has after a restart), so the next piece has to wait a
+/// moment (missing, so false, on servers from before it was told).
 /// </summary>
-public sealed record UploadStatus(string Id, long Received);
+public sealed record UploadStatus(string Id, long Received, bool Busy = false);
 
 /// <summary>Stable machine-readable error codes used in <see cref="ErrorBody"/>.</summary>
 public static class ErrorCodes
@@ -174,6 +176,15 @@ public static class ErrorCodes
 
     /// <summary>A piece of an upload did not start where the server's copy ends (ask for the status and go on from there).</summary>
     public const string UploadOffset = "upload-offset";
+
+    /// <summary>
+    /// An earlier piece of this upload is still arriving (or the server is still checking the part it kept over a
+    /// restart): wait a moment and ask for the status again. Servers from before it answer upload-offset instead.
+    /// </summary>
+    public const string UploadBusy = "upload-busy";
+
+    /// <summary>With 202: a history version is still being restored; ask again with the same ticket.</summary>
+    public const string Restoring = "restoring";
 
     /// <summary>An upload in pieces did not match the hash it was committed with; it was dropped.</summary>
     public const string UploadMismatch = "upload-mismatch";

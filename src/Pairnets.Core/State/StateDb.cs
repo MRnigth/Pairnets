@@ -28,12 +28,27 @@ public enum DeleteSide
 }
 
 /// <summary>
+/// An upload in pieces that stopped before it was finished: the server's id for it and exactly which local
+/// content it carries (<see cref="Size"/>, <see cref="MtimeTicks"/> and the content <see cref="Hash"/> when it
+/// started), so a later pass, also after Pause or a restart of the app, continues from what the server has
+/// instead of sending the file again. It is only continued for that same content, base and server.
+/// </summary>
+public sealed record UploadCheckpoint(string Path, string UploadId, string Server, string BaseHash, long Size, long MtimeTicks, string Hash, long StartedMs);
+
+/// <summary>
+/// A download that stopped before it was finished: its bytes so far are in <see cref="TmpName"/> (in the folder's
+/// .pairnets-tmp) and belong to the server version <see cref="Hash"/> of <see cref="Size"/> bytes, so a later pass
+/// asks only for the rest, as long as the server still has that version.
+/// </summary>
+public sealed record PartialDownload(string Path, string TmpName, string Server, string Hash, long Size, long StartedMs);
+
+/// <summary>
 /// SQLite state database for one sync folder (one per folder, under %LocalAppData%\Pairnets).
 /// Thread-safe: every call takes a short lock.
 /// </summary>
 public sealed class StateDb : IDisposable
 {
-    private const int SchemaVersion = 1;
+    private const int SchemaVersion = 2;
 
     public const string MetaMarker = "marker";
     public const string MetaServerId = "serverId";
@@ -71,41 +86,67 @@ public sealed class StateDb : IDisposable
         if (version == SchemaVersion)
             return;
 
-        Exec("""
-            CREATE TABLE IF NOT EXISTS files(
-                path TEXT PRIMARY KEY NOT NULL,
-                baseHash TEXT NULL,
-                size INTEGER NOT NULL DEFAULT -1,
-                mtimeTicks INTEGER NOT NULL DEFAULT 0,
-                hash TEXT NULL,
-                hashedAtTicks INTEGER NOT NULL DEFAULT 0);
-            CREATE TABLE IF NOT EXISTS remote(
-                path TEXT PRIMARY KEY NOT NULL,
-                hash TEXT NULL,
-                size INTEGER NOT NULL,
-                modifiedMs INTEGER NOT NULL,
-                deleted INTEGER NOT NULL,
-                version INTEGER NOT NULL);
-            CREATE TABLE IF NOT EXISTS warnings(
-                path TEXT PRIMARY KEY NOT NULL,
-                code TEXT NOT NULL,
-                message TEXT NULL,
-                localHash TEXT NULL,
-                serverCursor INTEGER NOT NULL,
-                createdMs INTEGER NOT NULL);
-            CREATE TABLE IF NOT EXISTS pendingDeletes(
-                side TEXT NOT NULL,
-                path TEXT NOT NULL,
-                PRIMARY KEY(side, path));
-            CREATE TABLE IF NOT EXISTS approvedDeletes(
-                side TEXT NOT NULL,
-                path TEXT NOT NULL,
-                PRIMARY KEY(side, path));
-            CREATE TABLE IF NOT EXISTS meta(
-                key TEXT PRIMARY KEY NOT NULL,
-                value TEXT NOT NULL);
-            """);
-        Exec($"PRAGMA user_version={SchemaVersion};");
+        if (version < 1)
+        {
+            Exec("""
+                CREATE TABLE IF NOT EXISTS files(
+                    path TEXT PRIMARY KEY NOT NULL,
+                    baseHash TEXT NULL,
+                    size INTEGER NOT NULL DEFAULT -1,
+                    mtimeTicks INTEGER NOT NULL DEFAULT 0,
+                    hash TEXT NULL,
+                    hashedAtTicks INTEGER NOT NULL DEFAULT 0);
+                CREATE TABLE IF NOT EXISTS remote(
+                    path TEXT PRIMARY KEY NOT NULL,
+                    hash TEXT NULL,
+                    size INTEGER NOT NULL,
+                    modifiedMs INTEGER NOT NULL,
+                    deleted INTEGER NOT NULL,
+                    version INTEGER NOT NULL);
+                CREATE TABLE IF NOT EXISTS warnings(
+                    path TEXT PRIMARY KEY NOT NULL,
+                    code TEXT NOT NULL,
+                    message TEXT NULL,
+                    localHash TEXT NULL,
+                    serverCursor INTEGER NOT NULL,
+                    createdMs INTEGER NOT NULL);
+                CREATE TABLE IF NOT EXISTS pendingDeletes(
+                    side TEXT NOT NULL,
+                    path TEXT NOT NULL,
+                    PRIMARY KEY(side, path));
+                CREATE TABLE IF NOT EXISTS approvedDeletes(
+                    side TEXT NOT NULL,
+                    path TEXT NOT NULL,
+                    PRIMARY KEY(side, path));
+                CREATE TABLE IF NOT EXISTS meta(
+                    key TEXT PRIMARY KEY NOT NULL,
+                    value TEXT NOT NULL);
+                PRAGMA user_version=1;
+                """);
+        }
+        if (version < 2)
+        {
+            // Unfinished transfers, so big files continue where they stopped (also after a restart).
+            Exec("""
+                CREATE TABLE IF NOT EXISTS uploads(
+                    path TEXT PRIMARY KEY NOT NULL,
+                    uploadId TEXT NOT NULL,
+                    server TEXT NOT NULL,
+                    baseHash TEXT NOT NULL,
+                    size INTEGER NOT NULL,
+                    mtimeTicks INTEGER NOT NULL,
+                    hash TEXT NOT NULL,
+                    startedMs INTEGER NOT NULL);
+                CREATE TABLE IF NOT EXISTS downloads(
+                    path TEXT PRIMARY KEY NOT NULL,
+                    tmpName TEXT NOT NULL,
+                    server TEXT NOT NULL,
+                    hash TEXT NOT NULL,
+                    size INTEGER NOT NULL,
+                    startedMs INTEGER NOT NULL);
+                PRAGMA user_version=2;
+                """);
+        }
     }
 
     // ---------------------------------------------------------------- meta
@@ -294,10 +335,114 @@ public sealed class StateDb : IDisposable
             Exec("DELETE FROM warnings", tx);
             Exec("DELETE FROM pendingDeletes", tx);
             Exec("DELETE FROM approvedDeletes", tx);
+            // Unfinished transfers belong to the previous server: start them again (their temp files go at the next pass).
+            Exec("DELETE FROM uploads", tx);
+            Exec("DELETE FROM downloads", tx);
             Exec($"DELETE FROM meta WHERE key IN ('{MetaServerId}','{MetaCursor}','{MetaApprovalArmed}')", tx);
             tx.Commit();
         }
     }
+
+    // ---------------------------------------------------------------- unfinished transfers
+
+    public UploadCheckpoint? GetUpload(string path)
+    {
+        lock (_gate)
+        {
+            using var cmd = Command("SELECT path, uploadId, server, baseHash, size, mtimeTicks, hash, startedMs FROM uploads WHERE path=$p", ("$p", path));
+            using var r = cmd.ExecuteReader();
+            return r.Read() ? ReadUpload(r) : null;
+        }
+    }
+
+    public List<UploadCheckpoint> LoadUploads()
+    {
+        lock (_gate)
+        {
+            var result = new List<UploadCheckpoint>();
+            using var cmd = Command("SELECT path, uploadId, server, baseHash, size, mtimeTicks, hash, startedMs FROM uploads ORDER BY path");
+            using var r = cmd.ExecuteReader();
+            while (r.Read())
+                result.Add(ReadUpload(r));
+            return result;
+        }
+    }
+
+    public void SetUpload(UploadCheckpoint u)
+    {
+        lock (_gate)
+        {
+            using var cmd = Command("""
+                INSERT INTO uploads(path, uploadId, server, baseHash, size, mtimeTicks, hash, startedMs) VALUES($p, $i, $s, $b, $z, $m, $h, $t)
+                ON CONFLICT(path) DO UPDATE SET uploadId=excluded.uploadId, server=excluded.server, baseHash=excluded.baseHash,
+                    size=excluded.size, mtimeTicks=excluded.mtimeTicks, hash=excluded.hash, startedMs=excluded.startedMs
+                """, ("$p", u.Path), ("$i", u.UploadId), ("$s", u.Server), ("$b", u.BaseHash), ("$z", u.Size), ("$m", u.MtimeTicks), ("$h", u.Hash), ("$t", u.StartedMs));
+            cmd.ExecuteNonQuery();
+        }
+    }
+
+    /// <summary>Forgets the unfinished upload of <paramref name="path"/>, but only the one with <paramref name="uploadId"/> when given.</summary>
+    public void RemoveUpload(string path, string? uploadId = null)
+    {
+        lock (_gate)
+        {
+            using var cmd = uploadId is null
+                ? Command("DELETE FROM uploads WHERE path=$p", ("$p", path))
+                : Command("DELETE FROM uploads WHERE path=$p AND uploadId=$i", ("$p", path), ("$i", uploadId));
+            cmd.ExecuteNonQuery();
+        }
+    }
+
+    public PartialDownload? GetDownload(string path)
+    {
+        lock (_gate)
+        {
+            using var cmd = Command("SELECT path, tmpName, server, hash, size, startedMs FROM downloads WHERE path=$p", ("$p", path));
+            using var r = cmd.ExecuteReader();
+            return r.Read() ? ReadDownload(r) : null;
+        }
+    }
+
+    public List<PartialDownload> LoadDownloads()
+    {
+        lock (_gate)
+        {
+            var result = new List<PartialDownload>();
+            using var cmd = Command("SELECT path, tmpName, server, hash, size, startedMs FROM downloads ORDER BY path");
+            using var r = cmd.ExecuteReader();
+            while (r.Read())
+                result.Add(ReadDownload(r));
+            return result;
+        }
+    }
+
+    public void SetDownload(PartialDownload d)
+    {
+        lock (_gate)
+        {
+            using var cmd = Command("""
+                INSERT INTO downloads(path, tmpName, server, hash, size, startedMs) VALUES($p, $n, $s, $h, $z, $t)
+                ON CONFLICT(path) DO UPDATE SET tmpName=excluded.tmpName, server=excluded.server, hash=excluded.hash,
+                    size=excluded.size, startedMs=excluded.startedMs
+                """, ("$p", d.Path), ("$n", d.TmpName), ("$s", d.Server), ("$h", d.Hash), ("$z", d.Size), ("$t", d.StartedMs));
+            cmd.ExecuteNonQuery();
+        }
+    }
+
+    public void RemoveDownload(string path)
+    {
+        lock (_gate)
+        {
+            using var cmd = Command("DELETE FROM downloads WHERE path=$p", ("$p", path));
+            cmd.ExecuteNonQuery();
+        }
+    }
+
+    private static UploadCheckpoint ReadUpload(SqliteDataReader r) =>
+        new(r.GetString(0), r.GetString(1), r.GetString(2), r.GetString(3), r.GetInt64(4), r.GetInt64(5), r.GetString(6), r.GetInt64(7));
+
+    private static PartialDownload ReadDownload(SqliteDataReader r) =>
+        new(r.GetString(0), r.GetString(1), r.GetString(2), r.GetString(3), r.GetInt64(4), r.GetInt64(5));
 
     // ---------------------------------------------------------------- remote mirror
 

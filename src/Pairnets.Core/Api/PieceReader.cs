@@ -42,6 +42,22 @@ internal sealed class PieceReader : Stream
         _end = offset + length;
     }
 
+    /// <summary>
+    /// Reads and hashes the first <paramref name="count"/> bytes without sending them, because the server already
+    /// has them from an earlier attempt. Reading them again (instead of trusting what was read then) makes the
+    /// final hash describe the file as it is now, so the server refuses the commit if it changed in between.
+    /// </summary>
+    public async Task SkipAsync(long count, CancellationToken ct)
+    {
+        if (count <= HashedUpTo)
+            return;
+        StartPiece(HashedUpTo, count - HashedUpTo);
+        var buffer = new byte[256 * 1024];
+        while (await ReadAsync(buffer, ct).ConfigureAwait(false) > 0)
+        {
+        }
+    }
+
     /// <summary>The hash of the whole file, once every byte has been read.</summary>
     public string GetHash()
     {

@@ -1,9 +1,11 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text;
+using Microsoft.Extensions.DependencyInjection;
 using Pairnets.Core;
 using Pairnets.Core.Api;
 using Pairnets.Core.Hashing;
+using Pairnets.Server.Storage;
 using Pairnets.Tests.Infrastructure;
 
 namespace Pairnets.Tests.Integration;
@@ -231,6 +233,45 @@ public class ServerApiTests : IAsyncLifetime
         Assert.Equal("old", await File.ReadAllTextAsync(Path.Combine(_server.Paths.Files, "h.txt")));
         Assert.Equal(2, (await api.GetHistoryAsync("h.txt", default)).Count); // "new" is kept too
         Assert.Equal(ApiOutcome.NotFound, (await api.RestoreAsync("h.txt", "20200101T000000000Z-deadbeef", default)).Outcome);
+    }
+
+    [Fact]
+    public async Task ARestoreThatTakesLongAnswersWithinTheProxyLimitAndIsAskedAgain()
+    {
+        // A big version: copying and hashing it takes a while, longer than the server waits here (not at all).
+        var big = new byte[48 * 1024 * 1024];
+        new Random(5).NextBytes(big);
+        using var api = _server.Client();
+        await api.UploadAsync("big.bin", "none", 1, new MemoryStream(big), null, default);
+        await api.UploadAsync("big.bin", ContentHash.Of(big), 1, new MemoryStream("small"u8.ToArray()), null, default);
+        var version = Assert.Single(await api.GetHistoryAsync("big.bin", default));
+        _server.Services.GetRequiredService<RestoreJobs>().AnswerWithin = TimeSpan.Zero;
+        var versionBefore = _server.Store.CurrentVersion;
+
+        // The first answer comes at once: still restoring (202). Asking again with the same ticket joins it.
+        using var http = _server.RawHttp(_server.Token);
+        var uri = $"api/history/restore?path=big.bin&id={version.Id}&ticket=00112233445566778899aabbccddeeff";
+        var first = await http.PostAsync(uri, null);
+        Assert.Equal(HttpStatusCode.Accepted, first.StatusCode);
+        Assert.Equal(ErrorCodes.Restoring, (await first.Content.ReadFromJsonAsync<ErrorBody>(PairnetsJson.Options))!.Code);
+        HttpResponseMessage answer;
+        do
+        {
+            await Task.Delay(50);
+            answer = await http.PostAsync(uri, null);
+        }
+        while (answer.StatusCode == HttpStatusCode.Accepted);
+        Assert.Equal(HttpStatusCode.OK, answer.StatusCode);
+        Assert.Equal(ContentHash.Of(big), (await answer.Content.ReadFromJsonAsync<ManifestEntry>(PairnetsJson.Options))!.Hash);
+        Assert.Equal(versionBefore + 1, _server.Store.CurrentVersion); // restored once, not once per question
+        Assert.Equal(big, await File.ReadAllBytesAsync(Path.Combine(_server.Paths.Files, "big.bin")));
+
+        // The app does the asking again by itself.
+        var again = Assert.Single(await api.GetHistoryAsync("big.bin", default), v => v.Size == 5);
+        api.RestorePollInterval = TimeSpan.FromMilliseconds(20);
+        var restored = await api.RestoreAsync("big.bin", again.Id, default);
+        Assert.Equal(ApiOutcome.Ok, restored.Outcome);
+        Assert.Equal("small", await File.ReadAllTextAsync(Path.Combine(_server.Paths.Files, "big.bin")));
     }
 
     [Fact]
