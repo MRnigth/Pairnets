@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Shapes;
 using Pairnets.Core.Client;
+using Pairnets.Core.Sync;
 
 namespace Pairnets.Client.Ui;
 
@@ -14,6 +15,9 @@ public partial class DeviceMapView : UserControl
     {
         InitializeComponent();
     }
+
+    /// <summary>Show the MB/s on the lines (Settings: "Show speed on the map"); never in the small tray picture.</summary>
+    public bool ShowSpeed { get; set; } = true;
 
     /// <summary>Smaller circles and text, for the tray panel.</summary>
     public bool Compact
@@ -31,6 +35,8 @@ public partial class DeviceMapView : UserControl
                 icon.Width = icon.Height = value ? 19 : 26;
             foreach (var dot in new[] { HereDot, ServerDot, OtherDot })
                 dot.Width = dot.Height = value ? 12 : 15;
+            OtherTick.Width = OtherTick.Height = value ? 16 : 20;
+            OtherTickIcon.Width = OtherTickIcon.Height = value ? 8 : 10;
             HereLine.Margin = OtherLine.Margin = value ? new Thickness(-22, 14, -22, 0) : new Thickness(-38, 23, -38, 0);
             foreach (var name in new[] { HereName, ServerName, OtherName })
             {
@@ -54,8 +60,56 @@ public partial class DeviceMapView : UserControl
         OtherMore.Visibility = map.MoreComputers > 0 ? Visibility.Visible : Visibility.Collapsed;
         HereLine.Linked = map.HereLinked;
         HereLine.Flow = map.HereFlow;
+        HereLine.UpSpeed = DeviceMap.DotSpeed(map.HereUpSpeed);
+        HereLine.DownSpeed = DeviceMap.DotSpeed(map.HereDownSpeed);
+        HereLine.Stalled = map.HereStalled;
         OtherLine.Linked = map.OtherLinked;
         OtherLine.Flow = map.OtherFlow;
+        OtherLine.UpSpeed = DeviceMap.DotSpeed(map.OtherUpSpeed);
+        OtherLine.DownSpeed = DeviceMap.DotSpeed(map.OtherDownSpeed);
+        ShowRate(HereRatePill, HereRate, map.HereRateText, map.HereFlow, map.HereStalled);
+        ShowRate(OtherRatePill, OtherRate, map.OtherRateText, map.OtherFlow, stalled: false);
+        ShowOtherState(map.OtherState);
+    }
+
+    /// <summary>The speed above a line, green going up, blue coming down, orange when stalled.</summary>
+    private void ShowRate(Border pill, TextBlock text, string? rate, LinkFlow flow, bool stalled)
+    {
+        var show = ShowSpeed && !_compact && rate is not null;
+        pill.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+        if (!show)
+            return;
+        text.Text = rate;
+        text.SetResourceReference(TextBlock.ForegroundProperty,
+            stalled ? "T.WarnText" : flow == LinkFlow.Up ? "T.OkText" : flow == LinkFlow.Down ? "T.Accent" : "T.Text");
+        pill.SetResourceReference(Border.BackgroundProperty, stalled ? "T.WarnPill" : "T.Card");
+    }
+
+    /// <summary>The other computer's circle breathes while it downloads, and gets a check mark once it has this computer's change.</summary>
+    private void ShowOtherState(PeerState state)
+    {
+        var downloading = state == PeerState.Downloading;
+        Motion.Ripple(OtherHalo, downloading && IsVisible);
+        if (downloading)
+            OtherRing.SetResourceReference(Shape.StrokeProperty, "S.Blue");
+        var has = state == PeerState.HasChanges;
+        if (has && OtherTick.Visibility != Visibility.Visible)
+        {
+            OtherTick.Visibility = Visibility.Visible;
+            Motion.Pop(OtherTick);
+        }
+        else if (!has)
+        {
+            OtherTick.Visibility = Visibility.Collapsed;
+        }
+        if (has)
+            OtherDot.Visibility = Visibility.Collapsed;
+        OtherDetail.SetResourceReference(TextBlock.ForegroundProperty, state switch
+        {
+            PeerState.Downloading => "T.Accent",
+            PeerState.HasChanges or PeerState.Sending => "T.OkText",
+            _ => "T.Muted",
+        });
     }
 
     /// <summary>Only the server's ring turns green when connected; the computers show a coloured dot.</summary>

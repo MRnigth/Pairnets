@@ -114,7 +114,7 @@ public class DesktopUiTests
         Assert.Equal(0, window.ActivityCount);
 
         window.ShowStatus(StatusSnapshot.Initial with { Status = RunnerStatus.Syncing, CurrentPath = "a/big.bin", Operation = "upload", BytesDone = 5, BytesTotal = 10, FilesTotal = 3 }, "/home/me/Work");
-        Assert.Equal("Syncing…", window.HeadlineText);
+        Assert.Equal("Uploading…", window.HeadlineText);
         Assert.True(window.TransferVisible);
         Assert.False(window.FixVisible);
 
@@ -143,7 +143,7 @@ public class DesktopUiTests
             Status = RunnerStatus.Syncing, CurrentPath = "a.bin", Operation = "upload", FilesTotal = 3,
             Active = [new ActiveTransfer("a.bin", "upload", 10, 100), new ActiveTransfer("b.bin", "upload", 50, 100)],
         }, null);
-        Assert.True(window.GlyphSpins);
+        Assert.Equal("rise", window.GlyphMotion); // the badge's arrow rises while uploading
         Assert.Equal("rise", window.ArrowMotion);
         Assert.Equal(2, window.ActiveRows);
 
@@ -152,11 +152,35 @@ public class DesktopUiTests
             Status = RunnerStatus.Syncing, CurrentPath = "c.bin", Operation = "download", FilesTotal = 3,
             Active = [new ActiveTransfer("c.bin", "download", 10, 100)],
         }, null);
+        Assert.Equal("fall", window.GlyphMotion);
         Assert.Equal("fall", window.ArrowMotion);
         Assert.Equal(1, window.ActiveRows);
 
+        // Both ways: the second arrow falls while the first rises.
+        window.ShowStatus(StatusSnapshot.Initial with
+        {
+            Status = RunnerStatus.Syncing, CurrentPath = "c.bin", Operation = "download", FilesTotal = 3,
+            Active = [new ActiveTransfer("a.bin", "upload", 10, 100), new ActiveTransfer("c.bin", "download", 10, 100)],
+        }, null);
+        Assert.Equal("rise", window.GlyphMotion);
+        Assert.True(window.SecondGlyphFalls);
+
+        // Checking for changes: a calm turn. Stalled: nothing moves.
+        window.ShowStatus(StatusSnapshot.Initial with { Status = RunnerStatus.Syncing }, null);
+        Assert.Equal("spin-slow", window.GlyphMotion);
+        Assert.Equal("Checking for changes…", window.HeadlineText);
+        window.ShowStatus(StatusSnapshot.Initial with
+        {
+            Status = RunnerStatus.Syncing, CurrentPath = "a.bin", Operation = "upload", FilesTotal = 1,
+            Active = [new ActiveTransfer("a.bin", "upload", 10, 100)], StalledSince = DateTimeOffset.UtcNow.AddSeconds(-8),
+        }, null);
+        Assert.Equal("none", window.GlyphMotion);
+        Assert.Equal("none", window.ArrowMotion);
+        Assert.False(window.SecondGlyphFalls);
+        Assert.Equal("Waiting for the network", window.HeadlineText);
+
         window.ShowStatus(StatusSnapshot.Initial with { Status = RunnerStatus.Idle, WaitingFor = new PeerWait("DESKTOP", 340, 12) }, null);
-        Assert.False(window.GlyphSpins);
+        Assert.Equal("none", window.GlyphMotion);
         Assert.True(window.BadgePulses);
         window.AllowClose = true;
         window.Close();

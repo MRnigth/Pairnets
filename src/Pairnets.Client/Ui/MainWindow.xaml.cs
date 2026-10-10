@@ -116,6 +116,9 @@ public partial class MainWindow : Window
     /// <summary>This computer's name, marked in the Devices list and shown first in the overview's picture.</summary>
     public string? ThisDevice { get; set; }
 
+    /// <summary>Show the MB/s on the overview picture's lines (Settings: "Show speed on the map").</summary>
+    public bool ShowMapSpeed { get; set; } = true;
+
     protected override void OnClosing(CancelEventArgs e)
     {
         if (!AllowClose)
@@ -223,9 +226,7 @@ public partial class MainWindow : Window
             ThisDevice = device;
         device ??= ThisDevice;
         ShowDevices(s);
-        var (brush, icon) = s.IsWaiting ? ("S.Grey", "I.Wait") : Visuals.ForStatus(s.Status);
-        StatusBadge.SetResourceReference(Shape.FillProperty, brush);
-        StatusGlyph.Data = Visuals.Resource<Geometry>(icon);
+        var brush = Badge.Show(s, StatusBadge, StatusGlyph, StatusGlyph2, 23, animate: true);
         Tint(brush);
         Animate(s);
         Headline.Text = s.Headline;
@@ -235,6 +236,7 @@ public partial class MainWindow : Window
         PauseGlyph.Data = Visuals.Resource<Geometry>(s.Paused ? "I.Play" : "I.Pause");
         FixButton.Visibility = Show(s.FixLabel is not null);
         FixButton.Content = s.FixLabel;
+        Map.ShowSpeed = ShowMapSpeed;
         Map.Show(DeviceMap.Build(s, device, DateTimeOffset.UtcNow));
 
         // Facts
@@ -257,7 +259,9 @@ public partial class MainWindow : Window
         if (s.IsTransferring)
         {
             TransferTitle.Text = s.BatchTitle;
-            TransferSpeed.Text = s.SpeedText;
+            var stall = s.StallText(DateTimeOffset.UtcNow);
+            TransferSpeed.Text = stall.Length > 0 ? stall : s.SpeedText;
+            TransferSpeed.SetResourceReference(TextBlock.ForegroundProperty, stall.Length > 0 ? "T.WarnText" : "T.Muted");
             LimitPill.Visibility = Show(s.LimitText is not null);
             LimitText.Text = s.LimitText ?? string.Empty;
             Motion.Glide(TransferProgress, s.OverallPercent ?? 0);
@@ -266,10 +270,12 @@ public partial class MainWindow : Window
             ActiveDivider.Visibility = Show(several && s.Active.Count > 0);
             ActiveList.Visibility = Show(several);
             LiveLists.Sync(_active, s.Active);
-            var uploading = s.Active.Count == 0 ? s.Operation != "download" : s.Active.Any(a => a.IsUpload);
+            var uploading = s.GoingUp || !s.GoingDown;
             TransferArrow.Data = Visuals.Resource<Geometry>(uploading ? "I.Up" : "I.Down");
             TransferArrow.SetResourceReference(LineIcon.StrokeProperty, uploading ? "S.Green" : "S.Blue");
-            Motion.Travel(TransferArrow, uploading);
+            var stalled = s.Motion == SyncMotion.Stalled;
+            TransferArrow.Opacity = stalled ? 0.5 : 1;
+            Motion.Travel(TransferArrow, stalled ? null : uploading);
         }
 
         // Waiting for the other computer's big batch.
@@ -332,14 +338,13 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Motion for the status badge: the sync glyph turns while syncing, the badge breathes while
-    /// waiting for the other computer, and it pops once whenever the state changes.
+    /// Motion for the status badge (its glyph moves in <see cref="Badge"/>): it breathes while waiting for the
+    /// other computer, and pops once whenever the state changes, also between uploading, downloading and stalled.
     /// </summary>
     private void Animate(StatusSnapshot s)
     {
-        Motion.Spin(StatusGlyph, s.Status == Pairnets.Core.Sync.RunnerStatus.Syncing && !s.IsWaiting);
         Motion.Pulse(StatusBadgeHost, s.IsWaiting);
-        var state = s.IsWaiting ? "waiting" : s.Status.ToString();
+        var state = s.IsWaiting ? "waiting" : s.Status == Pairnets.Core.Sync.RunnerStatus.Syncing ? s.Motion.ToString() : s.Status.ToString();
         if (_shownState is not null && _shownState != state && !s.IsWaiting)
             Motion.Pop(StatusBadgeHost);
         _shownState = state;
@@ -348,6 +353,8 @@ public partial class MainWindow : Window
     private void StopMotion()
     {
         Motion.Spin(StatusGlyph, false);
+        Motion.Travel(StatusGlyph, null);
+        Motion.Travel(StatusGlyph2, null);
         Motion.Pulse(StatusBadgeHost, false);
         Motion.Travel(TransferArrow, null);
         Motion.Bob(UpdateIcon, false);

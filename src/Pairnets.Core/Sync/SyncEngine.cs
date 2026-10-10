@@ -83,6 +83,12 @@ public sealed class SyncEngine
     /// <summary>Raised when an upload or download (finished, failed or skipped) no longer runs.</summary>
     public event Action<string>? TransferFinished;
 
+    /// <summary>
+    /// Raised when the server took a change from this computer (an upload or a deletion), with the server version
+    /// it got; another computer that reports having that version has the change. May be raised concurrently.
+    /// </summary>
+    public event Action<long>? ChangeSent;
+
     /// <summary>True if the engine itself wrote/deleted this path recently (used to ignore our own watcher events).</summary>
     public bool WasRecentlyTouched(string path, TimeSpan window)
     {
@@ -269,6 +275,7 @@ public sealed class SyncEngine
         }
         _state.ApplyRemote(manifest.Entries, replaceAll: full, manifest.Version, manifest.ServerId);
         cursor = manifest.Version;
+        result.ServerVersion = cursor;
 
         // ---- 3. Local scan.
         var scan = await _scanner.ScanAsync(ct).ConfigureAwait(false);
@@ -553,6 +560,7 @@ public sealed class SyncEngine
                     lock (ctx.Gate)
                         ctx.Result.Uploaded++;
                     FileSynced?.Invoke(SyncAction.Upload, path);
+                    ChangeSent?.Invoke(entry.Version);
                     _log.LogInformation("Uploaded {Path} ({Bytes} bytes)", path, sentBytes);
                     break;
                 case ApiOutcome.Conflict:
@@ -704,6 +712,8 @@ public sealed class SyncEngine
                 lock (ctx.Gate)
                     ctx.Result.DeletedRemote++;
                 FileSynced?.Invoke(SyncAction.DeleteRemote, item.Path);
+                if (res.Entry is not null)
+                    ChangeSent?.Invoke(res.Entry.Version);
                 _log.LogInformation("Deleted {Path} on the server (deleted here)", item.Path);
                 break;
             case ApiOutcome.Conflict:

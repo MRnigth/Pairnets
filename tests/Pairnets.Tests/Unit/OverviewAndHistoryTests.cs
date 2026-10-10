@@ -70,7 +70,7 @@ public class OverviewAndHistoryTests
         };
         var map = DeviceMap.Build(uploading, "MAC", Now);
         Assert.Equal(LinkFlow.Up, map.HereFlow);
-        Assert.Equal(LinkFlow.Down, map.OtherFlow); // what this computer uploads goes on to the other one
+        Assert.Equal(LinkFlow.None, map.OtherFlow); // no guessing: only the server says when the other one downloads
 
         var mixed = uploading with { Active = [new ActiveTransfer("a", "upload", 1, 2), new ActiveTransfer("b", "download", 1, 2)] };
         Assert.Equal(LinkFlow.Both, DeviceMap.Build(mixed, "MAC", Now).HereFlow);

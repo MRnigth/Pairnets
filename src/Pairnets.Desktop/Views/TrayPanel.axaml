@@ -21,6 +21,7 @@
           <Grid x:Name="StatusBadgeHost" Width="38" Height="38" VerticalAlignment="Top" Margin="0,0,12,0">
             <Ellipse x:Name="StatusBadge" Fill="{StaticResource S.Grey}" />
             <v:LineIcon x:Name="StatusGlyph" Classes="icon white" Width="19" Height="19" StrokeThickness="2.6" Data="{StaticResource I.CloudOff}" />
+            <v:LineIcon x:Name="StatusGlyph2" Classes="icon white" Width="19" Height="19" StrokeThickness="2.6" Data="{StaticResource I.Down}" IsVisible="False" />
           </Grid>
           <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
             <TextBlock x:Name="Headline" Classes="h2" FontSize="16" Text="Starting…" />

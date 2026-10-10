@@ -18,6 +18,37 @@ public sealed record ActiveTransfer(string Path, string Operation, long BytesDon
     public double PercentValue => Percent ?? 0;
 }
 
+/// <summary>What the badge and the map show this computer doing while it syncs.</summary>
+public enum SyncMotion
+{
+    /// <summary>Not syncing (up to date, offline, paused, waiting for another computer...).</summary>
+    None,
+
+    /// <summary>Syncing, but no file is moving: looking for changes, or deleting.</summary>
+    Checking,
+    Up,
+    Down,
+    Both,
+
+    /// <summary>Files should be moving, but no byte has moved for <see cref="StatusSnapshot.StallAfter"/>.</summary>
+    Stalled,
+}
+
+/// <summary>
+/// What the server says another computer is doing: its transfer speeds ("PeerTransfer", when they arrived) and the server
+/// version it has everything up to ("PeerSynced", when that arrived).
+/// </summary>
+public sealed record PeerActivity(PeerTransfer? Transfer, DateTimeOffset TransferAt, long SyncedVersion, DateTimeOffset? SyncedAt)
+{
+    /// <summary>The server reports a moving computer every second; older news means the report was lost (the server went away).</summary>
+    public static readonly TimeSpan Fresh = TimeSpan.FromSeconds(5);
+
+    public static PeerActivity None { get; } = new(null, DateTimeOffset.MinValue, 0, null);
+
+    /// <summary>The computer is uploading or downloading right now.</summary>
+    public bool IsMoving(DateTimeOffset now) => Transfer is { Active: true } && now - TransferAt <= Fresh;
+}
+
 /// <summary>A computer asking to join the nest, as the other computers hear about it.</summary>
 public sealed record JoinRequest(string Code, string Name, string System, DateTimeOffset At)
 {
@@ -56,6 +87,57 @@ public sealed record StatusSnapshot(
 
     /// <summary>Recent transfer speed (about the last 5 seconds).</summary>
     public double BytesPerSecond { get; init; }
+
+    // ---- what is really moving (the badge and the map)
+
+    /// <summary>No byte moved for this long while files should be moving: the transfer is stalled.</summary>
+    public static readonly TimeSpan StallAfter = TimeSpan.FromSeconds(5);
+
+    /// <summary>Bytes really sent per second over the last few seconds (not files planned).</summary>
+    public double UploadBytesPerSecond { get; init; }
+
+    /// <summary>Bytes really received per second over the last few seconds.</summary>
+    public double DownloadBytesPerSecond { get; init; }
+
+    /// <summary>Uploads are running (also for a moment after one ends, so the picture doesn't flicker between files).</summary>
+    public bool MovingUp { get; init; }
+
+    /// <summary>Downloads are running (with the same short grace as <see cref="MovingUp"/>).</summary>
+    public bool MovingDown { get; init; }
+
+    /// <summary>When the last byte moved, while files should be moving but nothing has for <see cref="StallAfter"/>; else null.</summary>
+    public DateTimeOffset? StalledSince { get; init; }
+
+    /// <summary>The other computers' transfers and syncs, as the server reports them (by device name).</summary>
+    public IReadOnlyDictionary<string, PeerActivity> Peers { get; init; } = System.Collections.ObjectModel.ReadOnlyDictionary<string, PeerActivity>.Empty;
+
+    /// <summary>The server version of this computer's latest change (an upload or a deletion); 0 before any.</summary>
+    public long MyChangeVersion { get; init; }
+
+    /// <summary>Files are going up to the server right now.</summary>
+    public bool GoingUp => Status == RunnerStatus.Syncing && (MovingUp || Active.Any(a => a.IsUpload) || (Active.Count == 0 && Operation == "upload"));
+
+    /// <summary>Files are coming down from the server right now.</summary>
+    public bool GoingDown => Status == RunnerStatus.Syncing && (MovingDown || Active.Any(a => !a.IsUpload) || (Active.Count == 0 && Operation == "download"));
+
+    /// <summary>Which animation the badge plays: one for each thing this computer can be doing.</summary>
+    public SyncMotion Motion
+    {
+        get
+        {
+            if (Status != RunnerStatus.Syncing || IsWaiting)
+                return SyncMotion.None;
+            var (up, down) = (GoingUp, GoingDown);
+            if (StalledSince is not null && (up || down))
+                return SyncMotion.Stalled;
+            return up && down ? SyncMotion.Both : up ? SyncMotion.Up : down ? SyncMotion.Down : SyncMotion.Checking;
+        }
+    }
+
+    /// <summary>"Stalled · nothing moved for 12 s" while stalled, else empty.</summary>
+    public string StallText(DateTimeOffset now) => Motion == SyncMotion.Stalled && StalledSince is { } since
+        ? $"Stalled · nothing moved for {Math.Max(StallAfter.TotalSeconds, Math.Floor((now - since).TotalSeconds)):0} s"
+        : string.Empty;
 
     /// <summary>"Limited to 5 MB/s" (or "Limited to 5 MB/s up, 10 MB/s down"), or null without limits.</summary>
     public string? LimitText { get; init; }
@@ -208,7 +290,14 @@ public sealed record StatusSnapshot(
     public string Headline => IsWaiting ? $"Waiting for {WaitingFor!.Device}" : Status switch
     {
         RunnerStatus.Idle => "Up to date",
-        RunnerStatus.Syncing => "Syncing…",
+        RunnerStatus.Syncing => Motion switch
+        {
+            SyncMotion.Up => "Uploading…",
+            SyncMotion.Down => "Downloading…",
+            SyncMotion.Both => "Uploading and downloading…",
+            SyncMotion.Stalled => "Waiting for the network",
+            _ => CurrentPath is not null && Operation == "delete" ? "Deleting files…" : "Checking for changes…",
+        },
         RunnerStatus.Offline => "Offline",
         RunnerStatus.Paused => "Paused",
         RunnerStatus.Blocked when BlockReason == BlockReason.SignedOut => "Signed out of your nest",
@@ -224,6 +313,8 @@ public sealed record StatusSnapshot(
         {
             if (IsWaiting)
                 return $"{WaitingFor!.Device} is uploading a big batch. Pairnets downloads it all in one go when it's done, so the two computers don't fight over the connection.";
+            if (Status == RunnerStatus.Syncing)
+                return Motion == SyncMotion.Stalled ? "Nothing has moved for a few seconds. Pairnets carries on by itself when the connection is back." : string.Empty;
             var root = Headline.TrimEnd('…', '.');
             var text = Text.Trim();
             if (text.Length == 0 || string.Equals(text.TrimEnd('…', '.'), root, StringComparison.OrdinalIgnoreCase))

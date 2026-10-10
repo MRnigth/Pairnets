@@ -63,7 +63,7 @@ public class ActivityAndStatusTests
         var s = StatusSnapshot.Initial with { Status = RunnerStatus.Syncing, CurrentPath = "big.bin", BytesDone = 50, BytesTotal = 200 };
         Assert.Equal(25, s.Percent);
         Assert.True(s.IsTransferring);
-        Assert.Equal("Syncing…", s.Headline);
+        Assert.Equal("Checking for changes…", s.Headline); // no upload or download listed yet
         Assert.Null((s with { BytesTotal = 0 }).Percent);
         Assert.Equal("Not synced yet", s.LastSyncText);
 

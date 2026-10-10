@@ -386,15 +386,30 @@ and **Settings**. The buttons at the top right are always there: **Open folder**
 
 **Overview** shows everything at a glance:
 
-* **Status card** (top): a coloured badge with a symbol (✓ up to date, ↻ syncing, ⏸ paused,
-  ! needs a decision, ✕ error, crossed-out cloud for offline) and one line for the overall state.
+* **Status card** (top): a coloured badge with a symbol (✓ up to date, ⏸ paused, ! needs a decision,
+  ✕ error, crossed-out cloud for offline) and one line for the overall state. While syncing, the
+  badge shows what this computer really does:
+  * a slow turn: **Checking for changes**
+  * a green arrow rising: **Uploading**
+  * a blue arrow falling: **Downloading**
+  * both arrows taking turns: uploading and downloading
+  * a still arrow on orange: **Waiting for the network**, when no data has moved for 5 seconds. It
+    carries on by itself.
+
   The top of the card takes on the status colour.
 * **Your computers**: *this computer*, the *server* and your *other computer*, joined by lines. A
-  green dot means online; for the other computer you see **Online**, **Sending changes**,
-  **Uploading 340 files** or **Last seen 3 h ago**. While files move, dots travel along the
-  lines: green towards the server (uploads), blue from the server (downloads). A dashed line means
-  not connected. Hover a computer's name to see which app and version it runs. (An older server
-  says *Update the server to see it*.)
+  green dot means online. For the other computer you see **Online**, **Sending changes**,
+  **Downloading your changes**, **Has your changes** (with a check mark), **Uploading 340 files** or
+  **Last seen 3 h ago**.
+  * While files move, dots travel along the lines: green towards the server (uploads), blue from the
+    server (downloads). They go faster when more megabytes go through, and stop and fade when nothing
+    moves.
+  * The speed (for example **↑ 4.90 MB/s**) shows above each line; turn it off in Settings with
+    **Show speed on the map**.
+  * The other computer's line shows what the server reports, so it moves only when that computer
+    really uploads or downloads (an older server can't say when it downloads).
+  * A dashed line means not connected. Hover a computer's name to see which app and version it runs.
+    (An older server says *Update the server to see it*.)
 * **"2 things need your attention"** with a **Review** button, when something waits for you.
 * **Transfer card** (only while transferring; the arrow travels up while uploading and down while
   downloading, and the bars glide): how many files are being sent, the speed and the
@@ -817,6 +832,8 @@ In **Settings → Updates and speed**:
   other computers always come through the server, so the download limit covers them too. Each
   computer has its own limits; all files in progress together stay under the limit.
 * **Wait while my other computer uploads many files**: the batch wait described in section 5.
+* **Show speed on the map**: the MB/s above the lines between the computers on the overview (on to
+  begin with).
 
 ### Starting over
 

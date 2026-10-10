@@ -27,28 +27,102 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
     private DateTimeOffset? _lastPassEnd;
     private readonly Dictionary<string, ActiveTransfer> _active = new(StringComparer.Ordinal);
     private readonly Queue<(long Ticks, long Bytes)> _samples = new();
+    private readonly Queue<(long Ticks, long Bytes)> _upSamples = new();
+    private readonly Queue<(long Ticks, long Bytes)> _downSamples = new();
+    private long _lastMoved;
+    private long _activeSince;
+    private long _lastUp;
+    private long _lastDown;
     private long _burstBytesDone;
     private long _burstBytesTotal;
     private Timer? _infoTimer;
     private Timer? _devicesTimer;
+    private Timer? _motionTimer;
 
     private static readonly TimeSpan SpeedWindow = TimeSpan.FromSeconds(5);
+
+    /// <summary>The map's speeds react faster than the "time left" estimate.</summary>
+    private static readonly TimeSpan DirectionWindow = TimeSpan.FromSeconds(3);
+
+    /// <summary>An upload or download still counts as running this long after it ended (no flicker between files).</summary>
+    private static readonly TimeSpan MovingGrace = TimeSpan.FromSeconds(1.5);
+
+    /// <summary>How often speeds and "stalled" are brought up to date while no file reports progress.</summary>
+    private static readonly TimeSpan MotionInterval = TimeSpan.FromMilliseconds(500);
     private static readonly TimeSpan ServerInfoInterval = TimeSpan.FromMinutes(5);
 
     /// <summary>How often the list of computers (online or not) is re-read.</summary>
     private static readonly TimeSpan DevicesInterval = TimeSpan.FromSeconds(30);
 
     /// <summary>Bytes per second over the last few seconds. Call with <c>_gate</c> held.</summary>
-    private double RateLocked()
+    private double RateLocked() => RateLocked(_samples, SpeedWindow);
+
+    private double RateLocked(Queue<(long Ticks, long Bytes)> samples, TimeSpan window)
     {
         var now = _clock.GetTimestamp();
-        while (_samples.Count > 0 && _clock.GetElapsedTime(_samples.Peek().Ticks, now) > SpeedWindow)
-            _samples.Dequeue();
-        if (_samples.Count == 0)
+        while (samples.Count > 0 && _clock.GetElapsedTime(samples.Peek().Ticks, now) > window)
+            samples.Dequeue();
+        if (samples.Count == 0)
             return 0;
-        var span = Math.Max(1.0, _clock.GetElapsedTime(_samples.Peek().Ticks, now).TotalSeconds);
-        return _samples.Sum(x => (double)x.Bytes) / span;
+        var span = Math.Max(1.0, _clock.GetElapsedTime(samples.Peek().Ticks, now).TotalSeconds);
+        return samples.Sum(x => (double)x.Bytes) / span;
     }
+
+    /// <summary>
+    /// What is really moving, for the badge and the map: the speed each way, whether uploads or downloads run, and
+    /// whether bytes stopped moving although files should be (stalled). Call with <c>_gate</c> held.
+    /// </summary>
+    private Func<StatusSnapshot, StatusSnapshot> MotionLocked()
+    {
+        var now = _clock.GetTimestamp();
+        if (_active.Values.Any(a => a.IsUpload))
+            _lastUp = now;
+        if (_active.Values.Any(a => !a.IsUpload))
+            _lastDown = now;
+        var up = RateLocked(_upSamples, DirectionWindow);
+        var down = RateLocked(_downSamples, DirectionWindow);
+        var rate = RateLocked();
+        var movingUp = _lastUp != 0 && _clock.GetElapsedTime(_lastUp, now) < MovingGrace;
+        var movingDown = _lastDown != 0 && _clock.GetElapsedTime(_lastDown, now) < MovingGrace;
+        DateTimeOffset? stalledSince = null;
+        if (_active.Count > 0)
+        {
+            var quiet = _clock.GetElapsedTime(Math.Max(_lastMoved, _activeSince), now);
+            if (quiet >= StatusSnapshot.StallAfter)
+                stalledSince = _clock.GetUtcNow() - quiet;
+        }
+        return s => s with
+        {
+            UploadBytesPerSecond = up,
+            DownloadBytesPerSecond = down,
+            BytesPerSecond = rate,
+            MovingUp = movingUp,
+            MovingDown = movingDown,
+            // Kept as first seen, so the record (and the window) does not change every tick while stalled.
+            StalledSince = s.StalledSince is { } before && stalledSince is not null ? before : stalledSince,
+        };
+    }
+
+    /// <summary>Speeds fall and "stalled" shows even while no file reports progress.</summary>
+    private void RefreshMotion()
+    {
+        Func<StatusSnapshot, StatusSnapshot> motion;
+        lock (_gate)
+        {
+            if (_active.Count == 0 && _upSamples.Count == 0 && _downSamples.Count == 0 && _samples.Count == 0
+                && !_status.MovingUp && !_status.MovingDown && _status.StalledSince is null)
+                return;
+            motion = MotionLocked();
+        }
+        Update(motion);
+    }
+
+    /// <summary>One computer's entry in <see cref="StatusSnapshot.Peers"/>, changed.</summary>
+    private static IReadOnlyDictionary<string, PeerActivity> WithPeer(StatusSnapshot s, string device, Func<PeerActivity, PeerActivity> change) =>
+        new Dictionary<string, PeerActivity>(s.Peers, StringComparer.OrdinalIgnoreCase)
+        {
+            [device] = change(s.Peers.TryGetValue(device, out var p) ? p : PeerActivity.None),
+        };
 
     /// <summary>Raised when the server's version, free space or updater state was (re)read.</summary>
     public event Action<ServerInfo>? ServerInfoChanged;
@@ -300,6 +374,7 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
         runner.Start();
         session._infoTimer = new Timer(_ => _ = session.RefreshServerInfoAsync(), null, TimeSpan.Zero, ServerInfoInterval);
         session._devicesTimer = new Timer(_ => _ = session.RefreshDevicesAsync(), null, TimeSpan.Zero, DevicesInterval);
+        session._motionTimer = new Timer(_ => session.RefreshMotion(), null, MotionInterval, MotionInterval);
         if (settings.Paused)
             runner.Pause();
         return session;
@@ -342,10 +417,13 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
                 {
                     _burstBytesDone = 0;
                     _samples.Clear();
+                    _upSamples.Clear();
+                    _downSamples.Clear();
                 }
                 _passDone = 0;
                 _passTotal = 0;
                 _active.Clear();
+                _activeSince = _lastMoved = 0;
             }
         };
         Engine.Progress += p =>
@@ -353,7 +431,7 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
             int done, total;
             IReadOnlyList<ActiveTransfer> active;
             long bytesDone, bytesTotal;
-            double rate;
+            Func<StatusSnapshot, StatusSnapshot> motion;
             lock (_gate)
             {
                 _passDone = p.FilesDone;
@@ -364,22 +442,27 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
                 {
                     var before = _active.TryGetValue(p.CurrentPath, out var a) ? a.BytesDone : 0;
                     var delta = p.BytesDone - before;
+                    var now = _clock.GetTimestamp();
                     if (delta > 0)
                     {
                         _burstBytesDone += delta;
-                        _samples.Enqueue((_clock.GetTimestamp(), delta));
+                        _samples.Enqueue((now, delta));
+                        (p.Operation == "upload" ? _upSamples : _downSamples).Enqueue((now, delta));
+                        _lastMoved = now;
                     }
+                    if (_active.Count == 0)
+                        _activeSince = now;
                     _active[p.CurrentPath] = new ActiveTransfer(p.CurrentPath, p.Operation, p.BytesDone, p.BytesTotal);
                 }
                 active = [.. _active.Values];
                 bytesDone = _burstBytesDone;
                 bytesTotal = Math.Max(_burstBytesTotal, _burstBytesDone);
-                rate = RateLocked();
+                motion = MotionLocked();
             }
-            Update(s => (p.CurrentPath is null
+            Update(s => motion((p.CurrentPath is null
                 ? s with { CurrentPath = null, Operation = null, BytesDone = 0, BytesTotal = 0, FilesDone = done, FilesTotal = total }
                 : s with { CurrentPath = p.CurrentPath, Operation = p.Operation, BytesDone = p.BytesDone, BytesTotal = p.BytesTotal, FilesDone = done, FilesTotal = total })
-                with { Active = active, PassBytesDone = bytesDone, PassBytesTotal = bytesTotal, BytesPerSecond = rate });
+                with { Active = active, PassBytesDone = bytesDone, PassBytesTotal = bytesTotal }));
         };
         Engine.TransferFinished += path =>
         {
@@ -399,6 +482,17 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
             Update(s => s with { FilesTotal = Math.Max(total, s.FilesDone) });
         };
         Runner.PeerWaitChanged += wait => Update(s => s with { WaitingFor = wait });
+        Runner.PeerTransferChanged += (device, transfer) =>
+        {
+            var at = _clock.GetUtcNow();
+            Update(s => s with { Peers = WithPeer(s, device, p => p with { Transfer = transfer, TransferAt = at }) });
+        };
+        Runner.PeerSynced += (device, version) =>
+        {
+            var at = _clock.GetUtcNow();
+            Update(s => s with { Peers = WithPeer(s, device, p => p with { SyncedVersion = version, SyncedAt = at }) });
+        };
+        Engine.ChangeSent += version => Update(s => version > s.MyChangeVersion ? s with { MyChangeVersion = version } : s);
         Runner.JoinRequested += (code, name, system) =>
         {
             var request = new JoinRequest(code, name, system, _clock.GetUtcNow());
@@ -817,6 +911,8 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
             await _infoTimer.DisposeAsync().ConfigureAwait(false);
         if (_devicesTimer is not null)
             await _devicesTimer.DisposeAsync().ConfigureAwait(false);
+        if (_motionTimer is not null)
+            await _motionTimer.DisposeAsync().ConfigureAwait(false);
         await Runner.DisposeAsync().ConfigureAwait(false);
         Api.Dispose();
         State.Dispose();

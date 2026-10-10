@@ -495,3 +495,27 @@ yet"), the same in both apps.
   `sync.pairnets.app`; migrations 0001 and 0002 applied; the generated keys and the account and
   Google client ids set. The outside keys (Cloudflare API token, Turnstile, Resend, Google client
   secret) wait for the owner to paste them.
+
+## Animations show what really moves (10 October 2026)
+
+* **The owner asked for it:** the status badge used to spin the same way for every kind of work, and the
+  dots on the overview's lines kept one pace even when nothing moved. The owner approved a moving preview
+  first.
+* **The badge follows `StatusSnapshot.Motion`.** A slow turn while checking. An arrow rising on green while
+  uploading, or falling on blue while downloading. Both arrows taking turns when it does both. A still,
+  faded arrow on orange, "Waiting for the network", once no byte has moved for 5 seconds (`StallAfter`).
+* **The dots go as fast as the bytes.** Speed is measured each way over the last 3 seconds
+  (`UploadBytesPerSecond`, `DownloadBytesPerSecond`), mapped to a dot speed with a log curve and a cap
+  (`DeviceMap.DotSpeed`). An upload or download keeps counting for 1.5 s after it ends, so the picture
+  doesn't flicker between small files.
+* **No more guessing about the other computer.** It used to "download" whenever this one uploaded.
+  * The server now counts the bytes of each computer's file requests (`TransferMeter`) and sends
+    `PeerTransfer(device, up, down, uploading, downloading)` once a second while it moves files, then once
+    with both flags off. The other computer's line uses only that (or, from an older server, the changes
+    heard from it).
+  * After a sync with nothing left over, an app calls `Synced(version)`; the others get
+    `PeerSynced(device, version)`. When that version covers this computer's latest change, the other
+    computer gets a check mark, "Has your changes", for a minute.
+  * Old apps and old servers keep working; they just show less.
+* **MB/s on the lines** is on to begin with, and can be turned off in Settings ("Show speed on the map").
+  It never shows in the small tray picture.

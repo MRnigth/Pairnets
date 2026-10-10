@@ -88,6 +88,15 @@ public sealed class PassResult
     /// <summary>Paths that need the user's attention (invalid name, case collision).</summary>
     public int Warnings { get; set; }
 
+    /// <summary>The server version this pass worked from (0 when it stopped before reading the server's list).</summary>
+    public long ServerVersion { get; set; }
+
+    /// <summary>
+    /// True when this pass left nothing behind: this computer then has every file up to <see cref="ServerVersion"/>
+    /// (errors, waiting downloads or changes the server turned back mean it doesn't yet).
+    /// </summary>
+    public bool CaughtUp => Outcome == PassOutcome.Completed && ServerVersion > 0 && Errors == 0 && Deferred == 0 && HeldDownloads == 0;
+
     public List<(DeleteSide Side, string Path)> BlockedDeletes { get; } = [];
     public List<ConflictInfo> ConflictCopies { get; } = [];
     public List<string> ErrorMessages { get; } = [];

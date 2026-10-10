@@ -21,6 +21,19 @@ public static class Visuals
         _ => ("S.Red", "I.X"),
     };
 
+    /// <summary>
+    /// The status badge's colour and icon: while syncing, what this computer really does (green arrow up, blue arrow
+    /// down, orange when stalled); otherwise the status.
+    /// </summary>
+    public static (string Brush, string Icon) ForBadge(StatusSnapshot s) => s.IsWaiting ? ("S.Grey", "I.Wait") : s.Motion switch
+    {
+        SyncMotion.Up => ("S.Green", "I.Up"),
+        SyncMotion.Down => ("S.Blue", "I.Down"),
+        SyncMotion.Both => ("S.Blue", "I.Up"),
+        SyncMotion.Stalled => ("S.Orange", s.GoingUp ? "I.Up" : "I.Down"),
+        _ => ForStatus(s.Status),
+    };
+
     public static (string Brush, string Icon) ForActivity(ActivityKind kind) => kind switch
     {
         ActivityKind.Uploaded => ("S.Green", "I.Up"),

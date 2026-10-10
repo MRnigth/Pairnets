@@ -48,6 +48,8 @@ public static class PairnetsServerHost
         builder.Services.AddSingleton<FailureThrottle>();
         builder.Services.AddSingleton<ServerUpdater>();
         builder.Services.AddSingleton<BatchRegistry>();
+        builder.Services.AddSingleton<SyncedRegistry>();
+        builder.Services.AddSingleton<TransferMeter>();
         builder.Services.AddSingleton<DeviceRegistry>();
         builder.Services.AddSingleton<TlsCertificateStore>();
         builder.Services.AddSingleton(sp => new AuthStore(sp.GetRequiredService<ServerPaths>()));
@@ -75,6 +77,7 @@ public static class PairnetsServerHost
         builder.Services.AddHostedService<HistoryPurgeService>();
         builder.Services.AddHostedService<UploadSessionSweeper>();
         builder.Services.AddHostedService<ConnectionGuardService>();
+        builder.Services.AddHostedService<TransferBroadcaster>();
         builder.Services.Configure<HostOptions>(o => o.ShutdownTimeout = TimeSpan.FromSeconds(60));
         builder.WebHost.ConfigureKestrel(k =>
         {

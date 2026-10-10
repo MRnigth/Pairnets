@@ -105,6 +105,9 @@ public partial class MainWindow : Window
     /// <summary>This computer's name, marked in the Devices list and shown first in the overview's picture.</summary>
     public string? ThisDevice { get; set; }
 
+    /// <summary>Show the MB/s on the overview picture's lines (Settings: "Show speed on the map").</summary>
+    public bool ShowMapSpeed { get; set; } = true;
+
     protected override void OnClosing(WindowClosingEventArgs e)
     {
         if (!AllowClose && !e.IsProgrammatic)
@@ -213,9 +216,7 @@ public partial class MainWindow : Window
             ThisDevice = device;
         device ??= ThisDevice;
         ShowDevices(s);
-        var (brush, icon) = s.IsWaiting ? ("S.Grey", "I.Wait") : Visuals.ForStatus(s.Status);
-        StatusBadge.Fill = Visuals.Resource<IBrush>(brush);
-        StatusGlyph.Data = Visuals.Resource<Geometry>(icon);
+        var brush = Badge.Show(s, StatusBadge, StatusGlyph, StatusGlyph2, 23);
         Tint(brush);
         Animate(s);
         Headline.Text = s.Headline;
@@ -225,6 +226,7 @@ public partial class MainWindow : Window
         PauseGlyph.Data = Visuals.Resource<Geometry>(s.Paused ? "I.Play" : "I.Pause");
         FixButton.IsVisible = s.FixLabel is not null;
         FixButton.Content = s.FixLabel;
+        Map.ShowSpeed = ShowMapSpeed;
         Map.Show(DeviceMap.Build(s, device, DateTimeOffset.UtcNow));
 
         // Facts
@@ -243,7 +245,9 @@ public partial class MainWindow : Window
         if (s.IsTransferring)
         {
             TransferTitle.Text = s.BatchTitle;
-            TransferSpeed.Text = s.SpeedText;
+            var stall = s.StallText(DateTimeOffset.UtcNow);
+            TransferSpeed.Text = stall.Length > 0 ? stall : s.SpeedText;
+            TransferSpeed.Classes.Set("warn", stall.Length > 0);
             LimitPill.IsVisible = s.LimitText is not null;
             LimitText.Text = s.LimitText ?? string.Empty;
             TransferProgress.IsIndeterminate = s.OverallPercent is null;
@@ -253,11 +257,13 @@ public partial class MainWindow : Window
             ActiveDivider.IsVisible = several && s.Active.Count > 0;
             ActiveList.IsVisible = several;
             LiveLists.Sync(_active, s.Active);
-            var uploading = s.Active.Count == 0 ? s.Operation != "download" : s.Active.Any(a => a.IsUpload);
+            var uploading = s.GoingUp || !s.GoingDown;
+            var stalled = s.Motion == SyncMotion.Stalled;
             TransferArrow.Data = Visuals.Resource<Geometry>(uploading ? "I.Up" : "I.Down");
             TransferArrow.Stroke = Visuals.Resource<IBrush>(uploading ? "S.Green" : "S.Blue");
-            TransferArrow.Classes.Set("rise", uploading);
-            TransferArrow.Classes.Set("fall", !uploading);
+            TransferArrow.Opacity = stalled ? 0.5 : 1;
+            TransferArrow.Classes.Set("rise", uploading && !stalled);
+            TransferArrow.Classes.Set("fall", !uploading && !stalled);
         }
 
         // Waiting for the other computer's big batch.
@@ -332,14 +338,13 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Motion for the status badge: the sync glyph turns while syncing, the badge breathes while
-    /// waiting for the other computer, and it pops once whenever the state changes.
+    /// Motion for the status badge (its glyph moves in <see cref="Badge"/>): it breathes while waiting for the
+    /// other computer, and pops once whenever the state changes, also between uploading, downloading and stalled.
     /// </summary>
     private void Animate(StatusSnapshot s)
     {
-        StatusGlyph.Classes.Set("spin", s.Status == Pairnets.Core.Sync.RunnerStatus.Syncing && !s.IsWaiting);
         StatusBadgeHost.Classes.Set("pulse", s.IsWaiting);
-        var state = s.IsWaiting ? "waiting" : s.Status.ToString();
+        var state = s.IsWaiting ? "waiting" : s.Status == Pairnets.Core.Sync.RunnerStatus.Syncing ? s.Motion.ToString() : s.Status.ToString();
         if (_shownState is not null && _shownState != state && !s.IsWaiting)
         {
             StatusBadgeHost.Classes.Remove("pop");
@@ -564,7 +569,10 @@ public partial class MainWindow : Window
     internal int ActivityCount => _activityItems.Count;
     internal int ActivityRowCount => _activityRows.Count;
     internal bool TransferVisible => TransferCard.IsVisible;
-    internal bool GlyphSpins => StatusGlyph.Classes.Contains("spin");
+    /// <summary>"rise", "fall", "spin-slow" or "none": how the badge's glyph moves.</summary>
+    internal string GlyphMotion => new[] { "rise", "fall", "spin-slow" }.FirstOrDefault(StatusGlyph.Classes.Contains) ?? "none";
+
+    internal bool SecondGlyphFalls => StatusGlyph2.IsVisible && StatusGlyph2.Classes.Contains("fall-late");
     internal bool BadgePulses => StatusBadgeHost.Classes.Contains("pulse");
     internal string ArrowMotion => TransferArrow.Classes.Contains("rise") ? "rise" : TransferArrow.Classes.Contains("fall") ? "fall" : "none";
     internal int ActiveRows => _active.Count;

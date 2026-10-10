@@ -107,10 +107,7 @@ public partial class TrayPanel : Window
 
     public void ShowStatus(StatusSnapshot s, string? device)
     {
-        var (brush, icon) = s.IsWaiting ? ("S.Grey", "I.Wait") : Visuals.ForStatus(s.Status);
-        StatusBadge.SetResourceReference(Shape.FillProperty, brush);
-        StatusGlyph.Data = Visuals.Resource<Geometry>(icon);
-        Motion.Spin(StatusGlyph, IsVisible && s.Status == Pairnets.Core.Sync.RunnerStatus.Syncing && !s.IsWaiting);
+        var brush = Badge.Show(s, StatusBadge, StatusGlyph, StatusGlyph2, 19, animate: IsVisible);
         if (_tintKey != brush)
         {
             _tintKey = brush;
@@ -128,12 +125,20 @@ public partial class TrayPanel : Window
         if (s.IsTransferring)
         {
             TransferTitle.Text = s.BatchTitle;
-            TransferSpeed.Text = s.BytesPerSecond >= 1 ? Format.Speed(s.BytesPerSecond) : string.Empty;
+            var stalled = s.Motion == SyncMotion.Stalled;
+            TransferSpeed.Text = stalled ? "Stalled" : s.BytesPerSecond >= 1 ? Format.Speed(s.BytesPerSecond) : string.Empty;
+            TransferSpeed.SetResourceReference(TextBlock.ForegroundProperty, stalled ? "T.WarnText" : "T.Muted");
             Motion.Glide(TransferProgress, s.OverallPercent ?? 0);
             TransferOverall.Text = s.OverallText;
-            var uploading = s.Active.Count == 0 ? s.Operation != "download" : s.Active.Any(a => a.IsUpload);
+            var uploading = s.GoingUp || !s.GoingDown;
             TransferArrow.Data = Visuals.Resource<Geometry>(uploading ? "I.Up" : "I.Down");
             TransferArrow.SetResourceReference(LineIcon.StrokeProperty, uploading ? "S.Green" : "S.Blue");
+            TransferArrow.Opacity = stalled ? 0.5 : 1;
+            Motion.Travel(TransferArrow, IsVisible && !stalled ? uploading : null, distance: 3);
+        }
+        else
+        {
+            Motion.Travel(TransferArrow, null);
         }
     }
 

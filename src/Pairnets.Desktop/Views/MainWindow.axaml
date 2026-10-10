@@ -164,6 +164,8 @@
                       <Ellipse x:Name="StatusBadge" Fill="{StaticResource S.Grey}" />
                       <v:LineIcon x:Name="StatusGlyph" Classes="icon white" Width="23" Height="23" StrokeThickness="2.6"
                                   Data="{StaticResource I.CloudOff}" />
+                      <v:LineIcon x:Name="StatusGlyph2" Classes="icon white" Width="23" Height="23" StrokeThickness="2.6"
+                                  Data="{StaticResource I.Down}" IsVisible="False" />
                     </Grid>
                     <StackPanel Grid.Column="1" Spacing="3" VerticalAlignment="Center">
                       <TextBlock x:Name="Headline" Classes="h1" Text="Starting…" />

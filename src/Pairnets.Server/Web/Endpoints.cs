@@ -104,23 +104,31 @@ public static class Endpoints
             return Json(entries);
         });
 
-        app.MapGet("/api/file", async (HttpContext ctx, SyncStore store) =>
+        app.MapGet("/api/file", async (HttpContext ctx, SyncStore store, TransferMeter meter) =>
         {
             var path = ctx.Request.Query["path"].ToString();
             var opened = await store.OpenReadAsync(path, ctx.RequestAborted);
             if (opened is null)
                 return Error(StatusCodes.Status404NotFound, ErrorCodes.NotFound, "No such file.");
             var entry = opened.Entry;
+            // Counted while the file is sent; the other computers see this one's download speed.
+            Stream stream = opened.Stream;
+            if (DeviceIdentity.Of(ctx) is { } who)
+            {
+                var transfer = meter.Begin(who.Name, upload: false);
+                ctx.Response.RegisterForDispose(transfer);
+                stream = transfer.Wrap(stream);
+            }
             // Also under the old Tether names, so an app that is not updated yet keeps syncing.
             ctx.Response.Headers[PairnetsHeaders.Hash] = ctx.Response.Headers[TetherNames.HashHeader] = entry.Hash;
             ctx.Response.Headers[PairnetsHeaders.ModifiedMs] = ctx.Response.Headers[TetherNames.ModifiedMsHeader] = entry.ModifiedMs.ToString(CultureInfo.InvariantCulture);
-            return Results.File(opened.Stream, "application/octet-stream",
+            return Results.File(stream, "application/octet-stream",
                 lastModified: DateTimeOffset.FromUnixTimeMilliseconds(entry.ModifiedMs),
                 entityTag: new EntityTagHeaderValue("\"" + entry.Hash + "\""),
                 enableRangeProcessing: true);
         });
 
-        app.MapPut("/api/file", async (HttpContext ctx, SyncStore store, IHubContext<SyncHub> hub) =>
+        app.MapPut("/api/file", async (HttpContext ctx, SyncStore store, IHubContext<SyncHub> hub, TransferMeter meter) =>
         {
             var bodySize = ctx.Features.Get<IHttpMaxRequestBodySizeFeature>();
             if (bodySize is { IsReadOnly: false })
@@ -132,9 +140,10 @@ public static class Endpoints
                 return Error(StatusCodes.Status400BadRequest, ErrorCodes.BadRequest, "mtime must be Unix milliseconds.");
 
             ChangeResult result;
+            using var transfer = Upload(ctx, meter);
             try
             {
-                result = await store.PutAsync(path, baseValue, mtime, ctx.Request.Body, ctx.RequestAborted);
+                result = await store.PutAsync(path, baseValue, mtime, transfer?.Wrap(ctx.Request.Body) ?? ctx.Request.Body, ctx.RequestAborted);
             }
             catch (OperationCanceledException) when (!ctx.RequestAborted.IsCancellationRequested)
             {
@@ -162,7 +171,7 @@ public static class Endpoints
             };
         });
 
-        app.MapPut("/api/upload/{id}", async (string id, HttpContext ctx, UploadSessions uploads) =>
+        app.MapPut("/api/upload/{id}", async (string id, HttpContext ctx, UploadSessions uploads, TransferMeter meter) =>
         {
             var bodySize = ctx.Features.Get<IHttpMaxRequestBodySizeFeature>();
             if (bodySize is { IsReadOnly: false })
@@ -173,9 +182,10 @@ public static class Endpoints
                 return Error(StatusCodes.Status400BadRequest, ErrorCodes.BadRequest, "offset must be a non-negative integer.");
 
             UploadSessions.ChunkResult result;
+            using var transfer = Upload(ctx, meter);
             try
             {
-                result = await uploads.AppendAsync(id, offset, ctx.Request.Body, ctx.RequestAborted);
+                result = await uploads.AppendAsync(id, offset, transfer?.Wrap(ctx.Request.Body) ?? ctx.Request.Body, ctx.RequestAborted);
             }
             catch (BadHttpRequestException ex) when (ex.StatusCode == StatusCodes.Status413PayloadTooLarge)
             {
@@ -343,6 +353,10 @@ public static class Endpoints
         mtime = parsed;
         return true;
     }
+
+    /// <summary>An upload request counted for the other computers' maps (null without a known computer).</summary>
+    private static TransferMeter.Transfer? Upload(HttpContext ctx, TransferMeter meter) =>
+        DeviceIdentity.Of(ctx) is { } who ? meter.Begin(who.Name, upload: true) : null;
 
     private static IResult UploadNotFound() =>
         Error(StatusCodes.Status404NotFound, ErrorCodes.NotFound, "No such upload (it was finished, dropped after an hour without data, or the server restarted).");
