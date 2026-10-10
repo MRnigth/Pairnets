@@ -31,6 +31,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- The tests that press every button reach the test hooks (Dialogs.Responder, the tray menu). -->
+    <InternalsVisibleTo Include="Pairnets.Client.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="System.Security.Cryptography.ProtectedData" />
     <PackageReference Include="Microsoft.Extensions.Logging" />
   </ItemGroup>

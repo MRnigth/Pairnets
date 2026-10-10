@@ -1,0 +1,12 @@
+#!/bin/sh
+# Pairnets pre-deploy check (installed by scripts/deploy-gate/install.mjs). A push to main or of a v* tag is a
+# release, so it needs a passed check for exactly that commit. This hook only looks for the pass record; it never
+# runs the check itself (that takes about 15 minutes).
+gate="${HOME:-$USERPROFILE}/.claude/hooks/pairnets-deploy-gate/deploy-gate.mjs"
+if command -v cygpath >/dev/null 2>&1; then gate="$(cygpath -m "$gate")"; fi
+if ! command -v node >/dev/null 2>&1 || [ ! -f "$gate" ]; then
+  echo "pre-push: the Pairnets pre-deploy check is not installed properly (node or $gate is missing), so nothing was pushed." >&2
+  echo "pre-push: install it again with: node scripts/deploy-gate/install.mjs" >&2
+  exit 1
+fi
+exec node "$gate" --pre-push "$@"

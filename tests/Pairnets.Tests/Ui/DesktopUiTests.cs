@@ -54,14 +54,17 @@ public sealed class SampleHistory : IHistorySource
     }
 }
 
-/// <summary>Records what the windows asked for; the History page reads <see cref="SampleHistory"/>.</summary>
-public sealed class SampleActions : IMainActions
+/// <summary>Records what the windows (and the tray panel) asked for; the History page reads <see cref="SampleHistory"/>.</summary>
+public sealed class SampleActions : ITrayActions
 {
     public List<string> Calls { get; } = [];
 
     public SampleHistory Samples { get; } = new();
 
-    public IHistorySource? History => Samples;
+    /// <summary>Set to read History from somewhere else, such as a server that cannot be reached.</summary>
+    public IHistorySource? HistoryFrom { get; set; }
+
+    public IHistorySource? History => HistoryFrom ?? Samples;
 
     public void FixBlocked() => Calls.Add("fix");
     public void SyncNow() => Calls.Add("sync");
@@ -80,6 +83,10 @@ public sealed class SampleActions : IMainActions
     public void AddComputer() => Calls.Add("add-computer");
 
     public void ManageDevices() => Calls.Add("manage-devices");
+
+    public void OpenWindow(MainPage page) => Calls.Add("open:" + page);
+
+    public void Quit() => Calls.Add("quit");
 }
 
 /// <summary>Loads the macOS/Linux windows headlessly: XAML parses, controls bind, states render.</summary>

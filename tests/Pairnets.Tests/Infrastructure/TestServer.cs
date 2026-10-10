@@ -71,7 +71,15 @@ public sealed class TestServer : IAsyncDisposable
             _configureBuilder = configureBuilder,
         };
         if (https && installCertificate)
-            TestCertificates.Create("localhost").WriteTo(server.TlsDir);
+        {
+            // Windows builds the chain through the test intermediate and some machines refuse it (see WriteLeafOnlyTo);
+            // the full chain is still served on Linux and macOS, like a real Let's Encrypt certificate.
+            var issued = TestCertificates.Create("localhost");
+            if (OperatingSystem.IsWindows())
+                issued.WriteLeafOnlyTo(server.TlsDir);
+            else
+                issued.WriteTo(server.TlsDir);
+        }
         await server.StartOnPortAsync(0);
         return server;
     }

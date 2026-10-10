@@ -1,0 +1,47 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <RootNamespace>Pairnets.Browser.Tests</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <!-- A real Chromium that clicks through the nest's website (Microsoft's own browser automation). -->
+    <PackageReference Include="Microsoft.Playwright" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Pairnets.Core\Pairnets.Core.csproj" />
+    <ProjectReference Include="..\..\src\Pairnets.Server\Pairnets.Server.csproj" />
+  </ItemGroup>
+
+  <!--
+    The test servers and fakes come from Pairnets.Tests as linked files. That project itself cannot be referenced:
+    it brings the Avalonia app along, whose program is called "Pairnets" like the Windows app's.
+  -->
+  <ItemGroup>
+    <Compile Include="..\Pairnets.Tests\Infrastructure\FakeGoogle.cs" Link="Shared\FakeGoogle.cs" />
+    <Compile Include="..\Pairnets.Tests\Infrastructure\FakeMail.cs" Link="Shared\FakeMail.cs" />
+    <Compile Include="..\Pairnets.Tests\Infrastructure\Localhost.cs" Link="Shared\Localhost.cs" />
+    <Compile Include="..\Pairnets.Tests\Infrastructure\RawMail.cs" Link="Shared\RawMail.cs" />
+    <Compile Include="..\Pairnets.Tests\Infrastructure\RepoPaths.cs" Link="Shared\RepoPaths.cs" />
+    <Compile Include="..\Pairnets.Tests\Infrastructure\ServerProcess.cs" Link="Shared\ServerProcess.cs" />
+    <Compile Include="..\Pairnets.Tests\Infrastructure\TempDir.cs" Link="Shared\TempDir.cs" />
+    <Compile Include="..\Pairnets.Tests\Infrastructure\TestCertificates.cs" Link="Shared\TestCertificates.cs" />
+    <Compile Include="..\Pairnets.Tests\E2E\CliUsage.cs" Link="Shared\CliUsage.cs" />
+    <Compile Include="..\Pairnets.Tests\E2E\IServerTarget.cs" Link="Shared\IServerTarget.cs" />
+    <Compile Include="..\Pairnets.Tests\E2E\InstalledLinuxTarget.cs" Link="Shared\InstalledLinuxTarget.cs" />
+    <Compile Include="..\Pairnets.Tests\E2E\ProcessTarget.cs" Link="Shared\ProcessTarget.cs" />
+    <Compile Include="..\Pairnets.Tests\E2E\TourRecord.cs" Link="Shared\TourRecord.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+</Project>

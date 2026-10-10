@@ -2,6 +2,7 @@ using System.IO;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using Pairnets.Client.Tests;
 using Pairnets.Client.Themes;
 using Pairnets.Client.Ui;
 using Pairnets.Core;
@@ -70,19 +71,22 @@ public static class Program
         public void Quit() { }
     }
 
-    [STAThread]
     public static int Main(string[] args)
     {
         var outDir = args.Length > 0 ? args[0] : "screens";
         var print = args.Contains("--print");
         Directory.CreateDirectory(outDir);
-        var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
-        foreach (var dark in new[] { false, true })
+        // On a desktop of its own, so the windows it shows never appear on the screen.
+        HiddenDesktop.Run("Pairnets screenshots", () =>
         {
-            ThemeManager.Apply(app, dark);
-            RenderAll(outDir, dark ? "dark" : "light", print);
-        }
-        app.Shutdown();
+            var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
+            foreach (var dark in new[] { false, true })
+            {
+                ThemeManager.Apply(app, dark);
+                RenderAll(outDir, dark ? "dark" : "light", print);
+            }
+            app.Shutdown();
+        }).GetAwaiter().GetResult();
         return 0;
     }
 

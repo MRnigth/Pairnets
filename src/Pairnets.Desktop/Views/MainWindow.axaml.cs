@@ -74,6 +74,7 @@ public partial class MainWindow : Window
     private string? _tintKey;
     private bool _navigating;
     private bool _deletedMode = true;
+    private string? _filteredSearch;
 
     private static readonly TimeSpan HistoryFreshFor = TimeSpan.FromMinutes(1);
 
@@ -446,6 +447,7 @@ public partial class MainWindow : Window
             return;
         var deleted = _deletedMode;
         var search = HistorySearch.Text;
+        _filteredSearch = search ?? string.Empty;
         var (rows, total) = HistoryQuery.Filter(_serverFiles, deleted, search, DateTimeOffset.UtcNow);
         var selected = (FileList.SelectedItem as ServerFile)?.Path;
         _shownFiles.Clear();
@@ -474,7 +476,10 @@ public partial class MainWindow : Window
 
     private void OnHistorySearch(object? sender, TextChangedEventArgs e)
     {
-        if (!_navigating)
+        // Avalonia reports a search the code typed in later, through the dispatcher, when _navigating is off again.
+        // The list already shows that search; filtering again would reselect the file and hide what the page just
+        // said (the "Restored." after Restore).
+        if (!_navigating && (HistorySearch.Text ?? string.Empty) != _filteredSearch)
             FilterHistory();
     }
 

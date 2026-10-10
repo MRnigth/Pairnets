@@ -111,7 +111,7 @@ public class PathRulesTests
         using var root = new TempDir();
         using var outside = new TempDir();
         File.WriteAllText(Path.Combine(outside.Path, "secret.txt"), "x");
-        Directory.CreateSymbolicLink(Path.Combine(root.Path, "link"), outside.Path);
+        Links.Folder(Path.Combine(root.Path, "link"), outside.Path);
         Directory.CreateDirectory(Path.Combine(root.Path, "real"));
 
         Assert.True(PathRules.HasReparsePoint(root.Path, "link/secret.txt"));

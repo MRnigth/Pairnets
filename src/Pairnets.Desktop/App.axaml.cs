@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
+using Pairnets.Core.Client;
 
 namespace Pairnets.Desktop;
 
@@ -15,7 +16,7 @@ public partial class App : Application
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             desktop.ShutdownMode = Avalonia.Controls.ShutdownMode.OnExplicitShutdown;
-            _controller = new DesktopController(this, desktop, Platform.IPlatformServices.Current);
+            _controller = new DesktopController(this, desktop, Platform.IPlatformServices.Current, ClientEnvironment.Default);
             desktop.ShutdownRequested += (_, _) => _controller.Dispose();
             _controller.Start(desktop.Args ?? []);
             // macOS hands a pairnets:// link to the running app as an event (no second process starts).

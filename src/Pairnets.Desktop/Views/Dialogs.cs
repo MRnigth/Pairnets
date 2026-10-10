@@ -1,16 +1,34 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
+using Avalonia.Platform.Storage;
 
 namespace Pairnets.Desktop.Views;
 
-/// <summary>Minimal message and yes/no dialogs (Avalonia has no built-in message box).</summary>
+/// <summary>Minimal message and yes/no dialogs (Avalonia has no built-in message box), and the folder picker.</summary>
 public static class Dialogs
 {
     public static Task InfoAsync(Window? owner, string title, string text) => ShowAsync(owner, title, text, ["OK"]);
 
     public static async Task<bool> ConfirmAsync(Window? owner, string title, string text, string yes = "Yes", string no = "No") =>
         await ShowAsync(owner, title, text, [yes, no]) == yes;
+
+    /// <summary>Asks for a folder; null when none was chosen.</summary>
+    public static Task<string?> PickFolderAsync(Window? owner, string title) => FolderPicker(owner, title);
+
+    /// <summary>
+    /// The folder picker behind <see cref="PickFolderAsync"/>: the system's own. The system picker does nothing
+    /// without a screen, so the tests that press every button answer it themselves.
+    /// </summary>
+    internal static Func<Window?, string, Task<string?>> FolderPicker { get; set; } = SystemFolderPickerAsync;
+
+    private static async Task<string?> SystemFolderPickerAsync(Window? owner, string title)
+    {
+        if (owner is null)
+            return null;
+        var folders = await owner.StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions { Title = title, AllowMultiple = false });
+        return folders.Count > 0 ? folders[0].TryGetLocalPath() : null;
+    }
 
     private static async Task<string?> ShowAsync(Window? owner, string title, string text, string[] buttons)
     {

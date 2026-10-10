@@ -1,7 +1,6 @@
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Media;
-using Avalonia.Platform.Storage;
 using Pairnets.Core;
 using Pairnets.Core.Api;
 using Pairnets.Core.Client;
@@ -135,10 +134,7 @@ public partial class SettingsView : UserControl
 
     private async void OnBrowse(object? sender, RoutedEventArgs e)
     {
-        if (Owner is not { } owner)
-            return;
-        var folders = await owner.StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions { Title = "Choose the folder to keep in sync", AllowMultiple = false });
-        if (folders.Count > 0 && folders[0].TryGetLocalPath() is { } path)
+        if (await Dialogs.PickFolderAsync(Owner, "Choose the folder to keep in sync") is { } path)
             FolderBox.Text = path;
     }
 
