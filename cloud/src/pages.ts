@@ -24,7 +24,7 @@ ${turnstile}
 ${scripts}
 </head>
 <body>
-<header class="top"><span class="brand">Pairnets</span> <span class="muted">account</span></header>
+<header class="top"><a class="brand" href="https://pairnets.app/">Pairnets</a> <span class="muted">account</span> <a class="button home" href="https://pairnets.app/">← Home</a></header>
 <main>
 ${main}
 </main>
