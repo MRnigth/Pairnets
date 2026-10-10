@@ -466,15 +466,8 @@ public partial class SignInView : UserControl
     {
         if (_state?.VerifyUrl is not { } link)
             return;
-        try
-        {
-            Clipboard.SetText(link);
-            CopyButton.Content = "Copied";
-        }
-        catch (System.Runtime.InteropServices.COMException)
-        {
-            // Another program holds the clipboard; the button can be pressed again.
-        }
+        if (Dialogs.CopyText(link))
+            CopyButton.Content = "Copied"; // else another program holds the clipboard; the button can be pressed again
     }
 
     private void OnRetry(object sender, RoutedEventArgs e)
@@ -519,11 +512,8 @@ public partial class SignInView : UserControl
 
     private void OnBrowse(object sender, RoutedEventArgs e)
     {
-        var dialog = new OpenFolderDialog { Title = "Choose the folder to keep in sync", Multiselect = false };
-        if (Directory.Exists(FolderBox.Text))
-            dialog.InitialDirectory = FolderBox.Text;
-        if ((Owner is { } owner ? dialog.ShowDialog(owner) : dialog.ShowDialog()) == true)
-            FolderBox.Text = dialog.FolderName;
+        if (Dialogs.PickFolder(Owner, "Choose the folder to keep in sync", FolderBox.Text) is { } folder)
+            FolderBox.Text = folder;
     }
 
     private async void OnStart(object sender, RoutedEventArgs e)
@@ -575,5 +565,5 @@ public partial class SignInView : UserControl
     }
 
     private MessageBoxResult Ask(string text, MessageBoxButton buttons, MessageBoxImage image, string title = "Pairnets") =>
-        Owner is { } owner ? MessageBox.Show(owner, text, title, buttons, image) : MessageBox.Show(text, title, buttons, image);
+        Dialogs.Ask(Owner, text, title, buttons, image);
 }

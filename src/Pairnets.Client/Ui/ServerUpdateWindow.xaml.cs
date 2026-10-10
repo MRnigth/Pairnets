@@ -110,7 +110,7 @@ public partial class ServerUpdateWindow : Window
         DetailsText.ScrollToEnd();
     }
 
-    private void OnCopyDetails(object sender, RoutedEventArgs e) => Clipboard.SetText(DetailsText.Text);
+    private void OnCopyDetails(object sender, RoutedEventArgs e) => Dialogs.CopyText(DetailsText.Text);
 
     public void ShowBusy(string step)
     {
@@ -172,5 +172,5 @@ public partial class ServerUpdateWindow : Window
             Dispatcher.InvokeAsync(() => AppendDetail("--- What the server reports ---" + Environment.NewLine + details), DispatcherPriority.Background);
     }
 
-    private void OnCopy(object sender, RoutedEventArgs e) => Clipboard.SetText(CommandText.Text);
+    private void OnCopy(object sender, RoutedEventArgs e) => Dialogs.CopyText(CommandText.Text);
 }

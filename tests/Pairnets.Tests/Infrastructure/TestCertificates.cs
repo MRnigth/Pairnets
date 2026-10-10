@@ -16,6 +16,18 @@ public static class TestCertificates
             File.WriteAllText(Path.Combine(dir, "privkey.pem"), KeyPem);
             File.WriteAllText(Path.Combine(dir, "fullchain.pem"), FullChainPem);
         }
+
+        /// <summary>
+        /// Writes the pair with the leaf alone in fullchain.pem. Some Windows machines refuse to build a chain through an
+        /// intermediate they cannot trust ("An unknown chain building error occurred"), and then the server shows no
+        /// certificate at all; the end-to-end test servers only need one the client accepts, so they serve the leaf alone.
+        /// </summary>
+        public void WriteLeafOnlyTo(string dir)
+        {
+            Directory.CreateDirectory(dir);
+            File.WriteAllText(Path.Combine(dir, "privkey.pem"), KeyPem);
+            File.WriteAllText(Path.Combine(dir, "fullchain.pem"), Leaf.ExportCertificatePem() + "\n");
+        }
     }
 
     public static Issued Create(string dnsName)

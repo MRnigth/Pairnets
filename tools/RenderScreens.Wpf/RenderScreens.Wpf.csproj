@@ -13,4 +13,9 @@
     <ProjectReference Include="..\..\src\Pairnets.Client\Pairnets.Client.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- The windows open on a hidden desktop, as in the Windows app's tests. -->
+    <Compile Include="..\..\tests\Pairnets.Client.Tests\HiddenDesktop.cs" Link="HiddenDesktop.cs" />
+  </ItemGroup>
+
 </Project>

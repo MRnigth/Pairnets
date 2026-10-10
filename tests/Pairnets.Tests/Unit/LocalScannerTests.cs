@@ -120,8 +120,8 @@ public class LocalScannerTests : IDisposable
     {
         using var outside = new TempDir("outside");
         File.WriteAllText(Path.Combine(outside.Path, "secret.txt"), "s");
-        Directory.CreateSymbolicLink(Path.Combine(_root.Path, "linkdir"), outside.Path);
-        File.CreateSymbolicLink(Path.Combine(_root.Path, "linkfile.txt"), Path.Combine(outside.Path, "secret.txt"));
+        Links.Folder(Path.Combine(_root.Path, "linkdir"), outside.Path);
+        Links.TryFile(Path.Combine(_root.Path, "linkfile.txt"), Path.Combine(outside.Path, "secret.txt"));
         Write("real.txt", "r");
 
         var result = await Scanner().ScanAsync(CancellationToken.None);
