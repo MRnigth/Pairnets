@@ -14,7 +14,9 @@ const WRITES = /(>|\btee\b|\bcp\b|\bmv\b|\brm\b|\bdel\b|\berase\b|\btouch\b|\bse
 
 /** True when a command writes into the check's pass records or its installed hook. */
 export function tampers(text) {
-  return STAMPS.test(text) && WRITES.test(text);
+  // Output sent to the screen or thrown away (2>&1, 2>/dev/null, > $null) writes nothing.
+  const harmless = text.replace(/[\d*&]*>>?\s*(&\d+|&-|\/dev\/null|\$null|NUL)(?![\w/\\.])/gi, ' ');
+  return STAMPS.test(text) && WRITES.test(harmless);
 }
 
 /**

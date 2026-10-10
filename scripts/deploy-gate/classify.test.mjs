@@ -124,6 +124,11 @@ test('tampering with the pass records or the hook is caught', () => {
   assert.equal(tampers('rm ~/.claude/hooks/pairnets-deploy-gate/deploy-gate.mjs'), true);
   assert.equal(tampers('ls "$LOCALAPPDATA/Pairnets-predeploy/stamps"'), false);
   assert.equal(tampers('cat "$LOCALAPPDATA/Pairnets-predeploy/reports/x/report.txt"'), false);
+  assert.equal(tampers('ls "$LOCALAPPDATA/Pairnets-predeploy/stamps"; gh run list 2>&1 | cat'), false);
+  assert.equal(tampers('ls "$LOCALAPPDATA/Pairnets-predeploy/stamps" 2>/dev/null'), false);
+  assert.equal(tampers('Get-ChildItem $env:LOCALAPPDATA\\Pairnets-predeploy\\stamps 2>$null'), false);
+  assert.equal(tampers('ls x 2>&1 > "$LOCALAPPDATA/Pairnets-predeploy/stamps/a.pass"'), true);
+  assert.equal(tampers('echo x >/dev/nullx "$LOCALAPPDATA/Pairnets-predeploy/stamps/a.pass"'), true);
   assert.deepEqual(types('cp fake.pass "$LOCALAPPDATA/Pairnets-predeploy/stamps/"'), ['tamper']);
 });
 
