@@ -73,6 +73,17 @@ public sealed partial class WebsiteTests(WebsiteFixture site, ITestOutputHelper 
         var password = NestApi.NewPassword();
         await Api.SetPasswordAsync(password);
 
+        Step("the licence, the privacy policy and the terms on pairnets.app, each in a new tab");
+        await page.GotoAsync("/signin");
+        foreach (var link in new[] { "https://pairnets.app/licenses/", "https://pairnets.app/privacy/", "https://pairnets.app/terms/" })
+        {
+            var opened = await page.Context.RunAndWaitForPageAsync(() => page.ClickAsync($"a[href='{link}']"));
+            await opened.WaitForLoadStateAsync();
+            Assert.Equal(link, opened.Url);
+            await opened.CloseAsync();
+        }
+        await page.AtAsync("/signin"); // the sign-in page itself stays
+
         Step("with the password");
         await page.GotoAsync("/signin");
         await page.FillAsync("#password", password);
