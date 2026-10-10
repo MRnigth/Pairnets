@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Net.Http;
 using System.Windows;
 using System.Windows.Threading;
@@ -22,11 +21,13 @@ namespace Pairnets.Client;
 /// </summary>
 public sealed class TrayController : ITrayActions, IDisposable
 {
-    private readonly App _app;
     private readonly ILoggerFactory _loggers;
     private readonly RollingFileLoggerProvider _fileLog;
     private readonly ILogger _log;
-    private readonly DpapiProtector _protector = new();
+    private readonly IWindowsPlatform _platform;
+    private readonly ClientEnvironment _env;
+    private readonly Dispatcher _ui;
+    private readonly Action _shutdown;
     private readonly Forms.NotifyIcon _icon;
     private readonly Dictionary<string, DateTime> _lastToast = [];
     private readonly DispatcherTimer _refresh;
@@ -37,7 +38,8 @@ public sealed class TrayController : ITrayActions, IDisposable
     private Action? _balloonClick;
     private volatile bool _dirty = true;
     private RunnerStatus? _shownStatus;
-    private readonly UpdateService _updates = new(new UpdateChecker(new HttpClient()), PairnetsInfo.ProductVersion, UpdateChecker.AssetForThisPlatform());
+    private readonly UpdateService _updates;
+    private IDisposable? _activation;
     private bool _updateDismissed;
     private double? _updateProgress;
     private string? _updateError;
@@ -56,13 +58,22 @@ public sealed class TrayController : ITrayActions, IDisposable
     private readonly Forms.ToolStripMenuItem _autoStart = new("Start with Windows") { CheckOnClick = true };
     private readonly Forms.ToolStripMenuItem _exit = new("Exit");
 
-    public TrayController(App app, ILoggerFactory loggers, RollingFileLoggerProvider fileLog)
+    /// <param name="platform">Windows itself: the saved key, the Recycle Bin, start with Windows, opening things.</param>
+    /// <param name="env">Where the settings, sync notes and logs are, and where updates come from.</param>
+    /// <param name="ui">The app's dispatcher: everything the session reports is drawn there.</param>
+    /// <param name="shutdown">Ends the app (Exit, and after starting an update's installer).</param>
+    public TrayController(ILoggerFactory loggers, RollingFileLoggerProvider fileLog, IWindowsPlatform platform, ClientEnvironment env,
+        Dispatcher ui, Action shutdown)
     {
-        _app = app;
         _loggers = loggers;
         _fileLog = fileLog;
+        _platform = platform;
+        _env = env;
+        _ui = ui;
+        _shutdown = shutdown;
         _log = loggers.CreateLogger("Pairnets.Tray");
-        _settings = SettingsStore.Load(SettingsStore.DefaultPath);
+        _settings = SettingsStore.Load(env.SettingsPath);
+        _updates = new UpdateService(env.CreateUpdateChecker(), PairnetsInfo.ProductVersion, UpdateChecker.AssetForThisPlatform());
         _fileLog.Minimum = _settings.DebugMode ? LogLevel.Debug : LogLevel.Information; // Debug mode: more detail in the log
 
         var menu = new Forms.ContextMenuStrip();
@@ -85,7 +96,7 @@ public sealed class TrayController : ITrayActions, IDisposable
             Icon = TrayIcons.For(RunnerStatus.Offline),
             Text = "Pairnets",
             ContextMenuStrip = menu,
-            Visible = true,
+            Visible = env.ShowTrayIcon,
         };
         // A click opens the quick-look panel next to the taskbar (like OneDrive); "Open Pairnets" in it,
         // a double-click or the menu opens the full window.
@@ -106,13 +117,44 @@ public sealed class TrayController : ITrayActions, IDisposable
         SystemEvents.PowerModeChanged += OnPowerModeChanged;
 
         // Progress events arrive for every transferred chunk: redraw at most 4 times a second.
-        _refresh = new DispatcherTimer(TimeSpan.FromMilliseconds(250), DispatcherPriority.Background, (_, _) => RefreshIfDirty(), _app.Dispatcher);
+        _refresh = new DispatcherTimer(TimeSpan.FromMilliseconds(250), DispatcherPriority.Background, (_, _) => RefreshIfDirty(), ui);
         _refresh.Start();
+    }
+
+    /// <summary>Test hook: other sync timings (null in the app).</summary>
+    internal Func<RunnerOptions, RunnerOptions>? RunnerOptionsForTests { get; init; }
+
+    /// <summary>Raised with the title and text of every notification shown (tests read it; the icon is hidden there).</summary>
+    internal event Action<string, string>? Notified;
+
+    internal Forms.NotifyIcon TrayIcon => _icon;
+    internal MainWindow? Window => _window;
+    internal TrayPanel? Panel => _panel;
+    internal ClientSession? Session => _session;
+    internal ClientSettings Settings => _settings;
+
+    /// <summary>Draws the current state right away instead of at the next tick.</summary>
+    internal void RefreshNow()
+    {
+        _dirty = true;
+        RefreshIfDirty();
+    }
+
+    private void RunOnUi(Action action)
+    {
+        if (_ui.CheckAccess())
+            action();
+        else
+            _ui.BeginInvoke(DispatcherPriority.Normal, action);
     }
 
     public void Start()
     {
-        _updates.UpdateAvailable += u => _app.RunOnUi(() =>
+        // A pairnets:// link (the nest's website after approving this computer) starts a second Pairnets,
+        // which pokes this one through the pipe and quits; come to the front for it. Listening starts before
+        // the sign-in window below opens (and waits), because that is when the link comes.
+        _activation = AppActivation.Listen(() => RunOnUi(ComeToFront), _env.ActivationPipeName);
+        _updates.UpdateAvailable += u => RunOnUi(() =>
         {
             _updateDismissed = false;
             _updateError = null;
@@ -137,7 +179,7 @@ public sealed class TrayController : ITrayActions, IDisposable
         StopSession();
         try
         {
-            plainToken ??= _protector.Unprotect(_settings.ProtectedToken!);
+            plainToken ??= _platform.Secrets.Unprotect(_settings.ProtectedToken!);
         }
         catch (Exception ex)
         {
@@ -146,19 +188,20 @@ public sealed class TrayController : ITrayActions, IDisposable
             return;
         }
 
-        var session = ClientSession.Start(_settings, plainToken, new RecycleBinTrash(_loggers.CreateLogger("Pairnets.Trash")), _loggers);
+        var session = ClientSession.Start(_settings, plainToken, _platform.CreateTrash(_loggers.CreateLogger("Pairnets.Trash")), _loggers,
+            stateBaseDir: _env.LocalDir, runnerOptions: RunnerOptionsForTests);
         session.StatusChanged += _ => _dirty = true;
         session.Activity.Added += _ => _dirty = true;
-        session.ConflictCreated += c => _app.RunOnUi(() => Toast("conflict:" + c.Path, "Conflict: both computers changed a file",
+        session.ConflictCreated += c => RunOnUi(() => Toast("conflict:" + c.Path, "Conflict: both computers changed a file",
             $"{c.Path} was changed on both. Your version was kept as \"{PathRules.FileName(c.ConflictCopyPath)}\".", Forms.ToolTipIcon.Warning, ShowMainWindow));
-        session.PathWarningRaised += w => _app.RunOnUi(() => Toast("warning:" + w.Path, w.Code == ErrorCodes.CaseCollision ? "Name collision" : "File name not allowed",
+        session.PathWarningRaised += w => RunOnUi(() => Toast("warning:" + w.Path, w.Code == ErrorCodes.CaseCollision ? "Name collision" : "File name not allowed",
             $"{w.Path}: {w.Message}", Forms.ToolTipIcon.Warning, ShowMainWindow));
-        session.PassCompleted += r => _app.RunOnUi(() => OnPassCompleted(r));
-        session.CatchUpCompleted += n => _app.RunOnUi(() => Toast("catchup", "Pairnets is up to date",
+        session.PassCompleted += r => RunOnUi(() => OnPassCompleted(r));
+        session.CatchUpCompleted += n => RunOnUi(() => Toast("catchup", "Pairnets is up to date",
             $"Synced {n} change(s) made while this computer was away.", Forms.ToolTipIcon.Info, ShowMainWindow));
-        session.ServerInfoChanged += info => _app.RunOnUi(() => OnServerInfo(session, info));
-        session.AccountChanged += (next, token) => _app.RunOnUi(() => OnAccountChanged(session, next, token));
-        session.JoinRequested += r => _app.RunOnUi(() => Toast("join:" + r.Code, r.Title, $"Code {r.Code} · click to review it on your nest.",
+        session.ServerInfoChanged += info => RunOnUi(() => OnServerInfo(session, info));
+        session.AccountChanged += (next, token) => RunOnUi(() => OnAccountChanged(session, next, token));
+        session.JoinRequested += r => RunOnUi(() => Toast("join:" + r.Code, r.Title, $"Code {r.Code} · click to review it on your nest.",
             Forms.ToolTipIcon.Info, () => ReviewJoin(r)));
         _session = session;
         _dirty = true;
@@ -177,7 +220,7 @@ public sealed class TrayController : ITrayActions, IDisposable
     // ------------------------------------------------------------------ the nest: devices and signing out
 
     /// <summary>The two steps, with this nest's name (or, signed in with an account, the account) filled in.</summary>
-    public void AddComputer() => MessageBox.Show(Relay.AddComputerSteps(_settings.ServerUrl, _settings.AccountEmail, _session?.Status.NestUrl ?? NestFromSettings()),
+    public void AddComputer() => Dialogs.Ask(null, Relay.AddComputerSteps(_settings.ServerUrl, _settings.AccountEmail, _session?.Status.NestUrl ?? NestFromSettings()),
         "Pairnets – add a computer", MessageBoxButton.OK, MessageBoxImage.Information);
 
     /// <summary>The nest's Devices page, or the account page when this computer signed in with a Pairnets account.</summary>
@@ -186,7 +229,7 @@ public sealed class TrayController : ITrayActions, IDisposable
         if (Relay.ManageComputersUrl(_settings.ServerUrl, _session?.Status.NestUrl ?? NestFromSettings()) is { } url)
             Shell(url);
         else
-            MessageBox.Show("Your nest has no website yet. On the server, give it its own name with: sudo ./install.sh --public-url https://nest.example.com",
+            Dialogs.Ask(null, "Your nest has no website yet. On the server, give it its own name with: sudo ./install.sh --public-url https://nest.example.com",
                 "Pairnets", MessageBoxButton.OK, MessageBoxImage.Information);
     }
 
@@ -200,7 +243,7 @@ public sealed class TrayController : ITrayActions, IDisposable
     /// </summary>
     public async void SignOut()
     {
-        if (MessageBox.Show($"Sign out of this computer?\n\nSyncing stops. Your files in {_settings.Folder} stay here. Sign in again to continue.",
+        if (Dialogs.Ask(null, $"Sign out of this computer?\n\nSyncing stops. Your files in {_settings.Folder} stay here. Sign in again to continue.",
                 "Pairnets – sign out", MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK)
             return;
         var removed = false;
@@ -216,10 +259,10 @@ public sealed class TrayController : ITrayActions, IDisposable
         _settings.ProtectedToken = null;
         _settings.DeviceId = null;
         _settings.FirstRunCompleted = false;
-        SettingsStore.Save(SettingsStore.DefaultPath, _settings);
+        SettingsStore.Save(_env.SettingsPath, _settings);
         _dirty = true;
         if (!removed)
-            MessageBox.Show("Signed out here, but your nest could not be told. " + Relay.RemoveByHandHint(_settings.ServerUrl),
+            Dialogs.Ask(null, "Signed out here, but your nest could not be told. " + Relay.RemoveByHandHint(_settings.ServerUrl),
                 "Pairnets", MessageBoxButton.OK, MessageBoxImage.Warning);
         _window?.Navigate(MainPage.Overview);
         ShowSettings(firstRun: true);
@@ -237,7 +280,7 @@ public sealed class TrayController : ITrayActions, IDisposable
             return;
         var folder = _settings.Folder;
         var where = string.IsNullOrWhiteSpace(folder) ? "your sync folder" : folder;
-        if (MessageBox.Show($"Reset Pairnets on this computer?\n\nThis signs this computer out of your nest, forgets every setting and the saved sign-in, and removes Pairnets' sync notes. Your files in {where} are not deleted. The log files are kept.\n\nYou start again from the sign-in screen.",
+        if (Dialogs.Ask(null, $"Reset Pairnets on this computer?\n\nThis signs this computer out of your nest, forgets every setting and the saved sign-in, and removes Pairnets' sync notes. Your files in {where} are not deleted. The log files are kept.\n\nYou start again from the sign-in screen.",
                 "Pairnets – reset", MessageBoxButton.OKCancel, MessageBoxImage.Warning, MessageBoxResult.Cancel) != MessageBoxResult.OK)
             return;
         _resetting = true;
@@ -255,11 +298,11 @@ public sealed class TrayController : ITrayActions, IDisposable
                 _log.LogWarning("Could not remove this computer on the nest: {Error}", ex.Message);
             }
             StopSession(); // the sync notes are only free to delete once the session is gone
-            var result = LocalReset.Run(_settings, _protector);
+            var result = LocalReset.Run(_settings, _platform.Secrets, _env.SettingsPath, _env.LocalDir);
             var notes = new List<string>(result.Problems);
             try
             {
-                AutoStart.Set(false);
+                _platform.SetAutoStart(false);
             }
             catch (Exception ex) when (ex is UnauthorizedAccessException or IOException or System.Security.SecurityException)
             {
@@ -276,7 +319,7 @@ public sealed class TrayController : ITrayActions, IDisposable
             _lastToast.Clear();
             _dirty = true;
             if (notes.Count > 0)
-                MessageBox.Show("Pairnets was reset, with these notes:\n\n• " + string.Join("\n• ", notes), "Pairnets", MessageBoxButton.OK, MessageBoxImage.Warning);
+                Dialogs.Ask(null, "Pairnets was reset, with these notes:\n\n• " + string.Join("\n• ", notes), "Pairnets", MessageBoxButton.OK, MessageBoxImage.Warning);
             _window?.Navigate(MainPage.Overview);
             ShowSettings(firstRun: true);
         }
@@ -293,7 +336,7 @@ public sealed class TrayController : ITrayActions, IDisposable
             return; // settings were saved meanwhile; the new session checks again
         try
         {
-            next.ProtectedToken = _protector.Protect(token);
+            next.ProtectedToken = _platform.Secrets.Protect(token);
         }
         catch (Exception ex)
         {
@@ -408,6 +451,7 @@ public sealed class TrayController : ITrayActions, IDisposable
         _lastToast[key] = now;
         _balloonClick = onClick;
         _icon.ShowBalloonTip(8000, title, text, icon);
+        Notified?.Invoke(title, text);
     }
 
     // ------------------------------------------------------------------ actions (also used by MainWindow)
@@ -507,7 +551,7 @@ public sealed class TrayController : ITrayActions, IDisposable
         else
             _session.Pause();
         _settings.Paused = _session.Settings.Paused;
-        SettingsStore.Save(SettingsStore.DefaultPath, _settings);
+        SettingsStore.Save(_env.SettingsPath, _settings);
     }
 
     public void FixBlocked()
@@ -520,18 +564,18 @@ public sealed class TrayController : ITrayActions, IDisposable
             case BlockReason.MassDelete:
             case BlockReason.FolderEmpty:
                 if (_session.PendingDeletes().Count > 0
-                    && MessageBox.Show(_session.DescribePendingDeletes(), "Pairnets – allow deletions?", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No) == MessageBoxResult.Yes)
+                    && Dialogs.Ask(null, _session.DescribePendingDeletes(), "Pairnets – allow deletions?", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No) == MessageBoxResult.Yes)
                     _session.ApproveDeletions();
                 break;
             case BlockReason.ForeignMarker:
-                if (MessageBox.Show($"{_settings.Folder} was synced by Pairnets before, but this computer has no record of it (for example after reinstalling).\n\n" +
+                if (Dialogs.Ask(null, $"{_settings.Folder} was synced by Pairnets before, but this computer has no record of it (for example after reinstalling).\n\n" +
                         "Continue syncing it? Files are merged: nothing is deleted, differing files become conflict copies.",
                         "Pairnets", MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes)
                     _session.AdoptExistingMarker();
                 break;
             case BlockReason.ServerChanged:
             case BlockReason.ServerRolledBack:
-                if (MessageBox.Show(status.Text + "\n\nRe-link? Pairnets will merge this folder with the server: nothing is deleted or overwritten, " +
+                if (Dialogs.Ask(null, status.Text + "\n\nRe-link? Pairnets will merge this folder with the server: nothing is deleted or overwritten, " +
                         "files that differ become conflict copies.", "Pairnets", MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.Yes)
                     _session.RelinkToServer();
                 break;
@@ -550,29 +594,28 @@ public sealed class TrayController : ITrayActions, IDisposable
 
     private void LocateFolder(string message)
     {
-        MessageBox.Show(message + "\n\nIf the drive is unplugged, plug it in and choose Sync now. If you moved or renamed the folder, choose its new location next.",
+        Dialogs.Ask(null, message + "\n\nIf the drive is unplugged, plug it in and choose Sync now. If you moved or renamed the folder, choose its new location next.",
             "Pairnets", MessageBoxButton.OK, MessageBoxImage.Warning);
-        var dialog = new OpenFolderDialog { Title = "Where is your Pairnets folder now?" };
-        if (dialog.ShowDialog() != true || _session is null)
+        if (Dialogs.PickFolder(null, "Where is your Pairnets folder now?") is not { } folder || _session is null)
             return;
-        var error = _session.CheckMovedFolder(dialog.FolderName);
+        var error = _session.CheckMovedFolder(folder);
         if (error is not null)
         {
-            MessageBox.Show(error, "Pairnets", MessageBoxButton.OK, MessageBoxImage.Warning);
+            Dialogs.Ask(null, error, "Pairnets", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
         var oldStateDir = _session.StateDirectory;
         StopSession();
         try
         {
-            StateLocator.AdoptState(oldStateDir, dialog.FolderName);
+            StateLocator.AdoptState(oldStateDir, folder, _env.LocalDir);
         }
         catch (IOException ex)
         {
-            MessageBox.Show(ex.Message, "Pairnets", MessageBoxButton.OK, MessageBoxImage.Warning);
+            Dialogs.Ask(null, ex.Message, "Pairnets", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
-        _settings.Folder = dialog.FolderName;
-        SettingsStore.Save(SettingsStore.DefaultPath, _settings);
+        _settings.Folder = folder;
+        SettingsStore.Save(_env.SettingsPath, _settings);
         StartSession(null);
     }
 
@@ -584,7 +627,7 @@ public sealed class TrayController : ITrayActions, IDisposable
             ShowMainWindow(MainPage.Settings);
             return;
         }
-        var window = new SettingsWindow(_settings, _protector, Shell, _session?.Status.NestUrl);
+        var window = new SettingsWindow(_settings, _platform.Secrets, Shell, _session?.Status.NestUrl);
         if (window.ShowDialog() != true || window.Result is null)
             return;
         ApplySettings(window.Result, window.PlainToken);
@@ -595,7 +638,7 @@ public sealed class TrayController : ITrayActions, IDisposable
     {
         if (_window is null)
             return;
-        var view = new SettingsView(_settings, _protector, _updates, _session?.Status.ServerVersionText);
+        var view = new SettingsView(_settings, _platform.Secrets, _updates, _session?.Status.ServerVersionText);
         view.Saved += v =>
         {
             ApplySettings(v.Result!, v.PlainToken);
@@ -613,7 +656,7 @@ public sealed class TrayController : ITrayActions, IDisposable
     {
         _settings = settings;
         _fileLog.Minimum = _settings.DebugMode ? LogLevel.Debug : LogLevel.Information;
-        SettingsStore.Save(SettingsStore.DefaultPath, _settings);
+        SettingsStore.Save(_env.SettingsPath, _settings);
         SetAutoStart(_settings.StartWithWindows);
         _updates.SetEnabled(_settings.CheckForUpdates);
         StartSession(plainToken);
@@ -641,12 +684,13 @@ public sealed class TrayController : ITrayActions, IDisposable
     }
 
     /// <summary>True when this Pairnets.exe was put there by PairnetsSetup.exe (so the installer can replace it).</summary>
-    private static bool IsInstalledCopy
+    private bool IsInstalledCopy
     {
         get
         {
-            var installDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "Pairnets");
-            return string.Equals(Path.TrimEndingDirectorySeparator(AppContext.BaseDirectory), installDir, StringComparison.OrdinalIgnoreCase);
+            var installDir = _env.InstallDir ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "Pairnets");
+            return string.Equals(Path.TrimEndingDirectorySeparator(AppContext.BaseDirectory), Path.TrimEndingDirectorySeparator(installDir),
+                StringComparison.OrdinalIgnoreCase);
         }
     }
 
@@ -674,9 +718,9 @@ public sealed class TrayController : ITrayActions, IDisposable
                 _updateProgress = p.Total is > 0 ? p.Done * 100.0 / p.Total.Value : 0;
                 _dirty = true;
             });
-            await new UpdateChecker(new HttpClient()).DownloadVerifiedAsync(update, setup, progress, CancellationToken.None);
+            await _env.CreateUpdateChecker().DownloadVerifiedAsync(update, setup, progress, CancellationToken.None);
             _log.LogInformation("Installing Pairnets {Version}", update.Version);
-            Process.Start(new ProcessStartInfo(setup, "/SILENT /SUPPRESSMSGBOXES /NORESTART /CLOSEAPPLICATIONS") { UseShellExecute = true });
+            _platform.RunInstaller(setup, "/SILENT /SUPPRESSMSGBOXES /NORESTART /CLOSEAPPLICATIONS");
             Exit();
         }
         catch (Exception ex) when (ex is UpdateVerificationException or HttpRequestException or IOException or System.ComponentModel.Win32Exception)
@@ -756,7 +800,7 @@ public sealed class TrayController : ITrayActions, IDisposable
             if (dialog.AlwaysUpdate)
                 _settings.AutoUpdateServer = true;
             if (dialog.Skipped || dialog.AlwaysUpdate)
-                SettingsStore.Save(SettingsStore.DefaultPath, _settings);
+                SettingsStore.Save(_env.SettingsPath, _settings);
         };
         dialog.Show();
     }
@@ -787,7 +831,8 @@ public sealed class TrayController : ITrayActions, IDisposable
     {
         var settings = _settings;
         var session = _session;
-        var window = new BugReportWindow(() => BugReport.BuildAsync(settings, session, _fileLog.CurrentFile, error, "Windows app"), Shell, afterError: error is not null);
+        var window = new BugReportWindow(() => BugReport.BuildAsync(settings, session, _fileLog.CurrentFile, error, "Windows app"), Shell,
+            afterError: error is not null, logsDir: _env.LogsDir);
         window.Show();
         window.Activate();
     }
@@ -800,7 +845,7 @@ public sealed class TrayController : ITrayActions, IDisposable
         try
         {
             if (File.Exists(full))
-                Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{full}\"") { UseShellExecute = false });
+                _platform.Reveal(full);
             else
                 OpenFolder();
         }
@@ -814,21 +859,21 @@ public sealed class TrayController : ITrayActions, IDisposable
     {
         try
         {
-            AutoStart.Set(enabled);
+            _platform.SetAutoStart(enabled);
             _settings.StartWithWindows = enabled;
-            SettingsStore.Save(SettingsStore.DefaultPath, _settings);
+            SettingsStore.Save(_env.SettingsPath, _settings);
         }
         catch (Exception ex) when (ex is UnauthorizedAccessException or IOException or System.Security.SecurityException)
         {
-            MessageBox.Show("Could not change the startup setting: " + ex.Message, "Pairnets");
+            Dialogs.Ask(null, "Could not change the startup setting: " + ex.Message, "Pairnets");
         }
     }
 
-    private static bool SafeIsAutoStart()
+    private bool SafeIsAutoStart()
     {
         try
         {
-            return AutoStart.IsEnabled();
+            return _platform.IsAutoStartEnabled();
         }
         catch (Exception ex) when (ex is UnauthorizedAccessException or IOException or System.Security.SecurityException)
         {
@@ -840,7 +885,7 @@ public sealed class TrayController : ITrayActions, IDisposable
     {
         try
         {
-            Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
+            _platform.Open(path);
         }
         catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or FileNotFoundException)
         {
@@ -865,11 +910,12 @@ public sealed class TrayController : ITrayActions, IDisposable
             _window.AllowClose = true;
             _window.Close();
         }
-        _app.Shutdown();
+        _shutdown();
     }
 
     public void Dispose()
     {
+        _activation?.Dispose();
         _updates.Dispose();
         _refresh.Stop();
         SystemEvents.PowerModeChanged -= OnPowerModeChanged;

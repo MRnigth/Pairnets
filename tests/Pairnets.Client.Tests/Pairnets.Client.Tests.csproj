@@ -1,0 +1,48 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Presses every button of the Windows app (WPF) and drives its tray controller against a real test server.
+    It builds everywhere (so the Linux build checks it compiles) but only runs on Windows.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <IsTestProject Condition="!$([MSBuild]::IsOSPlatform('Windows'))">false</IsTestProject>
+    <RootNamespace>Pairnets.Client.Tests</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- As in the app: WinForms only for the tray menu, so its names do not clash with WPF's. -->
+    <Using Remove="System.Windows.Forms" />
+    <Using Remove="System.Drawing" />
+    <Using Include="System.IO" />
+    <Using Include="System.Net.Http" />
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Not Pairnets.Tests or Pairnets.Desktop: the Mac/Linux app is also called "Pairnets". The shared helpers are linked instead. -->
+    <ProjectReference Include="..\..\src\Pairnets.Client\Pairnets.Client.csproj" />
+    <ProjectReference Include="..\..\src\Pairnets.Core\Pairnets.Core.csproj" />
+    <ProjectReference Include="..\..\src\Pairnets.Server\Pairnets.Server.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\Pairnets.Tests\Infrastructure\TestServer.cs" Link="Infrastructure\TestServer.cs" />
+    <Compile Include="..\Pairnets.Tests\Infrastructure\TempDir.cs" Link="Infrastructure\TempDir.cs" />
+    <Compile Include="..\Pairnets.Tests\Infrastructure\TestCertificates.cs" Link="Infrastructure\TestCertificates.cs" />
+    <Compile Include="..\Pairnets.Tests\Infrastructure\RepoPaths.cs" Link="Infrastructure\RepoPaths.cs" />
+    <Compile Include="..\Pairnets.Tests\Infrastructure\FakeSyncService.cs" Link="Infrastructure\FakeSyncService.cs" />
+  </ItemGroup>
+
+</Project>
