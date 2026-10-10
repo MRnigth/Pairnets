@@ -65,6 +65,20 @@ public sealed class LocalScanner
     /// <summary>See <see cref="FileState.CacheValidFor"/>.</summary>
     public TimeSpan RacyWindow { get; init; } = TimeSpan.FromSeconds(2);
 
+    /// <summary>
+    /// The hashes made so far are saved after this many files, or <see cref="SaveEvery"/>, and when the scan is stopped
+    /// (Pause, closing the app). So reading a big folder is never started over: the next scan only reads what is left.
+    /// </summary>
+    public int SaveBatch { get; init; } = 250;
+
+    public TimeSpan SaveEvery { get; init; } = TimeSpan.FromSeconds(2);
+
+    /// <summary>How often <see cref="Progress"/> is told at most.</summary>
+    public TimeSpan ReportEvery { get; init; } = TimeSpan.FromMilliseconds(250);
+
+    /// <summary>Told how far the scan is (at the start, then at most every <see cref="ReportEvery"/>).</summary>
+    public Action<ScanProgress>? Progress { get; set; }
+
     public async Task<ScanResult> ScanAsync(CancellationToken ct)
     {
         if (!Directory.Exists(_root))
@@ -72,7 +86,75 @@ public sealed class LocalScanner
 
         var result = new ScanResult();
         var known = _state.LoadFiles();
-        var cacheUpdates = new List<(string, long, long, string, long)>();
+        var tally = new Tally(this);
+        tally.Report(force: true);
+        try
+        {
+            await WalkAsync(result, known, tally, ct).ConfigureAwait(false);
+        }
+        catch when (tally.Unsaved > 0)
+        {
+            // Stopped part-way (Pause, an error): keep what was read, so the next scan does not read it again.
+            try
+            {
+                tally.Save();
+            }
+            catch (Exception ex) when (ex is Microsoft.Data.Sqlite.SqliteException or ObjectDisposedException or InvalidOperationException)
+            {
+                _log.LogDebug("Could not keep the hashes of a stopped scan: {Error}", ex.Message);
+            }
+            throw;
+        }
+
+        tally.Save();
+        _state.PruneCacheRows(result.Files.Keys.ToHashSet(StringComparer.Ordinal));
+        return result;
+    }
+
+    /// <summary>The counts of one scan, the hashes not saved yet, and when it last saved and reported.</summary>
+    private sealed class Tally(LocalScanner owner)
+    {
+        private readonly List<(string, long, long, string, long)> _unsaved = [];
+        private long _savedAt = owner._clock.GetTimestamp();
+        private long _reportedAt;
+
+        public int Checked;
+        public int Read;
+        public string? Reading;
+        public long ReadingBytes;
+        public long ReadingSize;
+
+        public int Unsaved => _unsaved.Count;
+
+        public void Add((string, long, long, string, long) row)
+        {
+            _unsaved.Add(row);
+            if (_unsaved.Count >= owner.SaveBatch || owner._clock.GetElapsedTime(_savedAt) >= owner.SaveEvery)
+                Save();
+        }
+
+        public void Save()
+        {
+            if (_unsaved.Count > 0)
+                owner._state.SetCaches(_unsaved);
+            _unsaved.Clear();
+            _savedAt = owner._clock.GetTimestamp();
+        }
+
+        public void Report(bool force = false)
+        {
+            if (owner.Progress is not { } progress)
+                return;
+            var now = owner._clock.GetTimestamp();
+            if (!force && _reportedAt != 0 && owner._clock.GetElapsedTime(_reportedAt, now) < owner.ReportEvery)
+                return;
+            _reportedAt = now;
+            progress(new ScanProgress(Checked, Read, Reading, ReadingBytes, ReadingSize));
+        }
+    }
+
+    private async Task WalkAsync(ScanResult result, Dictionary<string, FileState> known, Tally tally, CancellationToken ct)
+    {
         var pending = new Stack<string>();
         pending.Push(string.Empty);
         var enumOptions = new EnumerationOptions
@@ -151,22 +233,20 @@ public sealed class LocalScanner
                     continue;
                 }
 
-                var file = await InspectFileAsync((FileInfo)entry, rel, known, cacheUpdates, ct).ConfigureAwait(false);
+                var file = await InspectFileAsync((FileInfo)entry, rel, known, tally, ct).ConfigureAwait(false);
                 result.Files[rel] = file;
+                tally.Checked++;
+                tally.Report();
             }
         }
-
-        if (cacheUpdates.Count > 0)
-            _state.SetCaches(cacheUpdates);
-        _state.PruneCacheRows(result.Files.Keys.ToHashSet(StringComparer.Ordinal));
-        return result;
+        tally.Report(force: true);
     }
 
     private async Task<LocalFile> InspectFileAsync(
         FileInfo info,
         string rel,
         Dictionary<string, FileState> known,
-        List<(string, long, long, string, long)> cacheUpdates,
+        Tally tally,
         CancellationToken ct)
     {
         info.Refresh();
@@ -191,14 +271,27 @@ public sealed class LocalScanner
             return new LocalFile(rel, size, mtime, cached.Hash, true, null);
 
         string hash;
+        tally.Read++;
+        tally.Reading = rel;
+        tally.ReadingBytes = 0;
+        tally.ReadingSize = size;
+        tally.Report();
         try
         {
-            (hash, _) = await ContentHash.OfFileAsync(info.FullName, ct).ConfigureAwait(false);
+            (hash, _) = await ContentHash.OfFileAsync(info.FullName, read =>
+            {
+                tally.ReadingBytes = read;
+                tally.Report();
+            }, ct).ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             // Locked by another program, or vanished: unknown this pass, never "deleted".
             return new LocalFile(rel, size, mtime, null, false, "unreadable: " + ex.Message);
+        }
+        finally
+        {
+            tally.Reading = null;
         }
 
         info.Refresh();
@@ -212,7 +305,7 @@ public sealed class LocalScanner
             return new LocalFile(rel, size, mtime, null, false, "changed while hashing: " + ex.Message);
         }
 
-        cacheUpdates.Add((rel, size, mtime, hash, _clock.GetUtcNow().UtcTicks));
+        tally.Add((rel, size, mtime, hash, _clock.GetUtcNow().UtcTicks));
         return new LocalFile(rel, size, mtime, hash, true, null);
     }
 }

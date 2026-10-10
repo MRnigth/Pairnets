@@ -448,6 +448,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
         {
             var line = status.IsTransferring
                 ? $"{PathRules.FileName(status.CurrentPath!)}{(status.Percent is { } p ? $" {p}%" : string.Empty)}"
+                : status.IsChecking ? "Checking files: " + status.ScanText
                 : status.Text;
             if (_tray is not null)
             {

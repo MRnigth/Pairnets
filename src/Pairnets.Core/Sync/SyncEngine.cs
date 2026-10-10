@@ -40,8 +40,12 @@ public sealed class SyncEngine
         {
             StabilityWindow = options.StabilityWindow,
             RacyWindow = options.RacyWindow,
+            Progress = p => ScanProgressed?.Invoke(p),
         };
     }
+
+    /// <summary>How far the look through the folder is, while a pass is still finding out what changed.</summary>
+    public event Action<ScanProgress>? ScanProgressed;
 
     public string Root { get; }
 
@@ -397,7 +401,21 @@ public sealed class SyncEngine
         {
             if (_hooks.BeforeTransfer is { } before && item.Action is SyncAction.Upload or SyncAction.Download)
                 await before(item.Action, item.Path).ConfigureAwait(false);
-            await ExecuteAsync(item, ctx, ct).ConfigureAwait(false);
+            for (var slowDowns = 0; ; slowDowns++)
+            {
+                try
+                {
+                    await ExecuteAsync(item, ctx, ct).ConfigureAwait(false);
+                    break;
+                }
+                catch (PairnetsSlowDownException ex) when (item.Action is SyncAction.Upload or SyncAction.Download
+                    && slowDowns < PairnetsApiClient.MaxSlowDownsInARow && !ct.IsCancellationRequested)
+                {
+                    // Too many requests from this address: the API client holds every request back for the time the
+                    // server asked, so the same file simply goes again. A big upload or download goes on where it was.
+                    _log.LogDebug("{Action} of {Path} waits: {Error}", item.Action, item.Path, ex.Message);
+                }
+            }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or PairnetsProtocolException)
         {

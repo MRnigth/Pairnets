@@ -12,6 +12,9 @@ public sealed class RequestLog
     /// <summary>Called for each request before it is sent; may throw or block (a test seam).</summary>
     public Action<HttpRequestMessage>? OnRequest { get; set; }
 
+    /// <summary>May answer a request itself instead of the server (a 429, say); null lets it through.</summary>
+    public Func<HttpRequestMessage, HttpResponseMessage?>? Answer { get; set; }
+
     public sealed record Entry(string Request, long? Length, string? Range, string? IfRange);
 
     public List<Entry> Entries
@@ -49,6 +52,11 @@ public sealed class RequestLog
             lock (log._entries)
                 log._entries.Add(new Entry(name, request.Content?.Headers.ContentLength, request.Headers.Range?.ToString(), request.Headers.IfRange?.ToString()));
             log.OnRequest?.Invoke(request);
+            if (log.Answer?.Invoke(request) is { } answer)
+            {
+                answer.RequestMessage = request;
+                return Task.FromResult(answer);
+            }
             return base.SendAsync(request, cancellationToken);
         }
     }

@@ -49,6 +49,64 @@ public class LocalScannerTests : IDisposable
     }
 
     [Fact]
+    public async Task AScanStoppedPartWayKeepsWhatItReadSoTheNextOneGoesOn()
+    {
+        for (var i = 0; i < 10; i++)
+            Write($"d{i}/f.txt", "file " + i); // one folder each: the scan stops between folders
+        using var pause = new CancellationTokenSource();
+        var stopped = new LocalScanner(_root.Path, new IgnoreList(["*.bak"]), _state, _clock, NullLogger.Instance)
+        {
+            SaveBatch = 3,
+            ReportEvery = TimeSpan.Zero,
+            Progress = p =>
+            {
+                if (p.FilesChecked >= 5)
+                    pause.Cancel(); // Pause, after five files
+            },
+        };
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => stopped.ScanAsync(pause.Token));
+        var kept = _state.LoadFiles().Values.Count(f => f.Hash is not null);
+        Assert.InRange(kept, 5, 9);
+
+        ScanProgress? last = null;
+        var again = new LocalScanner(_root.Path, new IgnoreList(["*.bak"]), _state, _clock, NullLogger.Instance)
+        {
+            ReportEvery = TimeSpan.Zero,
+            Progress = p => last = p,
+        };
+        var result = await again.ScanAsync(CancellationToken.None);
+        Assert.Equal(10, result.Files.Count);
+        Assert.All(result.Files.Values, f => Assert.True(f.Stable));
+        Assert.Equal(10, last!.FilesChecked);
+        Assert.Equal(10 - kept, last.FilesRead); // only what the stopped scan had not read yet
+    }
+
+    [Fact]
+    public async Task ProgressNamesTheFileBeingReadAndHowFar()
+    {
+        Write("small.txt", "s");
+        var big = Path.Combine(_root.Path, "big.bin");
+        await File.WriteAllBytesAsync(big, new byte[3 * 1024 * 1024 + 5]);
+        File.SetLastWriteTimeUtc(big, DateTime.UtcNow.AddMinutes(-1));
+        var seen = new List<ScanProgress>();
+        var scanner = new LocalScanner(_root.Path, new IgnoreList([]), _state, _clock, NullLogger.Instance)
+        {
+            ReportEvery = TimeSpan.Zero,
+            Progress = seen.Add,
+        };
+
+        await scanner.ScanAsync(CancellationToken.None);
+
+        Assert.Equal(new ScanProgress(0, 0, null, 0, 0), seen[0]);
+        var reading = seen.Where(p => p.ReadingPath == "big.bin").ToList();
+        Assert.True(reading.Count >= 3, "a big file reports while it is read");
+        Assert.All(reading, p => Assert.Equal(3 * 1024 * 1024 + 5, p.ReadingSize));
+        Assert.Equal(3 * 1024 * 1024 + 5, reading.Max(p => p.ReadingBytes));
+        Assert.Equal((2, 2, (string?)null), (seen[^1].FilesChecked, seen[^1].FilesRead, seen[^1].ReadingPath));
+    }
+
+    [Fact]
     public async Task RecentlyModifiedFilesAreUnstable()
     {
         Write("fresh.txt", "x");

@@ -62,6 +62,12 @@ public sealed record PathWarningInfo(string Path, string Code, string? Message);
 
 public sealed record SyncProgress(string? CurrentPath, string? Operation, long BytesDone, long BytesTotal, int FilesDone, int FilesTotal);
 
+/// <summary>
+/// How far the look through the folder is: files looked at, how many of them had to be read (new or changed), and the
+/// file being read right now with its bytes read so far (big files take a while).
+/// </summary>
+public sealed record ScanProgress(int FilesChecked, int FilesRead, string? ReadingPath, long ReadingBytes, long ReadingSize);
+
 /// <summary>Summary of one pass.</summary>
 public sealed class PassResult
 {

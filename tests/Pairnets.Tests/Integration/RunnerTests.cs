@@ -153,6 +153,43 @@ public class RunnerTests : IAsyncLifetime
         await WaitUntil(() => runner.Status == RunnerStatus.Idle, TimeSpan.FromSeconds(10), "idle status");
     }
 
+    [Fact]
+    public async Task QuickPauseResumeNeverLeavesTheWrongStatusOnScreen()
+    {
+        var runner = _desktop.StartRunner();
+        await WaitUntil(() => runner.LastSyncAt is not null, TimeSpan.FromSeconds(15), "first pass");
+        _desktop.Hooks.BeforeTransfer = async (_, _) => await Task.Delay(150); // a slow link: passes take a while to stop
+        for (var i = 0; i < 40; i++)
+            _desktop.Write($"q/f{i:00}.txt", "file " + i);
+        runner.RequestSync("test");
+        await WaitUntil(() => runner.Status == RunnerStatus.Syncing, TimeSpan.FromSeconds(15), "the pass to start");
+
+        // Pause, Resume, Pause in a row: it ends paused, whatever the stopping pass shows meanwhile.
+        runner.Pause();
+        runner.Resume();
+        runner.Pause();
+        await Task.Delay(1500);
+        Assert.Equal(RunnerStatus.Paused, runner.Status);
+
+        // Resume, and Pause + Resume while that pass is still stopping: "Paused" never stays, and the work gets done.
+        runner.Resume();
+        await WaitUntil(() => runner.Status == RunnerStatus.Syncing, TimeSpan.FromSeconds(15), "the pass after resume");
+        var shown = new List<RunnerStatus>();
+        runner.Pause();
+        runner.StatusChanged += (status, _) =>
+        {
+            lock (shown)
+                shown.Add(status);
+        };
+        runner.Resume();
+        _desktop.Hooks.BeforeTransfer = null;
+        await WaitUntil(() => _server.Store.ReadManifest(null).Entries.Count(e => e.Path.StartsWith("q/", StringComparison.Ordinal)) == 40,
+            TimeSpan.FromSeconds(30), "all uploads");
+        await WaitUntil(() => runner.Status == RunnerStatus.Idle && runner.StatusText == "Up to date", TimeSpan.FromSeconds(15), "up to date");
+        lock (shown)
+            Assert.DoesNotContain(RunnerStatus.Paused, shown);
+    }
+
     private static RunnerOptions SmallBatches(RunnerOptions o) => new()
     {
         ServerUrl = o.ServerUrl,

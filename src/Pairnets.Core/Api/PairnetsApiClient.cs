@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 using System.Text.Json;
 using Pairnets.Core.Hashing;
@@ -141,7 +142,22 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
         using var timeout = Linked(ct, TimeSpan.FromSeconds(30));
         using var resp = await SendAsync(new HttpRequestMessage(HttpMethod.Get, "api/info"), HttpCompletionOption.ResponseContentRead, timeout, ct).ConfigureAwait(false);
         await ThrowForStatusAsync(resp).ConfigureAwait(false);
-        return await ReadJsonAsync<ServerInfo>(resp, timeout, ct).ConfigureAwait(false);
+        var info = await ReadJsonAsync<ServerInfo>(resp, timeout, ct).ConfigureAwait(false);
+        PiecesInFlight = info.PiecesInFlight ?? 1;
+        return info;
+    }
+
+    private volatile int _piecesInFlight = 1;
+
+    /// <summary>
+    /// How many pieces of one upload are sent at once: 2 once the server said it takes that (/api/info), else 1. The
+    /// second piece goes out as soon as the first one's bytes are sent; the server keeps it waiting until the first has
+    /// arrived. Through Cloudflare, which takes in a whole piece before it passes it on, this keeps both lines busy.
+    /// </summary>
+    internal int PiecesInFlight
+    {
+        get => _piecesInFlight;
+        set => _piecesInFlight = Math.Clamp(value, 1, 2);
     }
 
     /// <summary>The computers that use this server, or null for a server from before the Devices list.</summary>
@@ -621,7 +637,9 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
                 if (offset < reader.Size)
                 {
                     sending = true;
-                    offset = await SendPieceAsync(id, reader, offset, Math.Min(Pieces.Next, reader.Size - offset), ct).ConfigureAwait(false);
+                    offset = PiecesInFlight > 1
+                        ? await SendPiecesTwoAtOnceAsync(id, reader, offset, patience.Progressed, ct).ConfigureAwait(false)
+                        : await SendPieceAsync(id, reader, offset, Math.Min(Pieces.Next, reader.Size - offset), ct).ConfigureAwait(false);
                     patience.Progressed();
                     continue;
                 }
@@ -656,6 +674,12 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
                 await patience.BusyAsync(ct).ConfigureAwait(false); // throws when cancelled (Pause) or waited too long
                 ask = true;
             }
+            catch (PairnetsSlowDownException ex) when (!ct.IsCancellationRequested)
+            {
+                // Too many requests: the next one waits by itself (SendAsync). Not the piece's fault, so its size stays.
+                patience.SlowedDown(ex);
+                ask = true;
+            }
             catch (PairnetsNetworkException ex) when (!ct.IsCancellationRequested)
             {
                 if (sending)
@@ -666,17 +690,94 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
         }
     }
 
-    /// <summary>Sends one piece; returns how many bytes the server has afterwards.</summary>
-    private async Task<long> SendPieceAsync(string id, PieceReader reader, long offset, long length, CancellationToken ct)
+    /// <summary>
+    /// Sends the rest of the upload from <paramref name="offset"/> with two pieces on the way at once: the next piece
+    /// starts as soon as every byte of the one before was handed to the connection, and the server keeps it waiting
+    /// until that one has arrived. Returns how many bytes the server has: the whole file, or less when a piece arrived
+    /// short (the caller asks and goes on). When a piece fails, the other one is stopped and waited for before the
+    /// exception goes on, so nothing reads the file meanwhile.
+    /// </summary>
+    private async Task<long> SendPiecesTwoAtOnceAsync(string id, PieceReader reader, long offset, Action progressed, CancellationToken ct)
+    {
+        using var stop = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        var flying = new Queue<(Task<long> Received, long End)>();
+        var next = offset;
+        var received = offset;
+        try
+        {
+            while (true)
+            {
+                // A new piece only while none has failed: a failed one may have stopped part-way through the file.
+                if (next < reader.Size && flying.Count < 2 && flying.All(f => !f.Received.IsCompleted || f.Received.IsCompletedSuccessfully))
+                {
+                    var length = Math.Min(Pieces.Next, reader.Size - next);
+                    var sent = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                    var piece = SendPieceAsync(id, reader, next, length, stop.Token, waitTurn: flying.Count > 0, bodySent: () => sent.TrySetResult());
+                    flying.Enqueue((piece, next + length));
+                    next += length;
+                    // The reader is this piece's until all of it is out (or it ended): only then may the next one start.
+                    await Task.WhenAny(sent.Task, piece).ConfigureAwait(false);
+                    if (piece.IsCompleted && !piece.IsCompletedSuccessfully)
+                        await piece.ConfigureAwait(false); // throws: the others are stopped below
+                    continue;
+                }
+                if (flying.Count == 0)
+                    return received;
+                var (oldest, end) = flying.Peek();
+                received = await oldest.ConfigureAwait(false);
+                flying.Dequeue();
+                progressed();
+                if (received != end)
+                {
+                    // It arrived short; the piece after it is refused (wrong offset). Wait for it, then go on from what arrived.
+                    await DrainAsync(flying, stop).ConfigureAwait(false);
+                    return received;
+                }
+            }
+        }
+        catch
+        {
+            await DrainAsync(flying, stop).ConfigureAwait(false);
+            throw;
+        }
+
+        static async Task DrainAsync(Queue<(Task<long> Received, long End)> flying, CancellationTokenSource stop)
+        {
+            if (flying.Count == 0)
+                return;
+            await stop.CancelAsync().ConfigureAwait(false);
+            foreach (var (piece, _) in flying)
+            {
+                try
+                {
+                    await piece.ConfigureAwait(false);
+                }
+                catch (Exception)
+                {
+                    // Stopped on purpose; the server's count says what arrived.
+                }
+            }
+            flying.Clear();
+        }
+    }
+
+    /// <summary>
+    /// Sends one piece; returns how many bytes the server has afterwards. With <paramref name="waitTurn"/> the piece
+    /// before it may still be arriving, and the server keeps this one waiting until it has. <paramref name="bodySent"/>
+    /// is told when every byte of the piece was handed to the connection, so the next piece may read the file.
+    /// </summary>
+    private async Task<long> SendPieceAsync(string id, PieceReader reader, long offset, long length, CancellationToken ct,
+        bool waitTurn = false, Action? bodySent = null)
     {
         // The server can have more than this attempt read: the rest of a piece an earlier attempt sent.
         if (offset > reader.HashedUpTo && offset <= reader.Size)
             await reader.SkipAsync(offset, ct).ConfigureAwait(false);
         reader.StartPiece(offset, length);
         using var stall = Linked(ct, _stallTimeout);
-        using var req = new HttpRequestMessage(HttpMethod.Put, $"api/upload/{id}?offset={offset.ToString(CultureInfo.InvariantCulture)}")
+        var uri = $"api/upload/{id}?offset={offset.ToString(CultureInfo.InvariantCulture)}" + (waitTurn ? "&turn=wait" : string.Empty);
+        using var req = new HttpRequestMessage(HttpMethod.Put, uri)
         {
-            Content = new StreamingUploadContent(reader, stall, _stallTimeout, UploadLimit, length),
+            Content = new StreamingUploadContent(reader, stall, _stallTimeout, UploadLimit, length, bodySent),
         };
         req.Content.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
         var started = Stopwatch.GetTimestamp();
@@ -733,7 +834,15 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
     private sealed class Patience(PairnetsApiClient owner)
     {
         private int _failures;
+        private int _slowDowns;
         private long? _busySince;
+
+        /// <summary>A 429: goes on (the wait happens before the next request), or rethrows after many in a row.</summary>
+        public void SlowedDown(PairnetsSlowDownException ex)
+        {
+            if (++_slowDowns > MaxSlowDownsInARow)
+                System.Runtime.ExceptionServices.ExceptionDispatchInfo.Throw(ex);
+        }
 
         /// <summary>A request failed: waits before the next try, or rethrows once the tries are used up.</summary>
         public async Task FailedAsync(PairnetsNetworkException ex, CancellationToken ct)
@@ -756,9 +865,13 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
         public void Progressed()
         {
             _failures = 0;
+            _slowDowns = 0;
             _busySince = null;
         }
     }
+
+    /// <summary>How many 429s in a row one upload in pieces (or the engine, for one file) takes before it gives up for this pass.</summary>
+    internal const int MaxSlowDownsInARow = 30;
 
     // ------------------------------------------------------------------ delete
 
@@ -842,6 +955,8 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
                 ? m
                 : "The server rejected the token (401).", reason?.Code);
         }
+        if (resp.StatusCode == HttpStatusCode.TooManyRequests)
+            throw new PairnetsSlowDownException(RetryAfterOf(resp));
         if (DescribeCloudflareError(resp, IsRelay) is { } cloudflare)
             throw new PairnetsNetworkException(cloudflare);
         if (resp.StatusCode == HttpStatusCode.RequestEntityTooLarge)
@@ -921,6 +1036,62 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
 
     private const string HealthPath = "api/health";
 
+    /// <summary>The longest a 429 makes this client wait, whatever Retry-After says.</summary>
+    internal static readonly TimeSpan MaxSlowDown = TimeSpan.FromMinutes(2);
+
+    /// <summary>How long to wait after a 429 without a usable Retry-After.</summary>
+    internal static readonly TimeSpan DefaultSlowDown = TimeSpan.FromSeconds(10);
+
+    /// <summary><see cref="Environment.TickCount64"/> until which no request is sent (after a 429), or 0.</summary>
+    private long _slowUntilMs;
+
+    /// <summary>
+    /// Raised when a 429 makes every request wait (the length of the wait). The limit counts all requests from this
+    /// address, so all transfers wait together rather than each running into it again.
+    /// </summary>
+    public event Action<TimeSpan>? SlowingDown;
+
+    private void SlowDown(TimeSpan wait)
+    {
+        var until = Environment.TickCount64 + (long)wait.TotalMilliseconds;
+        long seen;
+        do
+        {
+            seen = Volatile.Read(ref _slowUntilMs);
+            if (seen >= until)
+                return; // another transfer already set the same or a later time
+        }
+        while (Interlocked.CompareExchange(ref _slowUntilMs, until, seen) != seen);
+        SlowingDown?.Invoke(wait);
+    }
+
+    /// <summary>Retry-After of a 429 (seconds or a date), within 1 s and <see cref="MaxSlowDown"/>.</summary>
+    internal static TimeSpan RetryAfterOf(HttpResponseMessage resp)
+    {
+        var after = resp.Headers.RetryAfter switch
+        {
+            { Delta: { } delta } => delta,
+            { Date: { } date } => date - DateTimeOffset.UtcNow,
+            _ => DefaultSlowDown,
+        };
+        return after < TimeSpan.FromSeconds(1) ? TimeSpan.FromSeconds(1) : after > MaxSlowDown ? MaxSlowDown : after;
+    }
+
+    /// <summary>
+    /// Holds a request back while a 429 asked this client to wait. The request's own timeout does not run meanwhile:
+    /// it starts again, at its full length, when the wait is over.
+    /// </summary>
+    private async Task WaitWhileSlowedDownAsync(CancellationTokenSource timeout, CancellationToken callerCt)
+    {
+        var wait = Volatile.Read(ref _slowUntilMs) - Environment.TickCount64;
+        if (wait <= 0)
+            return;
+        timeout.CancelAfter(Timeout.InfiniteTimeSpan);
+        await Task.Delay(TimeSpan.FromMilliseconds(wait), callerCt).ConfigureAwait(false);
+        if (TimeoutSpans.TryGetValue(timeout, out var span))
+            timeout.CancelAfter((TimeSpan)span);
+    }
+
     private async Task<HttpResponseMessage> SendAsync(HttpRequestMessage req, HttpCompletionOption completion,
         CancellationTokenSource timeout, CancellationToken callerCt)
     {
@@ -930,7 +1101,11 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
             req.Headers.TryAddWithoutValidation(PairnetsHeaders.Token, _token);
         try
         {
+            await WaitWhileSlowedDownAsync(timeout, callerCt).ConfigureAwait(false);
             var resp = await _http.SendAsync(req, completion, timeout.Token).ConfigureAwait(false);
+            // The relay's limit says how long to wait; a nest's own 429s (sign-in, update) do not, and mean something else.
+            if (resp.StatusCode == HttpStatusCode.TooManyRequests && resp.Headers.RetryAfter is not null)
+                SlowDown(RetryAfterOf(resp));
             if (await ServiceErrorAsync(resp).ConfigureAwait(false) is { } serviceError)
             {
                 resp.Dispose();
@@ -1020,8 +1195,12 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
     {
         var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         cts.CancelAfter(after);
+        TimeoutSpans.AddOrUpdate(cts, after);
         return cts;
     }
+
+    /// <summary>Each request timeout's length, so a wait for a 429 can start it again afterwards (see <see cref="WaitWhileSlowedDownAsync"/>).</summary>
+    private static readonly ConditionalWeakTable<CancellationTokenSource, object> TimeoutSpans = new();
 
     public void Dispose() => _http.Dispose();
 
@@ -1029,7 +1208,9 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
     /// Request body that streams from the local file, resets the stall watchdog on every chunk,
     /// and tags local read failures so they are not mistaken for network failures.
     /// </summary>
-    private sealed class StreamingUploadContent(Stream source, CancellationTokenSource stall, TimeSpan stallTimeout, Throttle limit, long? length = null) : HttpContent
+    /// <param name="sent">Told once every byte of the body was handed to the connection (the source is not read again).</param>
+    private sealed class StreamingUploadContent(Stream source, CancellationTokenSource stall, TimeSpan stallTimeout, Throttle limit, long? length = null,
+        Action? sent = null) : HttpContent
     {
         protected override async Task SerializeToStreamAsync(Stream stream, TransportContext? context, CancellationToken cancellationToken)
         {
@@ -1052,6 +1233,7 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
                 await stream.WriteAsync(buffer.AsMemory(0, n), cancellationToken).ConfigureAwait(false);
                 stall.CancelAfter(stallTimeout);
             }
+            sent?.Invoke();
         }
 
         protected override Task SerializeToStreamAsync(Stream stream, TransportContext? context) =>

@@ -544,3 +544,48 @@ yet"), the same in both apps.
   `sync.pairnets.app`; migrations 0001 and 0002 applied; the generated keys and the account and
   Google client ids set. The outside keys (Cloudflare API token, Turnstile, Resend, Google client
   secret) wait for the owner to paste them.
+
+## Faster uploads, and Resume that carries on (10 October 2026)
+
+What the owner saw on a test setup (two computers and a nest on one PC, all through sync.pairnets.app): uploads
+were slow, and after Pause → Resume the app said only "Syncing" for many minutes. The logs showed why.
+
+* **The relay allowed 600 requests a minute per address.** Computers in one home share an address, and every
+  file synced between them costs a request on each (one uploads it, the other downloads it), so a home got about
+  5 small files a second, and then a wall of "429 Too many requests". The relay now allows **6,000 a minute**,
+  counted by Cloudflare's Rate Limiting binding instead of a D1 row per request (no database round trip on
+  every file), and it reuses each nest's row for 30 s instead of reading it on every request. So a nest that is
+  unlinked keeps being relayed for at most 30 s. A limiter that fails lets the request through: the limit only
+  stops floods.
+* **A 429 means "wait", not "this file failed".** The app holds back every request (all transfers, not only the
+  one that was refused) for the time the answer's `Retry-After` asks (at least 1 s, at most 2 minutes) and then
+  sends the same files again; nothing is counted as an error and a big upload goes on where it was, with its
+  piece size unchanged (nothing was cut). Only a 429 that says how long counts: a nest's own 429s (too many
+  sign-ins, an update asked for a moment ago) mean something else. After 30 refusals in a row for one file the
+  pass ends as if offline. Considered and left out: halving the number of transfers after a 429. Under a limit
+  per minute that only moves the same number of requests around; the wait is what stops the hammering.
+* **Two pieces of a big upload on the way at once.** Cloudflare takes in a whole piece before it passes it on.
+  With one piece at a time the line to Cloudflare and the line to the nest took turns being idle: the nest's log
+  showed 4–6 s without data between pieces, and a 548 MB file arrived at about 4 MiB/s although each piece
+  moved at 9–11 MiB/s. Now the next piece goes out as soon as the previous one's bytes are sent, marked
+  `turn=wait`; the nest keeps it waiting (without reading it) until the one before has arrived, up to 60 s,
+  and refuses it at once (wrong offset) when the one before was cut off, so the app asks how much arrived and
+  goes on from there. Never more than two, because the nest writes and hashes a file in order and only one
+  piece can be arriving at a time anyway. A nest says it takes this in `/api/info` (`piecesInFlight: 2`);
+  with an older nest the app sends one piece at a time as before. Pieces stay at most 50 MiB.
+* **Looking through the folder keeps its work.** New and changed files are read whole once to fingerprint them
+  (needed to tell what changed, see "three hashes"). The scan used to save those fingerprints only at the very
+  end, so every Pause, restart or session restart threw them away: on a folder with 116 GB of new model files
+  each Resume started reading all of it again and never got through. Now they are saved every 250 files or 2 s
+  and when the scan is stopped, so the next one reads only what is left.
+* **"Checking files…" says how far it is.** The scan reports files checked, how many were new or changed, and
+  the big file being read with its bytes ("12,400 files checked, 310 new or changed · reading model.gguf (1.20
+  GB of 9.00 GB)"), in the status card and the tray tooltip of both apps (`StatusSnapshot.Scan`, shown by the
+  existing headline and detail lines, so the two apps stay alike). Files under 16 MB go by too fast to name.
+* **Pause and Resume show the right thing.** Status changes go one at a time, and while paused only "Paused"
+  is shown, and "Paused" only while paused. Before, a pass that was still stopping could show "Paused" after
+  Resume, or "Syncing" after Pause. A saved pause is now applied before the runner starts, so a paused app never
+  begins a pass at launch.
+* **The speed falls to zero when nothing moves.** It was only worked out when bytes arrived, so the last value
+  stayed on screen through every wait. Now it is worked out again every second. The units stay as they were
+  (1024-based "MB/s").

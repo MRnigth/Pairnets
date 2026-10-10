@@ -65,7 +65,7 @@ public static class Endpoints
         {
             var (free, total) = ServerUpdater.DiskSpace(store.Paths.DataDir);
             return Json(new ServerInfo(store.ServerId, store.CurrentVersion, PairnetsInfo.ApiVersion,
-                PairnetsInfo.ProductVersion, free, total, updater.GetStatus()));
+                PairnetsInfo.ProductVersion, free, total, updater.GetStatus(), UploadSessions.PiecesInFlight));
         });
 
         // "Update server" in the apps: asks the root-owned updater to install the newest release.
@@ -175,7 +175,9 @@ public static class Endpoints
             UploadSessions.ChunkResult result;
             try
             {
-                result = await uploads.AppendAsync(id, offset, ctx.Request.Body, ctx.RequestAborted);
+                // turn=wait: the app sent this piece while the one before it is still arriving (see UploadSessions.PiecesInFlight).
+                var waitTurn = string.Equals(ctx.Request.Query["turn"].ToString(), "wait", StringComparison.Ordinal);
+                result = await uploads.AppendAsync(id, offset, ctx.Request.Body, ctx.RequestAborted, waitTurn);
             }
             catch (BadHttpRequestException ex) when (ex.StatusCode == StatusCodes.Status413PayloadTooLarge)
             {

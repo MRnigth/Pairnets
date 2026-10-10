@@ -76,7 +76,10 @@ public sealed class SyncRunner : IAsyncDisposable
     private DateTimeOffset? _dueAt;
     private DateTimeOffset? _firstWatcherRequest;
     private bool _fullRequested;
-    private bool _paused;
+    private volatile bool _paused;
+
+    /// <summary>Status changes one at a time, so a pass winding down never paints over a Pause or Resume (see <see cref="SetStatus"/>).</summary>
+    private readonly object _statusGate = new();
     private CancellationTokenSource? _passCts;
     private readonly HashSet<string> _arrivedDuringPass = new(StringComparer.Ordinal);
     private readonly Dictionary<string, PeerBatchState> _peerBatches = new(StringComparer.Ordinal);
@@ -349,8 +352,8 @@ public sealed class SyncRunner : IAsyncDisposable
     }
 
     /// <summary>
-    /// Pauses syncing now: a pass that is running is cancelled (half-sent files are discarded on
-    /// both sides and the next pass picks up where this one stopped), and no new pass starts.
+    /// Pauses syncing now: a pass that is running is cancelled and no new pass starts. What it did so far stays:
+    /// the hashes of the files it read, and big uploads and downloads, which the next pass continues.
     /// </summary>
     public void Pause()
     {
@@ -453,7 +456,8 @@ public sealed class SyncRunner : IAsyncDisposable
         }
         catch (OperationCanceledException) when (passCts.IsCancellationRequested)
         {
-            // Paused mid-pass. Nothing half-done is kept; the next pass (after Resume) finishes the work.
+            // Paused mid-pass. What was read and sent so far is kept (hashes, big uploads and downloads); the next pass
+            // (after Resume) goes on from there. Resumed meanwhile: this shows nothing, the queued pass runs next.
             _log.LogInformation("Pass stopped because syncing was paused");
             SetStatus(RunnerStatus.Paused, "Paused");
             return;
@@ -522,25 +526,30 @@ public sealed class SyncRunner : IAsyncDisposable
                 break;
         }
 
-        lock (_gate)
-        {
-            if (_paused)
-                SetStatus(RunnerStatus.Paused, "Paused");
-        }
         PassCompleted?.Invoke(new PassReport(result, reasons, now));
     }
 
+    /// <summary>
+    /// Shows a status. While paused only "Paused" is shown, and "Paused" only while paused: Pause and Resume change
+    /// <see cref="_paused"/> before they show their status, so whatever a pass that is winding down shows at the same
+    /// moment (Syncing, Up to date, Paused) can never be what stays on screen. Never called under <see cref="_gate"/>.
+    /// </summary>
     private void SetStatus(RunnerStatus status, string text)
     {
-        Status = status;
-        StatusText = text;
-        try
+        lock (_statusGate)
         {
-            StatusChanged?.Invoke(status, text);
-        }
-        catch (Exception ex)
-        {
-            _log.LogWarning("Status handler failed: {Error}", ex.Message);
+            if (_paused != (status == RunnerStatus.Paused))
+                return;
+            Status = status;
+            StatusText = text;
+            try
+            {
+                StatusChanged?.Invoke(status, text);
+            }
+            catch (Exception ex)
+            {
+                _log.LogWarning("Status handler failed: {Error}", ex.Message);
+            }
         }
     }
 

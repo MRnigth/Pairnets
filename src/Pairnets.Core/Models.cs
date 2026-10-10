@@ -18,7 +18,8 @@ public sealed record ErrorBody(string Code, string? Message = null);
 /// <summary>
 /// Answer of GET /api/info. <see cref="Version"/> is the manifest version (the change counter);
 /// <see cref="ServerVersion"/> is the installed Pairnets release. The fields after
-/// <see cref="ApiVersion"/> are missing on older servers.
+/// <see cref="ApiVersion"/> are missing on older servers. <see cref="PiecesInFlight"/>: how many pieces of one upload
+/// the server takes at once (2: the next one may be sent while the one before is still arriving; missing: one).
 /// </summary>
 public sealed record ServerInfo(
     string ServerId,
@@ -27,7 +28,8 @@ public sealed record ServerInfo(
     string? ServerVersion = null,
     long? DiskFreeBytes = null,
     long? DiskTotalBytes = null,
-    UpdaterStatus? Updater = null);
+    UpdaterStatus? Updater = null,
+    int? PiecesInFlight = null);
 
 /// <summary>The server's self-updater. <see cref="State"/>: missing, idle, requested, running, succeeded or failed.</summary>
 public sealed record UpdaterStatus(bool Installed, string State, string? Message = null, DateTimeOffset? At = null);

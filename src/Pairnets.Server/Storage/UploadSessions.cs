@@ -125,21 +125,34 @@ public sealed class UploadSessions : IDisposable
         _sessions.TryGetValue(id, out var s) && !s.Closed ? new UploadStatus(id, s.Received, Busy: s.Gate.CurrentCount == 0) : null;
 
     /// <summary>
+    /// How many pieces of one upload an app may send at once (told in /api/info). The second one waits for its turn
+    /// (see <see cref="AppendAsync"/>) without being read. Through Cloudflare that is what makes a big upload fast:
+    /// Cloudflare takes in a whole piece before it passes it on, so with one piece at a time the line to Cloudflare
+    /// and the line to this server took turns being idle.
+    /// </summary>
+    public const int PiecesInFlight = 2;
+
+    /// <summary>How long a piece sent with "wait for your turn" waits for the earlier one to land.</summary>
+    public static readonly TimeSpan TurnWait = TimeSpan.FromSeconds(60);
+
+    /// <summary>How often a piece waiting for its turn looks again while the earlier piece has not even started arriving.</summary>
+    private static readonly TimeSpan TurnPoll = TimeSpan.FromMilliseconds(100);
+
+    /// <summary>
     /// Appends a piece that starts at <paramref name="offset"/>, which must equal what the server
     /// already has. When the connection breaks part-way, the bytes that did arrive are kept.
+    /// With <paramref name="waitTurn"/>, a piece that comes right after one still arriving waits for it (up to
+    /// <see cref="TurnWait"/>) instead of being refused as busy; if that earlier piece ends short, this one is refused
+    /// at once (wrong offset), so the app goes on from what arrived.
     /// </summary>
-    public async Task<ChunkResult> AppendAsync(string id, long offset, Stream body, CancellationToken ct)
+    public async Task<ChunkResult> AppendAsync(string id, long offset, Stream body, CancellationToken ct, bool waitTurn = false)
     {
         if (!_sessions.TryGetValue(id, out var s))
             return new(ChunkStatus.NotFound);
-        if (!await s.Gate.WaitAsync(0, CancellationToken.None).ConfigureAwait(false))
-            return new(ChunkStatus.Busy, s.Received); // another piece of this upload is still arriving
+        if (await TakeTurnAsync(s, offset, waitTurn, ct).ConfigureAwait(false) is { } refused)
+            return refused;
         try
         {
-            if (s.Closed)
-                return new(ChunkStatus.NotFound);
-            if (offset != s.Received)
-                return new(ChunkStatus.WrongOffset, s.Received);
             s.LastActivity = _clock.GetUtcNow();
 
             await using var fs = new FileStream(s.PartPath, FileMode.Open, FileAccess.Write, FileShare.None, 1024 * 1024, FileOptions.Asynchronous);
@@ -181,6 +194,43 @@ public sealed class UploadSessions : IDisposable
             if (s.Closed)
                 Cleanup(s);
             s.Gate.Release();
+        }
+    }
+
+    /// <summary>
+    /// Takes the session's gate for a piece at <paramref name="offset"/>: null when the piece may be written now (the
+    /// gate is then held), otherwise why not (the gate is then not held).
+    /// </summary>
+    private async Task<ChunkResult?> TakeTurnAsync(Session s, long offset, bool waitTurn, CancellationToken ct)
+    {
+        var started = System.Diagnostics.Stopwatch.GetTimestamp();
+        TimeSpan Left() => TurnWait - System.Diagnostics.Stopwatch.GetElapsedTime(started);
+        var waited = false;
+        while (true)
+        {
+            if (!await s.Gate.WaitAsync(0, CancellationToken.None).ConfigureAwait(false))
+            {
+                if (!waitTurn || Left() <= TimeSpan.Zero)
+                    return new(ChunkStatus.Busy, s.Received); // another piece of this upload is still arriving
+                waited = true;
+                if (!await s.Gate.WaitAsync(Left(), ct).ConfigureAwait(false))
+                    return new(ChunkStatus.Busy, s.Received);
+            }
+            if (s.Closed)
+            {
+                Cleanup(s);
+                s.Gate.Release();
+                return new(ChunkStatus.NotFound);
+            }
+            if (offset == s.Received)
+                return null;
+            var behind = offset < s.Received;
+            s.Gate.Release();
+            // Behind, or the piece before this one has come and gone without reaching it (it was cut off): the app
+            // asks how much arrived and goes on from there. Otherwise that piece has not started arriving yet.
+            if (behind || !waitTurn || waited || Left() <= TimeSpan.Zero)
+                return new(ChunkStatus.WrongOffset, s.Received);
+            await Task.Delay(TurnPoll, ct).ConfigureAwait(false);
         }
     }
 
