@@ -11,8 +11,8 @@ namespace Pairnets.Client.Tests;
 /// (with its theme, as the app has it) and runs its dispatcher until the run ends. Tests hand it work with
 /// <see cref="Ui(Action)"/> and friends. An exception that a click handler lets escape (the app would show
 /// "Pairnets hit an unexpected error") is kept in <see cref="TakeCrashes"/> instead of ending the run.
-/// Windows open far off screen and never take the focus, so a run does not get in the way of whoever sits
-/// at the computer.
+/// The thread lives on a <see cref="HiddenDesktop"/>, and its windows also open far off screen and never take
+/// the focus, so a run does not get in the way of whoever sits at the computer.
 /// </summary>
 public sealed class WpfThread
 {
@@ -22,7 +22,7 @@ public sealed class WpfThread
     private WpfThread()
     {
         var ready = new TaskCompletionSource<Dispatcher>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var thread = new Thread(() =>
+        var running = HiddenDesktop.Run("Pairnets WPF tests", () =>
         {
             try
             {
@@ -43,13 +43,8 @@ public sealed class WpfThread
                 return;
             }
             Dispatcher.Run();
-        })
-        {
-            IsBackground = true,
-            Name = "Pairnets WPF tests",
-        };
-        thread.SetApartmentState(ApartmentState.STA);
-        thread.Start();
+        });
+        running.ContinueWith(t => ready.TrySetException(t.Exception!.InnerExceptions), CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
         Dispatcher = ready.Task.GetAwaiter().GetResult();
     }
 
