@@ -1,11 +1,14 @@
 import { createExecutionContext, waitOnExecutionContext } from "cloudflare:test";
-import { describe, expect, it } from "vitest";
+import { env as baseEnv } from "cloudflare:workers";
+import { describe, expect, it, vi } from "vitest";
+import wranglerToml from "../wrangler.toml?raw";
+import type { Env } from "../src/env";
 import { RELAY_CSP } from "../src/http";
-import { relayAllowed } from "../src/relay";
+import { NEST_CACHE_SECONDS, RELAY_LIMIT_PERIOD, RELAY_PER_MINUTE, relayAllowed } from "../src/relay";
 import { addServer, Harness, linkNest, ORIGIN } from "./helpers";
 
-async function setup() {
-  const h = await Harness.create();
+async function setup(overrides: Partial<Env> = {}) {
+  const h = await Harness.create(overrides);
   const b = h.browser();
   await b.signInByEmail("you@example.com");
   const nest = await addServer(h, b);
@@ -226,19 +229,163 @@ describe("relay", () => {
     expect(nest.requests.at(-1)!.path).toBe("/hub?id=abc");
   });
 
-  it("allows 600 requests a minute per IP; the account pages keep their own 300", async () => {
+  it(`allows more than 600 requests a minute from one address (the binding allows ${RELAY_PER_MINUTE}); no D1 write per request`, async () => {
     const { h, b, nest } = await setup();
+    expect(h.env.RELAY_LIMIT, "wrangler.toml's binding is in the test runtime").toBeDefined();
+    // Two computers in one home share this address; 700 requests is about 350 small files synced between them.
     const app = h.client("198.51.100.99");
-    for (let i = 0; i < 600; i++) expect((await app.call("GET", `/n/${nest.nestId}/api/health`)).status).toBe(200);
-    const over = await app.call("GET", `/n/${nest.nestId}/api/health`);
-    expect(over.status).toBe(429);
-    expect(over.json.error).toBe("rate_limited");
-    expect(Number(over.headers.get("retry-after"))).toBeGreaterThan(0);
-    // Another address is not affected, and neither are this address's account pages.
-    expect((await h.client("198.51.100.98").call("GET", `/n/${nest.nestId}/api/health`)).status).toBe(200);
+    for (let i = 0; i < 700; i++) expect((await app.call("GET", `/n/${nest.nestId}/api/health`)).status).toBe(200);
+    expect(await h.query("SELECT * FROM rate_counters WHERE bucket LIKE 'relay:%'")).toEqual([]);
+    // The account pages keep their own 300 a minute, which the relay does not use up.
     expect((await h.client("198.51.100.99").call("GET", "/assets/style.css")).status).toBe(200);
-    h.advance(60);
-    expect((await app.call("GET", `/n/${nest.nestId}/api/health`)).status).toBe(200);
     expect(b).toBeTruthy();
   }, 120_000);
+
+  it("wrangler.toml's RELAY_LIMIT binding has the limit and period the code and docs name", () => {
+    const toml = wranglerToml.replace(/\r\n/g, "\n");
+    // The lines between `[[ratelimits]]` and the next table.
+    const block = toml.split("\n[[ratelimits]]\n")[1]?.split("\n[")[0] ?? "";
+    expect(block).toMatch(/^name = "RELAY_LIMIT"$/m);
+    expect(block).toMatch(/^namespace_id = "[1-9][0-9]*"$/m);
+    expect(block).toMatch(new RegExp(`^simple = \\{ limit = ${RELAY_PER_MINUTE}, period = ${RELAY_LIMIT_PERIOD} \\}$`, "m"));
+    expect(RELAY_PER_MINUTE).toBe(6000);
+    expect(RELAY_LIMIT_PERIOD).toBe(60);
+  });
+
+  it("a refusal from the binding is 429 rate_limited with Retry-After 60, keyed on the address, before any lookup", async () => {
+    const limiter = new FakeLimit();
+    const seen: string[] = [];
+    const { h, nest, app } = await setup({ RELAY_LIMIT: limiter.binding(), DB: countingDb(seen) });
+    expect((await app.call("GET", `/n/${nest.nestId}/api/health`)).status).toBe(200);
+    limiter.answer = false;
+    const lookups = nestLookups(seen);
+    const routed = h.world.routerRequests.length;
+    const r = await app.call("POST", `/n/${nest.nestId}/api/echo/x`, { body: {} });
+    expect(r.status).toBe(429);
+    expect(r.json).toEqual({ error: "rate_limited", message: "Too many requests. Wait a little and try again." });
+    expect(r.headers.get("retry-after")).toBe("60");
+    expect(r.headers.get("content-security-policy")).toBe(RELAY_CSP);
+    expect(limiter.keys).toEqual(["198.51.100.80", "198.51.100.80"]);
+    expect(nestLookups(seen)).toBe(lookups);
+    expect(h.world.routerRequests.length).toBe(routed);
+    // Another address has its own count.
+    limiter.answer = true;
+    expect((await h.client("198.51.100.98").call("GET", `/n/${nest.nestId}/api/health`)).status).toBe(200);
+    expect(limiter.keys.at(-1)).toBe("198.51.100.98");
+  });
+
+  it("without the binding (a local run) the relay does not limit, warns once and never falls back to D1", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    try {
+      const seen: string[] = [];
+      const { nest, app } = await setup({ RELAY_LIMIT: undefined, DB: countingDb(seen) });
+      const before = seen.length;
+      for (let i = 0; i < 3; i++) expect((await app.call("GET", `/n/${nest.nestId}/api/health`)).status).toBe(200);
+      expect(warn.mock.calls.filter((c) => String(c[0]).includes("RELAY_LIMIT"))).toHaveLength(1);
+      expect(seen.slice(before).filter((q) => q.includes("rate_counters"))).toHaveLength(0);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it("a limiter that fails lets the request through (the limit only stops floods)", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    try {
+      const broken = { limit: () => Promise.reject(new Error("limiter down")) } as unknown as RateLimit;
+      const { nest, app } = await setup({ RELAY_LIMIT: broken });
+      expect((await app.call("GET", `/n/${nest.nestId}/api/health`)).status).toBe(200);
+      expect(warn.mock.calls.some((c) => String(c[0]).includes("rate limiter failed"))).toBe(true);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it(`reads the nest row once per ${NEST_CACHE_SECONDS} s, and a pending server is marked active once`, async () => {
+    const seen: string[] = [];
+    const { h, nest, app } = await setup({ DB: countingDb(seen) });
+    const before = seen.length;
+    for (let i = 0; i < 5; i++) expect((await app.call("GET", `/n/${nest.nestId}/api/health`)).text).toBe("ok");
+    h.advance(NEST_CACHE_SECONDS - 1);
+    expect((await app.call("GET", `/n/${nest.nestId}/api/health`)).text).toBe("ok");
+    const relayed = seen.slice(before);
+    expect(nestLookups(relayed)).toBe(1);
+    expect(relayed.filter((q) => q.startsWith("UPDATE nests SET status = 'active'"))).toHaveLength(1);
+    expect(relayed.filter((q) => q.includes("rate_counters"))).toHaveLength(0);
+    expect(await h.query("SELECT status FROM nests")).toEqual([{ status: "active" }]);
+    // Then it is read again.
+    h.advance(1);
+    expect((await app.call("GET", `/n/${nest.nestId}/api/health`)).text).toBe("ok");
+    expect(nestLookups(seen.slice(before))).toBe(2);
+  });
+
+  it(`a removed server: relayed for at most ${NEST_CACHE_SECONDS} s from the cache, and 404 at once when the router dropped it`, async () => {
+    const { h, b, nest, app } = await setup();
+    expect((await app.call("GET", `/n/${nest.nestId}/api/health`)).text).toBe("ok");
+    // Removed by another Worker instance whose router deploy has not gone out yet: still relayed from the cache...
+    await h.env.DB.prepare("UPDATE nests SET status = 'broken' WHERE id = ?1").bind(nest.nestId).run();
+    expect((await app.call("GET", `/n/${nest.nestId}/api/health`)).text).toBe("ok");
+    // ...until the cached row is 30 s old.
+    h.advance(NEST_CACHE_SECONDS);
+    expect((await app.call("GET", `/n/${nest.nestId}/api/health`)).json).toEqual(UNKNOWN);
+
+    // Removed, and the router no longer has its link: the cached row is read again and the answer is nest_unknown.
+    const other = await addServer(h, b, { label: "other", ip: "198.51.100.41" });
+    expect((await app.call("GET", `/n/${other.nestId}/api/health`)).text).toBe("ok");
+    const deploys = h.cf.routerDeploys.length;
+    await h.env.DB.prepare("DELETE FROM nests WHERE id = ?1").bind(other.nestId).run();
+    h.cf.routerBindings = h.cf.routerBindings.filter((x) => x.name !== `N_${other.nestId}`);
+    expect((await app.call("GET", `/n/${other.nestId}/api/health`)).json).toEqual(UNKNOWN);
+    expect(h.cf.routerDeploys.length).toBe(deploys); // no self-heal for a server that is gone
+  });
+
+  it("when the router does not know a linked server, self-heal runs with a freshly read row", async () => {
+    const seen: string[] = [];
+    const { h, nest, app } = await setup({ DB: countingDb(seen) });
+    h.advance(121); // past SELF_HEAL_AFTER of the deploy that added it
+    expect((await app.call("GET", `/n/${nest.nestId}/api/health`)).text).toBe("ok");
+    const lookups = nestLookups(seen);
+    const deploys = h.cf.routerDeploys.length;
+    h.cf.routerBindings = []; // a code deploy of the router cleared its links
+    const r = await app.call("GET", `/n/${nest.nestId}/api/health`);
+    expect(r.status).toBe(503);
+    expect(r.json).toEqual(OFFLINE);
+    expect(nestLookups(seen)).toBe(lookups + 1);
+    expect(h.cf.routerDeploys.length).toBe(deploys + 1);
+    expect((await app.call("GET", `/n/${nest.nestId}/api/health`)).text).toBe("ok");
+  });
 });
+
+/** A stand-in for the Workers Rate Limiting binding that answers what the test says and records the keys. */
+class FakeLimit {
+  answer = true;
+  keys: string[] = [];
+  binding(): RateLimit {
+    return {
+      limit: async (options: RateLimitOptions) => {
+        this.keys.push(options.key);
+        return { success: this.answer };
+      },
+    };
+  }
+}
+
+/** The test D1 with the SQL of every prepared statement recorded in `seen`. */
+function countingDb(seen: string[]): D1Database {
+  return new Proxy(baseEnv.DB, {
+    get(target, prop) {
+      if (prop === "prepare") {
+        return (sql: string) => {
+          seen.push(sql);
+          return target.prepare(sql);
+        };
+      }
+      const v = Reflect.get(target, prop, target) as unknown;
+      return typeof v === "function" ? (v as (...a: unknown[]) => unknown).bind(target) : v;
+    },
+  });
+}
+
+/** How many times the relay read a nest row. */
+function nestLookups(seen: string[]): number {
+  return seen.filter((q) => q.startsWith("SELECT id, account_id, status, routed_version FROM nests")).length;
+}
