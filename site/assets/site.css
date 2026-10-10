@@ -100,8 +100,62 @@ details[open] { padding-bottom: 8px; }
 summary { cursor: pointer; font-weight: 650; padding: 12px 0; }
 
 footer { border-top: 1px solid var(--border); margin-top: 40px; padding: 28px 0 40px; color: var(--muted); font-size: 14px; }
-footer .wrap { display: flex; gap: 24px; flex-wrap: wrap; justify-content: space-between; }
-footer p { margin: 0; max-width: 560px; }
+footer .wrap { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 24px 48px; align-items: start; }
+footer p { margin: 0; max-width: 520px; }
+nav.foot { display: grid; grid-template-columns: repeat(3, auto); gap: 8px 40px; }
+nav.foot div { display: flex; flex-direction: column; gap: 6px; }
+nav.foot .head { color: var(--text); font-weight: 650; }
+nav.foot a { color: var(--muted); }
+nav.foot a:hover, nav.foot a[aria-current="page"] { color: var(--text); }
+footer .copy { grid-column: 1 / -1; max-width: none; padding-top: 18px; border-top: 1px solid var(--border); }
+
+/* Long text pages: privacy, terms, guidelines and the rest. */
+.updated { color: var(--muted); font-size: 14px; margin: -12px 0 0; }
+.doc { padding-top: 8px; }
+.doc h2 { font-size: 22px; margin: 38px 0 10px; scroll-margin-top: 84px; }
+.doc h3 { margin: 22px 0 6px; }
+.doc ul, .doc ol:not(.steps) { margin: 0 0 14px; padding-left: 22px; }
+.doc li { margin: 0 0 6px; }
+.doc .callout { margin: 0 0 14px; }
+.doc .callout ul { margin-bottom: 0; }
+.toc { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 16px 22px; margin: 0 0 8px; }
+.toc p { margin: 0 0 6px; font-weight: 650; }
+.toc ol { margin: 0; padding-left: 22px; columns: 2; column-gap: 32px; }
+.toc li { margin: 0 0 4px; break-inside: avoid; }
+.table-wrap { overflow-x: auto; margin: 0 0 16px; background: var(--card); border: 1px solid var(--border); border-radius: 12px; }
+table { border-collapse: collapse; width: 100%; font-size: 15px; line-height: 1.5; }
+th, td { text-align: left; vertical-align: top; padding: 10px 14px; border-bottom: 1px solid var(--border); }
+th { background: var(--subtle); font-weight: 650; white-space: nowrap; }
+tr:last-child td { border-bottom: 0; }
+td code { white-space: nowrap; }
+
+/* Cookie settings: one row per kind of cookie, with a switch that shows its state. */
+.setting { display: flex; gap: 18px; align-items: flex-start; justify-content: space-between; background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 18px 22px; margin: 0 0 12px; }
+.setting h3 { margin: 0 0 4px; }
+.setting p { margin: 0; color: var(--muted); font-size: 15px; }
+.switch { display: inline-flex; align-items: center; gap: 10px; flex: none; color: var(--muted); font-size: 14px; font-weight: 600; white-space: nowrap; }
+.switch input { appearance: none; -webkit-appearance: none; margin: 0; width: 42px; height: 24px; border-radius: 12px; background: var(--subtle-hover); position: relative; cursor: not-allowed; }
+.switch input::before { content: ""; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: var(--card); box-shadow: 0 1px 2px rgba(0, 0, 0, .25); }
+.switch input:checked { background: var(--accent); }
+.switch input:checked::before { left: 21px; }
+
+/* Cookie notice (built by site.js): a small card at the bottom, no overlay, the page stays usable. */
+.cookie-notice {
+  position: fixed; left: 24px; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); z-index: 20;
+  width: 400px; max-width: calc(100% - 48px);
+  background: var(--card); color: var(--text); border: 1px solid var(--border); border-radius: 14px;
+  padding: 16px 18px; box-shadow: var(--shadow), 0 12px 32px rgba(16, 24, 40, .12);
+  font-size: 15px; line-height: 1.5;
+  animation: cookie-notice-in .24s ease-out both;
+}
+.cookie-notice p { margin: 0 0 12px; }
+.cookie-notice-actions { display: flex; align-items: center; gap: 6px 14px; flex-wrap: wrap; }
+.cookie-notice-actions .button { padding: 8px 22px; }
+.cookie-notice-actions a:not(.button) { padding: 8px 4px; font-weight: 600; border-radius: 6px; }
+@keyframes cookie-notice-in { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .cookie-notice { animation: none; } }
+@media print { .cookie-notice { display: none; } }
+@media (prefers-color-scheme: dark) { .cookie-notice { box-shadow: var(--shadow), 0 12px 32px rgba(0, 0, 0, .35); } }
 
 @media (max-width: 760px) {
   .wrap { padding: 0 16px; }
@@ -110,4 +164,9 @@ footer p { margin: 0; max-width: 560px; }
   header.top .wrap { flex-wrap: wrap; gap: 8px 12px; }
   nav.main { margin-left: 0; order: 3; width: 100%; }
   ol.steps > li { padding-left: 46px; }
+  footer .wrap { grid-template-columns: minmax(0, 1fr); }
+  nav.foot { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 24px; }
+  .toc ol { columns: 1; }
+  .setting { flex-direction: column; gap: 10px; }
+  .cookie-notice { left: 16px; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); width: auto; max-width: none; }
 }

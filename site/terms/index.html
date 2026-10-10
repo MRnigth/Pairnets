@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Terms of Service · Pairnets</title>
+<meta name="description" content="The terms for using Pairnets: the website, the account service at sync.pairnets.app and its API, and the apps.">
+<meta name="referrer" content="no-referrer">
+<link rel="icon" href="/assets/logo.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/assets/icon-256.png">
+<link rel="stylesheet" href="/assets/site.css">
+<script src="/assets/site.js" defer></script>
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="/"><img src="/assets/logo.svg" alt=""><span>Pairnets</span></a>
+    <nav class="main" aria-label="Main">
+      <a href="/#download">Download</a>
+      <a href="/add/">Add a computer</a>
+      <a href="/help/">Help</a>
+    </nav>
+    <span class="grow"></span>
+    <a class="button accent" href="https://nest.pairnets.app">Sign in →</a>
+  </div>
+</header>
+<main>
+  <div class="wrap narrow">
+    <div class="hero tight">
+      <h1>Terms of Service</h1>
+      <p class="lead">The rules for using Pairnets, written to be read.</p>
+      <p class="updated">Last updated 10 October 2026</p>
+    </div>
+    <div class="doc">
+<div class="callout">
+<h3>The short version</h3>
+<ul>
+<li>Pairnets is free. The apps and the server are open source under the MIT licence.</li>
+<li>Your files stay yours, on your own server. Keep your own backups.</li>
+<li>Use it legally and fairly: see the <a href="/guidelines/">Guidelines</a>.</li>
+<li>It comes as it is, without guarantees. We do our best.</li>
+<li>Danish law applies, and you keep all your rights as a consumer.</li>
+</ul>
+</div>
+
+<nav class="toc" aria-label="On this page">
+<p>On this page</p>
+<ol>
+<li><a href="#agreement">Agreement</a></li>
+<li><a href="#what">What Pairnets is</a></li>
+<li><a href="#licence">The software licence</a></li>
+<li><a href="#account">Your account</a></li>
+<li><a href="#files">Your nest and your files</a></li>
+<li><a href="#fair">Fair use</a></li>
+<li><a href="#api">The API</a></li>
+<li><a href="#as-is">Free, and as it is</a></li>
+<li><a href="#service-changes">Changing or ending the service</a></li>
+<li><a href="#suspension">Suspending or closing accounts</a></li>
+<li><a href="#liability">Liability</a></li>
+<li><a href="#term-changes">Changes to these terms</a></li>
+<li><a href="#law">Law and disputes</a></li>
+<li><a href="#contact">Contact</a></li>
+</ol>
+</nav>
+
+<h2 id="agreement">1. Agreement</h2>
+<p>These terms are an agreement between you and <strong>MRnigth</strong>, a private person in Denmark who makes and runs Pairnets (“we”, “us”). They apply when you use pairnets.app, a Pairnets account at sync.pairnets.app (including its API and relay), or the Pairnets apps and server with that account.</p>
+<p>By making an account or using the service, you agree to these terms and to the <a href="/guidelines/">Guidelines</a>. The <a href="/privacy/">Privacy Policy</a> explains how we handle your data.</p>
+
+<h2 id="what">2. What Pairnets is</h2>
+<ul>
+<li><strong>The software</strong>: the apps for Windows, Mac and Linux, and the nest (server) software.</li>
+<li><strong>The account service</strong>: sync.pairnets.app, which signs you in, links your computers and nests, and passes traffic between them.</li>
+</ul>
+<p>You can use the software on your own domain without an account. Then only the MIT licence applies.</p>
+
+<h2 id="licence">3. The software licence</h2>
+<p>The software is licensed under the <a href="/licenses/">MIT licence</a>. These terms don't take away anything the MIT licence allows. They only cover the account service.</p>
+
+<h2 id="account">4. Your account</h2>
+<ul>
+<li>You must be at least 13 years old, or older if the law where you live requires it.</li>
+<li>Use a real email address that you can read.</li>
+<li>Keep your ways of signing in safe. Anyone who can sign in to your account can allow new computers to reach your nests.</li>
+<li>You are responsible for what happens with your account. An account is for one person: don't share it.</li>
+<li>If you think someone else got in, sign out everywhere on your account page and tell us at <a href="mailto:support@pairnets.app">support@pairnets.app</a>.</li>
+</ul>
+
+<h2 id="files">5. Your nest and your files</h2>
+<p>You own your files, and we claim no rights to them. Your nest runs on your own computer. You are responsible for it, for what's stored on it, for keeping it updated, and for anyone you let use it.</p>
+<p>Pairnets keeps old versions of files for a while, but it is not a backup. Keep your own copy of anything important.</p>
+
+<h2 id="fair">6. Fair use</h2>
+<p>Follow the <a href="/guidelines/">Guidelines</a>. In short: nothing illegal, don't attack or overload the service, and don't try to get into anything that isn't yours.</p>
+
+<h2 id="api">7. The API</h2>
+<p>The API at sync.pairnets.app (addresses under <code>/v1/</code>, and the relay under <code>/n/</code>) is made for the Pairnets apps, nests and installer.</p>
+<ul>
+<li>You may use it with your own tools for your own account, if you follow these terms and the Guidelines.</li>
+<li>Stay within the limits, and slow down when the service asks you to (an answer of <code>429</code> with <code>Retry-After</code>).</li>
+<li>Say who you are: send an honest <code>User-Agent</code>.</li>
+<li>Don't resell access to the API, or offer it to others as a service.</li>
+<li>The API can change or disappear at any time, without notice, except for what the current Pairnets apps need.</li>
+</ul>
+
+<h2 id="as-is">8. Free, and as it is</h2>
+<p>Pairnets is free. The service is provided “as is” and “as available”, without any warranties, as far as the law allows. It may be slow, unavailable or have bugs, and we may change it. We don't promise that it will keep your files safe or always be there.</p>
+
+<h2 id="service-changes">9. Changing or ending the service</h2>
+<p>We may change or stop the service. If we plan to shut down the account service, we'll tell you by email at least 30 days before, whenever we can. Your files are on your nest and stay there, and a nest can also be used on your own domain without the service.</p>
+
+<h2 id="suspension">10. Suspending or closing accounts</h2>
+<p>You can stop using Pairnets at any time and <a href="/delete-account/">delete your account</a>.</p>
+<p>We may suspend or close an account, or block a nest or computer from the service, if it breaks these terms or the Guidelines, puts other people or the service at risk, or if the law requires it. Where it's reasonable, we'll tell you first and explain why.</p>
+
+<h2 id="liability">11. Liability</h2>
+<p>As far as the law allows, we are not liable for indirect or consequential loss, lost data, lost profits or lost business from using Pairnets. Our total liability for anything about the service is limited to 100 Danish kroner (DKK).</p>
+<p>Nothing in these terms limits liability that the law doesn't let us limit, such as for intent or gross negligence, and nothing takes away your mandatory rights as a consumer.</p>
+
+<h2 id="term-changes">12. Changes to these terms</h2>
+<p>We may update these terms. We change the date at the top. For important changes, we tell you by email or on the sign-in page at least 14 days before they apply. If you keep using Pairnets after that, the new terms apply. If you don't agree, you can delete your account.</p>
+
+<h2 id="law">13. Law and disputes</h2>
+<p>Danish law applies, and disputes go to the Danish courts. If you are a consumer living in the EU, you also keep the protection of the mandatory laws of your own country, and you can bring a case where you live.</p>
+
+<h2 id="contact">14. Contact</h2>
+<p>MRnigth, Denmark · <a href="mailto:support@pairnets.app">support@pairnets.app</a> · <a href="/contact/">Contact page</a></p>
+    </div>
+  </div>
+</main>
+<footer>
+  <div class="wrap">
+    <p>pairnets.app only serves these pages. Your Pairnets account lives at sync.pairnets.app, which connects your computers to your nest. Your files are stored only on your nest: they pass through sync.pairnets.app on the way and are never kept there. Only computers you have allowed can get in.</p>
+    <nav class="foot" aria-label="More about Pairnets">
+      <div><span class="head">Help</span><a href="/help/">Help</a><a href="/faq/">FAQ</a><a href="/contact/">Contact</a><a href="/docs">Guide</a></div>
+      <div><span class="head">Legal</span><a href="/privacy/">Privacy</a><a href="/terms/" aria-current="page">Terms</a><a href="/guidelines/">Guidelines</a><a href="/cookies/">Cookie settings</a></div>
+      <div><span class="head">More</span><a href="/security/">Security</a><a href="/delete-account/">Delete my account</a><a href="/licenses/">Open-source licences</a><a href="/source">Source code</a></div>
+    </nav>
+    <p class="copy">© 2026 Pairnets · Made by MRnigth in Denmark · <a href="/licenses/">MIT licence</a></p>
+  </div>
+</footer>
+</body>
+</html>

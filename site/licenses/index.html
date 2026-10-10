@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Open-source licences · Pairnets</title>
+<meta name="description" content="Pairnets is open source under the MIT licence. These are the open-source projects it is built on, and their licences.">
+<meta name="referrer" content="no-referrer">
+<link rel="icon" href="/assets/logo.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/assets/icon-256.png">
+<link rel="stylesheet" href="/assets/site.css">
+<script src="/assets/site.js" defer></script>
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="/"><img src="/assets/logo.svg" alt=""><span>Pairnets</span></a>
+    <nav class="main" aria-label="Main">
+      <a href="/#download">Download</a>
+      <a href="/add/">Add a computer</a>
+      <a href="/help/">Help</a>
+    </nav>
+    <span class="grow"></span>
+    <a class="button accent" href="https://nest.pairnets.app">Sign in →</a>
+  </div>
+</header>
+<main>
+  <div class="wrap narrow">
+    <div class="hero tight">
+      <h1>Open-source licences</h1>
+      <p class="lead">Pairnets is open source, and built on other people's open-source work. Thank you to all of them.</p>
+    </div>
+    <div class="doc">
+<h2 id="pairnets">Pairnets</h2>
+<p>The apps, the nest software and this website are released under the MIT licence. The <a href="/source">source code</a> is on GitHub.</p>
+<pre><code>MIT License
+
+Copyright (c) 2026 MRnigth
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.</code></pre>
+
+<h2 id="built-on">What Pairnets is built on</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>Project</th><th>Used in</th><th>Licence</th></tr></thead>
+<tbody>
+<tr><td><a href="https://github.com/dotnet/runtime">.NET 8</a></td><td>The apps and the server</td><td>MIT</td></tr>
+<tr><td><a href="https://github.com/dotnet/aspnetcore">ASP.NET Core</a>, including the SignalR client</td><td>The server; live updates in the apps</td><td>MIT</td></tr>
+<tr><td><a href="https://github.com/dotnet/wpf">WPF</a> and <a href="https://github.com/dotnet/winforms">Windows Forms</a></td><td>The Windows app</td><td>MIT</td></tr>
+<tr><td><a href="https://github.com/dotnet/extensions">Microsoft.Extensions.Logging</a></td><td>The apps and the server</td><td>MIT</td></tr>
+<tr><td>System.Formats.Cbor and System.Security.Cryptography.ProtectedData (part of <a href="https://github.com/dotnet/runtime">.NET</a>)</td><td>Passkeys on the server; the saved key on Windows</td><td>MIT</td></tr>
+<tr><td><a href="https://github.com/dotnet/efcore">Microsoft.Data.Sqlite</a></td><td>The server</td><td>MIT</td></tr>
+<tr><td><a href="https://github.com/ericsink/SQLitePCL.raw">SQLitePCLRaw</a></td><td>The server</td><td>Apache 2.0</td></tr>
+<tr><td><a href="https://sqlite.org/">SQLite</a></td><td>The server</td><td>Public domain</td></tr>
+<tr><td><a href="https://github.com/AvaloniaUI/Avalonia">Avalonia</a></td><td>The Mac and Linux app</td><td>MIT</td></tr>
+<tr><td><a href="https://github.com/mono/SkiaSharp">SkiaSharp and HarfBuzzSharp</a></td><td>The Mac and Linux app</td><td>MIT</td></tr>
+<tr><td><a href="https://skia.org/">Skia</a></td><td>The Mac and Linux app</td><td>BSD 3-Clause</td></tr>
+<tr><td><a href="https://github.com/harfbuzz/harfbuzz">HarfBuzz</a></td><td>The Mac and Linux app</td><td>MIT (“Old MIT”)</td></tr>
+<tr><td><a href="https://github.com/tmds/Tmds.DBus">Tmds.DBus</a></td><td>The Linux app</td><td>MIT</td></tr>
+<tr><td><a href="https://github.com/kekekeks/MicroCom">MicroCom</a></td><td>The Mac app</td><td>MIT</td></tr>
+<tr><td><a href="https://jrsoftware.org/isinfo.php">Inno Setup</a></td><td>The Windows installer</td><td>Inno Setup License</td></tr>
+<tr><td><a href="https://github.com/cloudflare/cloudflared">cloudflared</a></td><td>Installed on your nest for its tunnel</td><td>Apache 2.0</td></tr>
+</tbody>
+</table></div>
+<p>Each project's full licence text comes with it: follow the links above.</p>
+    </div>
+  </div>
+</main>
+<footer>
+  <div class="wrap">
+    <p>pairnets.app only serves these pages. Your Pairnets account lives at sync.pairnets.app, which connects your computers to your nest. Your files are stored only on your nest: they pass through sync.pairnets.app on the way and are never kept there. Only computers you have allowed can get in.</p>
+    <nav class="foot" aria-label="More about Pairnets">
+      <div><span class="head">Help</span><a href="/help/">Help</a><a href="/faq/">FAQ</a><a href="/contact/">Contact</a><a href="/docs">Guide</a></div>
+      <div><span class="head">Legal</span><a href="/privacy/">Privacy</a><a href="/terms/">Terms</a><a href="/guidelines/">Guidelines</a><a href="/cookies/">Cookie settings</a></div>
+      <div><span class="head">More</span><a href="/security/">Security</a><a href="/delete-account/">Delete my account</a><a href="/licenses/" aria-current="page">Open-source licences</a><a href="/source">Source code</a></div>
+    </nav>
+    <p class="copy">© 2026 Pairnets · Made by MRnigth in Denmark · <a href="/licenses/">MIT licence</a></p>
+  </div>
+</footer>
+</body>
+</html>

@@ -96,6 +96,46 @@ public sealed class SiteTests
     }
 
     [Fact]
+    public void EveryPageLinksTheLegalPagesInItsFooter()
+    {
+        foreach (var page in Pages())
+        {
+            var html = File.ReadAllText(page);
+            var name = Path.GetRelativePath(Root, page);
+            var footer = Regex.Match(html, "<footer>.*?</footer>", RegexOptions.Singleline);
+            Assert.True(footer.Success, $"{name} has no footer");
+            foreach (var link in new[] { "/privacy/", "/terms/", "/guidelines/", "/cookies/", "/security/", "/faq/", "/contact/", "/delete-account/", "/licenses/" })
+                Assert.True(footer.Value.Contains($"href=\"{link}\"", StringComparison.Ordinal), $"{name}'s footer does not link {link}");
+        }
+    }
+
+    [Fact]
+    public void ThePrivacyPolicyAndTheTermsSayWhoRunsPairnetsAndHowToReachThem()
+    {
+        foreach (var page in new[] { "privacy", "terms" })
+        {
+            var html = File.ReadAllText(Path.Combine(Root, page, "index.html"));
+            Assert.Contains("MRnigth", html);
+            Assert.Contains("Denmark", html);
+            Assert.Contains("mailto:support@pairnets.app", html);
+            Assert.Matches("Last updated \\d{1,2} [A-Z][a-z]+ 20\\d\\d", html);
+        }
+        var privacy = File.ReadAllText(Path.Combine(Root, "privacy", "index.html"));
+        Assert.Contains("Datatilsynet", privacy); // where to complain, as the GDPR asks
+        Assert.Contains("Limited Use requirements", privacy); // what Google asks of apps that use Google sign-in
+    }
+
+    [Fact]
+    public void SecurityTxtHasAContactAndHasNotRunOut()
+    {
+        var lines = File.ReadAllLines(Path.Combine(Root, ".well-known", "security.txt"));
+        Assert.Contains("Contact: mailto:support@pairnets.app", lines);
+        Assert.Contains("Policy: https://pairnets.app/security/", lines);
+        var expires = DateTimeOffset.Parse(lines.Single(l => l.StartsWith("Expires: ", StringComparison.Ordinal))["Expires: ".Length..], System.Globalization.CultureInfo.InvariantCulture);
+        Assert.True(expires > DateTimeOffset.UtcNow, "security.txt has run out: move Expires on (at most a year ahead)");
+    }
+
+    [Fact]
     public void TheSignInLinkGoesToTheNest()
     {
         Assert.Contains("href=\"https://nest.pairnets.app\"", File.ReadAllText(Path.Combine(Root, "index.html")));

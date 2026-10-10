@@ -25,3 +25,9 @@ Edit the HTML by hand; there is no build step. `assets/site.css` uses the same c
 `index.html` in a browser, or run `python3 -m http.server -d site` (redirects and headers only work on
 Cloudflare Pages). `tests/Pairnets.Tests/Unit/SiteTests.cs` checks that every local link and image
 exists and that the download redirects point at files the release workflow builds.
+
+The legal and help pages (`privacy/`, `terms/`, `guidelines/`, `cookies/`, `security/`, `faq/`,
+`contact/`, `delete-account/`, `licenses/`) say exactly what the apps, the nest and sync.pairnets.app
+do. When one of those changes what it stores, sends or sets, change these pages with it, and move
+their "Last updated" date on. Every page's footer links all of them (a test checks this), and
+`.well-known/security.txt` needs a new `Expires` date within a year.

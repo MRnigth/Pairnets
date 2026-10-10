@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Delete my account · Pairnets</title>
+<meta name="description" content="How to delete your Pairnets account and everything stored about you, and what stays on your own computers.">
+<meta name="referrer" content="no-referrer">
+<link rel="icon" href="/assets/logo.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/assets/icon-256.png">
+<link rel="stylesheet" href="/assets/site.css">
+<script src="/assets/site.js" defer></script>
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="/"><img src="/assets/logo.svg" alt=""><span>Pairnets</span></a>
+    <nav class="main" aria-label="Main">
+      <a href="/#download">Download</a>
+      <a href="/add/">Add a computer</a>
+      <a href="/help/">Help</a>
+    </nav>
+    <span class="grow"></span>
+    <a class="button accent" href="https://nest.pairnets.app">Sign in →</a>
+  </div>
+</header>
+<main>
+  <div class="wrap narrow">
+    <div class="hero tight">
+      <h1>Delete your account</h1>
+      <p class="lead">How to remove your Pairnets account and everything stored about you, and what stays on your own computers.</p>
+    </div>
+    <div class="doc">
+<ol class="steps">
+<li><h3>Open your account</h3><p>Go to <a href="https://sync.pairnets.app/account">sync.pairnets.app/account</a> and sign in.</p></li>
+<li><h3>Press “Delete my account”</h3><p>It's at the bottom of the page, under <strong>Delete account</strong>.</p></li>
+<li><h3>Confirm</h3><p>If you signed in more than 15 minutes ago, Pairnets asks you to sign in again first, to be sure it's really you. Then the account is gone, and you get an email saying so.</p></li>
+</ol>
+
+<h2 id="deleted">What gets deleted, straight away</h2>
+<ul>
+<li>Your email address, and your link to Google if you used it.</li>
+<li>Every signed-in browser and app.</li>
+<li>Your nests' links to Pairnets, and their tunnels.</li>
+<li>Computers waiting to be allowed, and your activity log.</li>
+</ul>
+<p>Scrambled request counters run out within 2 days, and the database's automatic backups roll over within 30 days.</p>
+
+<h2 id="stays">What stays, because it's on your own computers</h2>
+<ul>
+<li><strong>Your nest and all its files.</strong> Once the account is gone, your computers can't reach the nest through sync.pairnets.app any more.</li>
+<li><strong>The computer list on your nest</strong>, including who allowed each one (shown as a masked email, like <code>m***@example.com</code>).</li>
+<li><strong>The apps</strong> on your computers, and your synced folders.</li>
+</ul>
+
+<h2 id="computers">Remove Pairnets from your computers too</h2>
+<ul>
+<li><strong>In the app:</strong> <strong>Settings → Start over → Reset this app…</strong> removes the computer from your nest and forgets its key and settings. Then uninstall the app as usual. Your synced folder and its files stay.</li>
+<li><strong>On your nest:</strong> follow “Uninstalling” in <a href="/docs">the guide</a>. Your files stay in <code>/var/lib/pairnets</code> until you delete that folder.</li>
+</ul>
+
+<h2 id="cant-sign-in">Can't sign in any more?</h2>
+<p>Email <a href="mailto:support@pairnets.app">support@pairnets.app</a> from the address on the account, and ask us to delete it. A reply from that address is enough to show it's yours. We delete it within one month, usually much sooner.</p>
+<p class="muted small">More about what we keep, and why: <a href="/privacy/">Privacy Policy</a>.</p>
+    </div>
+  </div>
+</main>
+<footer>
+  <div class="wrap">
+    <p>pairnets.app only serves these pages. Your Pairnets account lives at sync.pairnets.app, which connects your computers to your nest. Your files are stored only on your nest: they pass through sync.pairnets.app on the way and are never kept there. Only computers you have allowed can get in.</p>
+    <nav class="foot" aria-label="More about Pairnets">
+      <div><span class="head">Help</span><a href="/help/">Help</a><a href="/faq/">FAQ</a><a href="/contact/">Contact</a><a href="/docs">Guide</a></div>
+      <div><span class="head">Legal</span><a href="/privacy/">Privacy</a><a href="/terms/">Terms</a><a href="/guidelines/">Guidelines</a><a href="/cookies/">Cookie settings</a></div>
+      <div><span class="head">More</span><a href="/security/">Security</a><a href="/delete-account/" aria-current="page">Delete my account</a><a href="/licenses/">Open-source licences</a><a href="/source">Source code</a></div>
+    </nav>
+    <p class="copy">© 2026 Pairnets · Made by MRnigth in Denmark · <a href="/licenses/">MIT licence</a></p>
+  </div>
+</footer>
+</body>
+</html>

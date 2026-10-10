@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FAQ · Pairnets</title>
+<meta name="description" content="Questions and answers about Pairnets: what it is, what it costs, which computers it runs on, and where your files go.">
+<meta name="referrer" content="no-referrer">
+<link rel="icon" href="/assets/logo.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/assets/icon-256.png">
+<link rel="stylesheet" href="/assets/site.css">
+<script src="/assets/site.js" defer></script>
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="/"><img src="/assets/logo.svg" alt=""><span>Pairnets</span></a>
+    <nav class="main" aria-label="Main">
+      <a href="/#download">Download</a>
+      <a href="/add/">Add a computer</a>
+      <a href="/help/">Help</a>
+    </nav>
+    <span class="grow"></span>
+    <a class="button accent" href="https://nest.pairnets.app">Sign in →</a>
+  </div>
+</header>
+<main>
+  <div class="wrap narrow">
+    <div class="hero tight">
+      <h1>Questions and answers</h1>
+      <p class="lead">What Pairnets is, what it costs, and where your files go. Having trouble instead? See <a href="/help/">Help</a>.</p>
+    </div>
+    <div class="doc">
+<details>
+<summary>What is Pairnets?</summary>
+<p>Pairnets keeps one folder the same on all your computers. Instead of a cloud drive, the files live on a small server you own, called your nest. The app on each computer keeps its folder in sync with the nest.</p>
+</details>
+<details>
+<summary>What is a nest?</summary>
+<p>Your own always-on computer running the Pairnets server: an old PC, a mini PC or a home server with Ubuntu. It stores your files and their old versions. One command installs it: see <a href="/#download">Download</a>.</p>
+</details>
+<details>
+<summary>What does it cost?</summary>
+<p>Nothing. The apps and the server are free and open source, and so is the Pairnets account that connects them. You provide the computer your nest runs on.</p>
+</details>
+<details>
+<summary>Which computers does it work on?</summary>
+<p>Windows 10 and 11 (64-bit), macOS 11 or newer, and 64-bit Linux desktops with a system tray. Your nest needs Ubuntu. There's no phone app yet.</p>
+</details>
+<details>
+<summary>Where are my files stored?</summary>
+<p>On your nest and on the computers you sync. Nowhere else: not on pairnets.app, and not on sync.pairnets.app.</p>
+</details>
+<details>
+<summary>Can Pairnets see my files?</summary>
+<p>We don't look at them, and the service never stores them. So that your computers can reach your nest from anywhere, the traffic goes over HTTPS through Cloudflare's network, where the service runs. HTTPS is unwrapped there while the traffic is passed on, as with any Cloudflare Tunnel. Pairnets doesn't encrypt files end to end yet. The <a href="/privacy/">Privacy Policy</a> has the details.</p>
+</details>
+<details>
+<summary>Do I need a Pairnets account?</summary>
+<p>For the easy way, yes: sign in with Google or with a link sent by email, and Pairnets connects your computers to your nest. If you run your nest on your own domain, your computers can use its address directly, without an account.</p>
+</details>
+<details>
+<summary>I deleted or changed a file by mistake</summary>
+<p>Your nest keeps every overwritten or deleted file for 30 days (and at least the last 5 versions). If two computers change the same file, both versions are kept. <a href="/docs">The guide</a> shows how to get an old version back.</p>
+</details>
+<details>
+<summary>What happens if sync.pairnets.app is down?</summary>
+<p>Your files stay on your computers and on your nest. Syncing through the service pauses, and catches up when it's back. A nest on your own domain doesn't depend on it.</p>
+</details>
+<details>
+<summary>Does Pairnets use cookies or track me?</summary>
+<p>pairnets.app sets no cookies at all. The account site only uses the cookies it needs to keep you signed in. No ads, no analytics. See <a href="/cookies/">Cookie settings</a>.</p>
+</details>
+<details>
+<summary>Is Pairnets open source?</summary>
+<p>Yes, under the MIT licence. The <a href="/source">source code</a> is on GitHub.</p>
+</details>
+<details>
+<summary>Who makes Pairnets?</summary>
+<p>MRnigth, one person in Denmark. There's no big company behind it, but every email is read: see <a href="/contact/">Contact</a>.</p>
+</details>
+<details>
+<summary>How do I delete my account?</summary>
+<p>On your account page, with one button. <a href="/delete-account/">Delete my account</a> explains what goes and what stays.</p>
+</details>
+<details>
+<summary>I found a bug, or a security problem</summary>
+<p>Bugs: open an issue on GitHub or email us (see <a href="/contact/">Contact</a>). Security problems: please report them privately, as the <a href="/security/">Security</a> page explains.</p>
+</details>
+<p class="gap-lg muted">Still stuck? Try <a href="/help/">Help</a>, <a href="/docs">the guide</a>, or <a href="/contact/">get in touch</a>.</p>
+    </div>
+  </div>
+</main>
+<footer>
+  <div class="wrap">
+    <p>pairnets.app only serves these pages. Your Pairnets account lives at sync.pairnets.app, which connects your computers to your nest. Your files are stored only on your nest: they pass through sync.pairnets.app on the way and are never kept there. Only computers you have allowed can get in.</p>
+    <nav class="foot" aria-label="More about Pairnets">
+      <div><span class="head">Help</span><a href="/help/">Help</a><a href="/faq/" aria-current="page">FAQ</a><a href="/contact/">Contact</a><a href="/docs">Guide</a></div>
+      <div><span class="head">Legal</span><a href="/privacy/">Privacy</a><a href="/terms/">Terms</a><a href="/guidelines/">Guidelines</a><a href="/cookies/">Cookie settings</a></div>
+      <div><span class="head">More</span><a href="/security/">Security</a><a href="/delete-account/">Delete my account</a><a href="/licenses/">Open-source licences</a><a href="/source">Source code</a></div>
+    </nav>
+    <p class="copy">© 2026 Pairnets · Made by MRnigth in Denmark · <a href="/licenses/">MIT licence</a></p>
+  </div>
+</footer>
+</body>
+</html>

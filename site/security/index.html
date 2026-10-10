@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Security · Pairnets</title>
+<meta name="description" content="How Pairnets protects your files, what it doesn't protect against, and how to report a security problem safely.">
+<meta name="referrer" content="no-referrer">
+<link rel="icon" href="/assets/logo.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/assets/icon-256.png">
+<link rel="stylesheet" href="/assets/site.css">
+<script src="/assets/site.js" defer></script>
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="/"><img src="/assets/logo.svg" alt=""><span>Pairnets</span></a>
+    <nav class="main" aria-label="Main">
+      <a href="/#download">Download</a>
+      <a href="/add/">Add a computer</a>
+      <a href="/help/">Help</a>
+    </nav>
+    <span class="grow"></span>
+    <a class="button accent" href="https://nest.pairnets.app">Sign in →</a>
+  </div>
+</header>
+<main>
+  <div class="wrap narrow">
+    <div class="hero tight">
+      <h1>Security</h1>
+      <p class="lead">How Pairnets protects your files, and how to report a problem safely.</p>
+      <p class="updated">Last updated 10 October 2026</p>
+    </div>
+    <div class="doc">
+<h2 id="protects">How Pairnets keeps your files safe</h2>
+<ul>
+<li>Your files stay on your own server. The service never stores them.</li>
+<li>Every computer has its own key. Remove a lost computer on your nest, and its key stops working at once.</li>
+<li>A new computer only gets in after you check its code and press Allow.</li>
+<li>Keys, sign-in links and sessions are only stored in hashed form.</li>
+<li>HTTPS everywhere, strict content security rules on every page, and cookies that only our own site can read.</li>
+<li>Your nest opens no ports: it connects out to Cloudflare through a tunnel.</li>
+<li>Old versions of files are kept for 30 days, so a bad change can be undone.</li>
+</ul>
+
+<h2 id="limits">What it doesn't protect against</h2>
+<ul>
+<li>There's no end-to-end encryption yet. Cloudflare, where the service runs, can see traffic in transit.</li>
+<li>Anyone who can sign in to your Pairnets account, and the service itself, can allow a new computer to reach your nest. Protect your email and Google account.</li>
+<li>A computer that someone has taken over can read and change your synced files.</li>
+</ul>
+<p>All the details are in the <a href="https://github.com/MRnigth/Pairnets/blob/main/docs/SECURITY.md">security design</a>.</p>
+
+<h2 id="report">Report a security problem</h2>
+<div class="callout">
+<p>Email <a href="mailto:support@pairnets.app">support@pairnets.app</a> with “Security” in the subject. Please don't open a public issue on GitHub.</p>
+</div>
+<ul>
+<li>Say what you found, the steps to see it, and what someone could do with it.</li>
+<li>We aim to reply within 7 days, keep you updated, and fix serious problems as fast as we can.</li>
+<li>Please give us 90 days, or until a fix is out, before you tell others.</li>
+<li>Once it's fixed, we're happy to thank you by name on this page, if you'd like. Pairnets is a personal project, so there's no bug bounty.</li>
+</ul>
+
+<h2 id="rules">Rules for testing</h2>
+<ul>
+<li>Only test with your own account, your own nest and your own computers.</li>
+<li>Don't look at, change or delete other people's data. If you come across any, stop and tell us.</li>
+<li>No denial of service, flooding or spam. Stay within the limits.</li>
+<li>No phishing or tricking people, and no physical attacks.</li>
+</ul>
+<p>If you follow these rules in good faith, we see your research as allowed and won't take legal action against you.</p>
+
+<h2 id="scope">Not covered</h2>
+<ul>
+<li>Problems in Cloudflare, Google, GitHub or Resend themselves: please report those to them.</li>
+<li>Reports from automated scanners that show no real way to cause harm.</li>
+<li>Missing best-practice settings that can't be used to cause harm.</li>
+<li>Attacks that need a computer that has already been taken over.</li>
+</ul>
+<p class="muted small">This page is also listed in <a href="/.well-known/security.txt">security.txt</a>.</p>
+    </div>
+  </div>
+</main>
+<footer>
+  <div class="wrap">
+    <p>pairnets.app only serves these pages. Your Pairnets account lives at sync.pairnets.app, which connects your computers to your nest. Your files are stored only on your nest: they pass through sync.pairnets.app on the way and are never kept there. Only computers you have allowed can get in.</p>
+    <nav class="foot" aria-label="More about Pairnets">
+      <div><span class="head">Help</span><a href="/help/">Help</a><a href="/faq/">FAQ</a><a href="/contact/">Contact</a><a href="/docs">Guide</a></div>
+      <div><span class="head">Legal</span><a href="/privacy/">Privacy</a><a href="/terms/">Terms</a><a href="/guidelines/">Guidelines</a><a href="/cookies/">Cookie settings</a></div>
+      <div><span class="head">More</span><a href="/security/" aria-current="page">Security</a><a href="/delete-account/">Delete my account</a><a href="/licenses/">Open-source licences</a><a href="/source">Source code</a></div>
+    </nav>
+    <p class="copy">© 2026 Pairnets · Made by MRnigth in Denmark · <a href="/licenses/">MIT licence</a></p>
+  </div>
+</footer>
+</body>
+</html>
