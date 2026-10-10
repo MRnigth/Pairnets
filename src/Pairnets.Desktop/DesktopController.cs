@@ -426,9 +426,8 @@ public sealed class DesktopController : ITrayActions, IDisposable
                 _tray.Icon = IconFor(status.Status);
                 _shownStatus = status.Status;
             }
-            var line = status.IsTransferring
-                ? $"{PathRules.FileName(status.CurrentPath!)}{(status.Percent is { } p ? $" {p}%" : string.Empty)}"
-                : status.Text;
+            // What it is doing in one line: "Checking files · 12,000 of 38,206", "Uploading · 37 of 120 files · 4.90 MB/s · …".
+            var line = status.StatusLine;
             _tray.ToolTipText = $"Pairnets: {line} ({status.LastSyncText.ToLowerInvariant()})";
             _statusItem!.Header = line.Length > 60 ? line[..57] + "..." : line;
             _fixItem!.Header = status.FixLabel ?? "No action needed";

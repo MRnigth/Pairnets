@@ -14,7 +14,13 @@ public static class ServiceErrors
     /// <summary>404: the service knows no such nest (it was removed from the account). Only signing in again helps.</summary>
     public const string NestUnknown = "nest_unknown";
 
-    public const string NestOfflineMessage = "Your server is not connected right now. Check that it is on.";
+    /// <summary>
+    /// 429: too many requests from this computer or address for a while (with Retry-After). Not a failure: the app waits
+    /// and sends the same request again (<see cref="BackPressure"/>).
+    /// </summary>
+    public const string RateLimited = "rate_limited";
+
+    public const string NestOfflineMessage ="Your server is not connected right now. Check that it is on.";
 
     public const string NestUnknownMessage = "This server is not linked to Pairnets any more. Sign in again to choose a server.";
 

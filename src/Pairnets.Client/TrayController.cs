@@ -334,9 +334,8 @@ public sealed class TrayController : ITrayActions, IDisposable
             _icon.Icon = TrayIcons.For(status.Status);
             _shownStatus = status.Status;
         }
-        var line = status.IsTransferring
-            ? $"{Math.Min(status.FilesDone + 1, Math.Max(status.FilesTotal, 1))}/{status.FilesTotal}: {PathRules.FileName(status.CurrentPath!)}{(status.Percent is { } p ? $" {p}%" : string.Empty)}"
-            : status.Text;
+        // What it is doing in one line: "Checking files · 12,000 of 38,206", "Uploading · 37 of 120 files · 4.90 MB/s · …".
+        var line = status.StatusLine;
         var tip = $"Pairnets: {line} ({status.LastSyncText.ToLowerInvariant()})";
         _icon.Text = tip.Length > 127 ? tip[..124] + "..." : tip;
         _statusItem.Text = line.Length > 80 ? line[..77] + "..." : line;

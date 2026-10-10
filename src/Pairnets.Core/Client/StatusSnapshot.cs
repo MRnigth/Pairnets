@@ -25,6 +25,9 @@ public sealed record JoinRequest(string Code, string Name, string System, DateTi
     public string Title => System.Length > 0 ? $"{Name} ({System}) wants to join" : $"{Name} wants to join";
 }
 
+/// <summary>Another computer's latest live report (<see cref="TransferReport"/>) and when it arrived here.</summary>
+public sealed record PeerTransfer(TransferReport Report, DateTimeOffset At);
+
 /// <summary>Everything a UI needs to draw the current state, as one immutable value.</summary>
 public sealed record StatusSnapshot(
     RunnerStatus Status,
@@ -54,8 +57,93 @@ public sealed record StatusSnapshot(
 
     public long PassBytesTotal { get; init; }
 
-    /// <summary>Recent transfer speed (about the last 5 seconds).</summary>
+    /// <summary>Recent transfer speed (about the last 5 seconds), both directions together.</summary>
     public double BytesPerSecond { get; init; }
+
+    /// <summary>Recent upload speed of this computer (about the last 5 seconds).</summary>
+    public double UpBytesPerSecond { get; init; }
+
+    /// <summary>Recent download speed of this computer (about the last 5 seconds).</summary>
+    public double DownBytesPerSecond { get; init; }
+
+    /// <summary>When this computer last really moved a byte (up or down), or null.</summary>
+    public DateTimeOffset? LastBytesAt { get; init; }
+
+    /// <summary>
+    /// Files are in flight but no byte moved for <see cref="TransferReport.StallAfter"/>, or requests are held by "too
+    /// many requests" (refreshed about once a second).
+    /// </summary>
+    public bool Stalled { get; init; }
+
+    /// <summary>Whether files in flight are stuck at <paramref name="now"/>: no byte since <see cref="LastBytesAt"/> for a while, or held.</summary>
+    public bool StalledAt(DateTimeOffset now) =>
+        Status == RunnerStatus.Syncing && Active.Count > 0
+        && (IsSlowedDown || LastBytesAt is not { } last || now - last >= TransferReport.StallAfter);
+
+    // ---- what a pass is doing now
+
+    /// <summary>The running pass's stage (<see cref="SyncStage.None"/> when no pass runs).</summary>
+    public SyncStage Stage { get; init; }
+
+    /// <summary>While checking the folder: files checked so far, of <see cref="CheckTotal"/> (0 while still listing).</summary>
+    public int CheckedFiles { get; init; }
+
+    public int CheckTotal { get; init; }
+
+    // ---- slowed down by the server ("too many requests")
+
+    /// <summary>When requests go on again after a 429 "too many requests", or null.</summary>
+    public DateTimeOffset? SlowedUntil { get; init; }
+
+    /// <summary>Who said "too many requests": the server's host name ("sync.pairnets.app").</summary>
+    public string? SlowedBy { get; init; }
+
+    /// <summary>True while syncing waits because the server asked for fewer requests.</summary>
+    public bool IsSlowedDown => SlowedUntil is not null && Status == RunnerStatus.Syncing;
+
+    /// <summary>"Too many requests to sync.pairnets.app; continuing in 30 s".</summary>
+    public string SlowedText(DateTimeOffset now)
+    {
+        var seconds = SlowedUntil is { } until ? Math.Max(1, (int)Math.Ceiling((until - now).TotalSeconds)) : 1;
+        return $"Too many requests to {SlowedBy ?? "the server"}; continuing in {seconds} s";
+    }
+
+    /// <summary>Nothing to do but wait: for another computer's batch, or for the server to take requests again.</summary>
+    public bool IsHeldUp => IsWaiting || IsSlowedDown;
+
+    // ---- live speeds of every computer (pushed by the server, never guessed)
+
+    /// <summary>A report older than this counts as "nothing moving" (its computer stopped sending).</summary>
+    public static readonly TimeSpan LiveFor = TimeSpan.FromSeconds(10);
+
+    /// <summary>The other computers' latest live reports, by name.</summary>
+    public IReadOnlyDictionary<string, PeerTransfer> Peers { get; init; } = System.Collections.ObjectModel.ReadOnlyDictionary<string, PeerTransfer>.Empty;
+
+    /// <summary>What this computer is moving right now (the report it sends), or null when it moves nothing.</summary>
+    public TransferReport? OwnLive =>
+        Status == RunnerStatus.Syncing && (Stage == SyncStage.Transferring || Active.Count > 0)
+        && new TransferReport(UpBytesPerSecond, DownBytesPerSecond, FilesDone, FilesTotal, PassBytesDone, PassBytesTotal,
+            Uploading: Active.Any(a => a.IsUpload), Downloading: Active.Any(a => !a.IsUpload), Stalled: Stalled && Active.Count > 0) is { IsActive: true } own
+            ? own
+            : null;
+
+    /// <summary>
+    /// What a computer is moving right now, by its name: this computer's own numbers, or the other's last report if it
+    /// is fresh. Null when it moves nothing (or said nothing for <see cref="LiveFor"/>).
+    /// </summary>
+    public TransferReport? LiveOf(string? name, string? thisDevice, DateTimeOffset now)
+    {
+        if (name is null)
+            return null;
+        if (string.Equals(name, thisDevice, StringComparison.OrdinalIgnoreCase))
+            return OwnLive;
+        foreach (var (device, peer) in Peers)
+        {
+            if (string.Equals(device, name, StringComparison.OrdinalIgnoreCase))
+                return now - peer.At <= LiveFor && peer.Report.IsActive ? peer.Report : null;
+        }
+        return null;
+    }
 
     /// <summary>"Limited to 5 MB/s" (or "Limited to 5 MB/s up, 10 MB/s down"), or null without limits.</summary>
     public string? LimitText { get; init; }
@@ -63,7 +151,7 @@ public sealed record StatusSnapshot(
     /// <summary>"Uploading 120 files", "Downloading 32 files" or "Syncing 50 files".</summary>
     public string BatchTitle => FilesTotal <= 1 && Active.Count <= 1
         ? $"{OperationText} {CurrentFileName}"
-        : $"{(Active.Count > 0 && Active.All(a => a.Operation == Active[0].Operation) ? OperationText : "Syncing")} {FilesTotal} files";
+        : $"{(Active.Count > 0 && Active.All(a => a.Operation == Active[0].Operation) ? OperationText : "Syncing")} {Format.Count(FilesTotal)} files";
 
     /// <summary>"12.4 MB/s · about 2 min left" (empty until the speed is known).</summary>
     public string SpeedText
@@ -87,7 +175,7 @@ public sealed record StatusSnapshot(
 
     /// <summary>"37 of 120 files · 412 MB of 1.30 GB".</summary>
     public string OverallText => FilesTotal == 0 ? string.Empty
-        : $"{Math.Min(FilesDone, FilesTotal)} of {FilesTotal} files"
+        : $"{Format.Count(Math.Min(FilesDone, FilesTotal))} of {Format.Count(FilesTotal)} files"
           + (PassBytesTotal > 0 ? $" · {Format.Bytes(Math.Min(PassBytesDone, PassBytesTotal))} of {Format.Bytes(PassBytesTotal)}" : string.Empty);
 
     // ---- waiting for another computer's big batch
@@ -95,13 +183,38 @@ public sealed record StatusSnapshot(
     /// <summary>The other computer's big upload this one waits for, or null.</summary>
     public PeerWait? WaitingFor { get; init; }
 
-    /// <summary>True while waiting and nothing else is going on (the status card then shows the wait).</summary>
-    public bool IsWaiting => WaitingFor is not null && Status is RunnerStatus.Idle or RunnerStatus.Syncing && !IsTransferring;
+    /// <summary>
+    /// True while waiting and nothing else is going on (the status card then shows the wait). Checking the folder and
+    /// reading the server's list are said as they are, also during a wait.
+    /// </summary>
+    public bool IsWaiting => WaitingFor is not null && Status is RunnerStatus.Idle or RunnerStatus.Syncing && !IsTransferring
+        && Stage is not (SyncStage.Checking or SyncStage.ReadingServer);
 
-    /// <summary>"212 of 340 files are on the server".</summary>
-    public string WaitingProgressText => WaitingFor is { } w ? $"{w.Seen} of {w.Count} files are on the server" : string.Empty;
+    /// <summary>
+    /// How far the other computer's batch is: its own live report when it sends one (files done of its batch), otherwise
+    /// the changes that reached the server so far of the files it announced.
+    /// </summary>
+    public (int Done, int Total)? WaitingCounts(DateTimeOffset now) =>
+        WaitingFor is not { } w ? null
+        : LiveOf(w.Device, null, now) is { FilesTotal: > 0 } live ? (Math.Min(live.FilesDone, live.FilesTotal), live.FilesTotal)
+        : (Math.Min(w.Seen, w.Count), w.Count);
 
-    public int? WaitingPercent => WaitingFor is { Count: > 0 } w ? (int)Math.Clamp(w.Seen * 100L / w.Count, 0, 100) : null;
+    /// <summary>"383 of 38,206 files are on the server · ↑ 3.10 MB/s".</summary>
+    public string WaitingProgressText => WaitingProgressAt(DateTimeOffset.UtcNow);
+
+    /// <inheritdoc cref="WaitingProgressText"/>
+    public string WaitingProgressAt(DateTimeOffset now)
+    {
+        if (WaitingCounts(now) is not var (done, total))
+            return string.Empty;
+        var text = $"{Format.Count(done)} of {Format.Count(total)} files are on the server";
+        var flow = LiveOf(WaitingFor!.Device, null, now) is { } live ? Format.Flow(live.UpBytesPerSecond, live.DownBytesPerSecond) : string.Empty;
+        return flow.Length > 0 ? text + " · " + flow : text;
+    }
+
+    public int? WaitingPercent => WaitingCounts(DateTimeOffset.UtcNow) is var (done, total) && total > 0
+        ? (int)Math.Clamp(done * 100L / total, 0, 100)
+        : null;
 
     // ---- the other computers
 
@@ -204,34 +317,102 @@ public sealed record StatusSnapshot(
 
     public string LastSyncText => LastSyncAt is { } at ? "Last synced " + at.ToLocalTime().ToString("HH:mm", System.Globalization.CultureInfo.InvariantCulture) : "Not synced yet";
 
-    /// <summary>Short status line shown under the title.</summary>
-    public string Headline => IsWaiting ? $"Waiting for {WaitingFor!.Device}" : Status switch
-    {
-        RunnerStatus.Idle => "Up to date",
-        RunnerStatus.Syncing => "Syncing…",
-        RunnerStatus.Offline => "Offline",
-        RunnerStatus.Paused => "Paused",
-        RunnerStatus.Blocked when BlockReason == BlockReason.SignedOut => "Signed out of your nest",
-        RunnerStatus.Blocked when BlockReason == BlockReason.SignInRequired => "Sign in to your nest",
-        RunnerStatus.Blocked => "Needs your decision",
-        _ => "Problem",
-    };
-
-    /// <summary>Extra detail under the headline, without repeating it ("Offline: timeout" → "timeout").</summary>
-    public string DetailText
+    /// <summary>"Uploading", "Downloading" or "Uploading and downloading" for the transfers running now, or null.</summary>
+    private string? Direction
     {
         get
         {
-            if (IsWaiting)
-                return $"{WaitingFor!.Device} is uploading a big batch. Pairnets downloads it all in one go when it's done, so the two computers don't fight over the connection.";
-            var root = Headline.TrimEnd('…', '.');
-            var text = Text.Trim();
-            if (text.Length == 0 || string.Equals(text.TrimEnd('…', '.'), root, StringComparison.OrdinalIgnoreCase))
-                return string.Empty;
-            if (text.StartsWith(root + ":", StringComparison.OrdinalIgnoreCase))
-                return text[(root.Length + 1)..].Trim();
-            return text;
+            if (Active.Count > 0)
+                return Active.All(a => a.IsUpload) ? "Uploading" : Active.All(a => !a.IsUpload) ? "Downloading" : "Uploading and downloading";
+            return Operation switch
+            {
+                "upload" => "Uploading",
+                "download" => "Downloading",
+                _ => null,
+            };
         }
+    }
+
+    /// <summary>"37 of 120 files · 4.90 MB/s · about 3 min left" (what the transfers have done and how fast).</summary>
+    private string TransferSummary
+    {
+        get
+        {
+            var files = FilesTotal > 0 ? $"{Format.Count(Math.Min(FilesDone, FilesTotal))} of {Format.Count(FilesTotal)} files" : string.Empty;
+            var speed = SpeedText;
+            return files.Length > 0 && speed.Length > 0 ? files + " · " + speed : files + speed;
+        }
+    }
+
+    /// <summary>The title of the status card: what Pairnets is doing, in a few words.</summary>
+    public string Headline => Status == RunnerStatus.Paused ? "Paused"
+        : IsSlowedDown ? "Slowed down by the server"
+        : IsWaiting ? $"Waiting for {WaitingFor!.Device} to finish uploading"
+        : Status switch
+        {
+            RunnerStatus.Idle => "Up to date",
+            RunnerStatus.Syncing when Stage == SyncStage.Checking => "Checking files",
+            RunnerStatus.Syncing when Stage == SyncStage.ReadingServer => "Reading the server's list",
+            RunnerStatus.Syncing when IsTransferring && Direction is { } direction => direction,
+            RunnerStatus.Syncing => "Syncing…",
+            RunnerStatus.Offline => "Offline",
+            RunnerStatus.Blocked when BlockReason == BlockReason.SignedOut => "Signed out of your nest",
+            RunnerStatus.Blocked when BlockReason == BlockReason.SignInRequired => "Sign in to your nest",
+            RunnerStatus.Blocked => "Needs your decision",
+            _ => "Problem",
+        };
+
+    /// <summary>Extra detail under the headline, without repeating it ("Offline: timeout" → "timeout").</summary>
+    public string DetailText => DetailAt(DateTimeOffset.UtcNow);
+
+    /// <inheritdoc cref="DetailText"/>
+    public string DetailAt(DateTimeOffset now)
+    {
+        if (Status != RunnerStatus.Paused)
+        {
+            if (IsSlowedDown)
+                return SlowedText(now);
+            if (IsWaiting)
+                return "Pairnets downloads the whole batch in one go when it's done, so the two computers don't fight over the connection.";
+            if (Status == RunnerStatus.Syncing && Stage == SyncStage.Checking)
+                return CheckTotal > 0 ? $"{Format.Count(CheckedFiles)} of {Format.Count(CheckTotal)}" : "Listing the files in your folder";
+            if (Status == RunnerStatus.Syncing && Stage == SyncStage.ReadingServer)
+                return string.Empty;
+            if (IsTransferring && Direction is not null)
+                return TransferSummary;
+        }
+        var root = Headline.TrimEnd('…', '.');
+        var text = Text.Trim();
+        if (text.Length == 0 || string.Equals(text.TrimEnd('…', '.'), root, StringComparison.OrdinalIgnoreCase))
+            return string.Empty;
+        if (text.StartsWith(root + ":", StringComparison.OrdinalIgnoreCase))
+            return text[(root.Length + 1)..].Trim();
+        return text;
+    }
+
+    /// <summary>
+    /// The status in one line (the tray icon's tip, the tray menu): "Checking files · 12,000 of 38,206",
+    /// "Waiting for PC-1 to finish uploading · 383 of 38,206 files", "Uploading · 37 of 120 files · 4.90 MB/s · about 3 min left",
+    /// "Too many requests to sync.pairnets.app; continuing in 30 s", "Paused", or the runner's own words.
+    /// </summary>
+    public string StatusLine => StatusLineAt(DateTimeOffset.UtcNow);
+
+    /// <inheritdoc cref="StatusLine"/>
+    public string StatusLineAt(DateTimeOffset now)
+    {
+        if (Status == RunnerStatus.Paused)
+            return "Paused";
+        if (IsSlowedDown)
+            return SlowedText(now);
+        if (IsWaiting && WaitingCounts(now) is var (done, total))
+            return $"Waiting for {WaitingFor!.Device} to finish uploading · {Format.Count(done)} of {Format.Count(total)} files";
+        if (Status == RunnerStatus.Syncing && Stage == SyncStage.Checking)
+            return CheckTotal > 0 ? $"Checking files · {Format.Count(CheckedFiles)} of {Format.Count(CheckTotal)}" : "Checking files";
+        if (Status == RunnerStatus.Syncing && Stage == SyncStage.ReadingServer)
+            return "Reading the server's list";
+        if (IsTransferring && Direction is { } direction)
+            return TransferSummary is { Length: > 0 } summary ? direction + " · " + summary : direction;
+        return Text;
     }
 
     /// <summary>The action the UI should offer for a blocked pass, or null.</summary>

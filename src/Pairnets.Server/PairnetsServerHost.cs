@@ -48,6 +48,7 @@ public static class PairnetsServerHost
         builder.Services.AddSingleton<FailureThrottle>();
         builder.Services.AddSingleton<ServerUpdater>();
         builder.Services.AddSingleton<BatchRegistry>();
+        builder.Services.AddSingleton<LiveTransfers>();
         builder.Services.AddSingleton<DeviceRegistry>();
         builder.Services.AddSingleton<TlsCertificateStore>();
         builder.Services.AddSingleton(sp => new AuthStore(sp.GetRequiredService<ServerPaths>()));

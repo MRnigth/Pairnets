@@ -193,6 +193,68 @@ public static class ErrorCodes
     public const string WrongCredential = "wrong-credential";
 }
 
+/// <summary>
+/// What one computer is moving right now, as it measured it. The one source for every computer's live state in the
+/// apps (speed labels, the picture's lines, "waiting for PC-1"): nothing is guessed from other signals.
+/// <list type="bullet">
+/// <item><see cref="UpBytesPerSecond"/>, <see cref="DownBytesPerSecond"/>: bytes really moved per second (about the last 5 s).</item>
+/// <item><see cref="FilesDone"/> of <see cref="FilesTotal"/>, <see cref="BytesDone"/> of <see cref="BytesTotal"/>: its current batch.</item>
+/// <item><see cref="Uploading"/>, <see cref="Downloading"/>: files in flight in that direction right now (also while stalled).</item>
+/// <item><see cref="Stalled"/>: files in flight, but no byte moved for <see cref="StallAfter"/> (a broken connection, or held
+/// by "too many requests").</item>
+/// <item><see cref="AgeSeconds"/>: set by the server only: how old the report was when it passed it on (0 when pushed live;
+/// more for an app that connects later). The receiver's "last seen" is its arrival minus this.</item>
+/// </list>
+/// An app sends it on the push channel (<see cref="PushNames.ReportTransfer"/>) about once a second while it transfers
+/// and once, all zero, when it stops; the server passes it on to the other computers (<see cref="PushNames.PeerTransfer"/>).
+/// </summary>
+public sealed record TransferReport(double UpBytesPerSecond, double DownBytesPerSecond, int FilesDone, int FilesTotal, long BytesDone, long BytesTotal,
+    bool Uploading = false, bool Downloading = false, bool Stalled = false, double AgeSeconds = 0)
+{
+    /// <summary>"Not moving anything" (sent once when a computer stops).</summary>
+    public static TransferReport Idle { get; } = new(0, 0, 0, 0, 0, 0);
+
+    /// <summary>Files in flight but no byte moved for this long: stalled.</summary>
+    public static readonly TimeSpan StallAfter = TimeSpan.FromSeconds(5);
+
+    /// <summary>The largest speed believed (100 GB/s); anything above is a broken report.</summary>
+    private const double MaxSpeed = 100d * 1024 * 1024 * 1024;
+
+    [JsonIgnore]
+    public int FilesLeft => Math.Max(0, FilesTotal - FilesDone);
+
+    [JsonIgnore]
+    public long BytesLeft => Math.Max(0, BytesTotal - BytesDone);
+
+    /// <summary>True while it moves bytes, has files in flight, or still has files to go in its batch.</summary>
+    [JsonIgnore]
+    public bool IsActive => Uploading || Downloading || UpBytesPerSecond >= 1 || DownBytesPerSecond >= 1 || FilesLeft > 0;
+
+    /// <summary>The report with impossible values cut back (it comes from another computer).</summary>
+    public TransferReport Sanitized()
+    {
+        static double Clamp(double v, double max) => double.IsFinite(v) ? Math.Clamp(v, 0, max) : 0;
+        var total = Math.Clamp(FilesTotal, 0, 100_000_000);
+        var bytesTotal = Math.Max(0, BytesTotal);
+        return new TransferReport(Clamp(UpBytesPerSecond, MaxSpeed), Clamp(DownBytesPerSecond, MaxSpeed), Math.Clamp(FilesDone, 0, total), total,
+            Math.Clamp(BytesDone, 0, bytesTotal), bytesTotal, Uploading, Downloading, Stalled, Clamp(AgeSeconds, 3600));
+    }
+}
+
+/// <summary>
+/// Names on the push channel (the SignalR hub at /hub) that the apps and the server share. A message keeps its
+/// arguments forever (older apps fail on a mismatch); new information gets a new name. An app or server that does not
+/// know a name simply never sends or answers it.
+/// </summary>
+public static class PushNames
+{
+    /// <summary>App → server: <c>ReportTransfer(TransferReport)</c>, this computer's live speeds and batch.</summary>
+    public const string ReportTransfer = "ReportTransfer";
+
+    /// <summary>Server → the other apps: <c>PeerTransfer(device name, TransferReport)</c>.</summary>
+    public const string PeerTransfer = "PeerTransfer";
+}
+
 /// <summary>HTTP header names used by Pairnets.</summary>
 public static class PairnetsHeaders
 {

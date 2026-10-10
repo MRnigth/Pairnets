@@ -157,6 +157,17 @@ public static class Program
         }, folder, "DESKTOP");
         Save(window, outDir, $"windows-main-waiting-{suffix}.png", print);
 
+        // Saying what it does instead of a bare "Syncing" (two PCs: PC-1 here on Windows, PC-2 on Linux).
+        foreach (var (name, state) in SyncFeedbackStates(server, utc, now))
+        {
+            window.ShowStatus(state, folder, "PC-1");
+            Save(window, outDir, $"windows-main-{name}-{suffix}.png", print);
+        }
+        window.ShowStatus(SyncFeedbackStates(server, utc, now)[0].State, folder, "PC-1");
+        window.Navigate(MainPage.Devices);
+        Save(window, outDir, $"windows-main-devices-live-{suffix}.png", print);
+        window.Navigate(MainPage.Overview);
+
         window.ShowStatus(StatusSnapshot.Initial with
         {
             Status = RunnerStatus.Idle, Text = "Up to date", LastSyncAt = now.AddMinutes(-1), Server = server,
@@ -192,9 +203,14 @@ public static class Program
             CurrentPath = "Photos/summer/holiday-0412.jpg", Operation = "download", FilesDone = 12, FilesTotal = 30,
             PassBytesDone = 96L << 20, PassBytesTotal = 240L << 20, BytesPerSecond = 8.2 * (1 << 20),
             Active = [new ActiveTransfer("Photos/summer/holiday-0412.jpg", "download", 50, 100)],
-            HeardFrom = new Dictionary<string, DateTimeOffset> { ["LAPTOP"] = utc },
+            Peers = new Dictionary<string, PeerTransfer> { ["LAPTOP"] = new(new TransferReport(2.4 * (1 << 20), 0, 4, 30, 0, 0), DateTimeOffset.UtcNow) },
         }, "DESKTOP");
         Save(panel, outDir, $"windows-tray-panel-{suffix}.png", print);
+        foreach (var (name, state) in SyncFeedbackStates(server, utc, now))
+        {
+            panel.ShowStatus(state, "PC-1");
+            Save(panel, outDir, $"windows-tray-panel-{name}-{suffix}.png", print);
+        }
         panel.Close();
 
         // Signing in with a Pairnets account: the first screen, the browser step, "no nest yet", the folder.
@@ -232,6 +248,53 @@ public static class Program
         serverUpdate.ShowResult(new ServerUpdateResult(false, "This server can't update itself yet.", "1.0.52", CanUpdateItself: false));
         Save(serverUpdate, outDir, $"windows-server-update-manual-{suffix}.png", print);
         serverUpdate.Close();
+    }
+
+    /// <summary>
+    /// The states asked for after the first big sync (two PCs on one home address, through sync.pairnets.app): both
+    /// computers' real speeds, checking files, waiting for the other's batch, slowed down by the server, paused. The
+    /// Mac/Linux screenshots (DesktopUiTests) show the same, from PC-2's side.
+    /// </summary>
+    private static List<(string Name, StatusSnapshot State)> SyncFeedbackStates(ServerInfo server, DateTimeOffset utc, DateTimeOffset now)
+    {
+        const double MB = 1 << 20;
+        IReadOnlyList<DeviceInfo> pcs =
+        [
+            new("PC-1", utc.AddDays(-2), utc, true, "1.0.90", "Windows"),
+            new("PC-2", utc.AddDays(-2), utc, true, "1.0.90", "Linux"),
+        ];
+        var basis = StatusSnapshot.Initial with { LastSyncAt = now.AddMinutes(-9), Server = server, Devices = pcs, IsRelay = true };
+        return
+        [
+            ("live-speeds", basis with
+            {
+                Status = RunnerStatus.Syncing, Text = "Syncing", Stage = SyncStage.Transferring,
+                CurrentPath = "Photos/2019/IMG_4410.jpg", Operation = "upload", FilesDone = 37_002, FilesTotal = 38_206,
+                PassBytesDone = 98L << 30, PassBytesTotal = 114L << 30, BytesPerSecond = 3.1 * MB, UpBytesPerSecond = 3.1 * MB,
+                Active =
+                [
+                    new ActiveTransfer("Photos/2019/IMG_4410.jpg", "upload", 64, 100),
+                    new ActiveTransfer("Photos/2019/IMG_4411.jpg", "upload", 22, 100),
+                    new ActiveTransfer("Photos/2019/IMG_4412.jpg", "upload", 90, 100),
+                    new ActiveTransfer("Photos/2019/IMG_4413.jpg", "upload", 5, 100),
+                ],
+                Peers = new Dictionary<string, PeerTransfer> { ["PC-2"] = new(new TransferReport(0, 4.2 * MB, 212, 640, 0, 0), DateTimeOffset.UtcNow) },
+            }),
+            ("checking", basis with { Status = RunnerStatus.Syncing, Text = "Syncing", Stage = SyncStage.Checking, CheckedFiles = 12_000, CheckTotal = 38_206 }),
+            ("waiting-live", basis with
+            {
+                Status = RunnerStatus.Idle, Text = "Up to date", WaitingFor = new PeerWait("PC-2", 38_206, 360),
+                Peers = new Dictionary<string, PeerTransfer> { ["PC-2"] = new(new TransferReport(3.1 * MB, 0, 383, 38_206, 1L << 30, 114L << 30), DateTimeOffset.UtcNow) },
+            }),
+            ("slowed", basis with
+            {
+                Status = RunnerStatus.Syncing, Text = "Syncing", Stage = SyncStage.Transferring, CurrentPath = "Notes/2026/list.md", Operation = "upload",
+                FilesDone = 383, FilesTotal = 38_206, PassBytesDone = 1L << 30, PassBytesTotal = 114L << 30,
+                Active = [new ActiveTransfer("Notes/2026/list.md", "upload", 0, 100), new ActiveTransfer("Notes/2026/plan.md", "upload", 0, 100)],
+                SlowedUntil = DateTimeOffset.UtcNow.AddSeconds(30.5), SlowedBy = "sync.pairnets.app",
+            }),
+            ("paused", basis with { Status = RunnerStatus.Paused, Text = "Paused", Paused = true }),
+        ];
     }
 
     private static void Place(Window window)

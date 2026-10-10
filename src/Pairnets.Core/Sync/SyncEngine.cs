@@ -83,6 +83,12 @@ public sealed class SyncEngine
     /// <summary>Raised when an upload or download (finished, failed or skipped) no longer runs.</summary>
     public event Action<string>? TransferFinished;
 
+    /// <summary>
+    /// Raised when a pass moves on to another stage, and while it checks the folder: (stage, done, total). For
+    /// <see cref="SyncStage.Checking"/> done and total are files (total 0 while the folder is still being listed).
+    /// </summary>
+    public event Action<SyncStage, int, int>? StageChanged;
+
     /// <summary>True if the engine itself wrote/deleted this path recently (used to ignore our own watcher events).</summary>
     public bool WasRecentlyTouched(string path, TimeSpan window)
     {
@@ -251,6 +257,7 @@ public sealed class SyncEngine
         CleanTempDirectory();
 
         // ---- 2. Server manifest (full or delta) into the local mirror.
+        StageChanged?.Invoke(SyncStage.ReadingServer, 0, 0);
         var cursor = _state.Cursor;
         var knownServer = _state.ServerId;
         var full = options.FullManifest || cursor == 0 || knownServer is null;
@@ -271,7 +278,8 @@ public sealed class SyncEngine
         cursor = manifest.Version;
 
         // ---- 3. Local scan.
-        var scan = await _scanner.ScanAsync(ct).ConfigureAwait(false);
+        StageChanged?.Invoke(SyncStage.Checking, 0, 0);
+        var scan = await _scanner.ScanAsync(ct, (done, total) => StageChanged?.Invoke(SyncStage.Checking, done, total)).ConfigureAwait(false);
         result.Unstable = scan.UnstableCount;
         var warnings = _state.LoadWarnings();
         RecordInvalidLocalNames(scan, warnings, cursor, result);
@@ -373,6 +381,8 @@ public sealed class SyncEngine
                 ctx.Sizes[item.Path] = re.Size;
             }
         }
+        if (ordered.Count > 0)
+            StageChanged?.Invoke(SyncStage.Transferring, 0, ordered.Count);
         ExecutionStarting?.Invoke(
             ordered.Count(p => p.Action is SyncAction.Upload or SyncAction.Conflict),
             ordered.Count(p => p.Action == SyncAction.Download),

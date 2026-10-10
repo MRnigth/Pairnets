@@ -63,8 +63,7 @@ public partial class MainWindow : Window
     private readonly ObservableCollection<ActiveFileView> _active = [];
     private readonly ObservableCollection<ServerFile> _shownFiles = [];
     private readonly ObservableCollection<VersionRow> _versions = [];
-    private readonly ObservableCollection<DeviceRow> _devices = [];
-    private IReadOnlyList<DeviceInfo>? _shownDevices;
+    private readonly ObservableCollection<DeviceRowView> _devices = [];
     private IReadOnlyList<ActivityItem> _activityItems = [];
     private IReadOnlyList<ServerFile>? _serverFiles;
     private DateTimeOffset _serverFilesAt;
@@ -270,20 +269,19 @@ public partial class MainWindow : Window
         }
     }
 
-    /// <summary>The Devices page: rebuilt when the server sends a new list.</summary>
+    /// <summary>The Devices page: the server's list, with what each computer moves right now (updated in place).</summary>
     private void ShowDevices(StatusSnapshot s)
     {
         if (s.DevicesUnsupported)
             DevicesEmptyText.Text = "Update the server to see the computers that use it.";
-        if (ReferenceEquals(s.Devices, _shownDevices) || s.Devices is null)
+        if (s.Devices is null)
             return;
-        _shownDevices = s.Devices;
-        _devices.Clear();
-        foreach (var row in DeviceRow.From(s.Devices, ThisDevice, DateTimeOffset.UtcNow))
-            _devices.Add(row);
+        var count = _devices.Count;
+        LiveLists.Sync(_devices, DeviceRow.From(s.Devices, ThisDevice, DateTimeOffset.UtcNow, s));
         if (s.Devices.Count == 0 && !s.DevicesUnsupported)
             DevicesEmptyText.Text = "No computers have used this server yet.";
-        UpdatePanels();
+        if (count != _devices.Count)
+            UpdatePanels();
     }
 
     /// <summary>A soft wash of the status colour across the top of the status card.</summary>

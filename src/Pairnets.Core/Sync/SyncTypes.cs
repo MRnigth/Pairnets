@@ -38,6 +38,21 @@ public enum BlockReason
     SignInRequired,
 }
 
+/// <summary>What a running pass is doing now, so the apps can say it instead of a bare "Syncing".</summary>
+public enum SyncStage
+{
+    None,
+
+    /// <summary>Reading the server's list of files.</summary>
+    ReadingServer,
+
+    /// <summary>Checking the files in the folder (most from the saved fingerprints, new or changed ones are read).</summary>
+    Checking,
+
+    /// <summary>Uploading, downloading and deleting.</summary>
+    Transferring,
+}
+
 public enum PassOutcome
 {
     Completed,

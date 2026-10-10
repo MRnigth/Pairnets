@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.Logging;
 using Pairnets.Core.Paths;
@@ -139,6 +140,39 @@ public sealed class SyncRunner : IAsyncDisposable
 
     /// <summary>A join request was allowed or turned away on the nest ("PairDecided"): its code.</summary>
     public event Action<string>? JoinDecided;
+
+    /// <summary>Another computer's live speeds and batch ("PeerTransfer" on the push channel): its name and what it reported.</summary>
+    public event Action<string, TransferReport>? PeerTransferReceived;
+
+    /// <summary>Set when the server did not know <see cref="PushNames.ReportTransfer"/> (an older server): no more tries on this connection.</summary>
+    private volatile bool _reportsUnsupported;
+
+    /// <summary>True after the server said it has no <see cref="PushNames.ReportTransfer"/> (tests).</summary>
+    internal bool LiveReportsUnsupported => _reportsUnsupported;
+
+    /// <summary>
+    /// Tells the other computers what this one is moving right now (see <see cref="TransferReport"/>). Quietly does
+    /// nothing without a push connection, and for good on a server too old to pass it on (until the next connection).
+    /// </summary>
+    public async Task ReportTransferAsync(TransferReport report)
+    {
+        if (_reportsUnsupported || _hub is not { State: HubConnectionState.Connected } hub)
+            return;
+        try
+        {
+            await hub.InvokeCoreAsync(PushNames.ReportTransfer, [report]).ConfigureAwait(false);
+        }
+        catch (HubException ex)
+        {
+            // The server answered, but has no such method (a server from before live speeds): no live data, no errors.
+            _reportsUnsupported = true;
+            _log.LogDebug("The server does not take live speeds: {Error}", ex.Message);
+        }
+        catch (Exception ex)
+        {
+            _log.LogDebug("Live speed report not sent: {Error}", ex.Message);
+        }
+    }
 
     /// <summary>Files changed here or on another device while a pass was running; the next pass syncs them.</summary>
     public int PendingChanges
@@ -374,7 +408,8 @@ public sealed class SyncRunner : IAsyncDisposable
     {
         lock (_gate)
             _paused = false;
-        SetStatus(RunnerStatus.Idle, "Resuming");
+        // A pass starts right away; until it says what it does, it is "Syncing" (never "Up to date" while nothing was checked).
+        SetStatus(RunnerStatus.Syncing, "Resuming");
         RequestSync("resume", full: true);
     }
 
@@ -641,6 +676,11 @@ public sealed class SyncRunner : IAsyncDisposable
         _hub.On<string, string>("DeviceRenamed", (id, name) => DeviceListChanged?.Invoke(id, name, false));
         _hub.On<string, string, string>("PairRequested", (code, name, system) => JoinRequested?.Invoke(code, name, system));
         _hub.On<string, bool>("PairDecided", (code, _) => JoinDecided?.Invoke(code));
+        _hub.On<string, TransferReport>(PushNames.PeerTransfer, (device, report) =>
+        {
+            if (!string.Equals(device, _options.DeviceId, StringComparison.OrdinalIgnoreCase) && report is not null)
+                PeerTransferReceived?.Invoke(device, report.Sanitized());
+        });
         _hub.Reconnecting += _ =>
         {
             ClearHolds(); // the server re-sends active batches when we are back
@@ -648,6 +688,7 @@ public sealed class SyncRunner : IAsyncDisposable
         };
         _hub.Reconnected += _ =>
         {
+            _reportsUnsupported = false; // the server may have been updated meanwhile
             _log.LogInformation("Push channel reconnected");
             RequestSync("hub-reconnected");
             return Task.CompletedTask;
@@ -669,6 +710,7 @@ public sealed class SyncRunner : IAsyncDisposable
             try
             {
                 await _hub.StartAsync(ct).ConfigureAwait(false);
+                _reportsUnsupported = false;
                 _log.LogInformation("Push channel connected");
                 if (attempt > 0)
                     RequestSync("hub-connected");

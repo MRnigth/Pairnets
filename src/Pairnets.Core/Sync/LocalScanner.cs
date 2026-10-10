@@ -65,14 +65,72 @@ public sealed class LocalScanner
     /// <summary>See <see cref="FileState.CacheValidFor"/>.</summary>
     public TimeSpan RacyWindow { get; init; } = TimeSpan.FromSeconds(2);
 
-    public async Task<ScanResult> ScanAsync(CancellationToken ct)
+    /// <summary>How often progress is reported while files are checked (tests: every file).</summary>
+    internal TimeSpan ReportEvery { get; init; } = TimeSpan.FromMilliseconds(250);
+
+    /// <summary>Fingerprints are saved at least this often during a long check, so a pause or a crash loses little.</summary>
+    private static readonly TimeSpan SaveEvery = TimeSpan.FromSeconds(5);
+
+    private const int SaveAfterFiles = 500;
+
+    /// <summary>
+    /// Lists the whole folder first (quick), then looks at every file: most are answered by the fingerprint saved last
+    /// time, new or changed ones are read. <paramref name="progress"/> gets (files checked, files in the folder) right
+    /// after the listing and then a few times a second. Fingerprints are saved along the way and when the check is
+    /// cancelled (Pause), so the next check goes on where this one stopped.
+    /// </summary>
+    public async Task<ScanResult> ScanAsync(CancellationToken ct, Action<int, int>? progress = null)
     {
         if (!Directory.Exists(_root))
             throw new ScanFailedException($"Sync folder '{_root}' does not exist.");
 
         var result = new ScanResult();
         var known = _state.LoadFiles();
+        var candidates = List(result, ct);
+
+        progress?.Invoke(0, candidates.Count);
         var cacheUpdates = new List<(string, long, long, string, long)>();
+        var lastReport = System.Diagnostics.Stopwatch.GetTimestamp();
+        var lastSave = lastReport;
+        try
+        {
+            for (var i = 0; i < candidates.Count; i++)
+            {
+                ct.ThrowIfCancellationRequested();
+                var (info, rel) = candidates[i];
+                result.Files[rel] = await InspectFileAsync(info, rel, known, cacheUpdates, ct).ConfigureAwait(false);
+                var now = System.Diagnostics.Stopwatch.GetTimestamp();
+                if (cacheUpdates.Count >= SaveAfterFiles || (cacheUpdates.Count > 0 && System.Diagnostics.Stopwatch.GetElapsedTime(lastSave, now) >= SaveEvery))
+                {
+                    _state.SetCaches(cacheUpdates);
+                    cacheUpdates.Clear();
+                    lastSave = now;
+                }
+                if (progress is not null && (i + 1 == candidates.Count || System.Diagnostics.Stopwatch.GetElapsedTime(lastReport, now) >= ReportEvery))
+                {
+                    progress(i + 1, candidates.Count);
+                    lastReport = now;
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Paused half way: keep what was read, so the check after Resume starts where this one stopped.
+            if (cacheUpdates.Count > 0)
+                _state.SetCaches(cacheUpdates);
+            throw;
+        }
+
+        if (cacheUpdates.Count > 0)
+            _state.SetCaches(cacheUpdates);
+        _state.PruneCacheRows(result.Files.Keys.ToHashSet(StringComparer.Ordinal));
+        return result;
+    }
+
+    /// <summary>Walks the folder (never through links) and returns the files to look at; the rest goes into <paramref name="result"/>.</summary>
+    private List<(FileInfo Info, string Rel)> List(ScanResult result, CancellationToken ct)
+    {
+        var candidates = new List<(FileInfo, string)>();
         var pending = new Stack<string>();
         pending.Push(string.Empty);
         var enumOptions = new EnumerationOptions
@@ -150,16 +208,10 @@ public sealed class LocalScanner
                     result.InvalidNames.Add((rel, problem));
                     continue;
                 }
-
-                var file = await InspectFileAsync((FileInfo)entry, rel, known, cacheUpdates, ct).ConfigureAwait(false);
-                result.Files[rel] = file;
+                candidates.Add(((FileInfo)entry, rel));
             }
         }
-
-        if (cacheUpdates.Count > 0)
-            _state.SetCaches(cacheUpdates);
-        _state.PruneCacheRows(result.Files.Keys.ToHashSet(StringComparer.Ordinal));
-        return result;
+        return candidates;
     }
 
     private async Task<LocalFile> InspectFileAsync(
