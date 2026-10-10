@@ -42,6 +42,7 @@
     <Compile Include="..\Pairnets.Tests\Infrastructure\TempDir.cs" Link="Infrastructure\TempDir.cs" />
     <Compile Include="..\Pairnets.Tests\Infrastructure\TestCertificates.cs" Link="Infrastructure\TestCertificates.cs" />
     <Compile Include="..\Pairnets.Tests\Infrastructure\RepoPaths.cs" Link="Infrastructure\RepoPaths.cs" />
+    <Compile Include="..\Pairnets.Tests\Infrastructure\FakeSyncService.cs" Link="Infrastructure\FakeSyncService.cs" />
   </ItemGroup>
 
 </Project>

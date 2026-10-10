@@ -35,6 +35,9 @@ public sealed class ClickFixture : IAsyncLifetime
     /// <summary>The tray menu items, by the text they start with (filled by the tray menu run).</summary>
     public IReadOnlyList<string> TrayMenuItems { get; set; } = [];
 
+    /// <summary>A stand-in for sync.pairnets.app: an account sign-in started here keeps waiting for Allow.</summary>
+    public FakeSyncService Service { get; private set; } = null!;
+
     public async Task InitializeAsync()
     {
         Nest = await TestServer.StartWithWebsiteAsync(new()
@@ -50,6 +53,8 @@ public sealed class ClickFixture : IAsyncLifetime
         Grant = Nest.MintKey("DESKTOP");
         Found = await Pairnets.Core.Client.Nest.CheckAsync(Nest.Url.ToString());
         Feed = await FakeReleaseFeed.StartAsync();
+        Service = await FakeSyncService.StartAsync(Nest);
+        Service.AfterScript = "pending";
     }
 
     /// <summary>Runs <paramref name="run"/> the first time <paramref name="name"/> is asked for; later calls get the same result.</summary>
@@ -73,6 +78,7 @@ public sealed class ClickFixture : IAsyncLifetime
 
     public async Task DisposeAsync()
     {
+        await Service.DisposeAsync();
         await Feed.DisposeAsync();
         await Nest.DisposeAsync();
     }
@@ -600,6 +606,7 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
         view.SignOutRequested += () => b.Events.Add("SignOutRequested");
         view.ResetRequested += () => b.Events.Add("ResetRequested");
         view.ManageDevicesRequested += () => b.Events.Add("ManageDevicesRequested");
+        view.OpenLinkRequested += b.Opened.Add;
         var host = new Window { Title = "Settings", Width = 700, Height = 560, Content = view };
         ThemeManager.Attach(host);
         return host;
@@ -627,6 +634,9 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
         On("Check now", "look for an app update and say what it found", c => View(c).VersionText.Text.Contains("is available", StringComparison.Ordinal), seconds: 20),
         new(t => t.Element is RadioButton { GroupName: "par" }, "choose that many files at the same time", c => ((RadioButton)c.Target.Element).IsChecked == true),
         On("Reset this app…", "ask the app to reset everything", c => c.Bench.Events.Items.Contains("ResetRequested")),
+        new(t => t.Handlers.Contains("SettingsView.OnAboutLink"),"ask the app to open that page of pairnets.app in the browser",
+            c => c.Target.Element is Button { CommandParameter: string url } && url.StartsWith(PairnetsLinks.Website, StringComparison.Ordinal)
+                && c.Bench.Opened.Items.SequenceEqual([url])),
         On("Cancel", "leave Settings without saving", c => c.Bench.Events.Items.Contains("Cancelled")),
         On("Save", "check the settings and save them", c => c.Bench.Events.Items.Contains("Saved") && View(c).Result is not null, seconds: 20),
         On("Scroller", "scroll the page", c => View(c).Scroller.VerticalOffset > 0),
@@ -636,7 +646,19 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
 
     private static SignInView SignIn(Window w) => ((SettingsWindow)w).SignIn;
 
-    private SettingsWindow SignInWindow(Bench b) => new(new ClientSettings { DeviceName = "DESKTOP" }, b.Secrets, b.Opened.Add);
+    /// <summary>The sign-in window on its first step, a Pairnets account, with the stand-in for sync.pairnets.app.</summary>
+    private SettingsWindow SignInWindow(Bench b)
+    {
+        var window = new SettingsWindow(new ClientSettings { DeviceName = "DESKTOP" }, b.Secrets, b.Opened.Add);
+        window.SignIn.Service = fixture.Service.Url;
+        return window;
+    }
+
+    private string ServiceOrigin => fixture.Service.Url.GetLeftPart(UriPartial.Authority);
+
+    /// <summary>The page an account sign-in opens: the service's approval page for this computer's code.</summary>
+    private string AccountLink => $"{ServiceOrigin}/app?code={FakeSyncService.UserCode}";
+
 
     /// <summary>The nest as found, but offering no Google or email sign-in: only the browser button.</summary>
     private NestCheck BrowserOnly => fixture.Found with { Hello = fixture.Found.Hello! with { Methods = new SignInMethods(true, false, false, false) } };
@@ -657,6 +679,14 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
     private IEnumerable<Screen> SignInScreens()
     {
         const string name = "the sign-in window";
+        yield return new Screen(name, "the first step, a Pairnets account, an email typed", SignInWindow,
+            (b, w) => Wpf.Ui(() => SignIn(w).AccountEmailBox.Text = ClickFixture.OwnerEmail), Modal: true);
+        yield return new Screen(name, "finish in your browser", SignInWindow, (b, w) => Wpf.Ui(() =>
+            SignIn(w).ShowAccount(new AccountSignInState(PairingStage.Waiting, FakeSyncService.UserCode, AccountLink, DateTimeOffset.UtcNow.AddMinutes(9)),
+                openBrowser: false)), Modal: true);
+        yield return new Screen(name, "signed in, no nest yet", SignInWindow, (b, w) => Wpf.Ui(() =>
+            SignIn(w).ShowAccount(new AccountSignInState(PairingStage.Waiting, FakeSyncService.UserCode, AccountLink, DateTimeOffset.UtcNow.AddMinutes(29),
+                NoNest: true, AccountEmail: FakeSyncService.Email), openBrowser: false)), Modal: true);
         yield return new Screen(name, "a nest found, the browser the one way in", SignInWindow,
             (b, w) => Wpf.Ui(() => SignIn(w).ShowAddress(Address, BrowserOnly)), Modal: true);
         yield return new Screen(name, "a nest with Google and email sign-in, an email typed", SignInWindow, (b, w) => Wpf.Ui(() =>
@@ -693,9 +723,32 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
         SignIn(c.Window).WaitStep.IsVisible && c.Bench.Opened.Items.Any(l => l.Contains("/link?code=", StringComparison.Ordinal)
             && (method is null ? !l.Contains("method=", StringComparison.Ordinal) : l.Contains(method, StringComparison.Ordinal)));
 
-    private static readonly IReadOnlyList<Rule> SignInRules =
+    private static bool OnStep(Check c, SignInStep step) => SignIn(c.Window).Step == step;
+
+    /// <summary>An account sign-in started: "Finish in your browser", with the service's page opened once.</summary>
+    private static Func<Check, bool> OpensTheAccountPage(string method) => c =>
+        OnStep(c, SignInStep.AccountWait) && c.Bench.Opened.Items.Count == 1
+        && c.Bench.Opened.Items[0].Contains($"/app?code={FakeSyncService.UserCode}&method={method}", StringComparison.Ordinal);
+
+    private IReadOnlyList<Rule> SignInRules =>
     [
         Switch,
+        // The first step: a Pairnets account (sync.pairnets.app, here its stand-in).
+        new(t => t.Handlers.Contains("SignInView.OnAccountGoogle"), "ask Pairnets for a code and open its Google sign-in in the browser",
+            OpensTheAccountPage("google"), Seconds: 15),
+        new(t => t.Handlers.Contains("SignInView.OnAccountEmail"), "ask Pairnets for a code and open its email sign-in in the browser",
+            OpensTheAccountPage("email"), Seconds: 15),
+        On("Make an account", "open the service's sign-in page", c => c.Bench.Opened.Items.SequenceEqual([$"{ServiceOrigin}/login"])),
+        On("Terms", "open the Terms on pairnets.app", c => c.Bench.Opened.Items.SequenceEqual([PairnetsLinks.Terms])),
+        On("Privacy Policy", "open the Privacy Policy on pairnets.app", c => c.Bench.Opened.Items.SequenceEqual([PairnetsLinks.Privacy])),
+        On(["I run my own nest on my own domain: use its address", "I run my own nest: use its address"], "go to the step for a nest's own address",
+            c => OnStep(c, SignInStep.Address) && SignIn(c.Window).WelcomeStep.IsVisible),
+        On("Sign in with a Pairnets account instead", "go back to the Pairnets account step", c => OnStep(c, SignInStep.Account)),
+        // Finish in your browser, and no nest yet.
+        On("Open the page again", "open the service's page again", c => c.Bench.Opened.Items.SequenceEqual([AccountLink])),
+        new(t => t.Handlers.Contains("SignInView.OnAccountCancel"), "stop and go back to the Pairnets account step (Cancel, or Sign out with no nest yet)", c => OnStep(c, SignInStep.Account)),
+        On("Show me how", "open the account page, which says how to add a nest", c => c.Bench.Opened.Items.SequenceEqual([$"{ServiceOrigin}/account"])),
+        // A nest's own address.
         On(["Sign in with your browser", "More ways to sign in in your browser"], "ask the nest for a code and open it in the browser", OpensTheNest(null), seconds: 15),
         On("Continue with Google", "ask the nest for a code and open its Google sign-in", OpensTheNest("&method=google"), seconds: 15),
         On("Continue with email", "ask the nest for a code and open its email sign-in",

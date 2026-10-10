@@ -55,6 +55,12 @@ public sealed partial class ApiTour : IAsyncDisposable
         new("POST", "/api/pair/start"),
         new("POST", "/api/pair/poll"),
 
+        // The Pairnets service's signed calls to a nest linked to an account (Web/RelayEndpoints.cs).
+        new("GET", "/api/relay/status"),
+        new("GET", "/api/relay/devices"),
+        new("POST", "/api/relay/devices"),
+        new("DELETE", "/api/relay/devices/{id}"),
+
         // The website's pages (Web/WebUi.cs).
         new("GET", "/"),
         new("GET", "/setup"),
