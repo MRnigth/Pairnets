@@ -66,6 +66,10 @@ export function sendLater(ctx: Ctx, msg: MailMessage): void {
   );
 }
 
+/** Every email ends with who sent it and where the privacy policy is. */
+export const PRIVACY_URL = "https://pairnets.app/privacy/";
+const TEXT_FOOTER = `\n--\nPairnets account service (sync.pairnets.app)\nPrivacy: ${PRIVACY_URL}\n`;
+
 function paragraphsHtml(lines: string[]): string {
   return lines.map((p) => `<p>${escapeHtml(p)}</p>`).join("\n");
 }
@@ -80,7 +84,7 @@ function layout(title: string, before: string[], link?: { href: string; text: st
 ${paragraphsHtml(before)}
 ${button}
 ${paragraphsHtml(after)}
-<p style="color:#555555;font-size:13px">Pairnets account service (sync.pairnets.app)</p>
+<p style="color:#555555;font-size:13px">Pairnets account service (sync.pairnets.app) · <a href="${PRIVACY_URL}" style="color:#555555">Privacy</a></p>
 </body></html>`;
 }
 
@@ -94,7 +98,7 @@ export function loginEmail(to: string, link: string): MailMessage {
   return {
     to,
     subject,
-    text: `${lines[0]}\n\n${link}\n\n${lines[1]}\n${lines[2]}\n`,
+    text: `${lines[0]}\n\n${link}\n\n${lines[1]}\n${lines[2]}\n${TEXT_FOOTER}`,
     html: layout(subject, lines.slice(0, 1), { href: link, text: "Sign in" }, lines.slice(1)),
   };
 }
@@ -148,7 +152,7 @@ export function noticeEmail(to: string, kind: NoticeKind, url?: string): MailMes
       lines = ["Your Pairnets account and everything stored about it were deleted. Your nests keep their files."];
       break;
   }
-  return { to, subject, text: `${lines.join("\n\n")}\n`, html: layout(subject, lines) };
+  return { to, subject, text: `${lines.join("\n\n")}\n${TEXT_FOOTER}`, html: layout(subject, lines) };
 }
 
 /** A notice email within the daily budget; when the budget is used up it is skipped and audited. */

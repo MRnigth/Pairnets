@@ -33,6 +33,8 @@ form button { margin-top: 12px; }
 .error { color: var(--danger); }
 .notice { color: var(--warn); }
 .status { margin-top: 12px; }
+.legal { color: var(--muted); font-size: 0.85rem; text-align: center; margin: 16px 0 0; }
+footer nav { color: var(--muted); }
 .list { list-style: none; padding: 0; margin: 0; }
 .list > li { border-top: 1px solid var(--line); padding: 12px 0; }
 .list > li:first-child { border-top: none; }
@@ -52,6 +54,23 @@ label.choice input { width: auto; }
 details.card > summary { font-size: 1.1rem; font-weight: 600; cursor: pointer; }
 details.card[open] > summary { margin-bottom: 12px; }
 .devices > li { padding: 8px 0; }
+.cookie-notice { position: fixed; left: 24px; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); z-index: 20;
+  width: 400px; max-width: calc(100% - 48px); background: var(--card); color: var(--text); border: 1px solid var(--line);
+  border-radius: 10px; padding: 16px 18px; font-size: 15px; line-height: 1.5;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, .05), 0 12px 32px rgba(16, 24, 40, .14); animation: cookie-notice-in .24s ease-out both; }
+.cookie-notice p { margin: 0 0 12px; }
+.cookie-notice-actions { display: flex; align-items: center; gap: 6px 14px; flex-wrap: wrap; }
+.cookie-notice-actions button { padding: 7px 22px; font-weight: 600; }
+.cookie-notice-actions a { padding: 8px 4px; font-weight: 600; border-radius: 6px; text-decoration: none; }
+.cookie-notice-actions a:hover { text-decoration: underline; }
+.cookie-notice button:focus-visible, .cookie-notice a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@keyframes cookie-notice-in { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .cookie-notice { animation: none; } }
+@media (prefers-color-scheme: dark) { .cookie-notice { box-shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 12px 32px rgba(0, 0, 0, .4); } }
+@media (max-width: 600px) {
+  .cookie-notice { left: 16px; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); width: auto; max-width: none; }
+}
+@media print { .cookie-notice { display: none; } }
 `;
 
 const SHARED_JS = String.raw`
@@ -324,6 +343,47 @@ const ADD_JS = String.raw`(function () {
 })();
 `;
 
+// On every page (layout() in pages.ts): says Pairnets only uses the cookies needed to sign in. A notice, not a consent
+// wall. Closing it is remembered in local storage ("pn-cookie-notice" = "ok"), which is never sent anywhere.
+const COOKIE_NOTICE_JS = String.raw`(function () {
+  "use strict";
+  var KEY = "pn-cookie-notice";
+  if (/^\/cookies\/?$/.test(location.pathname)) return;
+  try {
+    if (window.localStorage.getItem(KEY) === "ok") return;
+  } catch (e) { /* storage blocked: show the notice, closing it lasts for this page view */ }
+  var box = document.createElement("div");
+  box.className = "cookie-notice";
+  box.setAttribute("role", "region");
+  box.setAttribute("aria-label", "Cookie notice");
+  var text = document.createElement("p");
+  text.textContent = "Pairnets only uses cookies that are needed to sign you in. No tracking, no ads.";
+  var actions = document.createElement("div");
+  actions.className = "cookie-notice-actions";
+  var ok = document.createElement("button");
+  ok.type = "button";
+  ok.textContent = "OK";
+  var more = document.createElement("a");
+  more.href = "https://pairnets.app/cookies/";
+  more.textContent = "Cookie settings";
+  actions.appendChild(ok);
+  actions.appendChild(more);
+  box.appendChild(text);
+  box.appendChild(actions);
+  function close() {
+    try { window.localStorage.setItem(KEY, "ok"); } catch (e) { /* storage blocked: hidden for this page view only */ }
+    document.removeEventListener("keydown", onKey);
+    if (box.parentNode) box.parentNode.removeChild(box);
+  }
+  function onKey(ev) {
+    if (ev.key === "Escape" && !ev.defaultPrevented) close();
+  }
+  ok.addEventListener("click", close);
+  document.addEventListener("keydown", onKey);
+  document.body.insertBefore(box, document.body.firstChild); // first in the tab order, so keyboard users reach it at once
+})();
+`;
+
 export const ASSETS: Record<string, { type: string; body: string }> = {
   "style.css": { type: "text/css; charset=utf-8", body: STYLE },
   "login.js": { type: "text/javascript; charset=utf-8", body: SHARED_JS + LOGIN_JS },
@@ -331,4 +391,5 @@ export const ASSETS: Record<string, { type: string; body: string }> = {
   "account.js": { type: "text/javascript; charset=utf-8", body: SHARED_JS + ACCOUNT_JS },
   "app.js": { type: "text/javascript; charset=utf-8", body: SHARED_JS + APP_JS },
   "add.js": { type: "text/javascript; charset=utf-8", body: SHARED_JS + ADD_JS },
+  "cookie-notice.js": { type: "text/javascript; charset=utf-8", body: COOKIE_NOTICE_JS },
 };

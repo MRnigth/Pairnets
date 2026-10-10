@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { CSP } from "../src/http";
+import { loginEmail, noticeEmail } from "../src/mail";
 import { Harness, type Res } from "./helpers";
 
 const EXPECTED: Record<string, string> = {
@@ -59,8 +60,38 @@ describe("headers on every response", () => {
   it("/ goes to the account page and /privacy to the website", async () => {
     const h = await Harness.create();
     expect((await h.browser().call("GET", "/")).location).toBe("/account");
-    expect((await h.browser().call("GET", "/privacy")).location).toBe("https://pairnets.app/privacy");
+    expect((await h.browser().call("GET", "/privacy")).location).toBe("https://pairnets.app/privacy/");
     expect((await h.browser().call("GET", "/account")).location).toBe("/login?next=/account");
+  });
+
+  it("the website's legal and help pages answer here too, with or without a trailing slash", async () => {
+    const h = await Harness.create();
+    for (const page of ["privacy", "terms", "guidelines", "cookies", "security", "faq", "help", "contact", "delete-account", "licenses"]) {
+      for (const path of [`/${page}`, `/${page}/`]) {
+        const r = await h.browser().call("GET", path);
+        expect(r.status, path).toBe(302);
+        expect(r.location, path).toBe(`https://pairnets.app/${page}/`);
+      }
+    }
+  });
+
+  it("every page links the legal pages, and the sign-in page says what continuing means", async () => {
+    const h = await Harness.create();
+    const login = await h.browser().call("GET", "/login");
+    for (const link of ["/privacy", "/terms", "/guidelines", "/cookies", "/help"]) {
+      expect(login.text).toContain(`<a href="${link}">`);
+    }
+    expect(login.text).toContain(`By continuing, you agree to the <a href="/terms">Terms</a> and the <a href="/privacy">Privacy Policy</a>.`);
+    const missing = await h.browser().call("GET", "/nope");
+    expect(missing.text).toContain(`<a href="/privacy">Privacy</a>`);
+  });
+
+  it("emails end with a link to the privacy policy", async () => {
+    const mail = loginEmail("you@example.com", "https://sync.pairnets.app/login/email#code=abc");
+    expect(mail.text).toContain("Privacy: https://pairnets.app/privacy/");
+    expect(mail.html).toContain(`href="https://pairnets.app/privacy/"`);
+    const notice = noticeEmail("you@example.com", "account_deleted");
+    expect(notice.text).toContain("Privacy: https://pairnets.app/privacy/");
   });
 });
 

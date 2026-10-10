@@ -9,7 +9,8 @@ interface LayoutOptions {
 }
 
 export function layout(title: string, main: string, opts: LayoutOptions = {}): string {
-  const scripts = (opts.scripts ?? []).map((s) => `<script src="/assets/${e(s)}" defer></script>`).join("\n");
+  // Every page gets the cookie notice (assets.ts), after its own scripts.
+  const scripts = [...(opts.scripts ?? []), "cookie-notice.js"].map((s) => `<script src="/assets/${e(s)}" defer></script>`).join("\n");
   const turnstile = opts.turnstile ? `<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>` : "";
   return `<!doctype html>
 <html lang="en">
@@ -27,7 +28,7 @@ ${scripts}
 <main>
 ${main}
 </main>
-<footer><a href="/privacy">Privacy</a></footer>
+<footer><nav aria-label="About Pairnets"><a href="/privacy">Privacy</a> · <a href="/terms">Terms</a> · <a href="/guidelines">Guidelines</a> · <a href="/cookies">Cookie settings</a> · <a href="/help">Help</a></nav></footer>
 </body>
 </html>
 `;
@@ -68,6 +69,7 @@ ${reauth}${error}
 <button type="submit" class="wide">Email me a sign-in link</button>
 </form>
 <p id="email-status" class="status" role="status" hidden></p>
+<p class="legal">By continuing, you agree to the <a href="/terms">Terms</a> and the <a href="/privacy">Privacy Policy</a>.</p>
 </section>`,
     { scripts: ["login.js"], turnstile: true },
   );
@@ -208,6 +210,7 @@ ${sessions}
 <section class="card">
 <h2>Delete account</h2>
 <p>This removes your account, your nests' links to Pairnets and everything stored about you here. Your nests keep their files.</p>
+<p class="muted"><a href="/delete-account">What gets deleted, and what stays</a></p>
 <p><button type="button" id="delete-account" class="danger">Delete my account</button></p>
 </section>`,
     { scripts: ["account.js"] },

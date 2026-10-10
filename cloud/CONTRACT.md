@@ -733,7 +733,7 @@ address) and `GET /login/google/callback` (protected by state, nonce, PKCE and t
 | `GET /login/email` | 1A | landing page of the emailed link: reads `#code`, `replaceState`, button "Continue" → `POST /v1/login/email/confirm` |
 | `GET /account` | 1A | nests (label, address, status, online, version, last seen), Add a nest, remove, on/off per nest, sessions, delete account; no session → 302 `/login?next=/account` |
 | `GET /app?code=XXXX-XXXX` | 1B | approve an app sign-in |
-| `GET /privacy` | 1A | 302 `https://pairnets.app/privacy` |
+| `GET /privacy`, `/terms`, `/guidelines`, `/cookies`, `/security`, `/faq`, `/help`, `/contact`, `/delete-account`, `/licenses` (with or without a trailing `/`) | 1A | 302 to the same page on the website, `https://pairnets.app/<page>/`. Every page's footer links Privacy, Terms, Guidelines, Cookie settings and Help; the sign-in page also says that continuing means agreeing to the Terms and the Privacy Policy |
 | `GET /nest-login` | 1A | §3.2 |
 
 `next` (everywhere on the service) MUST match `^/(account|app(\?code=[0-9A-Za-z-]{1,16})?|nest-login\?[^#\s]{1,600})$`;

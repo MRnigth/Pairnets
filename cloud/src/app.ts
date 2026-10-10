@@ -66,6 +66,10 @@ export const ORIGIN_EXEMPT = new Set([
 
 const MUTATING = new Set(["POST", "PATCH", "PUT", "DELETE"]);
 
+/** The public website. Its legal and help pages also answer here (/privacy, /terms, ...) with a redirect to it. */
+export const WEBSITE = "https://pairnets.app";
+export const WEBSITE_PAGES = ["privacy", "terms", "guidelines", "cookies", "security", "faq", "help", "contact", "delete-account", "licenses"] as const;
+
 type Handler = (ctx: Ctx, param: string, param2: string) => Promise<Response> | Response;
 
 interface Route {
@@ -114,8 +118,12 @@ const PAGE_ROUTES: Route[] = [
   { method: "GET", pattern: /^\/account$/, handler: accountPageRoute },
   { method: "GET", pattern: /^\/app$/, handler: appPageRoute },
   { method: "GET", pattern: /^\/add$/, handler: addPageRoute },
-  { method: "GET", pattern: /^\/privacy$/, handler: () => redirect("https://pairnets.app/privacy") },
   { method: "GET", pattern: /^\/nest-login$/, handler: nestLoginRoute },
+  ...WEBSITE_PAGES.map((page): Route => ({
+    method: "GET",
+    pattern: new RegExp(`^/${page}/?$`),
+    handler: () => redirect(`${WEBSITE}/${page}/`),
+  })),
 ];
 
 function match(routes: Route[], method: string, path: string): { handler: Handler; param: string; param2: string } | null {
