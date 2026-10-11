@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Net.Sockets;
 using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 using System.Text.Json;
@@ -1138,6 +1139,12 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
         }
         catch (IOException ex)
         {
+            throw new PairnetsNetworkException(ex.Message, ex);
+        }
+        catch (SocketException ex)
+        {
+            // On Linux a connection the server drops at once can come out bare, not in an HttpRequestException: .NET
+            // asks the new socket for its remote address and gets "Transport endpoint is not connected".
             throw new PairnetsNetworkException(ex.Message, ex);
         }
         catch (OperationCanceledException ex) when (!callerCt.IsCancellationRequested)
