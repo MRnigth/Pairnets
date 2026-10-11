@@ -261,6 +261,52 @@ public class SyncFeedbackTests
     }
 
     [Fact]
+    public void GoingOnAgainIsReportedEvenWhenTheTimerFiresAMomentEarly()
+    {
+        // CI on main (1d9793b): a timer fired just before the clock reached the held time, and "going on again" was
+        // never reported, so the apps would have said "slowed down" until the next 429.
+        var clock = new TimerClock(Now);
+        var pressure = new BackPressure(clock);
+        var heard = new List<DateTimeOffset?>();
+        pressure.Changed += heard.Add;
+
+        pressure.Refused(TimeSpan.FromSeconds(2));
+        clock.Advance(TimeSpan.FromSeconds(2) - TimeSpan.FromMilliseconds(1));
+        clock.FireLatest(); // early
+        Assert.Equal([Now.AddSeconds(2)], heard);
+
+        clock.Advance(TimeSpan.FromMilliseconds(1));
+        clock.FireLatest();
+        Assert.Equal([Now.AddSeconds(2), null], heard);
+        clock.FireAll(); // a replaced timer that fires anyway says nothing more
+        Assert.Equal([Now.AddSeconds(2), null], heard);
+    }
+
+    /// <summary>A clock set by the test whose timers fire only when the test says so.</summary>
+    private sealed class TimerClock(DateTimeOffset start) : TimeProvider
+    {
+        private readonly List<TimerCallback> _callbacks = [];
+        public DateTimeOffset Now { get; private set; } = start;
+        public override DateTimeOffset GetUtcNow() => Now;
+        public void Advance(TimeSpan by) => Now += by;
+        public void FireLatest() => _callbacks[^1](null);
+        public void FireAll() => _callbacks.ToList().ForEach(c => c(null));
+
+        public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
+        {
+            _callbacks.Add(callback);
+            return new NoTimer();
+        }
+
+        private sealed class NoTimer : ITimer
+        {
+            public bool Change(TimeSpan dueTime, TimeSpan period) => true;
+            public void Dispose() { }
+            public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+        }
+    }
+
+    [Fact]
     public async Task HeldRequestsWaitTheirTurnAndThenGoOneAtATime()
     {
         var pressure = new BackPressure();

@@ -32,6 +32,7 @@ public sealed class BackPressure
     private int _inFlight;
     private int _strikes;
     private ITimer? _resumeTimer;
+    private bool _held;
 
     public BackPressure(TimeProvider? clock = null) => _clock = clock ?? TimeProvider.System;
 
@@ -135,6 +136,7 @@ public sealed class BackPressure
             until = _until;
             _limit = 1;
             _limitSince = until;
+            _held = true;
             _resumeTimer?.Dispose();
             _resumeTimer = _clock.CreateTimer(_ => Resumed(), null, until - now, Timeout.InfiniteTimeSpan);
         }
@@ -152,8 +154,18 @@ public sealed class BackPressure
     {
         lock (_gate)
         {
-            if (_until > _clock.GetUtcNow())
-                return; // another 429 moved it on; its own timer reports that one
+            var now = _clock.GetUtcNow();
+            if (_until > now)
+            {
+                // A timer can fire a moment before the clock says the time has come, or another 429 moved the time on:
+                // wait for the rest, so "going on again" is never lost (the apps would say "slowed down" until the next 429).
+                _resumeTimer?.Dispose();
+                _resumeTimer = _clock.CreateTimer(_ => Resumed(), null, _until - now, Timeout.InfiniteTimeSpan);
+                return;
+            }
+            if (!_held)
+                return; // already reported (a replaced timer that fired anyway)
+            _held = false;
             WakeAll();
         }
         Changed?.Invoke(null);
