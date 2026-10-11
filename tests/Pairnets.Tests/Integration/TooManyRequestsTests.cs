@@ -112,9 +112,10 @@ public class TooManyRequestsTests : IAsyncLifetime
     public async Task ASingleFileIsSentAgainFromItsStartAndTheTimeoutDoesNotRunWhileItWaits()
     {
         var refused = 0;
-        var service = new BusyService((req, n) => req.Method == HttpMethod.Put && Interlocked.Increment(ref refused) <= 2, () => RateLimited("2"));
-        // A stall timeout shorter than the wait: the wait must not count against it.
-        using var api = new PairnetsApiClient(_server.Url, _server.Token, "PC-1", service, stallTimeout: TimeSpan.FromSeconds(1.5));
+        var service = new BusyService((req, n) => req.Method == HttpMethod.Put && Interlocked.Increment(ref refused) <= 2, () => RateLimited("4"));
+        // A stall timeout shorter than the wait: the wait must not count against it. (3 s, not less: on a busy test machine
+        // the test server itself can take over 1.5 s to answer, which is a real stall to the client.)
+        using var api = new PairnetsApiClient(_server.Url, _server.Token, "PC-1", service, stallTimeout: TimeSpan.FromSeconds(3));
         var data = Encoding.UTF8.GetBytes("the same bytes, sent again");
         long lastProgress = -1;
 
