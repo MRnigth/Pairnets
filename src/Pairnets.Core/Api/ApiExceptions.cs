@@ -18,10 +18,28 @@ public sealed class PairnetsAuthException(string message, string? code = null) :
 /// The server could not be reached, timed out, stalled, or failed (5xx). The pass is aborted and retried later.
 /// <see cref="Code"/> is <see cref="ServiceErrors.NestOffline"/> when the Pairnets service said the server is not connected.
 /// </summary>
-public sealed class PairnetsNetworkException(string message, Exception? inner = null, string? code = null) : Exception(message, inner)
+public class PairnetsNetworkException(string message, Exception? inner = null, string? code = null) : Exception(message, inner)
 {
     public string? Code { get; } = code;
 }
+
+/// <summary>
+/// The server, or the Pairnets service in front of it, answered 429: too many requests from this address for now.
+/// Nothing is wrong with the file. Every request this client sends waits <see cref="RetryAfter"/> first (see
+/// <c>PairnetsApiClient</c>), and the sync engine tries the same transfer again instead of counting it as failed.
+/// Where nothing handles it, it counts as network trouble, so nothing half-sent is thrown away.
+/// </summary>
+public sealed class PairnetsSlowDownException(TimeSpan retryAfter)
+    : PairnetsNetworkException($"The server asked to slow down; waiting {Math.Ceiling(retryAfter.TotalSeconds):0} s.")
+{
+    public TimeSpan RetryAfter { get; } = retryAfter;
+}
+
+/// <summary>
+/// A download arrived whole but its content does not match the server's hash. Unlike a cut connection, the
+/// bytes received are worthless: a partial file it was continuing must not be continued again.
+/// </summary>
+public sealed class DownloadMismatchException(string message) : PairnetsNetworkException(message);
 
 /// <summary>The server answered something unexpected for one file. Only that file is skipped.</summary>
 public sealed class PairnetsProtocolException(string message) : Exception(message);

@@ -18,7 +18,8 @@ public sealed record ErrorBody(string Code, string? Message = null);
 /// <summary>
 /// Answer of GET /api/info. <see cref="Version"/> is the manifest version (the change counter);
 /// <see cref="ServerVersion"/> is the installed Pairnets release. The fields after
-/// <see cref="ApiVersion"/> are missing on older servers.
+/// <see cref="ApiVersion"/> are missing on older servers. <see cref="PiecesInFlight"/>: how many pieces of one upload
+/// the server takes at once (2: the next one may be sent while the one before is still arriving; missing: one).
 /// </summary>
 public sealed record ServerInfo(
     string ServerId,
@@ -27,7 +28,8 @@ public sealed record ServerInfo(
     string? ServerVersion = null,
     long? DiskFreeBytes = null,
     long? DiskTotalBytes = null,
-    UpdaterStatus? Updater = null);
+    UpdaterStatus? Updater = null,
+    int? PiecesInFlight = null);
 
 /// <summary>The server's self-updater. <see cref="State"/>: missing, idle, requested, running, succeeded or failed.</summary>
 public sealed record UpdaterStatus(bool Installed, string State, string? Message = null, DateTimeOffset? At = null);
@@ -157,9 +159,11 @@ public sealed record HistoryVersion(string Id, DateTimeOffset StoredAtUtc, long 
 
 /// <summary>
 /// An upload that arrives in pieces (<c>POST /api/upload</c>, <c>PUT /api/upload/{id}</c>): its id and how
-/// many bytes the server has, which is where the next piece starts.
+/// many bytes the server has, which is where the next piece starts. <see cref="Busy"/>: the server is still
+/// taking in an earlier piece (or checking what it has after a restart), so the next piece has to wait a
+/// moment (missing, so false, on servers from before it was told).
 /// </summary>
-public sealed record UploadStatus(string Id, long Received);
+public sealed record UploadStatus(string Id, long Received, bool Busy = false);
 
 /// <summary>Stable machine-readable error codes used in <see cref="ErrorBody"/>.</summary>
 public static class ErrorCodes
@@ -174,6 +178,15 @@ public static class ErrorCodes
 
     /// <summary>A piece of an upload did not start where the server's copy ends (ask for the status and go on from there).</summary>
     public const string UploadOffset = "upload-offset";
+
+    /// <summary>
+    /// An earlier piece of this upload is still arriving (or the server is still checking the part it kept over a
+    /// restart): wait a moment and ask for the status again. Servers from before it answer upload-offset instead.
+    /// </summary>
+    public const string UploadBusy = "upload-busy";
+
+    /// <summary>With 202: a history version is still being restored; ask again with the same ticket.</summary>
+    public const string Restoring = "restoring";
 
     /// <summary>An upload in pieces did not match the hash it was committed with; it was dropped.</summary>
     public const string UploadMismatch = "upload-mismatch";

@@ -282,6 +282,55 @@ what cannot lose or silently overwrite data.
   and Cloudflare headers and explained in plain words; Pairnets's JSON errors relayed by Cloudflare are
   left alone.
 
+## Big transfers continue where they stopped
+
+* **This replaces two earlier rules:** "Sessions in memory, not in the manifest" (above) and the "half-sent
+  files are discarded" part of "Pause cancels the running pass". An upload or download that stops part-way
+  is now kept and continued. Still nothing partial is ever stored as a file.
+* **Uploads in pieces outlive a pass.** A broken connection, Pause or closing the app no longer drops the
+  upload on the server. The computer keeps the upload's id together with exactly the content it carries
+  (size, modification time, content hash, base, server address) in state.db (new `uploads` table, schema 2),
+  and the next pass asks the server how much it has and sends only the rest. Within one pass a broken
+  connection is retried for about a minute (after 1, 2, 4, 8, 15 and 30 s); then the pass ends offline and the
+  runner's retries (2, 5, 10, 30, 60 s) take over, each continuing from the server's count.
+* **The whole file is checked again, so two versions are never mixed.** When it continues, the computer reads
+  the bytes the server already has once more from the file (they are not sent again) and hashes the whole
+  file as it is now; the server compares that with its own hash of what it received. If the file changed in
+  between in a way that size and time do not show, the commit is refused and the file is sent again from the
+  start. The cost is reading the part already sent once more per continue (local disk: seconds to a minute
+  for 10 GB); trusting a hash kept from before would have been faster but could store a mixed file.
+* **Given up only on purpose.** `DELETE /api/upload/{id}` is sent only when the upload will not be continued:
+  the file changed, was deleted, is in sync now, or the server has another version. An upload nobody comes
+  back for (Reset, Re-link, uninstall) is dropped by the server after an hour without data, as before; so a
+  laptop that sleeps longer than an hour in the middle of an upload sends that file again.
+* **"Busy" is not a failure.** While an earlier piece of the same upload is still arriving (the server waits
+  up to 60 s on a quiet connection), the server answers `upload-busy` and `GET /api/upload/{id}` says
+  `busy: true`. The computer waits (up to 3 minutes) instead of counting a failure and shrinking the pieces.
+  Older servers answer `upload-offset` instead, which is handled the same way.
+* **Uploads also survive a restart of the server.** Each session now has a small description next to its part
+  file in tmp/ (`id.session`: path, base, size, mtime), and the part file is written to disk after every piece.
+  At start-up the server keeps the pairs that received data within the last hour (everything else in tmp/ is
+  still deleted, after the journal is replayed) and takes them up again. The running hash of what arrived lived
+  only in memory, so each kept part file is read and hashed once more, in the background; the upload answers
+  busy meanwhile, so no request waits for it. A part damaged over the restart fails the commit's hash check and
+  is refused, never stored.
+* **Big downloads continue too.** Files from 16 MB keep their partial download in `.pairnets-tmp` when they are
+  cut off, paused or closed, recorded in state.db (new `downloads` table) with the version (content hash) its
+  bytes belong to. The next pass sends `Range` with `If-Range` (a file's ETag is its hash), so the server sends
+  only the rest of that same version, or the whole file if it changed meanwhile. A new version in the manifest
+  deletes the old partial at once. The whole file is still hashed and checked against the server's hash before
+  it replaces anything; a partial that fails the check is deleted and the file is downloaded again in the same
+  pass. Smaller files take about a minute or less even on a slow link, so they simply start again.
+* **No answer takes longer than Cloudflare waits (100 s), and no request carries more than 100 MB.** Pieces are at
+  most 50 MiB (the server takes up to 64 MiB); one PUT is only used for files up to 50 MiB, or with a server from
+  before pieces. The commit no longer waits for gigabytes to reach the disk (each piece already did). Restoring a
+  big history version used to copy and hash it inside the request; it now runs in the background, the request
+  waits at most 60 s and otherwise answers 202, and the app asks again with the same ticket until it is done.
+  Left as it was: a file someone put into `files/` by hand is hashed under the server's lock when a computer
+  overwrites it (rare, and only once).
+* **Going back to an older app** needs Settings → Start over: an app from before refuses a state.db at schema 2
+  ("created by a newer Pairnets"). Nothing is lost by that; it only stops syncing until reset.
+
 ## Renamed from Tether to Pairnets
 
 * **Why.** "Tether" is also the name of a large crypto company, and the matching domains were taken.
@@ -560,3 +609,47 @@ yet"), the same in both apps.
   browsers keep `/assets/*` for an hour. sync.pairnets.app now links every stylesheet and script as
   `/assets/<name>?v=<fingerprint of its text>`, so a changed file has a new address. pairnets.app (plain files, no
   build step) has its `/assets/*` checked on every visit instead (`max-age=0, must-revalidate`; unchanged files get a 304).
+## Faster uploads, and Resume that carries on (10 October 2026)
+
+What the owner saw on a test setup (two computers and a nest on one PC, all through sync.pairnets.app): uploads
+were slow, and after Pause → Resume the app said only "Syncing" for many minutes. The logs showed why.
+
+* **The relay allowed 600 requests a minute per address.** Computers in one home share an address, and every
+  file synced between them costs a request on each (one uploads it, the other downloads it), so a home got about
+  5 small files a second, and then a wall of "429 Too many requests". The relay now allows **6,000 a minute**,
+  counted by Cloudflare's Rate Limiting binding instead of a D1 row per request (no database round trip on
+  every file), and it reuses each nest's row for 30 s instead of reading it on every request. So a nest that is
+  unlinked keeps being relayed for at most 30 s. A limiter that fails lets the request through: the limit only
+  stops floods.
+* **A 429 means "wait", not "this file failed".** The app holds back every request (all transfers, not only the
+  one that was refused) for the time the answer's `Retry-After` asks (at least 1 s, at most 2 minutes) and then
+  sends the same files again; nothing is counted as an error and a big upload goes on where it was, with its
+  piece size unchanged (nothing was cut). Only a 429 that says how long counts: a nest's own 429s (too many
+  sign-ins, an update asked for a moment ago) mean something else. After 30 refusals in a row for one file the
+  pass ends as if offline. Considered and left out: halving the number of transfers after a 429. Under a limit
+  per minute that only moves the same number of requests around; the wait is what stops the hammering.
+* **Two pieces of a big upload on the way at once.** Cloudflare takes in a whole piece before it passes it on.
+  With one piece at a time the line to Cloudflare and the line to the nest took turns being idle: the nest's log
+  showed 4–6 s without data between pieces, and a 548 MB file arrived at about 4 MiB/s although each piece
+  moved at 9–11 MiB/s. Now the next piece goes out as soon as the previous one's bytes are sent, marked
+  `turn=wait`; the nest keeps it waiting (without reading it) until the one before has arrived, up to 60 s,
+  and refuses it at once (wrong offset) when the one before was cut off, so the app asks how much arrived and
+  goes on from there. Never more than two, because the nest writes and hashes a file in order and only one
+  piece can be arriving at a time anyway. A nest says it takes this in `/api/info` (`piecesInFlight: 2`);
+  with an older nest the app sends one piece at a time as before. Pieces stay at most 50 MiB.
+* **Looking through the folder keeps its work.** New and changed files are read whole once to fingerprint them
+  (needed to tell what changed, see "three hashes"). The scan used to save those fingerprints only at the very
+  end, so every Pause, restart or session restart threw them away: on a folder with 116 GB of new model files
+  each Resume started reading all of it again and never got through. Now they are saved every 250 files or 2 s
+  and when the scan is stopped, so the next one reads only what is left.
+* **"Checking files…" says how far it is.** The scan reports files checked, how many were new or changed, and
+  the big file being read with its bytes ("12,400 files checked, 310 new or changed · reading model.gguf (1.20
+  GB of 9.00 GB)"), in the status card and the tray tooltip of both apps (`StatusSnapshot.Scan`, shown by the
+  existing headline and detail lines, so the two apps stay alike). Files under 16 MB go by too fast to name.
+* **Pause and Resume show the right thing.** Status changes go one at a time, and while paused only "Paused"
+  is shown, and "Paused" only while paused. Before, a pass that was still stopping could show "Paused" after
+  Resume, or "Syncing" after Pause. A saved pause is now applied before the runner starts, so a paused app never
+  begins a pass at launch.
+* **The speed falls to zero when nothing moves.** It was only worked out when bytes arrived, so the last value
+  stayed on screen through every wait. Now it is worked out again every second. The units stay as they were
+  (1024-based "MB/s").

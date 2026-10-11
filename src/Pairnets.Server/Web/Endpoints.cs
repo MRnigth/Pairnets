@@ -65,7 +65,7 @@ public static class Endpoints
         {
             var (free, total) = ServerUpdater.DiskSpace(store.Paths.DataDir);
             return Json(new ServerInfo(store.ServerId, store.CurrentVersion, PairnetsInfo.ApiVersion,
-                PairnetsInfo.ProductVersion, free, total, updater.GetStatus()));
+                PairnetsInfo.ProductVersion, free, total, updater.GetStatus(), UploadSessions.PiecesInFlight));
         });
 
         // "Update server" in the apps: asks the root-owned updater to install the newest release.
@@ -175,7 +175,9 @@ public static class Endpoints
             UploadSessions.ChunkResult result;
             try
             {
-                result = await uploads.AppendAsync(id, offset, ctx.Request.Body, ctx.RequestAborted);
+                // turn=wait: the app sent this piece while the one before it is still arriving (see UploadSessions.PiecesInFlight).
+                var waitTurn = string.Equals(ctx.Request.Query["turn"].ToString(), "wait", StringComparison.Ordinal);
+                result = await uploads.AppendAsync(id, offset, ctx.Request.Body, ctx.RequestAborted, waitTurn);
             }
             catch (BadHttpRequestException ex) when (ex.StatusCode == StatusCodes.Status413PayloadTooLarge)
             {
@@ -186,6 +188,8 @@ public static class Endpoints
                 UploadSessions.ChunkStatus.Ok => Json(new UploadStatus(id, result.Received)),
                 UploadSessions.ChunkStatus.WrongOffset => Error(StatusCodes.Status409Conflict, ErrorCodes.UploadOffset,
                     $"The server has {result.Received.ToString(CultureInfo.InvariantCulture)} bytes of this upload; continue from there."),
+                UploadSessions.ChunkStatus.Busy => Error(StatusCodes.Status409Conflict, ErrorCodes.UploadBusy,
+                    "An earlier piece of this upload is still arriving; ask again in a moment."),
                 UploadSessions.ChunkStatus.Stalled => Error(StatusCodes.Status408RequestTimeout, ErrorCodes.BadRequest, "The piece stalled; what arrived is kept."),
                 UploadSessions.ChunkStatus.TooMuchData => Error(StatusCodes.Status400BadRequest, ErrorCodes.BadRequest, "More data than the declared size; the upload was dropped."),
                 _ => UploadNotFound(),
@@ -193,7 +197,7 @@ public static class Endpoints
         });
 
         app.MapGet("/api/upload/{id}", (string id, UploadSessions uploads) =>
-            uploads.Received(id) is { } received ? Json(new UploadStatus(id, received)) : UploadNotFound());
+            uploads.Status(id) is { } status ? Json(status) : UploadNotFound());
 
         app.MapPost("/api/upload/{id}/commit", async (string id, HttpContext ctx, UploadSessions uploads, IHubContext<SyncHub> hub) =>
         {
@@ -205,6 +209,7 @@ public static class Endpoints
             {
                 UploadSessions.CommitStatus.Done => await ToResultAsync(result.Change!, ctx, result.Change!.Entry?.Path ?? string.Empty, hub),
                 UploadSessions.CommitStatus.Incomplete => Error(StatusCodes.Status409Conflict, ErrorCodes.UploadOffset, result.Message),
+                UploadSessions.CommitStatus.Busy => Error(StatusCodes.Status409Conflict, ErrorCodes.UploadBusy, result.Message),
                 UploadSessions.CommitStatus.HashMismatch => Error(StatusCodes.Status400BadRequest, ErrorCodes.UploadMismatch, result.Message),
                 _ => UploadNotFound(),
             };
@@ -231,10 +236,14 @@ public static class Endpoints
             return Json(store.ListHistory(path));
         });
 
-        app.MapPost("/api/history/restore", async (HttpContext ctx, SyncStore store, IHubContext<SyncHub> hub) =>
+        // A big version can take longer to copy than a proxy waits (Cloudflare: 100 s): then 202, and the app
+        // asks again with the same ticket until it is done (see RestoreJobs).
+        app.MapPost("/api/history/restore", async (HttpContext ctx, RestoreJobs restores, IHubContext<SyncHub> hub) =>
         {
             var path = ctx.Request.Query["path"].ToString();
-            var result = await store.RestoreAsync(path, ctx.Request.Query["id"].ToString(), ctx.RequestAborted);
+            var result = await restores.RunAsync(path, ctx.Request.Query["id"].ToString(), ctx.Request.Query["ticket"].ToString(), ctx.RequestAborted);
+            if (result is null)
+                return Results.Json(new ErrorBody(ErrorCodes.Restoring, "The version is still being restored; ask again in a moment."), PairnetsJson.Options, statusCode: StatusCodes.Status202Accepted);
             return await ToResultAsync(result, ctx, path, hub);
         });
 

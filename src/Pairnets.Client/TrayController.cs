@@ -379,6 +379,7 @@ public sealed class TrayController : ITrayActions, IDisposable
         }
         var line = status.IsTransferring
             ? $"{Math.Min(status.FilesDone + 1, Math.Max(status.FilesTotal, 1))}/{status.FilesTotal}: {PathRules.FileName(status.CurrentPath!)}{(status.Percent is { } p ? $" {p}%" : string.Empty)}"
+            : status.IsChecking ? "Checking files: " + status.ScanText
             : status.Text;
         var tip = $"Pairnets: {line} ({status.LastSyncText.ToLowerInvariant()})";
         _icon.Text = tip.Length > 127 ? tip[..124] + "..." : tip;

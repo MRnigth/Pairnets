@@ -62,6 +62,12 @@ public sealed record PathWarningInfo(string Path, string Code, string? Message);
 
 public sealed record SyncProgress(string? CurrentPath, string? Operation, long BytesDone, long BytesTotal, int FilesDone, int FilesTotal);
 
+/// <summary>
+/// How far the look through the folder is: files looked at, how many of them had to be read (new or changed), and the
+/// file being read right now with its bytes read so far (big files take a while).
+/// </summary>
+public sealed record ScanProgress(int FilesChecked, int FilesRead, string? ReadingPath, long ReadingBytes, long ReadingSize);
+
 /// <summary>Summary of one pass.</summary>
 public sealed class PassResult
 {
@@ -128,6 +134,13 @@ public sealed class EngineOptions
     /// so a few in flight hide the latency; 1 restores strictly one-by-one transfers.
     /// </summary>
     public int MaxParallelTransfers { get; init; } = 4;
+
+    /// <summary>
+    /// Downloads of files at least this big keep what arrived when the connection breaks (or syncing is paused or
+    /// the app closes) and later ask only for the rest. Smaller files take about a minute or less even on a slow
+    /// link, so they simply start again, as before.
+    /// </summary>
+    public long ResumeDownloadsFrom { get; init; } = 16L * 1024 * 1024;
 }
 
 /// <summary>Test seams. Production code never sets these.</summary>

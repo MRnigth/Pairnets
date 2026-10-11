@@ -389,6 +389,11 @@ and **Settings**. The buttons at the top right are always there: **Open folder**
 * **Status card** (top): a coloured badge with a symbol (✓ up to date, ↻ syncing, ⏸ paused,
   ! needs a decision, ✕ error, crossed-out cloud for offline) and one line for the overall state.
   The top of the card takes on the status colour.
+* **Checking files…** shows while Pairnets looks through the folder for what changed, before anything
+  is sent: "12,400 files checked, 310 new or changed · reading model.gguf (1.20 GB of 9.00 GB)". New
+  and changed files are read once from start to end to fingerprint them, which takes a while for
+  very big files (a 20 GB file takes a minute or more). What it has read is kept, so after **Pause**,
+  **Resume** or a restart it carries on instead of reading everything again.
 * **Your computers**: *this computer*, the *server* and your *other computer*, joined by lines. A
   green dot means online; for the other computer you see **Online**, **Sending changes**,
   **Uploading 340 files** or **Last seen 3 h ago**. While files move, dots travel along the
@@ -817,6 +822,14 @@ In **Settings → Updates and speed**:
   other computers always come through the server, so the download limit covers them too. Each
   computer has its own limits; all files in progress together stay under the limit.
 * **Wait while my other computer uploads many files**: the batch wait described in section 5.
+
+If the transfer card says **"Waiting a moment: the server asked Pairnets to slow down"**, too many
+requests came from your internet address at once (everything at home shares one). All transfers wait
+the time the server asked for (at most two minutes) and then go on with the same files; nothing is
+counted as failed.
+
+**Pause** keeps what is done: the files already checked, and big files half sent or half received.
+**Resume** goes on from there.
 
 ### Starting over
 

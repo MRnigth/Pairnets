@@ -64,7 +64,9 @@ public sealed class FakeApi : IPairnetsApi
         }
     }
 
-    public async Task<DownloadResult> DownloadAsync(string path, Stream destination, Action<long>? progress, CancellationToken ct)
+    public string ServerKey => "http://fake-server/";
+
+    public async Task<DownloadResult> DownloadAsync(string path, Stream destination, Action<long>? progress, CancellationToken ct, DownloadResume? resume = null)
     {
         ThrowIfOffline();
         byte[] data;
@@ -75,11 +77,18 @@ public sealed class FakeApi : IPairnetsApi
                 return new DownloadResult(false, string.Empty, 0, 0);
             (entry, data) = f;
         }
+        if (resume is not null)
+        {
+            // Like a server that ignores the range: the whole file, from the start.
+            destination.SetLength(0);
+            resume.ServedHash = entry.Hash;
+            resume.ServedSize = data.Length;
+        }
         await destination.WriteAsync(data, ct);
         return new DownloadResult(true, entry.Hash!, data.Length, entry.ModifiedMs);
     }
 
-    public async Task<(ApiResult Result, string SentHash, long SentBytes)> UploadAsync(string path, string baseHash, long mtimeMs, Stream content, Action<long>? progress, CancellationToken ct)
+    public async Task<(ApiResult Result, string SentHash, long SentBytes)> UploadAsync(string path, string baseHash, long mtimeMs, Stream content, Action<long>? progress, CancellationToken ct, UploadResume? resume = null)
     {
         ThrowIfOffline();
         var ms = new MemoryStream();
@@ -100,6 +109,8 @@ public sealed class FakeApi : IPairnetsApi
             return (ApiResult.Ok(entry), hash, data.Length);
         }
     }
+
+    public Task AbandonUploadAsync(string uploadId) => Task.CompletedTask;
 
     public Task<ApiResult> DeleteAsync(string path, string baseHash, CancellationToken ct)
     {

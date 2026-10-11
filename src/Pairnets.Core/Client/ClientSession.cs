@@ -31,6 +31,7 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
     private long _burstBytesTotal;
     private Timer? _infoTimer;
     private Timer? _devicesTimer;
+    private Timer? _speedTimer;
 
     private static readonly TimeSpan SpeedWindow = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan ServerInfoInterval = TimeSpan.FromMinutes(5);
@@ -297,11 +298,12 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
             IsRelay = api.IsRelay,
             AccountEmail = string.IsNullOrWhiteSpace(settings.AccountEmail) ? null : settings.AccountEmail,
         };
+        if (settings.Paused)
+            runner.Pause(); // before it starts, so a paused app never begins a pass
         runner.Start();
         session._infoTimer = new Timer(_ => _ = session.RefreshServerInfoAsync(), null, TimeSpan.Zero, ServerInfoInterval);
         session._devicesTimer = new Timer(_ => _ = session.RefreshDevicesAsync(), null, TimeSpan.Zero, DevicesInterval);
-        if (settings.Paused)
-            runner.Pause();
+        session._speedTimer = new Timer(_ => session.RefreshSpeed(), null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
         return session;
     }
 
@@ -331,8 +333,17 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
         // File counts run across back-to-back passes ("Sync now" while files keep arriving): a pass
         // that starts soon after the previous one continues its count, and files that arrive during a
         // pass are added to the total straight away.
+        Engine.ScanProgressed += p => Update(s => s.Status == RunnerStatus.Syncing ? s with { Scan = p } : s);
+        Api.SlowingDown += wait =>
+        {
+            var until = DateTimeOffset.UtcNow + wait;
+            Update(s => s with { SlowedUntil = until });
+            _ = Task.Delay(wait).ContinueWith(_ => Update(s => s.SlowedUntil is { } u && u <= until ? s with { SlowedUntil = null } : s),
+                CancellationToken.None, TaskContinuationOptions.None, TaskScheduler.Default);
+        };
         Engine.ExecutionStarting += (_, _, bytes) =>
         {
+            Update(s => s with { Scan = null }); // the folder is looked through; now the transfers
             lock (_gate)
             {
                 var chained = _lastPassEnd is { } end && _clock.GetUtcNow() - end < BurstGap;
@@ -427,6 +438,7 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
             Text = text,
             LastSyncAt = Runner.LastSyncAt,
             CurrentPath = status == RunnerStatus.Syncing ? s.CurrentPath : null,
+            Scan = status == RunnerStatus.Syncing ? s.Scan : null,
             Paused = status == RunnerStatus.Paused,
         });
         Runner.PassCompleted += report =>
@@ -811,8 +823,26 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
         return null;
     }
 
+    /// <summary>
+    /// Works the speed out again although no bytes arrived: progress alone only reports while bytes move, so without
+    /// this the last speed stayed on screen through every pause (a server answer, a wait, the next look through the folder).
+    /// </summary>
+    internal void RefreshSpeed()
+    {
+        double rate;
+        lock (_gate)
+        {
+            if (_status.BytesPerSecond <= 0)
+                return;
+            rate = RateLocked();
+        }
+        Update(s => s with { BytesPerSecond = rate });
+    }
+
     public async ValueTask DisposeAsync()
     {
+        if (_speedTimer is not null)
+            await _speedTimer.DisposeAsync().ConfigureAwait(false);
         if (_infoTimer is not null)
             await _infoTimer.DisposeAsync().ConfigureAwait(false);
         if (_devicesTimer is not null)

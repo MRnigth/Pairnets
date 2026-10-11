@@ -74,8 +74,48 @@ public class ClientSessionTests : IAsyncLifetime
         session.Pause();
         Assert.True(session.Settings.Paused);
         await WaitUntil(() => session.Status.Status == RunnerStatus.Paused, "paused");
+        File.WriteAllText(Path.Combine(_folder.Path, "while-paused.txt"), "later");
+        await Task.Delay(500);
+        Assert.Equal(RunnerStatus.Paused, session.Status.Status);
+        Assert.DoesNotContain(_server.Store.ReadManifest(null).Entries, e => e.Path == "while-paused.txt");
+
         session.Resume();
-        await WaitUntil(() => session.Status.Status == RunnerStatus.Idle, "resumed");
+        // "Resuming" is Idle too: wait for a pass that finished, with what changed while paused on the server.
+        await WaitUntil(() => _server.Store.ReadManifest(null).Entries.Any(e => e.Path == "while-paused.txt" && !e.Deleted), "the file written while paused");
+        await WaitUntil(() => session.Status is { Status: RunnerStatus.Idle, Text: "Up to date" }, "up to date after resume");
+    }
+
+    /// <summary>A clock whose stopwatch only moves when told (the speed is measured with it).</summary>
+    private sealed class SteppingClock : TimeProvider
+    {
+        public long Ticks;
+
+        public override long GetTimestamp() => Interlocked.Read(ref Ticks);
+
+        public override long TimestampFrequency => TimeSpan.TicksPerSecond;
+    }
+
+    [Fact]
+    public async Task TheSpeedFallsToZeroWhenNothingMoves()
+    {
+        File.WriteAllBytes(Path.Combine(_folder.Path, "some.bin"), new byte[300_000]);
+        var clock = new SteppingClock();
+        await using var session = ClientSession.Start(new ClientSettings
+        {
+            ServerUrl = _server.Url.ToString(),
+            ProtectedToken = "unused-by-session",
+            Folder = _folder.Path,
+            DeviceName = "mac",
+            FirstRunCompleted = true,
+        }, _server.Token, new PermanentDeleteTrash(), stateBaseDir: _stateBase.Path, clock: clock);
+        await WaitUntil(() => _server.Store.ReadManifest(null).Entries.Any(e => e.Path == "some.bin"), "the upload");
+        await WaitUntil(() => session.Status.Status == RunnerStatus.Idle, "idle");
+        Assert.True(session.Status.BytesPerSecond > 0, "the last speed is still shown right after the upload");
+
+        Interlocked.Add(ref clock.Ticks, TimeSpan.FromSeconds(6).Ticks);
+        session.RefreshSpeed();
+        Assert.Equal(0, session.Status.BytesPerSecond);
+        Assert.Equal(string.Empty, session.Status.SpeedText);
     }
 
     [Fact]

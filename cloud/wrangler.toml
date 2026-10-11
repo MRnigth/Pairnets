@@ -37,6 +37,16 @@ migrations_dir = "migrations"
 binding = "ROUTER"
 service = "pairnets-router"
 
+# The relay's per-address limit (src/relay.ts RELAY_PER_MINUTE; a test checks the two match): 6,000 requests a minute.
+# Counted by Cloudflare next to the Worker, so a relayed request costs no database write. namespace_id is not an id of
+# the account or a key: it is a number chosen here, which only has to differ from other rate limiters on the account
+# (limiters with the same number share their counts). period may only be 10 or 60. Nothing to create by hand: the
+# deploy sets it up.
+[[ratelimits]]
+name = "RELAY_LIMIT"
+namespace_id = "1001"
+simple = { limit = 6000, period = 60 }
+
 [triggers]
 # Hourly: expired rows, the 90-day audit, servers that never connected, and the router deploy and tunnel cleanup
 # (src/cron.ts).

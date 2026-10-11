@@ -60,16 +60,57 @@ public sealed record StatusSnapshot(
     /// <summary>"Limited to 5 MB/s" (or "Limited to 5 MB/s up, 10 MB/s down"), or null without limits.</summary>
     public string? LimitText { get; init; }
 
+    // ---- looking through the folder (before anything is sent)
+
+    /// <summary>How far the look through the folder is, while a pass is still finding out what changed; null otherwise.</summary>
+    public ScanProgress? Scan { get; init; }
+
+    /// <summary>True while the pass reads the folder to find what changed (nothing is sent yet).</summary>
+    public bool IsChecking => Status == RunnerStatus.Syncing && Scan is not null && !IsTransferring;
+
+    /// <summary>
+    /// "12,400 files checked, 310 new or changed · reading model.gguf (1.2 GB of 9.00 GB)". New and changed files are read
+    /// whole once to fingerprint them; after that only what changed is read again.
+    /// </summary>
+    public string ScanText
+    {
+        get
+        {
+            if (Scan is not { } scan)
+                return string.Empty;
+            var c = System.Globalization.CultureInfo.InvariantCulture;
+            var text = scan.FilesChecked.ToString("N0", c) + (scan.FilesChecked == 1 ? " file checked" : " files checked");
+            if (scan.FilesRead > 0)
+                text += ", " + scan.FilesRead.ToString("N0", c) + " new or changed";
+            if (scan.ReadingPath is { } reading && scan.ReadingSize >= BigFileToRead)
+                text += $" · reading {Paths.PathRules.FileName(reading)} ({Format.Bytes(scan.ReadingBytes)} of {Format.Bytes(scan.ReadingSize)})";
+            return text;
+        }
+    }
+
+    /// <summary>From this size the file being read is named with its progress (smaller ones go by too fast to read).</summary>
+    private const long BigFileToRead = 16L * 1024 * 1024;
+
+    // ---- the server asked to slow down
+
+    /// <summary>Until when every request waits because the server (or the Pairnets service) said "too many requests", or null.</summary>
+    public DateTimeOffset? SlowedUntil { get; init; }
+
     /// <summary>"Uploading 120 files", "Downloading 32 files" or "Syncing 50 files".</summary>
     public string BatchTitle => FilesTotal <= 1 && Active.Count <= 1
         ? $"{OperationText} {CurrentFileName}"
         : $"{(Active.Count > 0 && Active.All(a => a.Operation == Active[0].Operation) ? OperationText : "Syncing")} {FilesTotal} files";
 
-    /// <summary>"12.4 MB/s · about 2 min left" (empty until the speed is known).</summary>
+    /// <summary>
+    /// "12.4 MB/s · about 2 min left" (empty until the speed is known), or what holds the transfers back while the server
+    /// asked to slow down.
+    /// </summary>
     public string SpeedText
     {
         get
         {
+            if (SlowedUntil is { } until && until > DateTimeOffset.UtcNow)
+                return "Waiting a moment: the server asked Pairnets to slow down";
             if (BytesPerSecond < 1)
                 return string.Empty;
             var text = Format.Speed(BytesPerSecond);
@@ -205,7 +246,7 @@ public sealed record StatusSnapshot(
     public string LastSyncText => LastSyncAt is { } at ? "Last synced " + at.ToLocalTime().ToString("HH:mm", System.Globalization.CultureInfo.InvariantCulture) : "Not synced yet";
 
     /// <summary>Short status line shown under the title.</summary>
-    public string Headline => IsWaiting ? $"Waiting for {WaitingFor!.Device}" : Status switch
+    public string Headline => IsWaiting ? $"Waiting for {WaitingFor!.Device}" : IsChecking ? "Checking files…" : Status switch
     {
         RunnerStatus.Idle => "Up to date",
         RunnerStatus.Syncing => "Syncing…",
@@ -224,6 +265,8 @@ public sealed record StatusSnapshot(
         {
             if (IsWaiting)
                 return $"{WaitingFor!.Device} is uploading a big batch. Pairnets downloads it all in one go when it's done, so the two computers don't fight over the connection.";
+            if (IsChecking)
+                return ScanText;
             var root = Headline.TrimEnd('…', '.');
             var text = Text.Trim();
             if (text.Length == 0 || string.Equals(text.TrimEnd('…', '.'), root, StringComparison.OrdinalIgnoreCase))
