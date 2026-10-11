@@ -26,12 +26,19 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
     private int _passTotal;
     private DateTimeOffset? _lastPassEnd;
     private readonly Dictionary<string, ActiveTransfer> _active = new(StringComparer.Ordinal);
-    private readonly Queue<(long Ticks, long Bytes)> _samples = new();
+    private readonly Queue<(long Ticks, long Bytes)> _upSamples = new();
+    private readonly Queue<(long Ticks, long Bytes)> _downSamples = new();
     private long _burstBytesDone;
     private long _burstBytesTotal;
     private Timer? _infoTimer;
     private Timer? _devicesTimer;
-    private Timer? _speedTimer;
+    private Timer? _liveTimer;
+    private bool _reportedActive;
+    private DateTimeOffset? _lastBytesAt;
+    private int _liveTickRunning;
+
+    /// <summary>How often this computer's live speeds are refreshed and, while it transfers, sent to the other computers.</summary>
+    private static readonly TimeSpan LiveInterval = TimeSpan.FromSeconds(1);
 
     private static readonly TimeSpan SpeedWindow = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan ServerInfoInterval = TimeSpan.FromMinutes(5);
@@ -40,15 +47,15 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
     private static readonly TimeSpan DevicesInterval = TimeSpan.FromSeconds(30);
 
     /// <summary>Bytes per second over the last few seconds. Call with <c>_gate</c> held.</summary>
-    private double RateLocked()
+    private double RateLocked(Queue<(long Ticks, long Bytes)> samples)
     {
         var now = _clock.GetTimestamp();
-        while (_samples.Count > 0 && _clock.GetElapsedTime(_samples.Peek().Ticks, now) > SpeedWindow)
-            _samples.Dequeue();
-        if (_samples.Count == 0)
+        while (samples.Count > 0 && _clock.GetElapsedTime(samples.Peek().Ticks, now) > SpeedWindow)
+            samples.Dequeue();
+        if (samples.Count == 0)
             return 0;
-        var span = Math.Max(1.0, _clock.GetElapsedTime(_samples.Peek().Ticks, now).TotalSeconds);
-        return _samples.Sum(x => (double)x.Bytes) / span;
+        var span = Math.Max(1.0, _clock.GetElapsedTime(samples.Peek().Ticks, now).TotalSeconds);
+        return samples.Sum(x => (double)x.Bytes) / span;
     }
 
     /// <summary>Raised when the server's version, free space or updater state was (re)read.</summary>
@@ -303,7 +310,7 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
         runner.Start();
         session._infoTimer = new Timer(_ => _ = session.RefreshServerInfoAsync(), null, TimeSpan.Zero, ServerInfoInterval);
         session._devicesTimer = new Timer(_ => _ = session.RefreshDevicesAsync(), null, TimeSpan.Zero, DevicesInterval);
-        session._speedTimer = new Timer(_ => session.RefreshSpeed(), null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
+        session._liveTimer = new Timer(_ => _ = session.LiveTickAsync(), null, LiveInterval, LiveInterval);
         return session;
     }
 
@@ -334,13 +341,6 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
         // that starts soon after the previous one continues its count, and files that arrive during a
         // pass are added to the total straight away.
         Engine.ScanProgressed += p => Update(s => s.Status == RunnerStatus.Syncing ? s with { Scan = p } : s);
-        Api.SlowingDown += wait =>
-        {
-            var until = DateTimeOffset.UtcNow + wait;
-            Update(s => s with { SlowedUntil = until });
-            _ = Task.Delay(wait).ContinueWith(_ => Update(s => s.SlowedUntil is { } u && u <= until ? s with { SlowedUntil = null } : s),
-                CancellationToken.None, TaskContinuationOptions.None, TaskScheduler.Default);
-        };
         Engine.ExecutionStarting += (_, _, bytes) =>
         {
             Update(s => s with { Scan = null }); // the folder is looked through; now the transfers
@@ -352,11 +352,13 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
                 if (!chained)
                 {
                     _burstBytesDone = 0;
-                    _samples.Clear();
+                    _upSamples.Clear();
+                    _downSamples.Clear();
                 }
                 _passDone = 0;
                 _passTotal = 0;
                 _active.Clear();
+                _lastBytesAt = _clock.GetUtcNow(); // a batch that just starts is not stalled
             }
         };
         Engine.Progress += p =>
@@ -364,7 +366,8 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
             int done, total;
             IReadOnlyList<ActiveTransfer> active;
             long bytesDone, bytesTotal;
-            double rate;
+            double up, down;
+            DateTimeOffset? lastBytes;
             lock (_gate)
             {
                 _passDone = p.FilesDone;
@@ -378,19 +381,44 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
                     if (delta > 0)
                     {
                         _burstBytesDone += delta;
-                        _samples.Enqueue((_clock.GetTimestamp(), delta));
+                        (p.Operation == "upload" ? _upSamples : _downSamples).Enqueue((_clock.GetTimestamp(), delta));
+                        _lastBytesAt = _clock.GetUtcNow();
                     }
                     _active[p.CurrentPath] = new ActiveTransfer(p.CurrentPath, p.Operation, p.BytesDone, p.BytesTotal);
                 }
                 active = [.. _active.Values];
                 bytesDone = _burstBytesDone;
                 bytesTotal = Math.Max(_burstBytesTotal, _burstBytesDone);
-                rate = RateLocked();
+                up = RateLocked(_upSamples);
+                down = RateLocked(_downSamples);
+                lastBytes = _lastBytesAt;
             }
             Update(s => (p.CurrentPath is null
                 ? s with { CurrentPath = null, Operation = null, BytesDone = 0, BytesTotal = 0, FilesDone = done, FilesTotal = total }
                 : s with { CurrentPath = p.CurrentPath, Operation = p.Operation, BytesDone = p.BytesDone, BytesTotal = p.BytesTotal, FilesDone = done, FilesTotal = total })
-                with { Active = active, PassBytesDone = bytesDone, PassBytesTotal = bytesTotal, BytesPerSecond = rate });
+                with
+                {
+                    Active = active, PassBytesDone = bytesDone, PassBytesTotal = bytesTotal,
+                    BytesPerSecond = up + down, UpBytesPerSecond = up, DownBytesPerSecond = down, LastBytesAt = lastBytes,
+                });
+        };
+        // What the pass is doing: reading the server's list, checking files (with how many of how many), transferring.
+        Engine.StageChanged += (stage, done, total) => Update(s => s.Status is RunnerStatus.Paused ? s : s with
+        {
+            Stage = stage,
+            CheckedFiles = stage == SyncStage.Checking ? done : 0,
+            CheckTotal = stage == SyncStage.Checking ? total : 0,
+        });
+        // "Too many requests": every request waits; the status says so, with the time left.
+        Api.Pressure.Changed += until => Update(s => s with { SlowedUntil = until, SlowedBy = until is null ? null : Api.BaseAddress.Host });
+        // The other computers' live speeds, as they report them (never guessed from changes arriving).
+        Runner.PeerTransferReceived += (device, report) =>
+        {
+            var at = _clock.GetUtcNow() - TimeSpan.FromSeconds(report.AgeSeconds); // when it was really sent
+            Update(s => s with
+            {
+                Peers = new Dictionary<string, PeerTransfer>(s.Peers, StringComparer.OrdinalIgnoreCase) { [device] = new PeerTransfer(report, at) },
+            });
         };
         Engine.TransferFinished += path =>
         {
@@ -440,6 +468,9 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
             CurrentPath = status == RunnerStatus.Syncing ? s.CurrentPath : null,
             Scan = status == RunnerStatus.Syncing ? s.Scan : null,
             Paused = status == RunnerStatus.Paused,
+            Stage = status == RunnerStatus.Syncing ? s.Stage : SyncStage.None,
+            CheckedFiles = status == RunnerStatus.Syncing ? s.CheckedFiles : 0,
+            CheckTotal = status == RunnerStatus.Syncing ? s.CheckTotal : 0,
         });
         Runner.PassCompleted += report =>
         {
@@ -480,6 +511,59 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
             Activity.Add(ActivityKind.Info, null, $"Caught up: {n} change(s) synced", _clock);
             CatchUpCompleted?.Invoke(n);
         };
+    }
+
+    /// <summary>
+    /// Once a second: lets this computer's speeds fall back when nothing moves, forgets other computers' reports that
+    /// went quiet, and tells the other computers what this one moves (while it transfers, and once when it stops).
+    /// </summary>
+    internal async Task LiveTickAsync()
+    {
+        if (Interlocked.Exchange(ref _liveTickRunning, 1) == 1)
+            return;
+        try
+        {
+            double up, down;
+            DateTimeOffset? lastBytes;
+            lock (_gate)
+            {
+                up = RateLocked(_upSamples);
+                down = RateLocked(_downSamples);
+                lastBytes = _lastBytesAt;
+            }
+            var now = _clock.GetUtcNow();
+            Update(s =>
+            {
+                var next = s with { BytesPerSecond = up + down, UpBytesPerSecond = up, DownBytesPerSecond = down, LastBytesAt = lastBytes };
+                next = next with { Stalled = next.StalledAt(now) };
+                var quiet = s.Peers.Where(p => now - p.Value.At > StatusSnapshot.LiveFor).Select(p => p.Key).ToList();
+                if (quiet.Count == 0)
+                    return next;
+                var peers = new Dictionary<string, PeerTransfer>(s.Peers, StringComparer.OrdinalIgnoreCase);
+                foreach (var name in quiet)
+                    peers.Remove(name);
+                return next with { Peers = peers };
+            });
+
+            var own = Status.OwnLive;
+            if (own is not null)
+            {
+                _reportedActive = true;
+                await Runner.ReportTransferAsync(own.Sanitized()).ConfigureAwait(false);
+            }
+            else if (_reportedActive)
+            {
+                _reportedActive = false;
+                await Runner.ReportTransferAsync(TransferReport.Idle).ConfigureAwait(false);
+            }
+        }
+        catch (ObjectDisposedException)
+        {
+        }
+        finally
+        {
+            Interlocked.Exchange(ref _liveTickRunning, 0);
+        }
     }
 
     /// <summary>The join requests whose code still works.</summary>
@@ -823,30 +907,14 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
         return null;
     }
 
-    /// <summary>
-    /// Works the speed out again although no bytes arrived: progress alone only reports while bytes move, so without
-    /// this the last speed stayed on screen through every pause (a server answer, a wait, the next look through the folder).
-    /// </summary>
-    internal void RefreshSpeed()
-    {
-        double rate;
-        lock (_gate)
-        {
-            if (_status.BytesPerSecond <= 0)
-                return;
-            rate = RateLocked();
-        }
-        Update(s => s with { BytesPerSecond = rate });
-    }
-
     public async ValueTask DisposeAsync()
     {
-        if (_speedTimer is not null)
-            await _speedTimer.DisposeAsync().ConfigureAwait(false);
         if (_infoTimer is not null)
             await _infoTimer.DisposeAsync().ConfigureAwait(false);
         if (_devicesTimer is not null)
             await _devicesTimer.DisposeAsync().ConfigureAwait(false);
+        if (_liveTimer is not null)
+            await _liveTimer.DisposeAsync().ConfigureAwait(false);
         await Runner.DisposeAsync().ConfigureAwait(false);
         Api.Dispose();
         State.Dispose();

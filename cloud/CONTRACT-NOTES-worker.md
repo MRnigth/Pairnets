@@ -141,10 +141,13 @@ fold into `RELAY.md` or reverse.
   answers JSON.
 - **Step 6, the limit (choice):** RELAY.md first said 600 a minute per IP, counted in D1. Measured on the live service:
   two computers in one home share one address and a synced file costs a request on each, so a sync of many small
-  files got dozens of 429s after about 380 files in 40 s. Now 6,000 a minute, counted by the Workers Rate Limiting
-  binding `RELAY_LIMIT` (per Cloudflare location, approximate), keyed on `CF-Connecting-IP`. A refusal is the same
-  `429 rate_limited`, with `Retry-After: 60` (the binding's period; it gives no exact time). Without the binding (a
-  local run) the relay does not limit and warns once in the log; it never falls back to D1.
+  files got dozens of 429s after about 380 files in 40 s. Now three budgets, each counted by a Workers Rate Limiting
+  binding (per Cloudflare location, approximate), never in D1: 20,000 a minute per address for everything
+  (`RELAY_LIMIT`, keyed on `CF-Connecting-IP`), 6,000 a minute per nest and computer key (`RELAY_DEVICE_LIMIT`, keyed on
+  a keyed hash of both, so each computer at home has its own), and 600 a minute per address for keyless and failing
+  requests (`RELAY_FAIL_LIMIT`; going over it turns the address off for 60 s). A refusal is the same
+  `429 rate_limited`, with `Retry-After: 60` (the bindings' period; they give no exact time). Without the bindings (a
+  local run) the relay does not limit and warns once each in the log; it never falls back to D1.
 - **Step 1, the nest row is reused (choice):** each Worker instance keeps the row (or "no such nest") for 30 s, at most
   1,000 rows (all dropped when full). A removed or unlinked nest is therefore still relayed for up to 30 s by an
   instance that read it just before. When the router answers `nest_unknown`, the row is read again at once: a nest

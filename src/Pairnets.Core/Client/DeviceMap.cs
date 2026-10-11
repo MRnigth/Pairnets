@@ -36,9 +36,6 @@ public sealed record DeviceMap(
     LinkFlow OtherFlow,
     int MoreComputers)
 {
-    /// <summary>A change from the other computer within this time counts as "sending now".</summary>
-    public static readonly TimeSpan SendingWindow = TimeSpan.FromSeconds(8);
-
     /// <summary>Computers not seen for this long are left out (renamed or retired ones).</summary>
     public static readonly TimeSpan ForgetAfter = TimeSpan.FromDays(60);
 
@@ -50,10 +47,16 @@ public sealed record DeviceMap(
         _ => $"+{MoreComputers} more computers",
     };
 
+    /// <summary>
+    /// The picture. Every number on it is measured: this computer's own transfers, and what the other computer reported
+    /// on the push channel in the last few seconds (<see cref="StatusSnapshot.LiveOf"/>). A line moves only while its
+    /// computer really transfers; a computer that reports nothing shows no speed.
+    /// </summary>
     public static DeviceMap Build(StatusSnapshot s, string? thisDevice, DateTimeOffset now)
     {
         var connected = s.IsConnected;
-        var here = new MapNode(string.IsNullOrWhiteSpace(thisDevice) ? "This computer" : thisDevice, "This computer",
+        var own = s.OwnLive;
+        var here = new MapNode(string.IsNullOrWhiteSpace(thisDevice) ? "This computer" : thisDevice, own is not null ? Format.Live(own) : "This computer",
             NodeState.Online, AppText(ThisSystem, PairnetsInfo.ProductVersion));
 
         var server = s.Server is null && !connected
@@ -62,54 +65,60 @@ public sealed record DeviceMap(
                 ? new MapNode("Server", s.Server?.DiskFreeBytes is { } free ? Format.Bytes(free) + " free" : "Online", NodeState.Online, s.ServerVersionText)
                 : new MapNode("Server", "Can't reach it", NodeState.Offline, s.ServerVersionText);
 
-        var (other, more) = OtherComputer(s, thisDevice, now);
+        var (other, live, more) = OtherComputer(s, thisDevice, now);
 
+        // Held by "too many requests", nothing moves even though files wait in line.
         var hereFlow = LinkFlow.None;
-        if (connected && s.Status == RunnerStatus.Syncing)
+        if (connected && s.Status == RunnerStatus.Syncing && !s.IsSlowedDown)
         {
             var up = s.Active.Any(a => a.IsUpload) || (s.Active.Count == 0 && s.Operation == "upload");
             var down = s.Active.Any(a => !a.IsUpload) || (s.Active.Count == 0 && s.Operation == "download");
             hereFlow = up && down ? LinkFlow.Both : up ? LinkFlow.Up : down ? LinkFlow.Down : LinkFlow.None;
         }
 
-        var otherFlow = LinkFlow.None;
-        if (connected && other.State == NodeState.Online)
-        {
-            var sending = s.WaitingFor is { } w && string.Equals(w.Device, other.Name, StringComparison.OrdinalIgnoreCase)
-                          || s.HeardFrom.TryGetValue(other.Name, out var at) && now - at <= SendingWindow;
-            var receiving = hereFlow is LinkFlow.Up or LinkFlow.Both;
-            otherFlow = sending && receiving ? LinkFlow.Both : sending ? LinkFlow.Up : receiving ? LinkFlow.Down : LinkFlow.None;
-        }
-
+        var otherFlow = connected && other.State == NodeState.Online && live is not null ? FlowOf(live) : LinkFlow.None;
         return new DeviceMap(here, server, other, connected, hereFlow, connected && other.State == NodeState.Online, otherFlow, more);
     }
 
-    private static (MapNode Node, int More) OtherComputer(StatusSnapshot s, string? thisDevice, DateTimeOffset now)
+    /// <summary>Which way a computer's line moves for what it reported: "up" is towards the server.</summary>
+    public static LinkFlow FlowOf(TransferReport report) => (report.UpBytesPerSecond >= 1, report.DownBytesPerSecond >= 1) switch
+    {
+        (true, true) => LinkFlow.Both,
+        (true, false) => LinkFlow.Up,
+        (false, true) => LinkFlow.Down,
+        _ => LinkFlow.None,
+    };
+
+    private static (MapNode Node, TransferReport? Live, int More) OtherComputer(StatusSnapshot s, string? thisDevice, DateTimeOffset now)
     {
         if (s.DevicesUnsupported)
-            return (new MapNode("Other computer", "Update the server to see it", NodeState.Unknown), 0);
+            return (new MapNode("Other computer", "Update the server to see it", NodeState.Unknown), null, 0);
         if (s.Devices is null)
-            return (new MapNode("Other computer", s.IsConnected ? "Looking…" : "Unknown while offline", NodeState.Unknown), 0);
+            return (new MapNode("Other computer", s.IsConnected ? "Looking…" : "Unknown while offline", NodeState.Unknown), null, 0);
 
         var others = s.Devices
             .Where(d => !string.Equals(d.Name, thisDevice, StringComparison.OrdinalIgnoreCase) && (d.Online || now - d.LastSeen <= ForgetAfter))
-            .OrderByDescending(d => d.Online || s.HeardFrom.ContainsKey(d.Name))
+            .OrderByDescending(d => s.LiveOf(d.Name, thisDevice, now) is not null)
+            .ThenByDescending(d => d.Online || s.HeardFrom.ContainsKey(d.Name))
             .ThenByDescending(d => d.LastSeen)
             .ToList();
         if (others.Count == 0)
-            return (new MapNode("Your other computer", "Not connected yet", NodeState.Unknown, "Install Pairnets on it, type your nest's name and press \"Sign in with your browser\". You approve it on your nest."), 0);
+            return (new MapNode("Your other computer", "Not connected yet", NodeState.Unknown, "Install Pairnets on it, type your nest's name and press \"Sign in with your browser\". You approve it on your nest."), null, 0);
 
         var d = others[0];
-        // A change that just arrived from it means it is online, even before the next poll says so.
-        var online = d.Online || (s.HeardFrom.TryGetValue(d.Name, out var heard) && now - heard <= TimeSpan.FromMinutes(1));
+        var live = s.LiveOf(d.Name, thisDevice, now);
+        // A report or a change that just arrived from it means it is online, even before the next poll says so.
+        var online = d.Online || live is not null || (s.HeardFrom.TryGetValue(d.Name, out var heard) && now - heard <= TimeSpan.FromMinutes(1));
         string detail;
-        if (s.WaitingFor is { } wait && string.Equals(wait.Device, d.Name, StringComparison.OrdinalIgnoreCase))
-            detail = $"Uploading {wait.Count} files";
+        if (live is not null)
+            detail = Format.Live(live);
+        else if (s.WaitingFor is { } wait && string.Equals(wait.Device, d.Name, StringComparison.OrdinalIgnoreCase))
+            detail = $"Uploading {Format.Count(wait.Count)} files";
         else if (online)
-            detail = s.HeardFrom.TryGetValue(d.Name, out var at) && now - at <= SendingWindow ? "Sending changes" : "Online";
+            detail = "Online";
         else
             detail = "Last seen " + Format.RelativeTime(d.LastSeen, now);
-        return (new MapNode(d.Name, detail, online ? NodeState.Online : NodeState.Offline, AppText(d.System, d.AppVersion)), others.Count - 1);
+        return (new MapNode(d.Name, detail, online ? NodeState.Online : NodeState.Offline, AppText(d.System, d.AppVersion)), live, others.Count - 1);
     }
 
     private static string ThisSystem => OperatingSystem.IsWindows() ? "Windows" : OperatingSystem.IsMacOS() ? "macOS" : "Linux";

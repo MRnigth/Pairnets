@@ -543,7 +543,7 @@
             <ScrollViewer x:Name="DevicesPanel" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Visibility="Collapsed">
               <ItemsControl x:Name="DevicesList" Style="{StaticResource PlainList}">
                 <ItemsControl.ItemTemplate>
-                  <DataTemplate DataType="{x:Type c:DeviceRow}">
+                  <DataTemplate DataType="{x:Type c:DeviceRowView}">
                     <Border Style="{StaticResource Row}" Padding="10" Loaded="OnRowLoaded">
                       <Grid>
                         <Grid.ColumnDefinitions>

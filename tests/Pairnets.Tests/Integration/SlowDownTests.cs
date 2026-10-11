@@ -48,11 +48,12 @@ public class SlowDownTests : IAsyncLifetime
             return TooMany(TimeSpan.FromSeconds(1));
         };
         await using var pc = new Device("pc", _server, requests: log, parallel: 4);
-        var waits = new List<TimeSpan>();
-        pc.Api.SlowingDown += w =>
+        var holds = new List<DateTimeOffset>();
+        pc.Api.Pressure.Changed += until =>
         {
-            lock (waits)
-                waits.Add(w);
+            if (until is { } u)
+                lock (holds)
+                    holds.Add(u);
         };
         for (var i = 0; i < 20; i++)
             pc.Write($"f{i:00}.txt", "file " + i);
@@ -63,7 +64,8 @@ public class SlowDownTests : IAsyncLifetime
         Assert.Equal(0, result.Errors);
         Assert.Equal(20, result.Uploaded);
         Assert.Equal(20, _server.Store.ReadManifest(null).Entries.Count);
-        Assert.Contains(TimeSpan.FromSeconds(1), waits);
+        lock (holds)
+            Assert.NotEmpty(holds); // every request was held
         // Nothing was sent while the wait ran (a little slack for requests already on their way).
         var first = Interlocked.Read(ref refusedAtMs);
         lock (sentMs)
@@ -93,11 +95,10 @@ public class SlowDownTests : IAsyncLifetime
     }
 
     [Fact]
-    public void RetryAfterIsReadAndKeptWithinLimits()
+    public void RetryAfterIsRead()
     {
+        // The limits (at least 1 s, at most 10 min, a growing default without one) are BackPressure's: see SyncFeedbackTests.
         Assert.Equal(TimeSpan.FromSeconds(60), PairnetsApiClient.RetryAfterOf(TooMany(TimeSpan.FromSeconds(60))));
-        Assert.Equal(PairnetsApiClient.MaxSlowDown, PairnetsApiClient.RetryAfterOf(TooMany(TimeSpan.FromHours(3))));
-        Assert.Equal(TimeSpan.FromSeconds(1), PairnetsApiClient.RetryAfterOf(TooMany(TimeSpan.Zero)));
-        Assert.Equal(PairnetsApiClient.DefaultSlowDown, PairnetsApiClient.RetryAfterOf(new HttpResponseMessage(HttpStatusCode.TooManyRequests)));
+        Assert.Null(PairnetsApiClient.RetryAfterOf(new HttpResponseMessage(HttpStatusCode.TooManyRequests)));
     }
 }

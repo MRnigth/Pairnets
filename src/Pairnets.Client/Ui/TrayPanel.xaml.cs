@@ -117,7 +117,8 @@ public partial class TrayPanel : Window
             Head.Background = Visuals.Wash(brush, 0x26, 1);
         }
         Headline.Text = s.Headline;
-        Detail.Text = s.DetailText.Length > 0 ? s.DetailText : s.LastSyncText;
+        // Waiting: the other computer's progress (the window has a bar for it; the panel has only this line).
+        Detail.Text = s.IsWaiting ? s.WaitingProgressText : s.DetailText.Length > 0 ? s.DetailText : s.LastSyncText;
         FixButton.Visibility = s.FixLabel is not null ? Visibility.Visible : Visibility.Collapsed;
         FixButton.Content = s.FixLabel;
         PauseText.Text = s.Paused ? "Resume" : "Pause";

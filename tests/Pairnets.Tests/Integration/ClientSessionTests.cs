@@ -113,7 +113,7 @@ public class ClientSessionTests : IAsyncLifetime
         Assert.True(session.Status.BytesPerSecond > 0, "the last speed is still shown right after the upload");
 
         Interlocked.Add(ref clock.Ticks, TimeSpan.FromSeconds(6).Ticks);
-        session.RefreshSpeed();
+        await session.LiveTickAsync();
         Assert.Equal(0, session.Status.BytesPerSecond);
         Assert.Equal(string.Empty, session.Status.SpeedText);
     }

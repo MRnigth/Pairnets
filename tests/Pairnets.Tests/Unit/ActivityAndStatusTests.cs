@@ -62,7 +62,7 @@ public class ActivityAndStatusTests
     {
         var s = StatusSnapshot.Initial with { Status = RunnerStatus.Syncing, Text = "Syncing", Scan = new ScanProgress(12400, 310, null, 0, 0) };
         Assert.True(s.IsChecking);
-        Assert.Equal("Checking files…", s.Headline);
+        Assert.Equal("Checking files", s.Headline);
         Assert.Equal("12,400 files checked, 310 new or changed", s.DetailText);
 
         // A big file being read says which, and how far.

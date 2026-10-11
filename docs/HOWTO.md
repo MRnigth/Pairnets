@@ -387,19 +387,25 @@ and **Settings**. The buttons at the top right are always there: **Open folder**
 **Overview** shows everything at a glance:
 
 * **Status card** (top): a coloured badge with a symbol (✓ up to date, ↻ syncing, ⏸ paused,
-  ! needs a decision, ✕ error, crossed-out cloud for offline) and one line for the overall state.
-  The top of the card takes on the status colour.
-* **Checking files…** shows while Pairnets looks through the folder for what changed, before anything
-  is sent: "12,400 files checked, 310 new or changed · reading model.gguf (1.20 GB of 9.00 GB)". New
-  and changed files are read once from start to end to fingerprint them, which takes a while for
-  very big files (a 20 GB file takes a minute or more). What it has read is kept, so after **Pause**,
-  **Resume** or a restart it carries on instead of reading everything again.
+  ! needs a decision, ✕ error, crossed-out cloud for offline) and what Pairnets is doing right now,
+  in plain words: *Reading the server's list*; *Checking files* (see below); *Uploading* or
+  *Downloading* with how many files, the speed and the time left; *Waiting for PC-1 to finish
+  uploading* (see below); *Slowed down by the server* ("Too many requests to sync.pairnets.app;
+  continuing in 30 s"); or *Paused*. The top of the card takes on the status colour.
+* **Checking files** shows while Pairnets looks through the folder for what changed, before anything
+  is sent: "12,400 of 38,206 files checked, 310 new or changed · reading model.gguf (1.20 GB of
+  9.00 GB)". Most files are answered from what it remembers; new and changed files are read once from
+  start to end to fingerprint them, which takes a while for very big files (a 20 GB file takes a
+  minute or more). What it has read is kept, so after **Pause**, **Resume** or a restart it carries
+  on instead of reading everything again.
 * **Your computers**: *this computer*, the *server* and your *other computer*, joined by lines. A
-  green dot means online; for the other computer you see **Online**, **Sending changes**,
-  **Uploading 340 files** or **Last seen 3 h ago**. While files move, dots travel along the
-  lines: green towards the server (uploads), blue from the server (downloads). A dashed line means
-  not connected. Hover a computer's name to see which app and version it runs. (An older server
-  says *Update the server to see it*.)
+  green dot means online. Under each computer that is moving files you see its real speed, as that
+  computer measured it: **↓ 4.20 MB/s**, or **↑ 3.10 MB/s · 1,204 files left**. Otherwise the other
+  computer says **Online**, **Uploading 340 files** (it announced a big batch) or **Last seen 3 h
+  ago**. Dots travel along a line only while that computer really transfers: green towards the
+  server (uploads), blue from the server (downloads). A computer that sends no report for 10 seconds
+  shows no speed. A dashed line means not connected. Hover a computer's name to see which app and
+  version it runs. (An older server says *Update the server to see it*, and shows no speeds.)
 * **"2 things need your attention"** with a **Review** button, when something waits for you.
 * **Transfer card** (only while transferring; the arrow travels up while uploading and down while
   downloading, and the bars glide): how many files are being sent, the speed and the
@@ -429,7 +435,8 @@ computers within seconds; the version it replaces is kept in history too, so a r
 ![The History page](images/main-window-history-light.png)
 
 **Devices** lists every computer that uses your server, online or when it was last seen, with its
-system, Pairnets version and last change (see [Updates](#updates) for details).
+system, Pairnets version and last change (see [Updates](#updates) for details). A computer that is
+moving files shows its real speed instead of *Online* (**↓ 4.20 MB/s**, **↑ 3.10 MB/s · 1,204 files left**).
 
 **Needs attention** lists conflict copies and files that cannot be synced, each with a **Show in
 folder** button, and the decision Pairnets is waiting for, if any.
@@ -443,7 +450,9 @@ the server address and token under **Advanced**), the folder, this computer's na
 
 **Waiting for the other computer.** When your other computer uploads a big batch (more than 100
 files), this one waits and then downloads everything in one go instead of a few files at a time, so
-the two don't fight over the connection. The status card shows how far the other computer is:
+the two don't fight over the connection. The status card says *Waiting for PC-1 to finish uploading*
+and shows how far the other computer is, with its real speed ("383 of 38,206 files are on the
+server · ↑ 3.10 MB/s"):
 
 ![Pairnets waiting for the other computer (dark mode)](images/main-window-waiting-dark.png)
 
@@ -481,7 +490,7 @@ The icon colour always shows the state:
 | Icon | Meaning |
 |------|---------|
 | 🟢 green | up to date |
-| 🔵 blue | syncing (hover to see which file and how far) |
+| 🔵 blue | syncing (hover to see what it does: "Checking files · 12,000 of 38,206", "Uploading · 37 of 120 files · 4.90 MB/s · about 3 min left") |
 | ⚪ grey | offline: cannot reach the server, retrying by itself |
 | 🟠 orange | waiting for your decision (see section 9) |
 | 🔴 red | an error, or some files need attention |
@@ -823,13 +832,15 @@ In **Settings → Updates and speed**:
   computer has its own limits; all files in progress together stay under the limit.
 * **Wait while my other computer uploads many files**: the batch wait described in section 5.
 
-If the transfer card says **"Waiting a moment: the server asked Pairnets to slow down"**, too many
-requests came from your internet address at once (everything at home shares one). All transfers wait
-the time the server asked for (at most two minutes) and then go on with the same files; nothing is
-counted as failed.
+**Pause and Resume.** Pause stops at once, also in the middle of checking a big folder. What is done
+is kept: the files already checked, and big files half sent or half received. After **Resume**
+Pairnets goes on from there, and the status card shows its progress straight away.
 
-**Pause** keeps what is done: the files already checked, and big files half sent or half received.
-**Resume** goes on from there.
+**"Too many requests".** If the server, or sync.pairnets.app in front of it, says Pairnets asks too
+often, every transfer waits as long as it is told (the status card counts down: "continuing in
+30 s"), the same files go again, and then Pairnets goes on one file at a time for a while before
+speeding up again. Nothing fails and nothing is skipped because of it. On sync.pairnets.app each
+computer has its own allowance, so two computers at home do not slow each other down.
 
 ### Starting over
 

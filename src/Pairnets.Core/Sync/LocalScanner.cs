@@ -73,13 +73,19 @@ public sealed class LocalScanner
 
     public TimeSpan SaveEvery { get; init; } = TimeSpan.FromSeconds(2);
 
-    /// <summary>How often <see cref="Progress"/> is told at most.</summary>
+    /// <summary>How often progress is told at most (tests: every step).</summary>
     public TimeSpan ReportEvery { get; init; } = TimeSpan.FromMilliseconds(250);
 
-    /// <summary>Told how far the scan is (at the start, then at most every <see cref="ReportEvery"/>).</summary>
+    /// <summary>Told how far the scan is (at the start, after the listing, then at most every <see cref="ReportEvery"/>).</summary>
     public Action<ScanProgress>? Progress { get; set; }
 
-    public async Task<ScanResult> ScanAsync(CancellationToken ct)
+    /// <summary>
+    /// Lists the whole folder first (quick), then looks at every file: most are answered by the fingerprint saved last
+    /// time, new or changed ones are read. <paramref name="progress"/> gets (files checked, files in the folder) right
+    /// after the listing and then a few times a second. Fingerprints are saved along the way and when the check is
+    /// stopped (Pause, an error), so the next check goes on where this one stopped.
+    /// </summary>
+    public async Task<ScanResult> ScanAsync(CancellationToken ct, Action<int, int>? progress = null)
     {
         if (!Directory.Exists(_root))
             throw new ScanFailedException($"Sync folder '{_root}' does not exist.");
@@ -90,7 +96,25 @@ public sealed class LocalScanner
         tally.Report(force: true);
         try
         {
-            await WalkAsync(result, known, tally, ct).ConfigureAwait(false);
+            var candidates = List(result, ct);
+            tally.Total = candidates.Count;
+            tally.Report(force: true);
+            progress?.Invoke(0, candidates.Count);
+            var countedAt = _clock.GetTimestamp();
+            for (var i = 0; i < candidates.Count; i++)
+            {
+                ct.ThrowIfCancellationRequested();
+                var (info, rel) = candidates[i];
+                result.Files[rel] = await InspectFileAsync(info, rel, known, tally, ct).ConfigureAwait(false);
+                tally.Checked++;
+                tally.Report();
+                var now = _clock.GetTimestamp();
+                if (progress is not null && (i + 1 == candidates.Count || _clock.GetElapsedTime(countedAt, now) >= ReportEvery))
+                {
+                    progress(i + 1, candidates.Count);
+                    countedAt = now;
+                }
+            }
         }
         catch when (tally.Unsaved > 0)
         {
@@ -106,6 +130,7 @@ public sealed class LocalScanner
             throw;
         }
 
+        tally.Report(force: true);
         tally.Save();
         _state.PruneCacheRows(result.Files.Keys.ToHashSet(StringComparer.Ordinal));
         return result;
@@ -118,6 +143,7 @@ public sealed class LocalScanner
         private long _savedAt = owner._clock.GetTimestamp();
         private long _reportedAt;
 
+        public int Total;
         public int Checked;
         public int Read;
         public string? Reading;
@@ -149,12 +175,14 @@ public sealed class LocalScanner
             if (!force && _reportedAt != 0 && owner._clock.GetElapsedTime(_reportedAt, now) < owner.ReportEvery)
                 return;
             _reportedAt = now;
-            progress(new ScanProgress(Checked, Read, Reading, ReadingBytes, ReadingSize));
+            progress(new ScanProgress(Checked, Read, Reading, ReadingBytes, ReadingSize, Total));
         }
     }
 
-    private async Task WalkAsync(ScanResult result, Dictionary<string, FileState> known, Tally tally, CancellationToken ct)
+    /// <summary>Walks the folder (never through links) and returns the files to look at; the rest goes into <paramref name="result"/>.</summary>
+    private List<(FileInfo Info, string Rel)> List(ScanResult result, CancellationToken ct)
     {
+        var candidates = new List<(FileInfo, string)>();
         var pending = new Stack<string>();
         pending.Push(string.Empty);
         var enumOptions = new EnumerationOptions
@@ -232,14 +260,10 @@ public sealed class LocalScanner
                     result.InvalidNames.Add((rel, problem));
                     continue;
                 }
-
-                var file = await InspectFileAsync((FileInfo)entry, rel, known, tally, ct).ConfigureAwait(false);
-                result.Files[rel] = file;
-                tally.Checked++;
-                tally.Report();
+                candidates.Add(((FileInfo)entry, rel));
             }
         }
-        tally.Report(force: true);
+        return candidates;
     }
 
     private async Task<LocalFile> InspectFileAsync(

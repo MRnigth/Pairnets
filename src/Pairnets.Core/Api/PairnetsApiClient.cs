@@ -36,10 +36,11 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
     /// <param name="serviceUrl">The Pairnets service whose relay addresses this client recognises (tests; by default sync.pairnets.app).</param>
     public PairnetsApiClient(Uri serverUrl, string token, string deviceId, HttpMessageHandler? handler = null,
         TimeSpan? stallTimeout = null, TimeSpan? metadataTimeout = null, long? pieceSize = null, long? minPieceSize = null,
-        Uri? serviceUrl = null)
+        Uri? serviceUrl = null, TimeProvider? clock = null)
     {
         ArgumentNullException.ThrowIfNull(serverUrl);
         BaseAddress = NormalizeBase(serverUrl);
+        Pressure = new BackPressure(clock);
         IsRelay = Client.Relay.IsRelayAddress(BaseAddress, serviceUrl);
         _token = token;
         _stallTimeout = stallTimeout ?? TimeSpan.FromSeconds(60);
@@ -128,7 +129,7 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
         using var timeout = Linked(ct, TimeSpan.FromSeconds(15));
         try
         {
-            using var resp = await SendAsync(new HttpRequestMessage(HttpMethod.Get, HealthPath), HttpCompletionOption.ResponseContentRead, timeout, ct).ConfigureAwait(false);
+            using var resp = await SendAsync(() => new HttpRequestMessage(HttpMethod.Get, HealthPath), HttpCompletionOption.ResponseContentRead, timeout, ct).ConfigureAwait(false);
             return new HealthCheck(resp.IsSuccessStatusCode, IsFromCloudflare(resp), DescribeCloudflareError(resp, IsRelay));
         }
         catch (Exception ex) when (ex is PairnetsNetworkException { Code: not null } or PairnetsAuthException { Code: ServiceErrors.NestUnknown })
@@ -140,7 +141,7 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
     public async Task<ServerInfo> GetInfoAsync(CancellationToken ct)
     {
         using var timeout = Linked(ct, TimeSpan.FromSeconds(30));
-        using var resp = await SendAsync(new HttpRequestMessage(HttpMethod.Get, "api/info"), HttpCompletionOption.ResponseContentRead, timeout, ct).ConfigureAwait(false);
+        using var resp = await SendAsync(() => new HttpRequestMessage(HttpMethod.Get, "api/info"), HttpCompletionOption.ResponseContentRead, timeout, ct).ConfigureAwait(false);
         await ThrowForStatusAsync(resp).ConfigureAwait(false);
         var info = await ReadJsonAsync<ServerInfo>(resp, timeout, ct).ConfigureAwait(false);
         PiecesInFlight = info.PiecesInFlight ?? 1;
@@ -164,7 +165,7 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
     public async Task<IReadOnlyList<DeviceInfo>?> GetDevicesAsync(CancellationToken ct)
     {
         using var timeout = Linked(ct, TimeSpan.FromSeconds(30));
-        using var resp = await SendAsync(new HttpRequestMessage(HttpMethod.Get, "api/devices"), HttpCompletionOption.ResponseContentRead, timeout, ct).ConfigureAwait(false);
+        using var resp = await SendAsync(() => new HttpRequestMessage(HttpMethod.Get, "api/devices"), HttpCompletionOption.ResponseContentRead, timeout, ct).ConfigureAwait(false);
         if ((int)resp.StatusCode is 404 or 405)
             return null;
         await ThrowForStatusAsync(resp).ConfigureAwait(false);
@@ -175,7 +176,7 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
     public async Task<UpdaterDiagnostics?> GetUpdateDiagnosticsAsync(CancellationToken ct)
     {
         using var timeout = Linked(ct, TimeSpan.FromSeconds(30));
-        using var resp = await SendAsync(new HttpRequestMessage(HttpMethod.Get, "api/update/diagnostics"), HttpCompletionOption.ResponseContentRead, timeout, ct).ConfigureAwait(false);
+        using var resp = await SendAsync(() => new HttpRequestMessage(HttpMethod.Get, "api/update/diagnostics"), HttpCompletionOption.ResponseContentRead, timeout, ct).ConfigureAwait(false);
         if ((int)resp.StatusCode is 404 or 405)
             return null;
         await ThrowForStatusAsync(resp).ConfigureAwait(false);
@@ -186,7 +187,7 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
     public async Task<ServerHello?> GetHelloAsync(CancellationToken ct)
     {
         using var timeout = Linked(ct, TimeSpan.FromSeconds(15));
-        using var resp = await SendAsync(new HttpRequestMessage(HttpMethod.Get, "api/hello"), HttpCompletionOption.ResponseContentRead, timeout, ct).ConfigureAwait(false);
+        using var resp = await SendAsync(() => new HttpRequestMessage(HttpMethod.Get, "api/hello"), HttpCompletionOption.ResponseContentRead, timeout, ct).ConfigureAwait(false);
         if ((int)resp.StatusCode is 401 or 404 or 405)
             return null; // older servers have no such endpoint (and ask for the token first)
         await ThrowForStatusAsync(resp).ConfigureAwait(false);
@@ -197,7 +198,7 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
     public async Task<DeviceMe?> GetMeAsync(CancellationToken ct)
     {
         using var timeout = Linked(ct, TimeSpan.FromSeconds(30));
-        using var resp = await SendAsync(new HttpRequestMessage(HttpMethod.Get, "api/me"), HttpCompletionOption.ResponseContentRead, timeout, ct).ConfigureAwait(false);
+        using var resp = await SendAsync(() => new HttpRequestMessage(HttpMethod.Get, "api/me"), HttpCompletionOption.ResponseContentRead, timeout, ct).ConfigureAwait(false);
         if ((int)resp.StatusCode is 404 or 405)
             return null;
         await ThrowForStatusAsync(resp).ConfigureAwait(false);
@@ -208,7 +209,7 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
     public async Task<bool> RemoveDeviceAsync(string id, CancellationToken ct)
     {
         using var timeout = Linked(ct, TimeSpan.FromSeconds(30));
-        using var resp = await SendAsync(new HttpRequestMessage(HttpMethod.Delete, "api/devices/" + Uri.EscapeDataString(id)), HttpCompletionOption.ResponseContentRead, timeout, ct).ConfigureAwait(false);
+        using var resp = await SendAsync(() => new HttpRequestMessage(HttpMethod.Delete, "api/devices/" + Uri.EscapeDataString(id)), HttpCompletionOption.ResponseContentRead, timeout, ct).ConfigureAwait(false);
         if (resp.StatusCode == HttpStatusCode.NotFound)
             return false;
         await ThrowForStatusAsync(resp).ConfigureAwait(false);
@@ -219,7 +220,7 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
     public async Task<DeviceMe> RenameThisDeviceAsync(string name, CancellationToken ct)
     {
         using var timeout = Linked(ct, TimeSpan.FromSeconds(30));
-        using var resp = await SendAsync(new HttpRequestMessage(HttpMethod.Patch, "api/devices/me") { Content = JsonContent.Create(new DeviceNameRequest(name), options: PairnetsJson.Options) },
+        using var resp = await SendAsync(() => new HttpRequestMessage(HttpMethod.Patch, "api/devices/me") { Content = JsonContent.Create(new DeviceNameRequest(name), options: PairnetsJson.Options) },
             HttpCompletionOption.ResponseContentRead, timeout, ct).ConfigureAwait(false);
         await ThrowForStatusAsync(resp).ConfigureAwait(false);
         return await ReadJsonAsync<DeviceMe>(resp, timeout, ct).ConfigureAwait(false);
@@ -229,8 +230,8 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
     public async Task<PairStartResponse?> StartPairingAsync(PairStartRequest request, CancellationToken ct)
     {
         using var timeout = Linked(ct, TimeSpan.FromSeconds(30));
-        using var resp = await SendAsync(new HttpRequestMessage(HttpMethod.Post, "api/pair/start") { Content = JsonContent.Create(request, options: PairnetsJson.Options) },
-            HttpCompletionOption.ResponseContentRead, timeout, ct).ConfigureAwait(false);
+        using var resp = await SendAsync(() => new HttpRequestMessage(HttpMethod.Post, "api/pair/start") { Content = JsonContent.Create(request, options: PairnetsJson.Options) },
+            HttpCompletionOption.ResponseContentRead, timeout, ct, ownTooMany: true).ConfigureAwait(false);
         if ((int)resp.StatusCode is 401 or 404 or 405)
             return null;
         if ((int)resp.StatusCode is 400 or 409 or 429)
@@ -249,7 +250,7 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
     public async Task<PairPollResponse> PollPairingAsync(string pollToken, CancellationToken ct)
     {
         using var timeout = Linked(ct, TimeSpan.FromSeconds(30));
-        using var resp = await SendAsync(new HttpRequestMessage(HttpMethod.Post, "api/pair/poll") { Content = JsonContent.Create(new PairPollRequest(pollToken), options: PairnetsJson.Options) },
+        using var resp = await SendAsync(() => new HttpRequestMessage(HttpMethod.Post, "api/pair/poll") { Content = JsonContent.Create(new PairPollRequest(pollToken), options: PairnetsJson.Options) },
             HttpCompletionOption.ResponseContentRead, timeout, ct).ConfigureAwait(false);
         if (resp.StatusCode == HttpStatusCode.NotFound)
             return new PairPollResponse(PairPollResponse.Expired);
@@ -263,7 +264,7 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
     public async Task<ServerUpdateRequest> RequestServerUpdateAsync(CancellationToken ct)
     {
         using var timeout = Linked(ct, TimeSpan.FromSeconds(30));
-        using var resp = await SendAsync(new HttpRequestMessage(HttpMethod.Post, "api/update"), HttpCompletionOption.ResponseContentRead, timeout, ct).ConfigureAwait(false);
+        using var resp = await SendAsync(() => new HttpRequestMessage(HttpMethod.Post, "api/update"), HttpCompletionOption.ResponseContentRead, timeout, ct, ownTooMany: true).ConfigureAwait(false);
         switch ((int)resp.StatusCode)
         {
             case 202:
@@ -339,7 +340,7 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
     {
         var uri = since is null ? "api/manifest" : $"api/manifest?since={since.Value.ToString(CultureInfo.InvariantCulture)}";
         using var timeout = Linked(ct, _metadataTimeout);
-        using var resp = await SendAsync(new HttpRequestMessage(HttpMethod.Get, uri), HttpCompletionOption.ResponseHeadersRead, timeout, ct).ConfigureAwait(false);
+        using var resp = await SendAsync(() => new HttpRequestMessage(HttpMethod.Get, uri), HttpCompletionOption.ResponseHeadersRead, timeout, ct).ConfigureAwait(false);
         await ThrowForStatusAsync(resp).ConfigureAwait(false);
         var serverId = HeaderValue(resp, PairnetsHeaders.ServerId, TetherNames.ServerIdHeader) ?? throw new PairnetsProtocolException("Manifest response has no server id.");
         if (!long.TryParse(HeaderValue(resp, PairnetsHeaders.Version, TetherNames.VersionHeader), NumberStyles.None, CultureInfo.InvariantCulture, out var version))
@@ -352,6 +353,9 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
 
     /// <summary>Speed limit shared by all uploads of this client (no limit by default).</summary>
     public Throttle UploadLimit { get; } = new();
+
+    /// <summary>"Too many requests" handling shared by every request of this client (see <see cref="BackPressure"/>).</summary>
+    public BackPressure Pressure { get; }
 
     /// <summary>Speed limit shared by all downloads of this client (no limit by default).</summary>
     public Throttle DownloadLimit { get; } = new();
@@ -369,13 +373,16 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
         if (resume is { Offset: > 0 } && !(destination.CanSeek && destination.CanRead))
             throw new ArgumentException("Continuing a download needs a readable, seekable destination.", nameof(destination));
         using var stall = Linked(ct, _stallTimeout);
-        var req = new HttpRequestMessage(HttpMethod.Get, "api/file?path=" + Uri.EscapeDataString(path));
-        if (offset > 0)
+        using var resp = await SendAsync(() =>
         {
-            req.Headers.Range = new RangeHeaderValue(offset, null);
-            req.Headers.IfRange = new RangeConditionHeaderValue(new EntityTagHeaderValue("\"" + resume!.Hash + "\""));
-        }
-        using var resp = await SendAsync(req, HttpCompletionOption.ResponseHeadersRead, stall, ct).ConfigureAwait(false);
+            var req = new HttpRequestMessage(HttpMethod.Get, "api/file?path=" + Uri.EscapeDataString(path));
+            if (offset > 0)
+            {
+                req.Headers.Range = new RangeHeaderValue(offset, null);
+                req.Headers.IfRange = new RangeConditionHeaderValue(new EntityTagHeaderValue("\"" + resume!.Hash + "\""));
+            }
+            return req;
+        }, HttpCompletionOption.ResponseHeadersRead, stall, ct).ConfigureAwait(false);
         if (resp.StatusCode == HttpStatusCode.NotFound)
             return new DownloadResult(false, string.Empty, 0, 0);
         await ThrowForStatusAsync(resp).ConfigureAwait(false);
@@ -498,20 +505,32 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
         }
 
         using var stall = Linked(ct, _stallTimeout);
-        var hashing = new HashingStream(content, leaveOpen: true, progress);
         var uri = $"api/file?path={Uri.EscapeDataString(path)}&base={Uri.EscapeDataString(baseHash)}&mtime={mtimeMs.ToString(CultureInfo.InvariantCulture)}";
-        using var req = new HttpRequestMessage(HttpMethod.Put, uri)
+        var start = content.CanSeek ? content.Position : -1;
+        HashingStream? hashing = null;
+        using var resp = await SendAsync(() =>
         {
-            Content = new StreamingUploadContent(hashing, stall, _stallTimeout, UploadLimit),
-        };
-        req.Content.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
-        // The server answers 400/401/409 before we send a possibly huge body.
-        req.Headers.ExpectContinue = true;
-
-        using var resp = await SendAsync(req, HttpCompletionOption.ResponseContentRead, stall, ct).ConfigureAwait(false);
+            if (hashing is not null)
+            {
+                // Sent again after "too many requests": the whole file once more, with a fresh hash.
+                if (start < 0)
+                    throw new PairnetsNetworkException(TooManyRequestsMessage, code: ServiceErrors.RateLimited);
+                content.Position = start;
+                progress?.Invoke(0);
+            }
+            hashing = new HashingStream(content, leaveOpen: true, progress);
+            var req = new HttpRequestMessage(HttpMethod.Put, uri)
+            {
+                Content = new StreamingUploadContent(hashing, stall, _stallTimeout, UploadLimit),
+            };
+            req.Content.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
+            // The server answers 400/401/409 before we send a possibly huge body.
+            req.Headers.ExpectContinue = true;
+            return req;
+        }, HttpCompletionOption.ResponseContentRead, stall, ct).ConfigureAwait(false);
         var result = await ReadChangeResultAsync(resp, stall, ct).ConfigureAwait(false);
-        var sent = result.Outcome == ApiOutcome.Ok ? hashing.GetHash() : string.Empty;
-        return (result, sent, hashing.BytesTransferred);
+        var sent = result.Outcome == ApiOutcome.Ok ? hashing!.GetHash() : string.Empty;
+        return (result, sent, hashing!.BytesTransferred);
     }
 
     /// <summary>
@@ -599,7 +618,7 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
         using var timeout = Linked(ct, _metadataTimeout);
         var start = $"api/upload?path={Uri.EscapeDataString(path)}&base={Uri.EscapeDataString(baseHash)}" +
             $"&size={size.ToString(CultureInfo.InvariantCulture)}&mtime={mtimeMs.ToString(CultureInfo.InvariantCulture)}";
-        using var resp = await SendAsync(new HttpRequestMessage(HttpMethod.Post, start), HttpCompletionOption.ResponseContentRead, timeout, ct).ConfigureAwait(false);
+        using var resp = await SendAsync(() => new HttpRequestMessage(HttpMethod.Post, start), HttpCompletionOption.ResponseContentRead, timeout, ct).ConfigureAwait(false);
         if ((int)resp.StatusCode is 404 or 405 && !IsJson(resp))
         {
             _piecesUnsupported = true;
@@ -649,7 +668,7 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
                 await reader.SkipAsync(reader.Size, ct).ConfigureAwait(false); // the bytes an earlier attempt sent, if not read yet
                 var hash = reader.GetHash();
                 using var timeout = Linked(ct, _metadataTimeout);
-                using var resp = await SendAsync(new HttpRequestMessage(HttpMethod.Post, $"api/upload/{id}/commit?hash={hash}"),
+                using var resp = await SendAsync(() => new HttpRequestMessage(HttpMethod.Post, $"api/upload/{id}/commit?hash={hash}"),
                     HttpCompletionOption.ResponseContentRead, timeout, ct).ConfigureAwait(false);
                 if (!resp.IsSuccessStatusCode && await TryReadErrorAsync(resp, ct).ConfigureAwait(false) is { } error)
                 {
@@ -781,7 +800,9 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
         };
         req.Content.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
         var started = Stopwatch.GetTimestamp();
-        using var resp = await SendAsync(req, HttpCompletionOption.ResponseContentRead, stall, ct).ConfigureAwait(false);
+        // Never sent again here: the other piece may be reading the file by now. A 429 holds every request and comes
+        // back as PairnetsSlowDownException; the upload then asks the server how much it has and goes on from there.
+        using var resp = await SendAsync(() => req, HttpCompletionOption.ResponseContentRead, stall, ct, sendAgain: false).ConfigureAwait(false);
         if (resp.StatusCode == HttpStatusCode.OK)
         {
             var received = (await ReadJsonAsync<UploadStatus>(resp, stall, ct).ConfigureAwait(false)).Received;
@@ -800,7 +821,7 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
     private async Task<UploadStatus?> UploadStatusAsync(string id, CancellationToken ct)
     {
         using var timeout = Linked(ct, TimeSpan.FromSeconds(30));
-        using var resp = await SendAsync(new HttpRequestMessage(HttpMethod.Get, $"api/upload/{id}"), HttpCompletionOption.ResponseContentRead, timeout, ct).ConfigureAwait(false);
+        using var resp = await SendAsync(() => new HttpRequestMessage(HttpMethod.Get, $"api/upload/{id}"), HttpCompletionOption.ResponseContentRead, timeout, ct).ConfigureAwait(false);
         if (resp.StatusCode == HttpStatusCode.NotFound)
             return null;
         await ThrowForStatusAsync(resp).ConfigureAwait(false);
@@ -816,7 +837,8 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
         try
         {
             using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-            using var resp = await SendAsync(new HttpRequestMessage(HttpMethod.Delete, $"api/upload/{Uri.EscapeDataString(uploadId)}"), HttpCompletionOption.ResponseContentRead, timeout, CancellationToken.None).ConfigureAwait(false);
+            using var resp = await SendAsync(() => new HttpRequestMessage(HttpMethod.Delete, $"api/upload/{Uri.EscapeDataString(uploadId)}"), HttpCompletionOption.ResponseContentRead, timeout, CancellationToken.None,
+                bestEffort: true).ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is PairnetsNetworkException or LocalFileReadException)
         {
@@ -879,7 +901,7 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
     {
         using var timeout = Linked(ct, _metadataTimeout);
         var uri = $"api/file?path={Uri.EscapeDataString(path)}&base={Uri.EscapeDataString(baseHash)}";
-        using var resp = await SendAsync(new HttpRequestMessage(HttpMethod.Delete, uri), HttpCompletionOption.ResponseContentRead, timeout, ct).ConfigureAwait(false);
+        using var resp = await SendAsync(() => new HttpRequestMessage(HttpMethod.Delete, uri), HttpCompletionOption.ResponseContentRead, timeout, ct).ConfigureAwait(false);
         return await ReadChangeResultAsync(resp, timeout, ct).ConfigureAwait(false);
     }
 
@@ -888,7 +910,7 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
     public async Task<IReadOnlyList<HistoryVersion>> GetHistoryAsync(string path, CancellationToken ct)
     {
         using var timeout = Linked(ct, _metadataTimeout);
-        using var resp = await SendAsync(new HttpRequestMessage(HttpMethod.Get, "api/history?path=" + Uri.EscapeDataString(path)),
+        using var resp = await SendAsync(() => new HttpRequestMessage(HttpMethod.Get, "api/history?path=" + Uri.EscapeDataString(path)),
             HttpCompletionOption.ResponseContentRead, timeout, ct).ConfigureAwait(false);
         await ThrowForStatusAsync(resp).ConfigureAwait(false);
         return await ReadJsonAsync<List<HistoryVersion>>(resp, timeout, ct).ConfigureAwait(false);
@@ -909,7 +931,7 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
         while (true)
         {
             using var timeout = Linked(ct, _metadataTimeout);
-            using var resp = await SendAsync(new HttpRequestMessage(HttpMethod.Post, uri), HttpCompletionOption.ResponseContentRead, timeout, ct).ConfigureAwait(false);
+            using var resp = await SendAsync(() => new HttpRequestMessage(HttpMethod.Post, uri), HttpCompletionOption.ResponseContentRead, timeout, ct).ConfigureAwait(false);
             if (resp.StatusCode != HttpStatusCode.Accepted)
                 return await ReadChangeResultAsync(resp, timeout, ct).ConfigureAwait(false);
             if (Stopwatch.GetElapsedTime(giveUp) > TimeSpan.FromHours(1))
@@ -956,7 +978,7 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
                 : "The server rejected the token (401).", reason?.Code);
         }
         if (resp.StatusCode == HttpStatusCode.TooManyRequests)
-            throw new PairnetsSlowDownException(RetryAfterOf(resp));
+            throw new PairnetsSlowDownException(RetryAfterOf(resp) ?? BackPressure.DefaultWait);
         if (DescribeCloudflareError(resp, IsRelay) is { } cloudflare)
             throw new PairnetsNetworkException(cloudflare);
         if (resp.StatusCode == HttpStatusCode.RequestEntityTooLarge)
@@ -1036,63 +1058,60 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
 
     private const string HealthPath = "api/health";
 
-    /// <summary>The longest a 429 makes this client wait, whatever Retry-After says.</summary>
-    internal static readonly TimeSpan MaxSlowDown = TimeSpan.FromMinutes(2);
+    /// <summary>How often one request is sent again after "too many requests" before the pass gives up and retries later.</summary>
+    internal int MaxTooManyRetries { get; init; } = 30;
 
-    /// <summary>How long to wait after a 429 without a usable Retry-After.</summary>
-    internal static readonly TimeSpan DefaultSlowDown = TimeSpan.FromSeconds(10);
-
-    /// <summary><see cref="Environment.TickCount64"/> until which no request is sent (after a 429), or 0.</summary>
-    private long _slowUntilMs;
+    /// <summary>What a pass says when the server kept answering "too many requests" for a very long time.</summary>
+    private string TooManyRequestsMessage => $"Too many requests to {BaseAddress.Host}; Pairnets keeps trying.";
 
     /// <summary>
-    /// Raised when a 429 makes every request wait (the length of the wait). The limit counts all requests from this
-    /// address, so all transfers wait together rather than each running into it again.
+    /// Sends a request built by <paramref name="make"/> (built again if it has to be sent again). A 429 "too many requests"
+    /// is back-pressure, not an error: every request of this client waits as the answer says (<see cref="Pressure"/>) and
+    /// this one is sent again, up to <see cref="MaxTooManyRetries"/> times. <paramref name="ownTooMany"/>: the nest answers
+    /// 429 itself on this endpoint with a meaning of its own ("too many sign-ins waiting"), so only the Pairnets service's
+    /// rate_limited counts there. <paramref name="bestEffort"/>: never waits or retries (cleanup that may be skipped).
+    /// <paramref name="sendAgain"/> false: a 429 still holds every request, but this one is not sent again; it comes back
+    /// as <see cref="PairnetsSlowDownException"/> (a piece of an upload, whose caller goes on from what the server has).
     /// </summary>
-    public event Action<TimeSpan>? SlowingDown;
-
-    private void SlowDown(TimeSpan wait)
+    private async Task<HttpResponseMessage> SendAsync(Func<HttpRequestMessage> make, HttpCompletionOption completion,
+        CancellationTokenSource timeout, CancellationToken callerCt, bool ownTooMany = false, bool bestEffort = false, bool sendAgain = true)
     {
-        var until = Environment.TickCount64 + (long)wait.TotalMilliseconds;
-        long seen;
-        do
+        for (var attempt = 1; ; attempt++)
         {
-            seen = Volatile.Read(ref _slowUntilMs);
-            if (seen >= until)
-                return; // another transfer already set the same or a later time
+            HttpResponseMessage resp;
+            if (bestEffort)
+            {
+                // Cleanup that may be skipped: never waits its turn, and is skipped while requests are held.
+                if (Pressure.HeldUntil is not null)
+                    throw new PairnetsNetworkException(TooManyRequestsMessage, code: ServiceErrors.RateLimited);
+                resp = await SendOnceAsync(make(), completion, timeout, callerCt).ConfigureAwait(false);
+            }
+            else
+            {
+                using var slot = await Pressure.EnterAsync(callerCt, () => timeout.CancelAfter(Timeout.InfiniteTimeSpan)).ConfigureAwait(false);
+                // The request's own timeout does not run while it waits its turn.
+                if (slot.Waited)
+                    timeout.CancelAfter(TimeoutOf(timeout));
+                resp = await SendOnceAsync(make(), completion, timeout, callerCt).ConfigureAwait(false);
+            }
+            if (resp.StatusCode != HttpStatusCode.TooManyRequests
+                || (ownTooMany && await ServiceErrorCodeAsync(resp).ConfigureAwait(false) != ServiceErrors.RateLimited))
+            {
+                Pressure.Answered();
+                return resp;
+            }
+
+            var retryAfter = RetryAfterOf(resp);
+            resp.Dispose();
+            Pressure.Refused(retryAfter);
+            if (!sendAgain)
+                throw new PairnetsSlowDownException(retryAfter ?? BackPressure.DefaultWait);
+            if (bestEffort || attempt >= MaxTooManyRetries)
+                throw new PairnetsNetworkException(TooManyRequestsMessage, code: ServiceErrors.RateLimited);
         }
-        while (Interlocked.CompareExchange(ref _slowUntilMs, until, seen) != seen);
-        SlowingDown?.Invoke(wait);
     }
 
-    /// <summary>Retry-After of a 429 (seconds or a date), within 1 s and <see cref="MaxSlowDown"/>.</summary>
-    internal static TimeSpan RetryAfterOf(HttpResponseMessage resp)
-    {
-        var after = resp.Headers.RetryAfter switch
-        {
-            { Delta: { } delta } => delta,
-            { Date: { } date } => date - DateTimeOffset.UtcNow,
-            _ => DefaultSlowDown,
-        };
-        return after < TimeSpan.FromSeconds(1) ? TimeSpan.FromSeconds(1) : after > MaxSlowDown ? MaxSlowDown : after;
-    }
-
-    /// <summary>
-    /// Holds a request back while a 429 asked this client to wait. The request's own timeout does not run meanwhile:
-    /// it starts again, at its full length, when the wait is over.
-    /// </summary>
-    private async Task WaitWhileSlowedDownAsync(CancellationTokenSource timeout, CancellationToken callerCt)
-    {
-        var wait = Volatile.Read(ref _slowUntilMs) - Environment.TickCount64;
-        if (wait <= 0)
-            return;
-        timeout.CancelAfter(Timeout.InfiniteTimeSpan);
-        await Task.Delay(TimeSpan.FromMilliseconds(wait), callerCt).ConfigureAwait(false);
-        if (TimeoutSpans.TryGetValue(timeout, out var span))
-            timeout.CancelAfter((TimeSpan)span);
-    }
-
-    private async Task<HttpResponseMessage> SendAsync(HttpRequestMessage req, HttpCompletionOption completion,
+    private async Task<HttpResponseMessage> SendOnceAsync(HttpRequestMessage req, HttpCompletionOption completion,
         CancellationTokenSource timeout, CancellationToken callerCt)
     {
         // Every request carries the token except the health check, which needs none (so a URL that
@@ -1101,11 +1120,7 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
             req.Headers.TryAddWithoutValidation(PairnetsHeaders.Token, _token);
         try
         {
-            await WaitWhileSlowedDownAsync(timeout, callerCt).ConfigureAwait(false);
             var resp = await _http.SendAsync(req, completion, timeout.Token).ConfigureAwait(false);
-            // The relay's limit says how long to wait; a nest's own 429s (sign-in, update) do not, and mean something else.
-            if (resp.StatusCode == HttpStatusCode.TooManyRequests && resp.Headers.RetryAfter is not null)
-                SlowDown(RetryAfterOf(resp));
             if (await ServiceErrorAsync(resp).ConfigureAwait(false) is { } serviceError)
             {
                 resp.Dispose();
@@ -1133,6 +1148,33 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
         {
             if (completion == HttpCompletionOption.ResponseContentRead)
                 req.Dispose();
+        }
+    }
+
+    /// <summary>How long a 429 asks to wait (Retry-After in seconds or as a date), or null when it does not say.</summary>
+    internal static TimeSpan? RetryAfterOf(HttpResponseMessage resp)
+    {
+        if (resp.Headers.RetryAfter is not { } after)
+            return null;
+        if (after.Delta is { } delta)
+            return delta;
+        return after.Date is { } date ? date - DateTimeOffset.UtcNow : null;
+    }
+
+    /// <summary>The "error" of a short JSON answer from the Pairnets service, or null.</summary>
+    private static async Task<string?> ServiceErrorCodeAsync(HttpResponseMessage resp)
+    {
+        if (!IsJson(resp) || resp.Content.Headers.ContentLength > ServiceErrorMaxBytes)
+            return null;
+        try
+        {
+            await resp.Content.LoadIntoBufferAsync(ServiceErrorMaxBytes).ConfigureAwait(false);
+            var bytes = await resp.Content.ReadAsByteArrayAsync().ConfigureAwait(false);
+            return JsonSerializer.Deserialize<ServiceErrorBody>(bytes, PairnetsJson.Options)?.Error;
+        }
+        catch (Exception ex) when (ex is JsonException or NotSupportedException or IOException or HttpRequestException or InvalidOperationException)
+        {
+            return null;
         }
     }
 
@@ -1191,16 +1233,20 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
         return null;
     }
 
+    /// <summary>The time each request's timeout was made with, so it can start over after waiting its turn.</summary>
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<CancellationTokenSource, TimeoutSpan> Timeouts = new();
+
+    private sealed record TimeoutSpan(TimeSpan Value);
+
     private static CancellationTokenSource Linked(CancellationToken ct, TimeSpan after)
     {
         var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         cts.CancelAfter(after);
-        TimeoutSpans.AddOrUpdate(cts, after);
+        Timeouts.AddOrUpdate(cts, new TimeoutSpan(after));
         return cts;
     }
 
-    /// <summary>Each request timeout's length, so a wait for a 429 can start it again afterwards (see <see cref="WaitWhileSlowedDownAsync"/>).</summary>
-    private static readonly ConditionalWeakTable<CancellationTokenSource, object> TimeoutSpans = new();
+    private TimeSpan TimeoutOf(CancellationTokenSource cts) => Timeouts.TryGetValue(cts, out var span) ? span.Value : _metadataTimeout;
 
     public void Dispose() => _http.Dispose();
 

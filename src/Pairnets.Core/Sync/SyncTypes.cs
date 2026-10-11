@@ -38,6 +38,21 @@ public enum BlockReason
     SignInRequired,
 }
 
+/// <summary>What a running pass is doing now, so the apps can say it instead of a bare "Syncing".</summary>
+public enum SyncStage
+{
+    None,
+
+    /// <summary>Reading the server's list of files.</summary>
+    ReadingServer,
+
+    /// <summary>Checking the files in the folder (most from the saved fingerprints, new or changed ones are read).</summary>
+    Checking,
+
+    /// <summary>Uploading, downloading and deleting.</summary>
+    Transferring,
+}
+
 public enum PassOutcome
 {
     Completed,
@@ -64,9 +79,10 @@ public sealed record SyncProgress(string? CurrentPath, string? Operation, long B
 
 /// <summary>
 /// How far the look through the folder is: files looked at, how many of them had to be read (new or changed), and the
-/// file being read right now with its bytes read so far (big files take a while).
+/// file being read right now with its bytes read so far (big files take a while), and the files in the folder (0 while
+/// it is still being listed).
 /// </summary>
-public sealed record ScanProgress(int FilesChecked, int FilesRead, string? ReadingPath, long ReadingBytes, long ReadingSize);
+public sealed record ScanProgress(int FilesChecked, int FilesRead, string? ReadingPath, long ReadingBytes, long ReadingSize, int FilesTotal = 0);
 
 /// <summary>Summary of one pass.</summary>
 public sealed class PassResult

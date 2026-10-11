@@ -70,22 +70,33 @@ public class OverviewAndHistoryTests
         };
         var map = DeviceMap.Build(uploading, "MAC", Now);
         Assert.Equal(LinkFlow.Up, map.HereFlow);
-        Assert.Equal(LinkFlow.Down, map.OtherFlow); // what this computer uploads goes on to the other one
+        Assert.Equal(LinkFlow.None, map.OtherFlow); // no guess that the other one receives: it reported nothing
 
         var mixed = uploading with { Active = [new ActiveTransfer("a", "upload", 1, 2), new ActiveTransfer("b", "download", 1, 2)] };
         Assert.Equal(LinkFlow.Both, DeviceMap.Build(mixed, "MAC", Now).HereFlow);
 
+        // A change that just arrived says it is online, but not that it is sending now: its line stays still.
         var heard = Connected(new DeviceInfo("DESKTOP", Now.AddMinutes(-3).AddDays(-30), Now.AddMinutes(-3), false)) with
         {
             HeardFrom = new Dictionary<string, DateTimeOffset> { ["DESKTOP"] = Now.AddSeconds(-2) },
         };
-        var sending = DeviceMap.Build(heard, "MAC", Now);
-        Assert.Equal(NodeState.Online, sending.Other.State); // a change just arrived, so it is online
-        Assert.Equal("Sending changes", sending.Other.Detail);
+        var online = DeviceMap.Build(heard, "MAC", Now);
+        Assert.Equal(NodeState.Online, online.Other.State);
+        Assert.Equal("Online", online.Other.Detail);
+        Assert.Equal(LinkFlow.None, online.OtherFlow);
+
+        // Only its own report moves its line.
+        var reported = heard with
+        {
+            Peers = new Dictionary<string, PeerTransfer> { ["desktop"] = new(new TransferReport(3.1 * (1 << 20), 0, 100, 1304, 0, 0), Now.AddSeconds(-1)) },
+        };
+        var sending = DeviceMap.Build(reported, "MAC", Now);
+        Assert.Equal("↑ 3.10 MB/s · 1,204 files left", sending.Other.Detail);
         Assert.Equal(LinkFlow.Up, sending.OtherFlow);
 
         var batch = Connected(new DeviceInfo("DESKTOP", Now.AddDays(-30), Now, true)) with { WaitingFor = new PeerWait("DESKTOP", 340, 12) };
         Assert.Equal("Uploading 340 files", DeviceMap.Build(batch, "MAC", Now).Other.Detail);
+        Assert.Equal(LinkFlow.None, DeviceMap.Build(batch, "MAC", Now).OtherFlow); // announced, but no speed reported
     }
 
     [Fact]

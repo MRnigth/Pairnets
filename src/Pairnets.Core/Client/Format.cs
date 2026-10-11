@@ -71,6 +71,31 @@ public static class Format
     /// <summary>"12.4 MB/s", "820 KB/s".</summary>
     public static string Speed(double bytesPerSecond) => Bytes((long)Math.Max(0, bytesPerSecond)) + "/s";
 
+    /// <summary>"38,206": a count with thousands separators.</summary>
+    public static string Count(long count) => count.ToString("N0", CultureInfo.InvariantCulture);
+
+    /// <summary>"↑ 3.10 MB/s", "↓ 4.20 MB/s", "↑ 1.00 MB/s ↓ 2.00 MB/s", or empty when nothing moves.</summary>
+    public static string Flow(double up, double down) => (up >= 1, down >= 1) switch
+    {
+        (true, true) => $"↑ {Speed(up)} ↓ {Speed(down)}",
+        (true, false) => "↑ " + Speed(up),
+        (false, true) => "↓ " + Speed(down),
+        _ => string.Empty,
+    };
+
+    /// <summary>A computer's live report in a few words: "↑ 3.10 MB/s · 1,204 files left", "↓ 4.20 MB/s".</summary>
+    public static string Live(TransferReport report)
+    {
+        var flow = Flow(report.UpBytesPerSecond, report.DownBytesPerSecond);
+        var left = report.FilesLeft switch
+        {
+            0 => string.Empty,
+            1 => "1 file left",
+            var n => Count(n) + " files left",
+        };
+        return flow.Length > 0 && left.Length > 0 ? flow + " · " + left : flow + left;
+    }
+
     /// <summary>"less than a minute", "about 2 min", "about 1 h 20 min".</summary>
     public static string Duration(TimeSpan time)
     {

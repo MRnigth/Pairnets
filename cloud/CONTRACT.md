@@ -857,7 +857,7 @@ so no raw IP or address is stored there.
 | What | Per | Limit | Answer when exceeded |
 |---|---|---|---|
 | any request (except the relay `/n/*`) | IP | 300 / minute | 429 `rate_limited` |
-| relayed request `/n/*` (version 2, `RELAY.md` §5) | IP | 6,000 / minute, counted by the Workers Rate Limiting binding `RELAY_LIMIT`, not in D1 | 429 `rate_limited`, `Retry-After: 60` |
+| relayed request `/n/*` (version 2, `RELAY.md` §5) | IP; nest + computer key; IP for keyless and failing requests | 20,000 / minute; 6,000 / minute; 600 / minute (then the IP is off for 60 s). Counted by the Workers Rate Limiting bindings `RELAY_LIMIT`, `RELAY_DEVICE_LIMIT`, `RELAY_FAIL_LIMIT`, not in D1 | 429 `rate_limited`, `Retry-After: 60` |
 | `GET /login/google` | IP | 30 / 10 min | 429 page |
 | `POST /v1/login/email` | IP | 10 / hour | 429 `rate_limited` |
 | `POST /v1/login/email` | address | 3 / hour and 10 / day | **silent** (202, nothing sent) |

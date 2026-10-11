@@ -4,7 +4,16 @@ import { describe, expect, it, vi } from "vitest";
 import wranglerToml from "../wrangler.toml?raw";
 import type { Env } from "../src/env";
 import { RELAY_CSP } from "../src/http";
-import { NEST_CACHE_SECONDS, RELAY_LIMIT_PERIOD, RELAY_PER_MINUTE, relayAllowed } from "../src/relay";
+import { keyedHash } from "../src/ratelimit";
+import {
+  deviceKeyOf,
+  NEST_CACHE_SECONDS,
+  RELAY_DEVICE_PER_MINUTE,
+  RELAY_IP_PER_MINUTE,
+  RELAY_LIMIT_PERIOD,
+  RELAY_PER_MINUTE,
+  relayAllowed,
+} from "../src/relay";
 import { addServer, Harness, linkNest, ORIGIN } from "./helpers";
 
 async function setup(overrides: Partial<Env> = {}) {
@@ -229,27 +238,42 @@ describe("relay", () => {
     expect(nest.requests.at(-1)!.path).toBe("/hub?id=abc");
   });
 
-  it(`allows more than 600 requests a minute from one address (the binding allows ${RELAY_PER_MINUTE}); no D1 write per request`, async () => {
-    const { h, b, nest } = await setup();
-    expect(h.env.RELAY_LIMIT, "wrangler.toml's binding is in the test runtime").toBeDefined();
-    // Two computers in one home share this address; 700 requests is about 350 small files synced between them.
+  it(`requests without a computer's key: ${RELAY_IP_PER_MINUTE} a minute per address, then 429; no D1 write; the account pages keep their own 300`, async () => {
+    const seen: string[] = [];
+    const { h, b, nest } = await setup({ DB: countingDb(seen) });
     const app = h.client("198.51.100.99");
-    for (let i = 0; i < 700; i++) expect((await app.call("GET", `/n/${nest.nestId}/api/health`)).status).toBe(200);
-    expect(await h.query("SELECT * FROM rate_counters WHERE bucket LIKE 'relay:%'")).toEqual([]);
+    const before = seen.length;
+    for (let i = 0; i < RELAY_IP_PER_MINUTE; i++) expect((await app.call("GET", `/n/${nest.nestId}/api/health`)).status).toBe(200);
+    const over = await app.call("GET", `/n/${nest.nestId}/api/health`);
+    expect(over.status).toBe(429);
+    expect(over.headers.get("retry-after")).toBe(String(RELAY_LIMIT_PERIOD));
+    expect(seen.slice(before).filter((q) => q.includes("rate_counters"))).toHaveLength(0);
     // The account pages keep their own 300 a minute, which the relay does not use up.
     expect((await h.client("198.51.100.99").call("GET", "/assets/style.css")).status).toBe(200);
     expect(b).toBeTruthy();
   }, 120_000);
 
-  it("wrangler.toml's RELAY_LIMIT binding has the limit and period the code and docs name", () => {
+  it("wrangler.toml's three rate limit bindings have the limits and period the code and docs name, each its own namespace", () => {
     const toml = wranglerToml.replace(/\r\n/g, "\n");
-    // The lines between `[[ratelimits]]` and the next table.
-    const block = toml.split("\n[[ratelimits]]\n")[1]?.split("\n[")[0] ?? "";
-    expect(block).toMatch(/^name = "RELAY_LIMIT"$/m);
-    expect(block).toMatch(/^namespace_id = "[1-9][0-9]*"$/m);
-    expect(block).toMatch(new RegExp(`^simple = \\{ limit = ${RELAY_PER_MINUTE}, period = ${RELAY_LIMIT_PERIOD} \\}$`, "m"));
-    expect(RELAY_PER_MINUTE).toBe(6000);
-    expect(RELAY_LIMIT_PERIOD).toBe(60);
+    // The lines between each `[[ratelimits]]` and the next table.
+    const blocks = toml.split("\n[[ratelimits]]\n").slice(1).map((x) => x.split("\n[")[0] ?? "");
+    const ids = new Set<string>();
+    const bindings = [
+      ["RELAY_LIMIT", RELAY_PER_MINUTE],
+      ["RELAY_DEVICE_LIMIT", RELAY_DEVICE_PER_MINUTE],
+      ["RELAY_FAIL_LIMIT", RELAY_IP_PER_MINUTE],
+    ] as const;
+    for (const [name, limit] of bindings) {
+      const block = blocks.find((x) => new RegExp(`^name = "${name}"$`, "m").test(x)) ?? "";
+      expect(block, name).toMatch(new RegExp(`^simple = \\{ limit = ${limit}, period = ${RELAY_LIMIT_PERIOD} \\}$`, "m"));
+      const id = /^namespace_id = "([1-9][0-9]*)"$/m.exec(block)?.[1];
+      expect(id, name).toBeDefined();
+      ids.add(id!);
+      expect((baseEnv as unknown as Env)[name], `${name} is in the test runtime`).toBeDefined();
+    }
+    expect(blocks).toHaveLength(bindings.length);
+    expect(ids.size).toBe(bindings.length);
+    expect([RELAY_PER_MINUTE, RELAY_DEVICE_PER_MINUTE, RELAY_IP_PER_MINUTE, RELAY_LIMIT_PERIOD]).toEqual([20000, 6000, 600, 60]);
   });
 
   it("a refusal from the binding is 429 rate_limited with Retry-After 60, keyed on the address, before any lookup", async () => {
@@ -274,14 +298,21 @@ describe("relay", () => {
     expect(limiter.keys.at(-1)).toBe("198.51.100.98");
   });
 
-  it("without the binding (a local run) the relay does not limit, warns once and never falls back to D1", async () => {
+  it("without the bindings (a local run) the relay does not limit, warns once for each and never falls back to D1", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     try {
       const seen: string[] = [];
-      const { nest, app } = await setup({ RELAY_LIMIT: undefined, DB: countingDb(seen) });
+      const { nest, app } = await setup({ RELAY_LIMIT: undefined, RELAY_DEVICE_LIMIT: undefined, RELAY_FAIL_LIMIT: undefined, DB: countingDb(seen) });
+      const key = "test-device-key-local";
+      nest.deviceKeys.add(key);
       const before = seen.length;
-      for (let i = 0; i < 3; i++) expect((await app.call("GET", `/n/${nest.nestId}/api/health`)).status).toBe(200);
-      expect(warn.mock.calls.filter((c) => String(c[0]).includes("RELAY_LIMIT"))).toHaveLength(1);
+      for (let i = 0; i < 3; i++) {
+        expect((await app.call("GET", `/n/${nest.nestId}/api/health`)).status).toBe(200);
+        expect((await app.call("GET", `/n/${nest.nestId}/api/secret`, { headers: { "X-Sync-Token": key } })).status).toBe(200);
+      }
+      for (const name of ["RELAY_LIMIT", "RELAY_DEVICE_LIMIT", "RELAY_FAIL_LIMIT"]) {
+        expect(warn.mock.calls.filter((c) => String(c[0]).includes(`no ${name} binding`)), name).toHaveLength(1);
+      }
       expect(seen.slice(before).filter((q) => q.includes("rate_counters"))).toHaveLength(0);
     } finally {
       warn.mockRestore();
@@ -352,6 +383,112 @@ describe("relay", () => {
     expect(nestLookups(seen)).toBe(lookups + 1);
     expect(h.cf.routerDeploys.length).toBe(deploys + 1);
     expect((await app.call("GET", `/n/${nest.nestId}/api/health`)).text).toBe("ok");
+  });
+
+  it("two computers behind one home address each sync many small files without a 429", async () => {
+    // The owner's first sync: PC-1 and PC-2 at home, one address, thousands of small files. Each computer has its own
+    // budget, so together they go far beyond the old 600 a minute per address.
+    const { h, nest } = await setup();
+    const pc1 = "test-device-key-pc1";
+    const pc2 = "test-device-key-pc2";
+    nest.deviceKeys.add(pc1);
+    nest.deviceKeys.add(pc2);
+    const home = h.client("198.51.100.77");
+    const upload = (key: string, i: number) =>
+      home.call("PUT", `/n/${nest.nestId}/api/echo/file?path=photo-${i}.jpg`, { rawBody: "x", contentType: "application/octet-stream", headers: { "X-Sync-Token": key } });
+    const statuses: number[] = [];
+    for (let i = 0; i < 800; i += 50) {
+      const batch = await Promise.all(Array.from({ length: 50 }, (_, j) => [upload(pc1, i + j), upload(pc2, i + j)]).flat());
+      statuses.push(...batch.map((r) => r.status));
+    }
+    expect(statuses).toHaveLength(1600);
+    expect(statuses.filter((s) => s !== 200)).toEqual([]);
+    // The push channel (Authorization: Bearer) counts as the same computer.
+    const hub = await home.call("POST", `/n/${nest.nestId}/hub/negotiate?negotiateVersion=1`, { rawBody: "", contentType: "text/plain", headers: { Authorization: `Bearer ${pc1}` } });
+    expect(hub.status).toBe(200);
+    // Keyless calls from the same address still have the address's own 600.
+    expect((await home.call("GET", `/n/${nest.nestId}/api/health`)).status).toBe(200);
+  }, 120_000);
+
+  it("a computer's own budget is 6,000 requests a minute, then 429 with Retry-After until the minute is over", async () => {
+    const { h, nest } = await setup();
+    expect(RELAY_DEVICE_PER_MINUTE).toBe(6000);
+    const key = "test-device-key-busy";
+    nest.deviceKeys.add(key);
+    const app = h.client("198.51.100.81");
+    // 5,999 requests already this minute, under the key the Worker uses (a keyed hash of the server and the key).
+    h.limits.device.set(await keyedHash(h.env, `${nest.nestId}\n${key}`), RELAY_DEVICE_PER_MINUTE - 1);
+    const call = (k: string) => app.call("GET", `/n/${nest.nestId}/api/secret`, { headers: { "X-Sync-Token": k } });
+
+    expect((await call(key)).status).toBe(200); // the 6,000th
+    const over = await call(key);
+    expect(over.status).toBe(429);
+    expect(over.json).toEqual({ error: "rate_limited", message: "Too many requests. Wait a little and try again." });
+    const wait = Number(over.headers.get("retry-after"));
+    expect(wait).toBe(RELAY_LIMIT_PERIOD);
+    // The other computer at the same address goes on.
+    const other = "test-device-key-other";
+    nest.deviceKeys.add(other);
+    expect((await call(other)).status).toBe(200);
+    // Once the minute is over, so does this one.
+    h.advance(wait);
+    expect((await call(key)).status).toBe(200);
+    // The limiter never saw the key or the server's id (only a keyed hash of both), and nothing went into D1.
+    expect(h.limits.device.keys.some((k) => k.includes(key) || k.includes(nest.nestId))).toBe(false);
+    const rows = await h.query<{ bucket: string }>("SELECT bucket FROM rate_counters");
+    expect(rows.filter((r) => r.bucket.startsWith("relay")), "the relay counts nothing in D1").toEqual([]);
+    expect(rows.some((r) => r.bucket.includes(key) || r.bucket.includes(nest.nestId))).toBe(false);
+  });
+
+  it("made-up keys, unknown servers and refused paths count against the address: over 600 a minute, then nothing", async () => {
+    const { h, nest } = await setup();
+    const good = "test-device-key-good";
+    nest.deviceKeys.add(good);
+    const attacker = h.client("198.51.100.66");
+    const statuses: number[] = [];
+    for (let i = 0; i < 600; i += 50) {
+      const batch = await Promise.all(
+        Array.from({ length: 50 }, (_, j) => attacker.call("GET", `/n/${nest.nestId}/api/secret`, { headers: { "X-Sync-Token": `made-up-${i + j}` } })),
+      );
+      statuses.push(...batch.map((r) => r.status));
+    }
+    expect(new Set(statuses)).toEqual(new Set([401])); // each a fresh key, each turned away by the server
+    // The one over the budget still gets its answer, and turns the address off (a binding cannot be read without counting).
+    expect((await attacker.call("GET", `/n/${nest.nestId}/api/secret`, { headers: { "X-Sync-Token": "made-up-one-more" } })).status).toBe(401);
+    // The address is used up: even a good key from it waits now, and the server sees nothing more.
+    const seen = nest.requests.length;
+    const blocked = await attacker.call("GET", `/n/${nest.nestId}/api/secret`, { headers: { "X-Sync-Token": good } });
+    expect(blocked.status).toBe(429);
+    expect(Number(blocked.headers.get("retry-after"))).toBe(RELAY_LIMIT_PERIOD);
+    expect((await attacker.call("GET", "/n/nst_testnest000000000000000001/api/health")).status).toBe(429);
+    expect(nest.requests.length).toBe(seen);
+    // Other addresses are not affected.
+    expect((await h.client("198.51.100.67").call("GET", `/n/${nest.nestId}/api/secret`, { headers: { "X-Sync-Token": good } })).status).toBe(200);
+
+    // Unknown servers, refused paths and an offline server count the same way.
+    const prober = h.client("198.51.100.68");
+    h.limits.fail.set("198.51.100.68", RELAY_IP_PER_MINUTE - 2);
+    expect((await prober.call("GET", "/n/nst_testnest000000000000000001/api/health", { headers: { "X-Sync-Token": good } })).status).toBe(404);
+    expect((await prober.call("GET", `/n/${nest.nestId}/index.html`, { headers: { "X-Sync-Token": good } })).status).toBe(404);
+    nest.running = false;
+    expect((await prober.call("GET", `/n/${nest.nestId}/api/secret`, { headers: { "X-Sync-Token": "made-up" } })).status).toBe(503);
+    nest.running = true;
+    expect((await prober.call("GET", `/n/${nest.nestId}/api/secret`, { headers: { "X-Sync-Token": good } })).status).toBe(429);
+    // A minute later the address may try again.
+    h.advance(RELAY_LIMIT_PERIOD);
+    expect((await prober.call("GET", `/n/${nest.nestId}/api/secret`, { headers: { "X-Sync-Token": good } })).status).toBe(200);
+  }, 120_000);
+
+  it("reads the computer's key from X-Sync-Token, a Bearer header, or the hub's access_token", () => {
+    const req = (headers: Record<string, string>) => new Request("https://sync.pairnets.app/n/x/api/file", { headers });
+    const url = new URL("https://sync.pairnets.app/n/x/api/file");
+    expect(deviceKeyOf(req({ "X-Sync-Token": " k1 " }), url)).toBe("k1");
+    expect(deviceKeyOf(req({ Authorization: "Bearer k2" }), url)).toBe("k2");
+    expect(deviceKeyOf(req({ Authorization: "bearer   k3" }), url)).toBe("k3");
+    expect(deviceKeyOf(req({ "X-Sync-Token": "k1", Authorization: "Bearer k2" }), url)).toBe("k1");
+    expect(deviceKeyOf(req({}), new URL("https://sync.pairnets.app/n/x/hub?id=1&access_token=k4"))).toBe("k4");
+    expect(deviceKeyOf(req({}), url)).toBeNull();
+    expect(deviceKeyOf(req({ "X-Sync-Token": "  " }), url)).toBeNull();
   });
 });
 

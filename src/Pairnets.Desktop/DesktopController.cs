@@ -446,10 +446,8 @@ public sealed class DesktopController : ITrayActions, IDisposable
         var status = _session?.Status ?? StatusSnapshot.Initial with { Text = "Not set up yet: open Settings" };
         if (_trayMenu is not null)
         {
-            var line = status.IsTransferring
-                ? $"{PathRules.FileName(status.CurrentPath!)}{(status.Percent is { } p ? $" {p}%" : string.Empty)}"
-                : status.IsChecking ? "Checking files: " + status.ScanText
-                : status.Text;
+            // What it is doing in one line: "Checking files · 12,000 of 38,206", "Uploading · 37 of 120 files · 4.90 MB/s · …".
+            var line = status.StatusLine;
             if (_tray is not null)
             {
                 if (_shownStatus != status.Status)

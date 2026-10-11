@@ -53,6 +53,46 @@ public sealed class ActiveFileView(string path, string operation) : INotifyPrope
     }
 }
 
+/// <summary>
+/// A computer on the Devices page as the screens show it. Its live numbers change every second while it transfers, so
+/// it is updated in place (the row is not rebuilt and does not play its entrance again).
+/// </summary>
+public sealed class DeviceRowView(DeviceRow row) : INotifyPropertyChanged
+{
+    private DeviceRow _row = row;
+
+    public string Name => _row.Name;
+
+    public string Title => _row.Title;
+
+    public bool Online => _row.Online;
+
+    public string StatusText => _row.StatusText;
+
+    public string Detail => _row.Detail;
+
+    public bool IsThisComputer => _row.IsThisComputer;
+
+    public event PropertyChangedEventHandler? PropertyChanged;
+
+    public void Update(DeviceRow row)
+    {
+        var before = _row;
+        _row = row;
+        foreach (var (name, changed) in new[]
+        {
+            (nameof(Title), before.Title != row.Title),
+            (nameof(Online), before.Online != row.Online),
+            (nameof(StatusText), before.StatusText != row.StatusText),
+            (nameof(Detail), before.Detail != row.Detail),
+        })
+        {
+            if (changed)
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+        }
+    }
+}
+
 /// <summary>Keeps the screens' lists in step with the session without rebuilding them.</summary>
 public static class LiveLists
 {
@@ -75,6 +115,26 @@ public static class LiveLists
             }
             view.Update(t);
         }
+    }
+
+    /// <summary>
+    /// The Devices page: rows stay in place and are updated (live speeds change every second); a different set or
+    /// order of computers rebuilds the list.
+    /// </summary>
+    public static void Sync(ObservableCollection<DeviceRowView> shown, IReadOnlyList<DeviceRow> now)
+    {
+        var same = shown.Count == now.Count;
+        for (var i = 0; same && i < now.Count; i++)
+            same = string.Equals(shown[i].Name, now[i].Name, StringComparison.Ordinal) && shown[i].IsThisComputer == now[i].IsThisComputer;
+        if (!same)
+        {
+            shown.Clear();
+            foreach (var row in now)
+                shown.Add(new DeviceRowView(row));
+            return;
+        }
+        for (var i = 0; i < now.Count; i++)
+            shown[i].Update(now[i]);
     }
 
     /// <summary>

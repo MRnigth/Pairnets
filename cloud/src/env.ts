@@ -5,10 +5,13 @@ export interface Env {
   /** Service binding to the pairnets-router Worker (cloud/router), which holds one VPC link per relayed nest. */
   ROUTER: Fetcher;
   /**
-   * Workers Rate Limiting binding (wrangler.toml `[[ratelimits]]`): the relay's per-address limit, RELAY_PER_MINUTE a
-   * minute. Missing (a local run without it): the relay does not limit and warns once.
+   * Workers Rate Limiting bindings (wrangler.toml `[[ratelimits]]`, relay.ts): the flood ceiling per address
+   * (RELAY_PER_MINUTE), each computer's own budget (RELAY_DEVICE_PER_MINUTE) and the budget for keyless and failing
+   * requests per address (RELAY_IP_PER_MINUTE). Missing (a local run without them): the relay does not limit and warns once.
    */
   RELAY_LIMIT?: RateLimit;
+  RELAY_DEVICE_LIMIT?: RateLimit;
+  RELAY_FAIL_LIMIT?: RateLimit;
 
   // Secrets (dashboard / `wrangler secret put`; tests generate them).
   SIGNING_KEY: string;

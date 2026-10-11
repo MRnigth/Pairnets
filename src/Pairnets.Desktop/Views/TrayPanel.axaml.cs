@@ -94,7 +94,8 @@ public partial class TrayPanel : Window
         StatusBadgeHost.Classes.Set("pulse", s.IsWaiting);
         Tint(brush);
         Headline.Text = s.Headline;
-        Detail.Text = s.DetailText.Length > 0 ? s.DetailText : s.LastSyncText;
+        // Waiting: the other computer's progress (the window has a bar for it; the panel has only this line).
+        Detail.Text = s.IsWaiting ? s.WaitingProgressText : s.DetailText.Length > 0 ? s.DetailText : s.LastSyncText;
         FixButton.IsVisible = s.FixLabel is not null;
         FixButton.Content = s.FixLabel;
         PauseText.Text = s.Paused ? "Resume" : "Pause";
