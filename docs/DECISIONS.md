@@ -755,7 +755,7 @@ sync.pairnets.app) showed three problems: about 37 of PC-1's 38,206 uploads fail
 * **MB/s on the lines** is on to begin with, and can be turned off in Settings ("Show speed on the map").
   It never shows in the small tray picture.
 
-## One release from the waiting branches (1.0.49, 11 October 2026)
+## One release from the waiting branches (11 October 2026)
 
 Sync feedback, live transfers and faster uploads were built side by side and each solved part of the same thing. The
 owner chose "both go ahead, merge at the end". This is how they fit together.
