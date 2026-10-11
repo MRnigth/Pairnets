@@ -1,0 +1,9 @@
+{{intro}}
+
+Open this link to confirm. It works once, for 15 minutes:
+{{url}}
+
+Didn't ask? Ignore this email: nothing happens unless the link is opened.
+
+--
+Sent by your Pairnets nest at {{host}}.

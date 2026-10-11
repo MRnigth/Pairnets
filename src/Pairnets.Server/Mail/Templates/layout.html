@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="supported-color-schemes" content="light dark">
+<title>{{title}}</title>
+<style>
+  :root { color-scheme: light dark; supported-color-schemes: light dark; }
+  @media (prefers-color-scheme: dark) {
+    .page { background: #14161A !important; }
+    .card { background: #1D2026 !important; border-color: #2B2F37 !important; }
+    .ink { color: #E8EAED !important; }
+    .muted { color: #9AA1AB !important; }
+    .btn-cell { background: #4C8DF6 !important; }
+    .btn { color: #0B1220 !important; }
+    .num { background: #18243A !important; color: #4C8DF6 !important; }
+    .link { color: #6A9FF8 !important; }
+  }
+</style>
+</head>
+<body class="page" style="margin:0;padding:0;background:#F3F5F8;">
+<div style="display:none;max-height:0;overflow:hidden;opacity:0;font-size:1px;line-height:1px;color:#F3F5F8;">{{preheader}}</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="page" style="background:#F3F5F8;">
+<tr><td align="center" style="padding:32px 16px;">
+<table role="presentation" width="480" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:480px;">
+<tr><td style="padding:0 4px 18px 4px;font-family:'Segoe UI',-apple-system,BlinkMacSystemFont,Helvetica,Arial,sans-serif;">
+<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
+<td style="padding-right:10px;"><img src="{{logoUrl}}" width="36" height="36" alt="" style="display:block;border:0;border-radius:18px;"></td>
+<td class="ink" style="font-size:19px;font-weight:600;color:#1B1F24;font-family:'Segoe UI',-apple-system,BlinkMacSystemFont,Helvetica,Arial,sans-serif;">Pairnets</td>
+</tr></table>
+</td></tr>
+<tr><td class="card" style="background:#FFFFFF;border:1px solid #E3E7ED;border-radius:14px;padding:28px;font-family:'Segoe UI',-apple-system,BlinkMacSystemFont,Helvetica,Arial,sans-serif;">
+{{contentHtml}}
+</td></tr>
+<tr><td class="muted" style="padding:18px 8px 0 8px;font-family:'Segoe UI',-apple-system,BlinkMacSystemFont,Helvetica,Arial,sans-serif;font-size:13px;line-height:1.5;color:#6B7280;">Sent by your Pairnets nest at {{host}}.</td></tr>
+</table>
+</td></tr>
+</table>
+</body>
+</html>

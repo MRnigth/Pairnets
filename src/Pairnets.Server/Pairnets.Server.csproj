@@ -23,6 +23,10 @@
     <!-- The nest's website, built into the program (served by Web/WebUi.cs). -->
     <EmbeddedResource Include="WebUi\**\*" LogicalName="WebUi/%(RecursiveDir)%(Filename)%(Extension)" />
     <EmbeddedResource Include="..\..\assets\pairnets-logo.svg" LogicalName="WebUi/assets/logo.svg" />
+    <!-- The logo as a picture an email program can show; the nest serves it itself, so no mail loads anything from another site. -->
+    <EmbeddedResource Include="..\..\assets\pairnets-icon-256.png" LogicalName="WebUi/assets/icon-256.png" />
+    <!-- The nest's emails: HTML and text templates, filled in by Mail/EmailTemplates.cs. -->
+    <EmbeddedResource Include="Mail\Templates\*" LogicalName="Mail/Templates/%(Filename)%(Extension)" />
   </ItemGroup>
 
 </Project>
