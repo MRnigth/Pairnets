@@ -525,7 +525,7 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
     /// <summary>The links under "About Pairnets" on the Settings page, and the pages of pairnets.app they open.</summary>
     private static readonly (string Label, string Url)[] AboutLinks =
     [
-        ("Help", PairnetsLinks.Help), ("FAQ", PairnetsLinks.Faq), ("Contact", PairnetsLinks.Contact), ("Privacy", PairnetsLinks.Privacy),
+        ("Support Pairnets ♥", PairnetsLinks.Donate), ("Help", PairnetsLinks.Help), ("FAQ", PairnetsLinks.Faq), ("Contact", PairnetsLinks.Contact), ("Privacy", PairnetsLinks.Privacy),
         ("Terms", PairnetsLinks.Terms), ("Guidelines", PairnetsLinks.Guidelines), ("Cookie settings", PairnetsLinks.Cookies),
         ("Security", PairnetsLinks.Security), ("Open-source licences", PairnetsLinks.Licenses), ("Delete my account", PairnetsLinks.DeleteAccount),
     ];

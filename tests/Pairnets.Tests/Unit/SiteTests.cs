@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using Pairnets.Core;
 
 namespace Pairnets.Tests.Unit;
 
@@ -107,6 +108,25 @@ public sealed class SiteTests
             foreach (var link in new[] { "/privacy/", "/terms/", "/guidelines/", "/cookies/", "/security/", "/faq/", "/contact/", "/delete-account/", "/licenses/" })
                 Assert.True(footer.Value.Contains($"href=\"{link}\"", StringComparison.Ordinal), $"{name}'s footer does not link {link}");
         }
+    }
+
+    [Fact]
+    public void EveryPageAndBothAppsLinkTheSameKoFiPage()
+    {
+        // The footer, the home page's coffee box and the apps' "Support Pairnets ♥" all go to /donate; only _redirects
+        // names the Ko-fi page, and GitHub's Sponsor button (FUNDING.yml) names the same one.
+        var kofi = Redirects()["/donate"];
+        Assert.Matches(@"^https://ko-fi\.com/[A-Za-z0-9_]+$", kofi);
+        Assert.Equal("https://pairnets.app/donate", PairnetsLinks.Donate);
+        foreach (var page in Pages())
+        {
+            var footer = Regex.Match(File.ReadAllText(page), "<footer>.*?</footer>", RegexOptions.Singleline);
+            Assert.True(footer.Value.Contains("<a href=\"/donate\">Support Pairnets ♥</a>", StringComparison.Ordinal),
+                $"{Path.GetRelativePath(Root, page)}'s footer does not link /donate");
+        }
+        Assert.Contains("class=\"button accent\" href=\"/donate\"", File.ReadAllText(Path.Combine(Root, "index.html")));
+        var funding = File.ReadAllLines(Path.Combine(RepoRoot, ".github", "FUNDING.yml"));
+        Assert.Contains("ko_fi: " + kofi["https://ko-fi.com/".Length..], funding);
     }
 
     [Fact]
