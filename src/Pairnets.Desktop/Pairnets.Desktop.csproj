@@ -24,6 +24,11 @@
 
   <ItemGroup>
     <AvaloniaResource Include="..\..\assets\pairnets-icon-256.png" Link="Assets\pairnets-icon-256.png" />
+    <AvaloniaResource Include="..\..\assets\fonts\PlusJakartaSans-Regular.ttf" Link="Assets\Fonts\PlusJakartaSans-Regular.ttf" />
+    <AvaloniaResource Include="..\..\assets\fonts\PlusJakartaSans-Medium.ttf" Link="Assets\Fonts\PlusJakartaSans-Medium.ttf" />
+    <AvaloniaResource Include="..\..\assets\fonts\PlusJakartaSans-SemiBold.ttf" Link="Assets\Fonts\PlusJakartaSans-SemiBold.ttf" />
+    <AvaloniaResource Include="..\..\assets\fonts\PlusJakartaSans-Bold.ttf" Link="Assets\Fonts\PlusJakartaSans-Bold.ttf" />
+    <AvaloniaResource Include="..\..\assets\fonts\PlusJakartaSans-ExtraBold.ttf" Link="Assets\Fonts\PlusJakartaSans-ExtraBold.ttf" />
   </ItemGroup>
 
   <ItemGroup>

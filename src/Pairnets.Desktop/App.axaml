@@ -9,6 +9,8 @@
         <ResourceInclude Source="avares://Pairnets/Styles/Palette.axaml" />
         <ResourceInclude Source="avares://Pairnets/Styles/Icons.axaml" />
       </ResourceDictionary.MergedDictionaries>
+      <!-- Plus Jakarta Sans (bundled, OFL); system fonts only if it cannot load. -->
+      <FontFamily x:Key="F.Sans">avares://Pairnets/Assets/Fonts#Plus Jakarta Sans, Segoe UI, Helvetica Neue, Inter, Noto Sans, sans-serif</FontFamily>
     </ResourceDictionary>
   </Application.Resources>
   <Application.Styles>

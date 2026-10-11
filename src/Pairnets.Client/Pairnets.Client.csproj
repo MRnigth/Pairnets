@@ -24,6 +24,12 @@
   <ItemGroup>
     <!-- The window and header icon (AppIcons): read from here, not from the exe, so an update shows the new logo at once. -->
     <Resource Include="..\..\assets\pairnets.ico" Link="pairnets.ico" />
+    <!-- Plus Jakarta Sans (OFL): the app font, read as WPF resources so nothing has to be installed. -->
+    <Resource Include="..\..\assets\fonts\PlusJakartaSans-Regular.ttf" Link="Fonts\PlusJakartaSans-Regular.ttf" />
+    <Resource Include="..\..\assets\fonts\PlusJakartaSans-Medium.ttf" Link="Fonts\PlusJakartaSans-Medium.ttf" />
+    <Resource Include="..\..\assets\fonts\PlusJakartaSans-SemiBold.ttf" Link="Fonts\PlusJakartaSans-SemiBold.ttf" />
+    <Resource Include="..\..\assets\fonts\PlusJakartaSans-Bold.ttf" Link="Fonts\PlusJakartaSans-Bold.ttf" />
+    <Resource Include="..\..\assets\fonts\PlusJakartaSans-ExtraBold.ttf" Link="Fonts\PlusJakartaSans-ExtraBold.ttf" />
   </ItemGroup>
 
   <ItemGroup>

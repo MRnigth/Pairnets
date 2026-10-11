@@ -5,12 +5,15 @@
     <ResourceDictionary Source="pack://application:,,,/Pairnets;component/Themes/Icons.xaml" />
   </ResourceDictionary.MergedDictionaries>
 
+  <!-- The bundled font (Plus Jakarta Sans, 5 static faces linked as Resources). Segoe UI is the fallback. -->
+  <FontFamily x:Key="F.Sans">pack://application:,,,/Fonts/#Plus Jakarta Sans, Segoe UI Variable Text, Segoe UI</FontFamily>
+
   <!-- Window -->
   <Style x:Key="PairnetsWindow" TargetType="Window">
     <Setter Property="Background" Value="{DynamicResource T.Bg}" />
     <Setter Property="Foreground" Value="{DynamicResource T.Text}" />
-    <Setter Property="FontFamily" Value="Segoe UI Variable Text, Segoe UI" />
-    <Setter Property="FontSize" Value="13.5" />
+    <Setter Property="FontFamily" Value="{StaticResource F.Sans}" />
+    <Setter Property="FontSize" Value="14" />
     <Setter Property="TextOptions.TextFormattingMode" Value="Display" />
   </Style>
 
@@ -22,12 +25,12 @@
     <Setter Property="FontSize" Value="12" />
   </Style>
   <Style x:Key="H1" TargetType="TextBlock">
-    <Setter Property="FontSize" Value="21" />
-    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="FontSize" Value="26" />
+    <Setter Property="FontWeight" Value="ExtraBold" />
   </Style>
   <Style x:Key="H2" TargetType="TextBlock">
-    <Setter Property="FontSize" Value="15" />
-    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="FontSize" Value="16" />
+    <Setter Property="FontWeight" Value="ExtraBold" />
   </Style>
   <Style x:Key="Label" TargetType="TextBlock">
     <Setter Property="FontWeight" Value="SemiBold" />
@@ -39,17 +42,17 @@
     <Setter Property="Background" Value="{DynamicResource T.Card}" />
     <Setter Property="BorderBrush" Value="{DynamicResource T.Border}" />
     <Setter Property="BorderThickness" Value="1" />
-    <Setter Property="CornerRadius" Value="12" />
-    <Setter Property="Padding" Value="18,16" />
+    <Setter Property="CornerRadius" Value="20" />
+    <Setter Property="Padding" Value="22,24" />
   </Style>
   <Style x:Key="Pill" TargetType="Border">
     <Setter Property="Background" Value="{DynamicResource T.Pill}" />
-    <Setter Property="CornerRadius" Value="10" />
-    <Setter Property="Padding" Value="9,3" />
+    <Setter Property="CornerRadius" Value="100" />
+    <Setter Property="Padding" Value="11,4" />
   </Style>
   <Style x:Key="Row" TargetType="Border">
-    <Setter Property="CornerRadius" Value="8" />
-    <Setter Property="Padding" Value="8,7" />
+    <Setter Property="CornerRadius" Value="12" />
+    <Setter Property="Padding" Value="10,9" />
     <Setter Property="Background" Value="Transparent" />
     <Style.Triggers>
       <Trigger Property="IsMouseOver" Value="True">
@@ -67,12 +70,14 @@
 
   <Style x:Key="WarnPill" TargetType="Border" BasedOn="{StaticResource Pill}">
     <Setter Property="Background" Value="{DynamicResource T.WarnPill}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource T.WarnBorder}" />
+    <Setter Property="BorderThickness" Value="1" />
   </Style>
   <Style x:Key="Banner" TargetType="Border">
     <Setter Property="Background" Value="{DynamicResource T.Banner}" />
     <Setter Property="BorderBrush" Value="{DynamicResource T.BannerBorder}" />
     <Setter Property="BorderThickness" Value="1" />
-    <Setter Property="CornerRadius" Value="12" />
+    <Setter Property="CornerRadius" Value="16" />
     <Setter Property="Padding" Value="14,10,10,10" />
   </Style>
   <Style x:Key="Divider" TargetType="Border">
@@ -81,20 +86,23 @@
   </Style>
   <Style x:Key="CodeBox" TargetType="Border">
     <Setter Property="Background" Value="{DynamicResource T.Pill}" />
-    <Setter Property="CornerRadius" Value="8" />
+    <Setter Property="CornerRadius" Value="12" />
     <Setter Property="Padding" Value="10,8" />
   </Style>
 
   <!-- Buttons: one template, three colour styles -->
   <Style x:Key="ButtonBase" TargetType="Button">
-    <Setter Property="Padding" Value="13,7" />
+    <Setter Property="Padding" Value="16,0" />
+    <Setter Property="MinHeight" Value="38" />
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="FontWeight" Value="SemiBold" />
     <Setter Property="Cursor" Value="Hand" />
     <Setter Property="BorderThickness" Value="0" />
     <Setter Property="FocusVisualStyle" Value="{x:Null}" />
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="Button">
-          <Border x:Name="bd" Background="{TemplateBinding Background}" CornerRadius="8" Padding="{TemplateBinding Padding}">
+          <Border x:Name="bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="12" Padding="{TemplateBinding Padding}">
             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" TextElement.Foreground="{TemplateBinding Foreground}" />
           </Border>
           <ControlTemplate.Triggers>
@@ -109,7 +117,6 @@
             </Trigger>
             <Trigger Property="IsKeyboardFocused" Value="True">
               <Setter TargetName="bd" Property="BorderBrush" Value="{DynamicResource T.Accent}" />
-              <Setter TargetName="bd" Property="BorderThickness" Value="1.5" />
             </Trigger>
           </ControlTemplate.Triggers>
         </ControlTemplate>
@@ -118,13 +125,15 @@
   </Style>
   <!-- Tag carries the hover colour. -->
   <Style x:Key="SubtleButton" TargetType="Button" BasedOn="{StaticResource ButtonBase}">
-    <Setter Property="Background" Value="{DynamicResource T.Subtle}" />
-    <Setter Property="Tag" Value="{DynamicResource T.SubtleHover}" />
+    <Setter Property="Background" Value="{DynamicResource T.Card}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource T.Border}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="Tag" Value="{DynamicResource T.Hover}" />
     <Setter Property="Foreground" Value="{DynamicResource T.Text}" />
   </Style>
   <Style x:Key="AccentButton" TargetType="Button" BasedOn="{StaticResource ButtonBase}">
-    <Setter Property="Background" Value="{DynamicResource T.Accent}" />
-    <Setter Property="Tag" Value="{DynamicResource T.AccentHover}" />
+    <Setter Property="Background" Value="{DynamicResource T.AccentButton}" />
+    <Setter Property="Tag" Value="{DynamicResource T.AccentButtonHover}" />
     <Setter Property="Foreground" Value="White" />
     <Setter Property="FontWeight" Value="SemiBold" />
   </Style>
@@ -151,8 +160,8 @@
 
   <!-- Segmented control -->
   <Style x:Key="Segments" TargetType="Border">
-    <Setter Property="Background" Value="{DynamicResource T.Subtle}" />
-    <Setter Property="CornerRadius" Value="10" />
+    <Setter Property="Background" Value="{DynamicResource T.Chip}" />
+    <Setter Property="CornerRadius" Value="13" />
     <Setter Property="Padding" Value="3" />
   </Style>
   <Style x:Key="Seg" TargetType="RadioButton">
@@ -162,7 +171,7 @@
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="RadioButton">
-          <Border x:Name="bd" Background="Transparent" CornerRadius="8" Padding="14,6">
+          <Border x:Name="bd" Background="Transparent" CornerRadius="10" Padding="14,6">
             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
           </Border>
           <ControlTemplate.Triggers>
@@ -203,7 +212,9 @@
     <Setter Property="Foreground" Value="{DynamicResource T.Text}" />
     <Setter Property="BorderBrush" Value="{DynamicResource T.InputBorder}" />
     <Setter Property="BorderThickness" Value="1" />
-    <Setter Property="Padding" Value="8,6" />
+    <Setter Property="Padding" Value="12,0" />
+    <Setter Property="MinHeight" Value="38" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
   </Style>
   <Style x:Key="Input" TargetType="TextBox" BasedOn="{StaticResource InputBase}">
     <Setter Property="CaretBrush" Value="{DynamicResource T.Text}" />
@@ -211,7 +222,7 @@
       <Setter.Value>
         <ControlTemplate TargetType="TextBox">
           <Border x:Name="bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
-                  BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="8">
+                  BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="12">
             <ScrollViewer x:Name="PART_ContentHost" Margin="{TemplateBinding Padding}" />
           </Border>
           <ControlTemplate.Triggers>
@@ -230,7 +241,7 @@
       <Setter.Value>
         <ControlTemplate TargetType="PasswordBox">
           <Border x:Name="bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
-                  BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="8">
+                  BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="12">
             <ScrollViewer x:Name="PART_ContentHost" Margin="{TemplateBinding Padding}" />
           </Border>
           <ControlTemplate.Triggers>
@@ -253,20 +264,17 @@
       <Setter.Value>
         <ControlTemplate TargetType="CheckBox">
           <StackPanel Orientation="Horizontal" Background="Transparent">
-            <Grid Width="40" Height="22" VerticalAlignment="Center">
-              <Border x:Name="track" CornerRadius="11" Background="{DynamicResource T.Subtle}"
-                      BorderBrush="{DynamicResource T.InputBorder}" BorderThickness="1" />
-              <Ellipse x:Name="knob" Width="14" Height="14" Fill="{DynamicResource T.Muted}" HorizontalAlignment="Left" Margin="4,0,0,0" />
+            <Grid Width="42" Height="24" VerticalAlignment="Center">
+              <Border x:Name="track" CornerRadius="12" Background="{DynamicResource T.Off}" />
+              <Ellipse x:Name="knob" Width="20" Height="20" Fill="White" HorizontalAlignment="Left" Margin="2,0,0,0" />
             </Grid>
             <ContentPresenter Margin="10,0,0,0" VerticalAlignment="Center" />
           </StackPanel>
           <ControlTemplate.Triggers>
             <Trigger Property="IsChecked" Value="True">
-              <Setter TargetName="track" Property="Background" Value="{DynamicResource T.Accent}" />
-              <Setter TargetName="track" Property="BorderBrush" Value="{DynamicResource T.Accent}" />
-              <Setter TargetName="knob" Property="Fill" Value="White" />
+              <Setter TargetName="track" Property="Background" Value="{DynamicResource T.AccentButton}" />
               <Setter TargetName="knob" Property="HorizontalAlignment" Value="Right" />
-              <Setter TargetName="knob" Property="Margin" Value="0,0,4,0" />
+              <Setter TargetName="knob" Property="Margin" Value="0,0,2,0" />
             </Trigger>
           </ControlTemplate.Triggers>
         </ControlTemplate>
@@ -276,9 +284,9 @@
 
   <!-- Chips for the connection test -->
   <Style x:Key="Chip" TargetType="Border">
-    <Setter Property="CornerRadius" Value="8" />
-    <Setter Property="Padding" Value="10,6" />
-    <Setter Property="Background" Value="{DynamicResource T.Pill}" />
+    <Setter Property="CornerRadius" Value="100" />
+    <Setter Property="Padding" Value="11,5" />
+    <Setter Property="Background" Value="{DynamicResource T.Chip}" />
   </Style>
 
   <!-- Plain scroll viewer look for lists -->
@@ -334,12 +342,12 @@
   </Style>
   <!-- ================= Main window: sidebar, pages, tiles (same design as the Mac/Linux app) ================= -->
   <Style x:Key="Title" TargetType="TextBlock">
-    <Setter Property="FontSize" Value="24" />
-    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="FontSize" Value="26" />
+    <Setter Property="FontWeight" Value="ExtraBold" />
   </Style>
   <Style x:Key="Caps" TargetType="TextBlock">
     <Setter Property="FontSize" Value="11" />
-    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="FontWeight" Value="Bold" />
     <Setter Property="Foreground" Value="{DynamicResource T.Muted}" />
   </Style>
   <Style x:Key="Value" TargetType="TextBlock">
@@ -370,7 +378,7 @@
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="RadioButton">
-          <Border x:Name="bd" Background="Transparent" CornerRadius="9" Padding="11,9">
+          <Border x:Name="bd" Background="Transparent" CornerRadius="12" Padding="11,9">
             <ContentPresenter />
           </Border>
           <ControlTemplate.Triggers>
@@ -410,24 +418,26 @@
     <Setter Property="Background" Value="{DynamicResource T.Card}" />
     <Setter Property="BorderBrush" Value="{DynamicResource T.Border}" />
     <Setter Property="BorderThickness" Value="1" />
-    <Setter Property="CornerRadius" Value="16" />
+    <Setter Property="CornerRadius" Value="20" />
   </Style>
   <Style x:Key="Tile" TargetType="Border">
-    <Setter Property="Background" Value="{DynamicResource T.Card}" />
+    <Setter Property="Background" Value="{DynamicResource T.Tile}" />
     <Setter Property="BorderBrush" Value="{DynamicResource T.Border}" />
     <Setter Property="BorderThickness" Value="1" />
-    <Setter Property="CornerRadius" Value="12" />
+    <Setter Property="CornerRadius" Value="16" />
     <Setter Property="Padding" Value="14,12" />
     <Setter Property="Margin" Value="5,0" />
   </Style>
   <Style x:Key="Callout" TargetType="Border">
     <Setter Property="Background" Value="{DynamicResource T.WarnPill}" />
-    <Setter Property="CornerRadius" Value="12" />
+    <Setter Property="BorderBrush" Value="{DynamicResource T.WarnBorder}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="16" />
     <Setter Property="Padding" Value="14,10,10,10" />
   </Style>
   <Style x:Key="OkChip" TargetType="Border">
     <Setter Property="Background" Value="{DynamicResource T.OkPill}" />
-    <Setter Property="CornerRadius" Value="8" />
+    <Setter Property="CornerRadius" Value="14" />
     <Setter Property="Padding" Value="10,7" />
   </Style>
   <Style x:Key="BadChip" TargetType="Border" BasedOn="{StaticResource OkChip}">
@@ -437,7 +447,7 @@
     <Setter Property="Background" Value="{DynamicResource T.Bg}" />
     <Setter Property="BorderBrush" Value="{DynamicResource T.Border}" />
     <Setter Property="BorderThickness" Value="1" />
-    <Setter Property="CornerRadius" Value="14" />
+    <Setter Property="CornerRadius" Value="20" />
   </Style>
 
   <!-- A button that looks like a link, and plain icon buttons -->
@@ -446,13 +456,20 @@
     <Setter Property="Tag" Value="{DynamicResource T.Hover}" />
     <Setter Property="Foreground" Value="{DynamicResource T.Accent}" />
     <Setter Property="Padding" Value="6,3" />
+    <Setter Property="MinHeight" Value="0" />
     <Setter Property="FontSize" Value="12.5" />
   </Style>
   <Style x:Key="IconButton" TargetType="Button" BasedOn="{StaticResource SubtleButton}">
-    <Setter Property="Padding" Value="8" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="MinWidth" Value="34" />
+    <Setter Property="MinHeight" Value="34" />
+    <Setter Property="Background" Value="{DynamicResource T.Chip}" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Tag" Value="{DynamicResource T.SubtleHover}" />
   </Style>
   <Style x:Key="GhostButton" TargetType="Button" BasedOn="{StaticResource FlatButton}">
     <Setter Property="Padding" Value="6" />
+    <Setter Property="MinHeight" Value="0" />
   </Style>
 
   <!-- Selectable rows (History) -->
@@ -464,7 +481,7 @@
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="ListBoxItem">
-          <Border x:Name="bd" Background="Transparent" CornerRadius="8" Padding="8,7">
+          <Border x:Name="bd" Background="Transparent" CornerRadius="12" Padding="10,9">
             <ContentPresenter />
           </Border>
           <ControlTemplate.Triggers>
@@ -489,12 +506,13 @@
 
   <!-- Menus (the window's "…" button, right-click on a file) in the app's colours -->
   <Style TargetType="ContextMenu">
+    <Setter Property="FontFamily" Value="{StaticResource F.Sans}" />
     <Setter Property="OverridesDefaultStyle" Value="True" />
     <Setter Property="SnapsToDevicePixels" Value="True" />
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="ContextMenu">
-          <Border Background="{DynamicResource T.Card}" BorderBrush="{DynamicResource T.Border}" BorderThickness="1" CornerRadius="8" Padding="4" MinWidth="170">
+          <Border Background="{DynamicResource T.Card}" BorderBrush="{DynamicResource T.Border}" BorderThickness="1" CornerRadius="14" Padding="6" MinWidth="170">
             <StackPanel IsItemsHost="True" KeyboardNavigation.DirectionalNavigation="Cycle" />
           </Border>
         </ControlTemplate>
@@ -508,7 +526,7 @@
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="MenuItem">
-          <Border x:Name="bd" Background="Transparent" CornerRadius="6" Padding="10,6">
+          <Border x:Name="bd" Background="Transparent" CornerRadius="9" Padding="10,7">
             <ContentPresenter ContentSource="Header" TextElement.Foreground="{TemplateBinding Foreground}" />
           </Border>
           <ControlTemplate.Triggers>
@@ -531,5 +549,59 @@
         </ControlTemplate>
       </Setter.Value>
     </Setter>
+  </Style>
+
+  <!-- ================= New look (stage 1) ================= -->
+  <Style x:Key="PageTitle" TargetType="TextBlock" BasedOn="{StaticResource Title}" />
+  <Style x:Key="SectionTitle" TargetType="TextBlock" BasedOn="{StaticResource H2}" />
+  <!-- 11 px bold small label (WPF has no letter spacing; write the text in capitals where the design does). -->
+  <Style x:Key="SmallLabel" TargetType="TextBlock" BasedOn="{StaticResource Caps}" />
+  <Style x:Key="SoftText" TargetType="TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource T.TextSoft}" />
+    <Setter Property="FontSize" Value="12" />
+  </Style>
+
+  <Style x:Key="SecondaryButton" TargetType="Button" BasedOn="{StaticResource SubtleButton}" />
+
+  <!-- Round icon-only button (34 px circle). -->
+  <Style x:Key="RoundIconButton" TargetType="Button" BasedOn="{StaticResource IconButton}">
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="Button">
+          <Border x:Name="bd" Background="{TemplateBinding Background}" CornerRadius="100" Padding="{TemplateBinding Padding}"
+                  BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}">
+            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" TextElement.Foreground="{TemplateBinding Foreground}" />
+          </Border>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+              <Setter TargetName="bd" Property="Background" Value="{Binding Tag, RelativeSource={RelativeSource TemplatedParent}}" />
+            </Trigger>
+            <Trigger Property="IsPressed" Value="True">
+              <Setter TargetName="bd" Property="Opacity" Value="0.85" />
+            </Trigger>
+            <Trigger Property="IsEnabled" Value="False">
+              <Setter TargetName="bd" Property="Opacity" Value="0.5" />
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <!-- The attention strip (warm). -->
+  <Style x:Key="Attention" TargetType="Border">
+    <Setter Property="Background" Value="{DynamicResource T.WarnPill}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource T.WarnBorder}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="16" />
+    <Setter Property="Padding" Value="16,12" />
+  </Style>
+
+  <!-- The soft square behind an icon (34 px, radius 11). -->
+  <Style x:Key="IconSquare" TargetType="Border">
+    <Setter Property="Width" Value="34" />
+    <Setter Property="Height" Value="34" />
+    <Setter Property="CornerRadius" Value="11" />
+    <Setter Property="Background" Value="{DynamicResource T.Chip}" />
   </Style>
 </ResourceDictionary>

@@ -5,7 +5,12 @@
   <Style Selector="Window">
     <Setter Property="Background" Value="{DynamicResource T.Bg}" />
     <Setter Property="Foreground" Value="{DynamicResource T.Text}" />
+    <Setter Property="FontFamily" Value="{StaticResource F.Sans}" />
     <Setter Property="FontSize" Value="13.5" />
+  </Style>
+  <!-- Popups are separate roots and do not inherit the window font. -->
+  <Style Selector="ContextMenu, MenuFlyoutPresenter, ToolTip, FlyoutPresenter">
+    <Setter Property="FontFamily" Value="{StaticResource F.Sans}" />
   </Style>
 
   <!-- Line icons -->
@@ -27,13 +32,106 @@
     <Setter Property="Background" Value="{DynamicResource T.Card}" />
     <Setter Property="BorderBrush" Value="{DynamicResource T.Border}" />
     <Setter Property="BorderThickness" Value="1" />
-    <Setter Property="CornerRadius" Value="12" />
-    <Setter Property="Padding" Value="18,16" />
+    <Setter Property="CornerRadius" Value="20" />
+    <Setter Property="Padding" Value="22,24" />
   </Style>
   <Style Selector="Border.pill">
     <Setter Property="Background" Value="{DynamicResource T.Pill}" />
-    <Setter Property="CornerRadius" Value="10" />
-    <Setter Property="Padding" Value="9,3" />
+    <Setter Property="CornerRadius" Value="999" />
+    <Setter Property="Padding" Value="10,4" />
+  </Style>
+  <Style Selector="Border.pill TextBlock">
+    <Setter Property="FontWeight" Value="Bold" />
+  </Style>
+  <!-- Chips: fully round, T.Chip fill. Icon squares are Border.iconsq. -->
+  <Style Selector="Border.chip">
+    <Setter Property="Background" Value="{DynamicResource T.Chip}" />
+    <Setter Property="CornerRadius" Value="999" />
+    <Setter Property="Padding" Value="10,4" />
+  </Style>
+  <Style Selector="Border.chip.dim">
+    <Setter Property="Background" Value="{DynamicResource T.ChipDim}" />
+  </Style>
+  <Style Selector="Border.iconsq">
+    <Setter Property="Background" Value="{DynamicResource T.Chip}" />
+    <Setter Property="CornerRadius" Value="11" />
+    <Setter Property="Width" Value="36" />
+    <Setter Property="Height" Value="36" />
+  </Style>
+  <Style Selector="Border.iconsq.dim">
+    <Setter Property="Background" Value="{DynamicResource T.ChipDim}" />
+  </Style>
+  <!-- Class names shared with the Windows app -->
+  <Style Selector="TextBlock.PageTitle">
+    <Setter Property="FontSize" Value="26" />
+    <Setter Property="FontWeight" Value="ExtraBold" />
+  </Style>
+  <Style Selector="TextBlock.SectionTitle">
+    <Setter Property="FontSize" Value="16" />
+    <Setter Property="FontWeight" Value="ExtraBold" />
+  </Style>
+  <Style Selector="TextBlock.SmallLabel">
+    <Setter Property="FontSize" Value="11" />
+    <Setter Property="FontWeight" Value="Bold" />
+    <Setter Property="LetterSpacing" Value="0.8" />
+    <Setter Property="Foreground" Value="{DynamicResource T.TextSoft}" />
+  </Style>
+  <Style Selector="TextBlock.SoftText">
+    <Setter Property="Foreground" Value="{DynamicResource T.TextSoft}" />
+  </Style>
+  <Style Selector="Button.SecondaryButton">
+    <Setter Property="Background" Value="{DynamicResource T.Card}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource T.Border}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="12" />
+  </Style>
+  <Style Selector="Button.RoundIconButton">
+    <Setter Property="Background" Value="{DynamicResource T.Chip}" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="MinHeight" Value="0" />
+    <Setter Property="MinWidth" Value="34" />
+    <Setter Property="Width" Value="34" />
+    <Setter Property="Height" Value="34" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="CornerRadius" Value="999" />
+  </Style>
+  <Style Selector="Button.RoundIconButton /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource T.Chip}" />
+  </Style>
+  <Style Selector="Border.Attention">
+    <Setter Property="Background" Value="{DynamicResource T.WarnPill}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource T.WarnBorder}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="14" />
+    <Setter Property="Padding" Value="14,10" />
+  </Style>
+  <Style Selector="Border.Attention TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource T.WarnText}" />
+  </Style>
+  <Style Selector="Border.IconSquare">
+    <Setter Property="Background" Value="{DynamicResource T.Chip}" />
+    <Setter Property="CornerRadius" Value="11" />
+    <Setter Property="Width" Value="36" />
+    <Setter Property="Height" Value="36" />
+  </Style>
+  <!-- Page tiles and group boxes -->
+  <Style Selector="Border.tile2">
+    <Setter Property="Background" Value="{DynamicResource T.Tile}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource T.Border}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="18" />
+    <Setter Property="Padding" Value="14,12" />
+  </Style>
+  <!-- Attention strip -->
+  <Style Selector="Border.attention">
+    <Setter Property="Background" Value="{DynamicResource T.WarnPill}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource T.WarnBorder}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="14" />
+    <Setter Property="Padding" Value="14,10" />
+  </Style>
+  <Style Selector="Border.attention TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource T.WarnText}" />
   </Style>
 
   <Style Selector="Border.pill.warn">
@@ -46,7 +144,7 @@
     <Setter Property="Background" Value="{DynamicResource T.Banner}" />
     <Setter Property="BorderBrush" Value="{DynamicResource T.BannerBorder}" />
     <Setter Property="BorderThickness" Value="1" />
-    <Setter Property="CornerRadius" Value="12" />
+    <Setter Property="CornerRadius" Value="14" />
     <Setter Property="Padding" Value="14,10,10,10" />
   </Style>
   <Style Selector="Border.divider">
@@ -54,6 +152,11 @@
     <Setter Property="Background" Value="{DynamicResource T.Border}" />
   </Style>
   <Style Selector="Button.flat">
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Foreground" Value="{DynamicResource T.Text}" />
+  </Style>
+  <Style Selector="Button.flat /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="Foreground" Value="{DynamicResource T.Text}" />
   </Style>
@@ -74,47 +177,91 @@
     <Setter Property="FontSize" Value="12" />
   </Style>
   <Style Selector="TextBlock.h1">
-    <Setter Property="FontSize" Value="21" />
-    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="FontSize" Value="26" />
+    <Setter Property="FontWeight" Value="ExtraBold" />
   </Style>
   <Style Selector="TextBlock.h2">
-    <Setter Property="FontSize" Value="15" />
-    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="FontSize" Value="16" />
+    <Setter Property="FontWeight" Value="ExtraBold" />
   </Style>
   <Style Selector="TextBlock.strong">
-    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="FontWeight" Value="Bold" />
+  </Style>
+  <Style Selector="TextBlock.soft">
+    <Setter Property="Foreground" Value="{DynamicResource T.TextSoft}" />
   </Style>
 
   <!-- Buttons -->
+  <!-- Secondary button is the default; .accent is the primary one. -->
   <Style Selector="Button">
-    <Setter Property="CornerRadius" Value="8" />
-    <Setter Property="Padding" Value="13,7" />
+    <Setter Property="CornerRadius" Value="12" />
+    <Setter Property="Padding" Value="16,0" />
+    <Setter Property="MinHeight" Value="38" />
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Background" Value="{DynamicResource T.Card}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource T.Border}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="Foreground" Value="{DynamicResource T.Text}" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
   </Style>
-  <Style Selector="Button.subtle">
-    <Setter Property="Background" Value="{DynamicResource T.Subtle}" />
+  <Style Selector="Button:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource T.Hover}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource T.Border}" />
     <Setter Property="Foreground" Value="{DynamicResource T.Text}" />
   </Style>
-  <Style Selector="Button.subtle:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+  <Style Selector="Button:pressed /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Background" Value="{DynamicResource T.SubtleHover}" />
     <Setter Property="Foreground" Value="{DynamicResource T.Text}" />
   </Style>
+  <!-- Smaller button for tight rows. -->
+  <Style Selector="Button.small">
+    <Setter Property="MinHeight" Value="30" />
+    <Setter Property="Padding" Value="12,0" />
+    <Setter Property="CornerRadius" Value="10" />
+    <Setter Property="FontSize" Value="12.5" />
+  </Style>
+  <Style Selector="Button.subtle">
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="Background" Value="{DynamicResource T.Card}" />
+    <Setter Property="Foreground" Value="{DynamicResource T.Text}" />
+  </Style>
+  <Style Selector="Button.subtle /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource T.Card}" />
+    <Setter Property="Foreground" Value="{DynamicResource T.Text}" />
+  </Style>
+  <Style Selector="Button.subtle:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource T.Hover}" />
+    <Setter Property="Foreground" Value="{DynamicResource T.Text}" />
+  </Style>
   <Style Selector="Button.accent">
-    <Setter Property="Background" Value="{DynamicResource T.Accent}" />
+    <Setter Property="Background" Value="{DynamicResource T.AccentButton}" />
+    <Setter Property="BorderThickness" Value="0" />
     <Setter Property="Foreground" Value="White" />
-    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="FontWeight" Value="Bold" />
   </Style>
   <Style Selector="Button.accent /template/ ContentPresenter#PART_ContentPresenter">
-    <Setter Property="Background" Value="{DynamicResource T.Accent}" />
+    <Setter Property="Background" Value="{DynamicResource T.AccentButton}" />
+    <Setter Property="BorderThickness" Value="0" />
     <Setter Property="Foreground" Value="White" />
   </Style>
   <Style Selector="Button.accent:pointerover /template/ ContentPresenter#PART_ContentPresenter">
-    <Setter Property="Background" Value="{DynamicResource T.AccentHover}" />
+    <Setter Property="Background" Value="{DynamicResource T.AccentButtonHover}" />
+    <Setter Property="Foreground" Value="White" />
+  </Style>
+  <Style Selector="Button.accent:pressed /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="#1F55C9" />
     <Setter Property="Foreground" Value="White" />
   </Style>
   <Style Selector="Button.warn">
     <Setter Property="Background" Value="{StaticResource S.Orange}" />
+    <Setter Property="BorderThickness" Value="0" />
     <Setter Property="Foreground" Value="White" />
-    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="FontWeight" Value="Bold" />
+  </Style>
+  <Style Selector="Button.warn /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{StaticResource S.Orange}" />
+    <Setter Property="Foreground" Value="White" />
   </Style>
   <Style Selector="Button.warn:pointerover /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Background" Value="#C95E0F" />
@@ -123,8 +270,9 @@
   <!-- For actions that cannot be undone (Reset this app). -->
   <Style Selector="Button.danger">
     <Setter Property="Background" Value="{StaticResource S.Red}" />
+    <Setter Property="BorderThickness" Value="0" />
     <Setter Property="Foreground" Value="White" />
-    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="FontWeight" Value="Bold" />
   </Style>
   <Style Selector="Button.danger /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Background" Value="{StaticResource S.Red}" />
@@ -138,7 +286,7 @@
   <!-- Segmented control (two RadioButtons inside Border.segments) -->
   <Style Selector="Border.segments">
     <Setter Property="Background" Value="{DynamicResource T.Subtle}" />
-    <Setter Property="CornerRadius" Value="10" />
+    <Setter Property="CornerRadius" Value="12" />
     <Setter Property="Padding" Value="3" />
   </Style>
   <Style Selector="RadioButton.seg">
@@ -146,7 +294,7 @@
     <Setter Property="Cursor" Value="Hand" />
     <Setter Property="Template">
       <ControlTemplate>
-        <Border x:Name="bd" Background="Transparent" CornerRadius="8" Padding="14,6">
+        <Border x:Name="bd" Background="Transparent" CornerRadius="9" Padding="14,6">
           <ContentPresenter Content="{TemplateBinding Content}" Foreground="{TemplateBinding Foreground}"
                             HorizontalAlignment="Center" VerticalAlignment="Center" />
         </Border>
@@ -154,6 +302,7 @@
     </Setter>
   </Style>
   <Style Selector="RadioButton.seg:checked">
+    <Setter Property="FontWeight" Value="Bold" />
     <Setter Property="Foreground" Value="{DynamicResource T.Text}" />
   </Style>
   <Style Selector="RadioButton.seg:checked /template/ Border#bd">
@@ -162,8 +311,8 @@
 
   <!-- List rows -->
   <Style Selector="Border.row">
-    <Setter Property="CornerRadius" Value="8" />
-    <Setter Property="Padding" Value="8,7" />
+    <Setter Property="CornerRadius" Value="12" />
+    <Setter Property="Padding" Value="10,8" />
     <Setter Property="Background" Value="Transparent" />
   </Style>
   <Style Selector="Border.row:pointerover">
@@ -173,7 +322,7 @@
   <!-- Count badge -->
   <Style Selector="Border.badge">
     <Setter Property="Background" Value="{StaticResource S.Orange}" />
-    <Setter Property="CornerRadius" Value="9" />
+    <Setter Property="CornerRadius" Value="999" />
     <Setter Property="MinWidth" Value="18" />
     <Setter Property="Height" Value="18" />
     <Setter Property="Padding" Value="5,0" />
@@ -188,15 +337,21 @@
     </Setter>
     <Setter Property="Height" Value="8" />
     <Setter Property="MinHeight" Value="8" />
-    <Setter Property="CornerRadius" Value="4" />
+    <Setter Property="CornerRadius" Value="999" />
     <Setter Property="Background" Value="{DynamicResource T.Track}" />
     <Setter Property="Foreground" Value="{DynamicResource T.Accent}" />
+  </Style>
+  <Style Selector="ProgressBar /template/ Border#PART_Indicator">
+    <Setter Property="CornerRadius" Value="999" />
+  </Style>
+  <Style Selector="ProgressBar /template/ Border#PART_Track">
+    <Setter Property="CornerRadius" Value="999" />
   </Style>
 
   <Style Selector="ProgressBar.thin">
     <Setter Property="Height" Value="4" />
     <Setter Property="MinHeight" Value="4" />
-    <Setter Property="CornerRadius" Value="2" />
+    <Setter Property="CornerRadius" Value="999" />
   </Style>
   <Style Selector="ProgressBar.up">
     <Setter Property="Foreground" Value="{StaticResource S.Green}" />
@@ -207,41 +362,97 @@
 
   <!-- Settings form -->
   <Style Selector="TextBlock.label">
-    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="FontWeight" Value="Bold" />
     <Setter Property="Margin" Value="0,0,0,5" />
   </Style>
   <Style Selector="Border.chip-ok">
-    <Setter Property="Background" Value="#1A2EA043" />
-    <Setter Property="CornerRadius" Value="8" />
-    <Setter Property="Padding" Value="10,6" />
+    <Setter Property="Background" Value="{DynamicResource T.OkPill}" />
+    <Setter Property="CornerRadius" Value="14" />
+    <Setter Property="Padding" Value="12,6" />
   </Style>
   <Style Selector="Border.chip-bad">
-    <Setter Property="Background" Value="#1ACF222E" />
-    <Setter Property="CornerRadius" Value="8" />
-    <Setter Property="Padding" Value="10,6" />
+    <Setter Property="Background" Value="{DynamicResource T.BadPill}" />
+    <Setter Property="CornerRadius" Value="14" />
+    <Setter Property="Padding" Value="12,6" />
   </Style>
   <Style Selector="Border.chip-busy">
     <Setter Property="Background" Value="{DynamicResource T.Pill}" />
-    <Setter Property="CornerRadius" Value="8" />
-    <Setter Property="Padding" Value="10,6" />
+    <Setter Property="CornerRadius" Value="999" />
+    <Setter Property="Padding" Value="12,6" />
   </Style>
 
   <!-- Inputs -->
   <Style Selector="TextBox">
-    <Setter Property="CornerRadius" Value="8" />
-    <Setter Property="Padding" Value="10,7" />
+    <Setter Property="CornerRadius" Value="12" />
+    <Setter Property="Padding" Value="12,0" />
+    <Setter Property="MinHeight" Value="38" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="Background" Value="{DynamicResource T.Input}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource T.InputBorder}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="Foreground" Value="{DynamicResource T.Text}" />
+  </Style>
+  <Style Selector="TextBox /template/ Border#PART_BorderElement">
+    <Setter Property="Background" Value="{DynamicResource T.Input}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource T.InputBorder}" />
+  </Style>
+  <Style Selector="TextBox:pointerover /template/ Border#PART_BorderElement">
+    <Setter Property="Background" Value="{DynamicResource T.Input}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource T.TextSoft}" />
+  </Style>
+  <Style Selector="TextBox:focus /template/ Border#PART_BorderElement">
+    <Setter Property="Background" Value="{DynamicResource T.Input}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource T.Accent}" />
+    <Setter Property="BorderThickness" Value="1" />
+  </Style>
+
+  <!-- Toggle switch: 42x24 pill, white 20px knob, on = T.AccentButton -->
+  <Style Selector="ToggleSwitch">
+    <Setter Property="Foreground" Value="{DynamicResource T.Text}" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Grid ColumnDefinitions="Auto,Auto" Background="Transparent">
+          <Grid Grid.Column="0" VerticalAlignment="Center" Margin="0,0,12,0">
+            <ContentPresenter x:Name="PART_OffContentPresenter" Content="{TemplateBinding OffContent}"
+                              ContentTemplate="{TemplateBinding OffContentTemplate}" Foreground="{TemplateBinding Foreground}" />
+            <ContentPresenter x:Name="PART_OnContentPresenter" Content="{TemplateBinding OnContent}"
+                              ContentTemplate="{TemplateBinding OnContentTemplate}" Foreground="{TemplateBinding Foreground}" IsVisible="False" />
+          </Grid>
+          <Border x:Name="track" Grid.Column="1" Width="42" Height="24" CornerRadius="12" Padding="2"
+                  Background="{DynamicResource T.Off}" VerticalAlignment="Center">
+            <Panel x:Name="PART_MovingKnobs" HorizontalAlignment="Left"><Panel x:Name="PART_SwitchKnob"><Ellipse Width="20" Height="20" Fill="White" /></Panel></Panel>
+          </Border>
+        </Grid>
+      </ControlTemplate>
+    </Setter>
+  </Style>
+  <Style Selector="ToggleSwitch:checked /template/ Border#track">
+    <Setter Property="Background" Value="{DynamicResource T.AccentButton}" />
+  </Style>
+  <Style Selector="ToggleSwitch:checked /template/ Panel#PART_MovingKnobs">
+    <Setter Property="HorizontalAlignment" Value="Right" />
+  </Style>
+  <Style Selector="ToggleSwitch:checked /template/ ContentPresenter#PART_OffContentPresenter">
+    <Setter Property="IsVisible" Value="False" />
+  </Style>
+  <Style Selector="ToggleSwitch:checked /template/ ContentPresenter#PART_OnContentPresenter">
+    <Setter Property="IsVisible" Value="True" />
+  </Style>
+  <Style Selector="ToggleSwitch:disabled">
+    <Setter Property="Opacity" Value="0.5" />
   </Style>
 
   <!-- ================= Main window: sidebar, pages, tiles ================= -->
   <Style Selector="TextBlock.title">
-    <Setter Property="FontSize" Value="24" />
-    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="FontSize" Value="26" />
+    <Setter Property="FontWeight" Value="ExtraBold" />
   </Style>
   <Style Selector="TextBlock.caps">
     <Setter Property="FontSize" Value="11" />
-    <Setter Property="FontWeight" Value="SemiBold" />
-    <Setter Property="LetterSpacing" Value="0.6" />
-    <Setter Property="Foreground" Value="{DynamicResource T.Muted}" />
+    <Setter Property="FontWeight" Value="Bold" />
+    <Setter Property="LetterSpacing" Value="0.8" />
+    <Setter Property="Foreground" Value="{DynamicResource T.TextSoft}" />
   </Style>
   <Style Selector="Border.sidebar">
     <Setter Property="Background" Value="{DynamicResource T.Sidebar}" />
@@ -256,7 +467,7 @@
     <Setter Property="HorizontalAlignment" Value="Stretch" />
     <Setter Property="Template">
       <ControlTemplate>
-        <Border x:Name="bd" Background="Transparent" CornerRadius="9" Padding="11,9">
+        <Border x:Name="bd" Background="Transparent" CornerRadius="12" Padding="11,9">
           <ContentPresenter Content="{TemplateBinding Content}" Foreground="{TemplateBinding Foreground}" />
         </Border>
       </ControlTemplate>
@@ -267,7 +478,7 @@
   </Style>
   <Style Selector="RadioButton.nav:checked">
     <Setter Property="Foreground" Value="{DynamicResource T.Text}" />
-    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="FontWeight" Value="Bold" />
   </Style>
   <Style Selector="RadioButton.nav:checked /template/ Border#bd">
     <Setter Property="Background" Value="{DynamicResource T.NavSelected}" />
@@ -285,16 +496,16 @@
     <Setter Property="Background" Value="{DynamicResource T.Card}" />
     <Setter Property="BorderBrush" Value="{DynamicResource T.Border}" />
     <Setter Property="BorderThickness" Value="1" />
-    <Setter Property="CornerRadius" Value="16" />
+    <Setter Property="CornerRadius" Value="20" />
     <Setter Property="ClipToBounds" Value="True" />
   </Style>
 
   <!-- Small fact tiles (folder, last synced, server, free space) -->
   <Style Selector="Border.tile">
-    <Setter Property="Background" Value="{DynamicResource T.Card}" />
+    <Setter Property="Background" Value="{DynamicResource T.Tile}" />
     <Setter Property="BorderBrush" Value="{DynamicResource T.Border}" />
     <Setter Property="BorderThickness" Value="1" />
-    <Setter Property="CornerRadius" Value="12" />
+    <Setter Property="CornerRadius" Value="18" />
     <Setter Property="Padding" Value="14,12" />
   </Style>
   <Style Selector="Border.tile.warn">
@@ -305,13 +516,15 @@
   </Style>
   <Style Selector="TextBlock.value">
     <Setter Property="FontSize" Value="14.5" />
-    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="FontWeight" Value="Bold" />
   </Style>
 
   <!-- "2 things need your attention" -->
   <Style Selector="Border.callout">
     <Setter Property="Background" Value="{DynamicResource T.WarnPill}" />
-    <Setter Property="CornerRadius" Value="12" />
+    <Setter Property="BorderBrush" Value="{DynamicResource T.WarnBorder}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="14" />
     <Setter Property="Padding" Value="14,10,10,10" />
   </Style>
   <Style Selector="Border.callout TextBlock">
@@ -321,27 +534,47 @@
   <!-- Buttons that look like links, and round icon-only buttons -->
   <Style Selector="Button.link">
     <Setter Property="Background" Value="Transparent" />
-    <Setter Property="Foreground" Value="{DynamicResource T.Accent}" />
+    <Setter Property="Foreground" Value="{DynamicResource T.AccentInk}" />
     <Setter Property="Padding" Value="6,3" />
+    <Setter Property="MinHeight" Value="0" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="FontWeight" Value="Bold" />
     <Setter Property="FontSize" Value="12.5" />
     <Setter Property="Cursor" Value="Hand" />
+  </Style>
+  <Style Selector="Button.link /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Foreground" Value="{DynamicResource T.AccentInk}" />
   </Style>
   <Style Selector="Button.link:pointerover /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Background" Value="{DynamicResource T.Hover}" />
     <Setter Property="Foreground" Value="{DynamicResource T.AccentHover}" />
   </Style>
   <Style Selector="Button.icon">
-    <Setter Property="Background" Value="{DynamicResource T.Subtle}" />
-    <Setter Property="Padding" Value="8" />
-    <Setter Property="CornerRadius" Value="8" />
+    <Setter Property="Background" Value="{DynamicResource T.Chip}" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="MinHeight" Value="0" />
+    <Setter Property="MinWidth" Value="34" />
+    <Setter Property="Width" Value="34" />
+    <Setter Property="Height" Value="34" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="CornerRadius" Value="11" />
+  </Style>
+  <Style Selector="Button.icon /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource T.Chip}" />
   </Style>
   <Style Selector="Button.icon:pointerover /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Background" Value="{DynamicResource T.SubtleHover}" />
   </Style>
   <Style Selector="Button.ghost">
     <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="MinHeight" Value="0" />
     <Setter Property="Padding" Value="6" />
-    <Setter Property="CornerRadius" Value="8" />
+    <Setter Property="CornerRadius" Value="10" />
+  </Style>
+  <Style Selector="Button.ghost /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
   </Style>
   <Style Selector="Button.ghost:pointerover /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Background" Value="{DynamicResource T.Hover}" />
@@ -350,16 +583,16 @@
   <!-- Coloured message chips (History: restored / failed) -->
   <Style Selector="Border.ok">
     <Setter Property="Background" Value="{DynamicResource T.OkPill}" />
-    <Setter Property="CornerRadius" Value="8" />
-    <Setter Property="Padding" Value="10,7" />
+    <Setter Property="CornerRadius" Value="12" />
+    <Setter Property="Padding" Value="12,8" />
   </Style>
   <Style Selector="Border.ok TextBlock">
     <Setter Property="Foreground" Value="{DynamicResource T.OkText}" />
   </Style>
   <Style Selector="Border.bad">
     <Setter Property="Background" Value="{DynamicResource T.BadPill}" />
-    <Setter Property="CornerRadius" Value="8" />
-    <Setter Property="Padding" Value="10,7" />
+    <Setter Property="CornerRadius" Value="12" />
+    <Setter Property="Padding" Value="12,8" />
   </Style>
   <Style Selector="Border.bad TextBlock">
     <Setter Property="Foreground" Value="{DynamicResource T.BadText}" />
@@ -371,9 +604,9 @@
     <Setter Property="Padding" Value="0" />
   </Style>
   <Style Selector="ListBox.rows ListBoxItem">
-    <Setter Property="Padding" Value="8,7" />
+    <Setter Property="Padding" Value="10,8" />
     <Setter Property="Margin" Value="0,1" />
-    <Setter Property="CornerRadius" Value="8" />
+    <Setter Property="CornerRadius" Value="12" />
     <Setter Property="Cursor" Value="Hand" />
   </Style>
   <Style Selector="ListBox.rows ListBoxItem:pointerover /template/ ContentPresenter#PART_ContentPresenter">
@@ -389,8 +622,8 @@
   <!-- Day headings in the activity list -->
   <Style Selector="TextBlock.day">
     <Setter Property="FontSize" Value="11.5" />
-    <Setter Property="FontWeight" Value="SemiBold" />
-    <Setter Property="Foreground" Value="{DynamicResource T.Muted}" />
+    <Setter Property="FontWeight" Value="Bold" />
+    <Setter Property="Foreground" Value="{DynamicResource T.TextSoft}" />
     <Setter Property="Margin" Value="8,12,0,4" />
   </Style>
 
@@ -424,7 +657,7 @@
     <Setter Property="Background" Value="{DynamicResource T.Bg}" />
     <Setter Property="BorderBrush" Value="{DynamicResource T.Border}" />
     <Setter Property="BorderThickness" Value="1" />
-    <Setter Property="CornerRadius" Value="14" />
+    <Setter Property="CornerRadius" Value="20" />
   </Style>
 
   <!-- ================= Motion (runs only while a window is shown) ================= -->
