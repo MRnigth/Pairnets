@@ -12,16 +12,21 @@ namespace Pairnets.Server.Web;
 /// "DeviceRemoved"(id, name) and "DeviceRenamed"(id, name) tell the apps about changes to the list of
 /// computers; a removed computer's connections are closed right after. An app reports what it moves right now with
 /// ReportTransfer(report) (about once a second while it transfers, once all zero when it stops), and the others get
-/// "PeerTransfer"(name, report): real speeds for every computer, nothing guessed. Messages keep their argument
+/// "PeerTransfer"(name, report): real speeds for every computer, nothing guessed. A computer calls Synced(version) after a
+/// sync with nothing left to do; the others get "PeerSynced"(name, version), so they can show that it has their changes.
+/// Messages keep their argument
 /// lists forever (older apps fail on a mismatch); new information gets a new message name.
 /// </summary>
-public sealed class SyncHub(BatchRegistry batches, Services.DeviceRegistry devices, Storage.AuthStore auth, Auth.DeviceKeys keys, LiveTransfers live) : Hub
+public sealed class SyncHub(BatchRegistry batches, SyncedRegistry synced, Services.DeviceRegistry devices, Storage.AuthStore auth,
+    Auth.DeviceKeys keys, LiveTransfers live) : Hub
 {
     public const string Path = "/hub";
     public const string ChangedMethod = "Changed";
     public const string PeerBatchMethod = "PeerBatch";
     public const string DeviceRemovedMethod = "DeviceRemoved";
     public const string DeviceRenamedMethod = "DeviceRenamed";
+    public const string PeerTransferMethod = "PeerTransfer";
+    public const string PeerSyncedMethod = "PeerSynced";
 
     /// <summary>The computer behind this connection, from the key or token it connected with.</summary>
     private DeviceIdentity? Identity => DeviceIdentity.Of(Context.User);
@@ -49,7 +54,17 @@ public sealed class SyncHub(BatchRegistry batches, Services.DeviceRegistry devic
             return;
         var clean = report.Sanitized() with { AgeSeconds = 0 };
         if (live.Set(Context.ConnectionId, identity.Name, clean))
-            await Clients.Others.SendAsync(PushNames.PeerTransfer, identity.Name, clean);
+            await Clients.Others.SendAsync(PeerTransferMethod, identity.Name, clean);
+    }
+
+    /// <summary>This computer has everything up to server version <paramref name="version"/> (it just finished a clean sync).</summary>
+    public async Task Synced(long version)
+    {
+        if (version < 0)
+            return;
+        var device = DeviceId;
+        synced.Set(device, version);
+        await Clients.Others.SendAsync(PeerSyncedMethod, device, version);
     }
 
     public override async Task OnConnectedAsync()
@@ -73,7 +88,9 @@ public sealed class SyncHub(BatchRegistry batches, Services.DeviceRegistry devic
         }
         // What the others are moving right now (only reports from the last few seconds, each saying how old it is).
         foreach (var (name, report) in live.Fresh(except: Context.ConnectionId))
-            await Clients.Caller.SendAsync(PushNames.PeerTransfer, name, report);
+            await Clients.Caller.SendAsync(PeerTransferMethod, name, report);
+        foreach (var (device, version) in synced.All())
+            await Clients.Caller.SendAsync(PeerSyncedMethod, device, version);
         await base.OnConnectedAsync();
     }
 
@@ -96,7 +113,7 @@ public sealed class SyncHub(BatchRegistry batches, Services.DeviceRegistry devic
             await Clients.Others.SendAsync(PeerBatchMethod, batch.Device, 0, false);
         // Gone while it was moving files: it moves nothing now.
         if (live.Remove(Context.ConnectionId) is { Report.IsActive: true } gone)
-            await Clients.Others.SendAsync(PushNames.PeerTransfer, gone.Name, TransferReport.Idle);
+            await Clients.Others.SendAsync(PeerTransferMethod, gone.Name, TransferReport.Idle);
         await base.OnDisconnectedAsync(exception);
     }
 }
@@ -162,4 +179,14 @@ public sealed class LiveTransfers(TimeProvider? clock = null)
             .Select(e => (e.Value.Name, e.Value.Report with { AgeSeconds = Math.Max(0, (now - e.Value.At).TotalSeconds) }))
             .ToList();
     }
+}
+
+/// <summary>The newest server version each computer said it has everything up to (see <see cref="SyncHub.Synced"/>).</summary>
+public sealed class SyncedRegistry
+{
+    private readonly ConcurrentDictionary<string, long> _byDevice = new(StringComparer.Ordinal);
+
+    public void Set(string device, long version) => _byDevice[device] = version;
+
+    public IEnumerable<KeyValuePair<string, long>> All() => _byDevice.ToArray();
 }

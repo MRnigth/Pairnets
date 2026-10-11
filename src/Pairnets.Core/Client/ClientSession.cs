@@ -28,6 +28,8 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
     private readonly Dictionary<string, ActiveTransfer> _active = new(StringComparer.Ordinal);
     private readonly Queue<(long Ticks, long Bytes)> _upSamples = new();
     private readonly Queue<(long Ticks, long Bytes)> _downSamples = new();
+    private long _lastUp;
+    private long _lastDown;
     private long _burstBytesDone;
     private long _burstBytesTotal;
     private Timer? _infoTimer;
@@ -41,22 +43,83 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
     private static readonly TimeSpan LiveInterval = TimeSpan.FromSeconds(1);
 
     private static readonly TimeSpan SpeedWindow = TimeSpan.FromSeconds(5);
+
+    /// <summary>The map's speeds react faster than the "time left" estimate.</summary>
+    private static readonly TimeSpan DirectionWindow = TimeSpan.FromSeconds(3);
+
+    /// <summary>An upload or download still counts as running this long after it ended (no flicker between files).</summary>
+    private static readonly TimeSpan MovingGrace = TimeSpan.FromSeconds(1.5);
     private static readonly TimeSpan ServerInfoInterval = TimeSpan.FromMinutes(5);
 
     /// <summary>How often the list of computers (online or not) is re-read.</summary>
     private static readonly TimeSpan DevicesInterval = TimeSpan.FromSeconds(30);
 
-    /// <summary>Bytes per second over the last few seconds. Call with <c>_gate</c> held.</summary>
-    private double RateLocked(Queue<(long Ticks, long Bytes)> samples)
+    /// <summary>
+    /// Bytes per second over the last <paramref name="window"/> (at most <see cref="SpeedWindow"/>, which is how long
+    /// samples are kept). Call with <c>_gate</c> held.
+    /// </summary>
+    private double RateLocked(Queue<(long Ticks, long Bytes)> samples, TimeSpan window)
     {
         var now = _clock.GetTimestamp();
         while (samples.Count > 0 && _clock.GetElapsedTime(samples.Peek().Ticks, now) > SpeedWindow)
             samples.Dequeue();
-        if (samples.Count == 0)
+        long bytes = 0;
+        long? first = null;
+        foreach (var (ticks, count) in samples)
+        {
+            if (_clock.GetElapsedTime(ticks, now) > window)
+                continue;
+            first ??= ticks;
+            bytes += count;
+        }
+        if (first is not { } start)
             return 0;
-        var span = Math.Max(1.0, _clock.GetElapsedTime(samples.Peek().Ticks, now).TotalSeconds);
-        return samples.Sum(x => (double)x.Bytes) / span;
+        var span = Math.Max(1.0, _clock.GetElapsedTime(start, now).TotalSeconds);
+        return bytes / span;
     }
+
+    /// <summary>
+    /// What is really moving, for the badge, the map and the live report: the speed each way (and both together over a
+    /// longer window, for the time left), whether uploads or downloads run, and whether bytes stopped moving although files
+    /// should be (stalled, also while held by "too many requests"). Call with <c>_gate</c> held.
+    /// </summary>
+    private Func<StatusSnapshot, StatusSnapshot> MotionLocked()
+    {
+        var now = _clock.GetTimestamp();
+        if (_active.Values.Any(a => a.IsUpload))
+            _lastUp = now;
+        if (_active.Values.Any(a => !a.IsUpload))
+            _lastDown = now;
+        var up = RateLocked(_upSamples, DirectionWindow);
+        var down = RateLocked(_downSamples, DirectionWindow);
+        var rate = RateLocked(_upSamples, SpeedWindow) + RateLocked(_downSamples, SpeedWindow);
+        var movingUp = _lastUp != 0 && _clock.GetElapsedTime(_lastUp, now) < MovingGrace;
+        var movingDown = _lastDown != 0 && _clock.GetElapsedTime(_lastDown, now) < MovingGrace;
+        var lastBytes = _lastBytesAt;
+        var utcNow = _clock.GetUtcNow();
+        return s =>
+        {
+            var next = s with
+            {
+                UpBytesPerSecond = up,
+                DownBytesPerSecond = down,
+                BytesPerSecond = rate,
+                MovingUp = movingUp,
+                MovingDown = movingDown,
+                LastBytesAt = lastBytes,
+            };
+            var stalled = next.StalledAt(utcNow);
+            // Kept as first seen, so the record (and the window) does not change every tick while stalled.
+            return next with { Stalled = stalled, StalledSince = stalled ? s.StalledSince ?? lastBytes ?? utcNow : null };
+        };
+    }
+
+    /// <summary>One computer's entry in <see cref="StatusSnapshot.Peers"/>, changed.</summary>
+    private static IReadOnlyDictionary<string, PeerActivity> WithPeer(StatusSnapshot s, string device, Func<PeerActivity, PeerActivity> change) =>
+        new Dictionary<string, PeerActivity>(s.Peers, StringComparer.OrdinalIgnoreCase)
+        {
+            [device] = change(s.Peers.TryGetValue(device, out var p) ? p : PeerActivity.None),
+        };
 
     /// <summary>Raised when the server's version, free space or updater state was (re)read.</summary>
     public event Action<ServerInfo>? ServerInfoChanged;
@@ -366,8 +429,7 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
             int done, total;
             IReadOnlyList<ActiveTransfer> active;
             long bytesDone, bytesTotal;
-            double up, down;
-            DateTimeOffset? lastBytes;
+            Func<StatusSnapshot, StatusSnapshot> motion;
             lock (_gate)
             {
                 _passDone = p.FilesDone;
@@ -389,18 +451,12 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
                 active = [.. _active.Values];
                 bytesDone = _burstBytesDone;
                 bytesTotal = Math.Max(_burstBytesTotal, _burstBytesDone);
-                up = RateLocked(_upSamples);
-                down = RateLocked(_downSamples);
-                lastBytes = _lastBytesAt;
+                motion = MotionLocked();
             }
-            Update(s => (p.CurrentPath is null
+            Update(s => motion((p.CurrentPath is null
                 ? s with { CurrentPath = null, Operation = null, BytesDone = 0, BytesTotal = 0, FilesDone = done, FilesTotal = total }
                 : s with { CurrentPath = p.CurrentPath, Operation = p.Operation, BytesDone = p.BytesDone, BytesTotal = p.BytesTotal, FilesDone = done, FilesTotal = total })
-                with
-                {
-                    Active = active, PassBytesDone = bytesDone, PassBytesTotal = bytesTotal,
-                    BytesPerSecond = up + down, UpBytesPerSecond = up, DownBytesPerSecond = down, LastBytesAt = lastBytes,
-                });
+                with { Active = active, PassBytesDone = bytesDone, PassBytesTotal = bytesTotal }));
         };
         // What the pass is doing: reading the server's list, checking files (with how many of how many), transferring.
         Engine.StageChanged += (stage, done, total) => Update(s => s.Status is RunnerStatus.Paused ? s : s with
@@ -415,10 +471,7 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
         Runner.PeerTransferReceived += (device, report) =>
         {
             var at = _clock.GetUtcNow() - TimeSpan.FromSeconds(report.AgeSeconds); // when it was really sent
-            Update(s => s with
-            {
-                Peers = new Dictionary<string, PeerTransfer>(s.Peers, StringComparer.OrdinalIgnoreCase) { [device] = new PeerTransfer(report, at) },
-            });
+            Update(s => s with { Peers = WithPeer(s, device, p => p with { Report = report, ReportAt = at }) });
         };
         Engine.TransferFinished += path =>
         {
@@ -438,6 +491,12 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
             Update(s => s with { FilesTotal = Math.Max(total, s.FilesDone) });
         };
         Runner.PeerWaitChanged += wait => Update(s => s with { WaitingFor = wait });
+        Runner.PeerSynced += (device, version) =>
+        {
+            var at = _clock.GetUtcNow();
+            Update(s => s with { Peers = WithPeer(s, device, p => p with { SyncedVersion = version, SyncedAt = at }) });
+        };
+        Engine.ChangeSent += version => Update(s => version > s.MyChangeVersion ? s with { MyChangeVersion = version } : s);
         Runner.JoinRequested += (code, name, system) =>
         {
             var request = new JoinRequest(code, name, system, _clock.GetUtcNow());
@@ -514,8 +573,9 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
     }
 
     /// <summary>
-    /// Once a second: lets this computer's speeds fall back when nothing moves, forgets other computers' reports that
-    /// went quiet, and tells the other computers what this one moves (while it transfers, and once when it stops).
+    /// Once a second: brings this computer's speeds, "moving" and "stalled" up to date also while no file reports
+    /// progress, forgets other computers' reports that went quiet, and tells the other computers what this one moves
+    /// (while it transfers, and once when it stops).
     /// </summary>
     internal async Task LiveTickAsync()
     {
@@ -523,25 +583,20 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
             return;
         try
         {
-            double up, down;
-            DateTimeOffset? lastBytes;
+            Func<StatusSnapshot, StatusSnapshot> motion;
             lock (_gate)
-            {
-                up = RateLocked(_upSamples);
-                down = RateLocked(_downSamples);
-                lastBytes = _lastBytesAt;
-            }
+                motion = MotionLocked();
             var now = _clock.GetUtcNow();
             Update(s =>
             {
-                var next = s with { BytesPerSecond = up + down, UpBytesPerSecond = up, DownBytesPerSecond = down, LastBytesAt = lastBytes };
-                next = next with { Stalled = next.StalledAt(now) };
-                var quiet = s.Peers.Where(p => now - p.Value.At > StatusSnapshot.LiveFor).Select(p => p.Key).ToList();
+                var next = motion(s);
+                // A computer that went quiet moves nothing any more; what it has synced stays known.
+                var quiet = next.Peers.Where(p => p.Value.Report is not null && now - p.Value.ReportAt > StatusSnapshot.LiveFor).Select(p => p.Key).ToList();
                 if (quiet.Count == 0)
                     return next;
-                var peers = new Dictionary<string, PeerTransfer>(s.Peers, StringComparer.OrdinalIgnoreCase);
+                var peers = new Dictionary<string, PeerActivity>(next.Peers, StringComparer.OrdinalIgnoreCase);
                 foreach (var name in quiet)
-                    peers.Remove(name);
+                    peers[name] = peers[name] with { Report = null };
                 return next with { Peers = peers };
             });
 

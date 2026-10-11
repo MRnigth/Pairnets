@@ -94,6 +94,7 @@ public sealed class SyncRunner : IAsyncDisposable
         public DateTimeOffset Started { get; } = now;
         public DateTimeOffset LastActivity { get; set; } = now;
     }
+    private long _syncedSent = -1;
     private bool _catchUpArmed = true;
     private int _offlineAttempts;
     private Task? _loop;
@@ -137,6 +138,9 @@ public sealed class SyncRunner : IAsyncDisposable
     /// its id, its (new) name, and true when it was removed.
     /// </summary>
     public event Action<string, string, bool>? DeviceListChanged;
+
+    /// <summary>Another computer has everything up to a server version ("PeerSynced"): its name and that version.</summary>
+    public event Action<string, long>? PeerSynced;
 
     /// <summary>A computer asks to join the nest ("PairRequested"): its code, name and system.</summary>
     public event Action<string, string, string>? JoinRequested;
@@ -298,6 +302,20 @@ public sealed class SyncRunner : IAsyncDisposable
         // first files can reach the other computer before it knows a batch is coming. Bounded,
         // so a slow push channel never holds up syncing for long.
         InvokeHubAsync("BatchStarted", uploads).Wait(TimeSpan.FromSeconds(3));
+    }
+
+    /// <summary>
+    /// After a pass that left nothing behind, tells the server which version this computer has everything up to;
+    /// the other computers then show that it has their changes. Sent once per version, and again after reconnecting.
+    /// </summary>
+    private void ReportSynced(bool again = false)
+    {
+        if (again)
+            Interlocked.Exchange(ref _syncedSent, -1);
+        if (LastResult is not { CaughtUp: true } last || !HubConnected)
+            return;
+        if (Interlocked.Exchange(ref _syncedSent, last.ServerVersion) != last.ServerVersion)
+            _ = InvokeHubAsync("Synced", last.ServerVersion);
     }
 
     private async Task InvokeHubAsync(string method, params object[] args)
@@ -517,6 +535,7 @@ public sealed class SyncRunner : IAsyncDisposable
         }
 
         LastResult = result;
+        ReportSynced();
         var now = DateTimeOffset.UtcNow;
         switch (result.Outcome)
         {
@@ -681,6 +700,11 @@ public sealed class SyncRunner : IAsyncDisposable
             RequestSync("remote-change", delay: _options.RemoteDebounce);
         });
         _hub.On<string, int, bool>("PeerBatch", OnPeerBatch);
+        _hub.On<string, long>("PeerSynced", (device, version) =>
+        {
+            if (!string.Equals(device, _options.DeviceId, StringComparison.OrdinalIgnoreCase))
+                PeerSynced?.Invoke(device, version);
+        });
         _hub.On<string, string>("DeviceRemoved", (id, name) => DeviceListChanged?.Invoke(id, name, true));
         _hub.On<string, string>("DeviceRenamed", (id, name) => DeviceListChanged?.Invoke(id, name, false));
         _hub.On<string, string, string>("PairRequested", (code, name, system) => JoinRequested?.Invoke(code, name, system));
@@ -699,6 +723,7 @@ public sealed class SyncRunner : IAsyncDisposable
         {
             _reportsUnsupported = false; // the server may have been updated meanwhile
             _log.LogInformation("Push channel reconnected");
+            ReportSynced(again: true); // a restarted server forgot it
             RequestSync("hub-reconnected");
             return Task.CompletedTask;
         };
@@ -721,6 +746,7 @@ public sealed class SyncRunner : IAsyncDisposable
                 await _hub.StartAsync(ct).ConfigureAwait(false);
                 _reportsUnsupported = false;
                 _log.LogInformation("Push channel connected");
+                ReportSynced(again: true);
                 if (attempt > 0)
                     RequestSync("hub-connected");
                 return;

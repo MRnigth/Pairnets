@@ -108,6 +108,13 @@
         <Border Classes="divider" />
 
         <StackPanel Spacing="3">
+          <ToggleSwitch x:Name="MapSpeedBox" OnContent="Show speed on the map" OffContent="Show speed on the map" />
+          <TextBlock Classes="muted small" TextWrapping="Wrap"
+                     Text="Shows how fast files move (MB/s) on the lines between the computers on the overview." />
+        </StackPanel>
+        <Border Classes="divider" />
+
+        <StackPanel Spacing="3">
           <ToggleSwitch x:Name="WaitBox" OnContent="Wait while my other computer uploads many files" OffContent="Wait while my other computer uploads many files" />
           <TextBlock Classes="muted small" TextWrapping="Wrap"
                      Text="When the other computer sends more than 100 files, download them in one go after it finishes instead of a few at a time." />

@@ -728,3 +728,64 @@ sync.pairnets.app) showed three problems: about 37 of PC-1's 38,206 uploads fail
     check adds one read.
   * **Owner's call:** the two numbers (600 per address, 6,000 per computer). Higher per computer is cheap to allow; a
     lower one would make big first syncs slow down more often.
+
+## Animations show what really moves (10 October 2026)
+
+* **The owner asked for it:** the status badge used to spin the same way for every kind of work, and the
+  dots on the overview's lines kept one pace even when nothing moved. The owner approved a moving preview
+  first.
+* **The badge follows `StatusSnapshot.Motion`.** A slow turn while checking. An arrow rising on green while
+  uploading, or falling on blue while downloading. Both arrows taking turns when it does both. A still,
+  faded arrow on orange, "Waiting for the network", once no byte has moved for 5 seconds (`StallAfter`).
+* **The dots go as fast as the bytes.** Speed is measured each way over the last 3 seconds
+  (`UploadBytesPerSecond`, `DownloadBytesPerSecond`), mapped to a dot speed with a log curve and a cap
+  (`DeviceMap.DotSpeed`). An upload or download keeps counting for 1.5 s after it ends, so the picture
+  doesn't flicker between small files.
+* **No more guessing about the other computer.** It used to "download" whenever this one uploaded.
+  * The server now counts the bytes of each computer's file requests (`TransferMeter`) and sends
+    `PeerTransfer(device, up, down, uploading, downloading)` once a second while it moves files, then once
+    with both flags off. The other computer's line uses only that (or, from an older server, the changes
+    heard from it).
+  * After a sync with nothing left over, an app calls `Synced(version)`; the others get
+    `PeerSynced(device, version)`. When that version covers this computer's latest change, the other
+    computer gets a check mark, "Has your changes", for a minute.
+  * Old apps and old servers keep working; they just show less.
+* **MB/s on the lines** is on to begin with, and can be turned off in Settings ("Show speed on the map").
+  It never shows in the small tray picture.
+
+## One release from the waiting branches (1.0.49, 11 October 2026)
+
+Sync feedback, live transfers and faster uploads were built side by side and each solved part of the same thing. The
+owner chose "both go ahead, merge at the end". This is how they fit together.
+
+* **One source for every computer's speed: its own report.** Each app sends `ReportTransfer(report)` about once a
+  second while it moves files, and the others get `PeerTransfer(name, report)` (sync feedback). The server's own byte
+  counter from live transfers (`TransferMeter`) is gone: two sources for one number would disagree, and the app's report
+  says more (files left, stalled, what it is doing) and travels the same way through sync.pairnets.app.
+* **Kept from live transfers:** `Synced(version)` / `PeerSynced(name, version)` and the "Has your changes" check mark,
+  the badge's motion, the moving dots, the MB/s on the lines and its switch. The other computer's entry
+  (`StatusSnapshot.Peers`) holds both its latest report and what it has synced (`PeerActivity`); a report that goes
+  quiet for 10 s is dropped, what it has synced stays.
+* **A computer's box says what it does, its line how fast:** "Downloading your changes · 1,204 files left" under the
+  name, "↓ 4.20 MB/s" on the line. The Devices page, which has no lines, keeps the speed in its text.
+* **One tick a second in the app** (instead of three timers) brings the speeds, "moving" (with its 1.5 s grace) and
+  "stalled" up to date, forgets quiet reports and sends this computer's own. The speeds each way are measured over 3 s
+  for the map and the report; both together over 5 s for the time left.
+* **Stalled** is files in flight with no byte for 5 s, or requests held by "too many requests". `Stalled` and
+  `StalledSince` are set together; the badge then shows the still orange arrow, but the title still says "Slowed down by
+  the server" when that is the reason, and "Waiting for the network" otherwise.
+* **Words in the title** follow sync feedback ("Checking files", "Reading the server's list", "Uploading",
+  "Waiting for PC-1 to finish uploading"), plus "Waiting for the network" and "Deleting files" from live transfers.
+* **Checking the folder** lists it first, so there is a total from the start (sync feedback), and saves what it read
+  every 250 files or 2 s and when stopped (faster uploads). The status shows both the count and the big file being read:
+  "12,400 of 38,206 files checked, 310 new or changed · reading model.gguf (1.20 GB of 9.00 GB)".
+* **"Too many requests"** is handled in one place for every request (`BackPressure`: hold everything, send the refused
+  request again, then one at a time for a while). The pieces of an upload that sends two at once are the exception:
+  the next piece may already be reading the file, so the sender never sends a piece again by itself. It holds every
+  other request and reports the slow-down; the upload then asks the server how much it has and goes on from there.
+* **The relay's limits** are three of Cloudflare's rate limiting bindings, so a relayed request costs no database
+  round trip: 20,000 a minute per address (a flood ceiling), 6,000 a minute per computer key, and 600 a minute per
+  address for requests without a key and for failures. A binding cannot be read without counting, so the request that
+  goes over the 600 turns the address off for 60 s, remembered by the Worker instance. The Worker tests use a counting
+  stand-in per test, because the test runtime's own binding counts by the wall clock and keeps its counts between tests.
+* **A website-only push to main is not an app update:** release.yml ignores `site/**` as it already ignored `cloud/**`.

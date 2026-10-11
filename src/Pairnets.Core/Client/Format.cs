@@ -87,14 +87,17 @@ public static class Format
     public static string Live(TransferReport report)
     {
         var flow = Flow(report.UpBytesPerSecond, report.DownBytesPerSecond);
-        var left = report.FilesLeft switch
-        {
-            0 => string.Empty,
-            1 => "1 file left",
-            var n => Count(n) + " files left",
-        };
+        var left = FilesLeft(report.FilesLeft);
         return flow.Length > 0 && left.Length > 0 ? flow + " · " + left : flow + left;
     }
+
+    /// <summary>"1 file left", "1,204 files left", or empty for none.</summary>
+    public static string FilesLeft(int files) => files switch
+    {
+        <= 0 => string.Empty,
+        1 => "1 file left",
+        _ => Count(files) + " files left",
+    };
 
     /// <summary>"less than a minute", "about 2 min", "about 1 h 20 min".</summary>
     public static string Duration(TimeSpan time)

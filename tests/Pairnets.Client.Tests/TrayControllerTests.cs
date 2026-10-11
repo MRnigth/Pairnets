@@ -437,7 +437,7 @@ public sealed class TrayControllerTests
         var main = app.Tray.Window!;
 
         await app.Press(main, "Devices");
-        await app.WaitUntil(() => main.DevicesList.Items.Cast<DeviceRow>().Any(d => d.Title.Contains("DESKTOP", StringComparison.Ordinal)), "this computer in the Devices list");
+        await app.WaitUntil(() => main.DevicesList.Items.Cast<DeviceRowView>().Any(d => d.Title.Contains("DESKTOP", StringComparison.Ordinal)), "this computer in the Devices list");
         await app.Press(main, "+ Add a computer…");
         var steps = Assert.Single(app.Dialogs.Asked.Items);
         Assert.Contains("type localhost and press \"Sign in with your browser\"", steps.Text);

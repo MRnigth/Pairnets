@@ -108,7 +108,8 @@ public sealed partial class ApiTour : IAsyncDisposable
     ];
 
     /// <summary>The push channel's methods an app calls.</summary>
-    public static readonly IReadOnlyList<string> HubMethods = [nameof(SyncHub.BatchStarted), nameof(SyncHub.BatchFinished)];
+    public static readonly IReadOnlyList<string> HubMethods =
+        [nameof(SyncHub.BatchStarted), nameof(SyncHub.BatchFinished), nameof(SyncHub.ReportTransfer), nameof(SyncHub.Synced)];
 
     /// <summary>The push channel's messages the server sends.</summary>
     public static readonly IReadOnlyList<string> HubEvents =
@@ -117,6 +118,8 @@ public sealed partial class ApiTour : IAsyncDisposable
         SyncHub.PeerBatchMethod,
         SyncHub.DeviceRemovedMethod,
         SyncHub.DeviceRenamedMethod,
+        SyncHub.PeerTransferMethod,
+        SyncHub.PeerSyncedMethod,
         PairingEndpoints.PairRequestedMethod,
         PairingEndpoints.PairDecidedMethod,
     ];

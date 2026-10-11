@@ -16,6 +16,9 @@ public partial class DeviceMapView : UserControl
         InitializeComponent();
     }
 
+    /// <summary>Show the MB/s on the lines (Settings: "Show speed on the map"); never in the small tray picture.</summary>
+    public bool ShowSpeed { get; set; } = true;
+
     /// <summary>Smaller circles and text, for the tray panel.</summary>
     public bool Compact
     {
@@ -44,8 +47,52 @@ public partial class DeviceMapView : UserControl
         OtherMore.IsVisible = map.MoreComputers > 0;
         HereLine.Linked = map.HereLinked;
         HereLine.Flow = map.HereFlow;
+        HereLine.UpSpeed = DeviceMap.DotSpeed(map.HereUpSpeed);
+        HereLine.DownSpeed = DeviceMap.DotSpeed(map.HereDownSpeed);
+        HereLine.Stalled = map.HereStalled;
         OtherLine.Linked = map.OtherLinked;
         OtherLine.Flow = map.OtherFlow;
+        OtherLine.UpSpeed = DeviceMap.DotSpeed(map.OtherUpSpeed);
+        OtherLine.DownSpeed = DeviceMap.DotSpeed(map.OtherDownSpeed);
+        ShowRate(HereRatePill, HereRate, map.HereRateText, map.HereFlow, map.HereStalled);
+        ShowRate(OtherRatePill, OtherRate, map.OtherRateText, map.OtherFlow, stalled: false);
+        ShowOtherState(map.OtherState);
+    }
+
+    /// <summary>The speed above a line, green going up, blue coming down, orange when stalled.</summary>
+    private void ShowRate(Border pill, TextBlock text, string? rate, LinkFlow flow, bool stalled)
+    {
+        pill.IsVisible = ShowSpeed && !Compact && rate is not null;
+        if (!pill.IsVisible)
+            return;
+        text.Text = rate;
+        pill.Classes.Set("up", !stalled && flow == LinkFlow.Up);
+        pill.Classes.Set("down", !stalled && flow == LinkFlow.Down);
+        pill.Classes.Set("stalled", stalled);
+    }
+
+    /// <summary>The other computer's circle breathes while it downloads, and gets a check mark once it has this computer's change.</summary>
+    private void ShowOtherState(PeerState state)
+    {
+        var downloading = state == PeerState.Downloading;
+        OtherHalo.IsVisible = downloading;
+        OtherHalo.Classes.Set("ripple", downloading);
+        OtherRing.Classes.Set("downloading", downloading);
+        var has = state == PeerState.HasChanges;
+        if (has && !OtherTick.IsVisible)
+        {
+            OtherTick.IsVisible = true;
+            OtherTick.Classes.Remove("pop");
+            Avalonia.Threading.Dispatcher.UIThread.Post(() => OtherTick.Classes.Add("pop"), Avalonia.Threading.DispatcherPriority.Background);
+        }
+        else if (!has)
+        {
+            OtherTick.IsVisible = false;
+        }
+        if (has)
+            OtherDot.IsVisible = false;
+        OtherDetail.Classes.Set("down", downloading);
+        OtherDetail.Classes.Set("ok", state is PeerState.HasChanges or PeerState.Sending);
     }
 
     private static void ShowNode(MapNode node, Ellipse ring, Ellipse dot, TextBlock name, TextBlock detail)
@@ -63,4 +110,7 @@ public partial class DeviceMapView : UserControl
     internal string OtherText => $"{OtherName.Text}: {OtherDetail.Text}";
     internal bool HereFlowing => HereLine.IsFlowing;
     internal bool OtherFlowing => OtherLine.IsFlowing;
+    internal string? HereRateShown => HereRatePill.IsVisible ? HereRate.Text : null;
+    internal bool OtherBreathes => OtherHalo.IsVisible && OtherHalo.Classes.Contains("ripple");
+    internal bool OtherHasTick => OtherTick.IsVisible;
 }

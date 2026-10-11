@@ -150,7 +150,7 @@ public class DesktopUiTests
             Status = RunnerStatus.Syncing, CurrentPath = "a.bin", Operation = "upload", FilesTotal = 3,
             Active = [new ActiveTransfer("a.bin", "upload", 10, 100), new ActiveTransfer("b.bin", "upload", 50, 100)],
         }, null);
-        Assert.True(window.GlyphSpins);
+        Assert.Equal("rise", window.GlyphMotion); // the badge's arrow rises while uploading
         Assert.Equal("rise", window.ArrowMotion);
         Assert.Equal(2, window.ActiveRows);
 
@@ -159,11 +159,35 @@ public class DesktopUiTests
             Status = RunnerStatus.Syncing, CurrentPath = "c.bin", Operation = "download", FilesTotal = 3,
             Active = [new ActiveTransfer("c.bin", "download", 10, 100)],
         }, null);
+        Assert.Equal("fall", window.GlyphMotion);
         Assert.Equal("fall", window.ArrowMotion);
         Assert.Equal(1, window.ActiveRows);
 
+        // Both ways: the second arrow falls while the first rises.
+        window.ShowStatus(StatusSnapshot.Initial with
+        {
+            Status = RunnerStatus.Syncing, CurrentPath = "c.bin", Operation = "download", FilesTotal = 3,
+            Active = [new ActiveTransfer("a.bin", "upload", 10, 100), new ActiveTransfer("c.bin", "download", 10, 100)],
+        }, null);
+        Assert.Equal("rise", window.GlyphMotion);
+        Assert.True(window.SecondGlyphFalls);
+
+        // Checking for changes: a calm turn. Stalled: nothing moves.
+        window.ShowStatus(StatusSnapshot.Initial with { Status = RunnerStatus.Syncing }, null);
+        Assert.Equal("spin-slow", window.GlyphMotion);
+        Assert.Equal("Syncing…", window.HeadlineText);
+        window.ShowStatus(StatusSnapshot.Initial with
+        {
+            Status = RunnerStatus.Syncing, CurrentPath = "a.bin", Operation = "upload", FilesTotal = 1,
+            Active = [new ActiveTransfer("a.bin", "upload", 10, 100)], StalledSince = DateTimeOffset.UtcNow.AddSeconds(-8),
+        }, null);
+        Assert.Equal("none", window.GlyphMotion);
+        Assert.Equal("none", window.ArrowMotion);
+        Assert.False(window.SecondGlyphFalls);
+        Assert.Equal("Waiting for the network", window.HeadlineText);
+
         window.ShowStatus(StatusSnapshot.Initial with { Status = RunnerStatus.Idle, WaitingFor = new PeerWait("DESKTOP", 340, 12) }, null);
-        Assert.False(window.GlyphSpins);
+        Assert.Equal("none", window.GlyphMotion);
         Assert.True(window.BadgePulses);
         window.AllowClose = true;
         window.Close();
@@ -386,6 +410,11 @@ public class DesktopUiTests
             Status = RunnerStatus.Syncing, Text = "Syncing", LastSyncAt = now.AddMinutes(-1),
             CurrentPath = "Videos/presentation-final.mp4", Operation = "upload", BytesDone = 67_108_864, BytesTotal = 104_857_600,
             FilesDone = 37, FilesTotal = 120, PassBytesDone = 412L << 20, PassBytesTotal = 1331L << 20, BytesPerSecond = 4.9 * (1 << 20),
+            UpBytesPerSecond = 4.9 * (1 << 20), MyChangeVersion = 120,
+            Peers = new Dictionary<string, PeerActivity>
+            {
+                ["DESKTOP"] = new(new Pairnets.Core.TransferReport(0, 3_400_000, 0, 0, 0, 0, Downloading: true), utc, 80, utc.AddMinutes(-2)),
+            },
             LimitText = "Limited to 5 MB/s", Server = server, Devices = devices,
             Active =
             [
@@ -466,7 +495,7 @@ public class DesktopUiTests
             CurrentPath = "Photos/summer/holiday-0412.jpg", Operation = "download", FilesDone = 12, FilesTotal = 30,
             PassBytesDone = 96L << 20, PassBytesTotal = 240L << 20, BytesPerSecond = 8.2 * (1 << 20),
             Active = [new ActiveTransfer("Photos/summer/holiday-0412.jpg", "download", 50, 100)],
-            Peers = new Dictionary<string, PeerTransfer> { ["DESKTOP"] = new(new Pairnets.Core.TransferReport(2.4 * (1 << 20), 0, 4, 30, 0, 0), DateTimeOffset.UtcNow) },
+            Peers = new Dictionary<string, PeerActivity> { ["DESKTOP"] = new(new Pairnets.Core.TransferReport(2.4 * (1 << 20), 0, 4, 30, 0, 0), DateTimeOffset.UtcNow, 0, null) },
         }, "MacBook");
         Save(panel, outDir, $"tray-panel-syncing-{suffix}.png");
         panel.ShowAttention(0);
@@ -535,9 +564,9 @@ public class DesktopUiTests
             new("PC-1", utc.AddDays(-2), utc, true, "1.0.90", "Windows"),
             new("PC-2", utc.AddDays(-2), utc, true, "1.0.90", "Linux"),
         ];
-        var pc1Uploading = new Dictionary<string, PeerTransfer>
+        var pc1Uploading = new Dictionary<string, PeerActivity>
         {
-            ["PC-1"] = new(new Pairnets.Core.TransferReport(3.1 * MB, 0, 37_002, 38_206, 98L << 30, 114L << 30), DateTimeOffset.UtcNow),
+            ["PC-1"] = new(new Pairnets.Core.TransferReport(3.1 * MB, 0, 37_002, 38_206, 98L << 30, 114L << 30), DateTimeOffset.UtcNow, 0, null),
         };
         var basis = StatusSnapshot.Initial with { LastSyncAt = now.AddMinutes(-9), Server = server, Devices = pcs, IsRelay = true };
         var downloading = basis with
@@ -552,9 +581,9 @@ public class DesktopUiTests
                 new ActiveTransfer("Photos/2019/IMG_4412.jpg", "download", 90, 100),
                 new ActiveTransfer("Photos/2019/IMG_4413.jpg", "download", 5, 100),
             ],
-            Peers = new Dictionary<string, PeerTransfer>
+            Peers = new Dictionary<string, PeerActivity>
             {
-                ["PC-1"] = new(new Pairnets.Core.TransferReport(3.1 * MB, 0, 37_002, 38_206, 98L << 30, 114L << 30), DateTimeOffset.UtcNow),
+                ["PC-1"] = new(new Pairnets.Core.TransferReport(3.1 * MB, 0, 37_002, 38_206, 98L << 30, 114L << 30), DateTimeOffset.UtcNow, 0, null),
             },
         };
         return
@@ -564,7 +593,7 @@ public class DesktopUiTests
             ("waiting-live", basis with
             {
                 Status = RunnerStatus.Idle, Text = "Up to date", WaitingFor = new PeerWait("PC-1", 38_206, 360),
-                Peers = new Dictionary<string, PeerTransfer> { ["PC-1"] = new(new Pairnets.Core.TransferReport(3.1 * MB, 0, 383, 38_206, 1L << 30, 114L << 30), DateTimeOffset.UtcNow) },
+                Peers = new Dictionary<string, PeerActivity> { ["PC-1"] = new(new Pairnets.Core.TransferReport(3.1 * MB, 0, 383, 38_206, 1L << 30, 114L << 30), DateTimeOffset.UtcNow, 0, null) },
             }),
             ("slowed", basis with
             {

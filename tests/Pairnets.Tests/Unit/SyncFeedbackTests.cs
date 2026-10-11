@@ -77,7 +77,7 @@ public class SyncFeedbackTests
         // With PC-1's own report: its batch, as it counts it, and its speed.
         var live = waiting with
         {
-            Peers = new Dictionary<string, PeerTransfer> { ["PC-1"] = new(new TransferReport(3.1 * MB, 0, 383, 38_206, 0, 0), Now.AddSeconds(-1)) },
+            Peers = new Dictionary<string, PeerActivity> { ["PC-1"] = new(new TransferReport(3.1 * MB, 0, 383, 38_206, 0, 0), Now.AddSeconds(-1), 0, null) },
         };
         Assert.Equal("Waiting for PC-1 to finish uploading · 383 of 38,206 files", live.StatusLineAt(Now));
         Assert.Equal("383 of 38,206 files are on the server · ↑ 3.10 MB/s", live.WaitingProgressAt(Now));
@@ -140,13 +140,15 @@ public class SyncFeedbackTests
             Devices = TwoPcs,
             Stage = SyncStage.Transferring, CurrentPath = "a", Operation = "upload", Active = [new ActiveTransfer("a", "upload", 1, 2)],
             FilesDone = 100, FilesTotal = 1_304, UpBytesPerSecond = 3.1 * MB, BytesPerSecond = 3.1 * MB,
-            Peers = new Dictionary<string, PeerTransfer> { ["PC-2"] = new(new TransferReport(0, 4.2 * MB, 10, 10, 0, 0), Now.AddSeconds(-2)) },
+            Peers = new Dictionary<string, PeerActivity> { ["PC-2"] = new(new TransferReport(0, 4.2 * MB, 10, 10, 0, 0), Now.AddSeconds(-2), 0, null) },
         };
         var map = DeviceMap.Build(s, "PC-1", Now);
-        Assert.Equal("↑ 3.10 MB/s · 1,204 files left", map.Here.Detail);
+        Assert.Equal("Uploading · 1,204 files left", map.Here.Detail); // what it does in its box, how fast on its line
+        Assert.Equal("↑ 3.10 MB/s", map.HereRateText);
         Assert.Equal(LinkFlow.Up, map.HereFlow);
         Assert.Equal("PC-2", map.Other.Name);
-        Assert.Equal("↓ 4.20 MB/s", map.Other.Detail);
+        Assert.Equal("Downloading", map.Other.Detail);
+        Assert.Equal("↓ 4.20 MB/s", map.OtherRateText);
         Assert.Equal(LinkFlow.Down, map.OtherFlow);
 
         // The Devices page says the same.
@@ -161,7 +163,7 @@ public class SyncFeedbackTests
         Assert.Equal("Online", DeviceRow.From(TwoPcs, "PC-1", Now.AddSeconds(11), s)[1].StatusText);
 
         // A report that says it stopped: no speed either.
-        var stopped = s with { Peers = new Dictionary<string, PeerTransfer> { ["PC-2"] = new(TransferReport.Idle, Now) } };
+        var stopped = s with { Peers = new Dictionary<string, PeerActivity> { ["PC-2"] = new(TransferReport.Idle, Now, 0, null) } };
         Assert.Equal(LinkFlow.None, DeviceMap.Build(stopped, "PC-1", Now).OtherFlow);
 
         // Idle computers show no speed, this one included.
@@ -191,11 +193,11 @@ public class SyncFeedbackTests
         var s = Syncing with
         {
             Server = new ServerInfo("id", 1, 1), Devices = TwoPcs,
-            Peers = new Dictionary<string, PeerTransfer> { ["PC-2"] = new(new TransferReport(0, 0, 10, 640, 0, 0, Downloading: true, Stalled: true), Now) },
+            Peers = new Dictionary<string, PeerActivity> { ["PC-2"] = new(new TransferReport(0, 0, 10, 640, 0, 0, Downloading: true, Stalled: true), Now, 0, null) },
         };
         var map = DeviceMap.Build(s, "PC-1", Now);
         Assert.Equal(LinkFlow.None, map.OtherFlow);
-        Assert.Equal("630 files left", map.Other.Detail);
+        Assert.Equal("Stalled · 630 files left", map.Other.Detail);
         Assert.True(s.LiveOf("PC-2", "PC-1", Now)!.Stalled);
     }
 

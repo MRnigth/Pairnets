@@ -386,12 +386,19 @@ and **Settings**. The buttons at the top right are always there: **Open folder**
 
 **Overview** shows everything at a glance:
 
-* **Status card** (top): a coloured badge with a symbol (✓ up to date, ↻ syncing, ⏸ paused,
-  ! needs a decision, ✕ error, crossed-out cloud for offline) and what Pairnets is doing right now,
-  in plain words: *Reading the server's list*; *Checking files* (see below); *Uploading* or
-  *Downloading* with how many files, the speed and the time left; *Waiting for PC-1 to finish
-  uploading* (see below); *Slowed down by the server* ("Too many requests to sync.pairnets.app;
-  continuing in 30 s"); or *Paused*. The top of the card takes on the status colour.
+* **Status card** (top): a coloured badge with a symbol (✓ up to date, ⏸ paused, ! needs a decision,
+  ✕ error, crossed-out cloud for offline) and what Pairnets is doing right now, in plain words:
+  *Reading the server's list*; *Checking files* (see below); *Uploading* or *Downloading* with how
+  many files, the speed and the time left; *Waiting for PC-1 to finish uploading* (see below);
+  *Slowed down by the server* ("Too many requests to sync.pairnets.app; continuing in 30 s");
+  *Waiting for the network*; or *Paused*. The top of the card takes on the status colour. While
+  syncing, the badge shows what this computer really does:
+  * a slow turn: checking for changes
+  * a green arrow rising: uploading
+  * a blue arrow falling: downloading
+  * both arrows taking turns: uploading and downloading
+  * a still arrow on orange: **Waiting for the network**, when no data has moved for 5 seconds. It
+    carries on by itself.
 * **Checking files** shows while Pairnets looks through the folder for what changed, before anything
   is sent: "12,400 of 38,206 files checked, 310 new or changed · reading model.gguf (1.20 GB of
   9.00 GB)". Most files are answered from what it remembers; new and changed files are read once from
@@ -399,13 +406,19 @@ and **Settings**. The buttons at the top right are always there: **Open folder**
   minute or more). What it has read is kept, so after **Pause**, **Resume** or a restart it carries
   on instead of reading everything again.
 * **Your computers**: *this computer*, the *server* and your *other computer*, joined by lines. A
-  green dot means online. Under each computer that is moving files you see its real speed, as that
-  computer measured it: **↓ 4.20 MB/s**, or **↑ 3.10 MB/s · 1,204 files left**. Otherwise the other
-  computer says **Online**, **Uploading 340 files** (it announced a big batch) or **Last seen 3 h
-  ago**. Dots travel along a line only while that computer really transfers: green towards the
-  server (uploads), blue from the server (downloads). A computer that sends no report for 10 seconds
-  shows no speed. A dashed line means not connected. Hover a computer's name to see which app and
-  version it runs. (An older server says *Update the server to see it*, and shows no speeds.)
+  green dot means online. Under each computer it says what it is doing: for the other computer
+  **Online**, **Sending changes**, **Downloading your changes**, **Has your changes** (with a check
+  mark), **Uploading 340 files** (it announced a big batch) or **Last seen 3 h ago**, with how many
+  files it has left (**· 1,204 files left**).
+  * While files move, dots travel along the lines: green towards the server (uploads), blue from the
+    server (downloads). They go faster when more megabytes go through, and stop and fade when nothing
+    moves.
+  * The speed (for example **↑ 4.90 MB/s**) shows above each line, as each computer measured it;
+    turn it off in Settings with **Show speed on the map**.
+  * The other computer's line moves only when that computer reports that it really uploads or
+    downloads. A computer that sends no report for 10 seconds shows no speed.
+  * A dashed line means not connected. Hover a computer's name to see which app and version it runs.
+    (An older server says *Update the server to see it*, and shows no speeds.)
 * **"2 things need your attention"** with a **Review** button, when something waits for you.
 * **Transfer card** (only while transferring; the arrow travels up while uploading and down while
   downloading, and the bars glide): how many files are being sent, the speed and the
@@ -831,6 +844,8 @@ In **Settings → Updates and speed**:
   other computers always come through the server, so the download limit covers them too. Each
   computer has its own limits; all files in progress together stay under the limit.
 * **Wait while my other computer uploads many files**: the batch wait described in section 5.
+* **Show speed on the map**: the MB/s above the lines between the computers on the overview (on to
+  begin with).
 
 **Pause and Resume.** Pause stops at once, also in the middle of checking a big folder. What is done
 is kept: the files already checked, and big files half sent or half received. After **Resume**

@@ -88,10 +88,11 @@ public class OverviewAndHistoryTests
         // Only its own report moves its line.
         var reported = heard with
         {
-            Peers = new Dictionary<string, PeerTransfer> { ["desktop"] = new(new TransferReport(3.1 * (1 << 20), 0, 100, 1304, 0, 0), Now.AddSeconds(-1)) },
+            Peers = new Dictionary<string, PeerActivity> { ["desktop"] = new(new TransferReport(3.1 * (1 << 20), 0, 100, 1304, 0, 0), Now.AddSeconds(-1), 0, null) },
         };
         var sending = DeviceMap.Build(reported, "MAC", Now);
-        Assert.Equal("↑ 3.10 MB/s · 1,204 files left", sending.Other.Detail);
+        Assert.Equal("Sending changes · 1,204 files left", sending.Other.Detail);
+        Assert.Equal("↑ 3.10 MB/s", sending.OtherRateText);
         Assert.Equal(LinkFlow.Up, sending.OtherFlow);
 
         var batch = Connected(new DeviceInfo("DESKTOP", Now.AddDays(-30), Now, true)) with { WaitingFor = new PeerWait("DESKTOP", 340, 12) };

@@ -389,6 +389,7 @@ public sealed class TrayController : ITrayActions, IDisposable
         if (_window is { IsVisible: true })
         {
             DrawUpdateBanner();
+            _window.ShowMapSpeed = _settings.ShowMapSpeed;
             _window.ShowStatus(status, _settings.Folder, _settings.DeviceName);
             _window.ShowActivity(_session?.Activity.Items ?? []);
             _window.ShowAttention(BuildAttention(status));

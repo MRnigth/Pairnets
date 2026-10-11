@@ -234,7 +234,7 @@ JSON is camelCase; errors are `{"code","message"}`.
 | `GET /api/history?path=` | key | `[{id, storedAtUtc, size, hash8}]` newest first |
 | `POST /api/history/restore?path=&id=` | key | restores the version as a normal new version |
 | `GET /api/devices` | key | `[{name, firstSeen, lastSeen, online, appVersion, system, lastChange, id}]`: every computer that sent an authenticated request (`X-Device-Id`, plus `X-Pairnets-Client` such as "1.0.38; Windows"); `online` while its push channel is open or it was seen in the last 2 minutes; `id` only for computers with their own key |
-| `/hub` (SignalR) | key | server → clients: `Changed(deviceId, path)`, `PeerBatch` (another computer's big upload starts or ends), `DeviceRemoved`, `DeviceRenamed`, `PairRequested(code, name, system)`, `PairDecided(code, approved)`, `PeerTransfer(name, report)` (another computer's live speeds and batch, see below); clients → server: `BatchStarted(count)`, `BatchFinished()`, `ReportTransfer(report)` |
+| `/hub` (SignalR) | key | server → clients: `Changed(deviceId, path)`, `PeerBatch` (another computer's big upload starts or ends), `DeviceRemoved`, `DeviceRenamed`, `PairRequested(code, name, system)`, `PairDecided(code, approved)`, `PeerTransfer(name, report)` (another computer's live speeds and batch, see below), `PeerSynced(name, version)` (it has everything up to that version); clients → server: `BatchStarted(count)`, `BatchFinished()`, `ReportTransfer(report)`, `Synced(version)` |
 
 Every API response carries `Cache-Control: no-store, no-transform`, so a proxy in between
 (Cloudflare) never caches or rewrites files, manifests or errors. (The website's pages are

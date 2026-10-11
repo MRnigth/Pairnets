@@ -18,15 +18,41 @@ public sealed record ActiveTransfer(string Path, string Operation, long BytesDon
     public double PercentValue => Percent ?? 0;
 }
 
+/// <summary>What the badge and the map show this computer doing while it syncs.</summary>
+public enum SyncMotion
+{
+    /// <summary>Not syncing (up to date, offline, paused, waiting for another computer...).</summary>
+    None,
+
+    /// <summary>Syncing, but no file is moving: looking for changes, or deleting.</summary>
+    Checking,
+    Up,
+    Down,
+    Both,
+
+    /// <summary>Files should be moving, but no byte has moved for <see cref="StatusSnapshot.StallAfter"/>.</summary>
+    Stalled,
+}
+
+/// <summary>
+/// What another computer is doing, as this one hears it on the push channel: its latest live report (<see cref="TransferReport"/>,
+/// sent by itself about once a second while it moves files; "PeerTransfer") and when it arrived, and the server version it
+/// has everything up to ("PeerSynced") and when that arrived.
+/// </summary>
+public sealed record PeerActivity(TransferReport? Report, DateTimeOffset ReportAt, long SyncedVersion, DateTimeOffset? SyncedAt)
+{
+    public static PeerActivity None { get; } = new(null, DateTimeOffset.MinValue, 0, null);
+
+    /// <summary>Its report is fresh (younger than <see cref="StatusSnapshot.LiveFor"/>) and says it moves files.</summary>
+    public bool IsMoving(DateTimeOffset now) => Report is { IsActive: true } && now - ReportAt <= StatusSnapshot.LiveFor;
+}
+
 /// <summary>A computer asking to join the nest, as the other computers hear about it.</summary>
 public sealed record JoinRequest(string Code, string Name, string System, DateTimeOffset At)
 {
     /// <summary>"LAPTOP-2 (Windows) wants to join".</summary>
     public string Title => System.Length > 0 ? $"{Name} ({System}) wants to join" : $"{Name} wants to join";
 }
-
-/// <summary>Another computer's latest live report (<see cref="TransferReport"/>) and when it arrived here.</summary>
-public sealed record PeerTransfer(TransferReport Report, DateTimeOffset At);
 
 /// <summary>Everything a UI needs to draw the current state, as one immutable value.</summary>
 public sealed record StatusSnapshot(
@@ -60,25 +86,31 @@ public sealed record StatusSnapshot(
     /// <summary>Recent transfer speed (about the last 5 seconds), both directions together.</summary>
     public double BytesPerSecond { get; init; }
 
-    /// <summary>Recent upload speed of this computer (about the last 5 seconds).</summary>
+    /// <summary>Bytes really sent per second by this computer over the last few seconds (not files planned).</summary>
     public double UpBytesPerSecond { get; init; }
 
-    /// <summary>Recent download speed of this computer (about the last 5 seconds).</summary>
+    /// <summary>Bytes really received per second by this computer over the last few seconds.</summary>
     public double DownBytesPerSecond { get; init; }
 
     /// <summary>When this computer last really moved a byte (up or down), or null.</summary>
     public DateTimeOffset? LastBytesAt { get; init; }
 
     /// <summary>
-    /// Files are in flight but no byte moved for <see cref="TransferReport.StallAfter"/>, or requests are held by "too
-    /// many requests" (refreshed about once a second).
+    /// Files are in flight but no byte moved for <see cref="StallAfter"/>, or requests are held by "too many requests"
+    /// (refreshed about once a second, with <see cref="StalledSince"/>).
     /// </summary>
     public bool Stalled { get; init; }
+
+    /// <summary>No byte moved for this long while files should be moving: the transfer is stalled.</summary>
+    public static readonly TimeSpan StallAfter = TransferReport.StallAfter;
+
+    /// <summary>While <see cref="Stalled"/>: when the last byte moved (or the stall began); else null.</summary>
+    public DateTimeOffset? StalledSince { get; init; }
 
     /// <summary>Whether files in flight are stuck at <paramref name="now"/>: no byte since <see cref="LastBytesAt"/> for a while, or held.</summary>
     public bool StalledAt(DateTimeOffset now) =>
         Status == RunnerStatus.Syncing && Active.Count > 0
-        && (IsSlowedDown || LastBytesAt is not { } last || now - last >= TransferReport.StallAfter);
+        && (IsSlowedDown || LastBytesAt is not { } last || now - last >= StallAfter);
 
     // ---- what a pass is doing now
 
@@ -116,8 +148,8 @@ public sealed record StatusSnapshot(
     /// <summary>A report older than this counts as "nothing moving" (its computer stopped sending).</summary>
     public static readonly TimeSpan LiveFor = TimeSpan.FromSeconds(10);
 
-    /// <summary>The other computers' latest live reports, by name.</summary>
-    public IReadOnlyDictionary<string, PeerTransfer> Peers { get; init; } = System.Collections.ObjectModel.ReadOnlyDictionary<string, PeerTransfer>.Empty;
+    /// <summary>The other computers' latest live reports and syncs, by name.</summary>
+    public IReadOnlyDictionary<string, PeerActivity> Peers { get; init; } = System.Collections.ObjectModel.ReadOnlyDictionary<string, PeerActivity>.Empty;
 
     /// <summary>What this computer is moving right now (the report it sends), or null when it moves nothing.</summary>
     public TransferReport? OwnLive =>
@@ -140,10 +172,46 @@ public sealed record StatusSnapshot(
         foreach (var (device, peer) in Peers)
         {
             if (string.Equals(device, name, StringComparison.OrdinalIgnoreCase))
-                return now - peer.At <= LiveFor && peer.Report.IsActive ? peer.Report : null;
+                return peer.IsMoving(now) ? peer.Report : null;
         }
         return null;
     }
+
+    // ---- what is really moving (the badge and the map)
+
+    /// <summary>Uploads are running (also for a moment after one ends, so the picture doesn't flicker between files).</summary>
+    public bool MovingUp { get; init; }
+
+    /// <summary>Downloads are running (with the same short grace as <see cref="MovingUp"/>).</summary>
+    public bool MovingDown { get; init; }
+
+    /// <summary>The server version of this computer's latest change (an upload or a deletion); 0 before any.</summary>
+    public long MyChangeVersion { get; init; }
+
+    /// <summary>Files are going up to the server right now.</summary>
+    public bool GoingUp => Status == RunnerStatus.Syncing && (MovingUp || Active.Any(a => a.IsUpload) || (Active.Count == 0 && Operation == "upload"));
+
+    /// <summary>Files are coming down from the server right now.</summary>
+    public bool GoingDown => Status == RunnerStatus.Syncing && (MovingDown || Active.Any(a => !a.IsUpload) || (Active.Count == 0 && Operation == "download"));
+
+    /// <summary>Which animation the badge plays: one for each thing this computer can be doing.</summary>
+    public SyncMotion Motion
+    {
+        get
+        {
+            if (Status != RunnerStatus.Syncing || IsWaiting)
+                return SyncMotion.None;
+            var (up, down) = (GoingUp, GoingDown);
+            if (StalledSince is not null && (up || down))
+                return SyncMotion.Stalled;
+            return up && down ? SyncMotion.Both : up ? SyncMotion.Up : down ? SyncMotion.Down : SyncMotion.Checking;
+        }
+    }
+
+    /// <summary>"Stalled · nothing moved for 12 s" while stalled, else empty.</summary>
+    public string StallText(DateTimeOffset now) => Motion == SyncMotion.Stalled && StalledSince is { } since
+        ? $"Stalled · nothing moved for {Math.Max(StallAfter.TotalSeconds, Math.Floor((now - since).TotalSeconds)):0} s"
+        : string.Empty;
 
     /// <summary>"Limited to 5 MB/s" (or "Limited to 5 MB/s up, 10 MB/s down"), or null without limits.</summary>
     public string? LimitText { get; init; }
@@ -392,7 +460,9 @@ public sealed record StatusSnapshot(
             RunnerStatus.Idle => "Up to date",
             RunnerStatus.Syncing when IsChecking => "Checking files",
             RunnerStatus.Syncing when Stage == SyncStage.ReadingServer => "Reading the server's list",
+            RunnerStatus.Syncing when Motion == SyncMotion.Stalled => "Waiting for the network",
             RunnerStatus.Syncing when IsTransferring && Direction is { } direction => direction,
+            RunnerStatus.Syncing when CurrentPath is not null && Operation == "delete" => "Deleting files",
             RunnerStatus.Syncing => "Syncing…",
             RunnerStatus.Offline => "Offline",
             RunnerStatus.Blocked when BlockReason == BlockReason.SignedOut => "Signed out of your nest",
@@ -417,6 +487,8 @@ public sealed record StatusSnapshot(
                 return Scan is { } scan && (scan.FilesTotal > 0 || Stage == SyncStage.None) ? ScanText
                     : CheckTotal > 0 ? $"{Format.Count(CheckedFiles)} of {Format.Count(CheckTotal)}"
                     : "Listing the files in your folder";
+            if (Motion == SyncMotion.Stalled)
+                return "Nothing has moved for a few seconds. Pairnets carries on by itself when the connection is back.";
             if (Status == RunnerStatus.Syncing && Stage == SyncStage.ReadingServer)
                 return string.Empty;
             if (IsTransferring && Direction is not null)
@@ -434,7 +506,8 @@ public sealed record StatusSnapshot(
     /// <summary>
     /// The status in one line (the tray icon's tip, the tray menu): "Checking files · 12,000 of 38,206",
     /// "Waiting for PC-1 to finish uploading · 383 of 38,206 files", "Uploading · 37 of 120 files · 4.90 MB/s · about 3 min left",
-    /// "Too many requests to sync.pairnets.app; continuing in 30 s", "Paused", or the runner's own words.
+    /// "Too many requests to sync.pairnets.app; continuing in 30 s", "Stalled · nothing moved for 12 s", "Paused", or the
+    /// runner's own words.
     /// </summary>
     public string StatusLine => StatusLineAt(DateTimeOffset.UtcNow);
 
@@ -453,6 +526,8 @@ public sealed record StatusSnapshot(
                 : "Checking files";
         if (Status == RunnerStatus.Syncing && Stage == SyncStage.ReadingServer)
             return "Reading the server's list";
+        if (StallText(now) is { Length: > 0 } stall)
+            return stall;
         if (IsTransferring && Direction is { } direction)
             return TransferSummary is { Length: > 0 } summary ? direction + " · " + summary : direction;
         return Text;
