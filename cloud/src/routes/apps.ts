@@ -106,11 +106,25 @@ export async function appPageRoute(ctx: Ctx): Promise<Response> {
     return redirect(`/login?next=${encodeURIComponent(next)}`);
   }
   const row = typed ? await visibleRequest(ctx, typed, s.accountId) : null;
-  const servers = row?.status === "pending" ? await serversOf(ctx, s.accountId) : [];
+  // Pending: the nests to choose from. Answered: the account's nests, to name the one it joined.
+  const servers = row ? await serversOf(ctx, s.accountId) : [];
   return htmlResponse(
     200,
     appPage(
-      row ? { userCode: row.user_code, name: row.name, system: row.system, appVersion: row.app_version, createdAt: row.created_at, status: row.status } : null,
+      row
+        ? {
+            userCode: row.user_code,
+            name: row.name,
+            system: row.system,
+            appVersion: row.app_version,
+            createdAt: row.created_at,
+            expiresAt: row.expires_at,
+            decidedAt: row.decided_at,
+            status: row.status,
+            nestId: row.nest_id,
+            now: ctx.now,
+          }
+        : null,
       typed,
       servers.map((n) => ({ id: n.id, label: n.label })),
     ),

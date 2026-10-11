@@ -38,6 +38,21 @@ public enum BlockReason
     SignInRequired,
 }
 
+/// <summary>What a running pass is doing now, so the apps can say it instead of a bare "Syncing".</summary>
+public enum SyncStage
+{
+    None,
+
+    /// <summary>Reading the server's list of files.</summary>
+    ReadingServer,
+
+    /// <summary>Checking the files in the folder (most from the saved fingerprints, new or changed ones are read).</summary>
+    Checking,
+
+    /// <summary>Uploading, downloading and deleting.</summary>
+    Transferring,
+}
+
 public enum PassOutcome
 {
     Completed,
@@ -61,6 +76,13 @@ public sealed record ConflictInfo(string Path, string ConflictCopyPath);
 public sealed record PathWarningInfo(string Path, string Code, string? Message);
 
 public sealed record SyncProgress(string? CurrentPath, string? Operation, long BytesDone, long BytesTotal, int FilesDone, int FilesTotal);
+
+/// <summary>
+/// How far the look through the folder is: files looked at, how many of them had to be read (new or changed), and the
+/// file being read right now with its bytes read so far (big files take a while), and the files in the folder (0 while
+/// it is still being listed).
+/// </summary>
+public sealed record ScanProgress(int FilesChecked, int FilesRead, string? ReadingPath, long ReadingBytes, long ReadingSize, int FilesTotal = 0);
 
 /// <summary>Summary of one pass.</summary>
 public sealed class PassResult
@@ -87,6 +109,15 @@ public sealed class PassResult
 
     /// <summary>Paths that need the user's attention (invalid name, case collision).</summary>
     public int Warnings { get; set; }
+
+    /// <summary>The server version this pass worked from (0 when it stopped before reading the server's list).</summary>
+    public long ServerVersion { get; set; }
+
+    /// <summary>
+    /// True when this pass left nothing behind: this computer then has every file up to <see cref="ServerVersion"/>
+    /// (errors, waiting downloads or changes the server turned back mean it doesn't yet).
+    /// </summary>
+    public bool CaughtUp => Outcome == PassOutcome.Completed && ServerVersion > 0 && Errors == 0 && Deferred == 0 && HeldDownloads == 0;
 
     public List<(DeleteSide Side, string Path)> BlockedDeletes { get; } = [];
     public List<ConflictInfo> ConflictCopies { get; } = [];
@@ -128,6 +159,13 @@ public sealed class EngineOptions
     /// so a few in flight hide the latency; 1 restores strictly one-by-one transfers.
     /// </summary>
     public int MaxParallelTransfers { get; init; } = 4;
+
+    /// <summary>
+    /// Downloads of files at least this big keep what arrived when the connection breaks (or syncing is paused or
+    /// the app closes) and later ask only for the rest. Smaller files take about a minute or less even on a slow
+    /// link, so they simply start again, as before.
+    /// </summary>
+    public long ResumeDownloadsFrom { get; init; } = 16L * 1024 * 1024;
 }
 
 /// <summary>Test seams. Production code never sets these.</summary>

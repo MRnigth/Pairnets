@@ -3,6 +3,9 @@ using System.Globalization;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Net.Sockets;
+using System.Runtime.CompilerServices;
+using System.Security.Cryptography;
 using System.Text.Json;
 using Pairnets.Core.Hashing;
 using Pairnets.Core.Legacy;
@@ -25,9 +28,6 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
     /// </summary>
     public const long DefaultPieceSize = 50L * 1024 * 1024;
 
-    /// <summary>How often one piece may fail in a row before the upload gives up until the next pass.</summary>
-    private const int PieceRetries = 3;
-
     private readonly HttpClient _http;
     private readonly string _token;
     private readonly TimeSpan _stallTimeout;
@@ -37,10 +37,11 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
     /// <param name="serviceUrl">The Pairnets service whose relay addresses this client recognises (tests; by default sync.pairnets.app).</param>
     public PairnetsApiClient(Uri serverUrl, string token, string deviceId, HttpMessageHandler? handler = null,
         TimeSpan? stallTimeout = null, TimeSpan? metadataTimeout = null, long? pieceSize = null, long? minPieceSize = null,
-        Uri? serviceUrl = null)
+        Uri? serviceUrl = null, TimeProvider? clock = null)
     {
         ArgumentNullException.ThrowIfNull(serverUrl);
         BaseAddress = NormalizeBase(serverUrl);
+        Pressure = new BackPressure(clock);
         IsRelay = Client.Relay.IsRelayAddress(BaseAddress, serviceUrl);
         _token = token;
         _stallTimeout = stallTimeout ?? TimeSpan.FromSeconds(60);
@@ -74,6 +75,22 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
 
     /// <summary>How big the pieces of uploads are, learned from how fast the last ones went.</summary>
     internal PieceSizer Pieces { get; }
+
+    /// <summary>
+    /// How long to wait before trying again after a piece (or the question how much the server has) failed, one
+    /// entry per try in a row; about a minute in all. When they are used up the pass ends, and the next pass
+    /// continues the upload from the server's count (nothing is thrown away on a broken connection).
+    /// </summary>
+    internal IReadOnlyList<TimeSpan> PieceRetryDelays { get; set; } =
+        [TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(4), TimeSpan.FromSeconds(8), TimeSpan.FromSeconds(15), TimeSpan.FromSeconds(30)];
+
+    /// <summary>
+    /// How long an upload waits while the server is still taking in an earlier piece of it (it gives up on a
+    /// stalled one after 60 s) or checking a part it kept over a restart, asking every <see cref="BusyPollInterval"/>.
+    /// </summary>
+    internal TimeSpan BusyTimeout { get; set; } = TimeSpan.FromMinutes(3);
+
+    internal TimeSpan BusyPollInterval { get; set; } = TimeSpan.FromSeconds(2);
 
     /// <summary>
     /// Ensures the base URL ends with '/', so relative API paths resolve under it, path included: a relay address
@@ -113,7 +130,7 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
         using var timeout = Linked(ct, TimeSpan.FromSeconds(15));
         try
         {
-            using var resp = await SendAsync(new HttpRequestMessage(HttpMethod.Get, HealthPath), HttpCompletionOption.ResponseContentRead, timeout, ct).ConfigureAwait(false);
+            using var resp = await SendAsync(() => new HttpRequestMessage(HttpMethod.Get, HealthPath), HttpCompletionOption.ResponseContentRead, timeout, ct).ConfigureAwait(false);
             return new HealthCheck(resp.IsSuccessStatusCode, IsFromCloudflare(resp), DescribeCloudflareError(resp, IsRelay));
         }
         catch (Exception ex) when (ex is PairnetsNetworkException { Code: not null } or PairnetsAuthException { Code: ServiceErrors.NestUnknown })
@@ -125,16 +142,31 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
     public async Task<ServerInfo> GetInfoAsync(CancellationToken ct)
     {
         using var timeout = Linked(ct, TimeSpan.FromSeconds(30));
-        using var resp = await SendAsync(new HttpRequestMessage(HttpMethod.Get, "api/info"), HttpCompletionOption.ResponseContentRead, timeout, ct).ConfigureAwait(false);
+        using var resp = await SendAsync(() => new HttpRequestMessage(HttpMethod.Get, "api/info"), HttpCompletionOption.ResponseContentRead, timeout, ct).ConfigureAwait(false);
         await ThrowForStatusAsync(resp).ConfigureAwait(false);
-        return await ReadJsonAsync<ServerInfo>(resp, timeout, ct).ConfigureAwait(false);
+        var info = await ReadJsonAsync<ServerInfo>(resp, timeout, ct).ConfigureAwait(false);
+        PiecesInFlight = info.PiecesInFlight ?? 1;
+        return info;
+    }
+
+    private volatile int _piecesInFlight = 1;
+
+    /// <summary>
+    /// How many pieces of one upload are sent at once: 2 once the server said it takes that (/api/info), else 1. The
+    /// second piece goes out as soon as the first one's bytes are sent; the server keeps it waiting until the first has
+    /// arrived. Through Cloudflare, which takes in a whole piece before it passes it on, this keeps both lines busy.
+    /// </summary>
+    internal int PiecesInFlight
+    {
+        get => _piecesInFlight;
+        set => _piecesInFlight = Math.Clamp(value, 1, 2);
     }
 
     /// <summary>The computers that use this server, or null for a server from before the Devices list.</summary>
     public async Task<IReadOnlyList<DeviceInfo>?> GetDevicesAsync(CancellationToken ct)
     {
         using var timeout = Linked(ct, TimeSpan.FromSeconds(30));
-        using var resp = await SendAsync(new HttpRequestMessage(HttpMethod.Get, "api/devices"), HttpCompletionOption.ResponseContentRead, timeout, ct).ConfigureAwait(false);
+        using var resp = await SendAsync(() => new HttpRequestMessage(HttpMethod.Get, "api/devices"), HttpCompletionOption.ResponseContentRead, timeout, ct).ConfigureAwait(false);
         if ((int)resp.StatusCode is 404 or 405)
             return null;
         await ThrowForStatusAsync(resp).ConfigureAwait(false);
@@ -145,7 +177,7 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
     public async Task<UpdaterDiagnostics?> GetUpdateDiagnosticsAsync(CancellationToken ct)
     {
         using var timeout = Linked(ct, TimeSpan.FromSeconds(30));
-        using var resp = await SendAsync(new HttpRequestMessage(HttpMethod.Get, "api/update/diagnostics"), HttpCompletionOption.ResponseContentRead, timeout, ct).ConfigureAwait(false);
+        using var resp = await SendAsync(() => new HttpRequestMessage(HttpMethod.Get, "api/update/diagnostics"), HttpCompletionOption.ResponseContentRead, timeout, ct).ConfigureAwait(false);
         if ((int)resp.StatusCode is 404 or 405)
             return null;
         await ThrowForStatusAsync(resp).ConfigureAwait(false);
@@ -156,7 +188,7 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
     public async Task<ServerHello?> GetHelloAsync(CancellationToken ct)
     {
         using var timeout = Linked(ct, TimeSpan.FromSeconds(15));
-        using var resp = await SendAsync(new HttpRequestMessage(HttpMethod.Get, "api/hello"), HttpCompletionOption.ResponseContentRead, timeout, ct).ConfigureAwait(false);
+        using var resp = await SendAsync(() => new HttpRequestMessage(HttpMethod.Get, "api/hello"), HttpCompletionOption.ResponseContentRead, timeout, ct).ConfigureAwait(false);
         if ((int)resp.StatusCode is 401 or 404 or 405)
             return null; // older servers have no such endpoint (and ask for the token first)
         await ThrowForStatusAsync(resp).ConfigureAwait(false);
@@ -167,7 +199,7 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
     public async Task<DeviceMe?> GetMeAsync(CancellationToken ct)
     {
         using var timeout = Linked(ct, TimeSpan.FromSeconds(30));
-        using var resp = await SendAsync(new HttpRequestMessage(HttpMethod.Get, "api/me"), HttpCompletionOption.ResponseContentRead, timeout, ct).ConfigureAwait(false);
+        using var resp = await SendAsync(() => new HttpRequestMessage(HttpMethod.Get, "api/me"), HttpCompletionOption.ResponseContentRead, timeout, ct).ConfigureAwait(false);
         if ((int)resp.StatusCode is 404 or 405)
             return null;
         await ThrowForStatusAsync(resp).ConfigureAwait(false);
@@ -178,7 +210,7 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
     public async Task<bool> RemoveDeviceAsync(string id, CancellationToken ct)
     {
         using var timeout = Linked(ct, TimeSpan.FromSeconds(30));
-        using var resp = await SendAsync(new HttpRequestMessage(HttpMethod.Delete, "api/devices/" + Uri.EscapeDataString(id)), HttpCompletionOption.ResponseContentRead, timeout, ct).ConfigureAwait(false);
+        using var resp = await SendAsync(() => new HttpRequestMessage(HttpMethod.Delete, "api/devices/" + Uri.EscapeDataString(id)), HttpCompletionOption.ResponseContentRead, timeout, ct).ConfigureAwait(false);
         if (resp.StatusCode == HttpStatusCode.NotFound)
             return false;
         await ThrowForStatusAsync(resp).ConfigureAwait(false);
@@ -189,7 +221,7 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
     public async Task<DeviceMe> RenameThisDeviceAsync(string name, CancellationToken ct)
     {
         using var timeout = Linked(ct, TimeSpan.FromSeconds(30));
-        using var resp = await SendAsync(new HttpRequestMessage(HttpMethod.Patch, "api/devices/me") { Content = JsonContent.Create(new DeviceNameRequest(name), options: PairnetsJson.Options) },
+        using var resp = await SendAsync(() => new HttpRequestMessage(HttpMethod.Patch, "api/devices/me") { Content = JsonContent.Create(new DeviceNameRequest(name), options: PairnetsJson.Options) },
             HttpCompletionOption.ResponseContentRead, timeout, ct).ConfigureAwait(false);
         await ThrowForStatusAsync(resp).ConfigureAwait(false);
         return await ReadJsonAsync<DeviceMe>(resp, timeout, ct).ConfigureAwait(false);
@@ -199,8 +231,8 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
     public async Task<PairStartResponse?> StartPairingAsync(PairStartRequest request, CancellationToken ct)
     {
         using var timeout = Linked(ct, TimeSpan.FromSeconds(30));
-        using var resp = await SendAsync(new HttpRequestMessage(HttpMethod.Post, "api/pair/start") { Content = JsonContent.Create(request, options: PairnetsJson.Options) },
-            HttpCompletionOption.ResponseContentRead, timeout, ct).ConfigureAwait(false);
+        using var resp = await SendAsync(() => new HttpRequestMessage(HttpMethod.Post, "api/pair/start") { Content = JsonContent.Create(request, options: PairnetsJson.Options) },
+            HttpCompletionOption.ResponseContentRead, timeout, ct, ownTooMany: true).ConfigureAwait(false);
         if ((int)resp.StatusCode is 401 or 404 or 405)
             return null;
         if ((int)resp.StatusCode is 400 or 409 or 429)
@@ -219,7 +251,7 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
     public async Task<PairPollResponse> PollPairingAsync(string pollToken, CancellationToken ct)
     {
         using var timeout = Linked(ct, TimeSpan.FromSeconds(30));
-        using var resp = await SendAsync(new HttpRequestMessage(HttpMethod.Post, "api/pair/poll") { Content = JsonContent.Create(new PairPollRequest(pollToken), options: PairnetsJson.Options) },
+        using var resp = await SendAsync(() => new HttpRequestMessage(HttpMethod.Post, "api/pair/poll") { Content = JsonContent.Create(new PairPollRequest(pollToken), options: PairnetsJson.Options) },
             HttpCompletionOption.ResponseContentRead, timeout, ct).ConfigureAwait(false);
         if (resp.StatusCode == HttpStatusCode.NotFound)
             return new PairPollResponse(PairPollResponse.Expired);
@@ -233,7 +265,7 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
     public async Task<ServerUpdateRequest> RequestServerUpdateAsync(CancellationToken ct)
     {
         using var timeout = Linked(ct, TimeSpan.FromSeconds(30));
-        using var resp = await SendAsync(new HttpRequestMessage(HttpMethod.Post, "api/update"), HttpCompletionOption.ResponseContentRead, timeout, ct).ConfigureAwait(false);
+        using var resp = await SendAsync(() => new HttpRequestMessage(HttpMethod.Post, "api/update"), HttpCompletionOption.ResponseContentRead, timeout, ct, ownTooMany: true).ConfigureAwait(false);
         switch ((int)resp.StatusCode)
         {
             case 202:
@@ -309,7 +341,7 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
     {
         var uri = since is null ? "api/manifest" : $"api/manifest?since={since.Value.ToString(CultureInfo.InvariantCulture)}";
         using var timeout = Linked(ct, _metadataTimeout);
-        using var resp = await SendAsync(new HttpRequestMessage(HttpMethod.Get, uri), HttpCompletionOption.ResponseHeadersRead, timeout, ct).ConfigureAwait(false);
+        using var resp = await SendAsync(() => new HttpRequestMessage(HttpMethod.Get, uri), HttpCompletionOption.ResponseHeadersRead, timeout, ct).ConfigureAwait(false);
         await ThrowForStatusAsync(resp).ConfigureAwait(false);
         var serverId = HeaderValue(resp, PairnetsHeaders.ServerId, TetherNames.ServerIdHeader) ?? throw new PairnetsProtocolException("Manifest response has no server id.");
         if (!long.TryParse(HeaderValue(resp, PairnetsHeaders.Version, TetherNames.VersionHeader), NumberStyles.None, CultureInfo.InvariantCulture, out var version))
@@ -323,14 +355,35 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
     /// <summary>Speed limit shared by all uploads of this client (no limit by default).</summary>
     public Throttle UploadLimit { get; } = new();
 
+    /// <summary>"Too many requests" handling shared by every request of this client (see <see cref="BackPressure"/>).</summary>
+    public BackPressure Pressure { get; }
+
     /// <summary>Speed limit shared by all downloads of this client (no limit by default).</summary>
     public Throttle DownloadLimit { get; } = new();
 
-    public async Task<DownloadResult> DownloadAsync(string path, Stream destination, Action<long>? progress, CancellationToken ct)
+    public string ServerKey => BaseAddress.ToString();
+
+    /// <summary>
+    /// Downloads a file, verifying its length and content hash. With <paramref name="resume"/> holding the first
+    /// bytes of a version, only the rest is asked for (a Range request that the server answers only for that same
+    /// version, If-Range); the bytes already there are read again so the whole file is still verified.
+    /// </summary>
+    public async Task<DownloadResult> DownloadAsync(string path, Stream destination, Action<long>? progress, CancellationToken ct, DownloadResume? resume = null)
     {
+        var offset = resume is { Offset: > 0, Hash: not null } ? resume.Offset : 0;
+        if (resume is { Offset: > 0 } && !(destination.CanSeek && destination.CanRead))
+            throw new ArgumentException("Continuing a download needs a readable, seekable destination.", nameof(destination));
         using var stall = Linked(ct, _stallTimeout);
-        using var resp = await SendAsync(new HttpRequestMessage(HttpMethod.Get, "api/file?path=" + Uri.EscapeDataString(path)),
-            HttpCompletionOption.ResponseHeadersRead, stall, ct).ConfigureAwait(false);
+        using var resp = await SendAsync(() =>
+        {
+            var req = new HttpRequestMessage(HttpMethod.Get, "api/file?path=" + Uri.EscapeDataString(path));
+            if (offset > 0)
+            {
+                req.Headers.Range = new RangeHeaderValue(offset, null);
+                req.Headers.IfRange = new RangeConditionHeaderValue(new EntityTagHeaderValue("\"" + resume!.Hash + "\""));
+            }
+            return req;
+        }, HttpCompletionOption.ResponseHeadersRead, stall, ct).ConfigureAwait(false);
         if (resp.StatusCode == HttpStatusCode.NotFound)
             return new DownloadResult(false, string.Empty, 0, 0);
         await ThrowForStatusAsync(resp).ConfigureAwait(false);
@@ -340,12 +393,45 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
             throw new PairnetsProtocolException("Download response has no valid content hash.");
         _ = long.TryParse(HeaderValue(resp, PairnetsHeaders.ModifiedMs, TetherNames.ModifiedMsHeader), NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var modifiedMs);
         var expectedLength = resp.Content.Headers.ContentLength;
+        long start = 0;
+        if (resp.StatusCode == HttpStatusCode.PartialContent)
+        {
+            // Only ever the rest of exactly the version whose start is already here.
+            if (offset == 0 || resp.Content.Headers.ContentRange is not { From: { } from, Length: { } total } || from != offset
+                || !string.Equals(expectedHash, resume!.Hash, StringComparison.Ordinal))
+                throw new PairnetsProtocolException($"The server sent an unexpected part of '{path}'.");
+            start = offset;
+            expectedLength = total;
+        }
+        else if (resp.StatusCode != HttpStatusCode.OK)
+        {
+            throw new PairnetsProtocolException($"Unexpected status {(int)resp.StatusCode} for a download.");
+        }
+        if (resume is not null)
+        {
+            resume.ServedHash = expectedHash;
+            resume.ServedSize = expectedLength;
+            resume.ContinuedFrom = start;
+        }
 
-        using var hashing = new HashingStream(destination, leaveOpen: true, progress);
+        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        var buffer = new byte[CopyBufferSize];
+        if (start > 0)
+        {
+            await HashExistingAsync(destination, start, hash, buffer, ct).ConfigureAwait(false);
+            progress?.Invoke(start);
+        }
+        else if (offset > 0)
+        {
+            // The version changed since the partial file was started: the server sent the whole new one.
+            destination.SetLength(0);
+            destination.Position = 0;
+        }
+
+        var received = start;
         try
         {
             await using var body = await resp.Content.ReadAsStreamAsync(stall.Token).ConfigureAwait(false);
-            var buffer = new byte[CopyBufferSize];
             while (true)
             {
                 int n;
@@ -362,7 +448,10 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
                 await DownloadLimit.WaitAsync(n, ct).ConfigureAwait(false);
                 stall.CancelAfter(_stallTimeout);
                 // Local write errors (disk full, ...) propagate as IOException: a per-file failure.
-                await hashing.WriteAsync(buffer.AsMemory(0, n), ct).ConfigureAwait(false);
+                await destination.WriteAsync(buffer.AsMemory(0, n), ct).ConfigureAwait(false);
+                hash.AppendData(buffer, 0, n);
+                received += n;
+                progress?.Invoke(received);
             }
         }
         catch (OperationCanceledException ex) when (!ct.IsCancellationRequested)
@@ -370,123 +459,351 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
             throw new PairnetsNetworkException($"Download of '{path}' stalled.", ex);
         }
 
-        var hash = hashing.GetHash();
-        if (expectedLength is not null && hashing.BytesTransferred != expectedLength)
-            throw new PairnetsNetworkException($"Download of '{path}' was truncated ({hashing.BytesTransferred} of {expectedLength} bytes).");
-        if (!string.Equals(hash, expectedHash, StringComparison.Ordinal))
-            throw new PairnetsNetworkException($"Download of '{path}' does not match the server hash.");
-        return new DownloadResult(true, hash, hashing.BytesTransferred, modifiedMs);
+        var actual = ContentHash.ToHex(hash.GetHashAndReset());
+        if (expectedLength is { } length && received != length)
+            throw new PairnetsNetworkException($"Download of '{path}' was truncated ({received} of {length} bytes).");
+        if (!string.Equals(actual, expectedHash, StringComparison.Ordinal))
+            throw new DownloadMismatchException(start > 0
+                ? $"'{path}' does not match the server hash after continuing its download; it will be downloaded again."
+                : $"Download of '{path}' does not match the server hash.");
+        return new DownloadResult(true, actual, received, modifiedMs);
+    }
+
+    /// <summary>Hashes the first <paramref name="length"/> bytes the destination already holds and leaves it positioned after them.</summary>
+    private static async Task HashExistingAsync(Stream destination, long length, IncrementalHash hash, byte[] buffer, CancellationToken ct)
+    {
+        destination.Position = 0;
+        var left = length;
+        while (left > 0)
+        {
+            var n = await destination.ReadAsync(buffer.AsMemory(0, (int)Math.Min(buffer.Length, left)), ct).ConfigureAwait(false);
+            if (n == 0)
+                throw new IOException("The partial download got shorter.");
+            hash.AppendData(buffer, 0, n);
+            left -= n;
+        }
+        destination.Position = length;
     }
 
     // ------------------------------------------------------------------ upload
 
     public async Task<(ApiResult Result, string SentHash, long SentBytes)> UploadAsync(
-        string path, string baseHash, long mtimeMs, Stream content, Action<long>? progress, CancellationToken ct)
+        string path, string baseHash, long mtimeMs, Stream content, Action<long>? progress, CancellationToken ct, UploadResume? resume = null)
     {
-        if (!_piecesUnsupported && content.CanSeek && Pieces.ShouldSplit(content.Length - content.Position))
+        // An upload an earlier attempt started goes on in pieces, whatever the speed says now.
+        if (!_piecesUnsupported && content.CanSeek && (resume?.Id is not null || Pieces.ShouldSplit(content.Length - content.Position)))
         {
-            var inPieces = await UploadInPiecesAsync(path, baseHash, mtimeMs, content, progress, ct).ConfigureAwait(false);
+            var inPieces = await UploadInPiecesAsync(path, baseHash, mtimeMs, content, progress, resume ?? new UploadResume(), ct).ConfigureAwait(false);
             if (inPieces is { } done)
                 return done;
             // A server from before uploads in pieces: send the file in one request, as it always did.
         }
+        if (resume?.Id is { } unused)
+        {
+            // Sent in one request after all: nothing of it can be continued.
+            await AbandonUploadAsync(unused).ConfigureAwait(false);
+            resume.Forget();
+        }
 
         using var stall = Linked(ct, _stallTimeout);
-        var hashing = new HashingStream(content, leaveOpen: true, progress);
         var uri = $"api/file?path={Uri.EscapeDataString(path)}&base={Uri.EscapeDataString(baseHash)}&mtime={mtimeMs.ToString(CultureInfo.InvariantCulture)}";
-        using var req = new HttpRequestMessage(HttpMethod.Put, uri)
+        var start = content.CanSeek ? content.Position : -1;
+        HashingStream? hashing = null;
+        using var resp = await SendAsync(() =>
         {
-            Content = new StreamingUploadContent(hashing, stall, _stallTimeout, UploadLimit),
-        };
-        req.Content.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
-        // The server answers 400/401/409 before we send a possibly huge body.
-        req.Headers.ExpectContinue = true;
-
-        using var resp = await SendAsync(req, HttpCompletionOption.ResponseContentRead, stall, ct).ConfigureAwait(false);
+            if (hashing is not null)
+            {
+                // Sent again after "too many requests": the whole file once more, with a fresh hash.
+                if (start < 0)
+                    throw new PairnetsNetworkException(TooManyRequestsMessage, code: ServiceErrors.RateLimited);
+                content.Position = start;
+                progress?.Invoke(0);
+            }
+            hashing = new HashingStream(content, leaveOpen: true, progress);
+            var req = new HttpRequestMessage(HttpMethod.Put, uri)
+            {
+                Content = new StreamingUploadContent(hashing, stall, _stallTimeout, UploadLimit),
+            };
+            req.Content.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
+            // The server answers 400/401/409 before we send a possibly huge body.
+            req.Headers.ExpectContinue = true;
+            return req;
+        }, HttpCompletionOption.ResponseContentRead, stall, ct).ConfigureAwait(false);
         var result = await ReadChangeResultAsync(resp, stall, ct).ConfigureAwait(false);
-        var sent = result.Outcome == ApiOutcome.Ok ? hashing.GetHash() : string.Empty;
-        return (result, sent, hashing.BytesTransferred);
+        var sent = result.Outcome == ApiOutcome.Ok ? hashing!.GetHash() : string.Empty;
+        return (result, sent, hashing!.BytesTransferred);
     }
 
     /// <summary>
-    /// Uploads a big file in pieces (POST /api/upload, PUT /api/upload/{id}?offset=, POST .../commit),
-    /// so it fits through proxies that cap one request (Cloudflare: 100 MB), and a broken connection
-    /// costs only the piece in flight: the next try continues from what the server has. Null when the
-    /// server is too old to take uploads in pieces.
+    /// Uploads a big file in pieces (POST /api/upload, PUT /api/upload/{id}?offset=, POST .../commit), so it fits
+    /// through proxies that cap one request (Cloudflare: 100 MB), and a broken connection costs only the piece in
+    /// flight. The network never makes it throw the session away: when the connection stays away, or the pass is
+    /// cancelled (Pause), the session stays on the server and <paramref name="resume"/> keeps its id, so a later
+    /// attempt continues from the server's count. Null when the server is too old to take uploads in pieces.
     /// </summary>
     private async Task<(ApiResult Result, string SentHash, long SentBytes)?> UploadInPiecesAsync(
-        string path, string baseHash, long mtimeMs, Stream content, Action<long>? progress, CancellationToken ct)
+        string path, string baseHash, long mtimeMs, Stream content, Action<long>? progress, UploadResume resume, CancellationToken ct)
     {
         using var reader = new PieceReader(content, progress);
-        string id;
-        using (var timeout = Linked(ct, _metadataTimeout))
+        long offset = 0;
+        if (resume.Id is { } earlier)
         {
-            var start = $"api/upload?path={Uri.EscapeDataString(path)}&base={Uri.EscapeDataString(baseHash)}" +
-                $"&size={reader.Size.ToString(CultureInfo.InvariantCulture)}&mtime={mtimeMs.ToString(CultureInfo.InvariantCulture)}";
-            using var resp = await SendAsync(new HttpRequestMessage(HttpMethod.Post, start), HttpCompletionOption.ResponseContentRead, timeout, ct).ConfigureAwait(false);
-            if ((int)resp.StatusCode is 404 or 405 && !IsJson(resp))
+            UploadStatus? status;
+            try
             {
-                _piecesUnsupported = true;
-                return null;
+                status = await UploadStatusAsync(earlier, ct).ConfigureAwait(false);
             }
-            if (resp.StatusCode != HttpStatusCode.Created)
-                return (await ReadChangeResultAsync(resp, timeout, ct).ConfigureAwait(false), string.Empty, 0); // conflict, collision, bad name
-            id = (await ReadJsonAsync<UploadStatus>(resp, timeout, ct).ConfigureAwait(false)).Id;
+            catch (PairnetsProtocolException)
+            {
+                // An answer this upload cannot go on from: give it up (the next pass starts it again).
+                await AbandonUploadAsync(earlier).ConfigureAwait(false);
+                resume.Forget();
+                throw;
+            }
+            if (status is { Received: var have } && have <= reader.Size)
+            {
+                // The server kept what an earlier attempt sent. Those bytes are read again here (not sent), so the hash
+                // covers the file as it is now: if that is not what was sent then, the server refuses the commit.
+                await reader.SkipAsync(have, ct).ConfigureAwait(false);
+                offset = have;
+                resume.ResumedFrom = have;
+            }
+            else
+            {
+                if (status is not null)
+                    await AbandonUploadAsync(earlier).ConfigureAwait(false); // more than this file has: not this upload
+                resume.Forget();
+            }
         }
 
-        var finished = false;
-        try
+        var startedAgain = false;
+        while (true)
         {
-            long offset = 0;
-            var failures = 0;
-            while (offset < reader.Size)
+            if (resume.Id is null)
             {
-                try
-                {
-                    offset = await SendPieceAsync(id, reader, offset, Math.Min(Pieces.Next, reader.Size - offset), ct).ConfigureAwait(false);
-                    failures = 0;
-                }
-                catch (PairnetsNetworkException) when (failures < PieceRetries && !ct.IsCancellationRequested)
-                {
-                    failures++;
-                    Pieces.Failed();
-                    await Task.Delay(TimeSpan.FromSeconds(1 << (failures - 1)), ct).ConfigureAwait(false);
-                    offset = await UploadReceivedAsync(id, ct).ConfigureAwait(false);
-                }
+                var (id, rejected) = await StartUploadAsync(path, baseHash, mtimeMs, reader.Size, ct).ConfigureAwait(false);
+                if (id is null)
+                    return rejected is null ? null : (rejected, string.Empty, 0); // conflict, collision, bad name
+                resume.Started(id);
+                offset = 0;
             }
-
-            var hash = reader.GetHash();
-            using var timeout = Linked(ct, _metadataTimeout);
-            using var resp = await SendAsync(new HttpRequestMessage(HttpMethod.Post, $"api/upload/{id}/commit?hash={hash}"),
-                HttpCompletionOption.ResponseContentRead, timeout, ct).ConfigureAwait(false);
-            if (resp.StatusCode == HttpStatusCode.BadRequest && await TryReadErrorAsync(resp, ct).ConfigureAwait(false) is { Code: ErrorCodes.UploadMismatch })
+            try
             {
-                finished = true; // the server already dropped it
-                throw new PairnetsProtocolException($"{path} changed while it was being uploaded; it will be sent again.");
+                var (result, hash) = await FinishUploadAsync(path, resume, reader, offset, ct).ConfigureAwait(false);
+                return (result, result.Outcome == ApiOutcome.Ok ? hash : string.Empty, reader.Size);
             }
-            var result = await ReadChangeResultAsync(resp, timeout, ct).ConfigureAwait(false);
-            finished = true;
-            return (result, result.Outcome == ApiOutcome.Ok ? hash : string.Empty, reader.Size);
-        }
-        finally
-        {
-            if (!finished)
-                await TryAbortUploadAsync(id).ConfigureAwait(false);
+            catch (UploadGoneException) when (!startedAgain)
+            {
+                // The server dropped it (an hour without data, or a restart it could not keep it over): send it again.
+                resume.Forget();
+                startedAgain = true;
+            }
+            catch (UploadGoneException)
+            {
+                resume.Forget();
+                throw new PairnetsNetworkException($"The server dropped the upload of {path} twice; it will be sent again.");
+            }
+            catch (PairnetsProtocolException) when (resume.Id is { } broken)
+            {
+                // An answer this upload cannot go on from: give it up (the next pass starts it again).
+                await AbandonUploadAsync(broken).ConfigureAwait(false);
+                resume.Forget();
+                throw;
+            }
         }
     }
 
-    /// <summary>Sends one piece; returns how many bytes the server has afterwards.</summary>
-    private async Task<long> SendPieceAsync(string id, PieceReader reader, long offset, long length, CancellationToken ct)
+    /// <summary>POST /api/upload: the new session's id, or the server's refusal (conflict, ...), or neither from a server without uploads in pieces.</summary>
+    private async Task<(string? Id, ApiResult? Rejected)> StartUploadAsync(string path, string baseHash, long mtimeMs, long size, CancellationToken ct)
     {
+        using var timeout = Linked(ct, _metadataTimeout);
+        var start = $"api/upload?path={Uri.EscapeDataString(path)}&base={Uri.EscapeDataString(baseHash)}" +
+            $"&size={size.ToString(CultureInfo.InvariantCulture)}&mtime={mtimeMs.ToString(CultureInfo.InvariantCulture)}";
+        using var resp = await SendAsync(() => new HttpRequestMessage(HttpMethod.Post, start), HttpCompletionOption.ResponseContentRead, timeout, ct).ConfigureAwait(false);
+        if ((int)resp.StatusCode is 404 or 405 && !IsJson(resp))
+        {
+            _piecesUnsupported = true;
+            return (null, null);
+        }
+        if (resp.StatusCode != HttpStatusCode.Created)
+            return (null, await ReadChangeResultAsync(resp, timeout, ct).ConfigureAwait(false));
+        return ((await ReadJsonAsync<UploadStatus>(resp, timeout, ct).ConfigureAwait(false)).Id, null);
+    }
+
+    /// <summary>
+    /// Sends what the server does not have yet, then commits. A broken connection is retried a few times (see
+    /// <see cref="PieceRetryDelays"/>) and a server still busy with an earlier piece is waited for (see
+    /// <see cref="BusyTimeout"/>); after that the pass ends and the session stays for the next one. Once this
+    /// returns, the session is finished on the server (stored, or refused like a PUT would be).
+    /// </summary>
+    private async Task<(ApiResult Result, string Hash)> FinishUploadAsync(string path, UploadResume resume, PieceReader reader, long offset, CancellationToken ct)
+    {
+        var id = resume.Id!;
+        var patience = new Patience(this);
+        var ask = false;
+        while (true)
+        {
+            var sending = false;
+            try
+            {
+                if (ask)
+                {
+                    var status = await UploadStatusAsync(id, ct).ConfigureAwait(false) ?? throw new UploadGoneException();
+                    if (status.Busy)
+                        throw new UploadBusyException();
+                    offset = status.Received;
+                    ask = false;
+                }
+                if (offset < reader.Size)
+                {
+                    sending = true;
+                    offset = PiecesInFlight > 1
+                        ? await SendPiecesTwoAtOnceAsync(id, reader, offset, patience.Progressed, ct).ConfigureAwait(false)
+                        : await SendPieceAsync(id, reader, offset, Math.Min(Pieces.Next, reader.Size - offset), ct).ConfigureAwait(false);
+                    patience.Progressed();
+                    continue;
+                }
+
+                if (offset > reader.Size)
+                    throw new PairnetsProtocolException($"The server has more of {path} than the file holds.");
+                await reader.SkipAsync(reader.Size, ct).ConfigureAwait(false); // the bytes an earlier attempt sent, if not read yet
+                var hash = reader.GetHash();
+                using var timeout = Linked(ct, _metadataTimeout);
+                using var resp = await SendAsync(() => new HttpRequestMessage(HttpMethod.Post, $"api/upload/{id}/commit?hash={hash}"),
+                    HttpCompletionOption.ResponseContentRead, timeout, ct).ConfigureAwait(false);
+                if (!resp.IsSuccessStatusCode && await TryReadErrorAsync(resp, ct).ConfigureAwait(false) is { } error)
+                {
+                    switch (error.Code)
+                    {
+                        case ErrorCodes.UploadMismatch:
+                            resume.Forget(); // the server already dropped it
+                            throw new PairnetsProtocolException($"{path} changed while it was being uploaded; it will be sent again.");
+                        case ErrorCodes.UploadBusy or ErrorCodes.UploadOffset:
+                            // A piece is still arriving, or bytes are missing: ask how much is there and go on from it.
+                            throw new UploadBusyException();
+                        case ErrorCodes.NotFound when resp.StatusCode == HttpStatusCode.NotFound:
+                            throw new UploadGoneException();
+                    }
+                }
+                var result = await ReadChangeResultAsync(resp, timeout, ct).ConfigureAwait(false);
+                resume.Forget(); // stored, or refused (conflict, ...): either way the server is done with it
+                return (result, hash);
+            }
+            catch (UploadBusyException)
+            {
+                await patience.BusyAsync(ct).ConfigureAwait(false); // throws when cancelled (Pause) or waited too long
+                ask = true;
+            }
+            catch (PairnetsSlowDownException ex) when (!ct.IsCancellationRequested)
+            {
+                // Too many requests: the next one waits by itself (SendAsync). Not the piece's fault, so its size stays.
+                patience.SlowedDown(ex);
+                ask = true;
+            }
+            catch (PairnetsNetworkException ex) when (!ct.IsCancellationRequested)
+            {
+                if (sending)
+                    Pieces.Failed();
+                await patience.FailedAsync(ex, ct).ConfigureAwait(false);
+                ask = true;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Sends the rest of the upload from <paramref name="offset"/> with two pieces on the way at once: the next piece
+    /// starts as soon as every byte of the one before was handed to the connection, and the server keeps it waiting
+    /// until that one has arrived. Returns how many bytes the server has: the whole file, or less when a piece arrived
+    /// short (the caller asks and goes on). When a piece fails, the other one is stopped and waited for before the
+    /// exception goes on, so nothing reads the file meanwhile.
+    /// </summary>
+    private async Task<long> SendPiecesTwoAtOnceAsync(string id, PieceReader reader, long offset, Action progressed, CancellationToken ct)
+    {
+        using var stop = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        var flying = new Queue<(Task<long> Received, long End)>();
+        var next = offset;
+        var received = offset;
+        try
+        {
+            while (true)
+            {
+                // A new piece only while none has failed: a failed one may have stopped part-way through the file.
+                if (next < reader.Size && flying.Count < 2 && flying.All(f => !f.Received.IsCompleted || f.Received.IsCompletedSuccessfully))
+                {
+                    var length = Math.Min(Pieces.Next, reader.Size - next);
+                    var sent = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                    var piece = SendPieceAsync(id, reader, next, length, stop.Token, waitTurn: flying.Count > 0, bodySent: () => sent.TrySetResult());
+                    flying.Enqueue((piece, next + length));
+                    next += length;
+                    // The reader is this piece's until all of it is out (or it ended): only then may the next one start.
+                    await Task.WhenAny(sent.Task, piece).ConfigureAwait(false);
+                    if (piece.IsCompleted && !piece.IsCompletedSuccessfully)
+                        await piece.ConfigureAwait(false); // throws: the others are stopped below
+                    continue;
+                }
+                if (flying.Count == 0)
+                    return received;
+                var (oldest, end) = flying.Peek();
+                received = await oldest.ConfigureAwait(false);
+                flying.Dequeue();
+                progressed();
+                if (received != end)
+                {
+                    // It arrived short; the piece after it is refused (wrong offset). Wait for it, then go on from what arrived.
+                    await DrainAsync(flying, stop).ConfigureAwait(false);
+                    return received;
+                }
+            }
+        }
+        catch
+        {
+            await DrainAsync(flying, stop).ConfigureAwait(false);
+            throw;
+        }
+
+        static async Task DrainAsync(Queue<(Task<long> Received, long End)> flying, CancellationTokenSource stop)
+        {
+            if (flying.Count == 0)
+                return;
+            await stop.CancelAsync().ConfigureAwait(false);
+            foreach (var (piece, _) in flying)
+            {
+                try
+                {
+                    await piece.ConfigureAwait(false);
+                }
+                catch (Exception)
+                {
+                    // Stopped on purpose; the server's count says what arrived.
+                }
+            }
+            flying.Clear();
+        }
+    }
+
+    /// <summary>
+    /// Sends one piece; returns how many bytes the server has afterwards. With <paramref name="waitTurn"/> the piece
+    /// before it may still be arriving, and the server keeps this one waiting until it has. <paramref name="bodySent"/>
+    /// is told when every byte of the piece was handed to the connection, so the next piece may read the file.
+    /// </summary>
+    private async Task<long> SendPieceAsync(string id, PieceReader reader, long offset, long length, CancellationToken ct,
+        bool waitTurn = false, Action? bodySent = null)
+    {
+        // The server can have more than this attempt read: the rest of a piece an earlier attempt sent.
+        if (offset > reader.HashedUpTo && offset <= reader.Size)
+            await reader.SkipAsync(offset, ct).ConfigureAwait(false);
         reader.StartPiece(offset, length);
         using var stall = Linked(ct, _stallTimeout);
-        using var req = new HttpRequestMessage(HttpMethod.Put, $"api/upload/{id}?offset={offset.ToString(CultureInfo.InvariantCulture)}")
+        var uri = $"api/upload/{id}?offset={offset.ToString(CultureInfo.InvariantCulture)}" + (waitTurn ? "&turn=wait" : string.Empty);
+        using var req = new HttpRequestMessage(HttpMethod.Put, uri)
         {
-            Content = new StreamingUploadContent(reader, stall, _stallTimeout, UploadLimit, length),
+            Content = new StreamingUploadContent(reader, stall, _stallTimeout, UploadLimit, length, bodySent),
         };
         req.Content.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
         var started = Stopwatch.GetTimestamp();
-        using var resp = await SendAsync(req, HttpCompletionOption.ResponseContentRead, stall, ct).ConfigureAwait(false);
+        // Never sent again here: the other piece may be reading the file by now. A 429 holds every request and comes
+        // back as PairnetsSlowDownException; the upload then asks the server how much it has and goes on from there.
+        using var resp = await SendAsync(() => req, HttpCompletionOption.ResponseContentRead, stall, ct, sendAgain: false).ConfigureAwait(false);
         if (resp.StatusCode == HttpStatusCode.OK)
         {
             var received = (await ReadJsonAsync<UploadStatus>(resp, stall, ct).ConfigureAwait(false)).Received;
@@ -494,29 +811,35 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
             return received;
         }
         if (resp.StatusCode == HttpStatusCode.Conflict)
-            throw new PairnetsNetworkException("The server has a different part of the upload than expected."); // ask where it is and go on
+            throw new UploadBusyException(); // an earlier piece is still arriving, or the count moved on: ask and go on
+        if (resp.StatusCode == HttpStatusCode.NotFound)
+            throw new UploadGoneException();
         await ThrowForStatusAsync(resp).ConfigureAwait(false);
         throw new PairnetsProtocolException($"Unexpected status {(int)resp.StatusCode} for a piece of an upload.");
     }
 
-    /// <summary>How many bytes of the upload the server has (where the next piece starts).</summary>
-    private async Task<long> UploadReceivedAsync(string id, CancellationToken ct)
+    /// <summary>How many bytes of the upload the server has (where the next piece starts), or null when it has no such upload.</summary>
+    private async Task<UploadStatus?> UploadStatusAsync(string id, CancellationToken ct)
     {
         using var timeout = Linked(ct, TimeSpan.FromSeconds(30));
-        using var resp = await SendAsync(new HttpRequestMessage(HttpMethod.Get, $"api/upload/{id}"), HttpCompletionOption.ResponseContentRead, timeout, ct).ConfigureAwait(false);
+        using var resp = await SendAsync(() => new HttpRequestMessage(HttpMethod.Get, $"api/upload/{id}"), HttpCompletionOption.ResponseContentRead, timeout, ct).ConfigureAwait(false);
         if (resp.StatusCode == HttpStatusCode.NotFound)
-            throw new PairnetsNetworkException("The server no longer has this upload (it restarted?); the file will be sent again.");
+            return null;
         await ThrowForStatusAsync(resp).ConfigureAwait(false);
-        return (await ReadJsonAsync<UploadStatus>(resp, timeout, ct).ConfigureAwait(false)).Received;
+        return await ReadJsonAsync<UploadStatus>(resp, timeout, ct).ConfigureAwait(false);
     }
 
-    /// <summary>Tells the server to drop an unfinished upload. Best effort: it expires on its own anyway.</summary>
-    private async Task TryAbortUploadAsync(string id)
+    /// <summary>
+    /// Tells the server to drop an unfinished upload for good: only when it will not be continued (the file changed,
+    /// was deleted or is no longer sent), never because of the network. Best effort: it expires on its own anyway.
+    /// </summary>
+    public async Task AbandonUploadAsync(string uploadId)
     {
         try
         {
             using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-            using var resp = await SendAsync(new HttpRequestMessage(HttpMethod.Delete, $"api/upload/{id}"), HttpCompletionOption.ResponseContentRead, timeout, CancellationToken.None).ConfigureAwait(false);
+            using var resp = await SendAsync(() => new HttpRequestMessage(HttpMethod.Delete, $"api/upload/{Uri.EscapeDataString(uploadId)}"), HttpCompletionOption.ResponseContentRead, timeout, CancellationToken.None,
+                bestEffort: true).ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is PairnetsNetworkException or LocalFileReadException)
         {
@@ -524,13 +847,62 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
         }
     }
 
+    /// <summary>The server no longer has the upload (404): it was finished, dropped after an hour without data, or lost in a restart.</summary>
+    private sealed class UploadGoneException() : Exception("The server no longer has this upload.");
+
+    /// <summary>The server is still taking in an earlier piece of the upload, or its count moved on (409): ask and go on.</summary>
+    private sealed class UploadBusyException() : Exception("The server is still busy with an earlier piece of this upload.");
+
+    /// <summary>How long one upload keeps trying within one attempt (see <see cref="PieceRetryDelays"/> and <see cref="BusyTimeout"/>).</summary>
+    private sealed class Patience(PairnetsApiClient owner)
+    {
+        private int _failures;
+        private int _slowDowns;
+        private long? _busySince;
+
+        /// <summary>A 429: goes on (the wait happens before the next request), or rethrows after many in a row.</summary>
+        public void SlowedDown(PairnetsSlowDownException ex)
+        {
+            if (++_slowDowns > MaxSlowDownsInARow)
+                System.Runtime.ExceptionServices.ExceptionDispatchInfo.Throw(ex);
+        }
+
+        /// <summary>A request failed: waits before the next try, or rethrows once the tries are used up.</summary>
+        public async Task FailedAsync(PairnetsNetworkException ex, CancellationToken ct)
+        {
+            if (_failures >= owner.PieceRetryDelays.Count)
+                System.Runtime.ExceptionServices.ExceptionDispatchInfo.Throw(ex);
+            await Task.Delay(owner.PieceRetryDelays[_failures++], ct).ConfigureAwait(false);
+        }
+
+        /// <summary>The server is busy with this upload: waits a moment, or gives up for this attempt after <see cref="BusyTimeout"/>.</summary>
+        public async Task BusyAsync(CancellationToken ct)
+        {
+            _busySince ??= Stopwatch.GetTimestamp();
+            if (Stopwatch.GetElapsedTime(_busySince.Value) >= owner.BusyTimeout)
+                throw new PairnetsNetworkException("The server is still busy with an earlier piece of this upload; it goes on at the next try.");
+            await Task.Delay(owner.BusyPollInterval, ct).ConfigureAwait(false);
+        }
+
+        /// <summary>A piece arrived: the counts start again.</summary>
+        public void Progressed()
+        {
+            _failures = 0;
+            _slowDowns = 0;
+            _busySince = null;
+        }
+    }
+
+    /// <summary>How many 429s in a row one upload in pieces (or the engine, for one file) takes before it gives up for this pass.</summary>
+    internal const int MaxSlowDownsInARow = 30;
+
     // ------------------------------------------------------------------ delete
 
     public async Task<ApiResult> DeleteAsync(string path, string baseHash, CancellationToken ct)
     {
         using var timeout = Linked(ct, _metadataTimeout);
         var uri = $"api/file?path={Uri.EscapeDataString(path)}&base={Uri.EscapeDataString(baseHash)}";
-        using var resp = await SendAsync(new HttpRequestMessage(HttpMethod.Delete, uri), HttpCompletionOption.ResponseContentRead, timeout, ct).ConfigureAwait(false);
+        using var resp = await SendAsync(() => new HttpRequestMessage(HttpMethod.Delete, uri), HttpCompletionOption.ResponseContentRead, timeout, ct).ConfigureAwait(false);
         return await ReadChangeResultAsync(resp, timeout, ct).ConfigureAwait(false);
     }
 
@@ -539,18 +911,34 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
     public async Task<IReadOnlyList<HistoryVersion>> GetHistoryAsync(string path, CancellationToken ct)
     {
         using var timeout = Linked(ct, _metadataTimeout);
-        using var resp = await SendAsync(new HttpRequestMessage(HttpMethod.Get, "api/history?path=" + Uri.EscapeDataString(path)),
+        using var resp = await SendAsync(() => new HttpRequestMessage(HttpMethod.Get, "api/history?path=" + Uri.EscapeDataString(path)),
             HttpCompletionOption.ResponseContentRead, timeout, ct).ConfigureAwait(false);
         await ThrowForStatusAsync(resp).ConfigureAwait(false);
         return await ReadJsonAsync<List<HistoryVersion>>(resp, timeout, ct).ConfigureAwait(false);
     }
 
+    /// <summary>How often to ask again while the server is still restoring a big version (it answers 202 within a minute).</summary>
+    internal TimeSpan RestorePollInterval { get; set; } = TimeSpan.FromSeconds(2);
+
+    /// <summary>
+    /// Restores a history version. A big one can take the server longer than a proxy waits for an answer, so it
+    /// answers 202 meanwhile and this asks again with the same ticket (which joins that restore) until it is done.
+    /// </summary>
     public async Task<ApiResult> RestoreAsync(string path, string id, CancellationToken ct)
     {
-        using var timeout = Linked(ct, _metadataTimeout);
-        var uri = $"api/history/restore?path={Uri.EscapeDataString(path)}&id={Uri.EscapeDataString(id)}";
-        using var resp = await SendAsync(new HttpRequestMessage(HttpMethod.Post, uri), HttpCompletionOption.ResponseContentRead, timeout, ct).ConfigureAwait(false);
-        return await ReadChangeResultAsync(resp, timeout, ct).ConfigureAwait(false);
+        var ticket = Convert.ToHexString(RandomNumberGenerator.GetBytes(16)).ToLowerInvariant();
+        var uri = $"api/history/restore?path={Uri.EscapeDataString(path)}&id={Uri.EscapeDataString(id)}&ticket={ticket}";
+        var giveUp = Stopwatch.GetTimestamp();
+        while (true)
+        {
+            using var timeout = Linked(ct, _metadataTimeout);
+            using var resp = await SendAsync(() => new HttpRequestMessage(HttpMethod.Post, uri), HttpCompletionOption.ResponseContentRead, timeout, ct).ConfigureAwait(false);
+            if (resp.StatusCode != HttpStatusCode.Accepted)
+                return await ReadChangeResultAsync(resp, timeout, ct).ConfigureAwait(false);
+            if (Stopwatch.GetElapsedTime(giveUp) > TimeSpan.FromHours(1))
+                throw new PairnetsNetworkException("The server is still restoring that version; look at History again later.");
+            await Task.Delay(RestorePollInterval, ct).ConfigureAwait(false);
+        }
     }
 
     // ------------------------------------------------------------------ plumbing
@@ -590,6 +978,8 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
                 ? m
                 : "The server rejected the token (401).", reason?.Code);
         }
+        if (resp.StatusCode == HttpStatusCode.TooManyRequests)
+            throw new PairnetsSlowDownException(RetryAfterOf(resp) ?? BackPressure.DefaultWait);
         if (DescribeCloudflareError(resp, IsRelay) is { } cloudflare)
             throw new PairnetsNetworkException(cloudflare);
         if (resp.StatusCode == HttpStatusCode.RequestEntityTooLarge)
@@ -669,7 +1059,60 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
 
     private const string HealthPath = "api/health";
 
-    private async Task<HttpResponseMessage> SendAsync(HttpRequestMessage req, HttpCompletionOption completion,
+    /// <summary>How often one request is sent again after "too many requests" before the pass gives up and retries later.</summary>
+    internal int MaxTooManyRetries { get; init; } = 30;
+
+    /// <summary>What a pass says when the server kept answering "too many requests" for a very long time.</summary>
+    private string TooManyRequestsMessage => $"Too many requests to {BaseAddress.Host}; Pairnets keeps trying.";
+
+    /// <summary>
+    /// Sends a request built by <paramref name="make"/> (built again if it has to be sent again). A 429 "too many requests"
+    /// is back-pressure, not an error: every request of this client waits as the answer says (<see cref="Pressure"/>) and
+    /// this one is sent again, up to <see cref="MaxTooManyRetries"/> times. <paramref name="ownTooMany"/>: the nest answers
+    /// 429 itself on this endpoint with a meaning of its own ("too many sign-ins waiting"), so only the Pairnets service's
+    /// rate_limited counts there. <paramref name="bestEffort"/>: never waits or retries (cleanup that may be skipped).
+    /// <paramref name="sendAgain"/> false: a 429 still holds every request, but this one is not sent again; it comes back
+    /// as <see cref="PairnetsSlowDownException"/> (a piece of an upload, whose caller goes on from what the server has).
+    /// </summary>
+    private async Task<HttpResponseMessage> SendAsync(Func<HttpRequestMessage> make, HttpCompletionOption completion,
+        CancellationTokenSource timeout, CancellationToken callerCt, bool ownTooMany = false, bool bestEffort = false, bool sendAgain = true)
+    {
+        for (var attempt = 1; ; attempt++)
+        {
+            HttpResponseMessage resp;
+            if (bestEffort)
+            {
+                // Cleanup that may be skipped: never waits its turn, and is skipped while requests are held.
+                if (Pressure.HeldUntil is not null)
+                    throw new PairnetsNetworkException(TooManyRequestsMessage, code: ServiceErrors.RateLimited);
+                resp = await SendOnceAsync(make(), completion, timeout, callerCt).ConfigureAwait(false);
+            }
+            else
+            {
+                using var slot = await Pressure.EnterAsync(callerCt, () => timeout.CancelAfter(Timeout.InfiniteTimeSpan)).ConfigureAwait(false);
+                // The request's own timeout does not run while it waits its turn.
+                if (slot.Waited)
+                    timeout.CancelAfter(TimeoutOf(timeout));
+                resp = await SendOnceAsync(make(), completion, timeout, callerCt).ConfigureAwait(false);
+            }
+            if (resp.StatusCode != HttpStatusCode.TooManyRequests
+                || (ownTooMany && await ServiceErrorCodeAsync(resp).ConfigureAwait(false) != ServiceErrors.RateLimited))
+            {
+                Pressure.Answered();
+                return resp;
+            }
+
+            var retryAfter = RetryAfterOf(resp);
+            resp.Dispose();
+            Pressure.Refused(retryAfter);
+            if (!sendAgain)
+                throw new PairnetsSlowDownException(retryAfter ?? BackPressure.DefaultWait);
+            if (bestEffort || attempt >= MaxTooManyRetries)
+                throw new PairnetsNetworkException(TooManyRequestsMessage, code: ServiceErrors.RateLimited);
+        }
+    }
+
+    private async Task<HttpResponseMessage> SendOnceAsync(HttpRequestMessage req, HttpCompletionOption completion,
         CancellationTokenSource timeout, CancellationToken callerCt)
     {
         // Every request carries the token except the health check, which needs none (so a URL that
@@ -698,6 +1141,12 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
         {
             throw new PairnetsNetworkException(ex.Message, ex);
         }
+        catch (SocketException ex)
+        {
+            // On Linux a connection the server drops at once can come out bare, not in an HttpRequestException: .NET
+            // asks the new socket for its remote address and gets "Transport endpoint is not connected".
+            throw new PairnetsNetworkException(ex.Message, ex);
+        }
         catch (OperationCanceledException ex) when (!callerCt.IsCancellationRequested)
         {
             throw new PairnetsNetworkException("The request timed out or stalled.", ex);
@@ -706,6 +1155,33 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
         {
             if (completion == HttpCompletionOption.ResponseContentRead)
                 req.Dispose();
+        }
+    }
+
+    /// <summary>How long a 429 asks to wait (Retry-After in seconds or as a date), or null when it does not say.</summary>
+    internal static TimeSpan? RetryAfterOf(HttpResponseMessage resp)
+    {
+        if (resp.Headers.RetryAfter is not { } after)
+            return null;
+        if (after.Delta is { } delta)
+            return delta;
+        return after.Date is { } date ? date - DateTimeOffset.UtcNow : null;
+    }
+
+    /// <summary>The "error" of a short JSON answer from the Pairnets service, or null.</summary>
+    private static async Task<string?> ServiceErrorCodeAsync(HttpResponseMessage resp)
+    {
+        if (!IsJson(resp) || resp.Content.Headers.ContentLength > ServiceErrorMaxBytes)
+            return null;
+        try
+        {
+            await resp.Content.LoadIntoBufferAsync(ServiceErrorMaxBytes).ConfigureAwait(false);
+            var bytes = await resp.Content.ReadAsByteArrayAsync().ConfigureAwait(false);
+            return JsonSerializer.Deserialize<ServiceErrorBody>(bytes, PairnetsJson.Options)?.Error;
+        }
+        catch (Exception ex) when (ex is JsonException or NotSupportedException or IOException or HttpRequestException or InvalidOperationException)
+        {
+            return null;
         }
     }
 
@@ -764,12 +1240,20 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
         return null;
     }
 
+    /// <summary>The time each request's timeout was made with, so it can start over after waiting its turn.</summary>
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<CancellationTokenSource, TimeoutSpan> Timeouts = new();
+
+    private sealed record TimeoutSpan(TimeSpan Value);
+
     private static CancellationTokenSource Linked(CancellationToken ct, TimeSpan after)
     {
         var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         cts.CancelAfter(after);
+        Timeouts.AddOrUpdate(cts, new TimeoutSpan(after));
         return cts;
     }
+
+    private TimeSpan TimeoutOf(CancellationTokenSource cts) => Timeouts.TryGetValue(cts, out var span) ? span.Value : _metadataTimeout;
 
     public void Dispose() => _http.Dispose();
 
@@ -777,7 +1261,9 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
     /// Request body that streams from the local file, resets the stall watchdog on every chunk,
     /// and tags local read failures so they are not mistaken for network failures.
     /// </summary>
-    private sealed class StreamingUploadContent(Stream source, CancellationTokenSource stall, TimeSpan stallTimeout, Throttle limit, long? length = null) : HttpContent
+    /// <param name="sent">Told once every byte of the body was handed to the connection (the source is not read again).</param>
+    private sealed class StreamingUploadContent(Stream source, CancellationTokenSource stall, TimeSpan stallTimeout, Throttle limit, long? length = null,
+        Action? sent = null) : HttpContent
     {
         protected override async Task SerializeToStreamAsync(Stream stream, TransportContext? context, CancellationToken cancellationToken)
         {
@@ -800,6 +1286,7 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
                 await stream.WriteAsync(buffer.AsMemory(0, n), cancellationToken).ConfigureAwait(false);
                 stall.CancelAfter(stallTimeout);
             }
+            sent?.Invoke();
         }
 
         protected override Task SerializeToStreamAsync(Stream stream, TransportContext? context) =>

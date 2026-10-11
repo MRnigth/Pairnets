@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Http.Json;
 using System.Text;
 using Pairnets.Core;
 using Pairnets.Core.Api;
@@ -169,6 +170,31 @@ public class UploadInPiecesClientTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task ABusyAnswerToAPieceIsWaitedOutNotCountedAsAFailure()
+    {
+        var busy = 0;
+        var recorder = new Recorder(req =>
+            req.Method == HttpMethod.Put && req.RequestUri!.AbsolutePath.StartsWith("/api/upload/", StringComparison.Ordinal) && Interlocked.Increment(ref busy) <= 3
+                ? new HttpResponseMessage(HttpStatusCode.Conflict)
+                {
+                    Content = JsonContent.Create(new ErrorBody(ErrorCodes.UploadBusy, "An earlier piece is still arriving."), options: PairnetsJson.Options),
+                }
+                : null);
+        using var api = Client(recorder);
+        api.PieceRetryDelays = []; // one real failure would end the attempt
+        api.BusyPollInterval = TimeSpan.FromMilliseconds(20);
+        var data = Data((int)(Piece * 3));
+
+        var (result, sentHash, _) = await api.UploadAsync("a.bin", ContentHash.NoneBase, 0, new MemoryStream(data), null, default);
+
+        Assert.Equal(ApiOutcome.Ok, result.Outcome);
+        Assert.Equal(ContentHash.Of(data), sentHash);
+        Assert.Equal(Piece, api.Pieces.Next); // not halved: nothing was cut
+        Assert.True(recorder.Count("GET api/upload/") >= 3);
+        Assert.Equal(data, await File.ReadAllBytesAsync(Path.Combine(_server.Paths.Files, "a.bin")));
+    }
+
+    [Fact]
     public async Task PiecesGrowOnAFastConnection()
     {
         var recorder = new Recorder();
@@ -219,25 +245,34 @@ public class UploadInPiecesClientTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task CancellingDropsTheUploadOnTheServer()
+    public async Task CancellingKeepsTheUploadForLaterAndAbandoningDropsIt()
     {
-        using var api = Client(new Recorder());
+        var recorder = new Recorder();
+        using var api = Client(recorder);
         using var cts = new CancellationTokenSource();
         var data = Data((int)(Piece * 6));
+        var resume = new UploadResume();
 
+        // Pause: the pass is cancelled. What the server has stays there, to be continued.
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
             api.UploadAsync("a.bin", ContentHash.NoneBase, 0, new MemoryStream(data), p =>
             {
                 if (p > Piece * 2)
                     cts.Cancel();
-            }, cts.Token));
+            }, cts.Token, resume));
 
+        Assert.NotNull(resume.Id);
+        Assert.Equal(0, recorder.Count("DELETE api/upload/"));
+        Assert.Equal(1, _server.Uploads.Count);
+        Assert.Single(Directory.GetFiles(_server.Paths.Tmp, "*.part"));
+        Assert.Empty(_server.Store.ReadManifest(null).Entries);
+
+        // Given up for good (the file changed): the part file goes.
+        await api.AbandonUploadAsync(resume.Id!);
         Assert.Equal(0, _server.Uploads.Count);
-        // The part file goes once the server notices the cut-off piece.
         for (var i = 0; i < 100 && Directory.GetFiles(_server.Paths.Tmp, "*.part").Length > 0; i++)
             await Task.Delay(50);
         Assert.Empty(Directory.GetFiles(_server.Paths.Tmp, "*.part"));
-        Assert.Empty(_server.Store.ReadManifest(null).Entries);
     }
 
     [Fact]

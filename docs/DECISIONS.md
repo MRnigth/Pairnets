@@ -141,8 +141,10 @@ what cannot lose or silently overwrite data.
   because NTFS case-insensitivity and file locking are where the product runs.
 * **Fault injection** uses a real TCP proxy that resets connections, instead of mocks.
 * **Secret scanning** (`scripts/check-secrets.sh`) looks for 64-hex tokens, carrier-grade NAT/VPN IPs,
-  token assignments, Cloudflare Tunnel tokens and personal Windows paths. It runs before each push and in CI over the whole
-  history.
+  token assignments, Cloudflare Tunnel tokens and personal Windows paths, and (since 2026-10-11) the key formats
+  of every service in reach: GitHub, Google, Resend, Turnstile, AWS, Stripe, Slack, SendGrid, npm, Tailscale,
+  signed tokens, `pn_` computer keys and passwords in URLs. The git `pre-push` hook runs it on every push and
+  in CI over the whole history.
 * **Commit attribution.** At your request, commits no longer carry `Co-Authored-By` trailers.
 
 ## Mac and Linux desktop apps (added after v1 scope)
@@ -281,6 +283,55 @@ what cannot lose or silently overwrite data.
   ever sent. Cloudflare's own error pages (tunnel down, bot check) are recognised by their HTML body
   and Cloudflare headers and explained in plain words; Pairnets's JSON errors relayed by Cloudflare are
   left alone.
+
+## Big transfers continue where they stopped
+
+* **This replaces two earlier rules:** "Sessions in memory, not in the manifest" (above) and the "half-sent
+  files are discarded" part of "Pause cancels the running pass". An upload or download that stops part-way
+  is now kept and continued. Still nothing partial is ever stored as a file.
+* **Uploads in pieces outlive a pass.** A broken connection, Pause or closing the app no longer drops the
+  upload on the server. The computer keeps the upload's id together with exactly the content it carries
+  (size, modification time, content hash, base, server address) in state.db (new `uploads` table, schema 2),
+  and the next pass asks the server how much it has and sends only the rest. Within one pass a broken
+  connection is retried for about a minute (after 1, 2, 4, 8, 15 and 30 s); then the pass ends offline and the
+  runner's retries (2, 5, 10, 30, 60 s) take over, each continuing from the server's count.
+* **The whole file is checked again, so two versions are never mixed.** When it continues, the computer reads
+  the bytes the server already has once more from the file (they are not sent again) and hashes the whole
+  file as it is now; the server compares that with its own hash of what it received. If the file changed in
+  between in a way that size and time do not show, the commit is refused and the file is sent again from the
+  start. The cost is reading the part already sent once more per continue (local disk: seconds to a minute
+  for 10 GB); trusting a hash kept from before would have been faster but could store a mixed file.
+* **Given up only on purpose.** `DELETE /api/upload/{id}` is sent only when the upload will not be continued:
+  the file changed, was deleted, is in sync now, or the server has another version. An upload nobody comes
+  back for (Reset, Re-link, uninstall) is dropped by the server after an hour without data, as before; so a
+  laptop that sleeps longer than an hour in the middle of an upload sends that file again.
+* **"Busy" is not a failure.** While an earlier piece of the same upload is still arriving (the server waits
+  up to 60 s on a quiet connection), the server answers `upload-busy` and `GET /api/upload/{id}` says
+  `busy: true`. The computer waits (up to 3 minutes) instead of counting a failure and shrinking the pieces.
+  Older servers answer `upload-offset` instead, which is handled the same way.
+* **Uploads also survive a restart of the server.** Each session now has a small description next to its part
+  file in tmp/ (`id.session`: path, base, size, mtime), and the part file is written to disk after every piece.
+  At start-up the server keeps the pairs that received data within the last hour (everything else in tmp/ is
+  still deleted, after the journal is replayed) and takes them up again. The running hash of what arrived lived
+  only in memory, so each kept part file is read and hashed once more, in the background; the upload answers
+  busy meanwhile, so no request waits for it. A part damaged over the restart fails the commit's hash check and
+  is refused, never stored.
+* **Big downloads continue too.** Files from 16 MB keep their partial download in `.pairnets-tmp` when they are
+  cut off, paused or closed, recorded in state.db (new `downloads` table) with the version (content hash) its
+  bytes belong to. The next pass sends `Range` with `If-Range` (a file's ETag is its hash), so the server sends
+  only the rest of that same version, or the whole file if it changed meanwhile. A new version in the manifest
+  deletes the old partial at once. The whole file is still hashed and checked against the server's hash before
+  it replaces anything; a partial that fails the check is deleted and the file is downloaded again in the same
+  pass. Smaller files take about a minute or less even on a slow link, so they simply start again.
+* **No answer takes longer than Cloudflare waits (100 s), and no request carries more than 100 MB.** Pieces are at
+  most 50 MiB (the server takes up to 64 MiB); one PUT is only used for files up to 50 MiB, or with a server from
+  before pieces. The commit no longer waits for gigabytes to reach the disk (each piece already did). Restoring a
+  big history version used to copy and hash it inside the request; it now runs in the background, the request
+  waits at most 60 s and otherwise answers 202, and the app asks again with the same ticket until it is done.
+  Left as it was: a file someone put into `files/` by hand is hashed under the server's lock when a computer
+  overwrites it (rare, and only once).
+* **Going back to an older app** needs Settings → Start over: an app from before refuses a state.db at schema 2
+  ("created by a newer Pairnets"). Nothing is lost by that; it only stops syncing until reset.
 
 ## Renamed from Tether to Pairnets
 
@@ -577,3 +628,245 @@ yet"), the same in both apps.
 * **Nothing is paywalled**: the Terms say a donation is a gift that buys no features, support or promise that the
   service stays up. The Privacy Policy says what Ko-fi shows the owner (name, amount, message), that it is used only to
   say thank you and for tax records, and that it is never linked to a Pairnets account.
+
+## Faster uploads, and Resume that carries on (10 October 2026)
+
+What the owner saw on a test setup (two computers and a nest on one PC, all through sync.pairnets.app): uploads
+were slow, and after Pause → Resume the app said only "Syncing" for many minutes. The logs showed why.
+
+* **The relay allowed 600 requests a minute per address.** Computers in one home share an address, and every
+  file synced between them costs a request on each (one uploads it, the other downloads it), so a home got about
+  5 small files a second, and then a wall of "429 Too many requests". The relay now allows **6,000 a minute**,
+  counted by Cloudflare's Rate Limiting binding instead of a D1 row per request (no database round trip on
+  every file), and it reuses each nest's row for 30 s instead of reading it on every request. So a nest that is
+  unlinked keeps being relayed for at most 30 s. A limiter that fails lets the request through: the limit only
+  stops floods.
+* **A 429 means "wait", not "this file failed".** The app holds back every request (all transfers, not only the
+  one that was refused) for the time the answer's `Retry-After` asks (at least 1 s, at most 2 minutes) and then
+  sends the same files again; nothing is counted as an error and a big upload goes on where it was, with its
+  piece size unchanged (nothing was cut). Only a 429 that says how long counts: a nest's own 429s (too many
+  sign-ins, an update asked for a moment ago) mean something else. After 30 refusals in a row for one file the
+  pass ends as if offline. Considered and left out: halving the number of transfers after a 429. Under a limit
+  per minute that only moves the same number of requests around; the wait is what stops the hammering.
+* **Two pieces of a big upload on the way at once.** Cloudflare takes in a whole piece before it passes it on.
+  With one piece at a time the line to Cloudflare and the line to the nest took turns being idle: the nest's log
+  showed 4–6 s without data between pieces, and a 548 MB file arrived at about 4 MiB/s although each piece
+  moved at 9–11 MiB/s. Now the next piece goes out as soon as the previous one's bytes are sent, marked
+  `turn=wait`; the nest keeps it waiting (without reading it) until the one before has arrived, up to 60 s,
+  and refuses it at once (wrong offset) when the one before was cut off, so the app asks how much arrived and
+  goes on from there. Never more than two, because the nest writes and hashes a file in order and only one
+  piece can be arriving at a time anyway. A nest says it takes this in `/api/info` (`piecesInFlight: 2`);
+  with an older nest the app sends one piece at a time as before. Pieces stay at most 50 MiB.
+* **Looking through the folder keeps its work.** New and changed files are read whole once to fingerprint them
+  (needed to tell what changed, see "three hashes"). The scan used to save those fingerprints only at the very
+  end, so every Pause, restart or session restart threw them away: on a folder with 116 GB of new model files
+  each Resume started reading all of it again and never got through. Now they are saved every 250 files or 2 s
+  and when the scan is stopped, so the next one reads only what is left.
+* **"Checking files…" says how far it is.** The scan reports files checked, how many were new or changed, and
+  the big file being read with its bytes ("12,400 files checked, 310 new or changed · reading model.gguf (1.20
+  GB of 9.00 GB)"), in the status card and the tray tooltip of both apps (`StatusSnapshot.Scan`, shown by the
+  existing headline and detail lines, so the two apps stay alike). Files under 16 MB go by too fast to name.
+* **Pause and Resume show the right thing.** Status changes go one at a time, and while paused only "Paused"
+  is shown, and "Paused" only while paused. Before, a pass that was still stopping could show "Paused" after
+  Resume, or "Syncing" after Pause. A saved pause is now applied before the runner starts, so a paused app never
+  begins a pass at launch.
+* **The speed falls to zero when nothing moves.** It was only worked out when bytes arrived, so the last value
+  stayed on screen through every wait. Now it is worked out again every second. The units stay as they were
+  (1024-based "MB/s").
+
+## Sync feedback: real speeds, saying what it does, "too many requests" (10 October 2026)
+
+The owner's first real use (PC-1 on Windows and PC-2 on Linux behind one home address, a server, all through
+sync.pairnets.app) showed three problems: about 37 of PC-1's 38,206 uploads failed with 429, the app said only
+"Syncing" for 8 minutes while it fingerprinted 114 GB, and the picture *guessed* that the other computer was sending.
+
+### The live report: one message for every computer's live state
+
+* **Message.** App → server `ReportTransfer(TransferReport)`; server → the other apps `PeerTransfer(name,
+  TransferReport)` (names in `PushNames`, Core `Models.cs`). `TransferReport` is
+  `(upBytesPerSecond, downBytesPerSecond, filesDone, filesTotal, bytesDone, bytesTotal, uploading, downloading,
+  stalled, ageSeconds)`:
+  * speeds: bytes really moved in each direction over the last 5 s, measured by the app that moves them;
+  * files and bytes done of its current batch (back-to-back passes count as one batch, as on its own screen);
+  * `uploading` / `downloading`: files in flight in that direction now, true also while stalled, so a stalled line
+    still knows its direction;
+  * `stalled`: files in flight but no byte for 5 s, or held by a 429;
+  * `ageSeconds`: set by the server only; 0 when pushed live, the report's age when replayed to an app that connects
+    later. "Last seen" = arrival time minus this (no clock skew between computers matters).
+* **Cadence.** About once a second while the app transfers, and once all zero when it stops. The server passes on at
+  most 5 a second per connection (a change between moving and not moving always goes through), keeps only the latest
+  per connection in memory (`LiveTransfers`), replays the ones from the last 10 s to a new connection, and sends an
+  all-zero report for a computer that disconnects while moving files. Apps drop a report after 10 s without a newer one.
+* **One source.** `StatusSnapshot.LiveOf(name)` gives the same thing for this computer (its own numbers) and for the
+  others (their reports); the picture (`DeviceMap`), the Devices page and the "waiting for PC-1" progress all read it.
+  The 8-second "a change arrived, so it is sending" guess and "this one uploads, so the other receives" are gone: a
+  line moves only for a computer that reports moving bytes. The animation work (`feature/live-transfers`) can draw
+  direction, speed and stalled from this report without a second message.
+* **Why the apps report and the server does not count.** The app knows what the server cannot: files left in its
+  batch, that it is held by a 429, which direction is stalled. The server could measure bytes on `GET`/`PUT
+  /api/file`, which would add only computers running an app too old to report; those show no speed rather than a
+  wrong one, and the apps update themselves. It also keeps the file-transfer path untouched. If wanted later, the
+  server can fill in a report for a computer that has not sent one for 10 s, on the same `PeerTransfer` message.
+* **Old servers and apps.** A server without `ReportTransfer` answers the call with an error; the app then stops
+  sending on that connection (tries again after a reconnect) and shows no live data, with no error anywhere. An old
+  app ignores `PeerTransfer` (SignalR drops unknown messages).
+
+### Saying what it does
+
+* Priority of the status: Paused, then "Slowed down by the server", then "Waiting for PC-1 to finish uploading",
+  then the pass's stage: "Reading the server's list", "Checking files · 12,000 of 38,206", "Uploading" / "Downloading"
+  / "Uploading and downloading" with "37 of 120 files · 4.90 MB/s · about 3 min left". Everything else keeps its old
+  words. `StatusLine` is the same in one line for the tray icon's tip and menu, in both apps.
+* **Checking lists the folder first** (a second or two for 38,000 files), so the total is known before any file is
+  read. Fingerprints are saved every 500 files or 5 s and when the check is cancelled; before, a pause threw away
+  everything read so far, so the check after Resume started again from zero.
+* **While checking, the wait for another computer's batch is not shown**: the status says what this computer does.
+* **Resume says "Syncing…"** at once (it used to say "Up to date" until the pass began).
+* **Motion was left alone** (the badge, the dots): the live-transfers work owns it. While "slowed down" the badge
+  still turns; the snapshot says `Stalled` and `IsSlowedDown` for that work to show. The one exception: this
+  computer's line stops while requests are held, because no bytes move.
+
+### "Too many requests" is back-pressure
+
+* **In the apps.** One gate per client (`BackPressure`): a 429 holds every request until its `Retry-After` (capped at
+  10 minutes; without one 5 s, doubling to a minute while 429s go on), the same request is sent again (a single
+  upload from the start of the file with a fresh hash, a piece from its own start), and then one request runs at a
+  time, doubling every 15 s without another 429 until there is no limit. A request's own timeout does not run while it
+  waits. Nothing counts as a failed file. After 30 refusals of one request the pass ends as offline ("Too many
+  requests to …; Pairnets keeps trying") and the runner retries with its usual backoff. The nest's own 429s on
+  joining and on "update the server" keep their meaning; only the service's `rate_limited` is waited out there.
+* **In the Worker (relay).** Two budgets instead of one 600-a-minute per address:
+  * **per address, 600 a minute** (the old number) for requests without a computer's key, and for everything that
+    fails: unknown nest, refused path, a key the nest answers 401/403, an offline nest. Checked first, before the
+    nest is looked up. This is the abuse guard: a caller without a working key never gets more than this.
+  * **per nest and computer key, 6,000 a minute (100 a second)**: what a signed-in app sends. Two computers at home
+    each have their own. A made-up key costs one request to the nest, gets 401, and counts against the address.
+  * **Why 6,000.** A small-file upload is one request. With 4 transfers at once and 40–150 ms per request through
+    the relay, one computer makes about 1,600–6,000 a minute; the owner's PC-1 hit 600 after 383 files. 6,000 covers
+    a fast connection with 4 at once; 8 at once on a very fast link can touch it, and then the app slows down for a
+    moment instead of failing. Each relayed request still costs one D1 write (the counter), as before; the per-address
+    check adds one read.
+  * **Owner's call:** the two numbers (600 per address, 6,000 per computer). Higher per computer is cheap to allow; a
+    lower one would make big first syncs slow down more often.
+
+## Animations show what really moves (10 October 2026)
+
+* **The owner asked for it:** the status badge used to spin the same way for every kind of work, and the
+  dots on the overview's lines kept one pace even when nothing moved. The owner approved a moving preview
+  first.
+* **The badge follows `StatusSnapshot.Motion`.** A slow turn while checking. An arrow rising on green while
+  uploading, or falling on blue while downloading. Both arrows taking turns when it does both. A still,
+  faded arrow on orange, "Waiting for the network", once no byte has moved for 5 seconds (`StallAfter`).
+* **The dots go as fast as the bytes.** Speed is measured each way over the last 3 seconds
+  (`UploadBytesPerSecond`, `DownloadBytesPerSecond`), mapped to a dot speed with a log curve and a cap
+  (`DeviceMap.DotSpeed`). An upload or download keeps counting for 1.5 s after it ends, so the picture
+  doesn't flicker between small files.
+* **No more guessing about the other computer.** It used to "download" whenever this one uploaded.
+  * The server now counts the bytes of each computer's file requests (`TransferMeter`) and sends
+    `PeerTransfer(device, up, down, uploading, downloading)` once a second while it moves files, then once
+    with both flags off. The other computer's line uses only that (or, from an older server, the changes
+    heard from it).
+  * After a sync with nothing left over, an app calls `Synced(version)`; the others get
+    `PeerSynced(device, version)`. When that version covers this computer's latest change, the other
+    computer gets a check mark, "Has your changes", for a minute.
+  * Old apps and old servers keep working; they just show less.
+* **MB/s on the lines** is on to begin with, and can be turned off in Settings ("Show speed on the map").
+  It never shows in the small tray picture.
+
+## One release from the waiting branches (11 October 2026)
+
+Sync feedback, live transfers and faster uploads were built side by side and each solved part of the same thing. The
+owner chose "both go ahead, merge at the end". This is how they fit together.
+
+* **One source for every computer's speed: its own report.** Each app sends `ReportTransfer(report)` about once a
+  second while it moves files, and the others get `PeerTransfer(name, report)` (sync feedback). The server's own byte
+  counter from live transfers (`TransferMeter`) is gone: two sources for one number would disagree, and the app's report
+  says more (files left, stalled, what it is doing) and travels the same way through sync.pairnets.app.
+* **Kept from live transfers:** `Synced(version)` / `PeerSynced(name, version)` and the "Has your changes" check mark,
+  the badge's motion, the moving dots, the MB/s on the lines and its switch. The other computer's entry
+  (`StatusSnapshot.Peers`) holds both its latest report and what it has synced (`PeerActivity`); a report that goes
+  quiet for 10 s is dropped, what it has synced stays.
+* **A computer's box says what it does, its line how fast:** "Downloading your changes · 1,204 files left" under the
+  name, "↓ 4.20 MB/s" on the line. The Devices page, which has no lines, keeps the speed in its text.
+* **One tick a second in the app** (instead of three timers) brings the speeds, "moving" (with its 1.5 s grace) and
+  "stalled" up to date, forgets quiet reports and sends this computer's own. The speeds each way are measured over 3 s
+  for the map and the report; both together over 5 s for the time left.
+* **Stalled** is files in flight with no byte for 5 s, or requests held by "too many requests". `Stalled` and
+  `StalledSince` are set together; the badge then shows the still orange arrow, but the title still says "Slowed down by
+  the server" when that is the reason, and "Waiting for the network" otherwise.
+* **Words in the title** follow sync feedback ("Checking files", "Reading the server's list", "Uploading",
+  "Waiting for PC-1 to finish uploading"), plus "Waiting for the network" and "Deleting files" from live transfers.
+* **Checking the folder** lists it first, so there is a total from the start (sync feedback), and saves what it read
+  every 250 files or 2 s and when stopped (faster uploads). The status shows both the count and the big file being read:
+  "12,400 of 38,206 files checked, 310 new or changed · reading model.gguf (1.20 GB of 9.00 GB)".
+* **"Too many requests"** is handled in one place for every request (`BackPressure`: hold everything, send the refused
+  request again, then one at a time for a while). The pieces of an upload that sends two at once are the exception:
+  the next piece may already be reading the file, so the sender never sends a piece again by itself. It holds every
+  other request and reports the slow-down; the upload then asks the server how much it has and goes on from there.
+* **The relay's limits** are three of Cloudflare's rate limiting bindings, so a relayed request costs no database
+  round trip: 20,000 a minute per address (a flood ceiling), 6,000 a minute per computer key, and 600 a minute per
+  address for requests without a key and for failures. A binding cannot be read without counting, so the request that
+  goes over the 600 turns the address off for 60 s, remembered by the Worker instance. The Worker tests use a counting
+  stand-in per test, because the test runtime's own binding counts by the wall clock and keeps its counts between tests.
+* **A website-only push to main is not an app update:** release.yml ignores `site/**` as it already ignored `cloud/**`.
+
+## The "Sign in an app?" page (10 October 2026)
+
+The page where you press Allow so a computer can sign in (sync.pairnets.app/app) now has the apps' "Quiet" look. The
+owner picked option A from three designed options.
+* **One calm column, and the code is the question**: "Does Pairnets on PC-1 show this code?", with the code in big
+  letters. System, app version and times are folded under "Details". The buttons say "Yes, allow PC-1" and "No, this
+  isn't me".
+* **Every answer has a screen of its own** (signed in, waiting for your nest, not let in, code ran out) instead of a
+  line under greyed-out buttons. A reload draws the answered screen and says which answer was given and when.
+* **Errors can be retried**: the error is said in plain words and both buttons work again.
+* **The look is scoped to this page** (`app.css` on `<body class="q-page">`); the other pages keep theirs. Its
+  colours are the apps' Quiet palette and follow the system's light or dark setting.
+* **Instrument Sans comes from the Worker itself**: Latin-only WOFF2 files (about 15 KB each, regular, medium and
+  semibold) under `/assets/fonts/`, with their copyright and licence kept inside. That needed one addition to the
+  CSP, `font-src 'self'`: fonts from this site only, nothing from elsewhere.
+* **Bringing the app to the front**: after Allow, the page opens `pairnets://signed-in` by itself only when the
+  browser looks like it runs on the computer that asked: not a phone or tablet, and the same system (Windows, macOS
+  or Linux, as the app reports). The link carries nothing, so a wrong guess exposes nothing; it only spares people an
+  error on a phone. Everyone else gets an "Open Pairnets" button. A true same-computer check would mean storing
+  something about the asking computer's address, so it was left out.
+* **The cookie notice** sits in the page's flow under the content on this page, so it can never cover the buttons.
+* Nothing about the security changed: the session requirement, the Origin check, the code check and the rate limits
+  are the same.
+
+## The nest's emails
+
+* **Three emails, one look.** The sign-in link, the "confirm your email" mail and a new **welcome** mail
+  share one layout that matches the website (grey page, white rounded card, the logo, one blue button;
+  light and dark). They are plain files in `src/Pairnets.Server/Mail/Templates/` (an HTML and a text
+  version of each, plus `layout.html`), built into the program like the nest's website, so changing
+  the words needs no code. `Mail/EmailTemplates.cs` fills in the blanks; everything inserted is
+  HTML-escaped and a blank with no value is an error, not an empty space. Previews:
+  `docs/images/email-*.png` (made with `PAIRNETS_EMAIL_PREVIEW_DIR`, see `EmailTemplatesTests`).
+* **The logo comes from the nest itself** (`/assets/icon-256.png`, a PNG because mail programs do not
+  show SVG), so opening a mail never loads anything from pairnets.app or another site. With images
+  blocked the mail still reads fine: the name "Pairnets" is text.
+* **Subjects and the link sentence are unchanged** ("Your Pairnets sign-in link", "Confirm your email for
+  Pairnets", "It works once, for 15 minutes"), and the link still carries its code in the `#` part, so
+  nothing that reads these mails (tests, filters, people's habits) breaks.
+* **The welcome is sent once, when an address is first confirmed** (a different address counts as new;
+  confirming the same one again, or signing in by email link, sends nothing). It is best effort: if the
+  mail server refuses, the sign-in still works and only a log line says so (no address or link in it).
+  It is not counted in the "5 sign-in emails an hour" limit, because nobody can ask for it: it only
+  follows a confirm link that was opened from the inbox.
+
+## Secrets audit (2026-10-11)
+
+* **Everything on GitHub was checked for keys and passwords, and none were found.** The check covered every
+  branch and tag, every commit and message, and the old commits GitHub still keeps from earlier history rewrites.
+  It looked for the key formats above, the owner's real VPN addresses, names and paths, and the real keys saved on
+  the owner's PC. Releases, workflows and screenshots were checked too.
+* **Every push is now scanned before it is public**, not only by CI afterwards. The `pre-push` hook scans exactly
+  the commits a push sends (`check-secrets.sh --range <sha> --not --remotes`) on every branch. It uses a copy of the
+  scanner installed next to the gate, so branches made before `--range` existed are covered too.
+* **Personal details stay out of the public scanner.** A real name, email address or machine name can't be listed
+  in a public file. The scanner reads them from `.git/info/secret-denylist`, which never leaves the PC, and applies
+  them to new work only (`--diff`, `--range`). Old commits keep what they had, so `--tree` and `--history` don't use
+  that list, and the pre-deploy check of an older branch can still pass.
+* **Made-up names in test data.** A test used the owner's first name for a laptop; it now says "Alex". The old
+  commits were left as they are rather than rewriting main.

@@ -87,14 +87,12 @@ public partial class TrayPanel : Window
 
     public void ShowStatus(StatusSnapshot s, string? device)
     {
-        var (brush, icon) = s.IsWaiting ? ("S.Grey", "I.Wait") : Visuals.ForStatus(s.Status);
-        StatusBadge.Fill = Visuals.Resource<IBrush>(brush);
-        StatusGlyph.Data = Visuals.Resource<Geometry>(icon);
-        StatusGlyph.Classes.Set("spin", s.Status == Pairnets.Core.Sync.RunnerStatus.Syncing && !s.IsWaiting);
+        var brush = Badge.Show(s, StatusBadge, StatusGlyph, StatusGlyph2, 19);
         StatusBadgeHost.Classes.Set("pulse", s.IsWaiting);
         Tint(brush);
         Headline.Text = s.Headline;
-        Detail.Text = s.DetailText.Length > 0 ? s.DetailText : s.LastSyncText;
+        // Waiting: the other computer's progress (the window has a bar for it; the panel has only this line).
+        Detail.Text = s.IsWaiting ? s.WaitingProgressText : s.DetailText.Length > 0 ? s.DetailText : s.LastSyncText;
         FixButton.IsVisible = s.FixLabel is not null;
         FixButton.Content = s.FixLabel;
         PauseText.Text = s.Paused ? "Resume" : "Pause";
@@ -105,15 +103,18 @@ public partial class TrayPanel : Window
         if (s.IsTransferring)
         {
             TransferTitle.Text = s.BatchTitle;
-            TransferSpeed.Text = s.BytesPerSecond >= 1 ? Format.Speed(s.BytesPerSecond) : string.Empty;
+            var stalled = s.Motion == SyncMotion.Stalled;
+            TransferSpeed.Text = stalled ? "Stalled" : s.BytesPerSecond >= 1 ? Format.Speed(s.BytesPerSecond) : string.Empty;
+            TransferSpeed.Classes.Set("warn", stalled);
             TransferProgress.IsIndeterminate = s.OverallPercent is null;
             TransferProgress.Value = s.OverallPercent ?? 0;
             TransferOverall.Text = s.OverallText;
-            var uploading = s.Active.Count == 0 ? s.Operation != "download" : s.Active.Any(a => a.IsUpload);
+            var uploading = s.GoingUp || !s.GoingDown;
             TransferArrow.Data = Visuals.Resource<Geometry>(uploading ? "I.Up" : "I.Down");
             TransferArrow.Stroke = Visuals.Resource<IBrush>(uploading ? "S.Green" : "S.Blue");
-            TransferArrow.Classes.Set("rise", uploading);
-            TransferArrow.Classes.Set("fall", !uploading);
+            TransferArrow.Opacity = stalled ? 0.5 : 1;
+            TransferArrow.Classes.Set("rise", uploading && !stalled);
+            TransferArrow.Classes.Set("fall", !uploading && !stalled);
         }
     }
 

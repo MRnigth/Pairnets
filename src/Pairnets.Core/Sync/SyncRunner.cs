@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.Logging;
 using Pairnets.Core.Paths;
@@ -76,7 +77,10 @@ public sealed class SyncRunner : IAsyncDisposable
     private DateTimeOffset? _dueAt;
     private DateTimeOffset? _firstWatcherRequest;
     private bool _fullRequested;
-    private bool _paused;
+    private volatile bool _paused;
+
+    /// <summary>Status changes one at a time, so a pass winding down never paints over a Pause or Resume (see <see cref="SetStatus"/>).</summary>
+    private readonly object _statusGate = new();
     private CancellationTokenSource? _passCts;
     private readonly HashSet<string> _arrivedDuringPass = new(StringComparer.Ordinal);
     private readonly Dictionary<string, PeerBatchState> _peerBatches = new(StringComparer.Ordinal);
@@ -90,6 +94,7 @@ public sealed class SyncRunner : IAsyncDisposable
         public DateTimeOffset Started { get; } = now;
         public DateTimeOffset LastActivity { get; set; } = now;
     }
+    private long _syncedSent = -1;
     private bool _catchUpArmed = true;
     private int _offlineAttempts;
     private Task? _loop;
@@ -134,11 +139,47 @@ public sealed class SyncRunner : IAsyncDisposable
     /// </summary>
     public event Action<string, string, bool>? DeviceListChanged;
 
+    /// <summary>Another computer has everything up to a server version ("PeerSynced"): its name and that version.</summary>
+    public event Action<string, long>? PeerSynced;
+
     /// <summary>A computer asks to join the nest ("PairRequested"): its code, name and system.</summary>
     public event Action<string, string, string>? JoinRequested;
 
     /// <summary>A join request was allowed or turned away on the nest ("PairDecided"): its code.</summary>
     public event Action<string>? JoinDecided;
+
+    /// <summary>Another computer's live speeds and batch ("PeerTransfer" on the push channel): its name and what it reported.</summary>
+    public event Action<string, TransferReport>? PeerTransferReceived;
+
+    /// <summary>Set when the server did not know <see cref="PushNames.ReportTransfer"/> (an older server): no more tries on this connection.</summary>
+    private volatile bool _reportsUnsupported;
+
+    /// <summary>True after the server said it has no <see cref="PushNames.ReportTransfer"/> (tests).</summary>
+    internal bool LiveReportsUnsupported => _reportsUnsupported;
+
+    /// <summary>
+    /// Tells the other computers what this one is moving right now (see <see cref="TransferReport"/>). Quietly does
+    /// nothing without a push connection, and for good on a server too old to pass it on (until the next connection).
+    /// </summary>
+    public async Task ReportTransferAsync(TransferReport report)
+    {
+        if (_reportsUnsupported || _hub is not { State: HubConnectionState.Connected } hub)
+            return;
+        try
+        {
+            await hub.InvokeCoreAsync(PushNames.ReportTransfer, [report]).ConfigureAwait(false);
+        }
+        catch (HubException ex)
+        {
+            // The server answered, but has no such method (a server from before live speeds): no live data, no errors.
+            _reportsUnsupported = true;
+            _log.LogDebug("The server does not take live speeds: {Error}", ex.Message);
+        }
+        catch (Exception ex)
+        {
+            _log.LogDebug("Live speed report not sent: {Error}", ex.Message);
+        }
+    }
 
     /// <summary>Files changed here or on another device while a pass was running; the next pass syncs them.</summary>
     public int PendingChanges
@@ -263,6 +304,20 @@ public sealed class SyncRunner : IAsyncDisposable
         InvokeHubAsync("BatchStarted", uploads).Wait(TimeSpan.FromSeconds(3));
     }
 
+    /// <summary>
+    /// After a pass that left nothing behind, tells the server which version this computer has everything up to;
+    /// the other computers then show that it has their changes. Sent once per version, and again after reconnecting.
+    /// </summary>
+    private void ReportSynced(bool again = false)
+    {
+        if (again)
+            Interlocked.Exchange(ref _syncedSent, -1);
+        if (LastResult is not { CaughtUp: true } last || !HubConnected)
+            return;
+        if (Interlocked.Exchange(ref _syncedSent, last.ServerVersion) != last.ServerVersion)
+            _ = InvokeHubAsync("Synced", last.ServerVersion);
+    }
+
     private async Task InvokeHubAsync(string method, params object[] args)
     {
         try
@@ -349,8 +404,8 @@ public sealed class SyncRunner : IAsyncDisposable
     }
 
     /// <summary>
-    /// Pauses syncing now: a pass that is running is cancelled (half-sent files are discarded on
-    /// both sides and the next pass picks up where this one stopped), and no new pass starts.
+    /// Pauses syncing now: a pass that is running is cancelled and no new pass starts. What it did so far stays:
+    /// the hashes of the files it read, and big uploads and downloads, which the next pass continues.
     /// </summary>
     public void Pause()
     {
@@ -374,7 +429,8 @@ public sealed class SyncRunner : IAsyncDisposable
     {
         lock (_gate)
             _paused = false;
-        SetStatus(RunnerStatus.Idle, "Resuming");
+        // A pass starts right away; until it says what it does, it is "Syncing" (never "Up to date" while nothing was checked).
+        SetStatus(RunnerStatus.Syncing, "Resuming");
         RequestSync("resume", full: true);
     }
 
@@ -453,7 +509,8 @@ public sealed class SyncRunner : IAsyncDisposable
         }
         catch (OperationCanceledException) when (passCts.IsCancellationRequested)
         {
-            // Paused mid-pass. Nothing half-done is kept; the next pass (after Resume) finishes the work.
+            // Paused mid-pass. What was read and sent so far is kept (hashes, big uploads and downloads); the next pass
+            // (after Resume) goes on from there. Resumed meanwhile: this shows nothing, the queued pass runs next.
             _log.LogInformation("Pass stopped because syncing was paused");
             SetStatus(RunnerStatus.Paused, "Paused");
             return;
@@ -478,6 +535,7 @@ public sealed class SyncRunner : IAsyncDisposable
         }
 
         LastResult = result;
+        ReportSynced();
         var now = DateTimeOffset.UtcNow;
         switch (result.Outcome)
         {
@@ -522,25 +580,30 @@ public sealed class SyncRunner : IAsyncDisposable
                 break;
         }
 
-        lock (_gate)
-        {
-            if (_paused)
-                SetStatus(RunnerStatus.Paused, "Paused");
-        }
         PassCompleted?.Invoke(new PassReport(result, reasons, now));
     }
 
+    /// <summary>
+    /// Shows a status. While paused only "Paused" is shown, and "Paused" only while paused: Pause and Resume change
+    /// <see cref="_paused"/> before they show their status, so whatever a pass that is winding down shows at the same
+    /// moment (Syncing, Up to date, Paused) can never be what stays on screen. Never called under <see cref="_gate"/>.
+    /// </summary>
     private void SetStatus(RunnerStatus status, string text)
     {
-        Status = status;
-        StatusText = text;
-        try
+        lock (_statusGate)
         {
-            StatusChanged?.Invoke(status, text);
-        }
-        catch (Exception ex)
-        {
-            _log.LogWarning("Status handler failed: {Error}", ex.Message);
+            if (_paused != (status == RunnerStatus.Paused))
+                return;
+            Status = status;
+            StatusText = text;
+            try
+            {
+                StatusChanged?.Invoke(status, text);
+            }
+            catch (Exception ex)
+            {
+                _log.LogWarning("Status handler failed: {Error}", ex.Message);
+            }
         }
     }
 
@@ -637,10 +700,20 @@ public sealed class SyncRunner : IAsyncDisposable
             RequestSync("remote-change", delay: _options.RemoteDebounce);
         });
         _hub.On<string, int, bool>("PeerBatch", OnPeerBatch);
+        _hub.On<string, long>("PeerSynced", (device, version) =>
+        {
+            if (!string.Equals(device, _options.DeviceId, StringComparison.OrdinalIgnoreCase))
+                PeerSynced?.Invoke(device, version);
+        });
         _hub.On<string, string>("DeviceRemoved", (id, name) => DeviceListChanged?.Invoke(id, name, true));
         _hub.On<string, string>("DeviceRenamed", (id, name) => DeviceListChanged?.Invoke(id, name, false));
         _hub.On<string, string, string>("PairRequested", (code, name, system) => JoinRequested?.Invoke(code, name, system));
         _hub.On<string, bool>("PairDecided", (code, _) => JoinDecided?.Invoke(code));
+        _hub.On<string, TransferReport>(PushNames.PeerTransfer, (device, report) =>
+        {
+            if (!string.Equals(device, _options.DeviceId, StringComparison.OrdinalIgnoreCase) && report is not null)
+                PeerTransferReceived?.Invoke(device, report.Sanitized());
+        });
         _hub.Reconnecting += _ =>
         {
             ClearHolds(); // the server re-sends active batches when we are back
@@ -648,7 +721,9 @@ public sealed class SyncRunner : IAsyncDisposable
         };
         _hub.Reconnected += _ =>
         {
+            _reportsUnsupported = false; // the server may have been updated meanwhile
             _log.LogInformation("Push channel reconnected");
+            ReportSynced(again: true); // a restarted server forgot it
             RequestSync("hub-reconnected");
             return Task.CompletedTask;
         };
@@ -669,7 +744,9 @@ public sealed class SyncRunner : IAsyncDisposable
             try
             {
                 await _hub.StartAsync(ct).ConfigureAwait(false);
+                _reportsUnsupported = false;
                 _log.LogInformation("Push channel connected");
+                ReportSynced(again: true);
                 if (attempt > 0)
                     RequestSync("hub-connected");
                 return;

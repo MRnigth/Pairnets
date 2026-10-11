@@ -99,7 +99,8 @@
               <ColumnDefinition Width="*" />
               <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
-            <TextBlock x:Name="AppVersion" Style="{StaticResource MutedSmall}" Margin="10,0,0,0" VerticalAlignment="Center" />
+            <TextBlock x:Name="AppVersion" Style="{StaticResource MutedSmall}" Margin="10,0,8,0" VerticalAlignment="Center"
+                       TextTrimming="CharacterEllipsis" />
             <RadioButton x:Name="NavSettings" Grid.Column="1" Style="{StaticResource Nav}" GroupName="page" Margin="0"
                          ToolTip="Settings" Checked="OnNav">
               <StackPanel Orientation="Horizontal">
@@ -219,6 +220,7 @@
                     <Grid x:Name="StatusBadgeHost" Width="48" Height="48" VerticalAlignment="Center" Margin="0,0,16,0">
                       <Ellipse x:Name="StatusBadge" Fill="{StaticResource S.Grey}" />
                       <ui:LineIcon x:Name="StatusGlyph" Width="23" Height="23" StrokeThickness="2.6" Stroke="White" Data="{StaticResource I.CloudOff}" />
+                      <ui:LineIcon x:Name="StatusGlyph2" Width="23" Height="23" StrokeThickness="2.6" Stroke="White" Data="{StaticResource I.Down}" Visibility="Collapsed" />
                     </Grid>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
                       <TextBlock x:Name="Headline" Style="{StaticResource H1}" Text="Starting…" />
@@ -543,7 +545,7 @@
             <ScrollViewer x:Name="DevicesPanel" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Visibility="Collapsed">
               <ItemsControl x:Name="DevicesList" Style="{StaticResource PlainList}">
                 <ItemsControl.ItemTemplate>
-                  <DataTemplate DataType="{x:Type c:DeviceRow}">
+                  <DataTemplate DataType="{x:Type c:DeviceRowView}">
                     <Border Style="{StaticResource Row}" Padding="10" Loaded="OnRowLoaded">
                       <Grid>
                         <Grid.ColumnDefinitions>

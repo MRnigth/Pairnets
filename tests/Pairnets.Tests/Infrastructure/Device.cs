@@ -11,26 +11,40 @@ public sealed class Device : IAsyncDisposable
 {
     private readonly TempDir _folder;
     private readonly TempDir _stateDir;
+    private readonly Func<StateDb, PairnetsApiClient, SyncEngine> _makeEngine;
+    private readonly Func<PairnetsApiClient> _makeApi;
 
+    /// <param name="requests">Records every request this computer's API client sends (also after <see cref="RestartAppAsync"/>).</param>
+    /// <param name="configureApi">Applied to the API client (also after a restart), e.g. shorter retries.</param>
+    /// <param name="resumeDownloadsFrom">Downloads of files at least this big continue where they stopped (default: the app's).</param>
     public Device(string name, TestServer server, Uri? url = null, string? token = null, TimeSpan? stability = null,
-        IReadOnlyList<string>? extraIgnore = null, TimeProvider? clock = null, int parallel = 4, long? pieceSize = null)
+        IReadOnlyList<string>? extraIgnore = null, TimeProvider? clock = null, int parallel = 4, long? pieceSize = null,
+        RequestLog? requests = null, Action<PairnetsApiClient>? configureApi = null, long? resumeDownloadsFrom = null)
     {
         Name = name;
         Server = server;
         _folder = new TempDir(name);
         _stateDir = new TempDir(name + "-state");
-        State = new StateDb(Path.Combine(_stateDir.Path, "state.db"));
         Url = url ?? server.Url;
         Token = token ?? server.Token;
-        Api = new PairnetsApiClient(Url, Token, name, stallTimeout: TimeSpan.FromSeconds(20), pieceSize: pieceSize);
-        Engine = new SyncEngine(new EngineOptions
+        _makeApi = () =>
+        {
+            var api = new PairnetsApiClient(Url, Token, name, requests?.Handler(), stallTimeout: TimeSpan.FromSeconds(20), pieceSize: pieceSize);
+            configureApi?.Invoke(api);
+            return api;
+        };
+        _makeEngine = (state, api) => new SyncEngine(new EngineOptions
         {
             Folder = _folder.Path,
             DeviceName = name,
             StabilityWindow = stability ?? TimeSpan.Zero,
             ExtraIgnore = extraIgnore ?? [],
             MaxParallelTransfers = parallel,
-        }, Api, State, clock: clock, hooks: Hooks);
+            ResumeDownloadsFrom = resumeDownloadsFrom ?? new EngineOptions { Folder = ".", DeviceName = "x" }.ResumeDownloadsFrom,
+        }, api, state, clock: clock, hooks: Hooks);
+        State = new StateDb(StatePath);
+        Api = _makeApi();
+        Engine = _makeEngine(State, Api);
     }
 
     public string Name { get; }
@@ -38,9 +52,28 @@ public sealed class Device : IAsyncDisposable
     public Uri Url { get; }
     public string Token { get; }
     public string Folder => _folder.Path;
-    public StateDb State { get; }
-    public PairnetsApiClient Api { get; }
-    public SyncEngine Engine { get; }
+    public string StatePath => Path.Combine(_stateDir.Path, "state.db");
+    public StateDb State { get; private set; }
+    public PairnetsApiClient Api { get; private set; }
+    public SyncEngine Engine { get; private set; }
+
+    /// <summary>
+    /// Closes and starts the app again: the runner stops, and a new state.db connection, API client and engine
+    /// are made for the same folder and state (nothing is kept in memory).
+    /// </summary>
+    public async Task RestartAppAsync()
+    {
+        if (Runner is not null)
+        {
+            await Runner.DisposeAsync();
+            Runner = null;
+        }
+        Api.Dispose();
+        State.Dispose();
+        State = new StateDb(StatePath);
+        Api = _makeApi();
+        Engine = _makeEngine(State, Api);
+    }
     public EngineHooks Hooks { get; } = new();
     public SyncRunner? Runner { get; private set; }
 

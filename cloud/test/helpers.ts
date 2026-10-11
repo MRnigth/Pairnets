@@ -12,6 +12,7 @@ import { randomBytes } from "../src/crypto";
 import type { Env } from "../src/env";
 import type { MailMessage, Mailer } from "../src/mail";
 import { signRequest, type NestPurpose } from "../src/nestsig";
+import { RELAY_DEVICE_PER_MINUTE, RELAY_IP_PER_MINUTE, RELAY_LIMIT_PERIOD, RELAY_PER_MINUTE } from "../src/relay";
 import { TURNSTILE_VERIFY_URL } from "../src/turnstile";
 import { CF_ACCOUNT, CF_TOKEN, FakeCloudflare, type FakeNestServer, RelayWorld } from "./fake-relay";
 
@@ -117,6 +118,42 @@ export interface CallOptions {
 
 const MUTATING = new Set(["POST", "PATCH", "PUT", "DELETE"]);
 
+/**
+ * A Workers Rate Limiting binding that counts like Cloudflare's (fixed windows of `period` seconds, refused once `limit`
+ * were let through), but on the harness clock and fresh for every test: the test runtime's own binding counts on the
+ * wall clock and keeps its counts from one test to the next.
+ */
+export class CountingLimit {
+  /** Every key asked about, in order. */
+  readonly keys: string[] = [];
+  private readonly counts = new Map<string, { window: number; count: number }>();
+
+  constructor(
+    readonly limit: number,
+    private readonly clock: { now: number },
+    readonly period = RELAY_LIMIT_PERIOD,
+  ) {}
+
+  /** Pretends `count` requests under `key` were already let through in the current window. */
+  set(key: string, count: number): void {
+    this.counts.set(key, { window: Math.floor(this.clock.now / this.period), count });
+  }
+
+  binding(): RateLimit {
+    return {
+      limit: async ({ key }: RateLimitOptions) => {
+        this.keys.push(key);
+        const window = Math.floor(this.clock.now / this.period);
+        const seen = this.counts.get(key);
+        const count = seen && seen.window === window ? seen.count : 0;
+        if (count >= this.limit) return { success: false };
+        this.counts.set(key, { window, count: count + 1 });
+        return { success: true };
+      },
+    };
+  }
+}
+
 export class Harness {
   readonly mailer = new FakeMailer();
   readonly net = new FakeNet();
@@ -124,6 +161,12 @@ export class Harness {
   readonly worker = createWorker({ mailer: this.mailer, fetch: this.net.fetch, now: () => this.clock.now });
   readonly cf = new FakeCloudflare();
   readonly world = new RelayWorld(this.cf, this.clock);
+  /** The relay's rate limits, unless a test passed its own bindings (relay.ts). */
+  readonly limits = {
+    address: new CountingLimit(RELAY_PER_MINUTE, this.clock),
+    device: new CountingLimit(RELAY_DEVICE_PER_MINUTE, this.clock),
+    fail: new CountingLimit(RELAY_IP_PER_MINUTE, this.clock),
+  };
   turnstileAnswer = true;
 
   private constructor(
@@ -163,6 +206,9 @@ export class Harness {
     };
     const h = new Harness(env, signing, hbMaster);
     if (!overrides.ROUTER) h.env.ROUTER = h.world.binding();
+    if (!("RELAY_LIMIT" in overrides)) h.env.RELAY_LIMIT = h.limits.address.binding();
+    if (!("RELAY_DEVICE_LIMIT" in overrides)) h.env.RELAY_DEVICE_LIMIT = h.limits.device.binding();
+    if (!("RELAY_FAIL_LIMIT" in overrides)) h.env.RELAY_FAIL_LIMIT = h.limits.fail.binding();
     return h;
   }
 

@@ -42,6 +42,7 @@ public sealed partial class ApiTour
             await ComputersJoinAsync();
             await FilesAsync();
             await BigBatchesAsync();
+            await LiveReportsAsync();
             await RenamingAsync();
             await RemovingAsync();
             await SharedTokenAsync();
@@ -400,6 +401,22 @@ public sealed partial class ApiTour
         await late.StopAsync();
         await _laptopHub.InvokeAsync(nameof(SyncHub.BatchFinished));
         await _desktopHub.WaitForAsync(SyncHub.PeerBatchMethod, a => Equals(a[0], _laptop.Name) && Equals(a[1], 0) && Equals(a[2], false));
+    }
+
+    private async Task LiveReportsAsync()
+    {
+        Step("Live speeds and \"has your changes\": a computer's report and its synced version reach the others, also one that connects later");
+        var moving = new TransferReport(3_000_000, 0, 2, 10, 1_000, 10_000, Uploading: true);
+        await _laptopHub.InvokeAsync(nameof(SyncHub.ReportTransfer), moving);
+        await _desktopHub.WaitForAsync(SyncHub.PeerTransferMethod, a => Equals(a[0], _laptop.Name) && a[1] is TransferReport { Uploading: true, FilesTotal: 10 });
+        await _laptopHub.InvokeAsync(nameof(SyncHub.Synced), 7L);
+        await _desktopHub.WaitForAsync(SyncHub.PeerSyncedMethod, a => Equals(a[0], _laptop.Name) && Equals(a[1], 7L));
+        var late = await Listen($"{_tablet.Name}'s push channel", _tablet.Key, _tablet.Name);
+        await late.WaitForAsync(SyncHub.PeerTransferMethod, a => Equals(a[0], _laptop.Name) && a[1] is TransferReport { Uploading: true });
+        await late.WaitForAsync(SyncHub.PeerSyncedMethod, a => Equals(a[0], _laptop.Name) && Equals(a[1], 7L));
+        await late.StopAsync();
+        await _laptopHub.InvokeAsync(nameof(SyncHub.ReportTransfer), TransferReport.Idle);
+        await _desktopHub.WaitForAsync(SyncHub.PeerTransferMethod, a => Equals(a[0], _laptop.Name) && a[1] is TransferReport { IsActive: false });
     }
 
     // ------------------------------------------------------------------ renaming and removing computers

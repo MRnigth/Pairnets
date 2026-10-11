@@ -11,10 +11,10 @@ public sealed class FakeEmailSender : IEmailSender
 {
     public sealed record Sent(string To, string Subject, string Text, string Html)
     {
-        /// <summary>The sign-in link in the message, and the code after "#code=".</summary>
+        /// <summary>The sign-in link in the message ("" for a mail with none, like the welcome), and the code after "#code=".</summary>
         public string Link => Regex.Match(Text, @"https://\S+/email-link#code=\S+").Value;
 
-        public string Code => Link[(Link.IndexOf("#code=", StringComparison.Ordinal) + 6)..].Split('&')[0];
+        public string Code => Link.Length == 0 ? string.Empty : Link[(Link.IndexOf("#code=", StringComparison.Ordinal) + 6)..].Split('&')[0];
     }
 
     private readonly List<Sent> _messages = [];

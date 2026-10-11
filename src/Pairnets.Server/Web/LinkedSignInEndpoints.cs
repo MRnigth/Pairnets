@@ -3,6 +3,7 @@ using System.Net.Mail;
 using Microsoft.AspNetCore.Mvc;
 using Pairnets.Core;
 using Pairnets.Server.Auth;
+using Pairnets.Server.Mail;
 using Pairnets.Server.Storage;
 
 namespace Pairnets.Server.Web;
@@ -41,7 +42,8 @@ public static class LinkedSignInEndpoints
             return Results.NoContent();
         }).RequireRateLimiting(PairingEndpoints.RateLimitPolicy);
 
-        open.MapPost("/signin/email/confirm", (HttpContext ctx, CodeBody? body, OwnerAuth owner, FailureThrottle throttle, ILogger<OwnerAuth> log) =>
+        open.MapPost("/signin/email/confirm", async (HttpContext ctx, CodeBody? body, OwnerAuth owner, IEmailSender sender, FailureThrottle throttle,
+            ILogger<OwnerAuth> log, CancellationToken ct) =>
         {
             var address = ctx.Connection.RemoteIpAddress ?? IPAddress.None;
             if (owner.Store.UseEmailLink(body?.Code) is not { } link)
@@ -50,10 +52,17 @@ public static class LinkedSignInEndpoints
                 log.LogWarning("An email link was refused (used, expired or wrong) from {Address} ({Failures} recent failure(s))", address, failures);
                 return Error(StatusCodes.Status400BadRequest, ErrorCodes.Unauthorized, "This link was already used or has expired. Ask for a new one.");
             }
+            var welcome = false;
             if (link.Purpose == EmailLinkPurpose.Confirm)
+            {
+                // A welcome only for an address that is new to the nest: confirming the same one again says nothing more.
+                welcome = !string.Equals(owner.Store.OwnerEmail, link.Email, StringComparison.OrdinalIgnoreCase);
                 owner.Store.SetOwnerEmail(link.Email);
+            }
             owner.SignIn(ctx, "email link");
             log.LogInformation("Signed in to the nest's website with an email link from {Address}", address);
+            if (welcome)
+                await SendWelcomeAsync(owner, sender, link.Email, log, ct);
             return Results.NoContent();
         }).RequireRateLimiting(PairingEndpoints.RateLimitPolicy);
 
@@ -151,15 +160,32 @@ public static class LinkedSignInEndpoints
         // (approving a computer, say). Both stay out of server logs, and only paths on this site are accepted.
         var url = $"{owner.PublicUrl}/email-link#code={code}" + (next is null ? string.Empty : "&next=" + Uri.EscapeDataString(next));
         var host = owner.Options.PublicHost ?? "your nest";
-        var (subject, intro) = purpose == EmailLinkPurpose.Confirm
-            ? ("Confirm your email for Pairnets", $"Someone (hopefully you) asked to use this address for sign-in links to {host}.")
-            : ("Your Pairnets sign-in link", $"Someone (hopefully you) asked to sign in to {host}.");
-        var text = $"{intro}\n\nOpen this link to continue. It works once, for 15 minutes:\n{url}\n\nDidn't ask? Ignore this email: nothing happens unless the link is opened.";
-        var html = $"<p>{WebUtility.HtmlEncode(intro)}</p><p><a href=\"{url}\" style=\"display:inline-block;padding:10px 18px;background:#2563EB;color:#fff;border-radius:8px;text-decoration:none;font-weight:600\">Continue</a></p>" +
-                   "<p style=\"color:#6B7280\">It works once, for 15 minutes. Didn't ask? Ignore this email: nothing happens unless the link is opened.</p>";
-        await sender.SendAsync(address, subject, text, html, ct);
+        var email = purpose == EmailLinkPurpose.Confirm
+            ? EmailTemplates.Confirm(NestUrl(owner), host, url)
+            : EmailTemplates.SignIn(NestUrl(owner), host, url);
+        await sender.SendAsync(address, email.Subject, email.Text, email.Html, ct);
         log.LogInformation("A {Purpose} email link was sent", purpose);
     }
+
+    /// <summary>The thank-you after an address is confirmed. It never gets in the way: a mail that cannot go out is only logged.</summary>
+    private static async Task SendWelcomeAsync(OwnerAuth owner, IEmailSender sender, string address, ILogger log, CancellationToken ct)
+    {
+        try
+        {
+            var email = EmailTemplates.Welcome(NestUrl(owner), owner.Options.PublicHost ?? "your nest");
+            using var limit = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            limit.CancelAfter(TimeSpan.FromSeconds(10));
+            await sender.SendAsync(address, email.Subject, email.Text, email.Html, limit.Token);
+            log.LogInformation("A welcome email was sent");
+        }
+        catch (Exception ex) when (ex is SmtpException or InvalidOperationException or IOException or OperationCanceledException)
+        {
+            log.LogWarning("The welcome email could not be sent: {Error}", ex.Message);
+        }
+    }
+
+    private static string NestUrl(OwnerAuth owner) =>
+        owner.PublicUrl ?? throw new InvalidOperationException("The nest has no public address (Sync:PublicUrl).");
 
     private static bool TryAddress(string? text, out string address)
     {

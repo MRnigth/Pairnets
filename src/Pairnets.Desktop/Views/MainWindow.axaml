@@ -65,7 +65,8 @@
             </StackPanel>
           </Border>
           <Grid ColumnDefinitions="*,Auto">
-            <TextBlock x:Name="AppVersion" Classes="muted small" Margin="10,0,0,0" VerticalAlignment="Center" />
+            <TextBlock x:Name="AppVersion" Classes="muted small" Margin="10,0,8,0" VerticalAlignment="Center"
+                       TextTrimming="CharacterEllipsis" />
             <RadioButton x:Name="NavSettings" Grid.Column="1" Classes="nav" GroupName="page"
                          ToolTip.Tip="Settings" IsCheckedChanged="OnNav">
               <StackPanel Orientation="Horizontal" Spacing="7">
@@ -164,6 +165,8 @@
                       <Ellipse x:Name="StatusBadge" Fill="{StaticResource S.Grey}" />
                       <v:LineIcon x:Name="StatusGlyph" Classes="icon white" Width="23" Height="23" StrokeThickness="2.6"
                                   Data="{StaticResource I.CloudOff}" />
+                      <v:LineIcon x:Name="StatusGlyph2" Classes="icon white" Width="23" Height="23" StrokeThickness="2.6"
+                                  Data="{StaticResource I.Down}" IsVisible="False" />
                     </Grid>
                     <StackPanel Grid.Column="1" Spacing="3" VerticalAlignment="Center">
                       <TextBlock x:Name="Headline" Classes="h1" Text="Starting…" />
@@ -429,7 +432,7 @@
             <ScrollViewer x:Name="DevicesPanel" IsVisible="False">
               <ItemsControl x:Name="DevicesList">
                 <ItemsControl.ItemTemplate>
-                  <DataTemplate DataType="c:DeviceRow">
+                  <DataTemplate DataType="c:DeviceRowView">
                     <Border Classes="row enter" Padding="10,10">
                       <Grid ColumnDefinitions="Auto,*,Auto">
                         <Panel Width="40" Height="40" Margin="0,0,14,0">

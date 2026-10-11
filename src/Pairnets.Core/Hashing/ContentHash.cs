@@ -28,6 +28,32 @@ public static class ContentHash
         return (hash, fs.Length);
     }
 
+    /// <summary>Like <see cref="OfFileAsync(string, CancellationToken)"/>, telling <paramref name="progress"/> how many bytes were read so far.</summary>
+    public static async Task<(string Hash, long Length)> OfFileAsync(string fullPath, Action<long>? progress, CancellationToken ct = default)
+    {
+        if (progress is null)
+            return await OfFileAsync(fullPath, ct).ConfigureAwait(false);
+        await using var fs = OpenForSharedRead(fullPath);
+        using var sha = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        var buffer = System.Buffers.ArrayPool<byte>.Shared.Rent(BufferSize);
+        try
+        {
+            long read = 0;
+            int n;
+            while ((n = await fs.ReadAsync(buffer.AsMemory(0, BufferSize), ct).ConfigureAwait(false)) > 0)
+            {
+                sha.AppendData(buffer, 0, n);
+                read += n;
+                progress(read);
+            }
+            return (ToHex(sha.GetHashAndReset()), fs.Length);
+        }
+        finally
+        {
+            System.Buffers.ArrayPool<byte>.Shared.Return(buffer);
+        }
+    }
+
     /// <summary>Opens a file for reading with FileShare.ReadWrite | FileShare.Delete.</summary>
     public static FileStream OpenForSharedRead(string fullPath) =>
         new(fullPath, new FileStreamOptions

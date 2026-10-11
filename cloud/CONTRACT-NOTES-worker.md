@@ -136,8 +136,22 @@ fold into `RELAY.md` or reverse.
 
 ## The relay (RELAY.md 5)
 
-- **Order:** the 600-a-minute limit comes first (before the nest is looked up), then steps 1-5. `/n/*` does not count
-  against the 300-a-minute limit of the rest of the service. Everything under `/n` (also `/n` and `/n/`) answers JSON.
+- **Order:** the 6,000-a-minute limit (step 6) comes first (before the nest is looked up), then steps 1-5. `/n/*` does
+  not count against the 300-a-minute limit of the rest of the service. Everything under `/n` (also `/n` and `/n/`)
+  answers JSON.
+- **Step 6, the limit (choice):** RELAY.md first said 600 a minute per IP, counted in D1. Measured on the live service:
+  two computers in one home share one address and a synced file costs a request on each, so a sync of many small
+  files got dozens of 429s after about 380 files in 40 s. Now three budgets, each counted by a Workers Rate Limiting
+  binding (per Cloudflare location, approximate), never in D1: 20,000 a minute per address for everything
+  (`RELAY_LIMIT`, keyed on `CF-Connecting-IP`), 6,000 a minute per nest and computer key (`RELAY_DEVICE_LIMIT`, keyed on
+  a keyed hash of both, so each computer at home has its own), and 600 a minute per address for keyless and failing
+  requests (`RELAY_FAIL_LIMIT`; going over it turns the address off for 60 s). A refusal is the same
+  `429 rate_limited`, with `Retry-After: 60` (the bindings' period; they give no exact time). Without the bindings (a
+  local run) the relay does not limit and warns once each in the log; it never falls back to D1.
+- **Step 1, the nest row is reused (choice):** each Worker instance keeps the row (or "no such nest") for 30 s, at most
+  1,000 rows (all dropped when full). A removed or unlinked nest is therefore still relayed for up to 30 s by an
+  instance that read it just before. When the router answers `nest_unknown`, the row is read again at once: a nest
+  that is gone gets `404 nest_unknown` (not `503 nest_offline`), and self-heal (below) uses the fresh row.
 - **Step 2, admin paths:** `api/relay` and `api/relay/...` are refused in every spelling the nest's router would still
   match: percent-decoded, dot segments resolved, repeated slashes collapsed, any letter case. A malformed
   percent-encoding is refused too. The allowed prefixes (`api/`, `hub`, `hub/`) are case-sensitive.
@@ -154,15 +168,16 @@ fold into `RELAY.md` or reverse.
   clears its links).
 - **Step 5:** the first answer from the nest (anything that is not a link failure) turns `pending` into `active` with
   `confirmed_at`, in the background; the update only matches `pending` rows, so it is one write per server, ever (no
-  other relay writes to the row). The signed admin calls (account page, app sign-in) also count as "reached", so a
+  other relay writes to the row), and the reused row is marked active at once so the next 30 s of requests do not try
+  again. The signed admin calls (account page, app sign-in) also count as "reached", so a
   server that is only ever used through them is not swept as "never reached".
 - **Answers made inert (choice, security):** relayed answers are served on the account service's own origin, and a
   server is run by whoever installed it. So the relay drops `Set-Cookie`, `Clear-Site-Data` and `Access-Control-*`
   from them, sets the usual security headers with the CSP `default-src 'none'; sandbox; frame-ancestors 'none'`, and
   `Cache-Control: no-store`. Without this, a server could plant a session cookie in a visitor's browser or run a script
   on `sync.pairnets.app`. Apps are not affected. A WebSocket upgrade (`101`) is handed back untouched.
-- **Cost note:** every relayed request is one D1 read (the nest row) and one D1 write (the rate-limit counter). If that
-  costs too much at scale, the per-IP limit can move to a Workers Rate Limiting binding without changing any answer.
+- **Cost note:** a relayed request costs no D1 write (the limit is the Rate Limiting binding's) and at most one D1 read
+  per nest every 30 s per Worker instance (the reused row); the router's `nest_unknown` adds one read.
 
 ## The router and its deploys (RELAY.md 5)
 

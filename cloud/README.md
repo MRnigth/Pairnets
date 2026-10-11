@@ -30,7 +30,7 @@ do not work yet. Released servers and apps do not talk to this service.
 | `test/` | vitest tests in the Workers runtime (Miniflare, local D1). `test/fake-relay.ts` is a fake Cloudflare API, the real router code with fake VPC links, and fake servers that check the signed calls with their own code. `test/vectors/assertion-v1.json` holds the golden vectors that the C# tests also read. |
 | `scripts/keygen.mjs` | `npm run keygen`: prints a new ES256 signing key pair (nothing is written to disk). |
 | `scripts/setup-secrets.mjs` | Sets every secret and id in Cloudflare's secret store: makes the random ones, asks you to paste the rest (hidden). |
-| `wrangler.toml` | `pairnets-sync` settings: the address, the variables, the database by name, the `ROUTER` binding, the hourly Cron, and the list of secrets. It holds no keys and no ids. |
+| `wrangler.toml` | `pairnets-sync` settings: the address, the variables, the database by name, the `ROUTER` binding, the relay's three rate limiters (`RELAY_LIMIT` 20,000 requests a minute per address, `RELAY_DEVICE_LIMIT` 6,000 per computer, `RELAY_FAIL_LIMIT` 600 per address for keyless and failing requests), the hourly Cron, and the list of secrets. It holds no keys and no ids (a rate limiter's `namespace_id` is a number chosen here, not an id of the account). |
 
 ## Running the tests
 
@@ -83,7 +83,8 @@ Do these in order; nothing here is done yet.
    public ids `GOOGLE_CLIENT_ID` and `TURNSTILE_SITE_KEY` (kept out of the code all the same). The script needs the
    Worker to exist, so for a very first setup run step 7 once before it.
 7. **Deploy** `pairnets-sync` (`npx wrangler deploy` in `cloud/`). It makes the database (first time only) and the
-   custom domain `sync.pairnets.app` with its certificate.
+   custom domain `sync.pairnets.app` with its certificate, and sets up the relay's three rate limiters (in
+   `wrangler.toml`); that needs nothing by hand.
 8. The public half of the signing key goes into `src/Pairnets.Server/Auth/HostedKeys.cs` (only for servers on their own
    domain); keep a second "next" key offline for rotation.
 9. **Try it** with one server: run the installer, open the link it prints, choose **Add this nest**, and check that

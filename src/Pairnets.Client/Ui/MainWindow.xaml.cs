@@ -71,8 +71,7 @@ public partial class MainWindow : Window
     private readonly ObservableCollection<ActiveFileView> _active = [];
     private readonly ObservableCollection<ServerFile> _shownFiles = [];
     private readonly ObservableCollection<VersionRow> _versions = [];
-    private readonly ObservableCollection<DeviceRow> _devices = [];
-    private IReadOnlyList<DeviceInfo>? _shownDevices;
+    private readonly ObservableCollection<DeviceRowView> _devices = [];
     private IReadOnlyList<ActivityItem> _activityItems = [];
     private IReadOnlyList<ServerFile>? _serverFiles;
     private DateTimeOffset _serverFilesAt;
@@ -98,7 +97,9 @@ public partial class MainWindow : Window
         FileList.ItemsSource = _shownFiles;
         VersionList.ItemsSource = _versions;
         DevicesList.ItemsSource = _devices;
-        AppVersion.Text = "Pairnets " + PairnetsInfo.ProductVersion + " · " + PairnetsInfo.Copyright;
+        // Just the version, so it never runs under the Settings button; the full line is in Settings → About.
+        AppVersion.Text = "Pairnets " + PairnetsInfo.ProductVersion;
+        AppVersion.ToolTip = PairnetsLinks.AboutLine;
         AppIcon.Source = AppIcons.Large;
         IsVisibleChanged += (_, _) =>
         {
@@ -115,6 +116,9 @@ public partial class MainWindow : Window
 
     /// <summary>This computer's name, marked in the Devices list and shown first in the overview's picture.</summary>
     public string? ThisDevice { get; set; }
+
+    /// <summary>Show the MB/s on the overview picture's lines (Settings: "Show speed on the map").</summary>
+    public bool ShowMapSpeed { get; set; } = true;
 
     protected override void OnClosing(CancelEventArgs e)
     {
@@ -223,9 +227,7 @@ public partial class MainWindow : Window
             ThisDevice = device;
         device ??= ThisDevice;
         ShowDevices(s);
-        var (brush, icon) = s.IsWaiting ? ("S.Grey", "I.Wait") : Visuals.ForStatus(s.Status);
-        StatusBadge.SetResourceReference(Shape.FillProperty, brush);
-        StatusGlyph.Data = Visuals.Resource<Geometry>(icon);
+        var brush = Badge.Show(s, StatusBadge, StatusGlyph, StatusGlyph2, 23, animate: true);
         Tint(brush);
         Animate(s);
         Headline.Text = s.Headline;
@@ -235,6 +237,7 @@ public partial class MainWindow : Window
         PauseGlyph.Data = Visuals.Resource<Geometry>(s.Paused ? "I.Play" : "I.Pause");
         FixButton.Visibility = Show(s.FixLabel is not null);
         FixButton.Content = s.FixLabel;
+        Map.ShowSpeed = ShowMapSpeed;
         Map.Show(DeviceMap.Build(s, device, DateTimeOffset.UtcNow));
 
         // Facts
@@ -257,7 +260,9 @@ public partial class MainWindow : Window
         if (s.IsTransferring)
         {
             TransferTitle.Text = s.BatchTitle;
-            TransferSpeed.Text = s.SpeedText;
+            var stall = s.StallText(DateTimeOffset.UtcNow);
+            TransferSpeed.Text = stall.Length > 0 ? stall : s.SpeedText;
+            TransferSpeed.SetResourceReference(TextBlock.ForegroundProperty, stall.Length > 0 ? "T.WarnText" : "T.Muted");
             LimitPill.Visibility = Show(s.LimitText is not null);
             LimitText.Text = s.LimitText ?? string.Empty;
             Motion.Glide(TransferProgress, s.OverallPercent ?? 0);
@@ -266,10 +271,12 @@ public partial class MainWindow : Window
             ActiveDivider.Visibility = Show(several && s.Active.Count > 0);
             ActiveList.Visibility = Show(several);
             LiveLists.Sync(_active, s.Active);
-            var uploading = s.Active.Count == 0 ? s.Operation != "download" : s.Active.Any(a => a.IsUpload);
+            var uploading = s.GoingUp || !s.GoingDown;
             TransferArrow.Data = Visuals.Resource<Geometry>(uploading ? "I.Up" : "I.Down");
             TransferArrow.SetResourceReference(LineIcon.StrokeProperty, uploading ? "S.Green" : "S.Blue");
-            Motion.Travel(TransferArrow, uploading);
+            var stalled = s.Motion == SyncMotion.Stalled;
+            TransferArrow.Opacity = stalled ? 0.5 : 1;
+            Motion.Travel(TransferArrow, stalled ? null : uploading);
         }
 
         // Waiting for the other computer's big batch.
@@ -281,20 +288,19 @@ public partial class MainWindow : Window
         }
     }
 
-    /// <summary>The Devices page: rebuilt when the server sends a new list.</summary>
+    /// <summary>The Devices page: the server's list, with what each computer moves right now (updated in place).</summary>
     private void ShowDevices(StatusSnapshot s)
     {
         if (s.DevicesUnsupported)
             DevicesEmptyText.Text = "Update the server to see the computers that use it.";
-        if (ReferenceEquals(s.Devices, _shownDevices) || s.Devices is null)
+        if (s.Devices is null)
             return;
-        _shownDevices = s.Devices;
-        _devices.Clear();
-        foreach (var row in DeviceRow.From(s.Devices, ThisDevice, DateTimeOffset.UtcNow))
-            _devices.Add(row);
+        var count = _devices.Count;
+        LiveLists.Sync(_devices, DeviceRow.From(s.Devices, ThisDevice, DateTimeOffset.UtcNow, s));
         if (s.Devices.Count == 0 && !s.DevicesUnsupported)
             DevicesEmptyText.Text = "No computers have used this server yet.";
-        UpdatePanels();
+        if (count != _devices.Count)
+            UpdatePanels();
     }
 
     /// <summary>A soft wash of the status colour across the top of the status card.</summary>
@@ -332,14 +338,13 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Motion for the status badge: the sync glyph turns while syncing, the badge breathes while
-    /// waiting for the other computer, and it pops once whenever the state changes.
+    /// Motion for the status badge (its glyph moves in <see cref="Badge"/>): it breathes while waiting for the
+    /// other computer, and pops once whenever the state changes, also between uploading, downloading and stalled.
     /// </summary>
     private void Animate(StatusSnapshot s)
     {
-        Motion.Spin(StatusGlyph, s.Status == Pairnets.Core.Sync.RunnerStatus.Syncing && !s.IsWaiting);
         Motion.Pulse(StatusBadgeHost, s.IsWaiting);
-        var state = s.IsWaiting ? "waiting" : s.Status.ToString();
+        var state = s.IsWaiting ? "waiting" : s.Status == Pairnets.Core.Sync.RunnerStatus.Syncing ? s.Motion.ToString() : s.Status.ToString();
         if (_shownState is not null && _shownState != state && !s.IsWaiting)
             Motion.Pop(StatusBadgeHost);
         _shownState = state;
@@ -348,6 +353,8 @@ public partial class MainWindow : Window
     private void StopMotion()
     {
         Motion.Spin(StatusGlyph, false);
+        Motion.Travel(StatusGlyph, null);
+        Motion.Travel(StatusGlyph2, null);
         Motion.Pulse(StatusBadgeHost, false);
         Motion.Travel(TransferArrow, null);
         Motion.Bob(UpdateIcon, false);

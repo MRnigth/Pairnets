@@ -74,12 +74,72 @@
       <Setter Property="FontSize" Value="11" />
       <Setter Property="MaxHeight" Value="30" />
     </Style>
+    <Style Selector="TextBlock.detail.down">
+      <Setter Property="Foreground" Value="{DynamicResource T.Accent}" />
+    </Style>
+    <Style Selector="TextBlock.detail.ok">
+      <Setter Property="Foreground" Value="{DynamicResource T.OkText}" />
+    </Style>
+    <!-- The speed on a line, e.g. "↑ 4.9 MB/s" (Settings: "Show speed on the map"). -->
+    <Style Selector="Border.rate">
+      <Setter Property="HorizontalAlignment" Value="Center" />
+      <Setter Property="VerticalAlignment" Value="Top" />
+      <Setter Property="Margin" Value="0,3,0,0" />
+      <Setter Property="Padding" Value="7,0,7,1" />
+      <Setter Property="CornerRadius" Value="9" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="Background" Value="{DynamicResource T.Card}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource T.Border}" />
+      <Setter Property="IsHitTestVisible" Value="False" />
+    </Style>
+    <Style Selector="Border.rate.stalled">
+      <Setter Property="Background" Value="{DynamicResource T.WarnPill}" />
+    </Style>
+    <Style Selector="Border.rate TextBlock">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="{DynamicResource T.Text}" />
+    </Style>
+    <Style Selector="Border.rate.up TextBlock">
+      <Setter Property="Foreground" Value="{DynamicResource T.OkText}" />
+    </Style>
+    <Style Selector="Border.rate.down TextBlock">
+      <Setter Property="Foreground" Value="{DynamicResource T.Accent}" />
+    </Style>
+    <Style Selector="Border.rate.stalled TextBlock">
+      <Setter Property="Foreground" Value="{DynamicResource T.WarnText}" />
+    </Style>
+    <!-- The other computer: a ring grows out of it while it downloads, a check mark once it has this computer's change. -->
+    <Style Selector="Ellipse.halo">
+      <Setter Property="Stroke" Value="{StaticResource S.Blue}" />
+      <Setter Property="StrokeThickness" Value="2" />
+      <Setter Property="IsHitTestVisible" Value="False" />
+    </Style>
+    <Style Selector="Ellipse.ring.downloading">
+      <Setter Property="Stroke" Value="{StaticResource S.Blue}" />
+      <Setter Property="StrokeThickness" Value="2" />
+    </Style>
+    <Style Selector="Panel.tick">
+      <Setter Property="Width" Value="20" />
+      <Setter Property="Height" Value="20" />
+      <Setter Property="Margin" Value="0,0,-3,-3" />
+    </Style>
+    <Style Selector="Grid#Root.compact Panel.tick">
+      <Setter Property="Width" Value="16" />
+      <Setter Property="Height" Value="16" />
+    </Style>
   </UserControl.Styles>
 
   <Grid x:Name="Root" ColumnDefinitions="150,*,150,*,150">
     <!-- Lines first, so the circles sit on top of their ends. -->
     <v:FlowLine x:Name="HereLine" Grid.Column="1" />
     <v:FlowLine x:Name="OtherLine" Grid.Column="3" ServerOnLeft="True" />
+    <Border x:Name="HereRatePill" Grid.Column="1" Classes="rate" IsVisible="False">
+      <TextBlock x:Name="HereRate" />
+    </Border>
+    <Border x:Name="OtherRatePill" Grid.Column="3" Classes="rate" IsVisible="False">
+      <TextBlock x:Name="OtherRate" />
+    </Border>
 
     <StackPanel Grid.Column="0" HorizontalAlignment="Stretch">
       <Panel Classes="node" HorizontalAlignment="Center">
@@ -103,9 +163,14 @@
 
     <StackPanel Grid.Column="4" HorizontalAlignment="Stretch">
       <Panel Classes="node" HorizontalAlignment="Center">
+        <Ellipse x:Name="OtherHalo" Classes="halo" IsVisible="False" />
         <Ellipse x:Name="OtherRing" Classes="ring" />
         <v:LineIcon x:Name="OtherIcon" Classes="icon glyph" Data="{StaticResource I.Computer}" />
         <Ellipse x:Name="OtherDot" Classes="dot" Fill="{StaticResource S.Green}" HorizontalAlignment="Right" VerticalAlignment="Bottom" />
+        <Panel x:Name="OtherTick" Classes="tick" HorizontalAlignment="Right" VerticalAlignment="Bottom" IsVisible="False">
+          <Ellipse Classes="dot" Width="NaN" Height="NaN" Fill="{StaticResource S.Green}" />
+          <v:LineIcon Classes="icon white" Width="10" Height="10" StrokeThickness="3" Data="{StaticResource I.Check}" />
+        </Panel>
       </Panel>
       <TextBlock x:Name="OtherName" Classes="name" />
       <TextBlock x:Name="OtherDetail" Classes="detail" />

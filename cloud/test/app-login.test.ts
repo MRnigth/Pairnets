@@ -15,7 +15,7 @@ describe("app-login", () => {
   it("device-code flow: start, choose the server, allow, and the first poll brings a device key once", async () => {
     const { h, b, app } = await setup();
     const nest = await addServer(h, b, { label: "soro" });
-    const start = await app.call("POST", "/v1/app/start", { body: { name: "Marcus' laptop", system: "Windows 11", appVersion: "1.0.47" } });
+    const start = await app.call("POST", "/v1/app/start", { body: { name: "Alex's laptop", system: "Windows 11", appVersion: "1.0.47" } });
     expect(start.status).toBe(200);
     expect(start.json).toEqual({
       deviceCode: expect.stringMatching(/^pcd_[A-Za-z0-9_-]{43}$/),
@@ -30,15 +30,17 @@ describe("app-login", () => {
 
     const page = await b.call("GET", `/app?code=${userCode}`);
     expect(page.status).toBe(200);
-    expect(page.text).toContain("Marcus&#39; laptop");
+    expect(page.text).toContain("Alex&#39;s laptop");
     expect(page.text).toContain("Windows 11");
     expect(page.text).toContain(userCode);
-    expect(page.text).toContain(`<input type="radio" name="nest" value="${nest.nestId}" checked> soro`);
+    // One nest: nothing to choose, the page names it and app.js sends it.
+    expect(page.text).toContain(`data-nest="${nest.nestId}"`);
+    expect(page.text).toContain("It will sync with <b>soro</b>");
     expect(page.text).toContain('id="approve"');
     const req = await b.call("GET", `/v1/app/requests/${userCode.toLowerCase()}`);
     expect(req.json).toEqual({
       userCode,
-      name: "Marcus' laptop",
+      name: "Alex's laptop",
       system: "Windows 11",
       appVersion: "1.0.47",
       createdAt: "2026-10-09T00:00:03Z",
@@ -56,13 +58,13 @@ describe("app-login", () => {
       expiresIn: 3600,
       email: "you@example.com",
       nest: { id: nest.nestId, label: "soro", serverUrl: `https://sync.pairnets.app/n/${nest.nestId}/` },
-      device: { id: expect.any(String), name: "Marcus' laptop", key: expect.stringMatching(/^pn_/) },
+      device: { id: expect.any(String), name: "Alex's laptop", key: expect.stringMatching(/^pn_/) },
     });
     // The nest made exactly that device, approved by the masked account address; the service kept no key.
     expect([...nest.devices.values()]).toEqual([
       expect.objectContaining({
         id: done.json.device.id,
-        name: "Marcus' laptop",
+        name: "Alex's laptop",
         system: "Windows 11",
         key: done.json.device.key,
         approvedBy: "approved by y***@example.com on sync.pairnets.app",
@@ -81,7 +83,7 @@ describe("app-login", () => {
     expect((await app.call("GET", "/v1/nests", { headers: { Authorization: `Bearer ${token}` } })).json).toEqual({ nests: [] });
     // The account sees the app in its sessions list, with the computer's name.
     const sessions = (await b.call("GET", "/v1/sessions")).json.sessions;
-    expect(sessions.find((s: { kind: string }) => s.kind === "app").deviceName).toBe("Marcus' laptop");
+    expect(sessions.find((s: { kind: string }) => s.kind === "app").deviceName).toBe("Alex's laptop");
 
     expect((await app.call("POST", "/v1/app/logout", { headers: { Authorization: `Bearer ${token}` } })).status).toBe(204);
     expect((await app.call("GET", "/v1/me", { headers: { Authorization: `Bearer ${token}` } })).status).toBe(401);
@@ -238,13 +240,13 @@ describe("app-login", () => {
     expect((await stranger.call("GET", "/app?code=<script>")).location).toBe("/login?next=%2Fapp");
     await stranger.signInByEmail("stranger@example.com");
     const page = await stranger.call("GET", "/app?code=NOPE-NOPE");
-    expect(page.text).toContain("That code is not valid or has expired.");
-    expect((await stranger.call("GET", "/app")).text).toContain("Code shown by the app");
+    expect(page.text).toContain("That code didn't work");
+    expect((await stranger.call("GET", "/app")).text).toContain("Code shown by Pairnets");
     expect((await stranger.call("GET", `/v1/app/requests/${s.json.userCode}`, { headers: {} })).status).toBe(200);
     expect((await h.client().call("GET", `/v1/app/requests/${s.json.userCode}`)).status).toBe(401);
     // With no nest yet, the page says so, says how to set one up, and still offers Allow (the app then waits).
     const none = await stranger.call("GET", `/app?code=${s.json.userCode}`);
-    expect(none.text).toContain("This account has no nest yet.");
+    expect(none.text).toContain("You don't have a nest yet.");
     expect(none.text).toContain("curl -fsSL https://pairnets.app/get.sh | sudo bash");
     expect(none.text).toContain('id="approve"');
     expect(none.text).toContain('id="deny"');
@@ -282,8 +284,8 @@ describe("app-login", () => {
     const two = await addServer(h, b, { label: "Office <NAS>", ip: "198.51.100.42" });
     const s = await app.call("POST", "/v1/app/start", { body: { name: "Laptop" } });
     const page = await b.call("GET", `/app?code=${s.json.userCode}`);
-    expect(page.text).toContain(`<input type="radio" name="nest" value="${one.nestId}" checked> Basement`);
-    expect(page.text).toContain(`<input type="radio" name="nest" value="${two.nestId}"> Office &lt;NAS&gt;`);
+    expect(page.text).toContain(`<input type="radio" name="nest" value="${one.nestId}" data-label="Basement" checked> Basement`);
+    expect(page.text).toContain(`<input type="radio" name="nest" value="${two.nestId}" data-label="Office &lt;NAS&gt;"> Office &lt;NAS&gt;`);
   });
 
   it("start checks the name and is limited to 10 an hour per IP", async () => {

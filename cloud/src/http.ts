@@ -1,7 +1,7 @@
 // Responses, uniform errors and the headers every response carries (CONTRACT.md sections 6.1 and 6.8, RELAY.md 5).
 
 export const CSP =
-  "default-src 'none'; script-src 'self' https://challenges.cloudflare.com; style-src 'self'; img-src 'self' data:; " +
+  "default-src 'none'; script-src 'self' https://challenges.cloudflare.com; style-src 'self'; img-src 'self' data:; font-src 'self'; " +
   "connect-src 'self'; frame-src https://challenges.cloudflare.com; form-action 'self'; base-uri 'none'; frame-ancestors 'none'";
 
 export const SECURITY_HEADERS: Record<string, string> = {

@@ -45,9 +45,12 @@ public static class PairnetsServerHost
         builder.Services.AddSingleton(new ServerPaths(options.DataDir));
         builder.Services.AddSingleton<SyncStore>();
         builder.Services.AddSingleton<UploadSessions>();
+        builder.Services.AddSingleton<RestoreJobs>();
         builder.Services.AddSingleton<FailureThrottle>();
         builder.Services.AddSingleton<ServerUpdater>();
         builder.Services.AddSingleton<BatchRegistry>();
+        builder.Services.AddSingleton<LiveTransfers>();
+        builder.Services.AddSingleton<SyncedRegistry>();
         builder.Services.AddSingleton<DeviceRegistry>();
         builder.Services.AddSingleton<TlsCertificateStore>();
         builder.Services.AddSingleton(sp => new AuthStore(sp.GetRequiredService<ServerPaths>()));
@@ -87,6 +90,7 @@ public static class PairnetsServerHost
         var store = app.Services.GetRequiredService<SyncStore>();
         store.UploadStallTimeout = options.UploadStallTimeout;
         store.Initialize();
+        app.Services.GetRequiredService<UploadSessions>(); // takes up the uploads kept over a restart now (after tmp/ was cleaned)
         var auth = app.Services.GetRequiredService<AuthStore>(); // opens (or creates) auth.db now, so a problem stops the start
         // "pairnets-server owner-link" runs without the service's environment; it reads the nest's address from here.
         if (options.PublicUrl is { } publicUrl)

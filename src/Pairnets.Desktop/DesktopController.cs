@@ -446,9 +446,8 @@ public sealed class DesktopController : ITrayActions, IDisposable
         var status = _session?.Status ?? StatusSnapshot.Initial with { Text = "Not set up yet: open Settings" };
         if (_trayMenu is not null)
         {
-            var line = status.IsTransferring
-                ? $"{PathRules.FileName(status.CurrentPath!)}{(status.Percent is { } p ? $" {p}%" : string.Empty)}"
-                : status.Text;
+            // What it is doing in one line: "Checking files · 12,000 of 38,206", "Uploading · 37 of 120 files · 4.90 MB/s · …".
+            var line = status.StatusLine;
             if (_tray is not null)
             {
                 if (_shownStatus != status.Status)
@@ -470,6 +469,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
                     $"You have {PairnetsInfo.ProductVersion}. Download it and replace the app (your settings are kept).", "Download");
             else
                 _window.ShowUpdate(null, string.Empty, string.Empty);
+            _window.ShowMapSpeed = _settings.ShowMapSpeed;
             _window.ShowStatus(status, _settings.Folder, _settings.DeviceName);
             _window.ShowActivity(_session?.Activity.Items ?? []);
             _window.ShowAttention(BuildAttention(status));

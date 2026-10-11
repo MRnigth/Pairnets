@@ -58,12 +58,42 @@ public class ActivityAndStatusTests
     }
 
     [Fact]
+    public void WhileTheFolderIsLookedThroughItSaysSoWithCounts()
+    {
+        var s = StatusSnapshot.Initial with { Status = RunnerStatus.Syncing, Text = "Syncing", Scan = new ScanProgress(12400, 310, null, 0, 0) };
+        Assert.True(s.IsChecking);
+        Assert.Equal("Checking files", s.Headline);
+        Assert.Equal("12,400 files checked, 310 new or changed", s.DetailText);
+
+        // A big file being read says which, and how far.
+        var reading = s with { Scan = new ScanProgress(12400, 311, "models/model-00001.safetensors", 1288490189, 3972844748) };
+        Assert.Equal("12,400 files checked, 311 new or changed · reading model-00001.safetensors (1.20 GB of 3.70 GB)", reading.DetailText);
+
+        // Small files go by too fast to name; nothing read yet says only the count.
+        Assert.Equal("1 file checked", (s with { Scan = new ScanProgress(1, 0, "a.txt", 10, 100) }).DetailText);
+
+        // Once transfers run, or the pass is over, it is no longer "checking".
+        Assert.False((s with { CurrentPath = "a.txt" }).IsChecking);
+        Assert.False((s with { Status = RunnerStatus.Idle, Text = "Up to date" }).IsChecking);
+        Assert.Equal("Up to date", (s with { Status = RunnerStatus.Idle, Text = "Up to date" }).Headline);
+    }
+
+    [Fact]
+    public void WhileTheServerAskedToSlowDownTheSpeedLineSaysWhy()
+    {
+        var s = StatusSnapshot.Initial with { Status = RunnerStatus.Syncing, CurrentPath = "a.txt", BytesPerSecond = 2_000_000 };
+        Assert.Contains("/s", s.SpeedText);
+        Assert.Equal("Waiting a moment: the server asked Pairnets to slow down", (s with { SlowedUntil = DateTimeOffset.UtcNow.AddSeconds(30) }).SpeedText);
+        Assert.Contains("/s", (s with { SlowedUntil = DateTimeOffset.UtcNow.AddSeconds(-1) }).SpeedText);
+    }
+
+    [Fact]
     public void SnapshotComputesPercentHeadlineAndFix()
     {
         var s = StatusSnapshot.Initial with { Status = RunnerStatus.Syncing, CurrentPath = "big.bin", BytesDone = 50, BytesTotal = 200 };
         Assert.Equal(25, s.Percent);
         Assert.True(s.IsTransferring);
-        Assert.Equal("Syncing…", s.Headline);
+        Assert.Equal("Syncing…", s.Headline); // no upload or download listed yet
         Assert.Null((s with { BytesTotal = 0 }).Percent);
         Assert.Equal("Not synced yet", s.LastSyncText);
 

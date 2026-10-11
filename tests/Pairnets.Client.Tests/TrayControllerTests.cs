@@ -196,7 +196,12 @@ public sealed class TrayControllerTests
 
         await app.WaitUntil(() => main.RestoreMessage.IsVisible, "History to say it restored the file");
         Assert.StartsWith("Restored.", await app.Wpf.Ui(() => main.RestoreMessageText.Text));
-        await app.WaitUntil(() => File.ReadAllText(notes) == "version one", "the old version to come back into the folder");
+        // The app may still be writing the file when we look (Windows then refuses the read): look again.
+        await app.WaitUntil(() =>
+        {
+            try { return File.ReadAllText(notes) == "version one"; }
+            catch (IOException) { return false; }
+        }, "the old version to come back into the folder");
     }
 
     [Fact]
@@ -437,7 +442,7 @@ public sealed class TrayControllerTests
         var main = app.Tray.Window!;
 
         await app.Press(main, "Devices");
-        await app.WaitUntil(() => main.DevicesList.Items.Cast<DeviceRow>().Any(d => d.Title.Contains("DESKTOP", StringComparison.Ordinal)), "this computer in the Devices list");
+        await app.WaitUntil(() => main.DevicesList.Items.Cast<DeviceRowView>().Any(d => d.Title.Contains("DESKTOP", StringComparison.Ordinal)), "this computer in the Devices list");
         await app.Press(main, "+ Add a computer…");
         var steps = Assert.Single(app.Dialogs.Asked.Items);
         Assert.Contains("type localhost and press \"Sign in with your browser\"", steps.Text);

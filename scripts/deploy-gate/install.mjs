@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 // Installs the Pairnets deploy gate on this computer (see docs/PREDEPLOY.md):
-//   1. copies deploy-gate.mjs and classify.mjs to ~/.claude/hooks/pairnets-deploy-gate/
+//   1. copies deploy-gate.mjs, classify.mjs and scripts/check-secrets.sh to ~/.claude/hooks/pairnets-deploy-gate/
 //   2. adds its PreToolUse hook to ~/.claude/settings.json (the old file is kept as settings.json.bak-<time>),
 //      so every coding-assistant session on this computer, in every worktree, goes through it
-//   3. puts the git pre-push hook into this repository's hooks folder, which all its worktrees share
+//   3. puts the git pre-push hook into this repository's hooks folder, which all its worktrees share. It scans what
+//      every push sends for secrets (with the copied check-secrets.sh) and holds back releases without a pass record
 //
 //   node scripts/deploy-gate/install.mjs              install or update
 //   node scripts/deploy-gate/install.mjs --check      say whether everything is in place
@@ -19,13 +20,19 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const assistantDir = process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude');
 const hookDir = path.join(assistantDir, 'hooks', 'pairnets-deploy-gate');
 const settingsFile = path.join(assistantDir, 'settings.json');
-const FILES = ['deploy-gate.mjs', 'classify.mjs'];
+// Installed name -> this checkout's file. Shell scripts get LF endings, or bash refuses them.
+const FILES = {
+  'deploy-gate.mjs': path.join(here, 'deploy-gate.mjs'),
+  'classify.mjs': path.join(here, 'classify.mjs'),
+  'check-secrets.sh': path.join(here, '..', 'check-secrets.sh'),
+};
 const MARK = 'pairnets-deploy-gate';
 // Coding-assistant versions from this one on can be told to block (not allow) a tool call when the hook itself fails.
 const ON_FAILURE_SINCE = [2, 1, 295];
 
 const fwd = p => p.replace(/\\/g, '/');
-const hash = f => crypto.createHash('sha256').update(fs.readFileSync(f)).digest('hex');
+const contents = f => (f.endsWith('.sh') ? fs.readFileSync(f, 'utf8').replace(/\r\n/g, '\n') : fs.readFileSync(f));
+const hash = f => crypto.createHash('sha256').update(contents(f)).digest('hex');
 
 function git(args, cwd = process.cwd()) {
   const r = spawnSync('git', args, { cwd, encoding: 'utf8', windowsHide: true });
@@ -88,7 +95,7 @@ function prePushTarget() {
 
 function install() {
   fs.mkdirSync(hookDir, { recursive: true });
-  for (const f of FILES) fs.copyFileSync(path.join(here, f), path.join(hookDir, f));
+  for (const [name, source] of Object.entries(FILES)) fs.writeFileSync(path.join(hookDir, name), contents(source));
   console.log(`Copied the gate to ${hookDir}`);
 
   const settings = withoutOurHook(readSettings());
@@ -121,9 +128,9 @@ function check() {
     console.log(`${good ? 'ok  ' : 'MISSING'}  ${text}`);
     ok &&= good;
   };
-  for (const f of FILES) {
-    const installed = path.join(hookDir, f);
-    say(fs.existsSync(installed) && hash(installed) === hash(path.join(here, f)), `${installed} is this checkout's version`);
+  for (const [name, source] of Object.entries(FILES)) {
+    const installed = path.join(hookDir, name);
+    say(fs.existsSync(installed) && hash(installed) === hash(source), `${installed} is this checkout's version`);
   }
   const entry = (readSettings().hooks?.PreToolUse || []).find(ours);
   say(!!entry, `the PreToolUse hook in ${settingsFile}`);

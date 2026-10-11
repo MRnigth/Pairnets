@@ -63,11 +63,25 @@ public static class Motion
         x => Transforms(x).Move.BeginAnimation(TranslateTransform.YProperty, Wave(0, -6, 1.6)),
         x => Transforms(x).Move.BeginAnimation(TranslateTransform.YProperty, null));
 
-    /// <summary>Continuous rotation (the sync glyph while syncing, the ring while the server updates).</summary>
-    public static void Spin(UIElement e, bool on) => Loop(e, "spin", on,
-        x => Transforms(x).Rotate.BeginAnimation(RotateTransform.AngleProperty,
-            new DoubleAnimation(0, 360, TimeSpan.FromSeconds(1.4)) { RepeatBehavior = RepeatBehavior.Forever }),
-        x => Transforms(x).Rotate.BeginAnimation(RotateTransform.AngleProperty, null));
+    /// <summary>
+    /// Continuous rotation (the ring while the server updates). <paramref name="slow"/> is the calm turn of the
+    /// status badge while it only checks for changes.
+    /// </summary>
+    public static void Spin(UIElement e, bool on, bool slow = false)
+    {
+        // Both turn the same rotation, so the one going off goes first.
+        if (!on || slow)
+            Loop(e, "spin", false, _ => { }, StopSpin);
+        if (!on || !slow)
+            Loop(e, "spin-slow", false, _ => { }, StopSpin);
+        if (on)
+            Loop(e, slow ? "spin-slow" : "spin", true, x => StartSpin(x, slow ? 3.6 : 1.4), StopSpin);
+    }
+
+    private static void StartSpin(UIElement e, double seconds) => Transforms(e).Rotate.BeginAnimation(RotateTransform.AngleProperty,
+        new DoubleAnimation(0, 360, TimeSpan.FromSeconds(seconds)) { RepeatBehavior = RepeatBehavior.Forever });
+
+    private static void StopSpin(UIElement e) => Transforms(e).Rotate.BeginAnimation(RotateTransform.AngleProperty, null);
 
     /// <summary>Soft breathing (waiting for the other computer).</summary>
     public static void Pulse(UIElement e, bool on) => Loop(e, "pulse", on,
@@ -84,22 +98,32 @@ public static class Motion
             s.BeginAnimation(ScaleTransform.ScaleYProperty, null);
         });
 
-    /// <summary>An arrow that keeps travelling up (uploading) or down (downloading), fading in and out.</summary>
-    public static void Travel(UIElement e, bool? up)
+    /// <summary>
+    /// An arrow that keeps travelling up (uploading) or down (downloading), fading in and out. <paramref name="late"/>
+    /// starts half a beat later (the second arrow of the badge while it goes both ways, so the two take turns).
+    /// </summary>
+    public static void Travel(UIElement e, bool? up, bool late = false, double distance = 5)
     {
-        Loop(e, "rise", up == true, x => StartTravel(x, 5, -5), StopTravel);
-        Loop(e, "fall", up == false, x => StartTravel(x, -5, 5), StopTravel);
+        // Off first: both drive the same movement.
+        if (up != true)
+            Loop(e, "rise", false, _ => { }, StopTravel);
+        if (up != false)
+            Loop(e, "fall", false, _ => { }, StopTravel);
+        if (up is { } rising)
+            Loop(e, rising ? "rise" : "fall", true, x => StartTravel(x, rising ? distance : -distance, rising ? -distance : distance, late), StopTravel);
     }
 
-    private static void StartTravel(UIElement e, double from, double to)
+    private static void StartTravel(UIElement e, double from, double to, bool late)
     {
         var duration = TimeSpan.FromSeconds(1.1);
+        var begin = late ? TimeSpan.FromSeconds(0.55) : TimeSpan.Zero;
         Transforms(e).Move.BeginAnimation(TranslateTransform.YProperty, new DoubleAnimation(from, to, duration)
         {
+            BeginTime = begin,
             RepeatBehavior = RepeatBehavior.Forever,
             EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut },
         });
-        var fade = new DoubleAnimationUsingKeyFrames { Duration = duration, RepeatBehavior = RepeatBehavior.Forever };
+        var fade = new DoubleAnimationUsingKeyFrames { Duration = duration, BeginTime = begin, RepeatBehavior = RepeatBehavior.Forever };
         fade.KeyFrames.Add(new LinearDoubleKeyFrame(0, KeyTime.FromPercent(0)));
         fade.KeyFrames.Add(new LinearDoubleKeyFrame(1, KeyTime.FromPercent(0.35)));
         fade.KeyFrames.Add(new LinearDoubleKeyFrame(0, KeyTime.FromPercent(1)));
@@ -111,6 +135,30 @@ public static class Motion
         Transforms(e).Move.BeginAnimation(TranslateTransform.YProperty, null);
         e.BeginAnimation(UIElement.OpacityProperty, null);
     }
+
+    /// <summary>
+    /// A ring that keeps growing out of a circle and fading (the other computer's circle while it downloads).
+    /// The ring is a separate element behind the circle; it is hidden while off.
+    /// </summary>
+    public static void Ripple(UIElement ring, bool on) => Loop(ring, "ripple", on,
+        x =>
+        {
+            var duration = TimeSpan.FromSeconds(1.7);
+            var grow = new DoubleAnimation(1, 1.42, duration) { RepeatBehavior = RepeatBehavior.Forever, EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
+            var s = Transforms(x).Scale;
+            s.BeginAnimation(ScaleTransform.ScaleXProperty, grow);
+            s.BeginAnimation(ScaleTransform.ScaleYProperty, grow);
+            x.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(0.6, 0, duration) { RepeatBehavior = RepeatBehavior.Forever });
+            x.Visibility = Visibility.Visible;
+        },
+        x =>
+        {
+            var s = Transforms(x).Scale;
+            s.BeginAnimation(ScaleTransform.ScaleXProperty, null);
+            s.BeginAnimation(ScaleTransform.ScaleYProperty, null);
+            x.BeginAnimation(UIElement.OpacityProperty, null);
+            x.Visibility = Visibility.Collapsed;
+        });
 
     /// <summary>One small pop when something changes (status badge, success).</summary>
     public static void Pop(UIElement e)

@@ -48,6 +48,9 @@ public sealed class ClientSettings
     /// <summary>While another computer uploads a big batch, download it in one go when it's done.</summary>
     public bool WaitForPeerBatches { get; set; } = true;
 
+    /// <summary>Show the speed (MB/s) on the lines of the overview's picture while files move.</summary>
+    public bool ShowMapSpeed { get; set; } = true;
+
     /// <summary>Files transferred at the same time: 1, 2, 4 or 8.</summary>
     public int ParallelTransfers { get; set; } = 4;
 

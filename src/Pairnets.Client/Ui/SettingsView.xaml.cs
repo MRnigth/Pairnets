@@ -63,6 +63,7 @@ public partial class SettingsView : UserControl
         AutoStartBox.IsChecked = current.StartWithWindows;
         UpdateBox.IsChecked = current.CheckForUpdates;
         WaitBox.IsChecked = current.WaitForPeerBatches;
+        MapSpeedBox.IsChecked = current.ShowMapSpeed;
         AutoServerBox.IsChecked = current.AutoUpdateServer;
         DebugBox.IsChecked = current.DebugMode;
         ServerVersionText.Text = serverVersionText ?? "Server: not connected yet";
@@ -252,6 +253,7 @@ public partial class SettingsView : UserControl
                 Paused = _original.Paused,
                 CheckForUpdates = UpdateBox.IsChecked == true,
                 WaitForPeerBatches = WaitBox.IsChecked == true,
+                ShowMapSpeed = MapSpeedBox.IsChecked == true,
                 AutoUpdateServer = AutoServerBox.IsChecked == true,
                 DebugMode = DebugBox.IsChecked == true,
                 ParallelTransfers = ParallelChoice(),

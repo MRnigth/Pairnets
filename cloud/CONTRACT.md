@@ -685,8 +685,8 @@ key); the service needs all four.
   reading):
   ```
   Content-Security-Policy: default-src 'none'; script-src 'self' https://challenges.cloudflare.com; style-src 'self';
-    img-src 'self' data:; connect-src 'self'; frame-src https://challenges.cloudflare.com; form-action 'self';
-    base-uri 'none'; frame-ancestors 'none'
+    img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-src https://challenges.cloudflare.com;
+    form-action 'self'; base-uri 'none'; frame-ancestors 'none'
   Strict-Transport-Security: max-age=31536000
   X-Content-Type-Options: nosniff
   X-Frame-Options: DENY
@@ -856,7 +856,8 @@ so no raw IP or address is stored there.
 
 | What | Per | Limit | Answer when exceeded |
 |---|---|---|---|
-| any request | IP | 300 / minute | 429 `rate_limited` |
+| any request (except the relay `/n/*`) | IP | 300 / minute | 429 `rate_limited` |
+| relayed request `/n/*` (version 2, `RELAY.md` §5) | IP; nest + computer key; IP for keyless and failing requests | 20,000 / minute; 6,000 / minute; 600 / minute (then the IP is off for 60 s). Counted by the Workers Rate Limiting bindings `RELAY_LIMIT`, `RELAY_DEVICE_LIMIT`, `RELAY_FAIL_LIMIT`, not in D1 | 429 `rate_limited`, `Retry-After: 60` |
 | `GET /login/google` | IP | 30 / 10 min | 429 page |
 | `POST /v1/login/email` | IP | 10 / hour | 429 `rate_limited` |
 | `POST /v1/login/email` | address | 3 / hour and 10 / day | **silent** (202, nothing sent) |
