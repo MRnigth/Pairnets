@@ -141,8 +141,10 @@ what cannot lose or silently overwrite data.
   because NTFS case-insensitivity and file locking are where the product runs.
 * **Fault injection** uses a real TCP proxy that resets connections, instead of mocks.
 * **Secret scanning** (`scripts/check-secrets.sh`) looks for 64-hex tokens, carrier-grade NAT/VPN IPs,
-  token assignments, Cloudflare Tunnel tokens and personal Windows paths. It runs before each push and in CI over the whole
-  history.
+  token assignments, Cloudflare Tunnel tokens and personal Windows paths, and (since 2026-10-11) the key formats
+  of every service in reach: GitHub, Google, Resend, Turnstile, AWS, Stripe, Slack, SendGrid, npm, Tailscale,
+  signed tokens, `pn_` computer keys and passwords in URLs. The git `pre-push` hook runs it on every push and
+  in CI over the whole history.
 * **Commit attribution.** At your request, commits no longer carry `Co-Authored-By` trailers.
 
 ## Mac and Linux desktop apps (added after v1 scope)
@@ -834,3 +836,19 @@ owner picked option A from three designed options.
   mail server refuses, the sign-in still works and only a log line says so (no address or link in it).
   It is not counted in the "5 sign-in emails an hour" limit, because nobody can ask for it: it only
   follows a confirm link that was opened from the inbox.
+
+## Secrets audit (2026-10-11)
+
+* **Everything on GitHub was checked for keys and passwords, and none were found.** The check covered every
+  branch and tag, every commit and message, and the old commits GitHub still keeps from earlier history rewrites.
+  It looked for the key formats above, the owner's real VPN addresses, names and paths, and the real keys saved on
+  the owner's PC. Releases, workflows and screenshots were checked too.
+* **Every push is now scanned before it is public**, not only by CI afterwards. The `pre-push` hook scans exactly
+  the commits a push sends (`check-secrets.sh --range <sha> --not --remotes`) on every branch. It uses a copy of the
+  scanner installed next to the gate, so branches made before `--range` existed are covered too.
+* **Personal details stay out of the public scanner.** A real name, email address or machine name can't be listed
+  in a public file. The scanner reads them from `.git/info/secret-denylist`, which never leaves the PC, and applies
+  them to new work only (`--diff`, `--range`). Old commits keep what they had, so `--tree` and `--history` don't use
+  that list, and the pre-deploy check of an older branch can still pass.
+* **Made-up names in test data.** A test used the owner's first name for a laptop; it now says "Alex". The old
+  commits were left as they are rather than rewriting main.

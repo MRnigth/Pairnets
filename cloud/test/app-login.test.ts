@@ -15,7 +15,7 @@ describe("app-login", () => {
   it("device-code flow: start, choose the server, allow, and the first poll brings a device key once", async () => {
     const { h, b, app } = await setup();
     const nest = await addServer(h, b, { label: "soro" });
-    const start = await app.call("POST", "/v1/app/start", { body: { name: "Marcus' laptop", system: "Windows 11", appVersion: "1.0.47" } });
+    const start = await app.call("POST", "/v1/app/start", { body: { name: "Alex's laptop", system: "Windows 11", appVersion: "1.0.47" } });
     expect(start.status).toBe(200);
     expect(start.json).toEqual({
       deviceCode: expect.stringMatching(/^pcd_[A-Za-z0-9_-]{43}$/),
@@ -30,7 +30,7 @@ describe("app-login", () => {
 
     const page = await b.call("GET", `/app?code=${userCode}`);
     expect(page.status).toBe(200);
-    expect(page.text).toContain("Marcus&#39; laptop");
+    expect(page.text).toContain("Alex&#39;s laptop");
     expect(page.text).toContain("Windows 11");
     expect(page.text).toContain(userCode);
     // One nest: nothing to choose, the page names it and app.js sends it.
@@ -40,7 +40,7 @@ describe("app-login", () => {
     const req = await b.call("GET", `/v1/app/requests/${userCode.toLowerCase()}`);
     expect(req.json).toEqual({
       userCode,
-      name: "Marcus' laptop",
+      name: "Alex's laptop",
       system: "Windows 11",
       appVersion: "1.0.47",
       createdAt: "2026-10-09T00:00:03Z",
@@ -58,13 +58,13 @@ describe("app-login", () => {
       expiresIn: 3600,
       email: "you@example.com",
       nest: { id: nest.nestId, label: "soro", serverUrl: `https://sync.pairnets.app/n/${nest.nestId}/` },
-      device: { id: expect.any(String), name: "Marcus' laptop", key: expect.stringMatching(/^pn_/) },
+      device: { id: expect.any(String), name: "Alex's laptop", key: expect.stringMatching(/^pn_/) },
     });
     // The nest made exactly that device, approved by the masked account address; the service kept no key.
     expect([...nest.devices.values()]).toEqual([
       expect.objectContaining({
         id: done.json.device.id,
-        name: "Marcus' laptop",
+        name: "Alex's laptop",
         system: "Windows 11",
         key: done.json.device.key,
         approvedBy: "approved by y***@example.com on sync.pairnets.app",
@@ -83,7 +83,7 @@ describe("app-login", () => {
     expect((await app.call("GET", "/v1/nests", { headers: { Authorization: `Bearer ${token}` } })).json).toEqual({ nests: [] });
     // The account sees the app in its sessions list, with the computer's name.
     const sessions = (await b.call("GET", "/v1/sessions")).json.sessions;
-    expect(sessions.find((s: { kind: string }) => s.kind === "app").deviceName).toBe("Marcus' laptop");
+    expect(sessions.find((s: { kind: string }) => s.kind === "app").deviceName).toBe("Alex's laptop");
 
     expect((await app.call("POST", "/v1/app/logout", { headers: { Authorization: `Bearer ${token}` } })).status).toBe(204);
     expect((await app.call("GET", "/v1/me", { headers: { Authorization: `Bearer ${token}` } })).status).toBe(401);
