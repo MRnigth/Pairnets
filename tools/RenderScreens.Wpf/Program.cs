@@ -207,7 +207,7 @@ public static class Program
             CurrentPath = "Photos/summer/holiday-0412.jpg", Operation = "download", FilesDone = 12, FilesTotal = 30,
             PassBytesDone = 96L << 20, PassBytesTotal = 240L << 20, BytesPerSecond = 8.2 * (1 << 20),
             Active = [new ActiveTransfer("Photos/summer/holiday-0412.jpg", "download", 50, 100)],
-            Peers = new Dictionary<string, PeerTransfer> { ["LAPTOP"] = new(new TransferReport(2.4 * (1 << 20), 0, 4, 30, 0, 0), DateTimeOffset.UtcNow) },
+            Peers = new Dictionary<string, PeerActivity> { ["LAPTOP"] = new(new TransferReport(2.4 * (1 << 20), 0, 4, 30, 0, 0), DateTimeOffset.UtcNow, 0, null) },
         }, "DESKTOP");
         Save(panel, outDir, $"windows-tray-panel-{suffix}.png", print);
         foreach (var (name, state) in SyncFeedbackStates(server, utc, now))
@@ -282,13 +282,13 @@ public static class Program
                     new ActiveTransfer("Photos/2019/IMG_4412.jpg", "upload", 90, 100),
                     new ActiveTransfer("Photos/2019/IMG_4413.jpg", "upload", 5, 100),
                 ],
-                Peers = new Dictionary<string, PeerTransfer> { ["PC-2"] = new(new TransferReport(0, 4.2 * MB, 212, 640, 0, 0), DateTimeOffset.UtcNow) },
+                Peers = new Dictionary<string, PeerActivity> { ["PC-2"] = new(new TransferReport(0, 4.2 * MB, 212, 640, 0, 0), DateTimeOffset.UtcNow, 0, null) },
             }),
             ("checking", basis with { Status = RunnerStatus.Syncing, Text = "Syncing", Stage = SyncStage.Checking, CheckedFiles = 12_000, CheckTotal = 38_206 }),
             ("waiting-live", basis with
             {
                 Status = RunnerStatus.Idle, Text = "Up to date", WaitingFor = new PeerWait("PC-2", 38_206, 360),
-                Peers = new Dictionary<string, PeerTransfer> { ["PC-2"] = new(new TransferReport(3.1 * MB, 0, 383, 38_206, 1L << 30, 114L << 30), DateTimeOffset.UtcNow) },
+                Peers = new Dictionary<string, PeerActivity> { ["PC-2"] = new(new TransferReport(3.1 * MB, 0, 383, 38_206, 1L << 30, 114L << 30), DateTimeOffset.UtcNow, 0, null) },
             }),
             ("slowed", basis with
             {
