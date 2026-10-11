@@ -294,7 +294,8 @@
         <ControlTemplate TargetType="Expander">
           <StackPanel>
             <ToggleButton IsChecked="{Binding IsExpanded, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}"
-                          Cursor="Hand" FocusVisualStyle="{x:Null}" HorizontalAlignment="Left">
+                          Foreground="{TemplateBinding Foreground}" Cursor="Hand" FocusVisualStyle="{x:Null}"
+                          HorizontalAlignment="Left">
               <ToggleButton.Template>
                 <ControlTemplate TargetType="ToggleButton">
                   <StackPanel Orientation="Horizontal" Background="Transparent">

@@ -97,7 +97,9 @@ public partial class MainWindow : Window
         FileList.ItemsSource = _shownFiles;
         VersionList.ItemsSource = _versions;
         DevicesList.ItemsSource = _devices;
-        AppVersion.Text = "Pairnets " + PairnetsInfo.ProductVersion + " · " + PairnetsInfo.Copyright;
+        // Just the version, so it never runs under the Settings button; the full line is in Settings → About.
+        AppVersion.Text = "Pairnets " + PairnetsInfo.ProductVersion;
+        AppVersion.ToolTip = PairnetsLinks.AboutLine;
         AppIcon.Source = AppIcons.Large;
         IsVisibleChanged += (_, _) =>
         {

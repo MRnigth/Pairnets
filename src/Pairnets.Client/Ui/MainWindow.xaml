@@ -99,7 +99,8 @@
               <ColumnDefinition Width="*" />
               <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
-            <TextBlock x:Name="AppVersion" Style="{StaticResource MutedSmall}" Margin="10,0,0,0" VerticalAlignment="Center" />
+            <TextBlock x:Name="AppVersion" Style="{StaticResource MutedSmall}" Margin="10,0,8,0" VerticalAlignment="Center"
+                       TextTrimming="CharacterEllipsis" />
             <RadioButton x:Name="NavSettings" Grid.Column="1" Style="{StaticResource Nav}" GroupName="page" Margin="0"
                          ToolTip="Settings" Checked="OnNav">
               <StackPanel Orientation="Horizontal">

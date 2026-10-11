@@ -65,7 +65,8 @@
             </StackPanel>
           </Border>
           <Grid ColumnDefinitions="*,Auto">
-            <TextBlock x:Name="AppVersion" Classes="muted small" Margin="10,0,0,0" VerticalAlignment="Center" />
+            <TextBlock x:Name="AppVersion" Classes="muted small" Margin="10,0,8,0" VerticalAlignment="Center"
+                       TextTrimming="CharacterEllipsis" />
             <RadioButton x:Name="NavSettings" Grid.Column="1" Classes="nav" GroupName="page"
                          ToolTip.Tip="Settings" IsCheckedChanged="OnNav">
               <StackPanel Orientation="Horizontal" Spacing="7">
