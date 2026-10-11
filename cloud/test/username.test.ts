@@ -19,15 +19,15 @@ describe("username", () => {
 
   it("PATCH /v1/me sets, changes and clears it", async () => {
     const { h, b, accountId } = await setup();
-    const set = await b.call("PATCH", "/v1/me", { body: { username: "  Marcus  " } });
+    const set = await b.call("PATCH", "/v1/me", { body: { username: "  Alex  " } });
     expect(set.status).toBe(200);
-    expect(set.json.username).toBe("Marcus");
+    expect(set.json.username).toBe("Alex");
     expect(set.json.accountId).toBe(accountId);
-    expect((await b.call("GET", "/v1/me")).json.username).toBe("Marcus");
+    expect((await b.call("GET", "/v1/me")).json.username).toBe("Alex");
 
-    expect((await b.call("PATCH", "/v1/me", { body: { username: "Marcus L" } })).json.username).toBe("Marcus L");
+    expect((await b.call("PATCH", "/v1/me", { body: { username: "Alex L" } })).json.username).toBe("Alex L");
     expect((await b.call("PATCH", "/v1/me", { body: { username: "" } })).json.username).toBeNull();
-    await b.call("PATCH", "/v1/me", { body: { username: "Marcus" } });
+    await b.call("PATCH", "/v1/me", { body: { username: "Alex" } });
     expect((await b.call("PATCH", "/v1/me", { body: { username: null } })).json.username).toBeNull();
 
     const events = await h.query<{ event: string; detail: string | null }>("SELECT event, detail FROM audit WHERE account_id = ?1 AND event = 'username_changed'", accountId);
@@ -84,10 +84,10 @@ describe("GET /v1/signed-in (for pairnets.app)", () => {
   });
 
   it("gives the name: the part before the @, then the username", async () => {
-    const { b } = await setup("marcus@example.com");
-    expect((await b.call("GET", "/v1/signed-in", { origin: "https://pairnets.app" })).json).toEqual({ signedIn: true, name: "marcus" });
-    await b.call("PATCH", "/v1/me", { body: { username: "Marcus" } });
-    expect((await b.call("GET", "/v1/signed-in", { origin: "https://pairnets.app" })).json).toEqual({ signedIn: true, name: "Marcus" });
+    const { b } = await setup("alex@example.com");
+    expect((await b.call("GET", "/v1/signed-in", { origin: "https://pairnets.app" })).json).toEqual({ signedIn: true, name: "alex" });
+    await b.call("PATCH", "/v1/me", { body: { username: "Alex" } });
+    expect((await b.call("GET", "/v1/signed-in", { origin: "https://pairnets.app" })).json).toEqual({ signedIn: true, name: "Alex" });
     await b.call("POST", "/v1/logout");
     expect((await b.call("GET", "/v1/signed-in", { origin: "https://pairnets.app" })).json).toEqual({ signedIn: false });
   });
