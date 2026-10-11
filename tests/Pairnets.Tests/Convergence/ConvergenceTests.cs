@@ -28,7 +28,9 @@ public class ConvergenceTests(ITestOutputHelper output)
     [MemberData(nameof(Seeds))]
     public async Task DevicesConvergeAndNothingIsLost(int seed)
     {
-        await using var server = await TestServer.StartAsync();
+        // Stalls have their own tests. The 2 s of the other tests is too short for a busy machine (the deep run with 250
+        // seeds next to the whole suite): a small upload then comes back as a 408 and the pass fails for no fault of sync.
+        await using var server = await TestServer.StartAsync(config: new() { ["Sync:UploadStallTimeout"] = "00:00:30" });
         await using var desktop = new Device("desktop", server);
         await using var laptop = new Device("laptop", server);
         var devices = new[] { desktop, laptop };
