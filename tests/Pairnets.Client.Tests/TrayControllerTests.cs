@@ -196,7 +196,12 @@ public sealed class TrayControllerTests
 
         await app.WaitUntil(() => main.RestoreMessage.IsVisible, "History to say it restored the file");
         Assert.StartsWith("Restored.", await app.Wpf.Ui(() => main.RestoreMessageText.Text));
-        await app.WaitUntil(() => File.ReadAllText(notes) == "version one", "the old version to come back into the folder");
+        // The app may still be writing the file when we look (Windows then refuses the read): look again.
+        await app.WaitUntil(() =>
+        {
+            try { return File.ReadAllText(notes) == "version one"; }
+            catch (IOException) { return false; }
+        }, "the old version to come back into the folder");
     }
 
     [Fact]
