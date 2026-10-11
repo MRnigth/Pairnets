@@ -168,6 +168,7 @@ public sealed class NestWebsiteTests : IAsyncLifetime
         }
         Assert.Equal(HttpStatusCode.OK, (await web.GetAsync("assets/nest.js")).StatusCode);
         Assert.Equal("image/svg+xml", (await web.GetAsync("assets/logo.svg")).Content.Headers.ContentType?.MediaType);
+        Assert.Equal("image/png", (await web.GetAsync("assets/icon-256.png")).Content.Headers.ContentType?.MediaType); // the logo in the emails
         Assert.Equal(HttpStatusCode.NotFound, (await web.GetAsync("assets/missing.js")).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await web.GetAsync("assets/..%2F..%2Fappsettings.json")).StatusCode);
     }

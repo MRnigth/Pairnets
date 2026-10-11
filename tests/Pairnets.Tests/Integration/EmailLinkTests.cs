@@ -1,9 +1,11 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Net.Mail;
 using Microsoft.Extensions.DependencyInjection;
 using Pairnets.Core;
 using Pairnets.Server;
 using Pairnets.Server.Auth;
+using Pairnets.Server.Mail;
 using Pairnets.Server.Storage;
 using Pairnets.Server.Web;
 using Pairnets.Tests.Infrastructure;
@@ -49,7 +51,7 @@ public sealed class EmailLinkTests : IAsyncLifetime
     {
         using var owner = await SignedIn();
         await ConfirmAddress(owner, "you@example.com");
-        var confirm = _mail.Messages.Single();
+        var confirm = _mail.Messages[0]; // the welcome comes after it, once the address is confirmed
         Assert.Equal("you@example.com", confirm.To);
         Assert.Equal("Confirm your email for Pairnets", confirm.Subject);
         Assert.StartsWith("https://localhost/email-link#code=", confirm.Link); // the code is in the fragment: no server or mail scanner log sees it
@@ -75,6 +77,62 @@ public sealed class EmailLinkTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task AWelcomeComesOnceWhenAnAddressIsFirstConfirmed()
+    {
+        using var owner = await SignedIn();
+        await ConfirmAddress(owner, "you@example.com");
+
+        Assert.Equal(new[] { EmailTemplates.ConfirmSubject, EmailTemplates.WelcomeSubject }, _mail.Messages.Select(m => m.Subject));
+        var welcome = _mail.Messages[1];
+        Assert.Equal("you@example.com", welcome.To);
+        Assert.Contains("https://localhost/devices", welcome.Text);
+        Assert.Contains("https://localhost/security", welcome.Text);
+        Assert.Contains("https://localhost/devices", welcome.Html);
+        Assert.Equal(string.Empty, welcome.Link); // a welcome carries no sign-in link
+
+        // Signing in with a link, or confirming the same address again (however it is cased), welcomes nobody twice.
+        using var phone = _server.WebBrowser();
+        await phone.PostAsync("web/api/signin/email/request", null);
+        await phone.PostAsJsonAsync("web/api/signin/email/confirm", new { code = _mail.Messages[^1].Code });
+        await ConfirmAddress(owner, "You@Example.com");
+        Assert.Single(_mail.Messages, m => m.Subject == EmailTemplates.WelcomeSubject);
+
+        // A different address is new to the nest: it is welcomed.
+        await ConfirmAddress(owner, "other@example.com");
+        Assert.Equal(new[] { "you@example.com", "other@example.com" },
+            _mail.Messages.Where(m => m.Subject == EmailTemplates.WelcomeSubject).Select(m => m.To));
+    }
+
+    [Fact]
+    public async Task SigningInStillWorksWhenTheWelcomeCannotBeSent()
+    {
+        await using var server = await TestServer.StartWithWebsiteAsync(
+            new() { ["Sync:SmtpHost"] = "smtp.example.test", ["Sync:SmtpFrom"] = "Pairnets nest <nest@example.test>" },
+            builder => builder.Services.AddSingleton<IEmailSender>(new RefusesWelcomes(_mail)));
+        using var owner = server.WebBrowser();
+        var setup = server.Services.GetRequiredService<AuthStore>().CreateSetupCode();
+        Assert.Equal(HttpStatusCode.NoContent, (await owner.PostAsJsonAsync("web/api/setup", new { code = setup })).StatusCode);
+        await owner.PostAsJsonAsync("web/api/email", new { email = "you@example.com" });
+        using var fromInbox = server.WebBrowser();
+
+        var confirmed = await fromInbox.PostAsJsonAsync("web/api/signin/email/confirm", new { code = _mail.Messages[^1].Code });
+
+        Assert.Equal(HttpStatusCode.NoContent, confirmed.StatusCode);
+        Assert.Equal("you@example.com", server.Services.GetRequiredService<AuthStore>().OwnerEmail);
+        Assert.True((await State(fromInbox)).SignedIn);
+        Assert.DoesNotContain(_mail.Messages, m => m.Subject == EmailTemplates.WelcomeSubject);
+    }
+
+    /// <summary>A mail server that takes everything except the welcome.</summary>
+    private sealed class RefusesWelcomes(IEmailSender inner) : IEmailSender
+    {
+        public Task SendAsync(string to, string subject, string textBody, string htmlBody, CancellationToken ct = default) =>
+            subject == EmailTemplates.WelcomeSubject
+                ? throw new SmtpException("The mail server said no.")
+                : inner.SendAsync(to, subject, textBody, htmlBody, ct);
+    }
+
+    [Fact]
     public async Task AskingForALinkNeverRevealsWhetherAnAddressIsSetUp()
     {
         using var stranger = _server.WebBrowser();
@@ -94,7 +152,7 @@ public sealed class EmailLinkTests : IAsyncLifetime
         // Someone else's address (or a typo) sends nothing anywhere, and the answer does not say so.
         Assert.Equal(HttpStatusCode.NoContent,
             (await app.PostAsJsonAsync("web/api/signin/email/request", new { email = "wrong@example.com", next = "/link?code=KQ7M-4PXD" })).StatusCode);
-        Assert.Single(_mail.Messages); // still only the confirmation mail from the setup above
+        Assert.Equal(2, _mail.Messages.Count); // still only the confirmation and welcome mails from the setup above
 
         // The owner's own address (however it is cased) gets the link; the way back rides in the fragment, like the code.
         Assert.Equal(HttpStatusCode.NoContent,
@@ -123,7 +181,7 @@ public sealed class EmailLinkTests : IAsyncLifetime
         var refused = await browser.PostAsync("web/api/signin/email/request", null);
 
         Assert.Equal(HttpStatusCode.TooManyRequests, refused.StatusCode);
-        Assert.Equal(LinkedSignInEndpoints.MaxEmailsPerHour, _mail.Messages.Count);
+        Assert.Equal(LinkedSignInEndpoints.MaxEmailsPerHour, _mail.Messages.Count(m => m.Subject != EmailTemplates.WelcomeSubject)); // the welcome is not a link anyone can ask for
     }
 
     [Theory]
@@ -203,7 +261,7 @@ public sealed class EmailLinkTests : IAsyncLifetime
         var code = _mail.Messages[^1].Code;
         await phone.PostAsJsonAsync("web/api/signin/email/confirm", new { code });
 
-        Assert.DoesNotContain(_server.Logs.Lines, l => _mail.Messages.Any(m => l.Contains(m.Code, StringComparison.Ordinal)));
+        Assert.DoesNotContain(_server.Logs.Lines, l => _mail.Messages.Any(m => m.Code.Length > 0 && l.Contains(m.Code, StringComparison.Ordinal)));
     }
 
     [Fact]

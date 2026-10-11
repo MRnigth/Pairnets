@@ -315,3 +315,24 @@ what cannot lose or silently overwrite data.
   user name's hash (a long user name plus macOS's long temp folder passed the 104-byte socket path
   limit, which made every poke fail and could crash the app on a pairnets:// launch), and the next
   listening instance opens before the current one closes (a poke arriving in the gap was lost).
+
+## The nest's emails
+
+* **Three emails, one look.** The sign-in link, the "confirm your email" mail and a new **welcome** mail
+  share one layout that matches the website (grey page, white rounded card, the logo, one blue button;
+  light and dark). They are plain files in `src/Pairnets.Server/Mail/Templates/` (an HTML and a text
+  version of each, plus `layout.html`), built into the program like the nest's website, so changing
+  the words needs no code. `Mail/EmailTemplates.cs` fills in the blanks; everything inserted is
+  HTML-escaped and a blank with no value is an error, not an empty space. Previews:
+  `docs/images/email-*.png` (made with `PAIRNETS_EMAIL_PREVIEW_DIR`, see `EmailTemplatesTests`).
+* **The logo comes from the nest itself** (`/assets/icon-256.png`, a PNG because mail programs do not
+  show SVG), so opening a mail never loads anything from pairnets.app or another site. With images
+  blocked the mail still reads fine: the name "Pairnets" is text.
+* **Subjects and the link sentence are unchanged** ("Your Pairnets sign-in link", "Confirm your email for
+  Pairnets", "It works once, for 15 minutes"), and the link still carries its code in the `#` part, so
+  nothing that reads these mails (tests, filters, people's habits) breaks.
+* **The welcome is sent once, when an address is first confirmed** (a different address counts as new;
+  confirming the same one again, or signing in by email link, sends nothing). It is best effort: if the
+  mail server refuses, the sign-in still works and only a log line says so (no address or link in it).
+  It is not counted in the "5 sign-in emails an hour" limit, because nobody can ask for it: it only
+  follows a confirm link that was opened from the inbox.

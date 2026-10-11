@@ -384,6 +384,22 @@ You do not have to do anything. Just work in the folder on whichever PC you are 
 
 ---
 
+### The emails your nest sends
+
+If your nest is set up to send email (see [DEPLOY.md](DEPLOY.md)), it sends three kinds, all in the same look:
+
+| Email | When |
+|---|---|
+| **Your Pairnets sign-in link** | you choose *Continue with email* |
+| **Confirm your email for Pairnets** | you add an address on the Security page |
+| **Welcome to Pairnets** | once, right after an address is confirmed for the first time |
+
+![Welcome email](images/email-welcome-light.png)
+
+The words live in plain files, `src/Pairnets.Server/Mail/Templates/` (`*.html` for the pretty version,
+`*.txt` for the plain one). Change a sentence there and rebuild the server; nothing else needs touching.
+Blanks look like `{{host}}` and are filled in for you.
+
 ## 8. How it works
 
 ### The big picture

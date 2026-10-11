@@ -1,0 +1,15 @@
+Your nest is ready.
+
+{{host}} will now email sign-in links to this address. To use your nest on a computer:
+
+1. Install Pairnets on the computer: https://pairnets.app/add
+2. Open it and choose "Continue with email".
+3. Press "Allow" in the browser that opens.
+
+Open your nest: {{devicesUrl}}
+
+Wasn't you? Sign in to your nest and remove this address on the Security page:
+{{securityUrl}}
+
+--
+Sent by your Pairnets nest at {{host}}.
