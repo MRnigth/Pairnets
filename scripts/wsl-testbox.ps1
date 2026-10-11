@@ -110,6 +110,13 @@ function Wait-Systemd([string]$Distro, [int]$TimeoutSeconds = 180) {
     $r = Invoke-InDistro -Distro $Distro -TimeoutSeconds $TimeoutSeconds -Quiet -Script @'
 if [ "$(cat /proc/1/comm 2>/dev/null)" != systemd ]; then echo "state=no-systemd"; exit 0; fi
 state="$(timeout 150 systemctl is-system-running --wait 2>/dev/null || true)"
+# WSL has no real console, so getty@tty1 sometimes fails at boot. The tests never use it: when it is the only
+# failed unit, clear it and ask again. Any other failed unit still counts.
+if [ "$state" = degraded ] && [ -z "$(systemctl --failed --no-legend --plain 2>/dev/null | awk '{print $1}' | grep -v '^getty@tty[0-9]*\.service$')" ]; then
+  echo "cleared: getty on the console failed (WSL has no console)"
+  systemctl reset-failed 'getty@*' 2>/dev/null || true
+  state="$(systemctl is-system-running 2>/dev/null || true)"
+fi
 echo "state=${state:-unknown}"
 if [ "$state" != running ]; then systemctl --failed --no-legend --plain 2>/dev/null | sed 's/^/failed-unit: /'; fi
 '@
