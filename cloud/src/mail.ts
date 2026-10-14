@@ -3,7 +3,7 @@
 import { audit } from "./audit";
 import type { Ctx } from "./context";
 import { escapeHtml } from "./http";
-import { DAY, hit } from "./ratelimit";
+import { DAY, hit, peek } from "./ratelimit";
 
 export interface MailMessage {
   to: string;
@@ -39,21 +39,37 @@ export class ResendMailer implements Mailer {
 /** All emails, notices included: 95 per UTC day (Resend's free plan is 100). */
 export const ALL_MAIL_DAILY_LIMIT = 95;
 
+/**
+ * The last part of the day's total is kept for security notices ("a computer was allowed", "a nest was removed").
+ * Sign-in emails can never use it, however many are asked for, so an attacker who floods sign-in requests cannot
+ * make the notices of what they then do go unsent.
+ */
+export const NOTICE_RESERVE = 15;
+/** The most sign-in emails (together with the notices already sent) that fit in a day. */
+export const LOGIN_MAIL_CEILING = ALL_MAIL_DAILY_LIMIT - NOTICE_RESERVE;
+
 export function loginMailLimit(ctx: Ctx): number {
   const n = Number.parseInt(ctx.env.EMAIL_DAILY_LIMIT ?? "", 10);
-  return Number.isFinite(n) && n >= 0 ? Math.min(n, ALL_MAIL_DAILY_LIMIT) : 80;
+  return Number.isFinite(n) && n >= 0 ? Math.min(n, LOGIN_MAIL_CEILING) : LOGIN_MAIL_CEILING;
+}
+
+/** Whether a sign-in email could still be sent today, without taking one (the sign-in page says so when not). */
+export async function loginMailAvailable(ctx: Ctx): Promise<boolean> {
+  if ((await peek(ctx, "mail-login", "service", loginMailLimit(ctx), DAY)).limited) return false;
+  return !(await peek(ctx, "mail-all", "service", LOGIN_MAIL_CEILING, DAY)).limited;
 }
 
 /**
- * Takes one email from today's budget. Login emails also count against EMAIL_DAILY_LIMIT. Returns false when the
- * budget is used up (the caller then does not send).
+ * Takes one email from today's budget. Sign-in emails also count against EMAIL_DAILY_LIMIT and may only use the
+ * total up to LOGIN_MAIL_CEILING; notices may use all of it. Returns false when the budget is used up (the caller then
+ * does not send).
  */
 export async function reserveMail(ctx: Ctx, kind: "login" | "notice"): Promise<boolean> {
   if (kind === "login") {
     const login = await hit(ctx, "mail-login", "service", loginMailLimit(ctx), DAY);
     if (login.limited) return false;
   }
-  const all = await hit(ctx, "mail-all", "service", ALL_MAIL_DAILY_LIMIT, DAY);
+  const all = await hit(ctx, "mail-all", "service", kind === "login" ? LOGIN_MAIL_CEILING : ALL_MAIL_DAILY_LIMIT, DAY);
   return !all.limited;
 }
 

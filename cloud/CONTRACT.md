@@ -860,9 +860,9 @@ so no raw IP or address is stored there.
 | relayed request `/n/*` (version 2, `RELAY.md` §5) | IP; nest + computer key; IP for keyless and failing requests | 20,000 / minute; 6,000 / minute; 600 / minute (then the IP is off for 60 s). Counted by the Workers Rate Limiting bindings `RELAY_LIMIT`, `RELAY_DEVICE_LIMIT`, `RELAY_FAIL_LIMIT`, not in D1 | 429 `rate_limited`, `Retry-After: 60` |
 | `GET /login/google` | IP | 30 / 10 min | 429 page |
 | `POST /v1/login/email` | IP | 10 / hour | 429 `rate_limited` |
-| `POST /v1/login/email` | address | 3 / hour and 10 / day | **silent** (202, nothing sent) |
-| login emails | whole service | `EMAIL_DAILY_LIMIT` (80) per UTC day | 503 `email_unavailable` |
-| all emails incl. notices | whole service | 95 per UTC day (Resend free plan is 100) | notice skipped, audit `notice_skipped` |
+| `POST /v1/login/email` | address | 3 / hour and 10 / day, counted per email actually sent | **silent** (202, nothing sent) |
+| login emails | whole service | `EMAIL_DAILY_LIMIT` (80, never above 80) per UTC day; they also stop when the day's total reaches 80 | 503 `email_unavailable` |
+| all emails incl. notices | whole service | 95 per UTC day (Resend free plan is 100); the last 15 are kept for security notices | notice skipped, audit `notice_skipped` |
 | `POST /v1/login/email/confirm` | IP | 30 / hour | 429 |
 | `POST /v1/claim` | IP | 20 / hour, and 10 failures / hour | 429 `rate_limited` |
 | claim codes | account | 5 unused at once, 20 / day | 429 `too_many_codes` |
