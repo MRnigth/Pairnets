@@ -268,29 +268,36 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
+      # The packages go in their own folder: the checkout already has an assets/ folder (icons, fonts) that
+      # must not end up among the release files.
       - uses: actions/download-artifact@v4
         with:
-          path: assets
+          path: release-files
           merge-multiple: true
       - name: Server installer (pairnets.app/get.sh points at this copy, not at main)
-        run: cp deploy/get.sh assets/get.sh
+        run: cp deploy/get.sh release-files/get.sh
       - name: Version file (read by the apps' update check)
         shell: bash
         run: |
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then v="${GITHUB_REF_NAME#v}"; else v="1.0.${{ github.run_number }}"; fi
-          printf '{"version":"%s","commit":"%s"}\n' "$v" "$GITHUB_SHA" > assets/version.json
-          cat assets/version.json
+          printf '{"version":"%s","commit":"%s"}\n' "$v" "$GITHUB_SHA" > release-files/version.json
+          cat release-files/version.json
       - name: Checksums
-        working-directory: assets
-        run: sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt
+        working-directory: release-files
+        run: |
+          # Every release file is a plain file; a folder here would also break the upload below.
+          dirs="$(find . -mindepth 1 -maxdepth 1 ! -type f)"
+          if [ -n "$dirs" ]; then echo "::error::not a plain file, cannot be a release file: $dirs"; exit 1; fi
+          find . -maxdepth 1 -type f ! -name SHA256SUMS.txt -printf '%P\0' | sort -z | xargs -0 sha256sum > SHA256SUMS.txt
+          cat SHA256SUMS.txt
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release upload "$GITHUB_REF_NAME" assets/* --repo "$GITHUB_REPOSITORY" --clobber
+            gh release upload "$GITHUB_REF_NAME" release-files/* --repo "$GITHUB_REPOSITORY" --clobber
           else
-            gh release create "$GITHUB_REF_NAME" assets/* --repo "$GITHUB_REPOSITORY" --title "Pairnets $GITHUB_REF_NAME" --generate-notes
+            gh release create "$GITHUB_REF_NAME" release-files/* --repo "$GITHUB_REPOSITORY" --title "Pairnets $GITHUB_REF_NAME" --generate-notes
           fi
 
   latest:
@@ -305,27 +312,34 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
+      # The packages go in their own folder: the checkout already has an assets/ folder (icons, fonts) that
+      # must not end up among the release files.
       - uses: actions/download-artifact@v4
         with:
-          path: assets
+          path: release-files
           merge-multiple: true
       - name: Server installer (pairnets.app/get.sh points at this copy, not at main)
-        run: cp deploy/get.sh assets/get.sh
+        run: cp deploy/get.sh release-files/get.sh
       - name: Version file (read by the apps' update check)
         shell: bash
         run: |
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then v="${GITHUB_REF_NAME#v}"; else v="1.0.${{ github.run_number }}"; fi
-          printf '{"version":"%s","commit":"%s"}\n' "$v" "$GITHUB_SHA" > assets/version.json
-          cat assets/version.json
+          printf '{"version":"%s","commit":"%s"}\n' "$v" "$GITHUB_SHA" > release-files/version.json
+          cat release-files/version.json
       - name: Checksums
-        working-directory: assets
-        run: sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt
+        working-directory: release-files
+        run: |
+          # Every release file is a plain file; a folder here would also break the upload below.
+          dirs="$(find . -mindepth 1 -maxdepth 1 ! -type f)"
+          if [ -n "$dirs" ]; then echo "::error::not a plain file, cannot be a release file: $dirs"; exit 1; fi
+          find . -maxdepth 1 -type f ! -name SHA256SUMS.txt -printf '%P\0' | sort -z | xargs -0 sha256sum > SHA256SUMS.txt
+          cat SHA256SUMS.txt
       - name: Replace the "latest" release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release delete latest --repo "$GITHUB_REPOSITORY" --cleanup-tag --yes || true
-          gh release create latest assets/* --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --latest \
+          gh release create latest release-files/* --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --latest \
             --title "Latest build" \
             --notes "Built automatically from the newest commit on main (${GITHUB_SHA::7}).
 
