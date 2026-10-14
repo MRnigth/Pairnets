@@ -168,7 +168,11 @@ does (revoke, forget the cached key, `DeviceRemoved` on the hub, close the devic
 3. Forward to the router: same method, body streamed, headers copied except `Cookie`, `X-Pairnets-Client-IP`,
    `X-Pairnets-Route`, `X-Pairnets-Sig`, `X-Pairnets-Nonce`, `X-Pairnets-Ts`, `X-Pairnets-Nest` and `CF-*`; adds
    `X-Pairnets-Client-IP: <CF-Connecting-IP>` and `X-Pairnets-Route: <nestId>`. The path becomes `/` + `rest`.
-   WebSocket upgrades are passed through.
+   WebSocket upgrades are passed through. The answer keeps only an allowlist of the server's headers: `Content-Type`,
+   `Content-Length`, `Content-Encoding`, `Content-Range`, `Accept-Ranges`, `ETag`, `Last-Modified`, `Retry-After`, `Allow`
+   and the `X-Pairnets-Server-Id/Version/Hash/Modified-Ms` headers (also under their old `X-Tether-` names). Everything
+   else is dropped (cookies, `Content-Disposition`, `Link`, `Refresh`, `NEL`, CORS ...). `Location` is kept only when it
+   points inside the same nest (`/n/{nestId}/...`, sent as a relative address); any other redirect target is removed.
 4. If the router or the VPC link fails (exception, or the router answers 502/503 from the link):
    **503** `{"error":"nest_offline","message":"Your server is not connected right now. Check that it is on."}`.
    Every relay error is JSON (apps read non-JSON errors as "old server" or "tunnel down").

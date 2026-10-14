@@ -162,8 +162,41 @@ describe("relay", () => {
     expect(missing.json).toEqual({ code: "not-found" });
     const moved = await app.call("GET", `/n/${nest.nestId}/api/redirect`);
     expect(moved.status).toBe(302);
-    expect(moved.location).toBe("/api/elsewhere");
+    // A redirect inside the same nest stays (as a relative address resolved against the relayed one).
+    expect(moved.location).toBe(`/n/${nest.nestId}/api/elsewhere`);
     expect(nest.appRequests().map((r) => r.path)).toEqual(["/api/busy", "/api/nothing-here", "/api/redirect"]);
+  });
+
+  it("a nest cannot send people elsewhere: redirects out of the nest, to another origin or to this site's pages lose their Location", async () => {
+    const { nest, app } = await setup();
+    for (const path of ["redirect-out", "redirect-root", "redirect-other-nest", "redirect-scheme"]) {
+      const r = await app.call("GET", `/n/${nest.nestId}/api/${path}`);
+      expect(r.status, path).toBe(302);
+      expect(r.location, path).toBeNull();
+      expect(r.headers.get("location"), path).toBeNull();
+    }
+    const same = await app.call("GET", `/n/${nest.nestId}/api/redirect-self`);
+    expect(same.location).toBe(`/n/${nest.nestId}/api/elsewhere?a=1`);
+  });
+
+  it("only the headers the apps need pass: validators, ranges and the X-Pairnets answers stay; downloads, NEL, Link and the rest go", async () => {
+    const { nest, app } = await setup();
+    const r = await app.call("GET", `/n/${nest.nestId}/api/download`);
+    expect(r.status).toBe(200);
+    expect(r.text).toBe("MZ");
+    const h = r.headers;
+    expect(h.get("content-type")).toBe("application/octet-stream");
+    expect(h.get("content-range")).toBe("bytes 0-1/2");
+    expect(h.get("accept-ranges")).toBe("bytes");
+    expect(h.get("etag")).toBe('"abc"');
+    expect(h.get("last-modified")).toBe("Wed, 01 Oct 2026 00:00:00 GMT");
+    expect(h.get("retry-after")).toBe("7");
+    expect(h.get("x-pairnets-hash")).toBe("h1");
+    expect(h.get("x-tether-hash")).toBe("h1");
+    for (const dropped of ["content-disposition", "nel", "report-to", "link", "refresh"]) expect(h.get(dropped), dropped).toBeNull();
+    // Ours still win.
+    expect(h.get("content-security-policy")).toBe(RELAY_CSP);
+    expect(h.get("cache-control")).toBe("no-store");
   });
 
   it("the first answer makes a pending server active, once", async () => {
@@ -203,7 +236,7 @@ describe("relay", () => {
     expect(r.headers.get("x-frame-options")).toBe("DENY");
     expect(r.headers.get("x-content-type-options")).toBe("nosniff");
     expect(r.headers.get("cache-control")).toBe("no-store");
-    expect(r.headers.get("x-nest-header")).toBe("kept");
+    expect(r.headers.get("x-nest-header")).toBeNull(); // not on the allowlist
     // The browser's account session is untouched by it.
     const before = b.cookies.get("__Host-pn_id");
     await b.call("GET", `/n/${nest.nestId}/api/page`);

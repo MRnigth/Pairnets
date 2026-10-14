@@ -148,8 +148,10 @@ function tooMany(retryAfter: number): HttpError {
 
 /** ANY /n/... : never throws; JSON errors, relayed answers made inert for browsers (http.ts finalizeRelay). */
 export async function relay(ctx: Ctx): Promise<Response> {
+  const nestId = ctx.url.pathname.split("/")[2] ?? "";
+  const where = NEST_ID_RE.test(nestId) ? { url: ctx.url, nestId } : undefined;
   try {
-    return finalizeRelay(await forward(ctx));
+    return finalizeRelay(await forward(ctx), where);
   } catch (e) {
     if (e instanceof HttpError) return finalizeRelay(apiError(e.status, e.code, e.message, e.headers));
     console.error("relay: unexpected error", e instanceof Error ? `${e.name}: ${e.message}` : "unknown");
