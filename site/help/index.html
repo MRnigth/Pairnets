@@ -6,12 +6,16 @@
 <title>Help · Pairnets</title>
 <meta name="description" content="What to check when your Pairnets nest can't be reached, or a computer was removed.">
 <meta name="referrer" content="no-referrer">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#FFFFFF" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1D2026" media="(prefers-color-scheme: dark)">
 <link rel="icon" href="/assets/logo.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/assets/icon-256.png">
 <link rel="stylesheet" href="/assets/site.css">
 <script src="/assets/site.js" defer></script>
 </head>
 <body>
+<a class="skip" href="#main">Skip to content</a>
 <header class="top">
   <div class="wrap">
     <a class="brand" href="/"><img src="/assets/logo.svg" alt=""><span>Pairnets</span></a>
@@ -21,10 +25,10 @@
       <a href="/help/" aria-current="page">Help</a>
     </nav>
     <span class="grow"></span>
-    <a class="button accent" id="account-button" href="https://nest.pairnets.app">Sign in →</a>
+    <a class="button accent" id="account-button" href="https://sync.pairnets.app/account">Sign in →</a>
   </div>
 </header>
-<main>
+<main id="main" tabindex="-1">
   <div class="wrap narrow">
     <div class="hero tight">
       <h1>Help</h1>
@@ -32,47 +36,50 @@
     </div>
 
     <div class="callout warn spaced">
-      <h3>Can't open nest.pairnets.app?</h3>
-      <p>Your nest is your own server, so the name only works while that machine — and its tunnel to the internet — is running.</p>
+      <h2>My nest doesn't show up, or the app says it isn't connected</h2>
+      <p>Your nest is your own server, so it only answers while that machine, and its link out to the internet, is running.</p>
       <ol>
-        <li>Check the name is typed exactly: <code>nest.pairnets.app</code>.</li>
-        <li>Reload the page, or try from another device. Works there? Then it's this device's internet connection.</li>
-        <li>On the server: <code>sudo systemctl status pairnets-server pairnets-tunnel</code> — both should say <strong>active (running)</strong>.</li>
+        <li>Check that the computer your nest runs on is switched on and online.</li>
+        <li>Sign in at <a href="https://sync.pairnets.app/account">sync.pairnets.app/account</a> with the account your nest belongs to. It should be listed there, and say whether it is online.</li>
+        <li>On the server: <code>sudo systemctl status pairnets-server pairnets-tunnel</code>. Both should say <strong>active (running)</strong>.</li>
+        <li>Not listed at all? Run the one-line installer again and open the link it shows: <code>curl -fsSL https://pairnets.app/get.sh | sudo bash</code></li>
       </ol>
       <p>Still stuck? <a href="/docs">The guide</a> has a "Check it from outside" section with more.</p>
     </div>
 
     <details>
-      <summary>I just installed the server: how do I get in?</summary>
-      <p>At the end, the installer prints a one-time setup link for your nest. Open it in your browser: it works once, within 24 hours. Then add a passkey, or a password of at least 10 characters. After that, sign in at your nest's own name, for example <code>https://nest.pairnets.app</code>.</p>
-      <p>Lost the link, or it expired? On the server, make a new one and open it:</p>
-      <pre><code>sudo -u pairnets /opt/pairnets/pairnets-server owner-link</code></pre>
-      <p>Now add your computers: <a href="/add/">Add a computer</a>.</p>
+      <summary>I just installed the server: how do I add it to my account?</summary>
+      <p>At the end, the installer prints a link. Open it in your browser (on any device), sign in with the email address or Google account you want the nest to belong to, check that the page shows the same code as the server, and press <strong>Add this nest</strong>. The link works for 15 minutes; if it runs out, run the installer command again.</p>
+      <p>Your nest then appears at <a href="https://sync.pairnets.app/account">sync.pairnets.app/account</a>. Now add your computers: <a href="/add/">Add a computer</a>.</p>
     </details>
     <details>
-      <summary>"Can't reach it" under "Your nest" in the app</summary>
-      <p>Same causes: the name is mistyped, or your nest isn't running. Fix that, then change the name slightly and back, or press "Sign in with your browser" again; the line under the box checks the address as you type.</p>
+      <summary>"Can't reach it" in the app</summary>
+      <p>Your nest is switched off or offline, or it was removed from your account. Work through the checklist at the top of this page. If your nest runs on its own domain, check that the address is typed exactly, then press "Sign in with your browser" again; the line under the box checks the address as you type.</p>
     </details>
     <details>
-      <summary>The code expired, or my nest said no</summary>
-      <p>Codes last 10 minutes. Press <strong>Get a new code</strong> (or <strong>Start over</strong>) in the app and approve the new one. Always check that the code on your nest matches the code in the app before pressing Allow.</p>
+      <summary>The code expired, or the sign-in said no</summary>
+      <p>Codes last 10 minutes. Press <strong>Get a new code</strong> (or <strong>Start over</strong>) in the app and approve the new one. Always check that the code on the sign-in page matches the code in the app before pressing Allow.</p>
     </details>
     <details>
-      <summary>"Signed out of your nest"</summary>
-      <p>This computer was removed on your nest, or you pressed <em>Sign out of this computer</em>. Nothing is lost: your files are untouched. Press <strong>Sign in again…</strong> and approve it on your nest.</p>
+      <summary>"Signed out" in the app</summary>
+      <p>This computer was removed from your account, or you pressed <em>Sign out of this computer</em>. Nothing is lost: your files are untouched. Press <strong>Sign in again…</strong> and allow the computer at sync.pairnets.app.</p>
     </details>
     <details>
-      <summary>I lost my passkey or password</summary>
-      <p>On the server, make a new one-time sign-in link and open it in your browser:</p>
-      <pre><code>sudo -u pairnets /opt/pairnets/pairnets-server owner-link</code></pre>
+      <summary>I can't sign in to my account</summary>
+      <p>Your Pairnets account has no password. Sign in with the same method as before: <strong>Continue with email</strong> (a link sent to your address) or <strong>Continue with Google</strong>. Check your spam folder, and that you use the same address as last time. The link works for 15 minutes.</p>
     </details>
     <details>
       <summary>A computer was lost or stolen</summary>
-      <p>Open your nest, go to <strong>Devices</strong>, and remove it from the <strong>⋯</strong> menu. Its key stops working at once and nothing else changes.</p>
+      <p>Sign in at <a href="https://sync.pairnets.app/account">sync.pairnets.app/account</a> and remove it there. Its key stops working at once and nothing else changes. If you run your nest on your own domain, remove it under <strong>Devices</strong> on the nest's own website instead.</p>
+    </details>
+    <details>
+      <summary>My nest runs on its own domain and I lost my passkey or password</summary>
+      <p>This applies only to a nest with a website of its own. On the server, make a new one-time sign-in link and open it in your browser:</p>
+      <pre><code>sudo -u pairnets /opt/pairnets/pairnets-server owner-link</code></pre>
     </details>
     <details>
       <summary>Which of my data does pairnets.app see?</summary>
-      <p>None. This website is static pages with no accounts and no scripts that talk to anyone. Your nest is your own server; signing in and approving computers happens there, never here.</p>
+      <p>None of your files, and no account details. The pages here are static. The only thing they do is ask sync.pairnets.app, on every page, whether you are signed in, so the top bar can show your username instead of "Sign in". Your browser sends its sync.pairnets.app sign-in cookie with that question; pairnets.app never sees the cookie and keeps nothing. Cloudflare, which delivers the site, handles visitors' IP addresses. Details: <a href="/privacy/#website">Privacy</a>.</p>
     </details>
     <details>
       <summary>More</summary>

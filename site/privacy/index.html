@@ -6,12 +6,16 @@
 <title>Privacy Policy · Pairnets</title>
 <meta name="description" content="What Pairnets knows about you, why, for how long, and how to see or delete it. Your files are never stored by Pairnets.">
 <meta name="referrer" content="no-referrer">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#FFFFFF" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1D2026" media="(prefers-color-scheme: dark)">
 <link rel="icon" href="/assets/logo.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/assets/icon-256.png">
 <link rel="stylesheet" href="/assets/site.css">
 <script src="/assets/site.js" defer></script>
 </head>
 <body>
+<a class="skip" href="#main">Skip to content</a>
 <header class="top">
   <div class="wrap">
     <a class="brand" href="/"><img src="/assets/logo.svg" alt=""><span>Pairnets</span></a>
@@ -21,24 +25,24 @@
       <a href="/help/">Help</a>
     </nav>
     <span class="grow"></span>
-    <a class="button accent" id="account-button" href="https://nest.pairnets.app">Sign in →</a>
+    <a class="button accent" id="account-button" href="https://sync.pairnets.app/account">Sign in →</a>
   </div>
 </header>
-<main>
+<main id="main" tabindex="-1">
   <div class="wrap narrow">
     <div class="hero tight">
       <h1>Privacy Policy</h1>
       <p class="lead">What Pairnets knows about you, why, and for how long. As little as it can, and never your files.</p>
-      <p class="updated">Last updated 11 October 2026</p>
+      <p class="updated">Last updated 14 October 2026</p>
     </div>
     <div class="doc">
 <div class="callout">
-<h3>The short version</h3>
+<h2>The short version</h2>
 <ul>
 <li>Your files are stored only on your nest, your own server. They pass through sync.pairnets.app on the way and are never kept there.</li>
 <li>Your Pairnets account stores your email address, your username if you set one, how you sign in, and which computers and nests you have linked.</li>
 <li>No ads, no tracking, no analytics. We never sell your data or share it for marketing.</li>
-<li>This website, pairnets.app, sets no cookies and collects nothing.</li>
+<li>This website, pairnets.app, sets no cookies. Its pages ask sync.pairnets.app whether you are signed in, and Cloudflare, which delivers the site, handles visitors' IP addresses. It collects nothing else.</li>
 <li>You can see most of it on your account page, and delete all of it with one button.</li>
 </ul>
 </div>
@@ -130,17 +134,24 @@
 </ul>
 
 <h2 id="helpers">8. Who helps run Pairnets</h2>
-<p>These companies process data for us, only to run Pairnets:</p>
+<p>These companies process data for us, on our instructions and only to run Pairnets:</p>
 <div class="table-wrap"><table>
 <thead><tr><th>Company</th><th>What for</th><th>What they handle</th></tr></thead>
 <tbody>
 <tr><td><a href="https://www.cloudflare.com/privacypolicy/">Cloudflare, Inc.</a></td><td>Hosts this website and the account service (database included), runs the tunnels to nests, and the bot check on the sign-in page</td><td>Everything the service handles, including traffic to your nest while it passes through</td></tr>
 <tr><td><a href="https://resend.com/legal/privacy-policy">Resend, Inc.</a></td><td>Sends sign-in emails</td><td>Your email address and the email</td></tr>
-<tr><td><a href="https://policies.google.com/privacy">Google LLC</a></td><td>“Continue with Google”, only if you choose it</td><td>Confirms your email address and Google account ID</td></tr>
-<tr><td><a href="https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement">GitHub, Inc.</a></td><td>Hosts the downloads, updates and source code</td><td>Your IP address when you download or the app checks for updates</td></tr>
 </tbody>
 </table></div>
-<p>All four are based in the United States, so your data may be processed outside the EU. Where it is, the transfer is covered by the EU–US Data Privacy Framework or by the EU's Standard Contractual Clauses.</p>
+<p>These services act on their own, as independent controllers under their own privacy policies. We don't instruct them, and they are not processors for us:</p>
+<div class="table-wrap"><table>
+<thead><tr><th>Company</th><th>What for</th><th>What they handle</th></tr></thead>
+<tbody>
+<tr><td><a href="https://policies.google.com/privacy">Google LLC</a></td><td>“Continue with Google”, only if you choose it</td><td>Confirms your email address and Google account ID to us. Google's own policy covers what it knows about you.</td></tr>
+<tr><td><a href="https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement">GitHub, Inc.</a></td><td>Hosts the downloads, updates and source code</td><td>Your IP address when you download or the app checks for updates</td></tr>
+<tr><td><a href="https://more.ko-fi.com/privacy">Ko-fi</a></td><td>Takes donations, only if you choose to donate</td><td>Your payment and what you tell it; it shows us your name, the amount and any message (see <a href="#website">This website</a>)</td></tr>
+</tbody>
+</table></div>
+<p>Cloudflare, Resend, Google and GitHub are based in the United States, so your data may be processed outside the EU. Where it is, the transfer is covered by the EU–US Data Privacy Framework or by the EU's Standard Contractual Clauses.</p>
 <p>We share nothing with anyone else, unless the law requires it (for example, a valid court order).</p>
 
 <h2 id="bases">9. Why we may use your data</h2>
@@ -177,6 +188,10 @@
 <li>For anything else, email <a href="mailto:support@pairnets.app">support@pairnets.app</a> from the address on your account. It's free, and we answer within one month.</li>
 <li>You can complain to the Danish Data Protection Agency, <a href="https://www.datatilsynet.dk/">Datatilsynet</a>, or to the data protection authority where you live.</li>
 </ul>
+
+<div class="callout">
+<p><strong>You have the right to object.</strong> Where we use your data because of our legitimate interest (keeping Pairnets safe: request limits, the bot check, the activity log and technical logs, see <a href="#bases">section 9</a>), you can object to that at any time, on grounds relating to your particular situation (GDPR Article 21). Email <a href="mailto:support@pairnets.app">support@pairnets.app</a> and we will stop, unless we can show a compelling reason to continue that outweighs your interests, or we need the data to defend a legal claim.</p>
+</div>
 
 <h2 id="security">12. Security</h2>
 <p>We use HTTPS everywhere. Sign-in links, keys and sessions are stored only in hashed form. Cookies can only be read by our own site. Every computer has its own key, which you can remove at any time. The service doesn't store your files.</p>

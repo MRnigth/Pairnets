@@ -122,6 +122,7 @@ public sealed partial class ApiTour : IAsyncDisposable
         SyncHub.PeerTransferMethod,
         SyncHub.PeerSyncedMethod,
         PairingEndpoints.PairRequestedMethod,
+        PairingEndpoints.PairRequestedFromMethod,
         PairingEndpoints.PairDecidedMethod,
     ];
 

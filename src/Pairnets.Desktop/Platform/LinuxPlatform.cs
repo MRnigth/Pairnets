@@ -1,3 +1,4 @@
+using Pairnets.Core.Api;
 using Microsoft.Extensions.Logging;
 using Pairnets.Core.Settings;
 using Pairnets.Core.Sync;
@@ -82,7 +83,7 @@ public sealed class LinuxPlatform : IPlatformServices
             // Saved by Tether: copy it to Pairnets' entry.
             (code, output) = Proc.Run("secret-tool", ["lookup", .. TetherAttributes]);
             if (code != 0 || output.Length == 0)
-                throw new InvalidOperationException("The token is not in the keyring (is it unlocked?).");
+                throw new PlainMessageException("The token is not in the keyring (is it unlocked?).");
             Protect(output.Trim());
             return output.Trim();
         }
@@ -97,7 +98,7 @@ public sealed class LinuxPlatform : IPlatformServices
             // Pairnets' own entry only; one saved by Tether is left alone, as everywhere else.
             var (code, _) = Proc.Run("secret-tool", ["clear", .. Attributes]);
             if (code != 0)
-                throw new InvalidOperationException("The key could not be removed from the keyring (is it unlocked?).");
+                throw new PlainMessageException("The key could not be removed from the keyring (is it unlocked?).");
         }
     }
 

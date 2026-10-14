@@ -98,14 +98,55 @@ export function maskEmail(email: string): string {
 }
 
 /**
- * A label: control characters dropped, trimmed, 1-64 characters. Returns null for "absent or empty after cleaning",
+ * Control characters plus invisible "format" characters: soft hyphen, Arabic letter mark, Mongolian vowel separator,
+ * zero-width spaces and joiners, left-to-right/right-to-left marks and overrides, word joiner and invisible
+ * operators, bidi isolates and the byte-order mark. They let a name read as something it is not (a flipped or padded
+ * computer name on the Allow page), and no ordinary text needs them. Letters of every script stay.
+ */
+const HIDDEN_RANGES: [number, number][] = [
+  [0x00, 0x1f],
+  [0x7f, 0x9f],
+  [0xad, 0xad],
+  [0x61c, 0x61c],
+  [0x180e, 0x180e],
+  [0x200b, 0x200f],
+  [0x202a, 0x202e],
+  [0x2060, 0x2064],
+  [0x2066, 0x2069],
+  [0xfeff, 0xfeff],
+];
+const HIDDEN_CHARS = new RegExp(`[${HIDDEN_RANGES.map(([a, b]) => `${esc(a)}-${esc(b)}`).join("")}]`, "g");
+function esc(n: number): string {
+  return "\\" + "u" + n.toString(16).padStart(4, "0");
+}
+
+export function stripHidden(s: string): string {
+  return s.replace(HIDDEN_CHARS, "");
+}
+
+/** "Copenhagen, Denmark" from what Cloudflare knows about a request; null when it knows nothing usable. */
+export function placeName(country: string | null, city: string | null): string | null {
+  let countryName: string | null = null;
+  // XX means unknown and T1 is the Tor network: neither says where a computer is.
+  if (country && /^[A-Z]{2}$/.test(country) && country !== "XX" && country !== "T1") {
+    try {
+      countryName = new Intl.DisplayNames(["en"], { type: "region" }).of(country) ?? country;
+    } catch {
+      countryName = country;
+    }
+  }
+  const parts = [city, countryName].filter((x): x is string => !!x);
+  return parts.length ? parts.join(", ") : null;
+}
+
+/**
+ * A label: control and invisible characters dropped, trimmed, 1-64 characters. Returns null for "absent or empty after cleaning",
  * or the string "invalid" when it is not a string or too long.
  */
 export function cleanLabel(input: unknown): string | null | "invalid" {
   if (input === undefined || input === null) return null;
   if (typeof input !== "string") return "invalid";
-  // eslint-disable-next-line no-control-regex
-  const s = input.replace(/[\u0000-\u001f\u007f-\u009f]/g, "").trim();
+  const s = stripHidden(input).trim();
   if (s.length === 0) return null;
   if ([...s].length > 64) return "invalid";
   return s;
@@ -123,8 +164,7 @@ export function emailName(email: string): string {
 export function cleanText(input: unknown, max: number): string | null | "invalid" {
   if (input === undefined || input === null) return null;
   if (typeof input !== "string") return "invalid";
-  // eslint-disable-next-line no-control-regex
-  const s = input.replace(/[\u0000-\u001f\u007f-\u009f]/g, "").trim();
+  const s = stripHidden(input).trim();
   if (s.length === 0) return null;
   if ([...s].length > max) return "invalid";
   return s;

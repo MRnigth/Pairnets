@@ -145,6 +145,9 @@ public sealed class SyncRunner : IAsyncDisposable
     /// <summary>A computer asks to join the nest ("PairRequested"): its code, name and system.</summary>
     public event Action<string, string, string>? JoinRequested;
 
+    /// <summary>The same with the address the request came from ("PairRequestedFrom", sent by newer nests before "PairRequested").</summary>
+    public event Action<string, string, string, string>? JoinRequestedFrom;
+
     /// <summary>A join request was allowed or turned away on the nest ("PairDecided"): its code.</summary>
     public event Action<string>? JoinDecided;
 
@@ -708,6 +711,7 @@ public sealed class SyncRunner : IAsyncDisposable
         _hub.On<string, string>("DeviceRemoved", (id, name) => DeviceListChanged?.Invoke(id, name, true));
         _hub.On<string, string>("DeviceRenamed", (id, name) => DeviceListChanged?.Invoke(id, name, false));
         _hub.On<string, string, string>("PairRequested", (code, name, system) => JoinRequested?.Invoke(code, name, system));
+        _hub.On<string, string, string, string>("PairRequestedFrom", (code, name, system, address) => JoinRequestedFrom?.Invoke(code, name, system, address));
         _hub.On<string, bool>("PairDecided", (code, _) => JoinDecided?.Invoke(code));
         _hub.On<string, TransferReport>(PushNames.PeerTransfer, (device, report) =>
         {

@@ -16,15 +16,15 @@ const FAILURES_PER_HOUR = 10;
 
 export async function claimRoute(ctx: Ctx): Promise<Response> {
   // Per-IP limits first: 20 claims an hour, and no more once 10 have failed this hour.
-  const failures = await peek(ctx, "claim-fail", ctx.ip, FAILURES_PER_HOUR, HOUR);
+  const failures = await peek(ctx, "claim-fail", ctx.ipKey, FAILURES_PER_HOUR, HOUR);
   if (failures.limited) throw limitedError(failures);
-  const claims = await hit(ctx, "claim-ip", ctx.ip, CLAIMS_PER_HOUR, HOUR);
+  const claims = await hit(ctx, "claim-ip", ctx.ipKey, CLAIMS_PER_HOUR, HOUR);
   if (claims.limited) throw limitedError(claims);
   try {
     return await redeem(ctx);
   } catch (e) {
     if (e instanceof HttpError && e.status >= 400 && e.status < 500 && e.status !== 429) {
-      await hit(ctx, "claim-fail", ctx.ip, FAILURES_PER_HOUR, HOUR);
+      await hit(ctx, "claim-fail", ctx.ipKey, FAILURES_PER_HOUR, HOUR);
     }
     throw e;
   }

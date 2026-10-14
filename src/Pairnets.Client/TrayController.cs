@@ -1,3 +1,4 @@
+using Pairnets.Core.Api;
 using System.Net.Http;
 using System.Windows;
 using System.Windows.Threading;
@@ -243,30 +244,42 @@ public sealed class TrayController : ITrayActions, IDisposable
     /// </summary>
     public async void SignOut()
     {
-        if (Dialogs.Ask(null, $"Sign out of this computer?\n\nSyncing stops. Your files in {_settings.Folder} stay here. Sign in again to continue.",
-                "Pairnets – sign out", MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK)
-            return;
-        var removed = false;
+        if (_signingOut)
+            return; // a second click while the first is still working
+        _signingOut = true;
         try
         {
-            removed = _session is not null && await _session.SignOutAsync();
+            if (Dialogs.Ask(null, $"Sign out of this computer?\n\nSyncing stops. Your files in {_settings.Folder} stay here. Sign in again to continue.",
+                    "Pairnets – sign out", MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK)
+                return;
+            var removed = false;
+            try
+            {
+                removed = _session is not null && await _session.SignOutAsync();
+            }
+            catch (Exception ex) when (ex is Pairnets.Core.Api.PairnetsNetworkException or Pairnets.Core.Api.PairnetsAuthException or Pairnets.Core.Api.PairnetsProtocolException)
+            {
+                _log.LogWarning("Could not remove this computer on the nest: {Error}", ex.Message);
+            }
+            StopSession();
+            _settings.ProtectedToken = null;
+            _settings.DeviceId = null;
+            _settings.FirstRunCompleted = false;
+            SettingsStore.Save(_env.SettingsPath, _settings);
+            _dirty = true;
+            if (!removed)
+                Dialogs.Ask(null, "Signed out here, but your nest could not be told. " + Relay.RemoveByHandHint(_settings.ServerUrl),
+                    "Pairnets", MessageBoxButton.OK, MessageBoxImage.Warning);
+            _window?.Navigate(MainPage.Overview);
         }
-        catch (Exception ex) when (ex is Pairnets.Core.Api.PairnetsNetworkException or Pairnets.Core.Api.PairnetsAuthException or Pairnets.Core.Api.PairnetsProtocolException)
+        finally
         {
-            _log.LogWarning("Could not remove this computer on the nest: {Error}", ex.Message);
+            _signingOut = false;
         }
-        StopSession();
-        _settings.ProtectedToken = null;
-        _settings.DeviceId = null;
-        _settings.FirstRunCompleted = false;
-        SettingsStore.Save(_env.SettingsPath, _settings);
-        _dirty = true;
-        if (!removed)
-            Dialogs.Ask(null, "Signed out here, but your nest could not be told. " + Relay.RemoveByHandHint(_settings.ServerUrl),
-                "Pairnets", MessageBoxButton.OK, MessageBoxImage.Warning);
-        _window?.Navigate(MainPage.Overview);
         ShowSettings(firstRun: true);
     }
+
+    private bool _signingOut;
 
     private bool _resetting;
 
@@ -306,7 +319,7 @@ public sealed class TrayController : ITrayActions, IDisposable
             }
             catch (Exception ex) when (ex is UnauthorizedAccessException or IOException or System.Security.SecurityException)
             {
-                notes.Add("Start with Windows could not be turned off: " + ex.Message);
+                notes.Add("Start with Windows could not be turned off: " + FriendlyErrors.Describe(ex));
             }
             if (hadOwnKey && !removed)
                 notes.Add("Your nest could not be told. " + Relay.RemoveByHandHint(serverUrl));
@@ -648,12 +661,14 @@ public sealed class TrayController : ITrayActions, IDisposable
         }
         catch (IOException ex)
         {
-            Dialogs.Ask(null, ex.Message, "Pairnets", MessageBoxButton.OK, MessageBoxImage.Warning);
+            Dialogs.Ask(null, FriendlyErrors.Describe(ex), "Pairnets", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
         _settings.Folder = folder;
         SettingsStore.Save(_env.SettingsPath, _settings);
         StartSession(null);
     }
+
+    private SettingsWindow? _signInWindow;
 
     /// <summary>Signing in is a window of its own; later, Settings is a page of the main window.</summary>
     public void ShowSettings(bool firstRun)
@@ -663,8 +678,26 @@ public sealed class TrayController : ITrayActions, IDisposable
             ShowMainWindow(MainPage.Settings);
             return;
         }
+        // A second tray click or toast while the sign-in is open brings it forward instead of opening another.
+        if (_signInWindow is { } open)
+        {
+            if (open.WindowState == WindowState.Minimized)
+                open.WindowState = WindowState.Normal;
+            open.Activate();
+            return;
+        }
         var window = new SettingsWindow(_settings, _platform.Secrets, Shell, _session?.Status.NestUrl);
-        if (window.ShowDialog() != true || window.Result is null)
+        _signInWindow = window;
+        bool? accepted;
+        try
+        {
+            accepted = window.ShowDialog();
+        }
+        finally
+        {
+            _signInWindow = null;
+        }
+        if (accepted != true || window.Result is null)
             return;
         ApplySettings(window.Result, window.PlainToken);
         ShowMainWindow();
@@ -762,10 +795,10 @@ public sealed class TrayController : ITrayActions, IDisposable
         }
         catch (Exception ex) when (ex is UpdateVerificationException or HttpRequestException or IOException or System.ComponentModel.Win32Exception)
         {
-            _log.LogWarning("Update failed: {Error}", ex.Message);
+            _log.LogWarning("Update failed: {Error}", FriendlyErrors.Technical(ex));
             _updateError = ex is UpdateVerificationException
                 ? "The download didn't match its checksum, so Pairnets didn't install it and kept your current version."
-                : "The download failed: " + ex.Message;
+                : "The download failed. " + FriendlyErrors.Describe(ex);
             _updateProgress = null;
             _dirty = true;
         }
@@ -902,7 +935,7 @@ public sealed class TrayController : ITrayActions, IDisposable
         }
         catch (Exception ex) when (ex is UnauthorizedAccessException or IOException or System.Security.SecurityException)
         {
-            Dialogs.Ask(null, "Could not change the startup setting: " + ex.Message, "Pairnets");
+            Dialogs.Ask(null, "Could not change the startup setting: " + FriendlyErrors.Describe(ex), "Pairnets");
         }
     }
 

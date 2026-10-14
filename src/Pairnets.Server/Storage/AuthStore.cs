@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Data.Sqlite;
+using Pairnets.Core;
 
 namespace Pairnets.Server.Storage;
 
@@ -300,16 +301,14 @@ public sealed partial class AuthStore
     }
 
     /// <summary>
-    /// A name the apps can show and send in a header: trimmed, no control characters, at most 64 characters.
+    /// A name the apps can show and send in a header: trimmed, no control, format or bidi characters (see PlainText), at most 64 characters.
     /// Null when nothing usable is left. "unknown" and "another computer" are reserved.
     /// </summary>
     public static string? CleanName(string? name)
     {
         if (name is null)
             return null;
-        var clean = new string(name.Where(c => !char.IsControl(c)).ToArray()).Trim();
-        if (clean.Length > MaxNameLength)
-            clean = clean[..MaxNameLength].TrimEnd();
+        var clean = PlainText.Clean(name, MaxNameLength);
         if (clean.Length == 0 || clean.Equals("unknown", StringComparison.OrdinalIgnoreCase) || clean.Equals("another computer", StringComparison.OrdinalIgnoreCase))
             return null;
         return clean;

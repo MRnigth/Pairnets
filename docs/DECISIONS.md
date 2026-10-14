@@ -926,3 +926,32 @@ Overview and the nest picture are built; this entry records what was left out an
   (`main-window-*`, `sign-in-*`, `server-update-*`, `tray-panel-*`, `bug-report-*`, and `stage4-*` for Account,
   Devices, Activity and Needs you), because it runs on every system and the pages match the WPF ones page for page.
   The WPF tool writes the same screens as `windows-*` files; those are not kept in the repository, to keep it small.
+
+## Audit fixes (2026-10-14)
+
+An audit against ten outside guides (security, legal, polish, design, pre-ship) found four High issues; three are
+fixed here, the fourth (who runs the service, by legal name and address) is the owner's call and is unchanged.
+
+* **The root updater never touches the server user's folder as root.** Every write, rename and log append in
+  `/var/lib/pairnets/update` runs as `pairnets` (`runuser`), so a symlink planted there reaches nothing that user
+  couldn't already reach. `tests/linux-server/update-symlink-check.sh` proves it and runs in the pre-deploy check.
+* **Allowing a computer needs a sign-in from the last 15 minutes**, as do approving a server and removing a computer
+  (saying "no" doesn't). The Allow page shows the country and city Cloudflare saw for the request, and the account
+  gets a notice email for every allowed computer. Names lose hidden and right-to-left characters. Migration 0004
+  adds the two place columns and must be applied before the Worker is deployed.
+* **The relay passes only the headers the apps read**, and a `Location` only when it stays inside the same
+  `/n/<id>/`. The nest's website isn't reachable through the relay, and its downloads set no
+  `Content-Disposition`, so nothing else is needed.
+* **Per-address limits group an IPv6 /64.** `/assets` doesn't count toward the 300-a-minute limit, and a full
+  bucket stops writing. 15 of the day's 95 emails are kept for security notices; per-address email limits count only
+  emails actually sent.
+* **One friendly error mapping** (`FriendlyErrors` in Core) for everything the apps show; type names, status codes
+  and parser text go to the log only. Join requests are cleaned the same way (`PlainText.Clean`), and the nest sends
+  a new `PairRequestedFrom` with the address alongside the old `PairRequested`, so old apps keep working.
+* **App windows:** keyboard-only focus rings on the custom controls, one sign-in window at a time, Escape asks
+  before stopping a sign-in that is under way (the Mac/Linux window gained Escape to match), the saved email is
+  filled in, and Sign out can't run twice.
+* **Website:** Sign in goes to `sync.pairnets.app/account` (it used to point at the owner's own nest). Pages say
+  what is true today; Google, GitHub and Ko-fi are listed as independent controllers; muted text and links meet
+  contrast. `/get.sh` now points at the copy in the latest release, so it answers 404 until the next release
+  includes it: release before deploying the site.

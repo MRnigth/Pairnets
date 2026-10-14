@@ -134,21 +134,69 @@ export function finalize(resp: Response, isAsset: boolean, setCookies: string[],
 }
 
 /**
- * Relayed answers come from people's own servers but are served on this service's origin. So nothing a server sends
- * may act on that origin: its cookies, Clear-Site-Data and CORS headers are dropped, and the CSP makes any document a
- * sandbox without scripts (an app ignores all of this; a browser that opens a relayed URL gets an inert page).
+ * Relayed answers come from people's own servers (anyone can run one) but are served on this service's origin. So only
+ * the response headers the apps need get through (an allowlist; everything else a server sends is dropped, so it cannot
+ * add cookies, Clear-Site-Data, CORS, NEL/Report-To, Content-Disposition downloads and the like to our origin), a
+ * redirect may only point inside the same nest, and the CSP makes any document a sandbox without scripts (an app
+ * ignores all of this; a browser that opens a relayed URL gets an inert page).
+ *
+ * What the allowlist is made of: the body's type, length, encoding and byte ranges (resumable downloads send
+ * Range/If-Range and read Content-Range), the validators the nest's file endpoint sets (ETag, Last-Modified), Retry-After
+ * (the apps wait that long), Allow on a 405, and the nest's own X-Pairnets-* answer headers (server id, version, file
+ * hash, modified time) under their old X-Tether-* names too, for apps that are not updated yet.
  */
+const RELAY_PASS_HEADERS = new Set([
+  "content-type",
+  "content-length",
+  "content-encoding",
+  "content-range",
+  "accept-ranges",
+  "etag",
+  "last-modified",
+  "retry-after",
+  "allow",
+  "x-pairnets-server-id",
+  "x-pairnets-version",
+  "x-pairnets-hash",
+  "x-pairnets-modified-ms",
+  "x-tether-server-id",
+  "x-tether-version",
+  "x-tether-hash",
+  "x-tether-modified-ms",
+]);
 export const RELAY_CSP = "default-src 'none'; sandbox; frame-ancestors 'none'";
 
 const NULL_BODY = new Set([101, 204, 205, 304]);
 
-export function finalizeRelay(resp: Response): Response {
+/**
+ * A redirect the nest sends is kept only if it lands inside the same nest on this origin (`/n/<nestId>/...`), as a
+ * relative address; anything else would make this service's address bounce people to wherever a nest host likes.
+ */
+export function safeRelayLocation(location: string, requestUrl: URL, nestId: string): string | null {
+  let target: URL;
+  try {
+    target = new URL(location, requestUrl);
+  } catch {
+    return null;
+  }
+  if (target.origin !== requestUrl.origin) return null;
+  // Dot segments are already resolved by URL; a backslash or encoded slash cannot smuggle a second prefix.
+  if (!target.pathname.startsWith(`/n/${nestId}/`)) return null;
+  return target.pathname + target.search;
+}
+
+/** `where` is the relayed request's address and nest, to judge a redirect by; without it no Location passes. */
+export function finalizeRelay(resp: Response, where?: { url: URL; nestId: string }): Response {
   // A WebSocket upgrade is handed back untouched (its headers no longer matter and the socket must stay attached).
   if (resp.status === 101 || resp.webSocket) return resp;
-  const headers = new Headers(resp.headers);
-  for (const name of [...headers.keys()]) {
-    const n = name.toLowerCase();
-    if (n === "set-cookie" || n === "clear-site-data" || n.startsWith("access-control-")) headers.delete(name);
+  const headers = new Headers();
+  for (const [name, value] of resp.headers) {
+    if (RELAY_PASS_HEADERS.has(name.toLowerCase())) headers.append(name, value);
+  }
+  const location = resp.headers.get("Location");
+  if (location !== null && where) {
+    const safe = safeRelayLocation(location, where.url, where.nestId);
+    if (safe !== null) headers.set("Location", safe);
   }
   for (const [k, v] of Object.entries(SECURITY_HEADERS)) headers.set(k, v);
   headers.set("Content-Security-Policy", RELAY_CSP);

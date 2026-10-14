@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { Harness, lastEmailCode, type Res } from "./helpers";
+import { Harness, lastEmailCode, linkNest, type Res } from "./helpers";
 
 function askLink(b: ReturnType<Harness["browser"]>, email: string, next?: string): Promise<Res> {
   return b.call("POST", "/v1/login/email", { body: { email, turnstile: "token-ok", ...(next ? { next } : {}) } });
@@ -94,7 +94,8 @@ describe("login-email", () => {
     expect(h.mailer.to("busy@example.com")).toHaveLength(3);
     expect(h.mailer.to("new@example.com")).toHaveLength(1);
 
-    // 10 requests a day per address (the dropped 4th above counts too): 6 more go out, the 11th is dropped.
+    // 10 emails a day per address. Only emails that went out count: the dropped 4th above does not use up the
+    // allowance. 6 more go out in the next two hours, the 10th the hour after, the 11th request is dropped.
     for (let hour = 1; hour <= 2; hour++) {
       h.advance(3600);
       for (let i = 0; i < 3; i++) expect((await askLink(h.browser(`203.0.113.${30 + hour * 3 + i}`), "busy@example.com")).status).toBe(202);
@@ -102,10 +103,47 @@ describe("login-email", () => {
     expect(h.mailer.to("busy@example.com")).toHaveLength(9);
     h.advance(3600);
     expect(shape(await askLink(h.browser("203.0.113.60"), "busy@example.com"))).toEqual(fresh);
-    expect(h.mailer.to("busy@example.com")).toHaveLength(9);
+    expect(h.mailer.to("busy@example.com")).toHaveLength(10);
+    expect(shape(await askLink(h.browser("203.0.113.62"), "busy@example.com"))).toEqual(fresh);
+    expect(h.mailer.to("busy@example.com")).toHaveLength(10);
     h.advance(86400);
     await askLink(h.browser("203.0.113.61"), "busy@example.com");
-    expect(h.mailer.to("busy@example.com")).toHaveLength(10);
+    expect(h.mailer.to("busy@example.com")).toHaveLength(11);
+  });
+
+  it("requests that are dropped do not use up an address's allowance", async () => {
+    const h = await Harness.create();
+    for (let i = 0; i < 3; i++) await askLink(h.browser(`203.0.113.${10 + i}`), "me@example.com");
+    // Someone keeps asking for this address while it is at its hourly limit: nothing is sent and nothing is counted.
+    for (let i = 0; i < 20; i++) expect((await askLink(h.browser(`203.0.113.${100 + i}`), "me@example.com")).status).toBe(202);
+    expect(h.mailer.to("me@example.com")).toHaveLength(3);
+    const day = await h.query<{ count: number }>("SELECT count FROM rate_counters WHERE bucket LIKE 'email-addr-d:%'");
+    expect(day).toEqual([{ count: 3 }]);
+    // An hour later its owner can still get the link.
+    h.advance(3600);
+    await askLink(h.browser("203.0.113.200"), "me@example.com");
+    expect(h.mailer.to("me@example.com")).toHaveLength(4);
+  });
+
+  it("sign-in emails never use the part of the day's total kept for security notices", async () => {
+    // Even with the variable set to the whole total, 15 of the 95 stay for notices.
+    const h = await Harness.create({ EMAIL_DAILY_LIMIT: "95" });
+    const b = h.browser();
+    await b.signInByEmail("you@example.com");
+    // Pretend 79 emails went out today, all sign-in emails: one more fits under the ceiling of 80, then no more.
+    await h.env.DB.prepare("UPDATE rate_counters SET count = 79 WHERE bucket LIKE 'mail-all:%'").run();
+    await h.env.DB.prepare("UPDATE rate_counters SET count = 79 WHERE bucket LIKE 'mail-login:%'").run();
+    expect((await askLink(h.browser("203.0.113.70"), "one@example.com")).status).toBe(202);
+    expect(h.mailer.to("one@example.com")).toHaveLength(1); // the 80th
+    const refused = await askLink(h.browser("203.0.113.71"), "two@example.com");
+    expect(refused.status).toBe(503);
+    expect(refused.json.error).toBe("email_unavailable");
+    // Security notices still go out, up to the real total.
+    const before = h.mailer.sent.length;
+    await linkNest(h, b);
+    expect(h.mailer.sent.length).toBe(before + 1);
+    expect(h.mailer.sent.at(-1)!.subject).toContain("A nest was linked");
+    expect(await h.query("SELECT event FROM audit WHERE event = 'notice_skipped'")).toHaveLength(0);
   });
 
   it("checks Turnstile, the address and the per-IP limit", async () => {

@@ -267,7 +267,10 @@ public sealed partial class ApiTour
         Assert.Matches("^[A-Z2-9]{4}-[A-Z2-9]{4}$", start.Code);
         Assert.Equal($"{Origin}/link?code={start.Code}", start.VerifyUrl);
         foreach (var hub in listeners)
+        {
             await hub.WaitForAsync(PairingEndpoints.PairRequestedMethod, a => Equals(a[0], start.Code) && Equals(a[1], name) && Equals(a[2], "Windows"));
+            await hub.WaitForAsync(PairingEndpoints.PairRequestedFromMethod, a => Equals(a[0], start.Code) && Equals(a[1], name) && Equals(a[2], "Windows") && a[3] is string { Length: > 0 });
+        }
         Assert.Equal(PairPollResponse.Pending, (await Read<PairPollResponse>(Post(app, "api/pair/poll", new PairPollRequest(start.PollToken)))).Status);
 
         var waiting = await Read<WebEndpoints.DevicesView>(Get(_owner, "web/api/devices"));

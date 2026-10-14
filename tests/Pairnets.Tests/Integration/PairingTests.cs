@@ -142,6 +142,32 @@ public sealed class PairingTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task ANameWithInvisibleOrDirectionCharactersIsCleanedBeforeItIsStoredAndAnnounced()
+    {
+        var grant = _server.MintKey("DESKTOP");
+        var newer = new TaskCompletionSource<(string Code, string Name, string System, string Address)>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var older = new TaskCompletionSource<(string Code, string Name, string System)>(TaskCreationOptions.RunContinuationsAsynchronously);
+        await using var hub = new HubConnectionBuilder()
+            .WithUrl(new Uri(_server.Url, "hub"), o => o.AccessTokenProvider = () => Task.FromResult<string?>(grant.Key))
+            .Build();
+        hub.On<string, string, string, string>(PairingEndpoints.PairRequestedFromMethod, (code, name, system, address) => newer.TrySetResult((code, name, system, address)));
+        hub.On<string, string, string>(PairingEndpoints.PairRequestedMethod, (code, name, system) => older.TrySetResult((code, name, system)));
+        await hub.StartAsync();
+
+        // "DESKTOP" with a zero-width space, a right-to-left override, a soft hyphen, a word joiner and a BOM mixed in.
+        var disguised = "DESK\u200BTOP\u202E\u00AD\u2060\uFEFF\u061C\u180E\u2066\u2069";
+        var start = await Start(disguised);
+
+        var heardNewer = await newer.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        var heardOlder = await older.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.Equal((start.Code, "DESKTOP"), (heardNewer.Code, heardNewer.Name));
+        Assert.Equal((start.Code, "DESKTOP"), (heardOlder.Code, heardOlder.Name)); // an app without the address still hears it, in the old shape
+        Assert.False(string.IsNullOrEmpty(heardNewer.Address));
+        Assert.Equal("DESKTOP", Auth.FindPairRequestByCode(start.Code)!.Name);
+        Assert.Equal("Windows", Auth.FindPairRequestByCode(start.Code)!.System);
+    }
+
+    [Fact]
     public async Task ThePendingRequestShowsOnTheDevicesPageAndTheNewComputerAfterwards()
     {
         var start = await Start("LAPTOP");

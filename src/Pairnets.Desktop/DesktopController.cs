@@ -1,3 +1,4 @@
+using Pairnets.Core.Api;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
@@ -304,29 +305,41 @@ public sealed class DesktopController : ITrayActions, IDisposable
     /// </summary>
     public async void SignOut()
     {
-        if (!await Dialogs.ConfirmAsync(_window, "Pairnets – sign out",
-                $"Sign out of this computer?\n\nSyncing stops. Your files in {_settings.Folder} stay here. Sign in again to continue.", "Sign out", "Cancel"))
-            return;
-        var removed = false;
+        if (_signingOut)
+            return; // a second click while the first is still working
+        _signingOut = true;
         try
         {
-            removed = _session is not null && await _session.SignOutAsync();
+            if (!await Dialogs.ConfirmAsync(_window, "Pairnets – sign out",
+                    $"Sign out of this computer?\n\nSyncing stops. Your files in {_settings.Folder} stay here. Sign in again to continue.", "Sign out", "Cancel"))
+                return;
+            var removed = false;
+            try
+            {
+                removed = _session is not null && await _session.SignOutAsync();
+            }
+            catch (Exception ex) when (ex is Pairnets.Core.Api.PairnetsNetworkException or Pairnets.Core.Api.PairnetsAuthException or Pairnets.Core.Api.PairnetsProtocolException)
+            {
+                _log.LogWarning("Could not remove this computer on the nest: {Error}", ex.Message);
+            }
+            StopSession();
+            _settings.ProtectedToken = null;
+            _settings.DeviceId = null;
+            _settings.FirstRunCompleted = false;
+            SaveSettings();
+            _dirty = true;
+            if (!removed)
+                await Dialogs.InfoAsync(_window, "Pairnets", "Signed out here, but your nest could not be told. " + Relay.RemoveByHandHint(_settings.ServerUrl));
+            _window?.Navigate(MainPage.Overview);
         }
-        catch (Exception ex) when (ex is Pairnets.Core.Api.PairnetsNetworkException or Pairnets.Core.Api.PairnetsAuthException or Pairnets.Core.Api.PairnetsProtocolException)
+        finally
         {
-            _log.LogWarning("Could not remove this computer on the nest: {Error}", ex.Message);
+            _signingOut = false;
         }
-        StopSession();
-        _settings.ProtectedToken = null;
-        _settings.DeviceId = null;
-        _settings.FirstRunCompleted = false;
-        SaveSettings();
-        _dirty = true;
-        if (!removed)
-            await Dialogs.InfoAsync(_window, "Pairnets", "Signed out here, but your nest could not be told. " + Relay.RemoveByHandHint(_settings.ServerUrl));
-        _window?.Navigate(MainPage.Overview);
         ShowSignIn();
     }
+
+    private bool _signingOut;
 
     private bool _resetting;
 
@@ -365,7 +378,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
-                notes.Add("Start at login could not be turned off: " + ex.Message);
+                notes.Add("Start at login could not be turned off: " + FriendlyErrors.Describe(ex));
             }
             if (hadOwnKey && !removed)
                 notes.Add("Your nest could not be told. " + Relay.RemoveByHandHint(serverUrl));
@@ -669,7 +682,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
         }
         catch (IOException ex)
         {
-            await Dialogs.InfoAsync(_window, "Pairnets", ex.Message);
+            await Dialogs.InfoAsync(_window, "Pairnets", FriendlyErrors.Describe(ex));
         }
         _settings.Folder = newFolder;
         SaveSettings();
@@ -780,12 +793,24 @@ public sealed class DesktopController : ITrayActions, IDisposable
         dialog.Show();
     }
 
+    private SettingsWindow? _signInWindow;
+
     /// <summary>The sign-in window: the only way to set up (or set up again) this computer.</summary>
     private void ShowSignIn()
     {
+        // Already open (another tray click while signed out): bring it forward, don't open a second one.
+        if (_signInWindow is { } open)
+        {
+            if (open.WindowState == WindowState.Minimized)
+                open.WindowState = WindowState.Normal;
+            open.Activate();
+            return;
+        }
         var window = new SettingsWindow(_settings, _platform.Secrets, SafeIsAutoStart(), _platform.Open, _session?.Status.NestUrl);
+        _signInWindow = window;
         window.Closed += (_, _) =>
         {
+            _signInWindow = null;
             if (window.Result is null)
                 return;
             ApplySettings(window.Result, window.PlainToken);

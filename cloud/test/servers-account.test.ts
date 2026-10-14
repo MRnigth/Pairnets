@@ -85,9 +85,13 @@ describe("the account's servers", () => {
     expect(nest.devices.size).toBe(0);
     expect(nest.requests.at(-1)).toMatchObject({ method: "DELETE", path: `/api/relay/devices/${deviceId}` });
     expect(await h.query("SELECT event FROM audit WHERE event = 'device_removed' AND account_id = ?1", accountId)).toHaveLength(1);
-    // A device removal needs the Origin like every mutation, but not a recent sign-in.
+    // A device removal needs the Origin like every mutation, and a recent sign-in.
     h.advance(3600);
     expect((await b.call("DELETE", `/v1/servers/${nest.nestId}/devices/${deviceId}`, { origin: null })).status).toBe(403);
+    const old = await b.call("DELETE", `/v1/servers/${nest.nestId}/devices/${deviceId}`);
+    expect(old.status).toBe(401);
+    expect(old.json.error).toBe("reauth_required");
+    await b.signInByEmail("you@example.com");
     expect((await b.call("DELETE", `/v1/servers/${nest.nestId}/devices/${deviceId}`)).status).toBe(404);
   });
 

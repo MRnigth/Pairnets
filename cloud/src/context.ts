@@ -22,6 +22,8 @@ export interface Ctx {
   now: number;
   /** CF-Connecting-IP (or "unknown"); only ever stored as a keyed hash. */
   ip: string;
+  /** The address as per-address limits count it (an IPv6 address is its /64, see limitAddress); never leaves the Worker. */
+  ipKey: string;
   /** Raw request body (read once, at most 16 KiB) for requests that have one. */
   body: Uint8Array;
   /** Set-Cookie lines to add to the response. */

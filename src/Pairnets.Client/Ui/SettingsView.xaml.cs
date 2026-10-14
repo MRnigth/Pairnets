@@ -300,7 +300,7 @@ public partial class SettingsView : UserControl
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or PairnetsNetworkException or PairnetsAuthException or PairnetsProtocolException)
         {
-            Fail(ex.Message);
+            Fail(FriendlyErrors.Describe(ex));
         }
         finally
         {

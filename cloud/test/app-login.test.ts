@@ -314,3 +314,98 @@ describe("app-login", () => {
     expect(nest.devices.size).toBe(1);
   });
 });
+
+describe("allowing a computer is a security step", () => {
+  async function pending(cf?: { country?: string; city?: string }, staleSession = false) {
+    const s = await setup();
+    const nest = await addServer(s.h, s.b, { label: "soro" });
+    if (staleSession) s.h.advance(901); // the person signed in long ago; the request below is new
+    const start = await s.app.call("POST", "/v1/app/start", {
+      body: { name: "Alex‮'s laptop", system: "Windows 11", appVersion: "1.0.47" },
+      cf,
+    });
+    expect(start.status).toBe(200);
+    return { ...s, nest, start, userCode: start.json.userCode as string, deviceCode: start.json.deviceCode as string };
+  }
+
+  it("a sign-in older than 15 minutes cannot allow; a fresh one can, and the computer gets in", async () => {
+    const { h, b, nest, userCode, deviceCode, app } = await pending(undefined, true);
+    const old = await b.call("POST", "/v1/app/approve", { body: { userCode, approve: true, nestId: nest.nestId } });
+    expect(old.status).toBe(401);
+    expect(old.json.error).toBe("reauth_required");
+    const seen = await b.call("GET", `/v1/app/requests/${userCode}`);
+    expect(seen.json.status, seen.text).toBe("pending");
+    // Saying no never needs the fresh sign-in.
+    const start2 = await app.call("POST", "/v1/app/start", { body: { name: "Other" } });
+    expect((await b.call("POST", "/v1/app/approve", { body: { userCode: start2.json.userCode, approve: false } })).json).toEqual({ status: "denied" });
+
+    // The page sends the person to sign in again, and back to this very request.
+    const page = await b.call("GET", `/app?code=${userCode}`);
+    expect(page.status).toBe(302);
+    expect(page.location).toBe(`/login?reauth=1&next=${encodeURIComponent(`/app?code=${userCode}`)}`);
+    const login = await b.call("GET", page.location!);
+    expect(login.status).toBe(200);
+    expect(login.text).toContain("sign in again");
+
+    // A fresh sign-in (the new session) allows in one go.
+    await b.signInByEmail("you@example.com", `/app?code=${userCode}`);
+    expect((await b.call("GET", `/app?code=${userCode}`)).status).toBe(200);
+    const ok = await b.call("POST", "/v1/app/approve", { body: { userCode, approve: true, nestId: nest.nestId } });
+    expect(ok.json).toEqual({ status: "approved" });
+    h.advance(3);
+    expect((await app.call("POST", "/v1/app/poll", { body: { deviceCode } })).json.status).toBe("approved");
+  });
+
+  it("the page script sends a reauth_required answer to the sign-in page with reauth=1", async () => {
+    const { b } = await pending();
+    const js = await b.call("GET", "/assets/app.js");
+    expect(js.text).toContain('(err === "reauth_required" ? "reauth=1&" : "")');
+  });
+
+  it("the Allow page says where the request came from, and the computer name has no hidden characters", async () => {
+    const { b, userCode } = await pending({ country: "DK", city: "Copenhagen" });
+    const page = await b.call("GET", `/app?code=${userCode}`);
+    expect(page.status).toBe(200);
+    expect(page.text).toContain("This request came from <b>Copenhagen, Denmark</b>.");
+    expect(page.text).toContain("If that isn't where your computer is, don't allow it.");
+    expect(page.text).toContain("Allow Alex&#39;s laptop to sign in?");
+    expect(page.text).not.toContain("‮");
+  });
+
+  it("when Cloudflare does not know the place the page says so; only country and city are stored", async () => {
+    const { h, b, userCode } = await pending({ country: "XX" });
+    const page = await b.call("GET", `/app?code=${userCode}`);
+    expect(page.text).toContain("We couldn't tell where this request came from.");
+    const none = await pending({ country: "SE", city: "Malmö" });
+    const row = await h.query<{ request_country: string | null; request_city: string | null }>(
+      "SELECT request_country, request_city FROM device_logins WHERE user_code = ?1",
+      none.userCode.replace("-", ""),
+    );
+    expect(row).toEqual([{ request_country: "SE", request_city: "Malmö" }]);
+  });
+
+  it("allowing emails a security notice with the name, the nest, the time and the place", async () => {
+    const { h, b, nest, userCode } = await pending({ country: "DK", city: "Copenhagen" });
+    expect(h.mailer.to("you@example.com").filter((m) => m.subject.includes("allowed"))).toHaveLength(0);
+    h.advance(5);
+    await b.call("POST", "/v1/app/approve", { body: { userCode, approve: true, nestId: nest.nestId } });
+    const notice = h.mailer.to("you@example.com").filter((m) => m.subject.includes("A computer was allowed"));
+    expect(notice).toHaveLength(1);
+    expect(notice[0].subject).toBe("A computer was allowed to use your account: Alex's laptop");
+    const plain = (html: string) => html.replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+    for (const part of [notice[0].text, plain(notice[0].html)]) {
+      expect(part).toContain("\"Alex's laptop\"");
+      expect(part).toContain('the nest "soro"');
+      expect(part).toContain("2026-10-09 00:00 UTC");
+      expect(part).toContain("Copenhagen, Denmark");
+      expect(part).toContain("https://sync.pairnets.app/account");
+      expect(part).toContain("If this wasn");
+    }
+  });
+
+  it("a refusal sends no notice", async () => {
+    const { h, b, userCode } = await pending();
+    await b.call("POST", "/v1/app/approve", { body: { userCode, approve: false } });
+    expect(h.mailer.to("you@example.com").filter((m) => m.subject.includes("A computer was allowed"))).toHaveLength(0);
+  });
+});

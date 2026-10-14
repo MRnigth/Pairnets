@@ -61,7 +61,11 @@ public sealed class SiteTests
             var file = to[(to.LastIndexOf('/') + 1)..];
             Assert.True(workflow.Contains(file, StringComparison.Ordinal), $"{from} → {file} is not built by release.yml");
         }
-        Assert.True(Redirects().ContainsKey("/get.sh") && File.Exists(Path.Combine(RepoRoot, "deploy", "get.sh")));
+        // /get.sh is piped into "sudo bash", so it must point at the copy in the latest release, never at main.
+        Assert.Equal("https://github.com/MRnigth/Pairnets/releases/download/latest/get.sh", Redirects()["/get.sh"]);
+        Assert.True(File.Exists(Path.Combine(RepoRoot, "deploy", "get.sh")));
+        Assert.DoesNotContain("raw.githubusercontent.com", File.ReadAllText(Path.Combine(Root, "_redirects")));
+        Assert.Equal(2, Regex.Matches(workflow, @"cp deploy/get\.sh assets/get\.sh").Count); // both the release and the latest-build job upload it (and checksum it)
     }
 
     [Fact]
@@ -163,7 +167,7 @@ public sealed class SiteTests
         {
             var header = Regex.Match(File.ReadAllText(page), "<header class=\"top\">.*?</header>", RegexOptions.Singleline);
             Assert.True(header.Success, $"{Path.GetRelativePath(Root, page)} has no top bar");
-            Assert.Contains("<a class=\"button accent\" id=\"account-button\" href=\"https://nest.pairnets.app\">Sign in →</a>", header.Value);
+            Assert.Contains("<a class=\"button accent\" id=\"account-button\" href=\"https://sync.pairnets.app/account\">Sign in →</a>", header.Value);
         }
         var script = File.ReadAllText(Path.Combine(Root, "assets", "site.js"));
         Assert.Contains("fetch(\"https://sync.pairnets.app/v1/signed-in\", { credentials: \"include\"", script);
@@ -188,9 +192,22 @@ public sealed class SiteTests
     }
 
     [Fact]
-    public void TheSignInLinkGoesToTheNest()
+    public void TheSignInLinkGoesToTheAccountPage()
     {
-        Assert.Contains("href=\"https://nest.pairnets.app\"", File.ReadAllText(Path.Combine(Root, "index.html")));
-        Assert.Equal("https://nest.pairnets.app", Redirects()["/nest"]);
+        // /account sends visitors who are not signed in to /login and back to the account afterwards.
+        Assert.Contains("href=\"https://sync.pairnets.app/account\"", File.ReadAllText(Path.Combine(Root, "index.html")));
+        Assert.Equal("https://sync.pairnets.app/account", Redirects()["/nest"]); // old links to /nest keep working
+        foreach (var page in Pages())
+            Assert.DoesNotContain("href=\"https://nest.pairnets.app", File.ReadAllText(page));
+    }
+
+    [Fact]
+    public void HeadersHaveHstsAndOnlyCurrentPolicyNamesAndNoNotesAreInThePublishedFolder()
+    {
+        var headers = File.ReadAllText(Path.Combine(Root, "_headers"));
+        Assert.Contains("Strict-Transport-Security: max-age=31536000", headers);
+        Assert.Contains("browsing-topics=()", headers);
+        Assert.DoesNotContain("interest-cohort", headers); // retired
+        Assert.False(File.Exists(Path.Combine(Root, "README.md")), "notes belong in docs/, everything in site/ is public");
     }
 }

@@ -74,6 +74,58 @@ public sealed class TrayControllerTests
     }
 
     [Fact]
+    public async Task FirstRun_ClickingTheIconAgain_BringsTheSignInForwardInsteadOfOpeningAnother()
+    {
+        await using var app = await TrayHarness.CreateAsync();
+        var started = app.StartFirstRun();
+        var signIn = await app.Showing<SettingsWindow>("the sign-in window on the first start");
+
+        await app.ClickIcon();
+        await app.ClickIcon();
+
+        var open = await app.Wpf.Ui(() => System.Windows.Application.Current.Windows.OfType<SettingsWindow>().Count());
+        Assert.Equal(1, open);
+        Assert.Same(signIn, await app.Showing<SettingsWindow>("the same sign-in window"));
+        await app.Wpf.Ui(signIn.Close);
+        await started.WaitAsync(TimeSpan.FromSeconds(30));
+    }
+
+    [Fact]
+    public async Task FirstRun_Escape_ClosesAnIdleSignIn_ButAsksWhenAnEmailWasTyped()
+    {
+        await using var app = await TrayHarness.CreateAsync();
+        var started = app.StartFirstRun();
+        var signIn = await app.Showing<SettingsWindow>("the sign-in window on the first start");
+
+        // Typed an email: Escape asks first, and "No" keeps the window and the email.
+        await app.Type(signIn.SignIn.AccountEmailBox, "me@example.com");
+        await app.Wpf.Ui(signIn.EscapePressed);
+        Assert.Contains(app.Dialogs.Asked.Items, q => q.Text == "Stop signing in?");
+        Assert.True(await app.Wpf.Ui(() => signIn.IsVisible));
+        Assert.Equal("me@example.com", await app.Wpf.Ui(() => signIn.SignIn.AccountEmailBox.Text));
+
+        // "Yes" closes it.
+        app.Dialogs.When("Stop signing in?", MessageBoxResult.Yes);
+        await app.Wpf.Ui(signIn.EscapePressed);
+        await started.WaitAsync(TimeSpan.FromSeconds(30));
+        Assert.False(await app.Wpf.Ui(() => signIn.IsVisible));
+    }
+
+    [Fact]
+    public async Task SignInWindow_FillsInTheSavedAccountEmail_AndEscapeStillClosesWithoutAsking()
+    {
+        await using var app = await TrayHarness.CreateAsync(settings: s => s.AccountEmail = "saved@example.com"); // signed out, but remembers who
+        var started = app.StartFirstRun();
+        var signIn = await app.Showing<SettingsWindow>("the sign-in window");
+
+        Assert.Equal("saved@example.com", await app.Wpf.Ui(() => signIn.SignIn.AccountEmailBox.Text));
+        await app.Wpf.Ui(signIn.EscapePressed); // nothing was typed: no question
+        await started.WaitAsync(TimeSpan.FromSeconds(30));
+        Assert.DoesNotContain(app.Dialogs.Asked.Items, q => q.Text == "Stop signing in?");
+        Assert.False(await app.Wpf.Ui(() => signIn.IsVisible));
+    }
+
+    [Fact]
     public async Task FirstRun_GoogleAndEmailButtons_OpenTheNest()
     {
         await using var nest = await TestServer.StartWithWebsiteAsync(TrayHarness.BehindATunnel(new()
@@ -289,6 +341,26 @@ public sealed class TrayControllerTests
         Assert.Null(app.Tray.Session);
         Assert.True(File.Exists(Path.Combine(app.Folder, "keep-me.txt")));
         Assert.DoesNotContain(app.Dialogs.Asked.Items, q => q.Text.StartsWith("Signed out here, but your nest could not be told", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task SignOut_PressedTwice_AsksAndWorksOnlyOnce()
+    {
+        await using var nest = await TestServer.StartWithWebsiteAsync();
+        await using var app = await TrayHarness.CreateAsync(nest);
+        await app.StartAsync();
+        await app.SyncedOnce();
+        app.Dialogs.When("Sign out of this computer?", MessageBoxResult.OK);
+
+        // Two presses before the first has finished (it waits for the nest): the second does nothing.
+        await app.Wpf.Ui(() =>
+        {
+            app.Tray.SignOut();
+            app.Tray.SignOut();
+        });
+
+        await app.Showing<SettingsWindow>("the sign-in window after signing out");
+        Assert.Single(app.Dialogs.Asked.Items, q => q.Text.StartsWith("Sign out of this computer?", StringComparison.Ordinal));
     }
 
     [Fact]

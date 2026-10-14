@@ -341,8 +341,8 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
         catch (PairnetsNetworkException ex)
         {
             return new(ConnectionTestStatus.Unreachable, client.IsRelay
-                ? $"Cannot reach Pairnets: {ex.Message}. Check that this computer is online."
-                : $"Cannot reach the server: {ex.Message}. Is the server running, and its Cloudflare Tunnel connected?");
+                ? FriendlyErrors.Describe(ex) + " Check that this computer is online."
+                : FriendlyErrors.Describe(ex) + " Is the server running, and its Cloudflare Tunnel connected?");
         }
 
         try
@@ -360,13 +360,13 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
         {
             return new(ConnectionTestStatus.BadToken, "The server is reachable but rejected the token.");
         }
-        catch (PairnetsNetworkException ex)
+        catch (PairnetsNetworkException)
         {
-            return new(ConnectionTestStatus.Unreachable, $"Health is OK but the API failed: {ex.Message}");
+            return new(ConnectionTestStatus.Unreachable, "The server answers, but its API did not. Try again in a moment.");
         }
         catch (Exception ex) when (ex is PairnetsProtocolException or JsonException)
         {
-            return new(ConnectionTestStatus.ServerError, $"Unexpected answer from the server: {ex.Message}");
+            return new(ConnectionTestStatus.ServerError, "The server answered something Pairnets could not use. Update the server and the app to the same release.");
         }
     }
 
@@ -476,7 +476,7 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
                 }
                 catch (Exception ex) when (ex is IOException or HttpRequestException)
                 {
-                    throw new PairnetsNetworkException($"Download of '{path}' was interrupted: {ex.Message}", ex);
+                    throw new PairnetsNetworkException("The connection dropped during a download. Pairnets carries on from where it stopped.", ex, details: $"Download of '{path}' was interrupted: {ex.Message}");
                 }
                 if (n == 0)
                     break;
@@ -994,11 +994,11 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
                     ErrorCodes.CaseCollision => new ApiResult(ApiOutcome.CaseCollision, null, error.Message),
                     ErrorCodes.InvalidName => new ApiResult(ApiOutcome.InvalidName, null, error.Message),
                     ErrorCodes.NotFound => new ApiResult(ApiOutcome.NotFound, null, error.Message),
-                    _ => throw new PairnetsProtocolException($"Server answered {(int)resp.StatusCode}: {error?.Code ?? "no error code"} {error?.Message}"),
+                    _ => throw RefusedRequest(resp, error),
                 };
             default:
                 await ThrowForStatusAsync(resp).ConfigureAwait(false);
-                throw new PairnetsProtocolException($"Unexpected status {(int)resp.StatusCode}.");
+                throw new PairnetsProtocolException(FriendlyErrors.BadAnswer, $"Unexpected status {(int)resp.StatusCode}");
         }
     }
 
@@ -1011,18 +1011,18 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
             var reason = await TryReadErrorAsync(resp, CancellationToken.None).ConfigureAwait(false);
             throw new PairnetsAuthException(reason?.Code is ErrorCodes.DeviceRemoved or ErrorCodes.SharedTokenOff && reason.Message is { } m
                 ? m
-                : "The server rejected the token (401).", reason?.Code);
+                : FriendlyErrors.NotAllowed, reason?.Code);
         }
         if (resp.StatusCode == HttpStatusCode.TooManyRequests)
             throw new PairnetsSlowDownException(RetryAfterOf(resp) ?? BackPressure.DefaultWait);
         if (DescribeCloudflareError(resp, IsRelay) is { } cloudflare)
             throw new PairnetsNetworkException(cloudflare);
         if (resp.StatusCode == HttpStatusCode.RequestEntityTooLarge)
-            throw new PairnetsProtocolException("The server, or a proxy in front of it such as Cloudflare, refused a request that was too large (413).");
+            throw new PairnetsProtocolException("The server, or a proxy in front of it such as Cloudflare, refused a file that was too large to send in one go.", "413 Request Entity Too Large");
         if ((int)resp.StatusCode >= 500 || resp.StatusCode == HttpStatusCode.RequestTimeout)
-            throw new PairnetsNetworkException($"Server error {(int)resp.StatusCode} {resp.ReasonPhrase}.");
+            throw new PairnetsNetworkException(FriendlyErrors.ServerProblem, details: $"Server error {(int)resp.StatusCode} {resp.ReasonPhrase}");
         var error = await TryReadErrorAsync(resp, CancellationToken.None).ConfigureAwait(false);
-        throw new PairnetsProtocolException($"Server answered {(int)resp.StatusCode}: {error?.Code} {error?.Message}".TrimEnd());
+        throw RefusedRequest(resp, error);
     }
 
     /// <summary>
@@ -1076,19 +1076,19 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
         try
         {
             var value = await resp.Content.ReadFromJsonAsync<T>(PairnetsJson.Options, timeout.Token).ConfigureAwait(false);
-            return value ?? throw new PairnetsProtocolException("Empty JSON response.");
+            return value ?? throw new PairnetsProtocolException(FriendlyErrors.BadAnswer, "Empty JSON response");
         }
         catch (JsonException ex)
         {
-            throw new PairnetsProtocolException("Invalid JSON from server: " + ex.Message);
+            throw new PairnetsProtocolException(FriendlyErrors.BadAnswer, "Invalid JSON from server: " + ex.Message, ex);
         }
         catch (Exception ex) when (ex is IOException or HttpRequestException)
         {
-            throw new PairnetsNetworkException("Connection lost while reading the response: " + ex.Message, ex);
+            throw new PairnetsNetworkException("The connection to the server was lost while it was answering. Pairnets tries again by itself.", ex, details: ex.Message);
         }
         catch (OperationCanceledException ex) when (!ct.IsCancellationRequested)
         {
-            throw new PairnetsNetworkException("Timed out reading the response.", ex);
+            throw new PairnetsNetworkException(FriendlyErrors.TimedOut, ex);
         }
     }
 
@@ -1170,7 +1170,7 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
         }
         catch (HttpRequestException ex)
         {
-            throw new PairnetsNetworkException(Describe(ex), ex);
+            throw new PairnetsNetworkException(DescribeSendFailure(ex), ex, details: Describe(ex));
         }
         catch (IOException ex)
         {
@@ -1184,7 +1184,7 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
         }
         catch (OperationCanceledException ex) when (!callerCt.IsCancellationRequested)
         {
-            throw new PairnetsNetworkException("The request timed out or stalled.", ex);
+            throw new PairnetsNetworkException(FriendlyErrors.TimedOut, ex);
         }
         finally
         {
@@ -1245,6 +1245,18 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
 
     /// <summary>A service error is a short JSON line; anything bigger is not one.</summary>
     private const int ServiceErrorMaxBytes = 16 * 1024;
+
+    /// <summary>Plain words for a request that did not go through; the technical text goes in the exception's details.</summary>
+    private static string DescribeSendFailure(HttpRequestException ex) =>
+        FriendlyErrors.Describe(ex) is var text && text == FriendlyErrors.Generic ? FriendlyErrors.Offline : text;
+
+
+    /// <summary>The server turned a request down with an answer Pairnets has no special handling for.</summary>
+    private static PairnetsProtocolException RefusedRequest(HttpResponseMessage resp, ErrorBody? error) =>
+        new(error?.Message is { } said && !FriendlyErrors.LooksTechnical(said)
+                ? said
+                : "The server turned that request down. Update the server and the app to the same release, then try again.",
+            $"Server answered {(int)resp.StatusCode}: {error?.Code ?? "no error code"} {error?.Message}".TrimEnd());
 
     private static string Describe(HttpRequestException ex)
     {

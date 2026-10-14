@@ -48,10 +48,14 @@ public sealed record PeerActivity(TransferReport? Report, DateTimeOffset ReportA
 }
 
 /// <summary>A computer asking to join the nest, as the other computers hear about it.</summary>
-public sealed record JoinRequest(string Code, string Name, string System, DateTimeOffset At)
+public sealed record JoinRequest(string Code, string Name, string System, DateTimeOffset At, string? Address = null)
 {
-    /// <summary>"LAPTOP-2 (Windows) wants to join".</summary>
-    public string Title => System.Length > 0 ? $"{Name} ({System}) wants to join" : $"{Name} wants to join";
+    /// <summary>
+    /// "LAPTOP-2 (Windows) wants to join", and where from when the nest said so: "... from 203.0.113.7". Anyone can start a
+    /// request on a nest with its own address, so the address is how you tell a stranger from your own computer.
+    /// </summary>
+    public string Title => (System.Length > 0 ? $"{Name} ({System}) wants to join" : $"{Name} wants to join")
+        + (Address is { Length: > 0 } ? $" from {Address}" : string.Empty);
 }
 
 /// <summary>Everything a UI needs to draw the current state, as one immutable value.</summary>

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createWorker } from "../src/app";
-import { ResendMailer, RESEND_URL } from "../src/mail";
+import { loginEmail, noticeEmail, ResendMailer, RESEND_URL } from "../src/mail";
 import { FakeNet, Harness, jsonResponse, linkNest } from "./helpers";
 import { createExecutionContext, waitOnExecutionContext } from "cloudflare:test";
 
@@ -60,5 +60,48 @@ describe("mail", () => {
     expect(h.mailer.sent.length).toBe(before);
     const skipped = await h.query<{ detail: string }>("SELECT detail FROM audit WHERE event = 'notice_skipped'");
     expect(skipped.map((s) => JSON.parse(s.detail).kind)).toEqual(["nest_linked"]);
+  });
+});
+
+describe("account-service emails", () => {
+  const link = "https://sync.pairnets.app/login/email#code=abc";
+
+  it("every email says why it was sent, whom to ask, and is a proper UTF-8 English page", () => {
+    const login = loginEmail("you@example.com", link);
+    const notice = noticeEmail("you@example.com", "server_added", "soro");
+    for (const m of [login, notice]) {
+      expect(m.html.startsWith('<!doctype html><html lang="en"><head><meta charset="utf-8">')).toBe(true);
+      expect(m.text).toContain("support@pairnets.app");
+      expect(m.html).toContain('href="mailto:support@pairnets.app"');
+      expect(m.text).toContain("Privacy: https://pairnets.app/privacy/");
+      expect(m.html).toContain('href="https://pairnets.app/privacy/"');
+    }
+    const reasonLogin = "You got this because someone asked to sign in to Pairnets with this address.";
+    expect(login.text).toContain(reasonLogin);
+    expect(login.html).toContain(reasonLogin);
+    const reasonAccount = "You got this because this address belongs to a Pairnets account.";
+    expect(notice.text).toContain(reasonAccount);
+    expect(notice.html).toContain(reasonAccount);
+  });
+
+  it("uses the website's blue, and the help address is a real link while text versions stay in sync", () => {
+    const login = loginEmail("you@example.com", link);
+    expect(login.html).toContain("background:#2563EB");
+    expect(login.html).not.toContain("#1f6feb");
+    const notice = noticeEmail("you@example.com", "identity_added_google");
+    expect(notice.html).toContain('<a href="https://sync.pairnets.app/account" style="color:#2563EB">https://sync.pairnets.app/account</a>');
+    expect(notice.text).toContain("sign in at https://sync.pairnets.app/account, check");
+    // The plain text carries the same sentences as the page.
+    expect(notice.html.replace(/<[^>]+>/g, "").replace(/&quot;/g, '"')).toContain("You can now sign in to your Pairnets account with Google.");
+    expect(notice.text).toContain("You can now sign in to your Pairnets account with Google.");
+    expect(login.text).toContain(link);
+  });
+
+  it("only the account page address becomes a link: an address inside a computer's name stays text", () => {
+    const m = noticeEmail("you@example.com", "app_allowed", "https://evil.example/login", { nest: "soro", at: 1791504000, place: null });
+    expect(m.html).not.toContain('href="https://evil.example');
+    expect(m.html).toContain("https://evil.example/login");
+    expect(m.html).toContain('href="https://sync.pairnets.app/account"');
+    expect(m.text).toContain("We could not tell where the request came from.");
   });
 });

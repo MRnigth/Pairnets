@@ -16,7 +16,7 @@ import {
   verifyGoogleIdToken,
 } from "../google";
 import { HttpError, htmlResponse, json, noContent, redirect } from "../http";
-import { loginEmail, loginMailLimit, reserveMail, sendLater } from "../mail";
+import { loginEmail, loginMailAvailable, reserveMail, sendLater } from "../mail";
 import { emailLandingPage, loginPage } from "../pages";
 import { DAY, enforce, hit, HOUR, peek } from "../ratelimit";
 import { blobBytes, jsonBody } from "../request";
@@ -43,13 +43,13 @@ export function emailLandingRoute(): Response {
 
 // POST /v1/login/email
 export async function loginEmailRoute(ctx: Ctx): Promise<Response> {
-  await enforce(ctx, "email-ip", ctx.ip, 10, HOUR);
+  await enforce(ctx, "email-ip", ctx.ipKey, 10, HOUR);
   const b = jsonBody(ctx);
   const email = normaliseEmail(b.email);
   const nextOk = b.next === undefined || b.next === null || typeof b.next === "string";
   if (!email || typeof b.turnstile !== "string" || !nextOk) throw new HttpError(400, "bad_request");
   if (!(await verifyTurnstile(ctx, b.turnstile))) throw new HttpError(400, "turnstile_failed");
-  if ((await peek(ctx, "mail-login", "service", loginMailLimit(ctx), DAY)).limited) throw new HttpError(503, "email_unavailable");
+  if (!(await loginMailAvailable(ctx))) throw new HttpError(503, "email_unavailable");
 
   // The browser binding: a fresh cookie on every answer. A browser that already holds a well-formed one keeps its value,
   // so the links of two requests in a row both work in it (see CONTRACT-NOTES-worker.md).
@@ -57,10 +57,16 @@ export async function loginEmailRoute(ctx: Ctx): Promise<Response> {
   const binding = existing && existing.length === 43 && isStrictB64url(existing, 32) ? existing : randomToken(32);
   ctx.setCookies.push(setCookie(EMAIL_COOKIE, binding, EMAIL_BINDING_LIFETIME));
 
-  // Per-address limits fail silently: the answer is the same 202 whatever happens from here on.
-  const hourly = await hit(ctx, "email-addr-h", email, 3, HOUR);
-  const daily = await hit(ctx, "email-addr-d", email, 10, DAY);
-  if (!hourly.limited && !daily.limited && (await reserveMail(ctx, "login"))) {
+  // Per-address limits fail silently: the answer is the same 202 whatever happens from here on. They count emails that
+  // are really sent, not requests: asking again for an address that is at its limit, or while the day's email budget is
+  // used up, must not use up that address's allowance (it would lock the owner out for the day).
+  const addressFull = async () =>
+    (await peek(ctx, "email-addr-h", email, 3, HOUR)).limited || (await peek(ctx, "email-addr-d", email, 10, DAY)).limited;
+  if (!(await addressFull()) && (await reserveMail(ctx, "login"))) {
+    // Counted now, atomically: two requests at once cannot both slip under the limit.
+    const hourly = await hit(ctx, "email-addr-h", email, 3, HOUR);
+    const daily = await hit(ctx, "email-addr-d", email, 10, DAY);
+    if (hourly.limited || daily.limited) return json(202, { status: "sent" });
     const code = randomToken(24);
     await ctx.env.DB.prepare(
       `INSERT INTO login_challenges (id, kind, email, code_hash, binding_hash, next, created_at, expires_at, used_at)
@@ -75,7 +81,7 @@ export async function loginEmailRoute(ctx: Ctx): Promise<Response> {
 
 // POST /v1/login/email/confirm
 export async function loginEmailConfirmRoute(ctx: Ctx): Promise<Response> {
-  await enforce(ctx, "email-confirm-ip", ctx.ip, 30, HOUR);
+  await enforce(ctx, "email-confirm-ip", ctx.ipKey, 30, HOUR);
   const b = jsonBody(ctx);
   if (typeof b.code !== "string") throw new HttpError(400, "bad_request");
   if (b.code.length !== 32 || !isStrictB64url(b.code, 24)) throw new HttpError(400, "invalid_code");
@@ -101,7 +107,7 @@ export async function loginEmailConfirmRoute(ctx: Ctx): Promise<Response> {
 
 // GET /login/google?next=&reauth=1
 export async function googleStartRoute(ctx: Ctx): Promise<Response> {
-  await enforce(ctx, "google-ip", ctx.ip, 30, 600);
+  await enforce(ctx, "google-ip", ctx.ipKey, 30, 600);
   const next = safeNext(ctx.url.searchParams.get("next"));
   const reauth = ctx.url.searchParams.get("reauth") === "1";
   const state = randomToken(16);

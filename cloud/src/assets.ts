@@ -508,7 +508,7 @@ const APP_JS = String.raw`(function () {
     pnApi("POST", "/v1/app/approve", body).then(function (res) {
       var err = res.body && res.body.error;
       if (err === "unauthorized" || err === "reauth_required") {
-        location.href = "/login?next=" + encodeURIComponent("/app?code=" + code);
+        location.href = "/login?" + (err === "reauth_required" ? "reauth=1&" : "") + "next=" + encodeURIComponent("/app?code=" + code);
         return;
       }
       if (res.ok) {
@@ -546,7 +546,10 @@ const ADD_JS = String.raw`(function () {
     if (approve && label && label.value.trim()) body.label = label.value.trim();
     if (approve) pnShow(status, "Adding the nest...", false);
     pnApi("POST", "/v1/servers/approve", body).then(function (res) {
-      if (res.body && res.body.error === "unauthorized") { location.href = "/login?next=" + encodeURIComponent("/add?code=" + code); return; }
+      if (res.body && (res.body.error === "unauthorized" || res.body.error === "reauth_required")) {
+        location.href = "/login?" + (res.body.error === "reauth_required" ? "reauth=1&" : "") + "next=" + encodeURIComponent("/add?code=" + code);
+        return;
+      }
       if (!res.ok) {
         pnShow(status, res.body.message || "That did not work.", true);
         if (res.status >= 500) for (var j = 0; j < buttons.length; j++) buttons[j].disabled = false;

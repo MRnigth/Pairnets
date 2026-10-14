@@ -1,3 +1,4 @@
+using Pairnets.Core.Api;
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Windows;
@@ -133,7 +134,7 @@ public partial class HistoryPageView : UserControl
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            ShowMessage("Could not read the files on your nest: " + ex.Message, retry: true);
+            ShowMessage("Could not read the files on your nest. " + FriendlyErrors.Describe(ex), retry: true);
         }
     }
 
@@ -255,7 +256,7 @@ public partial class HistoryPageView : UserControl
         catch (Exception ex)
         {
             if (!cts.IsCancellationRequested)
-                _versionsMessage.Text = "Could not read the versions: " + ex.Message;
+                _versionsMessage.Text = "Could not read the versions. " + FriendlyErrors.Describe(ex);
         }
     }
 

@@ -61,6 +61,7 @@ public partial class SignInView : UserControl
     private bool _browserOpened;
     private bool _accountBrowserOpened;
     private bool _quiet;
+    private bool _typedSomething;
     private string? _shownAddress;
 
     public SignInView()
@@ -85,8 +86,15 @@ public partial class SignInView : UserControl
                 CheckSoon();
         };
         EmailBox.TextChanged += (_, _) =>
+        {
+            _typedSomething |= !string.IsNullOrEmpty(EmailBox.Text);
             EmailButton.IsEnabled = _check is { CanSignIn: true } && Nest.LooksLikeEmail(EmailBox.Text);
-        AccountEmailBox.TextChanged += (_, _) => AccountEmailProblem.IsVisible = false;
+        };
+        AccountEmailBox.TextChanged += (_, _) =>
+        {
+            _typedSomething |= (AccountEmailBox.Text ?? string.Empty) != (current.AccountEmail?.Trim() ?? string.Empty);
+            AccountEmailProblem.IsVisible = false;
+        };
         AccountEmailBox.KeyDown += (_, e) =>
         {
             if (e.Key != Key.Enter)
@@ -104,6 +112,9 @@ public partial class SignInView : UserControl
             _checking?.Cancel();
         };
         ShowStep(SignInStep.Account);
+        // The account this computer was signed in with last time, so signing in again doesn't mean typing it again.
+        if (!string.IsNullOrWhiteSpace(current.AccountEmail))
+            AccountEmailBox.Text = current.AccountEmail.Trim();
         if (!string.IsNullOrWhiteSpace(AddressBox.Text))
             CheckSoon(TimeSpan.Zero);
     }
@@ -116,6 +127,12 @@ public partial class SignInView : UserControl
 
     /// <summary>How often the account sign-in asks how it went (tests); by default what the service says.</summary>
     internal TimeSpan? AccountPollInterval { get; set; }
+
+    /// <summary>
+    /// True while closing the window would throw something away: waiting for the browser, or an email typed in.
+    /// (An email filled in from the saved account does not count.)
+    /// </summary>
+    internal bool InProgress => Step is SignInStep.AccountWait or SignInStep.Wait || _typedSomething;
 
     /// <summary>The step on show.</summary>
     internal SignInStep Step { get; private set; }
@@ -731,7 +748,7 @@ public partial class SignInView : UserControl
             {
                 // The preview is a courtesy; syncing itself never deletes or overwrites on a first pass.
             }
-            var protectedKey = _protector?.Protect(grant.Key) ?? throw new InvalidOperationException("No secret store to keep this computer's key in.");
+            var protectedKey = _protector?.Protect(grant.Key) ?? throw new PlainMessageException("No secret store to keep this computer's key in.");
             var startAtLogin = AutoStartBox.IsChecked == true;
             var settings = _accountResult is { } account
                 ? AccountSignIn.SettingsAfterSignIn(_current, account, folder, startAtLogin, protectedKey)
@@ -740,7 +757,7 @@ public partial class SignInView : UserControl
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
         {
-            await Dialogs.InfoAsync(Owner, "Pairnets", ex.Message);
+            await Dialogs.InfoAsync(Owner, "Pairnets", FriendlyErrors.Describe(ex));
         }
         finally
         {

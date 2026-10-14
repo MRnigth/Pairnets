@@ -322,7 +322,7 @@ public partial class SettingsView : UserControl
             }
 
             if (_protector is null)
-                throw new InvalidOperationException("No secret store available.");
+                throw new PlainMessageException("No secret store available.");
             var (deviceId, deviceName) = await OwnKey.CarryOverAsync(_original, url, token, tokenTyped: !string.IsNullOrWhiteSpace(TokenBox.Text), DeviceName());
             Result = new ClientSettings
             {
@@ -355,7 +355,7 @@ public partial class SettingsView : UserControl
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or PairnetsNetworkException or PairnetsAuthException or PairnetsProtocolException or InvalidOperationException)
         {
-            await Dialogs.InfoAsync(Owner, "Pairnets", ex.Message);
+            await Dialogs.InfoAsync(Owner, "Pairnets", FriendlyErrors.Describe(ex));
         }
         finally
         {

@@ -250,7 +250,31 @@ export class FakeNestServer {
         },
       });
     }
-    if (p === "/api/redirect") return new Response(null, { status: 302, headers: { Location: "/api/elsewhere" } });
+    if (p === "/api/redirect") return new Response(null, { status: 302, headers: { Location: "elsewhere" } });
+    if (p === "/api/redirect-out") return new Response(null, { status: 302, headers: { Location: "https://evil.example/login" } });
+    if (p === "/api/redirect-root") return new Response(null, { status: 302, headers: { Location: "/account" } });
+    if (p === "/api/redirect-other-nest") return new Response(null, { status: 302, headers: { Location: "/n/nst_testnest000000000000000009/api/x" } });
+    if (p === "/api/redirect-scheme") return new Response(null, { status: 302, headers: { Location: `//evil.example/n/${this.nestId}/api/x` } });
+    if (p === "/api/redirect-self") return new Response(null, { status: 302, headers: { Location: `https://sync.pairnets.app/n/${this.nestId}/api/elsewhere?a=1` } });
+    if (p === "/api/download") {
+      return new Response("MZ", {
+        headers: {
+          "Content-Type": "application/octet-stream",
+          "Content-Disposition": 'attachment; filename="Pairnets-Update.exe"',
+          "Content-Range": "bytes 0-1/2",
+          "Accept-Ranges": "bytes",
+          ETag: '"abc"',
+          "Last-Modified": "Wed, 01 Oct 2026 00:00:00 GMT",
+          "Retry-After": "7",
+          "X-Pairnets-Hash": "h1",
+          "X-Tether-Hash": "h1",
+          NEL: '{"report_to":"x","max_age":86400}',
+          "Report-To": '{"group":"x","endpoints":[{"url":"https://evil.example"}]}',
+          Link: "<https://evil.example>; rel=preload",
+          Refresh: "0; url=https://evil.example",
+        },
+      });
+    }
     if (p === "/api/secret") {
       // Like the nest's own API: only a key it gave out gets in (X-Sync-Token, or Bearer on the hub).
       const key = req.headers.get("x-sync-token") ?? (req.headers.get("authorization") ?? "").replace(/^bearer\s+/i, "");

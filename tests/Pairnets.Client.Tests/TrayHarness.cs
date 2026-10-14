@@ -84,6 +84,13 @@ internal sealed class TrayHarness : IAsyncDisposable
         var harness = new TrayHarness(env, root);
         if (signedInTo is not null)
             harness.Grant = harness.SaveSignIn(signedInTo, name, settings);
+        else if (settings is not null)
+        {
+            // Signed out, but with some settings remembered (for instance the account's email).
+            var remembered = new ClientSettings();
+            settings(remembered);
+            SettingsStore.Save(env.SettingsPath, remembered);
+        }
         await harness.Wpf.Ui(() =>
         {
             harness.Tray = new TrayController(harness._loggers, harness._fileLog, harness.Platform, env, harness.Wpf.Dispatcher,
