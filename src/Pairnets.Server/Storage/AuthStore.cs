@@ -9,6 +9,28 @@ namespace Pairnets.Server.Storage;
 public sealed record PairedDevice(string Id, string Name, string? System, DateTimeOffset Created, string ApprovedBy, DateTimeOffset? Revoked)
 {
     public bool IsActive => Revoked is null;
+
+    /// <summary>
+    /// How the owner was signed in on the nest's website when they let this computer in, from
+    /// <see cref="ApprovedBy"/> ("approved by the owner (google)"): "google", "email", "passkey", "password", or
+    /// another way as written ("setup link"). Null when it was not written down (computers let in by older nests).
+    /// </summary>
+    public string? ApprovalMethod
+    {
+        get
+        {
+            var open = ApprovedBy.LastIndexOf('(');
+            if (open < 0 || !ApprovedBy.EndsWith(')'))
+                return null;
+            var method = ApprovedBy[(open + 1)..^1].Trim().ToLowerInvariant();
+            return method switch
+            {
+                "" or "website" => null, // "website": the approval page did not know the sign-in
+                "email link" => "email",
+                _ => method,
+            };
+        }
+    }
 }
 
 /// <summary>

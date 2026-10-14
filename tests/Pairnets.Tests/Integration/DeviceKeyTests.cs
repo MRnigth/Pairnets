@@ -59,6 +59,70 @@ public sealed class DeviceKeyTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task MeSaysWhoLetTheComputerIn()
+    {
+        var store = Keys.Store;
+        store.SetOwnerEmail("owner@example.com");
+        store.SetGoogleAccount("google-sub", "owner.google@example.com");
+        var byGoogle = _server.MintKey("LAPTOP", "approved by the owner (google)");
+        var byEmail = _server.MintKey("DESKTOP", "approved by the owner (email link)");
+        var byOldNest = _server.MintKey("OLD", "approved by the owner");
+
+        using (var api = _server.Client("x", byGoogle.Key))
+        {
+            var me = (await api.GetMeAsync(CancellationToken.None))!;
+            Assert.Equal(("owner.google@example.com", "google"), (me.Email, me.Method));
+            Assert.Equal(store.GetDevice(byGoogle.Id)!.Created, me.Added);
+        }
+        using (var api = _server.Client("x", byEmail.Key))
+        {
+            var me = (await api.GetMeAsync(CancellationToken.None))!;
+            Assert.Equal(("owner@example.com", "email"), (me.Email, me.Method));
+        }
+        using (var api = _server.Client("x", byOldNest.Key))
+        {
+            var me = (await api.GetMeAsync(CancellationToken.None))!;
+            Assert.Equal(("owner@example.com", (string?)null), (me.Email, me.Method)); // the sign-in was not written down
+            Assert.NotNull(me.Added);
+        }
+        store.SetOwnerEmail(null);
+        using (var api = _server.Client("x", byEmail.Key))
+            Assert.Equal("owner.google@example.com", (await api.GetMeAsync(CancellationToken.None))!.Email);
+
+        // The shared token is no one in particular.
+        using var shared = _server.Client("MAC");
+        var anyone = (await shared.GetMeAsync(CancellationToken.None))!;
+        Assert.Equal((DeviceMe.KindSharedToken, (string?)null, (string?)null, (DateTimeOffset?)null), (anyone.Kind, anyone.Email, anyone.Method, anyone.Added));
+    }
+
+    [Fact]
+    public async Task ASessionWithItsOwnKeyShowsWhoLetItIn()
+    {
+        Keys.Store.SetOwnerEmail("owner@example.com");
+        var grant = _server.MintKey("MAC", "approved by the owner (passkey)");
+        using var folder = new TempDir("account");
+        using var stateBase = new TempDir("account-state");
+        await using var session = ClientSession.Start(new ClientSettings
+        {
+            ServerUrl = _server.Url.ToString(),
+            ProtectedToken = "unused",
+            Folder = folder.Path,
+            DeviceName = "MAC",
+            DeviceId = grant.Id,
+            FirstRunCompleted = true,
+        }, grant.Key, new PermanentDeleteTrash(), stateBaseDir: stateBase.Path,
+            runnerOptions: o => new RunnerOptions { ServerUrl = o.ServerUrl, Token = o.Token, DeviceId = o.DeviceId, PeriodicInterval = TimeSpan.FromHours(1) });
+
+        // The session checks its account on start-up.
+        await WaitUntil(() => session.Status.Account is not null, "account");
+        var account = session.Status.Account!;
+        Assert.Equal(("owner@example.com", "passkey", "Signed in with a passkey"), (account.Email, account.Method, account.MethodText));
+        Assert.Equal(Keys.Store.GetDevice(grant.Id)!.Created, account.Added);
+        await WaitUntil(() => session.Status.Status == RunnerStatus.Idle, "first pass");
+        Assert.Equal(account, session.Status.Account); // kept as the status changes
+    }
+
+    [Fact]
     public async Task NoEndpointHandsOutKeysWithoutAPerson()
     {
         // The silent POST /api/devices/upgrade is gone: Allow on the nest is the only way to a key.

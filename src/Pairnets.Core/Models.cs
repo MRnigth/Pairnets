@@ -115,8 +115,8 @@ public sealed record RelayHello(string NestId, string ServiceUrl);
 /// <summary>The ways the owner can sign in on the nest's website (the apps show matching buttons).</summary>
 public sealed record SignInMethods(bool Password, bool Passkeys, bool Email, bool Google);
 
-/// <summary>Answer of <c>GET /api/me</c>: who the server thinks this computer is.</summary>
-public sealed record DeviceMe(string? Id, string Name, string Kind)
+/// <summary>Answer of <c>GET /api/me</c>: who the server thinks this computer is. For a computer with its own key it also says who let it in: the owner's email, how they signed in ("google", "email", "passkey", "password", ...) and when. Null when not known, and from older servers.</summary>
+public sealed record DeviceMe(string? Id, string Name, string Kind, string? Email = null, string? Method = null, DateTimeOffset? Added = null)
 {
     public const string KindDeviceKey = "device-key";
     public const string KindSharedToken = "shared-token";

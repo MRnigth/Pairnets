@@ -64,8 +64,11 @@ public sealed class PairingTests : IAsyncLifetime
         Assert.StartsWith("pn_", collected.Key);
         Assert.Equal("LAPTOP-2", collected.Name);
         using var own = _server.Client("anything", collected.Key);
-        Assert.Equal(collected.Id, (await own.GetMeAsync(CancellationToken.None))!.Id);
+        var me = (await own.GetMeAsync(CancellationToken.None))!;
+        Assert.Equal(collected.Id, me.Id);
         Assert.Contains("approved by the owner", Auth.GetDevice(collected.Id!)!.ApprovedBy);
+        Assert.Equal("setup link", me.Method); // how the owner was signed in when they pressed Allow
+        Assert.Equal(Auth.GetDevice(collected.Id!)!.Created, me.Added);
 
         Assert.Equal(PairPollResponse.Used, (await Poll(start.PollToken)).Status); // the key is never handed out twice
         Assert.Equal(HttpStatusCode.Conflict, (await owner.PostAsync($"web/api/pair/{start.Code}/approve", null)).StatusCode);
