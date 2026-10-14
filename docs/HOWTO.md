@@ -377,22 +377,25 @@ working meanwhile.
 
 ### The Pairnets window
 
-After setup the Pairnets window opens. A sidebar on the left switches between its pages:
-**Overview**, **Activity**, **History**, **Devices**, **Needs attention** (the number shows how many)
-and **Settings**. The buttons at the top right are always there: **Open folder**, **Pause**/**Resume**,
-**Sync now**, and **⋯** for *View log* and *Report a bug*.
+After setup the Pairnets window opens. The **left side** shows **your computers**: this one, your nest, and a
+box with your other computers, each with its own icon, a dot (green online, red can't reach) and what it is doing.
+Click one to see it on the Devices page. Under them are the pages: **Overview**, **Activity**, **Needs you**
+(the number shows how many), **History**, **Devices** (with how many are online) and **Settings**. The round letter at
+the top opens the **Account** page, and the arrows next to it fold the left side to a thin strip of icons (and open
+it again). The buttons at the top right are always there: **Open folder**, **Pause**/**Resume**, **Sync now**, and
+**⋯** for *View log* and *Report a bug*.
 
 ![Pairnets window while syncing](images/main-window-syncing-light.png)
 
 **Overview** shows everything at a glance:
 
-* **Status card** (top): a coloured badge with a symbol (✓ up to date, ⏸ paused, ! needs a decision,
+* **Status card** (top): a round badge with a symbol (✓ up to date, ⏸ paused, ! needs a decision,
   ✕ error, crossed-out cloud for offline) and what Pairnets is doing right now, in plain words:
   *Reading the server's list*; *Checking files* (see below); *Uploading* or *Downloading* with how
   many files, the speed and the time left; *Waiting for PC-1 to finish uploading* (see below);
   *Slowed down by the server* ("Too many requests to sync.pairnets.app; continuing in 30 s");
-  *Waiting for the network*; or *Paused*. The top of the card takes on the status colour. While
-  syncing, the badge shows what this computer really does:
+  *Waiting for the network*; or *Paused*. The badge takes on the status colour. While
+  syncing, it shows what this computer really does:
   * a slow turn: checking for changes
   * a green arrow rising: uploading
   * a blue arrow falling: downloading
@@ -405,31 +408,32 @@ and **Settings**. The buttons at the top right are always there: **Open folder**
   start to end to fingerprint them, which takes a while for very big files (a 20 GB file takes a
   minute or more). What it has read is kept, so after **Pause**, **Resume** or a restart it carries
   on instead of reading everything again.
-* **Your computers**: *this computer*, the *server* and your *other computer*, joined by lines. A
-  green dot means online. Under each computer it says what it is doing: for the other computer
-  **Online**, **Sending changes**, **Downloading your changes**, **Has your changes** (with a check
-  mark), **Uploading 340 files** (it announced a big batch) or **Last seen 3 h ago**, with how many
-  files it has left (**· 1,204 files left**).
-  * While files move, dots travel along the lines: green towards the server (uploads), blue from the
-    server (downloads). They go faster when more megabytes go through, and stop and fade when nothing
-    moves.
-  * The speed (for example **↑ 4.90 MB/s**) shows above each line, as each computer measured it;
+* **The picture of your nest**: *this computer* on the left, your *nest* (the server) in the middle and your
+  *other computers* on the right, joined by lines. A green dot means online, a red one can't reach. Next to
+  each computer it says what it is doing: **in sync**, **sending changes**, **downloading your changes**,
+  **uploading 340 files** (it announced a big batch), **can't reach** or **last seen 3 h ago**, with how many
+  files it has left. With more than five other computers, four are drawn and **+N more** opens Devices.
+  * While files move, a few light dashes travel along the lines: green towards the nest (uploads), blue from the
+    nest (downloads). They go faster when more megabytes go through, and stop when nothing moves or when
+    Windows is set to fewer animations. (The Mac and Linux app has no such setting yet, so its lines always
+    move while the window is visible.)
+  * The speed (for example **↑ 4.90 MB/s**) shows beside each line, as each computer measured it;
     turn it off in Settings with **Show speed on the map**.
   * The other computer's line moves only when that computer reports that it really uploads or
     downloads. A computer that sends no report for 10 seconds shows no speed.
-  * A dashed line means not connected. Hover a computer's name to see which app and version it runs.
-    (An older server says *Update the server to see it*, and shows no speeds.)
-* **"2 things need your attention"** with a **Review** button, when something waits for you.
+  * A dashed red line with a cross means that computer cannot be reached. Hover a computer's name to see which
+    app and version it runs. (An older nest says *Update the server to see it*, and shows no speeds.)
+* **"3 things need you"** with a **Review** button, when something waits for you.
 * **Transfer card** (only while transferring; the arrow travels up while uploading and down while
   downloading, and the bars glide): how many files are being sent, the speed and the
   time left ("4.9 MB/s · about 4 min left"), one bar for the whole batch ("37 of 120 files · 412 MB
   of 1.30 GB"), and the files in progress right now, each with its own small bar. Pairnets sends up
   to four files at the same time. If new files appear while it syncs, the total grows straight away.
   "Limited to 5 MB/s" shows when you set a speed limit.
-* **Facts**: the folder (with **Open**), when it last synced, the server's version (with **Check
+* **Facts**: your folder (with **Open**), the nest's version (with **Check
   for update** or **Update server…**, orange when the server is older than the app) and the free
-  space on the server (orange when less than 5 GB or 5 % is left).
-* **Recent activity**: the last five changes; **See all** opens the Activity page.
+  space on the nest (orange when less than 5 GB or 5 % is left).
+* **Latest changes**: the last few changes; **See all in Activity** opens the Activity page.
 
 **Activity** lists everything that happened recently, newest first, under *Today*, *Yesterday* and
 so on: green ↑ uploaded, blue ↓ downloaded, red ✕ deleted, orange ⚠ conflict, red ! problem. Hover a
@@ -447,18 +451,32 @@ computers within seconds; the version it replaces is kept in history too, so a r
 
 ![The History page](images/main-window-history-light.png)
 
-**Devices** lists every computer that uses your server, online or when it was last seen, with its
+**Devices** shows your nest (its address, version, free space and how long deleted files are kept) and a card
+for every computer that uses it, online or when it was last seen, with its
 system, Pairnets version and last change (see [Updates](#updates) for details). A computer that is
 moving files shows its real speed instead of *Online* (**↓ 4.20 MB/s**, **↑ 3.10 MB/s · 1,204 files left**).
 
-**Needs attention** lists conflict copies and files that cannot be synced, each with a **Show in
+**Needs you** lists conflict copies and files that cannot be synced, each with a **Show in
 folder** button, and the decision Pairnets is waiting for, if any.
+
+**Choosing an icon for a computer.** Each computer card on Devices has a small pencil. It opens a short list
+of pictures (desktop, laptop, office PC, mini PC, TV PC); pick one and that computer is drawn with it on the
+left side, in the picture, in the quick panel and on the Devices page, on every one of your computers. The
+choice is kept on your nest, so an older nest (update it first) shows the pencil nowhere and guesses the
+icon from the name (a name with LAPTOP or BOOK in it gets a laptop).
+
+**Account** (the round letter at the top of the left side) shows who is signed in and how, when this computer
+was added and your nest's address, with **Manage your account on sync.pairnets.app** and **Sign out**. It
+also has the switches for the small pop-ups on this computer: when something needs you, when a computer asks
+to join, and when an app update is ready. They apply to this computer only; each computer keeps its own.
+
+![The Account page](images/stage4-account-light.png)
 
 **Settings** has your nest (with **Manage devices on the web**, **Sign out of this computer**, and
 the server address and token under **Advanced**), the folder, this computer's name, ignore patterns,
 **Updates and speed** and **Start over**. **Save** applies it at once.
 
-**When an update is out**, a small card at the bottom of the sidebar says so, with **Update now**
+**When an update is out**, a small card at the bottom of the left side says so, with **Update now**
 (Windows) or **Download** (Mac and Linux). See [Updates](#updates) below.
 
 **Waiting for the other computer.** When your other computer uploads a big batch (more than 100
@@ -488,7 +506,7 @@ Closing the window does **not** stop Pairnets. It keeps syncing in the backgroun
 * **Linux**: in the system tray or top bar, depending on your desktop. Clicking the icon opens the
   quick panel on most desktops; the menu also has **Quick status…** and **Open Pairnets**.
 
-The quick panel opens next to the icon and closes when you click elsewhere. It shows the status, your
+The quick panel opens next to the icon and closes when you click elsewhere. It shows the status, a small picture of your
 computers, the transfer, the last four changes and what needs attention, with **Open Pairnets**,
 **Folder** and **Pause** buttons, and **⋯** for Sync now, Settings, History, the log, Report a bug
 and Exit.
@@ -706,7 +724,7 @@ A renamed file is synced as "delete the old name, create the new name". The resu
 | **"This folder was already synced… Confirm"** | Pairnets finds a marker but no record of it on this PC (for example after reinstalling Windows). Choose **Confirm this folder…**. Pairnets then merges and deletes nothing. |
 | **"The server went back in time" / "not the one this folder was synced with"** | The server was restored from a backup or reinstalled. Choose **Re-link to this server…**. Pairnets merges your folder with the server: nothing is deleted or overwritten, and differences become conflict copies. |
 | **A file named `… (conflict PC date time) …`** | Both PCs changed the same file. Compare the two versions, keep what you want under the original name, and delete the conflict copy. |
-| **"Name collision" / "File name not allowed"** | Two names differ only in upper/lower case (`Report.txt` and `report.txt`), a file and a folder share a name, or the name is not allowed on Windows. The **Needs attention** page lists them. Rename them and they sync. |
+| **"Name collision" / "File name not allowed"** | Two names differ only in upper/lower case (`Report.txt` and `report.txt`), a file and a folder share a name, or the name is not allowed on Windows. The **Needs you** page lists them. Rename them and they sync. |
 
 ### Getting an old or deleted version back
 
@@ -759,7 +777,7 @@ Pairnets checks for a new version 15 seconds after it starts and then once a day
 **Settings → Updates and speed**; **Check now** checks right away). This needs the GitHub
 repository to be public.
 
-**Update a computer.** When a new version is out, a card appears at the bottom of the window's sidebar
+**Update a computer.** When a new version is out, a card appears at the bottom of the window's left side
 and you get a notification.
 
 * **Windows** (installed with `PairnetsSetup.exe`): click **Update now**. Pairnets downloads the new
@@ -785,7 +803,7 @@ orange when the server is older than your app. A server too old to say which ver
 server…** when the server is older, **Check for update** when it is up to date. It works even if you chose
 *Don't ask for this version*.
 
-**Devices.** The **Devices** page in the sidebar lists every computer that uses your server: a
+**Devices.** The **Devices** page on the left side lists every computer that uses your server: a
 green dot when it is online, otherwise when it was last seen, plus its system, Pairnets version, its last
 change and when it was added. This computer is marked "(this computer)". The list needs a server from
 1.0.38 on; computers appear once they have connected to it. The overview's picture of your computers
@@ -860,7 +878,7 @@ In **Settings → Updates and speed**:
   other computers always come through the server, so the download limit covers them too. Each
   computer has its own limits; all files in progress together stay under the limit.
 * **Wait while my other computer uploads many files**: the batch wait described in section 5.
-* **Show speed on the map**: the MB/s above the lines between the computers on the overview (on to
+* **Show speed on the map**: the MB/s beside the lines between the computers on the overview (on to
   begin with).
 
 **Pause and Resume.** Pause stops at once, also in the middle of checking a big folder. What is done

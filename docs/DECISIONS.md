@@ -891,3 +891,38 @@ owner picked option A from three designed options.
 * **Tests that checked the old status card** now check the new title ("Uploading 3 files to your nest", "Stopped to keep
   your files safe") and the picture's direction instead of the old badge glyph; the intent (the page says what it does and
   moves the right way) is the same.
+
+## Visual design: New look (replaces Quiet) (2026-10-14)
+
+The apps, the sign-in and bug-report windows, the tray panel and the nest's sign-in page now share one look: soft
+blue and white (and a dark twin), rounded cards, a left side with your computers and the pages, and the Plus Jakarta
+Sans font. It replaces the earlier "Quiet" look (the `feature/quiet-ui` branch, never released); the pieces of Quiet
+that were still useful (account info, notice settings, activity groups) were ported. Stage 3 above records how the
+Overview and the nest picture are built; this entry records what was left out and why.
+
+* **Left out because the app has no data for it.** The design draws more than the app knows. Rather than show made-up
+  numbers, these are not built, and each comes back when the engine or the nest can supply it:
+  * **Needs you: Deny / Allow buttons and the two-copy chooser** (keep this one, keep that one, keep both). The app can
+    only list the conflict copies and the deletion it is waiting on; **Show in folder** and the existing decision
+    buttons stay.
+  * **History: the "On" column and the version counts.** The nest returns a file's versions only after you pick the
+    file, so a list of every file cannot say how many versions each has or which computers hold it.
+  * **Two of the design's notification switches.** Account has the three the app really acts on (needs you, a
+    computer asks to join, an app update is ready). The other two have nothing behind them.
+  * **The Overview's offline countdown** ("next try in 12 s") and the **Waiting lists** ("Coming next from LAPTOP",
+    "Waiting to go up"). Stage 3 covers the wording that replaces them.
+* **No reduced-motion setting on Mac and Linux.** WPF reads Windows' "fewer animations". Avalonia has no such setting
+  to read, so the travelling dashes always move while the window is visible there.
+* **A computer's icon is stored on the nest, so the nest needs the update.** The choice (desktop, laptop, office PC,
+  mini PC, TV PC) is saved per computer on the nest and shown on every computer. A nest from before this change does
+  not send an icon: the pencil is hidden and the icon is guessed from the name (LAPTOP or BOOK gives a laptop).
+* **Plus Jakarta Sans, under the SIL Open Font License 1.1.** The font files and their licence text are in
+  `assets/fonts` (`PlusJakartaSans-OFL.txt`, kept under the font's own name next to the files it covers) and are built
+  into both apps, so no machine needs the font installed and nothing is fetched from the internet. The font is listed
+  with the other open-source licences on `pairnets.app/licenses` (the page both apps link under Settings → About).
+  The licence allows shipping the font with software as long as the licence text goes with it and the font is not
+  sold on its own.
+* **Screenshots.** `docs/images` was regenerated with both tools. The documentation uses the Avalonia set
+  (`main-window-*`, `sign-in-*`, `server-update-*`, `tray-panel-*`, `bug-report-*`, and `stage4-*` for Account,
+  Devices, Activity and Needs you), because it runs on every system and the pages match the WPF ones page for page.
+  The WPF tool writes the same screens as `windows-*` files; those are not kept in the repository, to keep it small.

@@ -31,8 +31,8 @@ to act when something looks wrong (wrong folder, unplugged drive, many deletions
 Or let Claude do it: copy a ready-made prompt from [Set Pairnets up with Claude](docs/SETUP-WITH-CLAUDE.md).
 
 <p>
-  <img src="docs/images/main-window-syncing-light.png" alt="The Pairnets window: your computers and the server, the transfer and recent activity" width="49%">
-  <img src="docs/images/main-window-history-dark.png" alt="The History page: get back deleted files and older versions (dark mode)" width="49%">
+  <img src="docs/images/main-window-syncing-light.png" alt="The Pairnets window: your computers on the left, and the Overview with the picture of your nest" width="49%">
+  <img src="docs/images/stage4-account-dark.png" alt="The Account page: who is signed in and which notices you get (dark mode)" width="49%">
 </p>
 
 | Install on | How |
@@ -99,12 +99,15 @@ use **Settings → Start over → Reset this app…**: it removes Pairnets' sett
 notes on that computer (and the computer from your nest), never your synced files.
 
 
-Pairnets has a window with a sidebar: **Overview** (status, a picture of this computer, the server
-and your other computer with files moving between them, the current transfer, facts and recent
-activity), **Activity** (by day), **History** (get back deleted files and older versions with one
-click), **Devices**, **Needs attention** and **Settings**. Its icon sits in the notification area (Windows), menu
-bar (Mac) or system tray (Linux); clicking it opens a small quick panel with the same status at a
-glance. The icon is green when up to date, blue while syncing, grey when offline, orange when it
+Pairnets has a window with a left side. At the top are **your computers**: this one, your nest, and a box with
+the other computers (each with the icon you chose for it, a coloured dot, and what it is doing). Below are the pages:
+**Overview** (status, a picture of your nest with this computer and the others around it, files moving along the
+lines, latest changes and facts), **Activity** (by day), **Needs you**, **History** (get back deleted files and
+older versions with one click), **Devices** (a card per computer, where you also choose its icon) and **Settings**.
+The round letter at the top opens **Account**: who is signed in, and which notices pop up on this computer.
+The arrows at the top fold the left side to a thin strip of icons. Pairnets' icon sits in the notification area
+(Windows), menu bar (Mac) or system tray (Linux); clicking it opens a small quick panel with the same picture
+and status at a glance. The icon is green when up to date, blue while syncing, grey when offline, orange when it
 needs your decision, red on errors, and yellow when paused. Closing the window keeps Pairnets syncing
 in the background.
 
@@ -144,7 +147,7 @@ in the background.
 | "Folder is missing" / "no .pairnets-marker" | The drive is unplugged or the folder moved. Plug it in and **Sync now**, or use **Locate the sync folder…** to point Pairnets at its new location. |
 | "The server went back in time" / "not the one this folder was synced with" | The server was restored from a backup or reinstalled. Use **Re-link to this server…**: it merges without deleting or overwriting. |
 | A file named `… (conflict PC date time) …` appeared | Both PCs changed that file. Compare the two, keep the right content under the original name, delete the conflict copy. |
-| "Name collision" / "File name not allowed" | Two names differ only in letter case (`Report.txt` vs `report.txt`), a file and a folder have the same name, or a name is not valid on Windows (for example `CON.txt` or a trailing dot). Rename it; the **Needs attention** page lists them. |
+| "Name collision" / "File name not allowed" | Two names differ only in letter case (`Report.txt` vs `report.txt`), a file and a folder have the same name, or a name is not valid on Windows (for example `CON.txt` or a trailing dot). Rename it; the **Needs you** page lists them. |
 | Anything else | Right-click → **View log** (kept 14 days in `%LocalAppData%\Pairnets\logs`). Server: `sudo journalctl -u pairnets-server`. Logs never contain a key or token. |
 
 ## Building from source
