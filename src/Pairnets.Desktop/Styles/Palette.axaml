@@ -52,6 +52,12 @@
       <SolidColorBrush x:Key="T.NeedsActive" Color="#FFB547" />
       <SolidColorBrush x:Key="T.NeedsActiveText" Color="#2B1A00" />
       <SolidColorBrush x:Key="T.Code" Color="#F0F2F6" />
+      <SolidColorBrush x:Key="T.AccentRing" Color="#BFD3FA" />
+      <SolidColorBrush x:Key="T.Field" Color="#F7F8FB" />
+      <SolidColorBrush x:Key="T.SwitchOff" Color="#C3C9D4" />
+      <SolidColorBrush x:Key="T.KnobOff" Color="#FFFFFF" />
+      <SolidColorBrush x:Key="T.DangerButton" Color="#C62828" />
+      <SolidColorBrush x:Key="T.BadBorder" Color="#F3B9B9" />
     </ResourceDictionary>
     <ResourceDictionary x:Key="Dark">
       <SolidColorBrush x:Key="T.Bg" Color="#0E1014" />
@@ -103,6 +109,12 @@
       <SolidColorBrush x:Key="T.NeedsActive" Color="#FFB547" />
       <SolidColorBrush x:Key="T.NeedsActiveText" Color="#2B1A00" />
       <SolidColorBrush x:Key="T.Code" Color="#0A0C10" />
+      <SolidColorBrush x:Key="T.AccentRing" Color="#615B9BFF" />
+      <SolidColorBrush x:Key="T.Field" Color="#111318" />
+      <SolidColorBrush x:Key="T.SwitchOff" Color="#3A404C" />
+      <SolidColorBrush x:Key="T.KnobOff" Color="#C9CFD9" />
+      <SolidColorBrush x:Key="T.DangerButton" Color="#D93636" />
+      <SolidColorBrush x:Key="T.BadBorder" Color="#4DFF6B6B" />
     </ResourceDictionary>
   </ResourceDictionary.ThemeDictionaries>
 

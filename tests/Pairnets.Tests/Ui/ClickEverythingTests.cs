@@ -212,10 +212,10 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
     {
         await using var stage = new Stage("the Settings page");
         var view = await SettingsStage(stage, ownKey: true);
-        foreach (var label in new[] { "Start Pairnets when I log in", "Check for updates when Pairnets starts", "Update the server automatically", "Debug mode",
-                     "Wait while my other computer uploads many files", "Limit upload to the server to", "Limit download from the server to", "2" })
+        foreach (var label in new[] { "Start Pairnets when I log in", "Check for updates by itself", "Update the nest by itself", "Debug mode",
+                     "Wait when another computer sends a lot", "Limit upload to", "Limit download from", "2" })
             Person.Click(Screen.Find<ToggleButton>(view, label));
-        Person.Expand(Screen.All<Expander>(view).Single());
+        Person.Click(Screen.Find<Button>(view, "Advanced: files to ignore Add your own rules on top of the usual ones. 0 rules"));
         Person.Type(Screen.Named<TextBox>(view, "IgnoreBox"), "*.bak");
         Person.Click(Screen.Find<Button>(view, "Save"));
         await Wait.Until(() => stage.Events.Contains("saved"), "Save to hand the settings to the app");
@@ -265,9 +265,15 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
                 w.Navigate(MainPage.Activity);
             })),
             new("the main window (History page)", s => MainStage(s, w => w.Navigate(MainPage.History), async w => await w.LoadHistoryAsync())),
+            new("the main window (History page, all files)", s => MainStage(s, w => w.Navigate(MainPage.History), async w =>
+            {
+                await w.LoadHistoryAsync();
+                w.ShowAllFiles();
+            })),
             new("the main window (History page, a file chosen)", s => MainStage(s, w => w.Navigate(MainPage.History), async w =>
             {
                 await w.LoadHistoryAsync();
+                w.ShowAllFiles();
                 w.SelectHistoryRow(0);
                 await Wait.Until(() => w.VersionRows == 3, "the versions of the chosen file to show");
             })),
@@ -278,7 +284,7 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
             }),
             new("the main window (Devices page)", s => MainStage(s, w =>
             {
-                w.ShowStatus(Idle, "/Users/me/Work", "MacBook");
+                w.ShowStatus(Idle with { JoinRequests = [new JoinRequest("RX4K-92TB", "PC-1", "Windows", DateTimeOffset.UtcNow)] }, "/Users/me/Work", "MacBook");
                 w.Navigate(MainPage.Devices);
             })),
             new("the main window (folded into the dock)", s => MainStage(s, w =>
@@ -286,6 +292,11 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
                 w.ShowStatus(Idle, "/Users/me/Work", "MacBook");
                 w.ShowAttention([Attention(s)]);
                 w.SideFolded = true;
+            })),
+            new("the main window (Account page)", s => MainStage(s, w =>
+            {
+                w.ShowStatus(Idle with { Account = new AccountInfo("alex@example.com", "google", DateTimeOffset.UtcNow.AddDays(-14)) }, "/Users/me/Work", "MacBook");
+                w.Navigate(MainPage.Account);
             })),
             new("the main window (Needs attention page)", s => MainStage(s, w =>
             {
@@ -387,6 +398,7 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
     {
         var now = DateTimeOffset.Now;
         var feed = new ActivityFeed();
+        feed.Add(new ActivityItem(now.AddHours(-4), ActivityKind.Conflict, "Projects/report (conflict LAPTOP 2026-10-02 141509).docx", "Conflict"));
         feed.Add(new ActivityItem(now.AddHours(-3), ActivityKind.Downloaded, "Projects/2026/plan.xlsx", "Downloaded"));
         feed.Add(new ActivityItem(now.AddMinutes(-47), ActivityKind.Uploaded, "Notes/meeting-notes.md", "Uploaded"));
         feed.Add(new ActivityItem(now.AddMinutes(-5), ActivityKind.Uploaded, "Projects/report.docx", "Uploaded"));
@@ -407,7 +419,7 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
         Dispatcher.UIThread.RunJobs();
         a.Calls.Clear(); // only what the press asks for counts
         var reads = history.Reads;
-        s.Typing["HistorySearch"] = "taxes";
+        s.Typing["HistorySearch"] = w.FilesPaneShown ? "report" : "taxes"; // one match in either list
         s.Expect["OnUpdateNow"] = Calls(a, "update");
         s.Expect["OnUpdateLater"] = Calls(a, "dismiss");
         s.Expect["OnOpenFolder"] = Calls(a, "folder");
@@ -430,19 +442,36 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
         s.Expect["OnFoldSide"] = That(() => w.SideFolded, "the left side fold into the dock");
         s.Expect["OnUnfoldSide"] = That(() => !w.SideFolded, "the left side open again");
         s.Expect["OnFoldGroup"] = That(() => !w.GroupGrid.IsVisible, "the other computers fold away");
-        s.Expect["OnAccount"] = Calls(a, "settings"); // the Account page comes later
+        s.Expect["OnAccount"] = OnPage(w, MainPage.Account);
         s.Expect["OnThisComputer"] = OnPage(w, MainPage.Overview);
         s.Expect["OnNestRow"] = OnPage(w, MainPage.Devices);
         s.Expect["OnDevices"] = OnPage(w, MainPage.Devices);
         s.Expect["OnNav:Settings"] = Calls(a, "settings"); // the controller hands over a fresh form
         s.Expect["OnRevealActivity"] = That(() => a.Calls.Count == 1 && a.Calls[0].StartsWith("reveal:", StringComparison.Ordinal), "the app show the file in its folder");
         s.Expect["OnActivityVersions"] = That(() => w.Page == MainPage.History && w.HistoryRows == 1 && w.VersionRows == 3, "History open on that file with its versions");
-        s.Expect["OnHistoryModeChanged:All files"] = That(() => w.HistoryRows == 3, "the current files show");
-        s.Expect["OnHistoryModeChanged:Deleted files"] = That(() => w.HistoryRows == 4, "the deleted files show");
+        s.Expect["OnHistoryModeChanged:All files"] = That(() => w.HistoryRows == 3 && w.FilesPaneShown, "the current files show");
+        s.Expect["OnHistoryModeChanged:Deleted files*"] = That(() => history.Unreachable || w.HistoryRows == 4 && w.DeletedPaneShown, "the deleted files show");
         s.Expect["OnHistorySearch"] = That(() => w.HistoryRows == 1, "only the matching file show");
         s.Expect["OnHistoryReload"] = That(() => history.Reads == reads + 1 && (history.Unreachable || w.HistoryRows == 4), "the files be read again",
             () => $"read {history.Reads - reads} time(s), {w.HistoryRows} row(s)");
         s.Expect["OnFileSelected"] = That(() => w.VersionRows == 3, "the versions of that file show");
+        s.Expect["OnRestoreDeleted"] = That(() => a.Samples.Restored.Count == 1 && w.RestoreText.StartsWith("Restored.", StringComparison.Ordinal), "that file come back",
+            () => $"{a.Samples.Restored.Count} restored, it says \"{w.RestoreText}\"");
+        s.Expect["OnShowInFolder"] = That(() => a.Calls.Count == 1 && a.Calls[0].StartsWith("reveal:", StringComparison.Ordinal), "the app show the file in its folder");
+        s.Expect["OnFilterClick:All*"] = That(() => w.ActivityFilterNow == ActivityFilter.All, "all the changes show");
+        s.Expect["OnFilterClick:Uploaded*"] = That(() => w.ActivityFilterNow == ActivityFilter.Uploaded, "the uploads show");
+        s.Expect["OnFilterClick:Downloaded*"] = That(() => w.ActivityFilterNow == ActivityFilter.Downloaded, "the downloads show");
+        s.Expect["OnFilterClick:Deleted*"] = That(() => w.ActivityFilterNow == ActivityFilter.Deleted, "the deletions show");
+        s.Expect["OnFilterClick:Conflicts*"] = That(() => w.ActivityFilterNow == ActivityFilter.Conflicts, "the conflicts show");
+        s.Expect["OnActivitySearch"] = That(() => w.ActivityNoMatchValue.Contains("test", StringComparison.Ordinal), "the list say nothing matches the search");
+        s.Expect["OnManageAccount"] = Calls(a, "account-site");
+        s.Expect["OnSignOutAccount"] = Calls(a, "sign-out");
+        s.Expect["OnNotifyChanged:When something needs you"] = Calls(a, "notify:Attention:False");
+        s.Expect["OnNotifyChanged:When a computer asks to join"] = Calls(a, "notify:JoinRequest:False");
+        s.Expect["OnNotifyChanged:When an app update is ready"] = Calls(a, "notify:Update:False");
+        s.Expect["OnReviewConflict"] = OnPage(w, MainPage.Attention);
+        s.Expect["OnReviewJoin"] = OnPage(w, MainPage.Attention);
+        s.Expect["OnMoreClick"] = Calls(a, "manage-devices");
         s.Expect["OnRestore"] = That(() => a.Samples.Restored.Count == 1 && w.RestoreText.StartsWith("Restored.", StringComparison.Ordinal), "that version come back",
             () => $"{a.Samples.Restored.Count} restored, it says \"{w.RestoreText}\"");
         s.Expect["OnAttentionAction"] = That(() => s.Events.SequenceEqual(["attention"]), "the item's action run");
@@ -521,13 +550,19 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
         view.ResetRequested += () => s.Events.Add("reset");
         view.ManageDevicesRequested += () => s.Events.Add("manage-devices");
         view.OpenLinkRequested += s.Opened.Add;
-        s.Show(new Window { Content = view, Width = 700, Height = 780 });
+        view.SignInAgainRequested += () => s.Events.Add("sign-in-again");
+        view.ReportBugRequested += () => s.Events.Add("report-bug");
+        s.Show(new Window { Content = view, Width = 900, Height = 780 });
 
         var expected = fixture.Feed.Asset is null ? "up to date" : "version 99.0.0 is available";
         s.Expect["OnManageDevices"] = Raised(s, "manage-devices");
         s.Expect["OnSignOut"] = Raised(s, "sign-out");
         s.Expect["OnReset"] = Raised(s, "reset");
         s.Expect["OnCancel"] = Raised(s, "cancelled");
+        s.Expect["OnSignInAgain"] = Raised(s, "sign-in-again");
+        s.Expect["OnReportBug"] = Raised(s, "report-bug");
+        s.Expect["OnToggleIgnore"] = That(() => Screen.Named<TextBox>(view, "IgnoreBox").IsEffectivelyVisible, "the rules box show");
+        s.Expect["OnIgnoreChanged"] = That(() => Screen.Named<TextBlock>(view, "IgnoreCount").Text == "1 rule", "the rule count change to 1 rule");
         s.Expect["OnSave"] = All(Raised(s, "saved"), That(() => view.Result is { } r && r.Folder == fixture.Folder && r.DeviceId == key?.Id && r.FirstRunCompleted,
             "the saved settings keep this computer's folder and key"));
         s.Expect["OnShowAddress"] = That(() => Screen.Named<TextBox>(view, "ServerUrlBox").IsEffectivelyVisible, "the server address and token show");

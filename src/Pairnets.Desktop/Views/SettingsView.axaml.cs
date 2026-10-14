@@ -1,3 +1,5 @@
+using System.Globalization;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Media;
@@ -51,13 +53,18 @@ public partial class SettingsView : UserControl
         InitializeComponent();
         _original = current;
         _protector = protector;
+        var host = Uri.TryCreate(current.ServerUrl, UriKind.Absolute, out var nest) ? nest.Authority : current.ServerUrl;
+        ConnectedPill.IsVisible = serverVersionText is not null;
         if (current.HasOwnKey)
         {
             // Signed in with its own key: show who it is; the address and token stay one click away.
             ServerHeading.Text = "Your nest";
             SignedInPanel.IsVisible = true;
             AddressFields.IsVisible = false;
-            SignedInText.Text = $"{(Uri.TryCreate(current.ServerUrl, UriKind.Absolute, out var nest) ? nest.Authority : current.ServerUrl)} · signed in as {current.DeviceName}";
+            NestHostText.Text = host ?? "Not connected";
+            var who = string.IsNullOrWhiteSpace(current.AccountEmail) ? current.DeviceName : current.AccountEmail;
+            SignedInText.Text = "Signed in as " + who;
+            AvatarText.Text = AvatarLetter(who);
         }
         ServerUrlBox.Text = current.ServerUrl ?? string.Empty;
         TokenBox.Watermark = current.ProtectedToken is null ? "printed by install.sh" : "(saved – leave empty to keep)";
@@ -70,25 +77,86 @@ public partial class SettingsView : UserControl
         MapSpeedBox.IsChecked = current.ShowMapSpeed;
         AutoServerBox.IsChecked = current.AutoUpdateServer;
         DebugBox.IsChecked = current.DebugMode;
-        ServerVersionText.Text = serverVersionText ?? "Server: not connected yet";
+        ServerVersionText.Text = $"Pairnets {PairnetsInfo.ProductVersion} for {SystemName()}"
+            + (serverVersionText is { } v ? " · your nest runs " + (v.StartsWith("Server ", StringComparison.Ordinal) ? v["Server ".Length..] : v) : " · not connected to your nest yet");
+        AppVersionText.Text = "Pairnets " + PairnetsInfo.ProductVersion;
+        StartOverNote.Text = $"Your files in {(string.IsNullOrWhiteSpace(current.Folder) ? "your sync folder" : current.Folder)} stay where they are.";
         (current.EffectiveParallelTransfers switch { 1 => Par1, 2 => Par2, 8 => Par8, _ => Par4 }).IsChecked = true;
         UpLimitBox.IsChecked = current.UploadLimitMBps is > 0;
-        UpLimitValue.Value = (decimal)(current.UploadLimitMBps is > 0 ? current.UploadLimitMBps.Value : 5);
+        UpLimitValue.Text = (current.UploadLimitMBps is > 0 ? current.UploadLimitMBps.Value : 5).ToString("0.##", CultureInfo.InvariantCulture);
         DownLimitBox.IsChecked = current.DownloadLimitMBps is > 0;
-        DownLimitValue.Value = (decimal)(current.DownloadLimitMBps is > 0 ? current.DownloadLimitMBps.Value : 10);
+        DownLimitValue.Text = (current.DownloadLimitMBps is > 0 ? current.DownloadLimitMBps.Value : 10).ToString("0.##", CultureInfo.InvariantCulture);
         AboutText.Text = PairnetsLinks.AboutLine;
         ShowVersion(null);
+
+        // Pieces that are wired here rather than in the XAML.
+        SignInAgainButton.Click += OnSignInAgain;
+        ReportBugButton.Click += OnReportBug;
+        IgnoreHeader.Click += OnToggleIgnore;
+        IgnoreBox.TextChanged += OnIgnoreChanged;
+        Scroller.SizeChanged += OnPageSized;
+        ShowIgnoreCount();
     }
+
+    private static string AvatarLetter(string? text)
+    {
+        foreach (var c in text ?? string.Empty)
+        {
+            if (char.IsLetterOrDigit(c))
+                return char.ToUpperInvariant(c).ToString();
+        }
+        return "?";
+    }
+
+    private static string SystemName() => OperatingSystem.IsMacOS() ? "macOS" : OperatingSystem.IsWindows() ? "Windows" : "Linux";
+
+    /// <summary>The page is two columns of cards; in a narrow window the right column goes below the left one.</summary>
+    private void OnPageSized(object? sender, SizeChangedEventArgs e)
+    {
+        var narrow = e.NewSize.Width < 700;
+        Columns.ColumnDefinitions[1].Width = narrow ? new GridLength(0) : new GridLength(1, GridUnitType.Star);
+        Grid.SetColumn(RightColumn, narrow ? 0 : 1);
+        Grid.SetRow(RightColumn, narrow ? 1 : 0);
+        LeftColumn.Margin = narrow ? new Thickness(0, 0, 0, 16) : new Thickness(0, 0, 8, 0);
+        RightColumn.Margin = narrow ? new Thickness(0) : new Thickness(8, 0, 0, 0);
+        HelpGrid.ColumnDefinitions[1].Width = narrow ? new GridLength(0) : new GridLength(1, GridUnitType.Star);
+    }
+
+    private void OnToggleIgnore(object? sender, RoutedEventArgs e)
+    {
+        IgnorePanel.IsVisible = !IgnorePanel.IsVisible;
+        IgnoreChevron.Data = Visuals.Resource<Geometry>(IgnorePanel.IsVisible ? "I.ChevronUp" : "I.ChevronDown");
+    }
+
+    private void OnIgnoreChanged(object? sender, TextChangedEventArgs e) => ShowIgnoreCount();
+
+    private void ShowIgnoreCount()
+    {
+        var n = Patterns().Count;
+        IgnoreCount.Text = n == 1 ? "1 rule" : n + " rules";
+    }
+
+    /// <summary>"Sign in again" in the Your nest card (the app opens the sign-in window).</summary>
+    public event Action? SignInAgainRequested;
+
+    private void OnSignInAgain(object? sender, RoutedEventArgs e) => SignInAgainRequested?.Invoke();
+
+    /// <summary>"Report a bug…" in the Help row (the app opens the bug report window).</summary>
+    public event Action? ReportBugRequested;
+
+    private void OnReportBug(object? sender, RoutedEventArgs e) => ReportBugRequested?.Invoke();
 
     /// <summary>"You have 1.0.52 · checked 19:41" plus the outcome of "Check now".</summary>
     public void ShowVersion(string? outcome)
     {
-        var text = "You have " + PairnetsInfo.ProductVersion;
-        if (_updates?.LastChecked is { } at)
-            text += " · checked " + at.ToLocalTime().ToString("HH:mm", System.Globalization.CultureInfo.InvariantCulture);
-        if (outcome is not null)
-            text += " · " + outcome;
-        VersionText.Text = text;
+        var checkedAt = _updates?.LastChecked is { } at ? "checked " + at.ToLocalTime().ToString("HH:mm", CultureInfo.InvariantCulture) : null;
+        VersionText.Text = (checkedAt, outcome) switch
+        {
+            (null, null) => "Not checked yet",
+            (not null, null) => char.ToUpperInvariant(checkedAt[0]) + checkedAt[1..],
+            (null, not null) => char.ToUpperInvariant(outcome[0]) + outcome[1..],
+            _ => char.ToUpperInvariant(checkedAt![0]) + checkedAt[1..] + " · " + outcome,
+        };
         CheckNowButton.IsVisible = _updates is not null;
     }
 
@@ -105,8 +173,9 @@ public partial class SettingsView : UserControl
 
     private int ParallelChoice() => Par1.IsChecked == true ? 1 : Par2.IsChecked == true ? 2 : Par8.IsChecked == true ? 8 : 4;
 
-    private static double? Limit(CheckBox box, NumericUpDown value) =>
-        box.IsChecked == true && value.Value is { } v && v > 0 ? (double)v : null;
+    private static double? Limit(ToggleSwitch box, TextBox value) =>
+        box.IsChecked == true
+        && double.TryParse((value.Text ?? string.Empty).Trim().Replace(',', '.'), NumberStyles.Float, CultureInfo.InvariantCulture, out var v) && v > 0 ? v : null;
 
     /// <summary>The settings to save, when the window closes with a result.</summary>
     public ClientSettings? Result { get; private set; }

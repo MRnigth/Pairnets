@@ -420,8 +420,8 @@
                               ContentTemplate="{TemplateBinding OnContentTemplate}" Foreground="{TemplateBinding Foreground}" IsVisible="False" />
           </Grid>
           <Border x:Name="track" Grid.Column="1" Width="42" Height="24" CornerRadius="12" Padding="2"
-                  Background="{DynamicResource T.Off}" VerticalAlignment="Center">
-            <Panel x:Name="PART_MovingKnobs" HorizontalAlignment="Left"><Panel x:Name="PART_SwitchKnob"><Ellipse Width="20" Height="20" Fill="White" /></Panel></Panel>
+                  Background="{DynamicResource T.SwitchOff}" VerticalAlignment="Center">
+            <Panel x:Name="PART_MovingKnobs" HorizontalAlignment="Left"><Panel x:Name="PART_SwitchKnob"><Ellipse x:Name="knob" Width="20" Height="20" Fill="{DynamicResource T.KnobOff}" /></Panel></Panel>
           </Border>
         </Grid>
       </ControlTemplate>
@@ -429,6 +429,9 @@
   </Style>
   <Style Selector="ToggleSwitch:checked /template/ Border#track">
     <Setter Property="Background" Value="{DynamicResource T.AccentButton}" />
+  </Style>
+  <Style Selector="ToggleSwitch:checked /template/ Ellipse#knob">
+    <Setter Property="Fill" Value="White" />
   </Style>
   <Style Selector="ToggleSwitch:checked /template/ Panel#PART_MovingKnobs">
     <Setter Property="HorizontalAlignment" Value="Right" />

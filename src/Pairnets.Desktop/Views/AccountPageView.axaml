@@ -1,0 +1,120 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:v="using:Pairnets.Desktop.Views"
+             x:Class="Pairnets.Desktop.Views.AccountPageView">
+  <!-- The Account page: who is signed in on this computer, and the notification switches (this computer only). -->
+  <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+    <StackPanel Spacing="16">
+      <StackPanel>
+        <TextBlock Classes="PageTitle" Text="Account" />
+        <TextBlock Classes="t2" Margin="0,2,0,0" TextWrapping="Wrap" Text="Who is signed in on this computer, and when Pairnets should tell you things." />
+      </StackPanel>
+
+      <!-- Who you are -->
+      <Border Classes="pcard" Padding="24">
+        <StackPanel Spacing="20">
+          <Grid ColumnDefinitions="Auto,*,Auto">
+            <Border Width="76" Height="76" CornerRadius="38" BorderThickness="3" BorderBrush="{DynamicResource T.Accent}" Background="{DynamicResource T.AccentSoft}" Margin="0,0,20,0">
+              <TextBlock x:Name="InitialText" FontSize="34" FontWeight="ExtraBold" Foreground="{DynamicResource T.AccentInk}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+            </Border>
+            <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+              <TextBlock x:Name="TitleText" FontSize="24" FontWeight="ExtraBold" TextTrimming="CharacterEllipsis" />
+              <TextBlock x:Name="SubtitleText" Classes="t2" FontSize="14" TextTrimming="CharacterEllipsis" />
+              <Border Classes="pillok" HorizontalAlignment="Left" Margin="0,6,0,0" Height="24">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                  <Ellipse Width="7" Height="7" Fill="{DynamicResource T.OkText}" VerticalAlignment="Center" />
+                  <TextBlock Text="Signed in" />
+                </StackPanel>
+              </Border>
+            </StackPanel>
+            <StackPanel Grid.Column="2" Spacing="8" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="16,0,0,0">
+              <Button x:Name="ManageButton" Classes="accent" HorizontalAlignment="Right">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                  <TextBlock Text="Manage your account on sync.pairnets.app" VerticalAlignment="Center" />
+                  <v:LineIcon Classes="icon white" Width="15" Height="15" Data="{StaticResource I.External}" />
+                </StackPanel>
+              </Button>
+              <Button x:Name="SignOutButton" Classes="chipbtn redtext" Height="38" Padding="14,0" CornerRadius="12" HorizontalAlignment="Right">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                  <v:LineIcon Classes="icon ink-bad" Width="16" Height="16" Data="{StaticResource I.Logout}" />
+                  <TextBlock Text="Sign out" VerticalAlignment="Center" />
+                </StackPanel>
+              </Button>
+            </StackPanel>
+          </Grid>
+          <Border Classes="hair" />
+          <UniformGrid Columns="4">
+            <Grid ColumnDefinitions="Auto,*" Margin="0,0,12,0">
+              <Border Classes="sq36" Margin="0,0,10,0"><v:LineIcon Classes="icon ink-soft" Width="18" Height="18" Data="{StaticResource I.Shield}" /></Border>
+              <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                <TextBlock Classes="t3" Text="Signed in with" />
+                <TextBlock x:Name="MethodText" FontWeight="Bold" TextTrimming="CharacterEllipsis" />
+              </StackPanel>
+            </Grid>
+            <Grid ColumnDefinitions="Auto,*" Margin="0,0,12,0">
+              <Border Classes="sq36" Margin="0,0,10,0"><v:LineIcon Classes="icon ink-soft" Width="18" Height="18" Data="{StaticResource I.Calendar}" /></Border>
+              <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                <TextBlock Classes="t3" Text="This computer added" TextTrimming="CharacterEllipsis" />
+                <TextBlock x:Name="AddedText" FontWeight="Bold" TextTrimming="CharacterEllipsis" />
+              </StackPanel>
+            </Grid>
+            <Grid ColumnDefinitions="Auto,*" Margin="0,0,12,0">
+              <Border Classes="sq36" Margin="0,0,10,0"><v:LineIcon Classes="icon ink-soft" Width="18" Height="18" Data="{StaticResource I.Desktop}" /></Border>
+              <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                <TextBlock Classes="t3" Text="This computer" />
+                <TextBlock x:Name="DeviceText" FontWeight="Bold" TextTrimming="CharacterEllipsis" />
+              </StackPanel>
+            </Grid>
+            <Grid ColumnDefinitions="Auto,*">
+              <Border Classes="sq36" Margin="0,0,10,0"><v:LineIcon Classes="icon ink-soft" Width="18" Height="18" Data="{StaticResource I.Nest}" /></Border>
+              <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                <TextBlock Classes="t3" Text="Your nest" />
+                <TextBlock x:Name="NestText" FontWeight="Bold" TextTrimming="CharacterEllipsis" />
+              </StackPanel>
+            </Grid>
+          </UniformGrid>
+        </StackPanel>
+      </Border>
+
+      <!-- Notifications -->
+      <Border Classes="pcard" Padding="22,18,22,6">
+        <StackPanel>
+          <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,10">
+            <v:LineIcon Classes="icon ink-soft" Width="17" Height="17" Margin="0,0,8,0" Data="{StaticResource I.Bell}" />
+            <TextBlock Grid.Column="1" Classes="ctitle" Text="Notifications" VerticalAlignment="Center" />
+            <TextBlock Grid.Column="2" Classes="t3" Text="Small pop-ups in the corner of the screen" VerticalAlignment="Center" />
+          </Grid>
+          <Border Classes="hair" />
+          <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,12">
+            <Border Classes="sq36 tint-warn" Margin="0,0,14,0"><v:LineIcon Classes="icon ink-warn" Width="18" Height="18" Data="{StaticResource I.Warning}" /></Border>
+            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+              <TextBlock FontWeight="SemiBold" Text="When something needs you" />
+              <TextBlock Classes="t3" Text="A file to compare, or deletions waiting for your OK." TextWrapping="Wrap" />
+            </StackPanel>
+            <ToggleSwitch x:Name="AttentionSwitch" Grid.Column="2" Classes="bare" OnContent="When something needs you" OffContent="When something needs you" VerticalAlignment="Center" />
+          </Grid>
+          <Border Classes="hair" />
+          <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,12">
+            <Border Classes="sq36 tint-accent" Margin="0,0,14,0"><v:LineIcon Classes="icon ink-accent" Width="18" Height="18" Data="{StaticResource I.UserPlus}" /></Border>
+            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+              <TextBlock FontWeight="SemiBold" Text="When a computer asks to join" />
+              <TextBlock Classes="t3" Text="So you can let it in, or say no." TextWrapping="Wrap" />
+            </StackPanel>
+            <ToggleSwitch x:Name="JoinSwitch" Grid.Column="2" Classes="bare" OnContent="When a computer asks to join" OffContent="When a computer asks to join" VerticalAlignment="Center" />
+          </Grid>
+          <Border Classes="hair" />
+          <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,12">
+            <Border Classes="sq36" Margin="0,0,14,0"><v:LineIcon Classes="icon ink-soft" Width="18" Height="18" Data="{StaticResource I.Download}" /></Border>
+            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+              <TextBlock FontWeight="SemiBold" Text="When an app update is ready" />
+              <TextBlock Classes="t3" Text="You still choose when to install it." TextWrapping="Wrap" />
+            </StackPanel>
+            <ToggleSwitch x:Name="UpdateSwitch" Grid.Column="2" Classes="bare" OnContent="When an app update is ready" OffContent="When an app update is ready" VerticalAlignment="Center" />
+          </Grid>
+        </StackPanel>
+      </Border>
+
+      <TextBlock Classes="t3" Text="These choices apply to this computer only. Each computer keeps its own." TextWrapping="Wrap" Margin="0,0,0,8" />
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

@@ -38,6 +38,18 @@ public class XamlParityTests
         // Avalonia's menu takes the focus from the tray panel, which hides when it loses focus; the panel stays
         // open while its own menu is open. WPF's ContextMenu does not take the focus.
         ("TrayPanel", "OnMenuOpened", MacLinuxApp, "the panel stays open while its menu is open"),
+        // New look stage 4: the Mac/Linux page was built before the Windows one was merged in; the Windows helper's names
+        // for the same buttons may differ. Rename one side, or delete the line, when the two pages are merged.
+        ("MainWindow", "OnRestoreDeleted", MacLinuxApp, "the Restore button of a row in the Deleted files table"),
+        ("MainWindow", "OnReviewConflict", MacLinuxApp, "the Review button of a conflict row in Activity"),
+        ("MainWindow", "OnReviewJoin", MacLinuxApp, "the Review chip of the join request on Devices"),
+    ];
+
+    /// <summary>Views one app has before the other (stage 4 of the new look): the view, the app that has it, and why.</summary>
+    private static readonly (string View, string OnlyIn, string Why)[] PendingViews =
+    [
+        ("DeviceCardView", MacLinuxApp, "a computer's card on the Devices page; the Windows one is built in the other stage 4 worktree"),
+        ("AccountPageView", MacLinuxApp, "the Account page; the Windows one is built in the other stage 4 worktree"),
     ];
 
     private const string WindowsApp = "the Windows app";
@@ -52,8 +64,10 @@ public class XamlParityTests
     {
         var wpf = WpfViews.Keys.ToHashSet();
         var avalonia = AvaloniaViews.Keys.ToHashSet();
-        var problems = wpf.Except(avalonia).Select(v => $"{v} is in {WindowsApp} (src/Pairnets.Client/Ui/{v}.xaml) but not in {MacLinuxApp}.")
-            .Concat(avalonia.Except(wpf).Select(v => $"{v} is in {MacLinuxApp} (src/Pairnets.Desktop/Views/{v}.axaml) but not in {WindowsApp}."))
+        var problems = wpf.Except(avalonia).Where(v => !PendingViews.Any(p => p.View == v && p.OnlyIn == WindowsApp))
+            .Select(v => $"{v} is in {WindowsApp} (src/Pairnets.Client/Ui/{v}.xaml) but not in {MacLinuxApp}.")
+            .Concat(avalonia.Except(wpf).Where(v => !PendingViews.Any(p => p.View == v && p.OnlyIn == MacLinuxApp))
+                .Select(v => $"{v} is in {MacLinuxApp} (src/Pairnets.Desktop/Views/{v}.axaml) but not in {WindowsApp}."))
             .ToList();
         Assert.True(problems.Count == 0, string.Join(Environment.NewLine, problems));
         Assert.Contains("MainWindow", avalonia); // the folders were read at all
@@ -89,6 +103,9 @@ public class XamlParityTests
                 : avalonia.GetValueOrDefault(d.View, []).Contains(d.Handler) && !wpf.GetValueOrDefault(d.View, []).Contains(d.Handler)))
             .Select(d => $"{d.View}: {d.Handler} is no longer only in {d.OnlyIn} ({d.Why}); take it off the list in XamlParityTests.")
             .ToList();
+        stale.AddRange(PendingViews
+            .Where(p => !(p.OnlyIn == WindowsApp ? wpf.ContainsKey(p.View) && !avalonia.ContainsKey(p.View) : avalonia.ContainsKey(p.View) && !wpf.ContainsKey(p.View)))
+            .Select(p => $"{p.View} is no longer only in {p.OnlyIn} ({p.Why}); take it off the PendingViews list in XamlParityTests."));
         Assert.True(stale.Count == 0, string.Join(Environment.NewLine, stale));
     }
 

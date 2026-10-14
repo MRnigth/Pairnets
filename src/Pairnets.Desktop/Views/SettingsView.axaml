@@ -3,195 +3,319 @@
              xmlns:v="using:Pairnets.Desktop.Views"
              xmlns:core="using:Pairnets.Core"
              x:Class="Pairnets.Desktop.Views.SettingsView">
-  <ScrollViewer x:Name="Scroller" HorizontalScrollBarVisibility="Disabled" PointerWheelChanged="OnScrollWheel">
-  <!-- Inside the main window, which has its own margins. -->
-  <StackPanel x:Name="Form" Margin="0,0,14,16" Spacing="12">
-    <!-- Server -->
-    <Border Classes="card">
-      <StackPanel Spacing="10">
-        <StackPanel Orientation="Horizontal" Spacing="8">
-          <v:LineIcon Classes="icon" Width="17" Height="17" Data="{StaticResource I.Server}" />
-          <TextBlock x:Name="ServerHeading" Classes="h2" Text="Your server" />
-        </StackPanel>
-        <!-- Signed in with this computer's own key: who it is, and signing out. -->
-        <StackPanel x:Name="SignedInPanel" IsVisible="False" Spacing="10">
-          <TextBlock x:Name="SignedInText" TextWrapping="Wrap" />
-          <WrapPanel>
-            <Button Classes="subtle" Content="Manage devices on the web" Margin="0,0,8,0" Click="OnManageDevices" />
-            <Button Classes="subtle" Content="Sign out of this computer" Click="OnSignOut" />
-          </WrapPanel>
-          <Button x:Name="ShowAddressButton" Classes="link" Content="Advanced: server address and token ▸" Click="OnShowAddress" />
-        </StackPanel>
-        <StackPanel x:Name="AddressFields" Spacing="10">
-        <StackPanel>
-          <TextBlock Classes="label" Text="Server address" />
-          <TextBox x:Name="ServerUrlBox" Watermark="https://sync.example.com/" />
-        </StackPanel>
-        <StackPanel>
-          <TextBlock Classes="label" Text="Token" />
-          <TextBox x:Name="TokenBox" PasswordChar="•" />
-        </StackPanel>
-        <Grid ColumnDefinitions="Auto,*">
-          <Button x:Name="TestButton" Classes="subtle" Content="Test connection" Click="OnTest" VerticalAlignment="Top" />
-          <Border x:Name="TestChip" Grid.Column="1" Margin="10,0,0,0" IsVisible="False" HorizontalAlignment="Left">
-            <TextBlock x:Name="TestResult" TextWrapping="Wrap" />
-          </Border>
-        </Grid>
-        </StackPanel>
+  <!-- The Settings page: a header with Cancel and Save, then two columns of cards (one column when the window is narrow). -->
+  <Grid RowDefinitions="Auto,*">
+    <Grid ColumnDefinitions="*,Auto,Auto">
+      <StackPanel VerticalAlignment="Center">
+        <TextBlock Classes="PageTitle" Text="Settings" />
+        <TextBlock Classes="t2" Margin="0,2,0,0" TextWrapping="Wrap" FontSize="13" Text="Your nest, the folder, and how Pairnets behaves on this computer." />
       </StackPanel>
-    </Border>
-
-    <!-- Folder -->
-    <Border Classes="card">
-      <StackPanel Spacing="10">
+      <Button Grid.Column="1" Classes="SecondaryButton" Height="38" Padding="16,0" Margin="8,0" VerticalAlignment="Center" Content="Cancel" IsCancel="True" Click="OnCancel" />
+      <Button x:Name="SaveButton" Grid.Column="2" Classes="accent" Height="38" Padding="18,0" VerticalAlignment="Center" IsDefault="True" Click="OnSave">
         <StackPanel Orientation="Horizontal" Spacing="8">
-          <v:LineIcon Classes="icon" Width="17" Height="17" Data="{StaticResource I.Folder}" />
-          <TextBlock Classes="h2" Text="Folder to keep in sync" />
+          <v:LineIcon Classes="icon white" Width="15" Height="15" StrokeThickness="2.6" Data="{StaticResource I.Check}" />
+          <TextBlock Text="Save" VerticalAlignment="Center" />
         </StackPanel>
-        <Grid ColumnDefinitions="*,Auto">
-          <TextBox x:Name="FolderBox" Watermark="Choose a folder…" />
-          <Button Grid.Column="1" Classes="subtle" Content="Browse…" Margin="8,0,0,0" Click="OnBrowse" />
-        </Grid>
-      </StackPanel>
-    </Border>
+      </Button>
+    </Grid>
 
-    <!-- This computer -->
-    <Border Classes="card">
-      <StackPanel Spacing="10">
-        <StackPanel Orientation="Horizontal" Spacing="8">
-          <v:LineIcon Classes="icon" Width="17" Height="17" Data="{StaticResource I.Computer}" />
-          <TextBlock Classes="h2" Text="This computer" />
-        </StackPanel>
-        <StackPanel>
-          <TextBlock Classes="label" Text="Device name" />
-          <TextBox x:Name="DeviceBox" />
-          <TextBlock Classes="muted small" Margin="0,4,0,0" Text="Shown in conflict file names. Use a different name on each computer." />
-        </StackPanel>
-        <ToggleSwitch x:Name="AutoStartBox" OnContent="Start Pairnets when I log in" OffContent="Start Pairnets when I log in" />
-        <Expander Header="Advanced: files to ignore" HorizontalAlignment="Stretch">
-          <StackPanel Spacing="4">
-            <TextBox x:Name="IgnoreBox" Height="76" AcceptsReturn="True" Watermark="One pattern per line, e.g. *.bak or node_modules/" />
-            <TextBlock Classes="muted small" Text="Temporary and system files (~$*, *.tmp, Thumbs.db, .git/ …) are always ignored." TextWrapping="Wrap" />
-          </StackPanel>
-        </Expander>
-      </StackPanel>
-    </Border>
+    <ScrollViewer x:Name="Scroller" Grid.Row="1" Margin="0,16,0,0" HorizontalScrollBarVisibility="Disabled" PointerWheelChanged="OnScrollWheel">
+      <StackPanel x:Name="Form" Spacing="16" Margin="0,0,0,8">
+        <Grid x:Name="Columns" ColumnDefinitions="*,*" RowDefinitions="Auto,Auto">
+          <!-- ======== Left column ======== -->
+          <StackPanel x:Name="LeftColumn" Spacing="16" Margin="0,0,8,0">
+            <!-- Your nest -->
+            <Border Classes="pcard" Padding="20,16">
+              <StackPanel Spacing="14">
+                <Grid ColumnDefinitions="Auto,*,Auto">
+                  <v:LineIcon Classes="icon ink-soft" Width="17" Height="17" Margin="0,0,8,0" Data="{StaticResource I.Nest}" />
+                  <TextBlock x:Name="ServerHeading" Grid.Column="1" Classes="stitle" Text="Your nest" VerticalAlignment="Center" />
+                  <Border x:Name="ConnectedPill" Grid.Column="2" Classes="pillok" Height="24" IsVisible="False">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                      <Ellipse Width="7" Height="7" Fill="{DynamicResource T.OkText}" VerticalAlignment="Center" />
+                      <TextBlock Text="Connected" />
+                    </StackPanel>
+                  </Border>
+                </Grid>
+                <!-- Signed in with this computer's own key: who it is, and signing out. -->
+                <StackPanel x:Name="SignedInPanel" IsVisible="False" Spacing="14">
+                  <Grid ColumnDefinitions="Auto,*">
+                    <Border Width="40" Height="40" CornerRadius="12" Classes="tint-accent" Margin="0,0,12,0">
+                      <TextBlock x:Name="AvatarText" FontSize="17" FontWeight="ExtraBold" Foreground="{DynamicResource T.AccentInk}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                      <TextBlock x:Name="NestHostText" FontSize="15" FontWeight="ExtraBold" TextTrimming="CharacterEllipsis" />
+                      <TextBlock x:Name="SignedInText" Classes="t2" FontSize="13" TextTrimming="CharacterEllipsis" />
+                    </StackPanel>
+                  </Grid>
+                  <WrapPanel>
+                    <Button x:Name="SignInAgainButton" Classes="chipbtn" Margin="0,0,8,8">
+                      <StackPanel Orientation="Horizontal" Spacing="7">
+                        <v:LineIcon Classes="icon" Width="15" Height="15" Data="{StaticResource I.Retry}" />
+                        <TextBlock Text="Sign in again" VerticalAlignment="Center" />
+                      </StackPanel>
+                    </Button>
+                    <Button Classes="chipbtn redtext" Margin="0,0,8,8" Click="OnSignOut" ToolTip.Tip="Sign out of this computer">
+                      <StackPanel Orientation="Horizontal" Spacing="7">
+                        <v:LineIcon Classes="icon ink-bad" Width="15" Height="15" Data="{StaticResource I.Logout}" />
+                        <TextBlock Text="Sign out" VerticalAlignment="Center" />
+                      </StackPanel>
+                    </Button>
+                    <Button Classes="chipbtn" Margin="0,0,0,8" Click="OnManageDevices">
+                      <StackPanel Orientation="Horizontal" Spacing="7">
+                        <v:LineIcon Classes="icon" Width="15" Height="15" Data="{StaticResource I.External}" />
+                        <TextBlock Text="Manage devices on the web" VerticalAlignment="Center" />
+                      </StackPanel>
+                    </Button>
+                  </WrapPanel>
+                  <Button x:Name="ShowAddressButton" Classes="link" HorizontalAlignment="Left" Margin="-6,-6,0,0" Content="Advanced: server address and token ▸" Click="OnShowAddress" />
+                </StackPanel>
+                <StackPanel x:Name="AddressFields" Spacing="10">
+                  <StackPanel Spacing="4">
+                    <TextBlock Classes="label" Text="Server address" />
+                    <TextBox x:Name="ServerUrlBox" Classes="field" Watermark="https://sync.example.com/" />
+                  </StackPanel>
+                  <StackPanel Spacing="4">
+                    <TextBlock Classes="label" Text="Token" />
+                    <TextBox x:Name="TokenBox" Classes="field" PasswordChar="•" />
+                  </StackPanel>
+                  <Grid ColumnDefinitions="Auto,*">
+                    <Button x:Name="TestButton" Classes="chipbtn" Content="Test connection" Click="OnTest" VerticalAlignment="Top" />
+                    <Border x:Name="TestChip" Grid.Column="1" Margin="10,0,0,0" IsVisible="False" HorizontalAlignment="Left">
+                      <TextBlock x:Name="TestResult" TextWrapping="Wrap" />
+                    </Border>
+                  </Grid>
+                </StackPanel>
+              </StackPanel>
+            </Border>
 
-    <!-- Updates and speed -->
-    <Border Classes="card">
-      <StackPanel Spacing="12">
-        <StackPanel Orientation="Horizontal" Spacing="8">
-          <v:LineIcon Classes="icon" Width="17" Height="17" Data="{StaticResource I.Bolt}" />
-          <TextBlock Classes="h2" Text="Updates and speed" />
-        </StackPanel>
+            <!-- This computer -->
+            <Border Classes="pcard" Padding="20,16">
+              <StackPanel Spacing="14">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                  <v:LineIcon Classes="icon ink-soft" Width="17" Height="17" Data="{StaticResource I.Desktop}" />
+                  <TextBlock Classes="stitle" Text="This computer" VerticalAlignment="Center" />
+                </StackPanel>
+                <StackPanel Spacing="6">
+                  <TextBlock FontSize="13" FontWeight="Bold" Text="Folder to keep in sync" />
+                  <Grid ColumnDefinitions="*,Auto">
+                    <TextBox x:Name="FolderBox" Classes="field" Height="38" MinHeight="38" CornerRadius="11" Watermark="Choose a folder…">
+                      <TextBox.InnerLeftContent>
+                        <v:LineIcon Classes="icon" Stroke="{DynamicResource T.Folder}" Width="16" Height="16" Margin="12,0,0,0" Data="{StaticResource I.Folder}" />
+                      </TextBox.InnerLeftContent>
+                    </TextBox>
+                    <Button Grid.Column="1" Classes="chipbtn" Height="38" Margin="8,0,0,0" Content="Change…" Click="OnBrowse" />
+                  </Grid>
+                </StackPanel>
+                <StackPanel Spacing="6">
+                  <TextBlock FontSize="13" FontWeight="Bold" Text="This computer's name" />
+                  <TextBox x:Name="DeviceBox" Classes="field" Height="38" MinHeight="38" CornerRadius="11" FontWeight="SemiBold" />
+                  <TextBlock Classes="t3" TextWrapping="Wrap" Text="Use a different name on each computer. It shows in conflict file names." />
+                </StackPanel>
+                <Border Classes="hair" />
+                <Grid ColumnDefinitions="*,Auto">
+                  <TextBlock Text="Start Pairnets when I log in" FontWeight="SemiBold" VerticalAlignment="Center" />
+                  <ToggleSwitch x:Name="AutoStartBox" Grid.Column="1" Classes="bare" OnContent="Start Pairnets when I log in" OffContent="Start Pairnets when I log in" />
+                </Grid>
+              </StackPanel>
+            </Border>
 
-        <StackPanel Spacing="3">
-          <ToggleSwitch x:Name="UpdateBox" OnContent="Check for updates when Pairnets starts" OffContent="Check for updates when Pairnets starts" />
-          <TextBlock Classes="muted small" TextWrapping="Wrap"
-                     Text="Looks for a new version on GitHub at start-up and once a day. Nothing is installed until you click Update." />
-          <StackPanel Orientation="Horizontal" Spacing="10">
-            <TextBlock x:Name="VersionText" Classes="muted small" VerticalAlignment="Center" />
-            <Button x:Name="CheckNowButton" Classes="flat" Padding="6,3" FontSize="12" Content="Check now" Foreground="{DynamicResource T.Accent}" Click="OnCheckNow" />
-          </StackPanel>
-        </StackPanel>
-        <StackPanel Spacing="3">
-          <TextBlock x:Name="ServerVersionText" Classes="muted small" />
-          <ToggleSwitch x:Name="AutoServerBox" OnContent="Update the server automatically" OffContent="Update the server automatically" />
-          <TextBlock Classes="muted small" TextWrapping="Wrap"
-                     Text="When this app finds the server on an older version, it updates it without asking (about 30 seconds; your files are not touched)." />
-        </StackPanel>
-        <StackPanel Spacing="3">
-          <ToggleSwitch x:Name="DebugBox" OnContent="Debug mode" OffContent="Debug mode" />
-          <TextBlock Classes="muted small" TextWrapping="Wrap"
-                     Text="Writes more detail to the log and shows the server's update log in the update window. Turn it on when updating the server does not work." />
-        </StackPanel>
-        <Border Classes="divider" />
-
-        <StackPanel Spacing="3">
-          <ToggleSwitch x:Name="MapSpeedBox" OnContent="Show speed on the map" OffContent="Show speed on the map" />
-          <TextBlock Classes="muted small" TextWrapping="Wrap"
-                     Text="Shows how fast files move (MB/s) on the lines between the computers on the overview." />
-        </StackPanel>
-        <Border Classes="divider" />
-
-        <StackPanel Spacing="3">
-          <ToggleSwitch x:Name="WaitBox" OnContent="Wait while my other computer uploads many files" OffContent="Wait while my other computer uploads many files" />
-          <TextBlock Classes="muted small" TextWrapping="Wrap"
-                     Text="When the other computer sends more than 100 files, download them in one go after it finishes instead of a few at a time." />
-        </StackPanel>
-        <Border Classes="divider" />
-
-        <StackPanel Spacing="6">
-          <TextBlock Classes="strong" Text="Files at the same time" />
-          <Border Classes="segments" HorizontalAlignment="Left">
-            <StackPanel Orientation="Horizontal">
-              <RadioButton x:Name="Par1" Classes="seg" GroupName="par" Content="1" />
-              <RadioButton x:Name="Par2" Classes="seg" GroupName="par" Content="2" />
-              <RadioButton x:Name="Par4" Classes="seg" GroupName="par" Content="4" />
-              <RadioButton x:Name="Par8" Classes="seg" GroupName="par" Content="8" />
+            <!-- Advanced: files to ignore -->
+            <StackPanel>
+              <Button x:Name="IgnoreHeader" Classes="rowbtn cardbtn" Padding="20,14" HorizontalContentAlignment="Stretch">
+                <Grid ColumnDefinitions="Auto,*,Auto,Auto">
+                  <v:LineIcon Classes="icon ink-soft" Width="17" Height="17" Margin="0,0,12,0" Data="{StaticResource I.Sliders}" VerticalAlignment="Center" />
+                  <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                    <TextBlock Classes="advtitle" Text="Advanced: files to ignore" />
+                    <TextBlock Classes="t3" Text="Add your own rules on top of the usual ones." TextWrapping="Wrap" />
+                  </StackPanel>
+                  <TextBlock x:Name="IgnoreCount" Grid.Column="2" Classes="t3" FontWeight="SemiBold" VerticalAlignment="Center" Margin="10,0" />
+                  <v:LineIcon x:Name="IgnoreChevron" Grid.Column="3" Classes="icon ink-soft" Width="14" Height="14" StrokeThickness="2.4" Data="{StaticResource I.ChevronDown}" VerticalAlignment="Center" />
+                </Grid>
+              </Button>
+              <Border x:Name="IgnorePanel" Classes="pcard" Padding="20,14" Margin="0,8,0,0" IsVisible="False">
+                <StackPanel Spacing="6">
+                  <TextBox x:Name="IgnoreBox" Classes="field" Height="86" AcceptsReturn="True" Watermark="One pattern per line, e.g. *.bak or node_modules/" />
+                  <TextBlock Classes="t3" Text="Temporary and system files (~$*, *.tmp, Thumbs.db, .git/ …) are always ignored." TextWrapping="Wrap" />
+                </StackPanel>
+              </Border>
             </StackPanel>
-          </Border>
-          <TextBlock Classes="muted small" TextWrapping="Wrap" Text="4 is fastest for most connections. Use 1 on a very slow or metered connection." />
-        </StackPanel>
-        <Border Classes="divider" />
+          </StackPanel>
 
-        <StackPanel Spacing="8">
-          <TextBlock Classes="strong" Text="Speed limits" />
-          <Grid ColumnDefinitions="Auto,Auto,Auto" RowDefinitions="Auto,Auto" >
-            <CheckBox x:Name="UpLimitBox" Content="Limit upload to the server to" Margin="0,0,10,6" />
-            <NumericUpDown x:Name="UpLimitValue" Grid.Column="1" Minimum="0.1" Maximum="10000" Increment="1" Value="5" FormatString="0.##" Width="120" Margin="0,0,8,6" />
-            <TextBlock Grid.Column="2" Classes="muted" Text="MB/s" VerticalAlignment="Center" Margin="0,0,0,6" />
-            <CheckBox x:Name="DownLimitBox" Grid.Row="1" Content="Limit download from the server to" Margin="0,0,10,0" />
-            <NumericUpDown x:Name="DownLimitValue" Grid.Row="1" Grid.Column="1" Minimum="0.1" Maximum="10000" Increment="1" Value="10" FormatString="0.##" Width="120" Margin="0,0,8,0" />
-            <TextBlock Grid.Row="1" Grid.Column="2" Classes="muted" Text="MB/s" VerticalAlignment="Center" />
+          <!-- ======== Right column ======== -->
+          <StackPanel x:Name="RightColumn" Grid.Column="1" Spacing="16" Margin="8,0,0,0">
+            <!-- Updates -->
+            <Border Classes="pcard" Padding="20,16">
+              <StackPanel Spacing="14">
+                <Grid ColumnDefinitions="Auto,*,Auto">
+                  <v:LineIcon Classes="icon ink-soft" Width="17" Height="17" Margin="0,0,8,0" Data="{StaticResource I.Download}" />
+                  <TextBlock Grid.Column="1" Classes="stitle" Text="Updates" VerticalAlignment="Center" />
+                  <TextBlock x:Name="AppVersionText" Grid.Column="2" Classes="t3" VerticalAlignment="Center" />
+                </Grid>
+                <Grid ColumnDefinitions="*,Auto">
+                  <StackPanel VerticalAlignment="Center">
+                    <TextBlock Text="Check for updates by itself" FontWeight="SemiBold" TextWrapping="Wrap" />
+                    <TextBlock Classes="t3" TextWrapping="Wrap" Text="Looks when Pairnets starts and once a day. You choose when to install." />
+                  </StackPanel>
+                  <ToggleSwitch x:Name="UpdateBox" Grid.Column="1" Classes="bare" OnContent="Check for updates by itself" OffContent="Check for updates by itself" />
+                </Grid>
+                <Border Background="{DynamicResource T.Chip}" CornerRadius="12" Padding="12,7,7,7">
+                  <Grid ColumnDefinitions="Auto,*,Auto">
+                    <v:LineIcon Classes="icon ink-ok" Width="15" Height="15" StrokeThickness="2.4" Margin="0,0,10,0" Data="{StaticResource I.Check}" VerticalAlignment="Center" />
+                    <TextBlock x:Name="VersionText" Grid.Column="1" Classes="t2" FontSize="13" TextWrapping="Wrap" VerticalAlignment="Center" />
+                    <Button x:Name="CheckNowButton" Grid.Column="2" Classes="small" Margin="10,0,0,0" FontWeight="Bold" Click="OnCheckNow">
+                      <StackPanel Orientation="Horizontal" Spacing="6">
+                        <v:LineIcon Classes="icon" Width="13" Height="13" Data="{StaticResource I.Sync}" />
+                        <TextBlock Text="Check now" />
+                      </StackPanel>
+                    </Button>
+                  </Grid>
+                </Border>
+                <Border Classes="hair" />
+                <Grid ColumnDefinitions="*,Auto">
+                  <StackPanel VerticalAlignment="Center">
+                    <TextBlock Text="Update the nest by itself" FontWeight="SemiBold" TextWrapping="Wrap" />
+                    <TextBlock Classes="t3" TextWrapping="Wrap" Text="When your nest runs an older version it updates in about 30 seconds. Your files are never touched." />
+                  </StackPanel>
+                  <ToggleSwitch x:Name="AutoServerBox" Grid.Column="1" Classes="bare" OnContent="Update the nest by itself" OffContent="Update the nest by itself" />
+                </Grid>
+              </StackPanel>
+            </Border>
+
+            <!-- Speed -->
+            <Border Classes="pcard" Padding="20,16">
+              <StackPanel Spacing="14">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                  <v:LineIcon Classes="icon ink-soft" Width="17" Height="17" Data="{StaticResource I.Bolt}" />
+                  <TextBlock Classes="stitle" Text="Speed" VerticalAlignment="Center" />
+                </StackPanel>
+                <Grid ColumnDefinitions="*,Auto">
+                  <StackPanel VerticalAlignment="Center">
+                    <TextBlock Text="Wait when another computer sends a lot" FontWeight="SemiBold" TextWrapping="Wrap" />
+                    <TextBlock Classes="t3" TextWrapping="Wrap" Text="Over 100 files: get them in one go at the end." />
+                  </StackPanel>
+                  <ToggleSwitch x:Name="WaitBox" Grid.Column="1" Classes="bare" OnContent="Wait when another computer sends a lot" OffContent="Wait when another computer sends a lot" />
+                </Grid>
+                <Grid ColumnDefinitions="*,Auto">
+                  <StackPanel VerticalAlignment="Center">
+                    <TextBlock Text="Files at the same time" FontWeight="SemiBold" />
+                    <TextBlock Classes="t3" TextWrapping="Wrap" Text="4 suits most connections." />
+                  </StackPanel>
+                  <Border Grid.Column="1" Classes="numsegs" VerticalAlignment="Center">
+                    <StackPanel Orientation="Horizontal">
+                      <RadioButton x:Name="Par1" Classes="numseg" GroupName="par" Content="1" />
+                      <RadioButton x:Name="Par2" Classes="numseg" GroupName="par" Content="2" />
+                      <RadioButton x:Name="Par4" Classes="numseg" GroupName="par" Content="4" />
+                      <RadioButton x:Name="Par8" Classes="numseg" GroupName="par" Content="8" />
+                    </StackPanel>
+                  </Border>
+                </Grid>
+                <Border Classes="hair" />
+                <StackPanel Spacing="10">
+                  <Grid ColumnDefinitions="Auto,*,Auto,Auto" MinHeight="34">
+                    <ToggleSwitch x:Name="UpLimitBox" Classes="bare" Margin="-12,0,0,0" OnContent="Limit upload to" OffContent="Limit upload to" VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="1" Text="Limit upload to" FontWeight="SemiBold" VerticalAlignment="Center" Margin="-4,0,0,0" />
+                    <TextBox x:Name="UpLimitValue" Grid.Column="2" Classes="field" Width="64" Height="34" MinHeight="34" CornerRadius="10" Padding="10,0" Text="5" TextAlignment="Right" FontWeight="Bold"
+                             IsVisible="{Binding #UpLimitBox.IsChecked}" />
+                    <TextBlock Grid.Column="3" Text="MB/s" Classes="t2" FontSize="13" VerticalAlignment="Center" Margin="8,0,0,0" IsVisible="{Binding #UpLimitBox.IsChecked}" />
+                    <TextBlock Grid.Column="2" Grid.ColumnSpan="2" Text="No limit" Classes="t3" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" HorizontalAlignment="Right"
+                               IsVisible="{Binding !#UpLimitBox.IsChecked}" />
+                  </Grid>
+                  <Grid ColumnDefinitions="Auto,*,Auto,Auto" MinHeight="34">
+                    <ToggleSwitch x:Name="DownLimitBox" Classes="bare" Margin="-12,0,0,0" OnContent="Limit download from" OffContent="Limit download from" VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="1" Text="Limit download" FontWeight="SemiBold" VerticalAlignment="Center" Margin="-4,0,0,0" />
+                    <TextBox x:Name="DownLimitValue" Grid.Column="2" Classes="field" Width="64" Height="34" MinHeight="34" CornerRadius="10" Padding="10,0" Text="10" TextAlignment="Right" FontWeight="Bold"
+                             IsVisible="{Binding #DownLimitBox.IsChecked}" />
+                    <TextBlock Grid.Column="3" Text="MB/s" Classes="t2" FontSize="13" VerticalAlignment="Center" Margin="8,0,0,0" IsVisible="{Binding #DownLimitBox.IsChecked}" />
+                    <TextBlock Grid.Column="2" Grid.ColumnSpan="2" Text="No limit" Classes="t3" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" HorizontalAlignment="Right"
+                               IsVisible="{Binding !#DownLimitBox.IsChecked}" />
+                  </Grid>
+                  <TextBlock Classes="t3" TextWrapping="Wrap" Text="Includes files from your other computers: they always come through your nest." />
+                </StackPanel>
+                <Border Classes="hair" />
+                <Grid ColumnDefinitions="*,Auto">
+                  <StackPanel VerticalAlignment="Center">
+                    <TextBlock Text="Show speed on the map" FontWeight="SemiBold" TextWrapping="Wrap" />
+                    <TextBlock Classes="t3" TextWrapping="Wrap" Text="Shows how fast files move (MB/s) on the lines between the computers on the overview." />
+                  </StackPanel>
+                  <ToggleSwitch x:Name="MapSpeedBox" Grid.Column="1" Classes="bare" OnContent="Show speed on the map" OffContent="Show speed on the map" />
+                </Grid>
+              </StackPanel>
+            </Border>
+          </StackPanel>
+        </Grid>
+
+        <!-- Help -->
+        <Border Classes="pcard">
+          <Grid x:Name="HelpGrid" ColumnDefinitions="*,*">
+            <Button x:Name="ReportBugButton" Classes="rowbtn" Padding="20,14">
+              <Grid ColumnDefinitions="Auto,*,Auto">
+                <Border Classes="sq34" Margin="0,0,12,0"><v:LineIcon Classes="icon ink-soft" Width="17" Height="17" StrokeThickness="2" Data="{StaticResource I.Bang}" /></Border>
+                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                  <TextBlock Text="Report a bug…" FontWeight="Bold" />
+                  <TextBlock Classes="t3" Text="Makes a report to paste. Nothing is sent." TextWrapping="Wrap" />
+                </StackPanel>
+                <v:LineIcon Grid.Column="2" Classes="icon ink-dim" Width="14" Height="14" StrokeThickness="2.4" Data="{StaticResource I.ChevronRight}" VerticalAlignment="Center" />
+              </Grid>
+            </Button>
+            <Border Grid.Column="1" BorderThickness="1,0,0,0" BorderBrush="{DynamicResource T.Border}" Padding="20,14">
+              <Grid ColumnDefinitions="Auto,*,Auto">
+                <Border Classes="sq34" Margin="0,0,12,0"><v:LineIcon Classes="icon ink-soft" Width="17" Height="17" StrokeThickness="2" Data="{StaticResource I.Terminal}" /></Border>
+                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                  <TextBlock Text="Debug mode" FontWeight="Bold" />
+                  <TextBlock Classes="t3" Text="Writes more detail to the log and shows the nest's update log." TextWrapping="Wrap" />
+                </StackPanel>
+                <ToggleSwitch x:Name="DebugBox" Grid.Column="2" Classes="bare" OnContent="Debug mode" OffContent="Debug mode" VerticalAlignment="Center" />
+              </Grid>
+            </Border>
           </Grid>
-          <TextBlock Classes="muted small" TextWrapping="Wrap"
-                     Text="Files from your other computers always come through the server, so the download limit covers them too. All files at once stay under the limit together." />
-        </StackPanel>
-      </StackPanel>
-    </Border>
+        </Border>
 
-    <!-- Start over -->
-    <Border Classes="card">
-      <StackPanel Spacing="10">
-        <StackPanel Orientation="Horizontal" Spacing="8">
-          <v:LineIcon Classes="icon" Width="17" Height="17" Data="{StaticResource I.Trash}" />
-          <TextBlock Classes="h2" Text="Start over" />
-        </StackPanel>
-        <TextBlock Classes="muted small" TextWrapping="Wrap"
-                   Text="Forgets every setting, signs this computer out of your nest and starts again from the sign-in screen. The files in your sync folder are never deleted." />
-        <Button x:Name="ResetButton" Classes="danger" HorizontalAlignment="Left" Content="Reset this app…" Click="OnReset" />
-      </StackPanel>
-    </Border>
+        <!-- Start over -->
+        <Border x:Name="StartOverCard" Classes="pcard dangercard" Padding="20,18">
+          <Grid ColumnDefinitions="Auto,*,Auto">
+            <Border Classes="sq44 tint-bad" Margin="0,0,16,0" VerticalAlignment="Center">
+              <v:LineIcon Classes="icon ink-bad" Width="22" Height="22" StrokeThickness="1.9" Data="{StaticResource I.Restore}" />
+            </Border>
+            <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+              <TextBlock Classes="stitle" Text="Start over" />
+              <TextBlock Classes="t2" FontSize="13" TextWrapping="Wrap"
+                         Text="Forgets every setting and signs this computer out of your nest, then opens the sign-in screen so you can set it up again." />
+              <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,4,0,0">
+                <v:LineIcon Classes="icon ink-ok" Width="13" Height="13" StrokeThickness="2.6" Data="{StaticResource I.Check}" VerticalAlignment="Center" />
+                <TextBlock x:Name="StartOverNote" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource T.OkText}" TextWrapping="Wrap" />
+              </StackPanel>
+            </StackPanel>
+            <Button x:Name="ResetButton" Grid.Column="2" Classes="reset" Height="38" Padding="16,0" Margin="16,0,0,0" VerticalAlignment="Center" Content="Reset this app…" Click="OnReset" />
+          </Grid>
+        </Border>
 
-    <!-- About: version and licence, and the website's help and legal pages (each link's CommandParameter is its address) -->
-    <Border Classes="card">
-      <StackPanel Spacing="10">
-        <StackPanel Orientation="Horizontal" Spacing="8">
-          <v:LineIcon Classes="icon" Width="17" Height="17" Data="{StaticResource I.Info}" />
-          <TextBlock Classes="h2" Text="About Pairnets" />
-        </StackPanel>
-        <TextBlock x:Name="AboutText" Classes="muted small" TextWrapping="Wrap" />
-        <WrapPanel x:Name="AboutLinks" Margin="-6,0,0,0">
-          <Button x:Name="DonateLink" Classes="link" Content="Support Pairnets ♥" CommandParameter="{x:Static core:PairnetsLinks.Donate}" Click="OnAboutLink" />
-          <Button x:Name="HelpLink" Classes="link" Content="Help" CommandParameter="{x:Static core:PairnetsLinks.Help}" Click="OnAboutLink" />
-          <Button x:Name="FaqLink" Classes="link" Content="FAQ" CommandParameter="{x:Static core:PairnetsLinks.Faq}" Click="OnAboutLink" />
-          <Button x:Name="ContactLink" Classes="link" Content="Contact" CommandParameter="{x:Static core:PairnetsLinks.Contact}" Click="OnAboutLink" />
-          <Button x:Name="PrivacyLink" Classes="link" Content="Privacy" CommandParameter="{x:Static core:PairnetsLinks.Privacy}" Click="OnAboutLink" />
-          <Button x:Name="TermsLink" Classes="link" Content="Terms" CommandParameter="{x:Static core:PairnetsLinks.Terms}" Click="OnAboutLink" />
-          <Button x:Name="GuidelinesLink" Classes="link" Content="Guidelines" CommandParameter="{x:Static core:PairnetsLinks.Guidelines}" Click="OnAboutLink" />
-          <Button x:Name="CookiesLink" Classes="link" Content="Cookie settings" CommandParameter="{x:Static core:PairnetsLinks.Cookies}" Click="OnAboutLink" />
-          <Button x:Name="SecurityLink" Classes="link" Content="Security" CommandParameter="{x:Static core:PairnetsLinks.Security}" Click="OnAboutLink" />
-          <Button x:Name="LicensesLink" Classes="link" Content="Open-source licences" CommandParameter="{x:Static core:PairnetsLinks.Licenses}" Click="OnAboutLink" />
-          <Button x:Name="DeleteAccountLink" Classes="link" Content="Delete my account" CommandParameter="{x:Static core:PairnetsLinks.DeleteAccount}" Click="OnAboutLink" />
-        </WrapPanel>
-      </StackPanel>
-    </Border>
+        <!-- About: version and licence, and the website's help and legal pages (each link's CommandParameter is its address) -->
+        <Border Classes="pcard" Padding="20,16">
+          <StackPanel Spacing="10">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <v:LineIcon Classes="icon ink-soft" Width="17" Height="17" Data="{StaticResource I.Info}" />
+              <TextBlock Classes="stitle" Text="About Pairnets" VerticalAlignment="Center" />
+            </StackPanel>
+            <TextBlock x:Name="AboutText" Classes="t3" TextWrapping="Wrap" />
+            <WrapPanel x:Name="AboutLinks" Margin="-6,0,0,0">
+              <Button x:Name="DonateLink" Classes="link" Content="Support Pairnets ♥" CommandParameter="{x:Static core:PairnetsLinks.Donate}" Click="OnAboutLink" />
+              <Button x:Name="HelpLink" Classes="link" Content="Help" CommandParameter="{x:Static core:PairnetsLinks.Help}" Click="OnAboutLink" />
+              <Button x:Name="FaqLink" Classes="link" Content="FAQ" CommandParameter="{x:Static core:PairnetsLinks.Faq}" Click="OnAboutLink" />
+              <Button x:Name="ContactLink" Classes="link" Content="Contact" CommandParameter="{x:Static core:PairnetsLinks.Contact}" Click="OnAboutLink" />
+              <Button x:Name="PrivacyLink" Classes="link" Content="Privacy" CommandParameter="{x:Static core:PairnetsLinks.Privacy}" Click="OnAboutLink" />
+              <Button x:Name="TermsLink" Classes="link" Content="Terms" CommandParameter="{x:Static core:PairnetsLinks.Terms}" Click="OnAboutLink" />
+              <Button x:Name="GuidelinesLink" Classes="link" Content="Guidelines" CommandParameter="{x:Static core:PairnetsLinks.Guidelines}" Click="OnAboutLink" />
+              <Button x:Name="CookiesLink" Classes="link" Content="Cookie settings" CommandParameter="{x:Static core:PairnetsLinks.Cookies}" Click="OnAboutLink" />
+              <Button x:Name="SecurityLink" Classes="link" Content="Security" CommandParameter="{x:Static core:PairnetsLinks.Security}" Click="OnAboutLink" />
+              <Button x:Name="LicensesLink" Classes="link" Content="Open-source licences" CommandParameter="{x:Static core:PairnetsLinks.Licenses}" Click="OnAboutLink" />
+              <Button x:Name="DeleteAccountLink" Classes="link" Content="Delete my account" CommandParameter="{x:Static core:PairnetsLinks.DeleteAccount}" Click="OnAboutLink" />
+            </WrapPanel>
+          </StackPanel>
+        </Border>
 
-    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
-      <Button Classes="subtle" Content="Cancel" IsCancel="True" Click="OnCancel" />
-      <Button x:Name="SaveButton" Classes="accent" Content="Save" IsDefault="True" Click="OnSave" />
-    </StackPanel>
-  </StackPanel>
-  </ScrollViewer>
+        <TextBlock x:Name="ServerVersionText" Classes="t3" HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" />
+      </StackPanel>
+    </ScrollViewer>
+  </Grid>
 </UserControl>
