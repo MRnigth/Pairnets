@@ -202,6 +202,23 @@ public sealed class RecordingActions(IHistorySource? history = null) : ITrayActi
     public void RevealFile(string syncPath) => Calls.Add($"{nameof(RevealFile)}({syncPath})");
     public void OpenWindow(MainPage page) => Calls.Add($"{nameof(OpenWindow)}({page})");
     public void Quit() => Calls.Add(nameof(Quit));
+
+    private readonly HashSet<NoticeKind> _silenced = [];
+
+    public bool Notifies(NoticeKind kind) => !_silenced.Contains(kind);
+
+    public void SetNotifies(NoticeKind kind, bool on)
+    {
+        if (on)
+            _silenced.Remove(kind);
+        else
+            _silenced.Add(kind);
+        Calls.Add($"SetNotifies({kind},{on})");
+    }
+
+    public void SignOut() => Calls.Add(nameof(SignOut));
+
+    public void OpenAccountSite() => Calls.Add(nameof(OpenAccountSite));
 }
 
 /// <summary>Sample files and versions for the History page, with every read and restore written down.</summary>

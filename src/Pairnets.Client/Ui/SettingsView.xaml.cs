@@ -48,13 +48,22 @@ public partial class SettingsView : UserControl
         InitializeComponent();
         _original = current;
         _protector = protector;
+        var host = Uri.TryCreate(current.ServerUrl, UriKind.Absolute, out var nest) ? nest.Authority : current.ServerUrl;
+        NestHost.Text = string.IsNullOrWhiteSpace(host) ? "Not connected" : host;
+        // Who is signed in: the account's email, or the computer's own name on an older nest that did not send one.
+        var email = string.IsNullOrWhiteSpace(current.AccountEmail) ? null : current.AccountEmail.Trim();
+        SignedInText.Text = email is not null ? "Signed in as " + email : current.DeviceName ?? Environment.MachineName;
+        NestInitial.Text = FirstLetter(email ?? current.DeviceName ?? host ?? "?");
+        var connected = serverVersionText is not null;
+        ConnectedText.Text = connected ? "Connected" : "Not connected";
+        ConnectedPill.SetResourceReference(Border.BackgroundProperty, connected ? "T.OkPill" : "T.Chip");
+        ConnectedDot.SetResourceReference(System.Windows.Shapes.Shape.FillProperty, connected ? "T.OkText" : "T.Off");
+        ConnectedText.SetResourceReference(TextBlock.ForegroundProperty, connected ? "T.OkText" : "T.Muted");
         if (current.HasOwnKey)
         {
             // Signed in with its own key: show who it is; the address and token stay one click away.
-            ServerHeading.Text = "Your nest";
             SignedInPanel.Visibility = Visibility.Visible;
             AddressFields.Visibility = Visibility.Collapsed;
-            SignedInText.Text = $"{(Uri.TryCreate(current.ServerUrl, UriKind.Absolute, out var nest) ? nest.Authority : current.ServerUrl)} · signed in as {current.DeviceName}";
         }
         ServerUrlBox.Text = current.ServerUrl ?? string.Empty;
         FolderBox.Text = current.Folder ?? string.Empty;
@@ -66,7 +75,14 @@ public partial class SettingsView : UserControl
         MapSpeedBox.IsChecked = current.ShowMapSpeed;
         AutoServerBox.IsChecked = current.AutoUpdateServer;
         DebugBox.IsChecked = current.DebugMode;
-        ServerVersionText.Text = serverVersionText ?? "Server: not connected yet";
+        ServerVersionText.Text = serverVersionText ?? "Your nest: not connected yet";
+        AppVersionText.Text = "Pairnets " + PairnetsInfo.ProductVersion;
+        FooterText.Text = $"Pairnets {PairnetsInfo.ProductVersion} for Windows"
+            + (serverVersionText?.Replace("Server ", string.Empty, StringComparison.Ordinal) is { Length: > 0 } nestVersion && connected ? " · your nest runs " + nestVersion : string.Empty);
+        StayText.Text = $"Your files in {(string.IsNullOrWhiteSpace(current.Folder) ? "your folder" : current.Folder)} stay where they are.";
+        FolderBox.TextChanged += (_, _) => StayText.Text = $"Your files in {(string.IsNullOrWhiteSpace(FolderBox.Text) ? "your folder" : FolderBox.Text.Trim())} stay where they are.";
+        IgnoreBox.TextChanged += (_, _) => ShowIgnoreCount();
+        ShowIgnoreCount();
         AboutText.Text = PairnetsLinks.AboutLine;
         (current.EffectiveParallelTransfers switch { 1 => Par1, 2 => Par2, 8 => Par8, _ => Par4 }).IsChecked = true;
         UpLimitBox.IsChecked = current.UploadLimitMBps is > 0;
@@ -76,16 +92,30 @@ public partial class SettingsView : UserControl
         ShowVersion(null);
     }
 
+    private static string FirstLetter(string text)
+    {
+        foreach (var c in text)
+        {
+            if (char.IsLetterOrDigit(c))
+                return char.ToUpperInvariant(c).ToString();
+        }
+        return "?";
+    }
+
+    private void ShowIgnoreCount()
+    {
+        var rules = SplitPatterns().Count;
+        IgnoreCount.Text = rules == 0 ? "No rules" : rules == 1 ? "1 rule" : rules + " rules";
+    }
+
     private static string Number(double v) => v.ToString("0.##", CultureInfo.CurrentCulture);
 
-    /// <summary>"You have 1.0.52 · checked 19:41" plus the outcome of "Check now".</summary>
+    /// <summary>"You have 1.0.52 · checked 19:41", or the outcome of "Check now" ("Up to date · checked 19:41").</summary>
     public void ShowVersion(string? outcome)
     {
-        var text = "You have " + PairnetsInfo.ProductVersion;
+        var text = outcome is { Length: > 0 } ? char.ToUpperInvariant(outcome[0]) + outcome[1..] : "You have " + PairnetsInfo.ProductVersion;
         if (_updates?.LastChecked is { } at)
             text += " · checked " + at.ToLocalTime().ToString("HH:mm", CultureInfo.InvariantCulture);
-        if (outcome is not null)
-            text += " · " + outcome;
         VersionText.Text = text;
         CheckNowButton.Visibility = _updates is null ? Visibility.Collapsed : Visibility.Visible;
     }
@@ -301,6 +331,11 @@ public partial class SettingsView : UserControl
     public event Action? ResetRequested;
 
     private void OnReset(object sender, RoutedEventArgs e) => ResetRequested?.Invoke();
+
+    /// <summary>"Report a bug…": opens the bug report window.</summary>
+    public event Action? ReportBugRequested;
+
+    private void OnReportBug(object sender, RoutedEventArgs e) => ReportBugRequested?.Invoke();
 
     private void OnSignOut(object sender, RoutedEventArgs e) => SignOutRequested?.Invoke();
 

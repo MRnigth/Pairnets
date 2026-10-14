@@ -1,0 +1,112 @@
+<UserControl x:Class="Pairnets.Client.Ui.ActivityPageView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="clr-namespace:Pairnets.Client.Ui">
+  <Grid Margin="28,40,28,24">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="*" />
+    </Grid.RowDefinitions>
+
+    <!-- Header -->
+    <Grid>
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="*" />
+        <ColumnDefinition Width="Auto" />
+      </Grid.ColumnDefinitions>
+      <StackPanel>
+        <TextBlock Style="{StaticResource PgTitle}" Text="Activity" />
+        <TextBlock Style="{StaticResource PgSub}" Text="Everything that synced, newest first." />
+      </StackPanel>
+      <Button x:Name="OpenFolderButton" Grid.Column="1" Style="{StaticResource PgButton}" VerticalAlignment="Center" ToolTip="Open the synced folder" Click="OnOpenFolder">
+        <StackPanel Orientation="Horizontal">
+          <ui:LineIcon Width="16" Height="16" Margin="0,0,8,0" StrokeThickness="1.9" Stroke="{DynamicResource T.Text}" Data="{StaticResource I.Folder}" />
+          <TextBlock Text="Open folder" VerticalAlignment="Center" />
+        </StackPanel>
+      </Button>
+    </Grid>
+
+    <!-- Filters and search -->
+    <Grid x:Name="FilterBar" Grid.Row="1" Margin="0,16,0,0">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="*" />
+        <ColumnDefinition Width="Auto" />
+      </Grid.ColumnDefinitions>
+      <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+        <RadioButton x:Name="FilterAll" Style="{StaticResource PgPill}" GroupName="activityfilter" IsChecked="True" Checked="OnFilter">
+          <StackPanel Orientation="Horizontal"><TextBlock Text="All" /><TextBlock x:Name="CountAll" Margin="6,0,0,0" FontWeight="SemiBold" Opacity="0.65" /></StackPanel>
+        </RadioButton>
+        <RadioButton x:Name="FilterUploaded" Style="{StaticResource PgPill}" GroupName="activityfilter" Checked="OnFilter">
+          <StackPanel Orientation="Horizontal"><TextBlock Text="Uploaded" /><TextBlock x:Name="CountUploaded" Margin="6,0,0,0" FontWeight="SemiBold" Opacity="0.65" /></StackPanel>
+        </RadioButton>
+        <RadioButton x:Name="FilterDownloaded" Style="{StaticResource PgPill}" GroupName="activityfilter" Checked="OnFilter">
+          <StackPanel Orientation="Horizontal"><TextBlock Text="Downloaded" /><TextBlock x:Name="CountDownloaded" Margin="6,0,0,0" FontWeight="SemiBold" Opacity="0.65" /></StackPanel>
+        </RadioButton>
+        <RadioButton x:Name="FilterDeleted" Style="{StaticResource PgPill}" GroupName="activityfilter" Checked="OnFilter">
+          <StackPanel Orientation="Horizontal"><TextBlock Text="Deleted" /><TextBlock x:Name="CountDeleted" Margin="6,0,0,0" FontWeight="SemiBold" Opacity="0.65" /></StackPanel>
+        </RadioButton>
+        <RadioButton x:Name="FilterConflicts" Style="{StaticResource PgPill}" GroupName="activityfilter" Checked="OnFilter">
+          <StackPanel Orientation="Horizontal"><TextBlock Text="Conflicts" /><TextBlock x:Name="CountConflicts" Margin="6,0,0,0" FontWeight="SemiBold" Opacity="0.65" /></StackPanel>
+        </RadioButton>
+      </StackPanel>
+      <ui:SearchBox x:Name="Search" Grid.Column="1" Width="250" Height="38" Margin="12,0,0,0" Placeholder="Search files and folders" />
+    </Grid>
+
+    <!-- The list -->
+    <Border x:Name="ListCard" Grid.Row="2" Style="{StaticResource PgCard}" Margin="0,16,0,0">
+      <Grid>
+        <ScrollViewer x:Name="ListScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="12,6">
+          <StackPanel x:Name="ActivityRows" />
+        </ScrollViewer>
+
+        <!-- A filter or the search matches nothing -->
+        <StackPanel x:Name="NoMatch" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed">
+          <ui:LineIcon Width="30" Height="30" StrokeThickness="1.6" Stroke="{DynamicResource T.TextSoft}" Data="{StaticResource I.Search}" />
+          <TextBlock x:Name="NoMatchText" Style="{StaticResource PgSub}" Margin="0,10,0,0" TextAlignment="Center" />
+        </StackPanel>
+
+        <!-- Nothing has synced yet -->
+        <StackPanel x:Name="EmptyState" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="32">
+          <Canvas Width="340" Height="150" HorizontalAlignment="Center">
+            <Line X1="60" Y1="75" X2="280" Y2="75" StrokeThickness="2" StrokeDashArray="3 2.5" Stroke="{DynamicResource T.Track}" />
+            <Border Canvas.Left="16" Canvas.Top="52" Width="48" Height="48" CornerRadius="15" BorderThickness="1" RenderTransformOrigin="0.5,0.5"
+                    Background="{DynamicResource T.Chip}" BorderBrush="{DynamicResource T.Border}">
+              <Border.RenderTransform><RotateTransform Angle="-6" /></Border.RenderTransform>
+              <ui:LineIcon Width="22" Height="22" StrokeThickness="1.8" Stroke="{DynamicResource T.Muted}" Data="{StaticResource I.Desktop}" />
+            </Border>
+            <Border Canvas.Left="276" Canvas.Top="52" Width="48" Height="48" CornerRadius="15" BorderThickness="1" RenderTransformOrigin="0.5,0.5"
+                    Background="{DynamicResource T.Chip}" BorderBrush="{DynamicResource T.Border}">
+              <Border.RenderTransform><RotateTransform Angle="6" /></Border.RenderTransform>
+              <ui:LineIcon Width="22" Height="22" StrokeThickness="1.8" Stroke="{DynamicResource T.Muted}" Data="{StaticResource I.Laptop}" />
+            </Border>
+            <Ellipse Canvas.Left="110" Canvas.Top="15" Width="120" Height="120" Fill="{DynamicResource T.Card}" />
+            <Ellipse Canvas.Left="110" Canvas.Top="15" Width="120" Height="120" Fill="{DynamicResource T.AccentSoft}" />
+            <Border Canvas.Left="136" Canvas.Top="41" Width="68" Height="68" CornerRadius="22" BorderThickness="1"
+                    Background="{DynamicResource T.Card}" BorderBrush="{DynamicResource T.Border}">
+              <ui:LineIcon Width="32" Height="32" StrokeThickness="2" Stroke="{DynamicResource T.Accent}" Data="{StaticResource I.Activity}" />
+            </Border>
+            <Border Canvas.Left="96" Canvas.Top="8" Width="30" Height="30" CornerRadius="10" BorderThickness="1" RenderTransformOrigin="0.5,0.5"
+                    Background="{DynamicResource T.Card}" BorderBrush="{DynamicResource T.Border}">
+              <Border.RenderTransform><RotateTransform Angle="-10" /></Border.RenderTransform>
+              <ui:LineIcon Width="15" Height="15" StrokeThickness="1.9" Stroke="{DynamicResource T.Folder}" Data="{StaticResource I.Folder}" />
+            </Border>
+            <Border Canvas.Left="216" Canvas.Top="114" Width="30" Height="30" CornerRadius="10" BorderThickness="1" RenderTransformOrigin="0.5,0.5"
+                    Background="{DynamicResource T.Card}" BorderBrush="{DynamicResource T.Border}">
+              <Border.RenderTransform><RotateTransform Angle="9" /></Border.RenderTransform>
+              <ui:LineIcon Width="15" Height="15" StrokeThickness="2" Stroke="{DynamicResource T.Muted}" Data="{StaticResource I.File}" />
+            </Border>
+          </Canvas>
+          <TextBlock Text="Nothing has synced yet" FontSize="22" FontWeight="ExtraBold" HorizontalAlignment="Center" Margin="0,26,0,0" />
+          <TextBlock x:Name="EmptyText" Style="{StaticResource PgSub}" MaxWidth="440" TextAlignment="Center" HorizontalAlignment="Center" Margin="0,8,0,0" />
+          <Button x:Name="OpenYourFolder" Style="{StaticResource PgPrimary}" HorizontalAlignment="Center" Margin="0,22,0,0" Padding="16,0" Click="OnOpenFolder">
+            <StackPanel Orientation="Horizontal">
+              <ui:LineIcon Width="16" Height="16" Margin="0,0,8,0" StrokeThickness="1.9" Stroke="White" Data="{StaticResource I.Folder}" />
+              <TextBlock Text="Open your folder" VerticalAlignment="Center" />
+            </StackPanel>
+          </Button>
+        </StackPanel>
+      </Grid>
+    </Border>
+  </Grid>
+</UserControl>

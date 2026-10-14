@@ -44,12 +44,8 @@ public partial class MainWindow
         SideFoldedChanged?.Invoke(folded);
     }
 
-    /// <summary>The account button opens Settings for now (the Account page comes later).</summary>
-    private void OnAccount(object sender, RoutedEventArgs e)
-    {
-        if (NavSettings.IsChecked != true)
-            NavSettings.IsChecked = true;
-    }
+    /// <summary>The account button opens the Account page.</summary>
+    private void OnAccount(object sender, RoutedEventArgs e) => Navigate(MainPage.Account);
 
     private void OnThisComputer(object sender, RoutedEventArgs e) => Navigate(MainPage.Overview);
 

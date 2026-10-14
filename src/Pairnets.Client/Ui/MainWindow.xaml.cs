@@ -84,30 +84,18 @@ public interface IMainActions
 /// Activity, History, Needs attention and Settings. It only displays what <see cref="ClientSession"/>
 /// reports and forwards clicks. Same design as the Mac/Linux app.
 /// </summary>
-public partial class MainWindow : Window
+public partial class MainWindow : Window, IPageHost
 {
     private readonly IMainActions? _actions;
     private readonly ObservableCollection<ActivityItem> _recent = [];
-    private readonly ObservableCollection<object> _activityRows = [];
-    private readonly ObservableCollection<AttentionItem> _attention = [];
     private readonly ObservableCollection<ActiveFileView> _active = [];
-    private readonly ObservableCollection<ServerFile> _shownFiles = [];
-    private readonly ObservableCollection<VersionRow> _versions = [];
-    private readonly ObservableCollection<DeviceRowView> _devices = [];
     private IReadOnlyList<ActivityItem> _activityItems = [];
-    private IReadOnlyList<ServerFile>? _serverFiles;
-    private DateTimeOffset _serverFilesAt;
-    private CancellationTokenSource? _versionsCts;
-    private string? _selectAfterLoad;
     private string? _shownState;
     private string? _tintKey;
     private bool _navigating;
-    private bool _deletedMode = true;
     private StatusSnapshot _status = StatusSnapshot.Initial;
     private SideUpdate _update = SideUpdate.None;
     private int _attentionCount;
-
-    private static readonly TimeSpan HistoryFreshFor = TimeSpan.FromMinutes(1);
 
     public MainWindow(IMainActions? actions)
     {
@@ -116,12 +104,8 @@ public partial class MainWindow : Window
         Icon = AppIcons.WindowIcon;
         _actions = actions;
         RecentList.ItemsSource = _recent;
-        ActivityList.ItemsSource = _activityRows;
-        AttentionList.ItemsSource = _attention;
         ActiveList.ItemsSource = _active;
-        FileList.ItemsSource = _shownFiles;
-        VersionList.ItemsSource = _versions;
-        DevicesList.ItemsSource = _devices;
+        ActivityPage.Host = HistoryPage.Host = DevicesPage.Host = AccountPage.Host = this;
         AppIcon.Source = AppIcons.Large;
         DockIcon.Source = AppIcons.Large;
         RefreshSide();
@@ -137,6 +121,16 @@ public partial class MainWindow : Window
     public bool AllowClose { get; set; }
 
     public MainPage Page { get; private set; } = MainPage.Overview;
+
+    /// <summary>What the pages ask of the app (the pages are given this window as their host).</summary>
+    public IMainActions? Actions => _actions;
+
+    /// <summary>The pages (for the checks and the screenshot tool).</summary>
+    public ActivityPageView ActivityPane => ActivityPage;
+    public HistoryPageView HistoryPane => HistoryPage;
+    public DevicesPageView DevicesPane => DevicesPage;
+    public NeedsPageView NeedsPane => AttentionPage;
+    public AccountPageView AccountPane => AccountPage;
 
     /// <summary>This computer's name, marked in the Devices list and shown first in the overview's picture.</summary>
     public string? ThisDevice { get; set; }
@@ -161,14 +155,26 @@ public partial class MainWindow : Window
         _navigating = true;
         try
         {
-            NavFor(page).IsChecked = true;
-            DockFor(page).IsChecked = true;
+            CheckTiles(page);
         }
         finally
         {
             _navigating = false;
         }
         ShowPage(page);
+    }
+
+    /// <summary>Chooses the tile and the dock button of a page; on the Account page none is chosen.</summary>
+    private void CheckTiles(MainPage page)
+    {
+        if (page == MainPage.Account)
+        {
+            foreach (var tile in new[] { NavOverview, NavActivity, NavAttention, NavHistory, NavDevices, NavSettings, DockOverview, DockActivity, DockAttention, DockHistory, DockDevices, DockSettings })
+                tile.IsChecked = false;
+            return;
+        }
+        NavFor(page).IsChecked = true;
+        DockFor(page).IsChecked = true;
     }
 
     private RadioButton NavFor(MainPage page) => page switch
@@ -205,8 +211,7 @@ public partial class MainWindow : Window
         _navigating = true;
         try
         {
-            NavFor(page).IsChecked = true;
-            DockFor(page).IsChecked = true;
+            CheckTiles(page);
         }
         finally
         {
@@ -228,17 +233,21 @@ public partial class MainWindow : Window
         (PageTitle.Text, PageSubtitle.Text) = page switch
         {
             MainPage.Activity => ("Activity", "What synced recently, newest first. Right-click a file for more."),
-            MainPage.History => ("History", "Get back deleted files and older versions. The server keeps them for 30 days."),
-            MainPage.Devices => ("Devices", "Every computer that uses your server: online now, or when it was last seen."),
-            MainPage.Attention => ("Needs attention", "Things Pairnets can't decide for you."),
-            MainPage.Settings => ("Settings", "Your server, the folder, and how Pairnets behaves."),
+            MainPage.History => ("History", "Get back deleted files and older versions. Your nest keeps them for 30 days."),
+            MainPage.Devices => ("Devices", "Every computer on your nest, and the nest itself."),
+            MainPage.Attention => ("Needs you", "Things only you can decide."),
+            MainPage.Settings => ("Settings", "Your nest, the folder, and how Pairnets behaves on this computer."),
+            MainPage.Account => ("Account", "Who is signed in on this computer, and when Pairnets should tell you things."),
             _ => ("Overview", string.Empty),
         };
         PageSubtitle.Visibility = Show(PageSubtitle.Text.Length > 0);
+        // The pages draw their own header; the shared one belongs to the Overview.
+        PageHeader.Visibility = Show(page == MainPage.Overview);
         foreach (var (element, shown) in new (FrameworkElement, MainPage)[]
                  {
                      (OverviewPage, MainPage.Overview), (ActivityPage, MainPage.Activity), (HistoryPage, MainPage.History),
                      (DevicesPage, MainPage.Devices), (AttentionPage, MainPage.Attention), (SettingsPage, MainPage.Settings),
+                     (AccountPage, MainPage.Account),
                  })
         {
             var visible = shown == page;
@@ -247,11 +256,16 @@ public partial class MainWindow : Window
             element.Visibility = Show(visible);
         }
         if (page == MainPage.Activity)
-            LiveLists.Sync(_activityRows, ActivityDays.Rows(_activityItems, DateTimeOffset.Now));
+            ActivityPage.Show(_activityItems);
         if (page == MainPage.Devices)
+        {
+            DevicesPage.Show(_status, ThisDevice, null);
             _actions?.RefreshDevices();
-        if (page == MainPage.History && (_serverFiles is null || DateTimeOffset.Now - _serverFilesAt > HistoryFreshFor))
-            _ = LoadHistoryAsync();
+        }
+        if (page == MainPage.History)
+            HistoryPage.Opened();
+        if (page == MainPage.Account)
+            AccountPage.Show(_status, ThisDevice, null);
         UpdatePanels();
     }
 
@@ -274,7 +288,11 @@ public partial class MainWindow : Window
         device ??= ThisDevice;
         _status = s;
         RefreshSide();
-        ShowDevices(s);
+        DevicesPage.Show(s, ThisDevice, null);
+        if (Page == MainPage.Account)
+            AccountPage.Show(s, ThisDevice, null);
+        if (folder is not null)
+            ActivityPage.Folder = folder;
         var brush = Badge.Show(s, StatusBadge, StatusGlyph, StatusGlyph2, 23, animate: true);
         Tint(brush);
         Animate(s);
@@ -336,21 +354,6 @@ public partial class MainWindow : Window
         }
     }
 
-    /// <summary>The Devices page: the server's list, with what each computer moves right now (updated in place).</summary>
-    private void ShowDevices(StatusSnapshot s)
-    {
-        if (s.DevicesUnsupported)
-            DevicesEmptyText.Text = "Update the server to see the computers that use it.";
-        if (s.Devices is null)
-            return;
-        var count = _devices.Count;
-        LiveLists.Sync(_devices, DeviceRow.From(s.Devices, ThisDevice, DateTimeOffset.UtcNow, s));
-        if (s.Devices.Count == 0 && !s.DevicesUnsupported)
-            DevicesEmptyText.Text = "No computers have used this server yet.";
-        if (count != _devices.Count)
-            UpdatePanels();
-    }
-
     /// <summary>A soft wash of the status colour across the top of the status card.</summary>
     private void Tint(string brushKey)
     {
@@ -388,7 +391,7 @@ public partial class MainWindow : Window
         RefreshSide();
         LiveLists.Sync(_recent, items.Take(5).ToList());
         if (Page == MainPage.Activity)
-            LiveLists.Sync(_activityRows, ActivityDays.Rows(items, DateTimeOffset.Now));
+            ActivityPage.Show(items);
         UpdatePanels();
     }
 
@@ -424,13 +427,9 @@ public partial class MainWindow : Window
 
     private void OnAddComputer(object sender, RoutedEventArgs e) => _actions?.AddComputer();
 
-    private void OnManageDevices(object sender, RoutedEventArgs e) => _actions?.ManageDevices();
-
     public void ShowAttention(IReadOnlyList<AttentionItem> items)
     {
-        _attention.Clear();
-        foreach (var item in items)
-            _attention.Add(item);
+        AttentionPage.Show(items);
         _attentionCount = items.Count;
         RefreshSide();
         AttentionCallout.Visibility = Show(items.Count > 0);
@@ -440,204 +439,36 @@ public partial class MainWindow : Window
 
     private void UpdatePanels()
     {
-        if (ActivityPanel is null)
+        if (RecentEmpty is null)
             return; // Checked fires during InitializeComponent
-        ActivityPanel.Visibility = Show(_activityItems.Count > 0);
-        ActivityEmpty.Visibility = Show(_activityItems.Count == 0);
         RecentEmpty.Visibility = Show(_recent.Count == 0);
-        AttentionList.Visibility = Show(_attention.Count > 0);
-        AttentionEmpty.Visibility = Show(_attention.Count == 0);
-        DevicesPanel.Visibility = Show(_devices.Count > 0);
-        DevicesEmpty.Visibility = Show(_devices.Count == 0);
     }
 
     private static Visibility Show(bool visible) => visible ? Visibility.Visible : Visibility.Collapsed;
 
-    // ------------------------------------------------------------------ history
+    // ------------------------------------------------------------------ history (the page itself is HistoryPageView)
 
-    /// <summary>Reads the server's file list (deleted files included) for the History page.</summary>
-    public async Task LoadHistoryAsync()
-    {
-        var source = _actions?.History;
-        if (source is null)
-        {
-            ShowHistoryMessage("Not connected to the server. History appears here once Pairnets is connected.", retry: false);
-            return;
-        }
-        ShowHistoryMessage("Loading the files on the server…", retry: false);
-        try
-        {
-            _serverFiles = await source.GetServerFilesAsync(CancellationToken.None);
-            _serverFilesAt = DateTimeOffset.Now;
-            if (_selectAfterLoad is { } path && _serverFiles.FirstOrDefault(f => f.Path == path) is { } target)
-            {
-                _navigating = true;
-                try
-                {
-                    _deletedMode = target.Deleted;
-                    DeletedTab.IsChecked = target.Deleted;
-                    FilesTab.IsChecked = !target.Deleted;
-                    HistorySearch.Text = target.Name;
-                }
-                finally
-                {
-                    _navigating = false;
-                }
-            }
-            FilterHistory();
-            if (_selectAfterLoad is { } selected)
-                FileList.SelectedItem = _shownFiles.FirstOrDefault(f => f.Path == selected);
-            _selectAfterLoad = null;
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            ShowHistoryMessage("Could not read the files on the server: " + ex.Message, retry: true);
-        }
-    }
+    /// <summary>Reads the nest's file list (deleted files included) for the History page.</summary>
+    public Task LoadHistoryAsync() => HistoryPage.LoadAsync();
 
-    /// <summary>Opens History on one file (from the activity list).</summary>
+    /// <summary>Opens History on one file (from the activity list): its versions, or the deleted table filtered to it.</summary>
     public void ShowVersionsFor(string path)
     {
-        _selectAfterLoad = path;
+        HistoryPage.ChooseAfterLoad(path);
         if (Page == MainPage.History)
-            _ = LoadHistoryAsync();
+            _ = HistoryPage.LoadAsync();
         else
         {
-            _serverFiles = null; // read fresh, so the file is there
+            HistoryPage.Forget(); // read fresh, so the file is there
             Navigate(MainPage.History);
         }
     }
 
-    private void ShowHistoryMessage(string text, bool retry)
-    {
-        _shownFiles.Clear();
-        FileList.Visibility = Visibility.Collapsed;
-        HistoryMessage.Visibility = Visibility.Visible;
-        HistoryMessageText.Text = text;
-        HistoryRetry.Visibility = Show(retry);
-        HistorySummary.Text = string.Empty;
-    }
-
-    private void FilterHistory()
-    {
-        if (_serverFiles is null)
-            return;
-        var search = HistorySearch.Text;
-        var (rows, total) = HistoryQuery.Filter(_serverFiles, _deletedMode, search, DateTimeOffset.UtcNow);
-        var selected = (FileList.SelectedItem as ServerFile)?.Path;
-        _shownFiles.Clear();
-        foreach (var row in rows)
-            _shownFiles.Add(row);
-        HistorySummary.Text = HistoryQuery.Summary(rows.Count, total, _deletedMode, !string.IsNullOrWhiteSpace(search));
-        FileList.Visibility = Show(rows.Count > 0);
-        HistoryMessage.Visibility = Show(rows.Count == 0);
-        HistoryRetry.Visibility = Visibility.Collapsed;
-        HistoryMessageIcon.Data = Visuals.Resource<Geometry>(_deletedMode ? "I.Trash" : "I.File");
-        HistoryMessageText.Text = HistorySummary.Text;
-        if (selected is not null)
-            FileList.SelectedItem = _shownFiles.FirstOrDefault(f => f.Path == selected);
-        if (FileList.SelectedItem is null)
-            ShowDetail(null);
-    }
-
-    private void OnHistoryModeChanged(object sender, RoutedEventArgs e)
-    {
-        if (sender is not RadioButton tab || _navigating || FileList is null)
-            return; // Checked also fires during InitializeComponent
-        _deletedMode = tab == DeletedTab;
-        FilterHistory();
-    }
-
-    private void OnHistorySearch(object sender, TextChangedEventArgs e)
-    {
-        SearchHint.Visibility = Show(HistorySearch.Text.Length == 0);
-        if (!_navigating)
-            FilterHistory();
-    }
-
-    private void OnHistoryReload(object sender, RoutedEventArgs e) => _ = LoadHistoryAsync();
-
-    private void OnFileSelected(object sender, SelectionChangedEventArgs e) => ShowDetail(FileList.SelectedItem as ServerFile);
-
-    private async void ShowDetail(ServerFile? file)
-    {
-        _versionsCts?.Cancel();
-        DetailEmpty.Visibility = Show(file is null);
-        DetailPanel.Visibility = Show(file is not null);
-        _versions.Clear();
-        RestoreMessage.Visibility = Visibility.Collapsed;
-        if (file is null)
-            return;
-        DetailName.Text = file.Name;
-        DetailFolder.Text = file.Folder;
-        var now = DateTimeOffset.UtcNow;
-        DetailState.Text = file.Deleted
-            ? $"Deleted {Format.Moment(file.ChangedAt, now)}"
-            : $"Current version · {Format.Bytes(file.Size)} · changed {Format.Moment(file.ChangedAt, now)}";
-        DetailStatePill.SetResourceReference(Border.BackgroundProperty, file.Deleted ? "T.WarnPill" : "T.Pill");
-        DetailState.SetResourceReference(TextBlock.ForegroundProperty, file.Deleted ? "T.WarnText" : "T.Text");
-        VersionsMessage.Visibility = Visibility.Visible;
-        VersionsMessage.Text = "Loading versions…";
-        if (_actions?.History is not { } source)
-            return;
-        var cts = _versionsCts = new CancellationTokenSource();
-        try
-        {
-            var versions = await source.GetVersionsAsync(file.Path, cts.Token);
-            if (cts.IsCancellationRequested)
-                return;
-            foreach (var row in VersionRow.For(file, versions, DateTimeOffset.UtcNow))
-                _versions.Add(row);
-            VersionsMessage.Visibility = Show(_versions.Count == 0);
-            VersionsMessage.Text = file.Deleted
-                ? "The server no longer has a copy: it was deleted more than 30 days ago."
-                : "No older versions: this file has not been changed or replaced in the last 30 days.";
-        }
-        catch (OperationCanceledException)
-        {
-        }
-        catch (Exception ex)
-        {
-            if (!cts.IsCancellationRequested)
-                VersionsMessage.Text = "Could not read the versions: " + ex.Message;
-        }
-    }
-
-    private async void OnRestore(object sender, RoutedEventArgs e)
-    {
-        if (sender is not Button { CommandParameter: VersionRow row } button)
-            return;
-        button.IsEnabled = false;
-        try
-        {
-            await RestoreAsync(row);
-        }
-        finally
-        {
-            button.IsEnabled = true;
-        }
-    }
-
-    /// <summary>Restores one version, says how it went, and re-reads the list (the file is current again).</summary>
-    public async Task RestoreAsync(VersionRow row)
-    {
-        if (_actions?.History is not { } source)
-            return;
-        var error = await source.RestoreVersionAsync(row.Path, row.Version, CancellationToken.None);
-        var message = error ?? $"Restored. {Pairnets.Core.Paths.PathRules.FileName(row.Path)} is back on your computers in a few seconds.";
-        if (error is null)
-        {
-            _selectAfterLoad = row.Path;
-            await LoadHistoryAsync(); // it is a current file again, with one more version
-        }
-        RestoreMessage.Visibility = Visibility.Visible;
-        RestoreMessage.SetResourceReference(Border.BackgroundProperty, error is null ? "T.OkPill" : "T.BadPill");
-        RestoreMessageText.SetResourceReference(TextBlock.ForegroundProperty, error is null ? "T.OkText" : "T.BadText");
-        RestoreMessageText.Text = message;
-    }
+    /// <summary>Restores one version of a file (History's version list).</summary>
+    public Task RestoreAsync(VersionRow row) => HistoryPage.RestoreAsync(row);
 
     /// <summary>Selects a row in the History list (the screenshot tool).</summary>
-    public void SelectHistoryRow(int index) => FileList.SelectedIndex = index;
+    public void SelectHistoryRow(int index) => HistoryPage.SelectHistoryRow(index);
 
     /// <summary>What the overview's picture says about the other computer (checks).</summary>
     public string MapOtherText => Map.OtherText;
@@ -674,11 +505,5 @@ public partial class MainWindow : Window
     {
         if (sender is FrameworkElement { DataContext: ActivityItem { Path: { } path } })
             ShowVersionsFor(path);
-    }
-
-    private void OnAttentionAction(object sender, RoutedEventArgs e)
-    {
-        if (sender is Button { CommandParameter: AttentionItem item })
-            item.Action();
     }
 }

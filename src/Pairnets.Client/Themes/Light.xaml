@@ -47,4 +47,11 @@
   <SolidColorBrush x:Key="T.NeedsActive" Color="#FFB547" />
   <SolidColorBrush x:Key="T.NeedsActiveText" Color="#2B1A00" />
   <SolidColorBrush x:Key="T.AccentButtonHover" Color="#2560D6" />
+  <!-- Stage 4 pages -->
+  <SolidColorBrush x:Key="T.Field" Color="#F7F8FB" />
+  <SolidColorBrush x:Key="T.SwitchOff" Color="#C3C9D4" />
+  <SolidColorBrush x:Key="T.KnobOff" Color="#FFFFFF" />
+  <SolidColorBrush x:Key="T.DangerBtn" Color="#C62828" />
+  <SolidColorBrush x:Key="T.BadBorder" Color="#F3B9B9" />
+  <SolidColorBrush x:Key="T.AccentRing" Color="#BFD3FA" />
 </ResourceDictionary>

@@ -1,4 +1,5 @@
 using System.IO;
+using System.Net.Http;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
@@ -83,11 +84,177 @@ public static class Program
             foreach (var dark in new[] { false, true })
             {
                 ThemeManager.Apply(app, dark);
-                RenderAll(outDir, dark ? "dark" : "light", print);
+                if (args.Contains("--stage4"))
+                    RenderStage4(outDir, dark ? "dark" : "light", print);
+                else
+                    RenderAll(outDir, dark ? "dark" : "light", print);
             }
             app.Shutdown();
         }).GetAwaiter().GetResult();
         return 0;
+    }
+
+    // ------------------------------------------------------------------ stage 4: the pages (Activity ... Account)
+
+    private sealed class Stage4History : IHistorySource
+    {
+        private readonly DateTimeOffset _now = DateTimeOffset.UtcNow;
+
+        public Task<IReadOnlyList<ServerFile>> GetServerFilesAsync(CancellationToken ct) => Task.FromResult<IReadOnlyList<ServerFile>>(
+        [
+            new("Drafts/old-draft.docx", true, _now.AddHours(-5), 0),
+            new("Photos/Holiday 2026/holiday-0388.jpg", true, _now.AddHours(-7), 0),
+            new("Notes/meeting-2026-09-18.md", true, _now.AddDays(-1).AddHours(-1), 0),
+            new("Finance/budget-2025.xlsx", true, _now.AddDays(-1).AddHours(-6), 0),
+            new("Scans/scan-0042.pdf", true, _now.AddDays(-4), 0),
+            new("Talks/presentation-draft.mp4", true, _now.AddDays(-7), 0),
+            new("Reports/report-q2.xlsx", true, _now.AddDays(-19), 0),
+            new("Notes/notes-old.txt", true, _now.AddDays(-27), 0),
+            new("Reports/report-q3.xlsx", false, _now.AddMinutes(-30), 2_516_582),
+            new("Photos/Holiday 2026/holiday-0412.jpg", false, _now.AddMinutes(-44), 4_404_019),
+            new("Finance/budget.xlsx", false, _now.AddMinutes(-55), 48_220),
+            new("Notes/meeting-2026-10-02.md", false, _now.AddHours(-1), 3_100),
+            new("Talks/presentation-final.mp4", false, _now.AddDays(-1), 860_000_000),
+            new("Drafts/plan-2027.docx", false, _now.AddDays(-1).AddHours(-2), 91_000),
+            new("Finance/invoice-0931.pdf", false, _now.AddDays(-2), 221_000),
+            new("Notes/ideas.md", false, _now.AddDays(-3), 1_204),
+        ]);
+
+        public Task<IReadOnlyList<HistoryVersion>> GetVersionsAsync(string path, CancellationToken ct) => Task.FromResult<IReadOnlyList<HistoryVersion>>(
+        [
+            new("20261006T100000000Z-c0ffee00", _now.AddHours(-2), 2_400_000, "c0ffee00"),
+            new("20261004T100000000Z-be5eda7a", _now.AddDays(-1).AddHours(-4), 2_200_000, "be5eda7a"),
+            new("20261001T100000000Z-0ddba11a", _now.AddDays(-4), 1_900_000, "0ddba11a"),
+            new("20260929T100000000Z-aaa11a11", _now.AddDays(-6), 1_200_000, "aaa11a11"),
+        ]);
+
+        public Task<string?> RestoreVersionAsync(string path, HistoryVersion version, CancellationToken ct) => Task.FromResult<string?>(null);
+    }
+
+    private sealed class Stage4Actions : ITrayActions
+    {
+        public IHistorySource? History { get; } = new Stage4History();
+        public void FixBlocked() { }
+        public void SyncNow() { }
+        public void TogglePause() { }
+        public void OpenFolder() { }
+        public void ShowSettings() { }
+        public void ViewLog() { }
+        public void UpdateNow() { }
+        public void DismissUpdate() { }
+        public void DownloadNow() { }
+        public void UpdateServer() { }
+        public void ReportBug() { }
+        public void RevealFile(string syncPath) { }
+        public void RefreshDevices() { }
+        public void AddComputer() { }
+        public void ManageDevices() { }
+        public void OpenWindow(MainPage page) { }
+        public void Quit() { }
+    }
+
+    private static void RenderStage4(string outDir, string suffix, bool print)
+    {
+        var now = DateTimeOffset.Now;
+        var utc = DateTimeOffset.UtcNow;
+        const string folder = @"D:\Sync\Work";
+        var server = new ServerInfo("id", 1, 1, PairnetsInfo.ProductVersion, 412L << 30, 1L << 40);
+        IReadOnlyList<DeviceInfo> devices =
+        [
+            new("DESKTOP", utc.AddDays(-30), utc, true, "1.0.48", "Windows") { LastChange = utc.AddMinutes(-5) },
+            new("LAPTOP", utc.AddDays(-30), utc, true, "1.0.48", "Windows") { LastChange = utc.AddMinutes(-19) },
+            new("MINI-PC", utc.AddDays(-30), utc.AddSeconds(-3), true, "1.0.48", "Linux") { LastChange = utc.AddMinutes(-30) },
+            new("MEDIA-PC", utc.AddDays(-30), utc.AddDays(-1), false, "1.0.48", "Linux") { LastChange = utc.AddDays(-1) },
+            new("OFFICE-PC", utc.AddDays(-30), utc.AddDays(-2), false, "1.0.48", "Windows") { LastChange = utc.AddDays(-2) },
+            new("KITCHEN-PC", utc.AddDays(-30), utc.AddDays(-3), false, "1.0.48", "Windows") { LastChange = utc.AddDays(-3) },
+        ];
+        var status = StatusSnapshot.Initial with
+        {
+            Status = RunnerStatus.Idle, Text = "Up to date", LastSyncAt = now.AddMinutes(-1), Server = server, Devices = devices,
+            NestUrl = "https://nest.example.com", DeviceIconsSupported = true,
+            Account = new AccountInfo("alex@example.com", "google", utc.AddDays(-14)),
+            JoinRequests = [new JoinRequest("RX4K-92TB", "PC-1", "Windows", utc.AddMinutes(-9))],
+            Peers = new Dictionary<string, PeerActivity> { ["LAPTOP"] = new(new TransferReport(0, 4.1 * (1 << 20), 30, 120, 0, 0, Downloading: true), DateTimeOffset.UtcNow, 0, null) },
+        };
+
+        // The activity: a folder of 37 photos, single files, a conflict, a deletion; yesterday's too.
+        var feed = new ActivityFeed(300);
+        var yesterday = now.AddDays(-1);
+        feed.Add(new ActivityItem(yesterday.AddHours(-3), ActivityKind.Uploaded, "Talks/presentation-final.mp4", "Uploaded"));
+        for (var i = 0; i < 12; i++)
+            feed.Add(new ActivityItem(yesterday.AddHours(-5).AddSeconds(i * 4), ActivityKind.Downloaded, $"Reports/report-{i + 1:00}.xlsx", "Downloaded"));
+        feed.Add(new ActivityItem(now.AddHours(-3), ActivityKind.DeletedHere, "Drafts/old-draft.docx", "Deleted"));
+        feed.Add(new ActivityItem(now.AddHours(-2), ActivityKind.Uploaded, "Notes/meeting-2026-10-02.md", "Uploaded"));
+        feed.Add(new ActivityItem(now.AddHours(-1), ActivityKind.Conflict, "Finance/budget.xlsx", "Conflict"));
+        feed.Add(new ActivityItem(now.AddMinutes(-50), ActivityKind.Downloaded, "Photos/Holiday 2026/holiday-0412.jpg", "Downloaded"));
+        for (var i = 0; i < 37; i++)
+            feed.Add(new ActivityItem(now.AddMinutes(-40).AddSeconds(i * 3), ActivityKind.Uploaded, $"Photos/Holiday 2026/holiday-{414 - i:0000}.jpg", "Uploaded"));
+        feed.Add(new ActivityItem(now.AddMinutes(-15), ActivityKind.Uploaded, "Reports/report-q3.xlsx", "Uploaded"));
+
+        var window = new MainWindow(new Stage4Actions()) { Width = 1200, Height = 860 };
+        Place(window);
+        window.ShowStatus(status, folder, "DESKTOP");
+        window.ShowActivity(feed.Items);
+        window.ShowAttention(
+        [
+            new("PC-1 (Windows) wants to join", "Code RX4K-92TB.", "Review on your nest", () => { }, AttentionKind.Join, "RX4K-92TB", now.AddMinutes(-9)),
+            new("Conflict copy: budget (conflict LAPTOP 2026-10-02 141509).xlsx", "Both computers changed this file. Both copies were kept, so nothing is lost.", "Show in folder", () => { }, AttentionKind.Conflict, null, now.AddHours(-1)),
+            new("Docs/Report.TXT", "Another file with the same name in different letter case exists on your nest: report.txt can't share a folder with it.", "Show in folder", () => { }, AttentionKind.NameClash),
+        ]);
+
+        window.Navigate(MainPage.Activity);
+        window.ActivityPane.OpenFolder("Holiday 2026");
+        Save(window, outDir, $"stage4-activity-{suffix}.png", print);
+        window.ActivityPane.SearchText = "zzz-not-there";
+        Save(window, outDir, $"stage4-activity-search-empty-{suffix}.png", print);
+        window.ActivityPane.SearchText = string.Empty;
+
+        window.Navigate(MainPage.Attention);
+        Save(window, outDir, $"stage4-needs-{suffix}.png", print);
+
+        window.Navigate(MainPage.History);
+        window.LoadHistoryAsync().GetAwaiter().GetResult();
+        Save(window, outDir, $"stage4-history-deleted-{suffix}.png", print);
+        window.HistoryPane.ShowAllFiles();
+        window.SelectHistoryRow(0);
+        Settle(window, 900);
+        Save(window, outDir, $"stage4-history-all-{suffix}.png", print);
+
+        window.ShowStatus(status, folder, "DESKTOP");
+        window.Navigate(MainPage.Devices);
+        Save(window, outDir, $"stage4-devices-{suffix}.png", print);
+
+        window.Navigate(MainPage.Account);
+        Save(window, outDir, $"stage4-account-{suffix}.png", print);
+        window.ShowStatus(status with { Account = null }, folder, "DESKTOP");
+        Save(window, outDir, $"stage4-account-old-nest-{suffix}.png", print);
+
+        var settings = new ClientSettings
+        {
+            ServerUrl = "https://nest.example.com/", Folder = folder, DeviceName = "DESKTOP", DeviceId = "id", AccountEmail = "alex@example.com",
+            ExtraIgnore = ["*.bak", "node_modules/", "~backup/"], UploadLimitMBps = 5, StartWithWindows = true, CheckForUpdates = true, AutoUpdateServer = true, WaitForPeerBatches = true,
+        };
+        using var updates = new UpdateService(new UpdateChecker(new HttpClient(), new Uri("https://downloads.example.com/"), new Uri("https://releases.example.com/")),
+            PairnetsInfo.ProductVersion, null);
+        var page = new SettingsView(settings, new NoProtector(), updates, "Server " + PairnetsInfo.ProductVersion);
+        window.ShowSettingsPage(page);
+        Save(window, outDir, $"stage4-settings-{suffix}.png", print);
+        page.ScrollToEnd();
+        Save(window, outDir, $"stage4-settings-start-over-{suffix}.png", print);
+
+        // A window with nothing synced yet.
+        window.Navigate(MainPage.Overview);
+        window.AllowClose = true;
+        window.Close();
+        var empty = new MainWindow(new Stage4Actions()) { Width = 1200, Height = 860 };
+        Place(empty);
+        empty.ShowStatus(status, folder, "DESKTOP");
+        empty.ShowActivity([]);
+        empty.Navigate(MainPage.Activity);
+        Settle(empty, 900);
+        Save(empty, outDir, $"stage4-activity-empty-{suffix}.png", print);
+        empty.AllowClose = true;
+        empty.Close();
     }
 
     private static void RenderAll(string outDir, string suffix, bool print)
