@@ -163,7 +163,7 @@ public sealed class SiteTests
         {
             var header = Regex.Match(File.ReadAllText(page), "<header class=\"top\">.*?</header>", RegexOptions.Singleline);
             Assert.True(header.Success, $"{Path.GetRelativePath(Root, page)} has no top bar");
-            Assert.Contains("<a class=\"button accent\" id=\"account-button\" href=\"https://nest.pairnets.app\">Sign in →</a>", header.Value);
+            Assert.Contains("<a class=\"button accent\" id=\"account-button\" href=\"https://sync.pairnets.app/account\">Sign in →</a>", header.Value);
         }
         var script = File.ReadAllText(Path.Combine(Root, "assets", "site.js"));
         Assert.Contains("fetch(\"https://sync.pairnets.app/v1/signed-in\", { credentials: \"include\"", script);
@@ -188,9 +188,12 @@ public sealed class SiteTests
     }
 
     [Fact]
-    public void TheSignInLinkGoesToTheNest()
+    public void TheSignInLinkGoesToTheAccountPage()
     {
-        Assert.Contains("href=\"https://nest.pairnets.app\"", File.ReadAllText(Path.Combine(Root, "index.html")));
-        Assert.Equal("https://nest.pairnets.app", Redirects()["/nest"]);
+        // /account sends visitors who are not signed in to /login and back to the account afterwards.
+        Assert.Contains("href=\"https://sync.pairnets.app/account\"", File.ReadAllText(Path.Combine(Root, "index.html")));
+        Assert.Equal("https://sync.pairnets.app/account", Redirects()["/nest"]); // old links to /nest keep working
+        foreach (var page in Pages())
+            Assert.DoesNotContain("href=\"https://nest.pairnets.app", File.ReadAllText(page));
     }
 }
