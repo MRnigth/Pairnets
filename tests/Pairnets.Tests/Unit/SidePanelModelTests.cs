@@ -260,10 +260,10 @@ public class SidePanelModelTests
     [Fact]
     public void ALaptopLikeNameGetsALaptopIconForNow()
     {
-        Assert.Equal(ComputerIcon.Laptop, SidePanelModel.IconFor("LAPTOP"));
-        Assert.Equal(ComputerIcon.Laptop, SidePanelModel.IconFor("Marias-MacBook"));
-        Assert.Equal(ComputerIcon.Desktop, SidePanelModel.IconFor("MINI-PC"));
-        Assert.Equal(ComputerIcon.Desktop, SidePanelModel.IconFor("DESKTOP"));
+        Assert.Equal(DeviceIconKind.Laptop, DeviceIcon.Guess("LAPTOP"));
+        Assert.Equal(DeviceIconKind.Laptop, DeviceIcon.Guess("Marias-MacBook"));
+        Assert.Equal(DeviceIconKind.Desktop, DeviceIcon.Guess("MINI-PC"));
+        Assert.Equal(DeviceIconKind.Desktop, DeviceIcon.Guess("DESKTOP"));
     }
 
     // ------------------------------------------------------------------ tiles, account, update card

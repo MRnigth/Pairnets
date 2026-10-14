@@ -9,6 +9,7 @@
     <ui:ActivityBrushConverter x:Key="KindBrush" />
     <ui:ActivityIconConverter x:Key="KindIcon" />
     <ui:DirectionBrushConverter x:Key="DirectionBrush" />
+    <ui:DeviceIconConverter x:Key="DeviceIcon" />
     <BooleanToVisibilityConverter x:Key="Visible" />
     <Style x:Key="ToolIcon" TargetType="ui:LineIcon">
       <Setter Property="Width" Value="17" />
@@ -737,7 +738,9 @@
                         </Grid.ColumnDefinitions>
                         <Grid Width="40" Height="40" Margin="0,0,14,0">
                           <Ellipse Fill="{DynamicResource T.Node}" Stroke="{DynamicResource T.NodeRing}" StrokeThickness="1.5" />
-                          <ui:LineIcon Width="20" Height="20" StrokeThickness="1.9" Stroke="{DynamicResource T.Text}" Data="{StaticResource I.Computer}" />
+                          <ui:LineIcon Width="20" Height="20" StrokeThickness="1.9" Stroke="{DynamicResource T.Text}" Data="{Binding Icon, Converter={StaticResource DeviceIcon}}" />
+                          <ui:DeviceIconPencil DeviceId="{Binding Id}" DeviceName="{Binding Name}" Current="{Binding Icon}"
+                                               Visibility="{Binding CanChooseIcon, Converter={StaticResource Visible}}" />
                           <Ellipse x:Name="StateDot" Width="12" Height="12" HorizontalAlignment="Right" VerticalAlignment="Bottom"
                                    Stroke="{DynamicResource T.Card}" StrokeThickness="2.5" Fill="{StaticResource S.Grey}" />
                         </Grid>

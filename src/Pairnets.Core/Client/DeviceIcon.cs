@@ -47,4 +47,35 @@ public static class DeviceIcon
 
     /// <summary>For a nest that may be too old to know icons: always the guess then, so nothing looks chosen that cannot be saved.</summary>
     public static DeviceIconKind For(DeviceInfo device, bool nestSupportsIcons) => nestSupportsIcons ? For(device) : Guess(device.Name);
+
+    /// <summary>The icon for a computer known only by name (this computer in the left side): the one the nest holds, else the guess.</summary>
+    public static DeviceIconKind ForName(StatusSnapshot? s, string name)
+    {
+        var device = s?.Devices?.FirstOrDefault(d => string.Equals(d.Name, name, StringComparison.OrdinalIgnoreCase));
+        return device is null ? Guess(name) : For(device, s!.DeviceIconsSupported);
+    }
+
+    /// <summary>The name of the line-icon drawing in each app's icon dictionary ("I.Laptop"), the same in both apps.</summary>
+    public static string ResourceKey(DeviceIconKind kind) => kind switch
+    {
+        DeviceIconKind.Laptop => "I.Laptop",
+        DeviceIconKind.Office => "I.Office",
+        DeviceIconKind.Mini => "I.MiniPc",
+        DeviceIconKind.Tv => "I.Tv",
+        _ => "I.Desktop",
+    };
+
+    /// <summary>What the chooser calls each icon.</summary>
+    public static string Label(DeviceIconKind kind) => kind switch
+    {
+        DeviceIconKind.Laptop => "Laptop",
+        DeviceIconKind.Office => "Office",
+        DeviceIconKind.Mini => "Mini PC",
+        DeviceIconKind.Tv => "TV / media",
+        _ => "Desktop",
+    };
+
+    /// <summary>The five choices, in the order the chooser shows them.</summary>
+    public static IReadOnlyList<DeviceIconKind> Choices { get; } =
+        [DeviceIconKind.Desktop, DeviceIconKind.Laptop, DeviceIconKind.Office, DeviceIconKind.Mini, DeviceIconKind.Tv];
 }

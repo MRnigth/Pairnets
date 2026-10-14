@@ -44,6 +44,9 @@ public interface IMainActions
     /// <summary>The Devices page was opened: ask the server for the current list.</summary>
     void RefreshDevices();
 
+    /// <summary>Saves the icon picked in the chooser on the nest (one of <see cref="Pairnets.Core.DeviceIcons.All"/>).</summary>
+    Task<bool> SetDeviceIcon(string id, string icon);
+
     /// <summary>"+ Add a computer…": how to add one (it signs in on the new computer).</summary>
     void AddComputer();
 

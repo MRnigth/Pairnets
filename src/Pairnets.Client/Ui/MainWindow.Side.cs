@@ -99,7 +99,7 @@ public partial class MainWindow
         _ => "T.Ok",
     };
 
-    private static Geometry? IconOf(ComputerIcon icon) => Visuals.Resource<Geometry>(icon == ComputerIcon.Laptop ? "I.Laptop" : "I.Desktop");
+    private static Geometry? IconOf(DeviceIconKind icon) => DeviceIconArt.For(icon);
 
     private void DrawOpen(SidePanelModel m)
     {

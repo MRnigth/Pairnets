@@ -73,6 +73,14 @@ public sealed class DeviceRowView(DeviceRow row) : INotifyPropertyChanged
 
     public bool IsThisComputer => _row.IsThisComputer;
 
+    /// <summary>The nest's id for the computer (what the icon is saved against); null from an old nest.</summary>
+    public string? Id => _row.Id;
+
+    public DeviceIconKind Icon => _row.Icon;
+
+    /// <summary>The pencil on the icon shows only when the nest can save an icon.</summary>
+    public bool CanChooseIcon => _row.CanChooseIcon;
+
     public event PropertyChangedEventHandler? PropertyChanged;
 
     public void Update(DeviceRow row)
@@ -85,6 +93,9 @@ public sealed class DeviceRowView(DeviceRow row) : INotifyPropertyChanged
             (nameof(Online), before.Online != row.Online),
             (nameof(StatusText), before.StatusText != row.StatusText),
             (nameof(Detail), before.Detail != row.Detail),
+            (nameof(Id), before.Id != row.Id),
+            (nameof(Icon), before.Icon != row.Icon),
+            (nameof(CanChooseIcon), before.CanChooseIcon != row.CanChooseIcon),
         })
         {
             if (changed)

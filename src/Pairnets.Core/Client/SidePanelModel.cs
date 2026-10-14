@@ -51,19 +51,12 @@ public enum OtherKind
     LastSeen,
 }
 
-/// <summary>Which picture a computer has. Until each computer can pick its own (a later stage), it is guessed from the name.</summary>
-public enum ComputerIcon
-{
-    Desktop,
-    Laptop,
-}
-
 /// <summary>This computer's card at the top of the left side.</summary>
 /// <param name="Text">"This one · sending 4.90 MB/s".</param>
 /// <param name="Detail">The same without "This one · " (for tooltips).</param>
 /// <param name="Tone">Colours the text and, unless <see cref="SideTone.Neutral"/>, the card behind it.</param>
 /// <param name="BarPercent">0–100 while syncing and the progress is known; the card then shows a bar.</param>
-public sealed record SideThisComputer(string Name, string Text, string Detail, SideDot Dot, SideTone Tone, int? BarPercent, ComputerIcon Icon)
+public sealed record SideThisComputer(string Name, string Text, string Detail, SideDot Dot, SideTone Tone, int? BarPercent, DeviceIconKind Icon)
 {
     public bool Highlighted => Tone != SideTone.Neutral;
 
@@ -83,7 +76,7 @@ public sealed record SideNest(string Text, SideDot Dot, SideTone Tone)
 /// <summary>One of the other computers.</summary>
 /// <param name="Text">"↓ 4.10 MB/s", "in sync", "next", "online", "can't reach" or "seen 10:45".</param>
 /// <param name="Detail">Words for a tooltip: "online, getting files at 4.10 MB/s".</param>
-public sealed record SideOther(string Name, string Text, string Detail, OtherKind Kind, ComputerIcon Icon)
+public sealed record SideOther(string Name, string Text, string Detail, OtherKind Kind, DeviceIconKind Icon)
 {
     /// <summary>It can be reached (the icon is drawn full, with a green dot).</summary>
     public bool Reachable => Kind is OtherKind.Live or OtherKind.Ok or OtherKind.Next or OtherKind.Online;
@@ -206,12 +199,6 @@ public sealed record SidePanelModel(
     /// <summary>The progress ring around this computer in the dock (0–100), or null when nothing is syncing.</summary>
     public int? RingPercent => This.BarPercent;
 
-    /// <summary>Whether the app can offer a laptop icon: temporary rule until each computer saves its own icon.</summary>
-    public static ComputerIcon IconFor(string name) =>
-        name.Contains("LAPTOP", StringComparison.OrdinalIgnoreCase) || name.Contains("BOOK", StringComparison.OrdinalIgnoreCase)
-            ? ComputerIcon.Laptop
-            : ComputerIcon.Desktop;
-
     public static SidePanelModel Build(StatusSnapshot s, string? thisDevice, int activityCount, int attentionCount, SideUpdate? update, DateTimeOffset now)
     {
         var name = string.IsNullOrWhiteSpace(thisDevice) ? "This computer" : thisDevice.Trim();
@@ -280,7 +267,7 @@ public sealed record SidePanelModel(
 
     private static SideThisComputer ThisOf(StatusSnapshot s, string name, Side state, DateTimeOffset now)
     {
-        var icon = IconFor(name);
+        var icon = DeviceIcon.ForName(s, name);
         switch (state)
         {
             case Side.Syncing:
@@ -377,7 +364,7 @@ public sealed record SidePanelModel(
 
     private static SideOther OtherOf(StatusSnapshot s, DeviceInfo d, TransferReport? live, bool online, bool cantCheck, string? waited, Side state)
     {
-        var icon = IconFor(d.Name);
+        var icon = DeviceIcon.For(d, s.DeviceIconsSupported);
         if (cantCheck)
         {
             var seen = "seen " + d.LastSeen.ToLocalTime().ToString("HH:mm", CultureInfo.InvariantCulture);

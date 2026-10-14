@@ -65,6 +65,7 @@ public static class Program
         public void ReportBug() { }
         public void RevealFile(string syncPath) { }
         public void RefreshDevices() { }
+        public Task<bool> SetDeviceIcon(string id, string icon) => Task.FromResult(true);
         public void AddComputer() { }
         public void ManageDevices() { }
         public void OpenWindow(MainPage page) { }
@@ -285,6 +286,8 @@ public static class Program
         Place(bugReport);
         Save(bugReport, outDir, $"windows-bug-report-{suffix}.png", print);
         bugReport.Close();
+
+        Stage6.Render(outDir, suffix, print);
     }
 
     /// <summary>
@@ -334,7 +337,7 @@ public static class Program
         ];
     }
 
-    private static void Place(Window window)
+    internal static void Place(Window window)
     {
         window.WindowStartupLocation = WindowStartupLocation.Manual;
         window.Left = 0;
@@ -358,7 +361,7 @@ public static class Program
         System.Windows.Threading.Dispatcher.PushFrame(frame);
     }
 
-    private static void Save(Window window, string outDir, string name, bool print)
+    internal static void Save(Window window, string outDir, string name, bool print)
     {
         Settle(window);
         window.UpdateLayout();

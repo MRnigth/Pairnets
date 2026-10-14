@@ -525,6 +525,10 @@ public sealed class TrayController : ITrayActions, IDisposable
             _ = session.RefreshDevicesAsync();
     }
 
+    /// <summary>Saves the icon chosen for a computer on the nest; false when the nest cannot (too old, or unreachable).</summary>
+    public Task<bool> SetDeviceIcon(string id, string icon) =>
+        _session is { } session ? session.SetDeviceIconAsync(id, icon) : Task.FromResult(false);
+
     /// <summary>The quick-look panel next to the taskbar; a second click on the icon closes it.</summary>
     private void TogglePanel()
     {

@@ -572,6 +572,10 @@ public sealed class DesktopController : ITrayActions, IDisposable
             _ = session.RefreshDevicesAsync();
     }
 
+    /// <summary>Saves the icon chosen for a computer on the nest; false when the nest cannot (too old, or unreachable).</summary>
+    public Task<bool> SetDeviceIcon(string id, string icon) =>
+        _session is { } session ? session.SetDeviceIconAsync(id, icon) : Task.FromResult(false);
+
     public void RevealFile(string syncPath) => _platform.Reveal(LocalPath(syncPath));
 
     public void SyncNow() => _session?.SyncNow();

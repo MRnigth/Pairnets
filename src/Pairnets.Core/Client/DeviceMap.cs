@@ -35,7 +35,7 @@ public enum PeerState
 }
 
 /// <summary>One box in the picture: a computer or the server.</summary>
-public sealed record MapNode(string Name, string Detail, NodeState State, string? Tip = null);
+public sealed record MapNode(string Name, string Detail, NodeState State, string? Tip = null, DeviceIconKind? Icon = null);
 
 /// <summary>
 /// "This computer ⇄ server ⇄ your other computer": what the overview and the tray panel draw.
@@ -128,7 +128,7 @@ public sealed record DeviceMap(
         var connected = s.IsConnected;
         var own = s.OwnLive;
         var here = new MapNode(string.IsNullOrWhiteSpace(thisDevice) ? "This computer" : thisDevice, own is not null ? Doing(own, "Uploading", yourChanges: false) : "This computer",
-            NodeState.Online, AppText(ThisSystem, PairnetsInfo.ProductVersion));
+            NodeState.Online, AppText(ThisSystem, PairnetsInfo.ProductVersion), DeviceIcon.ForName(s, string.IsNullOrWhiteSpace(thisDevice) ? "" : thisDevice));
 
         var server = s.Server is null && !connected
             ? new MapNode("Server", s.Status == RunnerStatus.Offline ? "Can't reach it" : "Connecting…", s.Status == RunnerStatus.Offline ? NodeState.Offline : NodeState.Unknown)
@@ -231,7 +231,7 @@ public sealed record DeviceMap(
             detail = "Online";
         else
             detail = "Last seen " + Format.RelativeTime(d.LastSeen, now);
-        return (new MapNode(d.Name, detail, online ? NodeState.Online : NodeState.Offline, AppText(d.System, d.AppVersion)), live, others.Count - 1);
+        return (new MapNode(d.Name, detail, online ? NodeState.Online : NodeState.Offline, AppText(d.System, d.AppVersion), DeviceIcon.For(d, s.DeviceIconsSupported)), live, others.Count - 1);
     }
 
     private static string ThisSystem => OperatingSystem.IsWindows() ? "Windows" : OperatingSystem.IsMacOS() ? "macOS" : "Linux";
