@@ -267,10 +267,13 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
           path: assets
           merge-multiple: true
+      - name: Server installer (pairnets.app/get.sh points at this copy, not at main)
+        run: cp deploy/get.sh assets/get.sh
       - name: Version file (read by the apps' update check)
         shell: bash
         run: |
@@ -301,10 +304,13 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
           path: assets
           merge-multiple: true
+      - name: Server installer (pairnets.app/get.sh points at this copy, not at main)
+        run: cp deploy/get.sh assets/get.sh
       - name: Version file (read by the apps' update check)
         shell: bash
         run: |

@@ -61,7 +61,11 @@ public sealed class SiteTests
             var file = to[(to.LastIndexOf('/') + 1)..];
             Assert.True(workflow.Contains(file, StringComparison.Ordinal), $"{from} → {file} is not built by release.yml");
         }
-        Assert.True(Redirects().ContainsKey("/get.sh") && File.Exists(Path.Combine(RepoRoot, "deploy", "get.sh")));
+        // /get.sh is piped into "sudo bash", so it must point at the copy in the latest release, never at main.
+        Assert.Equal("https://github.com/MRnigth/Pairnets/releases/download/latest/get.sh", Redirects()["/get.sh"]);
+        Assert.True(File.Exists(Path.Combine(RepoRoot, "deploy", "get.sh")));
+        Assert.DoesNotContain("raw.githubusercontent.com", File.ReadAllText(Path.Combine(Root, "_redirects")));
+        Assert.Equal(2, Regex.Matches(workflow, @"cp deploy/get\.sh assets/get\.sh").Count); // both the release and the latest-build job upload it (and checksum it)
     }
 
     [Fact]
