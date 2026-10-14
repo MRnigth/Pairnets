@@ -114,7 +114,11 @@ public sealed class ActivityFeed(int capacity = 200)
 }
 
 /// <summary>A day heading in the full activity list ("Today", "Yesterday", "Monday 5 October").</summary>
-public sealed record ActivityDay(string Text, DateTime Day);
+public sealed record ActivityDay(string Text, DateTime Day, int Changes = 0)
+{
+    /// <summary>"42 changes" (empty when the count is not known).</summary>
+    public string CountText => Changes switch { <= 0 => string.Empty, 1 => "1 change", _ => Format.Count(Changes) + " changes" };
+}
 
 /// <summary>The Activity page's rows: newest first, with a heading before each day.</summary>
 public static class ActivityDays
@@ -145,8 +149,9 @@ public static class ActivityDays
         var rows = new List<object>(items.Count + 4);
         foreach (var day in items.GroupBy(i => i.Time.ToLocalTime().Date))
         {
-            rows.Add(new ActivityDay(Format.Day(day.Key, now), day.Key));
-            rows.AddRange(ActivityGroups.Group(day.ToList()));
+            var list = day.ToList();
+            rows.Add(new ActivityDay(Format.Day(day.Key, now), day.Key, list.Count));
+            rows.AddRange(ActivityGroups.Group(list));
         }
         return rows;
     }

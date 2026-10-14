@@ -27,6 +27,14 @@ public sealed record AccountSummary(
     string DeviceName,
     string DeviceDetail)
 {
+    /// <summary>The account's email, or null for an older nest that did not send it (the page then shows the computer name).</summary>
+    public string? Email { get; init; }
+
+    /// <summary>"Google", "Email" or "–": how the owner signed in, for the "Signed in with" tile.</summary>
+    public string MethodName { get; init; } = "–";
+
+    /// <summary>"29 Sep 2026", or "–": when this computer was added.</summary>
+    public string AddedText { get; init; } = "–";
     /// <param name="s">The latest status.</param>
     /// <param name="device">This computer's name.</param>
     /// <param name="serverUrl">The server address in the settings (used when the nest has no website address).</param>
@@ -52,7 +60,20 @@ public sealed record AccountSummary(
             ? "Added " + at.ToLocalTime().ToString("d MMM yyyy", System.Globalization.CultureInfo.InvariantCulture) + " · Shown in conflict file names"
             : "Shown in conflict file names";
 
-        return new AccountSummary(FirstLetter(title), title, subtitle, host, string.Join(" · ", facts), name, deviceDetail);
+        var method = s.Account?.Method?.Trim().ToLowerInvariant() switch
+        {
+            "google" => "Google",
+            "email" => "Email",
+            "passkey" => "Passkey",
+            "password" => "Password",
+            _ => "–",
+        };
+        return new AccountSummary(FirstLetter(title), title, subtitle, host, string.Join(" · ", facts), name, deviceDetail)
+        {
+            Email = email,
+            MethodName = method,
+            AddedText = added is { } addedAt ? addedAt.ToLocalTime().ToString("d MMM yyyy", System.Globalization.CultureInfo.InvariantCulture) : "–",
+        };
     }
 
     private static string FirstLetter(string text)

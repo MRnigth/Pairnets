@@ -492,16 +492,16 @@ public sealed class DesktopController : ITrayActions, IDisposable
         foreach (var join in status.JoinRequests)
         {
             items.Add(new AttentionItem(join.Title, $"Code {join.Code}. Check that it matches the code on that computer, then allow or deny it on your nest.",
-                "Review in browser", () => ReviewJoin(join)));
+                "Review in browser", () => ReviewJoin(join), AttentionKind.Join, join.Code, join.At));
         }
         if (status.FixLabel is not null)
             items.Add(new AttentionItem("Syncing is paused until you decide", status.Text, status.FixLabel, FixBlocked));
         foreach (var w in _session.Warnings())
-            items.Add(new AttentionItem(w.Path, w.Message ?? w.Code, "Show in folder", () => _platform.Reveal(LocalPath(w.Path))));
+            items.Add(new AttentionItem(w.Path, w.Message ?? w.Code, "Show in folder", () => _platform.Reveal(LocalPath(w.Path)), w.Code == ErrorCodes.CaseCollision ? AttentionKind.NameClash : AttentionKind.Warning));
         foreach (var c in _session.Activity.Items.Where(i => i.Kind == ActivityKind.Conflict && i.Path is not null).Take(20))
         {
             if (File.Exists(LocalPath(c.Path!)))
-                items.Add(new AttentionItem("Conflict copy: " + PathRules.FileName(c.Path!), "Both computers changed this file. Compare the two, keep what you want, delete the other.", "Show in folder", () => _platform.Reveal(LocalPath(c.Path!))));
+                items.Add(new AttentionItem("Conflict copy: " + PathRules.FileName(c.Path!), "Both computers changed this file. Compare the two, keep what you want, delete the other.", "Show in folder", () => _platform.Reveal(LocalPath(c.Path!)), AttentionKind.Conflict, null, c.Time));
         }
         return items;
     }
@@ -564,6 +564,28 @@ public sealed class DesktopController : ITrayActions, IDisposable
     }
 
     public IHistorySource? History => _session;
+
+    public bool Notifies(NoticeKind kind) => kind switch
+    {
+        NoticeKind.JoinRequest => _settings.NotifyJoinRequests,
+        NoticeKind.Attention => _settings.NotifyAttention,
+        NoticeKind.Update => _settings.NotifyUpdates,
+        _ => true,
+    };
+
+    public void SetNotifies(NoticeKind kind, bool on)
+    {
+        switch (kind)
+        {
+            case NoticeKind.JoinRequest: _settings.NotifyJoinRequests = on; break;
+            case NoticeKind.Attention: _settings.NotifyAttention = on; break;
+            case NoticeKind.Update: _settings.NotifyUpdates = on; break;
+            default: return;
+        }
+        SettingsStore.Save(_env.SettingsPath, _settings);
+    }
+
+    public void OpenAccountSite() => _platform.Open(Relay.DefaultServiceUrl.ToString());
 
     /// <summary>The Devices page was opened: ask the server for the current list.</summary>
     public void RefreshDevices()

@@ -261,6 +261,9 @@ public partial class SettingsView : UserControl
                 UploadLimitMBps = upLimit,
                 DownloadLimitMBps = downLimit,
                 SkippedServerVersion = _original.SkippedServerVersion,
+                NotifyJoinRequests = _original.NotifyJoinRequests,
+                NotifyAttention = _original.NotifyAttention,
+                NotifyUpdates = _original.NotifyUpdates,
             };
             PlainToken = token;
             Saved?.Invoke(this);

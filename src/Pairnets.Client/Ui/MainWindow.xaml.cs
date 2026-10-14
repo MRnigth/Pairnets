@@ -11,7 +11,8 @@ using Pairnets.Core.Client;
 namespace Pairnets.Client.Ui;
 
 /// <summary>An item in the "Needs attention" list with one action button.</summary>
-public sealed record AttentionItem(string Title, string Detail, string ActionLabel, Action Action);
+public sealed record AttentionItem(string Title, string Detail, string ActionLabel, Action Action,
+    AttentionKind Kind = AttentionKind.Warning, string? Code = null, DateTimeOffset? At = null);
 
 /// <summary>The pages in the main window's sidebar.</summary>
 public enum MainPage
@@ -22,6 +23,9 @@ public enum MainPage
     Devices,
     Attention,
     Settings,
+
+    /// <summary>Who is signed in, and the notification switches (the left side's account button opens it).</summary>
+    Account,
 }
 
 /// <summary>What the main window's buttons do (implemented by <see cref="TrayController"/>).</summary>
@@ -55,6 +59,24 @@ public interface IMainActions
 
     /// <summary>Where the History page reads from; null while not connected.</summary>
     IHistorySource? History { get; }
+
+    /// <summary>Whether this kind of notification is switched on (the Account page's switches).</summary>
+    bool Notifies(NoticeKind kind) => true;
+
+    /// <summary>The Account page's switch for one kind of notification was changed: remember it.</summary>
+    void SetNotifies(NoticeKind kind, bool on)
+    {
+    }
+
+    /// <summary>"Sign out" on the Account page (the controller asks first).</summary>
+    void SignOut()
+    {
+    }
+
+    /// <summary>"Manage your account on sync.pairnets.app": opens the website.</summary>
+    void OpenAccountSite()
+    {
+    }
 }
 
 /// <summary>
