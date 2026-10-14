@@ -196,4 +196,14 @@ public sealed class SiteTests
         foreach (var page in Pages())
             Assert.DoesNotContain("href=\"https://nest.pairnets.app", File.ReadAllText(page));
     }
+
+    [Fact]
+    public void HeadersHaveHstsAndOnlyCurrentPolicyNamesAndNoNotesAreInThePublishedFolder()
+    {
+        var headers = File.ReadAllText(Path.Combine(Root, "_headers"));
+        Assert.Contains("Strict-Transport-Security: max-age=31536000", headers);
+        Assert.Contains("browsing-topics=()", headers);
+        Assert.DoesNotContain("interest-cohort", headers); // retired
+        Assert.False(File.Exists(Path.Combine(Root, "README.md")), "notes belong in docs/, everything in site/ is public");
+    }
 }
