@@ -1,6 +1,6 @@
-using System.Collections.ObjectModel;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Shapes;
 using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Platform;
@@ -18,14 +18,18 @@ public interface ITrayActions : IMainActions
 }
 
 /// <summary>
-/// The quick look that opens from the tray (Linux) or the menu bar (macOS): status, the two
-/// computers, the transfer, recent changes and the main buttons. It hides when it loses focus.
+/// The quick look that opens from the tray (Linux) or the menu bar (macOS): status, the nest with a small
+/// branch per computer, the latest changes and the main buttons. It hides when it loses focus.
 /// </summary>
 public partial class TrayPanel : Window
 {
     private readonly ITrayActions? _actions;
-    private readonly ObservableCollection<ActivityItem> _recent = [];
-    private string? _tintKey;
+    private StatusSnapshot _status = StatusSnapshot.Initial;
+    private string? _device;
+    private IReadOnlyList<ActivityItem> _items = [];
+    private IReadOnlyList<TrayChange> _shown = [];
+    private int _attention;
+    private string? _drawnKey;
     private bool _menuOpen;
 
     public TrayPanel()
@@ -37,7 +41,6 @@ public partial class TrayPanel : Window
     {
         InitializeComponent();
         _actions = actions;
-        RecentList.ItemsSource = _recent;
         Deactivated += (_, _) =>
         {
             // Its own "…" menu takes focus for a moment; only a click elsewhere closes the panel.
@@ -87,70 +90,109 @@ public partial class TrayPanel : Window
 
     public void ShowStatus(StatusSnapshot s, string? device)
     {
-        var brush = Badge.Show(s, StatusBadge, StatusGlyph, StatusGlyph2, 19);
-        StatusBadgeHost.Classes.Set("pulse", s.IsWaiting);
-        Tint(brush);
-        Headline.Text = s.Headline;
-        // Waiting: the other computer's progress (the window has a bar for it; the panel has only this line).
-        Detail.Text = s.IsWaiting ? s.WaitingProgressText : s.DetailText.Length > 0 ? s.DetailText : s.LastSyncText;
-        FixButton.IsVisible = s.FixLabel is not null;
-        FixButton.Content = s.FixLabel;
-        PauseText.Text = s.Paused ? "Resume" : "Pause";
-        PauseGlyph.Data = Visuals.Resource<Geometry>(s.Paused ? "I.Play" : "I.Pause");
-        Map.Show(DeviceMap.Build(s, device, DateTimeOffset.UtcNow));
-
-        TransferCard.IsVisible = s.IsTransferring;
-        if (s.IsTransferring)
-        {
-            TransferTitle.Text = s.BatchTitle;
-            var stalled = s.Motion == SyncMotion.Stalled;
-            TransferSpeed.Text = stalled ? "Stalled" : s.BytesPerSecond >= 1 ? Format.Speed(s.BytesPerSecond) : string.Empty;
-            TransferSpeed.Classes.Set("warn", stalled);
-            TransferProgress.IsIndeterminate = s.OverallPercent is null;
-            TransferProgress.Value = s.OverallPercent ?? 0;
-            TransferOverall.Text = s.OverallText;
-            var uploading = s.GoingUp || !s.GoingDown;
-            TransferArrow.Data = Visuals.Resource<Geometry>(uploading ? "I.Up" : "I.Down");
-            TransferArrow.Stroke = Visuals.Resource<IBrush>(uploading ? "S.Green" : "S.Blue");
-            TransferArrow.Opacity = stalled ? 0.5 : 1;
-            TransferArrow.Classes.Set("rise", uploading && !stalled);
-            TransferArrow.Classes.Set("fall", !uploading && !stalled);
-        }
-    }
-
-    private void Tint(string brushKey)
-    {
-        if (_tintKey == brushKey)
-            return;
-        _tintKey = brushKey;
-        var color = (Visuals.Resource<IBrush>(brushKey) as ISolidColorBrush)?.Color ?? Colors.Gray;
-        Head.Background = new LinearGradientBrush
-        {
-            StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
-            EndPoint = new RelativePoint(0, 1, RelativeUnit.Relative),
-            GradientStops =
-            {
-                new GradientStop(Color.FromArgb(0x26, color.R, color.G, color.B), 0),
-                new GradientStop(Color.FromArgb(0x00, color.R, color.G, color.B), 1),
-            },
-        };
+        _status = s;
+        _device = device;
+        Redraw();
     }
 
     public void ShowActivity(IReadOnlyList<ActivityItem> items)
     {
-        LiveLists.Sync(_recent, items.Take(4).ToList());
-        RecentEmpty.IsVisible = _recent.Count == 0;
+        _items = items;
+        Redraw();
     }
 
     public void ShowAttention(int count)
     {
-        AttentionButton.IsVisible = count > 0;
-        AttentionText.Text = count == 1 ? "1 thing needs your attention" : $"{count} things need your attention";
+        _attention = count;
+        Redraw();
+    }
+
+    private static void Paint(Control target, AvaloniaProperty property, string key) => target.Bind(property, target.GetResourceObservable(key));
+
+    private void Redraw()
+    {
+        var now = DateTimeOffset.UtcNow;
+        var m = TrayPanelModel.Build(_status, _device, now);
+
+        // The status circle
+        var (fill, ink, glyph, size, stroke) = m.Tone switch
+        {
+            TrayTone.Ok => ("T.OkPill", "T.OkText", "I.Check", 22, 2.6),
+            TrayTone.Paused => ("T.WarnPill", "T.WarnText", "I.Pause", 20, 2.6),
+            TrayTone.Warn => ("T.WarnPill", "T.WarnText", "I.Warning", 22, 2.2),
+            TrayTone.Bad => ("T.BadPill", "T.BadText", "I.CloudOff", 22, 2.2),
+            _ => ("T.AccentSoft", "T.AccentInk", "I.Sync", 20, 2.2),
+        };
+        Paint(StatusBadge, Shape.FillProperty, fill);
+        Paint(StatusGlyph, LineIcon.StrokeProperty, ink);
+        StatusGlyph.Data = Visuals.Resource<Geometry>(glyph);
+        StatusGlyph.Width = StatusGlyph.Height = size;
+        StatusGlyph.StrokeThickness = stroke;
+        StatusGlyph.Classes.Set("spin-slow", m.Tone == TrayTone.Syncing);
+
+        Headline.Text = m.Headline;
+        Detail.Text = m.Detail;
+        ToolTip.SetTip(Detail, m.Detail);
+
+        PercentText.IsVisible = Progress.IsVisible = m.ShowsProgress;
+        ProgressLine.IsVisible = m.ShowsProgress && (m.FilesText is not null || m.LeftText is not null);
+        if (m.Percent is { } percent)
+        {
+            PercentText.Text = percent + "%";
+            Progress.Value = percent;
+        }
+        FilesText.Text = m.FilesText ?? string.Empty;
+        LeftText.Text = m.LeftText ?? string.Empty;
+        PausedNote.IsVisible = m.PausedNote is not null;
+        PausedNoteText.Text = m.PausedNote ?? string.Empty;
+
+        // The nest and its branches
+        NestSub.Text = m.NestSub;
+        Paint(NestDotShape, Shape.FillProperty, m.NestDot switch
+        {
+            NestDot.Bad => "T.Bad",
+            NestDot.Warn => "T.Warn",
+            NestDot.Off => "T.Off",
+            _ => "T.Ok",
+        });
+        if (_drawnKey != m.BranchKey)
+        {
+            _drawnKey = m.BranchKey;
+            TrayBranches.Fill(Branches, m);
+        }
+        MoreText.IsVisible = m.MoreText is not null;
+        MoreText.Text = m.MoreText is null ? string.Empty : m.MoreText + " computers";
+
+        // Buttons
+        FixButton.IsVisible = m.FixLabel is not null;
+        FixButton.Content = m.FixLabel;
+        var attention = TrayPanelModel.AttentionText(_attention);
+        AttentionButton.IsVisible = attention is not null;
+        AttentionText.Text = attention ?? string.Empty;
+        PauseText.Text = m.PauseLabel;
+        PauseGlyph.Data = Visuals.Resource<Geometry>(m.Paused ? "I.Play" : "I.Pause");
+        PauseButton.Classes.Set("accent", m.ResumeIsPrimary);
+        PauseButton.Classes.Set("subtle", !m.ResumeIsPrimary);
+        OpenButton.Classes.Set("accent", !m.ResumeIsPrimary);
+        OpenButton.Classes.Set("subtle", m.ResumeIsPrimary);
+        if (m.ResumeIsPrimary)
+            PauseGlyph.Stroke = Brushes.White;
+        else
+            Paint(PauseGlyph, LineIcon.StrokeProperty, "T.Text");
+
+        // Latest changes
+        var changes = TrayPanelModel.Changes(_status, _items, m.ChangesLimit(attention is not null), now);
+        if (!_shown.SequenceEqual(changes))
+        {
+            _shown = changes;
+            TrayBranches.FillChanges(RecentList, changes);
+        }
+        RecentEmpty.IsVisible = changes.Count == 0;
     }
 
     // Exposed for the headless UI test.
     internal string HeadlineText => Headline.Text ?? string.Empty;
-    internal int RecentRows => _recent.Count;
+    internal int RecentRows => RecentList.Children.Count;
     internal bool AttentionShown => AttentionButton.IsVisible;
 
     private void Run(Action<ITrayActions> action)
@@ -174,6 +216,7 @@ public partial class TrayPanel : Window
     private void OnPause(object? sender, RoutedEventArgs e) => _actions?.TogglePause();
     private void OnOpenFolder(object? sender, RoutedEventArgs e) => Run(a => a.OpenFolder());
     private void OnOpenApp(object? sender, RoutedEventArgs e) => Run(a => a.OpenWindow(MainPage.Overview));
+    private void OnSeeAll(object? sender, RoutedEventArgs e) => Run(a => a.OpenWindow(MainPage.Activity));
     private void OnAttention(object? sender, RoutedEventArgs e) => Run(a => a.OpenWindow(MainPage.Attention));
     private void OnSettings(object? sender, RoutedEventArgs e) => Run(a => a.OpenWindow(MainPage.Settings));
     private void OnHistory(object? sender, RoutedEventArgs e) => Run(a => a.OpenWindow(MainPage.History));

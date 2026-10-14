@@ -454,6 +454,7 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
         On("Report a bug…", "hide the panel and open a bug report", HidesAnd("ReportBug")),
         On("Exit Pairnets", "hide the panel and quit Pairnets", HidesAnd("Quit")),
         new(t => t.Label.StartsWith("Allow these deletions", StringComparison.Ordinal), "hide the panel and ask about the blocked deletions", HidesAnd("FixBlocked")),
+        On("See all", "hide the panel and open Activity in the main window", HidesAnd("OpenWindow(Activity)")),
         On("Open Pairnets", "hide the panel and open the main window", HidesAnd("OpenWindow(Overview)")),
         On("Folder", "hide the panel and open the synced folder", HidesAnd("OpenFolder")),
         On(["Pause", "Resume"], "ask the app to pause or resume syncing", Called("TogglePause")),
@@ -780,6 +781,7 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
         On(["I run my own nest on my own domain: use its address", "I run my own nest: use its address"], "go to the step for a nest's own address",
             c => OnStep(c, SignInStep.Address) && SignIn(c.Window).WelcomeStep.IsVisible),
         On(["Continue", "Try again"], "check the typed address", c => OnStep(c, SignInStep.Address)),
+        On("Change", "show the nest's name field again", c => SignIn(c.Window) is { FoundCard.IsVisible: false, AddressBox.IsVisible: true }),
         On("Sign in with a Pairnets account instead", "go back to the Pairnets account step", c => OnStep(c, SignInStep.Account)),
         // Finish in your browser, and no nest yet.
         On("Open the page again", "open the service's page again", c => c.Bench.Opened.Items.SequenceEqual([AccountLink])),

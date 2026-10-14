@@ -1,126 +1,128 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:v="using:Pairnets.Desktop.Views"
-        xmlns:c="using:Pairnets.Core.Client"
         x:Class="Pairnets.Desktop.Views.TrayPanel"
-        Title="Pairnets" Width="392" SizeToContent="Height" CanResize="False"
+        Title="Pairnets" Width="404" SizeToContent="Height" CanResize="False"
         SystemDecorations="None" ShowInTaskbar="False" Topmost="True"
         Background="Transparent" TransparencyLevelHint="Transparent"
         Icon="avares://Pairnets/Assets/pairnets-icon-256.png">
-  <Window.Resources>
-    <v:ActivityBrushConverter x:Key="KindBrush" />
-    <v:ActivityIconConverter x:Key="KindIcon" />
-  </Window.Resources>
 
   <!-- The quick look that opens from the tray / menu bar icon. The margin leaves room for the shadow. -->
-  <Border Classes="panel" Margin="10" BoxShadow="0 8 28 0 #38000000">
+  <Border Margin="10" Background="{DynamicResource T.Bg}" BorderBrush="{DynamicResource T.Border}" BorderThickness="1" CornerRadius="22" Padding="12"
+          BoxShadow="0 8 28 0 #38000000">
     <StackPanel>
-      <!-- Status -->
-      <Border x:Name="Head" CornerRadius="14,14,0,0" Padding="16,16,10,8">
-        <Grid ColumnDefinitions="Auto,*,Auto">
-          <Grid x:Name="StatusBadgeHost" Width="38" Height="38" VerticalAlignment="Top" Margin="0,0,12,0">
-            <Ellipse x:Name="StatusBadge" Fill="{StaticResource S.Grey}" />
-            <v:LineIcon x:Name="StatusGlyph" Classes="icon white" Width="19" Height="19" StrokeThickness="2.6" Data="{StaticResource I.CloudOff}" />
-            <v:LineIcon x:Name="StatusGlyph2" Classes="icon white" Width="19" Height="19" StrokeThickness="2.6" Data="{StaticResource I.Down}" IsVisible="False" />
+      <!-- Header: logo, name, the "…" menu -->
+      <Grid Height="32" Margin="4,0,0,10" ColumnDefinitions="Auto,*,Auto">
+        <Image Source="avares://Pairnets/Assets/pairnets-icon-256.png" Width="24" Height="24" Margin="0,0,8,0" />
+        <TextBlock Grid.Column="1" Text="Pairnets" FontSize="15" FontWeight="ExtraBold" VerticalAlignment="Center" />
+        <Button x:Name="MoreButton" Grid.Column="2" Classes="RoundIconButton" Width="32" Height="32" ToolTip.Tip="More" AutomationProperties.Name="More">
+          <v:LineIcon Classes="icon" Width="16" Height="16" StrokeThickness="3" Stroke="{DynamicResource T.Muted}" Data="{StaticResource I.More}" />
+          <Button.Flyout>
+            <MenuFlyout Placement="BottomEdgeAlignedRight" Opened="OnMenuOpened" Closed="OnMenuClosed">
+              <MenuItem Header="Sync now" Click="OnSyncNow" />
+              <MenuItem Header="Settings…" Click="OnSettings" />
+              <MenuItem Header="History…" Click="OnHistory" />
+              <Separator />
+              <MenuItem Header="View log" Click="OnViewLog" />
+              <MenuItem Header="Report a bug…" Click="OnReportBug" />
+              <Separator />
+              <MenuItem Header="Quit Pairnets" Click="OnQuit" />
+            </MenuFlyout>
+          </Button.Flyout>
+        </Button>
+      </Grid>
+
+      <!-- Status, then the nest with a line to every computer -->
+      <Border Classes="card" Padding="14,12">
+        <StackPanel>
+          <Grid ColumnDefinitions="Auto,*,Auto">
+            <Grid Width="44" Height="44" Margin="0,0,12,0" VerticalAlignment="Center">
+              <Ellipse x:Name="StatusBadge" Fill="{DynamicResource T.AccentSoft}" />
+              <v:LineIcon x:Name="StatusGlyph" Classes="icon" Width="20" Height="20" StrokeThickness="2.2" Stroke="{DynamicResource T.AccentInk}" Data="{StaticResource I.Sync}" />
+            </Grid>
+            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+              <TextBlock x:Name="Headline" FontSize="17" FontWeight="ExtraBold" TextTrimming="CharacterEllipsis" Text="Starting…" />
+              <TextBlock x:Name="Detail" FontSize="12" Foreground="{DynamicResource T.Muted}" TextTrimming="CharacterEllipsis" />
+            </StackPanel>
+            <TextBlock x:Name="PercentText" Grid.Column="2" FontSize="24" FontWeight="ExtraBold" VerticalAlignment="Center" Margin="10,0,0,0" IsVisible="False" />
           </Grid>
-          <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
-            <TextBlock x:Name="Headline" Classes="h2" FontSize="16" Text="Starting…" />
-            <TextBlock x:Name="Detail" Classes="muted small" TextWrapping="Wrap" MaxHeight="48" />
-          </StackPanel>
-          <Button Grid.Column="2" Classes="ghost" VerticalAlignment="Top" ToolTip.Tip="More">
-            <v:LineIcon Classes="icon" Width="18" Height="18" StrokeThickness="3.2" Data="{StaticResource I.More}" />
-            <Button.Flyout>
-              <MenuFlyout Placement="BottomEdgeAlignedRight" Opened="OnMenuOpened" Closed="OnMenuClosed">
-                <MenuItem Header="Sync now" Click="OnSyncNow" />
-                <MenuItem Header="Settings…" Click="OnSettings" />
-                <MenuItem Header="History…" Click="OnHistory" />
-                <Separator />
-                <MenuItem Header="View log" Click="OnViewLog" />
-                <MenuItem Header="Report a bug…" Click="OnReportBug" />
-                <Separator />
-                <MenuItem Header="Quit Pairnets" Click="OnQuit" />
-              </MenuFlyout>
-            </Button.Flyout>
-          </Button>
-        </Grid>
+
+          <ProgressBar x:Name="Progress" Height="6" MinHeight="6" Minimum="0" Maximum="100" Margin="0,10,0,0" IsVisible="False" />
+          <Grid x:Name="ProgressLine" Margin="0,7,0,0" IsVisible="False">
+            <TextBlock x:Name="FilesText" FontSize="12" Foreground="{DynamicResource T.Muted}" TextTrimming="CharacterEllipsis" HorizontalAlignment="Left" />
+            <TextBlock x:Name="LeftText" FontSize="12" Foreground="{DynamicResource T.Muted}" HorizontalAlignment="Right" />
+          </Grid>
+          <Border x:Name="PausedNote" Background="{DynamicResource T.Chip}" CornerRadius="12" Padding="10,6" Margin="0,10,0,0" IsVisible="False">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <v:LineIcon Classes="icon muted" Width="15" Height="15" StrokeThickness="2" Data="{StaticResource I.Info}" VerticalAlignment="Center" />
+              <TextBlock x:Name="PausedNoteText" FontSize="12" Foreground="{DynamicResource T.Muted}" VerticalAlignment="Center" />
+            </StackPanel>
+          </Border>
+
+          <Border Height="1" Background="{DynamicResource T.Border}" Margin="0,10" />
+
+          <!-- The nest -->
+          <Grid Height="28" ColumnDefinitions="Auto,*,Auto">
+            <Grid Width="28" Height="28" Margin="0,0,10,0">
+              <Border Background="{DynamicResource T.AccentSoft}" CornerRadius="9">
+                <v:LineIcon Classes="icon" Width="15" Height="15" StrokeThickness="1.9" Stroke="{DynamicResource T.AccentInk}" Data="{StaticResource I.Nest}" />
+              </Border>
+              <Ellipse x:Name="NestDotShape" Width="10" Height="10" StrokeThickness="2" Stroke="{DynamicResource T.Card}" Fill="{DynamicResource T.Ok}"
+                       HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,-2,-2" />
+            </Grid>
+            <TextBlock Grid.Column="1" Text="Your nest" FontSize="13" FontWeight="ExtraBold" VerticalAlignment="Center" />
+            <TextBlock x:Name="NestSub" Grid.Column="2" FontSize="11.5" Foreground="{DynamicResource T.TextSoft}" VerticalAlignment="Center" />
+          </Grid>
+          <Border Width="2" Height="4" Margin="13,0,0,0" HorizontalAlignment="Left" Background="{DynamicResource T.Line}" />
+          <StackPanel x:Name="Branches" Margin="13,0,0,0" />
+          <TextBlock x:Name="MoreText" FontSize="11.5" Foreground="{DynamicResource T.TextSoft}" Margin="13,4,0,0" IsVisible="False" />
+        </StackPanel>
       </Border>
 
-      <StackPanel Margin="14,4,14,14" Spacing="12">
-        <v:DeviceMapView x:Name="Map" Compact="True" Margin="0,6,0,0" />
+      <Button x:Name="FixButton" Classes="warn" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Margin="0,10,0,0" IsVisible="False" Click="OnFix" />
 
-        <Button x:Name="FixButton" Classes="warn" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" IsVisible="False" Click="OnFix" />
-
-        <!-- Transfer in progress -->
-        <Border x:Name="TransferCard" Classes="card" Padding="12,10" IsVisible="False">
-          <StackPanel Spacing="6">
-            <Grid ColumnDefinitions="*,Auto">
-              <StackPanel Orientation="Horizontal" Spacing="5">
-                <v:LineIcon x:Name="TransferArrow" Classes="icon rise" Width="14" Height="14" StrokeThickness="2.4"
-                            Stroke="{StaticResource S.Green}" Data="{StaticResource I.Up}" VerticalAlignment="Center" />
-                <TextBlock x:Name="TransferTitle" Classes="strong small" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
-              </StackPanel>
-              <TextBlock x:Name="TransferSpeed" Grid.Column="1" Classes="muted small" Margin="8,0,0,0" />
-            </Grid>
-            <ProgressBar x:Name="TransferProgress" Classes="thin" Minimum="0" Maximum="100" />
-            <TextBlock x:Name="TransferOverall" Classes="muted small" FontSize="11.5" />
-          </StackPanel>
+      <!-- Something needs a decision -->
+      <Button x:Name="AttentionButton" Classes="flat" Padding="0" Margin="0,10,0,0" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" MinHeight="44" IsVisible="False" Click="OnAttention">
+        <Border Height="44" CornerRadius="16" Background="{DynamicResource T.WarnPill}" BorderBrush="{DynamicResource T.WarnBorder}" BorderThickness="1">
+          <Grid Margin="14,0,12,0" ColumnDefinitions="Auto,*,Auto,Auto">
+            <v:LineIcon Classes="icon" Width="18" Height="18" StrokeThickness="2" Stroke="{DynamicResource T.WarnText}" Data="{StaticResource I.Warning}" Margin="0,0,10,0" />
+            <TextBlock x:Name="AttentionText" Grid.Column="1" FontSize="13" FontWeight="Bold" Foreground="{DynamicResource T.WarnText}" VerticalAlignment="Center" />
+            <TextBlock Grid.Column="2" Text="Review" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource T.Muted}" VerticalAlignment="Center" Margin="0,0,6,0" />
+            <v:LineIcon Grid.Column="3" Classes="icon muted" Width="16" Height="16" StrokeThickness="2.2" Data="{StaticResource I.Chevron}" />
+          </Grid>
         </Border>
+      </Button>
 
-        <!-- Something needs a decision -->
-        <Button x:Name="AttentionButton" Classes="flat" Padding="0" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" IsVisible="False" Click="OnAttention">
-          <Border Classes="callout" Padding="12,9">
-            <Grid ColumnDefinitions="Auto,*,Auto">
-              <v:LineIcon Classes="icon" Width="16" Height="16" Stroke="{DynamicResource T.WarnText}" Data="{StaticResource I.Warning}" Margin="0,0,9,0" />
-              <TextBlock x:Name="AttentionText" Grid.Column="1" Classes="strong small" VerticalAlignment="Center" />
-              <v:LineIcon Grid.Column="2" Classes="icon" Width="14" Height="14" Stroke="{DynamicResource T.WarnText}" Data="{StaticResource I.Chevron}" />
-            </Grid>
-          </Border>
+      <!-- Latest changes -->
+      <Border Classes="card" Padding="14,10" Margin="0,10,0,0">
+        <StackPanel>
+          <Grid>
+            <TextBlock Text="Latest changes" FontSize="13" FontWeight="ExtraBold" VerticalAlignment="Center" />
+            <Button Classes="link" Content="See all" HorizontalAlignment="Right" Margin="0,-3,-6,0" Click="OnSeeAll" />
+          </Grid>
+          <StackPanel x:Name="RecentList" Margin="0,4,0,0" />
+          <TextBlock x:Name="RecentEmpty" Foreground="{DynamicResource T.Muted}" FontSize="12" Margin="0,2,0,4" Text="Nothing has synced yet." />
+        </StackPanel>
+      </Border>
+
+      <!-- Quick buttons -->
+      <Grid Margin="0,10,0,0" ColumnDefinitions="Auto,Auto,*">
+        <Button x:Name="PauseButton" Classes="subtle" Padding="13,0" Click="OnPause">
+          <StackPanel Orientation="Horizontal" Spacing="7">
+            <v:LineIcon x:Name="PauseGlyph" Classes="icon" Width="15" Height="15" StrokeThickness="2.2" Data="{StaticResource I.Pause}" />
+            <TextBlock x:Name="PauseText" Text="Pause" />
+          </StackPanel>
         </Button>
-
-        <!-- Recent activity -->
-        <Border Classes="card" Padding="6,8,6,6">
-          <StackPanel>
-            <TextBlock Classes="caps" Text="RECENT" Margin="8,0,0,4" />
-            <ItemsControl x:Name="RecentList">
-              <ItemsControl.ItemTemplate>
-                <DataTemplate DataType="c:ActivityItem">
-                  <Border Classes="row enter" Padding="6,5">
-                    <Grid ColumnDefinitions="Auto,*,Auto">
-                      <Grid Width="24" Height="24" Margin="0,0,10,0">
-                        <Ellipse Fill="{Binding Kind, Converter={StaticResource KindBrush}}" />
-                        <v:LineIcon Classes="icon white" Width="15" Height="15" StrokeThickness="2.6"
-                                    Data="{Binding Kind, Converter={StaticResource KindIcon}}" />
-                      </Grid>
-                      <TextBlock Grid.Column="1" Text="{Binding Primary}" Classes="small" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
-                      <TextBlock Grid.Column="2" Text="{Binding WhenText}" Classes="muted small" FontSize="11.5" VerticalAlignment="Center" Margin="8,0,2,0" />
-                    </Grid>
-                  </Border>
-                </DataTemplate>
-              </ItemsControl.ItemTemplate>
-            </ItemsControl>
-            <TextBlock x:Name="RecentEmpty" Classes="muted small" Margin="8,2,8,4" Text="Nothing has synced yet." />
+        <Button Grid.Column="1" Classes="subtle" Padding="13,0" Margin="8,0,0,0" Click="OnOpenFolder" ToolTip.Tip="Open the synced folder">
+          <StackPanel Orientation="Horizontal" Spacing="7">
+            <v:LineIcon Classes="icon" Width="15" Height="15" StrokeThickness="1.9" Data="{StaticResource I.Folder}" />
+            <TextBlock Text="Folder" />
           </StackPanel>
-        </Border>
-
-        <!-- Actions -->
-        <Grid ColumnDefinitions="*,Auto,Auto">
-          <Button Classes="accent" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Click="OnOpenApp">
-            <TextBlock Text="Open Pairnets" />
-          </Button>
-          <Button Grid.Column="1" Classes="subtle" Margin="8,0,0,0" Click="OnOpenFolder" ToolTip.Tip="Open the synced folder">
-            <StackPanel Orientation="Horizontal" Spacing="6">
-              <v:LineIcon Classes="icon" Width="16" Height="16" Data="{StaticResource I.Folder}" />
-              <TextBlock Text="Folder" />
-            </StackPanel>
-          </Button>
-          <Button Grid.Column="2" Classes="subtle" Margin="8,0,0,0" Click="OnPause">
-            <StackPanel Orientation="Horizontal" Spacing="6">
-              <v:LineIcon x:Name="PauseGlyph" Classes="icon" Width="16" Height="16" Data="{StaticResource I.Pause}" />
-              <TextBlock x:Name="PauseText" Text="Pause" />
-            </StackPanel>
-          </Button>
-        </Grid>
-      </StackPanel>
+        </Button>
+        <Button x:Name="OpenButton" Grid.Column="2" Classes="accent" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Margin="8,0,0,0" Click="OnOpenApp">
+          <TextBlock Text="Open Pairnets" />
+        </Button>
+      </Grid>
     </StackPanel>
   </Border>
 </Window>

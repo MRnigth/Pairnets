@@ -481,6 +481,7 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
         s.Expect["OnMenuOpened"] = That(() => menu.IsOpen && panel.IsVisible, "its menu open while the panel stays");
         s.Expect["OnFix"] = All(Calls(a, "fix"), hides);
         s.Expect["OnAttention"] = All(Calls(a, "open:Attention"), hides);
+        s.Expect["OnSeeAll"] = All(Calls(a, "open:Activity"), hides);
         s.Expect["OnOpenApp"] = All(Calls(a, "open:Overview"), hides);
         s.Expect["OnOpenFolder"] = All(Calls(a, "folder"), hides);
         s.Expect["OnPause"] = Calls(a, "pause");
