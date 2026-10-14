@@ -41,6 +41,7 @@
   <SolidColorBrush x:Key="T.OkLine" Color="#8C3DD68C" />
   <SolidColorBrush x:Key="T.Warn" Color="#FFB547" />
   <SolidColorBrush x:Key="T.WarnBorder" Color="#4DFFB74D" />
+  <SolidColorBrush x:Key="T.BadBorder" Color="#4DFF6B6B" />
   <SolidColorBrush x:Key="T.Bad" Color="#FF6B6B" />
   <SolidColorBrush x:Key="T.Off" Color="#5D6573" />
   <SolidColorBrush x:Key="T.Folder" Color="#F0B43C" />

@@ -57,10 +57,8 @@ public interface IMainActions
 public partial class MainWindow : Window
 {
     private readonly IMainActions? _actions;
-    private readonly ObservableCollection<ActivityItem> _recent = [];
     private readonly ObservableCollection<object> _activityRows = [];
     private readonly ObservableCollection<AttentionItem> _attention = [];
-    private readonly ObservableCollection<ActiveFileView> _active = [];
     private readonly ObservableCollection<ServerFile> _shownFiles = [];
     private readonly ObservableCollection<VersionRow> _versions = [];
     private readonly ObservableCollection<DeviceRowView> _devices = [];
@@ -69,8 +67,8 @@ public partial class MainWindow : Window
     private DateTimeOffset _serverFilesAt;
     private CancellationTokenSource? _versionsCts;
     private string? _selectAfterLoad;
-    private string? _shownState;
-    private string? _tintKey;
+    private string? _folder;
+    private OverviewModel? _overview;
     private bool _navigating;
     private StatusSnapshot _status = StatusSnapshot.Initial;
     private SideUpdate _update = SideUpdate.None;
@@ -89,10 +87,11 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         _actions = actions;
-        RecentList.ItemsSource = _recent;
+        Overview.Act += OnOverviewAction;
+        Overview.SeeAllActivity += () => Navigate(MainPage.Activity);
+        Overview.MoreComputers += () => Navigate(MainPage.Devices);
         ActivityList.ItemsSource = _activityRows;
         AttentionList.ItemsSource = _attention;
-        ActiveList.ItemsSource = _active;
         FileList.ItemsSource = _shownFiles;
         VersionList.ItemsSource = _versions;
         DevicesList.ItemsSource = _devices;
@@ -242,67 +241,59 @@ public partial class MainWindow : Window
     {
         if (device is not null)
             ThisDevice = device;
-        device ??= ThisDevice;
+        if (folder is not null)
+            _folder = folder;
         _status = s;
         RefreshSide();
         ShowDevices(s);
-        var brush = Badge.Show(s, StatusBadge, StatusGlyph, StatusGlyph2, 23);
-        Tint(brush);
-        Animate(s);
-        Headline.Text = s.Headline;
-        Detail.Text = s.DetailText;
-        Detail.IsVisible = s.DetailText.Length > 0;
         PauseText.Text = s.Paused ? "Resume" : "Pause";
         PauseGlyph.Data = Visuals.Resource<Geometry>(s.Paused ? "I.Play" : "I.Pause");
-        FixButton.IsVisible = s.FixLabel is not null;
-        FixButton.Content = s.FixLabel;
-        Map.ShowSpeed = ShowMapSpeed;
-        Map.Show(DeviceMap.Build(s, device, DateTimeOffset.UtcNow));
+        RefreshOverview();
+    }
 
-        // Facts
-        FolderText.Text = folder ?? "Not chosen yet";
-        ToolTip.SetTip(FolderText, folder);
-        LastSync.Text = s.LastSyncAt is { } at ? Format.Moment(at, DateTimeOffset.Now) : "Not yet";
-        ConnectionText.Text = s.ConnectionText ?? "Connecting…";
-        VersionText.Text = s.Server is null ? "–" : s.Server.ServerVersion is { Length: > 0 } v ? "Version " + v : "Old version";
-        VersionButton.IsVisible = s.Server is not null;
-        VersionButton.Content = s.ServerUpdateButtonText;
-        VersionTile.Classes.Set("warn", s.ServerIsOlder);
-        SpaceText.Text = s.Server?.DiskFreeBytes is { } free ? Format.Bytes(free) : "–";
-        SpaceTile.Classes.Set("warn", s.ServerSpaceLow);
+    /// <summary>Draws the Overview from the last status, activity and attention list (each of them calls this when it changes).</summary>
+    private void RefreshOverview()
+    {
+        if (Overview is null)
+            return; // Checked fires during InitializeComponent
+        var now = DateTimeOffset.UtcNow;
+        Overview.ShowSpeed = ShowMapSpeed;
+        _overview = OverviewModel.Build(_status, ThisDevice, _folder, _attentionCount, _activityItems, now);
+        Overview.Show(_overview, NestMapModel.Build(_status, ThisDevice, now), ThisDevice);
+    }
 
-        TransferCard.IsVisible = s.IsTransferring;
-        if (s.IsTransferring)
+    private void OnOverviewAction(OverviewAction action)
+    {
+        switch (action)
         {
-            TransferTitle.Text = s.BatchTitle;
-            var stall = s.StallText(DateTimeOffset.UtcNow);
-            TransferSpeed.Text = stall.Length > 0 ? stall : s.SpeedText;
-            TransferSpeed.Classes.Set("warn", stall.Length > 0);
-            LimitPill.IsVisible = s.LimitText is not null;
-            LimitText.Text = s.LimitText ?? string.Empty;
-            TransferProgress.IsIndeterminate = s.OverallPercent is null;
-            TransferProgress.Value = s.OverallPercent ?? 0;
-            TransferOverall.Text = s.OverallText;
-            var several = s.Active.Count > 1 || s.FilesTotal > 1;
-            ActiveDivider.IsVisible = several && s.Active.Count > 0;
-            ActiveList.IsVisible = several;
-            LiveLists.Sync(_active, s.Active);
-            var uploading = s.GoingUp || !s.GoingDown;
-            var stalled = s.Motion == SyncMotion.Stalled;
-            TransferArrow.Data = Visuals.Resource<Geometry>(uploading ? "I.Up" : "I.Down");
-            TransferArrow.Stroke = Visuals.Resource<IBrush>(uploading ? "S.Green" : "S.Blue");
-            TransferArrow.Opacity = stalled ? 0.5 : 1;
-            TransferArrow.Classes.Set("rise", uploading && !stalled);
-            TransferArrow.Classes.Set("fall", !uploading && !stalled);
-        }
-
-        // Waiting for the other computer's big batch.
-        WaitPanel.IsVisible = s.IsWaiting;
-        if (s.IsWaiting)
-        {
-            WaitProgress.IsIndeterminate = s.WaitingPercent is null;
-            WaitProgress.Value = s.WaitingPercent ?? 0;
-            WaitText.Text = s.WaitingProgressText;
+            case OverviewAction.Fix:
+                _actions?.FixBlocked();
+                break;
+            case OverviewAction.SyncNow:
+                _actions?.SyncNow();
+                break;
+            case OverviewAction.TogglePause:
+                _actions?.TogglePause();
+                break;
+            case OverviewAction.OpenFolder:
+                _actions?.OpenFolder();
+                break;
+            case OverviewAction.DownloadNow:
+                _actions?.DownloadNow();
+                break;
+            case OverviewAction.CheckNestUpdate:
+                _actions?.UpdateServer();
+                break;
+            case OverviewAction.OpenAccount:
+                OnAccount(this, new Avalonia.Interactivity.RoutedEventArgs());
+                break;
+            case OverviewAction.SeeList:
+            case OverviewAction.Review:
+                Navigate(MainPage.Attention);
+                break;
+            case OverviewAction.SeeActivity:
+                Navigate(MainPage.Activity);
+                break;
         }
     }
 
@@ -319,25 +310,6 @@ public partial class MainWindow : Window
             DevicesEmptyText.Text = "No computers have used this server yet.";
         if (count != _devices.Count)
             UpdatePanels();
-    }
-
-    /// <summary>A soft wash of the status colour across the top of the status card.</summary>
-    private void Tint(string brushKey)
-    {
-        if (_tintKey == brushKey)
-            return;
-        _tintKey = brushKey;
-        var color = (Visuals.Resource<IBrush>(brushKey) as ISolidColorBrush)?.Color ?? Colors.Gray;
-        HeroTint.Background = new LinearGradientBrush
-        {
-            StartPoint = new Avalonia.RelativePoint(0, 0, Avalonia.RelativeUnit.Relative),
-            EndPoint = new Avalonia.RelativePoint(0, 1, Avalonia.RelativeUnit.Relative),
-            GradientStops =
-            {
-                new GradientStop(Color.FromArgb(0x24, color.R, color.G, color.B), 0),
-                new GradientStop(Color.FromArgb(0x00, color.R, color.G, color.B), 0.75),
-            },
-        };
     }
 
     /// <summary>
@@ -365,26 +337,10 @@ public partial class MainWindow : Window
     {
         _activityItems = items;
         RefreshSide();
-        LiveLists.Sync(_recent, items.Take(5).ToList());
+        RefreshOverview();
         if (Page == MainPage.Activity)
             LiveLists.Sync(_activityRows, ActivityDays.Rows(items, DateTimeOffset.Now));
         UpdatePanels();
-    }
-
-    /// <summary>
-    /// Motion for the status badge (its glyph moves in <see cref="Badge"/>): it breathes while waiting for the
-    /// other computer, and pops once whenever the state changes, also between uploading, downloading and stalled.
-    /// </summary>
-    private void Animate(StatusSnapshot s)
-    {
-        StatusBadgeHost.Classes.Set("pulse", s.IsWaiting);
-        var state = s.IsWaiting ? "waiting" : s.Status == Pairnets.Core.Sync.RunnerStatus.Syncing ? s.Motion.ToString() : s.Status.ToString();
-        if (_shownState is not null && _shownState != state && !s.IsWaiting)
-        {
-            StatusBadgeHost.Classes.Remove("pop");
-            Avalonia.Threading.Dispatcher.UIThread.Post(() => StatusBadgeHost.Classes.Add("pop"), Avalonia.Threading.DispatcherPriority.Background);
-        }
-        _shownState = state;
     }
 
     private void OnAddComputer(object? sender, Avalonia.Interactivity.RoutedEventArgs e) => _actions?.AddComputer();
@@ -398,8 +354,7 @@ public partial class MainWindow : Window
             _attention.Add(item);
         _attentionCount = items.Count;
         RefreshSide();
-        AttentionCallout.IsVisible = items.Count > 0;
-        AttentionCalloutText.Text = items.Count == 1 ? "1 thing needs your attention" : $"{items.Count} things need your attention";
+        RefreshOverview();
         UpdatePanels();
     }
 
@@ -407,7 +362,6 @@ public partial class MainWindow : Window
     {
         ActivityPanel.IsVisible = _activityItems.Count > 0;
         ActivityEmpty.IsVisible = _activityItems.Count == 0;
-        RecentEmpty.IsVisible = _recent.Count == 0;
         AttentionList.IsVisible = _attention.Count > 0;
         AttentionEmpty.IsVisible = _attention.Count == 0;
         DevicesPanel.IsVisible = _devices.Count > 0;
@@ -602,24 +556,24 @@ public partial class MainWindow : Window
     }
 
     // Exposed for the headless UI test.
-    internal string HeadlineText => Headline.Text ?? string.Empty;
-    internal bool FixVisible => FixButton.IsVisible;
+    internal string HeadlineText => Overview.TitleText;
+    internal bool FixVisible => _overview?.HasFix == true;
     internal int ActivityCount => _activityItems.Count;
     internal int ActivityRowCount => _activityRows.Count;
-    internal bool TransferVisible => TransferCard.IsVisible;
+    internal bool TransferVisible => Overview.MovingVisible;
     /// <summary>"rise", "fall", "spin-slow" or "none": how the badge's glyph moves.</summary>
-    internal string GlyphMotion => new[] { "rise", "fall", "spin-slow" }.FirstOrDefault(StatusGlyph.Classes.Contains) ?? "none";
+    internal string GlyphMotion => _overview?.Flow switch { OverviewFlow.Up or OverviewFlow.Both => "rise", OverviewFlow.Down => "fall", OverviewFlow.Checking => "spin-slow", _ => "none" };
 
-    internal bool SecondGlyphFalls => StatusGlyph2.IsVisible && StatusGlyph2.Classes.Contains("fall-late");
-    internal bool BadgePulses => StatusBadgeHost.Classes.Contains("pulse");
-    internal string ArrowMotion => TransferArrow.Classes.Contains("rise") ? "rise" : TransferArrow.Classes.Contains("fall") ? "fall" : "none";
-    internal int ActiveRows => _active.Count;
-    internal string MapOtherText => Map.OtherText;
-    internal bool MapHereFlowing => Map.HereFlowing;
+    internal bool SecondGlyphFalls => _overview?.Flow == OverviewFlow.Both;
+    internal bool BadgePulses => Overview.Pulsing;
+    internal string ArrowMotion => _overview?.Flow switch { OverviewFlow.Up or OverviewFlow.Both => "rise", OverviewFlow.Down => "fall", _ => "none" };
+    internal int ActiveRows => Overview.MovingRows;
+    internal string MapOtherText => Overview.OtherText;
+    internal bool MapHereFlowing => Overview.ThisFlowing;
     internal int HistoryRows => _shownFiles.Count;
     internal int VersionRows => _versions.Count;
     internal string RestoreText => RestoreMessage.IsVisible ? RestoreMessageText.Text ?? string.Empty : string.Empty;
-    internal bool CalloutVisible => AttentionCallout.IsVisible;
+    internal bool CalloutVisible => Overview.NeedsVisible;
     internal int DeviceRows => _devices.Count;
     internal bool DevicesShown => DevicesPanel.IsVisible && DevicesPage.IsVisible;
 
@@ -639,7 +593,6 @@ public partial class MainWindow : Window
 
     internal bool SettingsShown => SettingsPage.Content is not null;
 
-    private void OnFix(object? sender, RoutedEventArgs e) => _actions?.FixBlocked();
     private void OnSyncNow(object? sender, RoutedEventArgs e) => _actions?.SyncNow();
     private void OnPause(object? sender, RoutedEventArgs e) => _actions?.TogglePause();
     private void OnOpenFolder(object? sender, RoutedEventArgs e) => _actions?.OpenFolder();
@@ -647,10 +600,6 @@ public partial class MainWindow : Window
     private void OnReportBug(object? sender, RoutedEventArgs e) => _actions?.ReportBug();
     private void OnUpdateNow(object? sender, RoutedEventArgs e) => _actions?.UpdateNow();
     private void OnUpdateLater(object? sender, RoutedEventArgs e) => _actions?.DismissUpdate();
-    private void OnDownloadNow(object? sender, RoutedEventArgs e) => _actions?.DownloadNow();
-    private void OnUpdateServer(object? sender, RoutedEventArgs e) => _actions?.UpdateServer();
-    private void OnSeeAllActivity(object? sender, RoutedEventArgs e) => Navigate(MainPage.Activity);
-    private void OnReviewAttention(object? sender, RoutedEventArgs e) => Navigate(MainPage.Attention);
 
     private void OnRevealActivity(object? sender, RoutedEventArgs e)
     {

@@ -121,12 +121,12 @@ public class DesktopUiTests
         Assert.Equal(0, window.ActivityCount);
 
         window.ShowStatus(StatusSnapshot.Initial with { Status = RunnerStatus.Syncing, CurrentPath = "a/big.bin", Operation = "upload", BytesDone = 5, BytesTotal = 10, FilesTotal = 3 }, "/home/me/Work");
-        Assert.Equal("Uploading", window.HeadlineText); // what it does, not a bare "Syncing"
+        Assert.Equal("Uploading 3 files to your nest", window.HeadlineText); // what it does, not a bare "Syncing"
         Assert.True(window.TransferVisible);
         Assert.False(window.FixVisible);
 
         window.ShowStatus(StatusSnapshot.Initial with { Status = RunnerStatus.Blocked, BlockReason = BlockReason.MassDelete, PendingDeletes = 12 }, null);
-        Assert.Equal("Needs your decision", window.HeadlineText);
+        Assert.Equal("Stopped to keep your files safe", window.HeadlineText);
         Assert.True(window.FixVisible);
         Assert.False(window.TransferVisible);
 
@@ -315,7 +315,7 @@ public class DesktopUiTests
             Active = [new ActiveTransfer("a", "upload", 1, 2)],
             Devices = [new DeviceInfo("mac", DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, true), new DeviceInfo("DESKTOP", DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, true)],
         }, "/tmp/x", "mac");
-        Assert.Equal("DESKTOP: Online", window.MapOtherText);
+        Assert.Equal("DESKTOP: online", window.MapOtherText);
         Assert.True(window.MapHereFlowing);
         window.ShowAttention([new AttentionItem("x", "y", "Show in folder", () => { })]);
         Assert.True(window.CalloutVisible);

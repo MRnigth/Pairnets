@@ -895,4 +895,21 @@
   <Style Selector="RadioButton.dockpage:checked v|LineIcon">
     <Setter Property="Stroke" Value="White" />
   </Style>
+
+  <!-- Overview: the amber button of a stop ("Allow these deletions") -->
+  <Style Selector="Button.amber">
+    <Setter Property="Background" Value="{DynamicResource T.NeedsActive}" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Foreground" Value="{DynamicResource T.NeedsActiveText}" />
+    <Setter Property="FontWeight" Value="Bold" />
+  </Style>
+  <Style Selector="Button.amber /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource T.NeedsActive}" />
+    <Setter Property="Foreground" Value="{DynamicResource T.NeedsActiveText}" />
+  </Style>
+  <Style Selector="Button.amber:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource T.NeedsActive}" />
+    <Setter Property="Foreground" Value="{DynamicResource T.NeedsActiveText}" />
+    <Setter Property="Opacity" Value="0.9" />
+  </Style>
 </Styles>

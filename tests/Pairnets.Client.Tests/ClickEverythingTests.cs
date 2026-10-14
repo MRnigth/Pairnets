@@ -603,7 +603,10 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
         On("Download now anyway", "stop waiting for the other computer", Called("DownloadNow")),
         On("Review", "show the Needs attention page", OnPage(MainPage.Attention)),
         On(["Update server…", "Check for update"], "open the server update window", Called("UpdateServer")),
-        On("See all", "show the Activity page", OnPage(MainPage.Activity)),
+        On(["See all", "See all in Activity"], "show the Activity page", OnPage(MainPage.Activity)),
+        On("See the full list", "show the Needs attention page", OnPage(MainPage.Attention)),
+        new(t => t.Label.StartsWith("+", StringComparison.Ordinal) && t.Label.EndsWith(" more", StringComparison.Ordinal), "show the Devices page", OnPage(MainPage.Devices)),
+        On("Open your account page", "ask the app for the Settings page (the Account page comes later)", Called("ShowSettings")),
 
         // History.
         On("Deleted files", "list the deleted files", c => ((MainWindow)c.Window).DeletedTab.IsChecked == true && ListShows((MainWindow)c.Window, f => f.Deleted)),

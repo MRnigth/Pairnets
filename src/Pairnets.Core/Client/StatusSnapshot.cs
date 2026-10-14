@@ -84,6 +84,12 @@ public sealed record StatusSnapshot(
     /// </summary>
     public IReadOnlyList<BatchFile> Batch { get; init; } = [];
 
+    /// <summary>Changes made here (or on another computer) while a pass ran, which the next pass picks up.</summary>
+    public int PendingChanges { get; init; }
+
+    /// <summary>The first files a blocked pass would delete (the Overview lists a few; <see cref="PendingDeletes"/> is how many in all).</summary>
+    public IReadOnlyList<string> PendingDeletePaths { get; init; } = [];
+
     /// <summary>Who this computer belongs to on the nest (email, how they signed in), or null when not known.</summary>
     public AccountInfo? Account { get; init; }
 
