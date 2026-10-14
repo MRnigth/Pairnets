@@ -155,8 +155,8 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
     {
         try
         {
-            var devices = await Api.GetDevicesAsync(CancellationToken.None).ConfigureAwait(false);
-            Update(s => s with { Devices = devices ?? [], DevicesUnsupported = devices is null });
+            var answer = await Api.GetDevicesWithIconSupportAsync(CancellationToken.None).ConfigureAwait(false);
+            Update(s => s with { Devices = answer?.Devices ?? [], DevicesUnsupported = answer is null, DeviceIconsSupported = answer?.IconsSupported == true });
         }
         catch (PairnetsAuthException ex) when (ex.NeedsSignIn)
         {
@@ -165,6 +165,32 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
         catch (Exception ex) when (ex is PairnetsNetworkException or PairnetsAuthException or PairnetsProtocolException or ObjectDisposedException or OperationCanceledException)
         {
         }
+    }
+
+    /// <summary>
+    /// Saves the icon chosen for a computer on the nest, then re-reads the list. False when the nest is too old
+    /// (<see cref="StatusSnapshot.DeviceIconsSupported"/>) or the value is not an icon; nothing changes then.
+    /// </summary>
+    public async Task<bool> SetDeviceIconAsync(string id, string icon)
+    {
+        if (!DeviceIcon.TryParse(icon, out _) || !_status.DeviceIconsSupported)
+            return false;
+        try
+        {
+            if (!await Api.SetDeviceIconAsync(id, icon, CancellationToken.None).ConfigureAwait(false))
+                return false;
+        }
+        catch (PairnetsAuthException ex) when (ex.NeedsSignIn)
+        {
+            NoticeSignedOut();
+            return false;
+        }
+        catch (Exception ex) when (ex is PairnetsNetworkException or PairnetsAuthException or PairnetsProtocolException or ObjectDisposedException or OperationCanceledException)
+        {
+            return false;
+        }
+        await RefreshDevicesAsync().ConfigureAwait(false);
+        return true;
     }
 
     // ------------------------------------------------------------------ this computer's key and name

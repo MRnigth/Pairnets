@@ -33,6 +33,7 @@ public sealed partial class ApiTour : IAsyncDisposable
         new("GET", "/api/me"),
         new("DELETE", "/api/devices/{id}"),
         new("PATCH", "/api/devices/me"),
+        new("PATCH", "/api/devices/{id}/icon"),
         new("GET", "/api/info"),
         new("POST", "/api/update"),
         new("GET", "/api/devices"),

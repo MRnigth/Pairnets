@@ -1,3 +1,4 @@
+using Pairnets.Core;
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
@@ -6,7 +7,7 @@ using Microsoft.Data.Sqlite;
 namespace Pairnets.Server.Storage;
 
 /// <summary>A computer with its own key. <see cref="Revoked"/> is set once it was removed.</summary>
-public sealed record PairedDevice(string Id, string Name, string? System, DateTimeOffset Created, string ApprovedBy, DateTimeOffset? Revoked)
+public sealed record PairedDevice(string Id, string Name, string? System, DateTimeOffset Created, string ApprovedBy, DateTimeOffset? Revoked, string? Icon = null)
 {
     public bool IsActive => Revoked is null;
 }
@@ -18,7 +19,7 @@ public sealed record PairedDevice(string Id, string Name, string? System, DateTi
 /// </summary>
 public sealed partial class AuthStore
 {
-    public const int SchemaVersion = 4;
+    public const int SchemaVersion = 5;
 
     /// <summary>Prefix of every computer key, so they are easy to recognise (and to keep out of commits).</summary>
     public const string KeyPrefix = "pn_";
@@ -132,6 +133,13 @@ public sealed partial class AuthStore
                     expiresMs INTEGER NOT NULL,
                     usedMs INTEGER NULL);
                 PRAGMA user_version=4;
+                """);
+        }
+        if (version < 5)
+        {
+            Exec(conn, """
+                ALTER TABLE devices ADD COLUMN icon TEXT NULL;
+                PRAGMA user_version=5;
                 """);
         }
     }
@@ -256,6 +264,19 @@ public sealed partial class AuthStore
         return GetDevice(id);
     }
 
+    /// <summary>The icons a computer can have (null = not chosen yet).</summary>
+    public static readonly IReadOnlyList<string> Icons = DeviceIcons.All;
+
+    /// <summary>Sets the icon of an active computer. False when it is gone or <paramref name="icon"/> is not one of <see cref="Icons"/>.</summary>
+    public bool SetDeviceIcon(string id, string icon)
+    {
+        if (!DeviceIcons.IsValid(icon))
+            return false;
+        using var conn = Open();
+        using var cmd = Command(conn, "UPDATE devices SET icon=$icon WHERE id=$id AND revokedMs IS NULL", ("$icon", icon), ("$id", id));
+        return cmd.ExecuteNonQuery() == 1;
+    }
+
     /// <summary>
     /// A name the apps can show and send in a header: trimmed, no control characters, at most 64 characters.
     /// Null when nothing usable is left. "unknown" and "another computer" are reserved.
@@ -285,11 +306,11 @@ public sealed partial class AuthStore
         }
     }
 
-    private const string SelectDevice = "SELECT id, name, system, createdMs, approvedBy, revokedMs FROM devices";
+    private const string SelectDevice = "SELECT id, name, system, createdMs, approvedBy, revokedMs, icon FROM devices";
 
     private static PairedDevice ReadDevice(SqliteDataReader r) => new(
         r.GetString(0), r.GetString(1), r.IsDBNull(2) ? null : r.GetString(2), FromMs(r.GetInt64(3)), r.GetString(4),
-        r.IsDBNull(5) ? null : FromMs(r.GetInt64(5)));
+        r.IsDBNull(5) ? null : FromMs(r.GetInt64(5)), r.IsDBNull(6) ? null : r.GetString(6));
 
     // ------------------------------------------------------------------ settings
 

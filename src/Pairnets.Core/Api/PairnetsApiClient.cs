@@ -163,14 +163,49 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
     }
 
     /// <summary>The computers that use this server, or null for a server from before the Devices list.</summary>
-    public async Task<IReadOnlyList<DeviceInfo>?> GetDevicesAsync(CancellationToken ct)
+    public async Task<IReadOnlyList<DeviceInfo>?> GetDevicesAsync(CancellationToken ct) =>
+        (await GetDevicesWithIconSupportAsync(ct).ConfigureAwait(false))?.Devices;
+
+    /// <summary>
+    /// Like <see cref="GetDevicesAsync"/>, and says whether the nest knows icons. A nest that does always sends an
+    /// "icon" field on each computer (null until one is chosen); an older nest leaves it out. Null for a server
+    /// from before the Devices list.
+    /// </summary>
+    public async Task<DevicesAnswer?> GetDevicesWithIconSupportAsync(CancellationToken ct)
     {
         using var timeout = Linked(ct, TimeSpan.FromSeconds(30));
         using var resp = await SendAsync(() => new HttpRequestMessage(HttpMethod.Get, "api/devices"), HttpCompletionOption.ResponseContentRead, timeout, ct).ConfigureAwait(false);
         if ((int)resp.StatusCode is 404 or 405)
             return null;
         await ThrowForStatusAsync(resp).ConfigureAwait(false);
-        return await ReadJsonAsync<List<DeviceInfo>>(resp, timeout, ct).ConfigureAwait(false);
+        var json = await ReadJsonAsync<JsonElement>(resp, timeout, ct).ConfigureAwait(false);
+        try
+        {
+            var devices = json.Deserialize<List<DeviceInfo>>(PairnetsJson.Options) ?? throw new PairnetsProtocolException("Empty JSON response.");
+            var iconsKnown = json.ValueKind == JsonValueKind.Array && json.EnumerateArray().Any(e =>
+                e.ValueKind == JsonValueKind.Object && e.TryGetProperty("icon", out _));
+            return new DevicesAnswer(devices, iconsKnown);
+        }
+        catch (JsonException ex)
+        {
+            throw new PairnetsProtocolException("Invalid JSON from server: " + ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// Chooses the icon of a computer (one of <see cref="DeviceIcons.All"/>); it is saved on the nest.
+    /// False when the nest is too old to know icons or the computer is gone; throws when the nest refuses the value.
+    /// </summary>
+    public async Task<bool> SetDeviceIconAsync(string id, string icon, CancellationToken ct)
+    {
+        using var timeout = Linked(ct, TimeSpan.FromSeconds(30));
+        using var resp = await SendAsync(() => new HttpRequestMessage(HttpMethod.Patch, "api/devices/" + Uri.EscapeDataString(id) + "/icon")
+            { Content = JsonContent.Create(new DeviceIconRequest(icon), options: PairnetsJson.Options) },
+            HttpCompletionOption.ResponseContentRead, timeout, ct).ConfigureAwait(false);
+        if ((int)resp.StatusCode is 404 or 405)
+            return false;
+        await ThrowForStatusAsync(resp).ConfigureAwait(false);
+        return true;
     }
 
     /// <summary>The server's updater report (Debug mode), or null for a server from before it existed.</summary>

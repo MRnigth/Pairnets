@@ -334,6 +334,9 @@ public sealed record StatusSnapshot(
     /// <summary>True when the server answered but is too old to list the computers that use it.</summary>
     public bool DevicesUnsupported { get; init; }
 
+    /// <summary>True when the nest knows icons (it sends an "icon" field per computer). An older nest: hide the chooser, use <see cref="DeviceIcon.Guess"/>.</summary>
+    public bool DeviceIconsSupported { get; init; }
+
     /// <summary>When a change last arrived from each other computer (by device name).</summary>
     public IReadOnlyDictionary<string, DateTimeOffset> HeardFrom { get; init; } = System.Collections.ObjectModel.ReadOnlyDictionary<string, DateTimeOffset>.Empty;
 
