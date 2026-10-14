@@ -33,8 +33,6 @@ public class XamlParityTests
         // WPF opens the "…" menus from a click handler; in Avalonia the button carries a MenuFlyout instead.
         ("MainWindow", "OnMore", WindowsApp, "the \"…\" menu opens from code"),
         ("TrayPanel", "OnMore", WindowsApp, "the \"…\" menu opens from code"),
-        // WPF fades the rows in from code; Avalonia does it with the "enter" style class.
-        ("MainWindow", "OnRowLoaded", WindowsApp, "rows fade in from code"),
         // Avalonia's menu takes the focus from the tray panel, which hides when it loses focus; the panel stays
         // open while its own menu is open. WPF's ContextMenu does not take the focus.
         ("TrayPanel", "OnMenuOpened", MacLinuxApp, "the panel stays open while its menu is open"),

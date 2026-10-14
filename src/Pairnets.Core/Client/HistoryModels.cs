@@ -16,6 +16,34 @@ public sealed record ServerFile(string Path, bool Deleted, DateTimeOffset Change
     /// <summary>The folder it is in, or "Top folder".</summary>
     public string Folder => PathRules.Parent(Path) ?? "Top folder";
 
+    /// <summary>"today 10:45" (read when drawn): when it was deleted, or last changed.</summary>
+    public string WhenText => Format.Moment(ChangedAt, DateTimeOffset.Now);
+
+    /// <summary>Whole days before the server forgets a deleted file (0 on the last day).</summary>
+    public int DaysLeft(DateTimeOffset now) => (int)Math.Max(0, Math.Ceiling((HistoryQuery.Retention - (now - ChangedAt)).TotalDays));
+
+    /// <summary>"30 days left", "1 day left" (deleted files only; read when drawn).</summary>
+    public string DaysLeftText
+    {
+        get
+        {
+            var days = DaysLeft(DateTimeOffset.Now);
+            return days == 1 ? "1 day left" : days.ToString(System.Globalization.CultureInfo.InvariantCulture) + " days left";
+        }
+    }
+
+    /// <summary>Three days or fewer left: the text turns amber.</summary>
+    public bool ExpiresSoon => Deleted && DaysLeft(DateTimeOffset.Now) <= 3;
+
+    /// <summary>"Reports · today 10:45": the second line of a row in the All files list.</summary>
+    public string FolderAndWhen => Folder + " · " + WhenText;
+
+    /// <summary>"2.4 MB" (empty for a deleted file).</summary>
+    public string SizeText => Deleted ? string.Empty : Format.Bytes(Size);
+
+    /// <summary>"In Reports · 2.4 MB": under the file's name on the right-hand side.</summary>
+    public string InFolderText => (PathRules.Parent(Path) is { } folder ? "In " + folder : "In the top folder") + (Deleted ? string.Empty : " · " + Format.Bytes(Size));
+
     /// <summary>"Deleted 2 days ago · Projects" or "1.2 MB · changed 5 min ago · Projects" (read when drawn).</summary>
     public string Secondary
     {

@@ -199,6 +199,18 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
         return feed.Items;
     }
 
+    /// <summary>Activity with a folder of photos (so a folder row can be opened), a conflict, an upload and a deletion.</summary>
+    private static IReadOnlyList<ActivityItem> RowsWithAFolder()
+    {
+        var feed = new ActivityFeed();
+        feed.Add(new ActivityItem(Now.AddDays(-1), ActivityKind.Uploaded, "Projects/report.docx", "Uploaded"));
+        feed.Add(new ActivityItem(Now.AddHours(-3), ActivityKind.Conflict, "Notes/ideas.md", "Conflict"));
+        feed.Add(new ActivityItem(Now.AddMinutes(-12), ActivityKind.DeletedOnServer, "Projects/2026/budget-draft.xlsx", "Deleted"));
+        for (var i = 0; i < 5; i++)
+            feed.Add(new ActivityItem(Now.AddMinutes(-30).AddSeconds(i * 5), ActivityKind.Uploaded, $"Photos/summer/IMG_{2040 + i}.jpg", "Uploaded"));
+        return feed.Items;
+    }
+
     private const string ConflictTitle = "Conflict copy: report (conflict LAPTOP).docx";
     private const string JoinTitle = "LAPTOP-2 (Windows) wants to join";
 
@@ -505,26 +517,27 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
             main.ShowActivity(Rows());
             main.Navigate(MainPage.Activity);
         }));
-        yield return new Screen(name, "the History page, a deleted file chosen", NewMainWindow, async (b, w) =>
+        yield return new Screen(name, "the History page, the deleted files", NewMainWindow, async (b, w) =>
         {
             var main = (MainWindow)w;
             await Wpf.Ui(() => main.Navigate(MainPage.History));
-            await Wpf.WaitUntil(() => main.FileList.Items.Count > 0, "the History list");
-            await Wpf.Ui(() => main.SelectHistoryRow(0));
-            await Wpf.WaitUntil(() => main.VersionList.Items.Count == 2, "the versions of the chosen file");
+            await Wpf.WaitUntil(() => main.HistoryPane.DeletedRows.Count > 0, "the deleted files");
         });
-        yield return new Screen(name, "the History page, all files", NewMainWindow, async (b, w) =>
+        yield return new Screen(name, "the History page, all files, a file chosen", NewMainWindow, async (b, w) =>
         {
             var main = (MainWindow)w;
             await Wpf.Ui(() => main.Navigate(MainPage.History));
-            await Wpf.WaitUntil(() => main.FileList.Items.Count > 0, "the History list");
-            await Wpf.Ui(() => main.FilesTab.IsChecked = true);
+            await Wpf.WaitUntil(() => main.HistoryPane.DeletedRows.Count > 0, "the History list");
+            await Wpf.Ui(() => main.HistoryPane.ShowAllFiles());
+            await Wpf.WaitUntil(() => main.HistoryPane.FileRows.Count > 0, "the files");
+            await Wpf.Ui(() => main.SelectHistoryRow(0));
+            await Wpf.WaitUntil(() => main.HistoryPane.VersionRowCount == 2, "the versions of the chosen file");
         });
         yield return new Screen(name, "the History page when the server cannot be read", NewMainWindow, async (b, w) =>
         {
             var main = (MainWindow)w;
             await Wpf.Ui(() => main.Navigate(MainPage.History));
-            await Wpf.WaitUntil(() => main.HistoryRetry.IsVisible, "the History page's Try again");
+            await Wpf.WaitUntil(() => main.HistoryPane.HistoryRetry.IsVisible, "the History page's Try again");
         }, BrokenHistory: true);
         yield return new Screen(name, "the Devices page", NewMainWindow, (b, w) => Wpf.Ui(() =>
         {
@@ -547,17 +560,95 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
                 FolderPath, "DESKTOP");
             main.SideFolded = true;
         }));
-        yield return new Screen(name, "the Needs attention page", NewMainWindow, (b, w) => Wpf.Ui(() =>
+        yield return new Screen(name, "the Needs you page", NewMainWindow, (b, w) => Wpf.Ui(() =>
         {
             var main = (MainWindow)w;
             main.ShowAttention(Attention(b));
             main.Navigate(MainPage.Attention);
         }));
+        yield return new Screen(name, "the Needs you page with a computer asking to join, a conflict and a name clash", NewMainWindow, (b, w) => Wpf.Ui(() =>
+        {
+            var main = (MainWindow)w;
+            main.ShowAttention(
+            [
+                new(JoinTitle, "Code RX4K-92TB.", "Review on your nest", () => b.Actions.Calls.Add("attention:" + JoinTitle), AttentionKind.Join, "RX4K-92TB", DateTimeOffset.Now),
+                new(ConflictTitle, "Both computers changed this file.", "Show in folder", () => b.Actions.Calls.Add("attention:" + ConflictTitle), AttentionKind.Conflict, null, DateTimeOffset.Now),
+                new("Docs/Report.TXT", "Same name, other capitals.", "Show in folder", () => b.Actions.Calls.Add("attention:Docs/Report.TXT"), AttentionKind.NameClash),
+            ]);
+            main.Navigate(MainPage.Attention);
+        }));
+        yield return new Screen(name, "the Activity page, with a folder of photos and a conflict", NewMainWindow, (b, w) => Wpf.Ui(() =>
+        {
+            var main = (MainWindow)w;
+            main.ShowActivity(RowsWithAFolder());
+            main.Navigate(MainPage.Activity);
+        }));
+        yield return new Screen(name, "the Activity page, a folder opened", NewMainWindow, (b, w) => Wpf.Ui(() =>
+        {
+            var main = (MainWindow)w;
+            main.ShowActivity(RowsWithAFolder());
+            main.Navigate(MainPage.Activity);
+            main.ActivityPane.OpenFolder("summer");
+        }));
+        yield return new Screen(name, "the Activity page, nothing synced yet", NewMainWindow, (b, w) => Wpf.Ui(() =>
+        {
+            var main = (MainWindow)w;
+            main.ShowStatus(StatusSnapshot.Initial with { Status = RunnerStatus.Idle, Text = "Up to date", Server = CurrentServer, Devices = Devices }, FolderPath, "DESKTOP");
+            main.ShowActivity([]);
+            main.Navigate(MainPage.Activity);
+        }));
+        yield return new Screen(name, "the Devices page, with a computer asking to join", NewMainWindow, (b, w) => Wpf.Ui(() =>
+        {
+            var main = (MainWindow)w;
+            main.ShowStatus(StatusSnapshot.Initial with
+            {
+                Status = RunnerStatus.Idle, Text = "Up to date", Server = CurrentServer, Devices = Devices,
+                JoinRequests = [new JoinRequest("RX4K-92TB", "PC-1", "Windows", Utc)],
+            }, FolderPath, "DESKTOP");
+            main.Navigate(MainPage.Devices);
+        }));
+        yield return new Screen(name, "the Account page", NewMainWindow, (b, w) => Wpf.Ui(() =>
+        {
+            var main = (MainWindow)w;
+            main.ShowStatus(StatusSnapshot.Initial with
+            {
+                Status = RunnerStatus.Idle, Text = "Up to date", Server = CurrentServer, Devices = Devices, NestUrl = "https://nest.example.com",
+                Account = new AccountInfo("alex@example.com", "google", Utc.AddDays(-14)),
+            }, FolderPath, "DESKTOP");
+            main.Navigate(MainPage.Account);
+        }));
     }
 
     private static Func<Check, bool> OnPage(MainPage page) => c => ((MainWindow)c.Window).Page == page;
 
-    private static bool ListShows(MainWindow main, Func<ServerFile, bool> match) => main.FileList.Items.Cast<ServerFile>().All(match);
+    private static bool ListShows(MainWindow main, Func<ServerFile, bool> match) =>
+        (main.HistoryPane.IsDeletedMode ? main.HistoryPane.DeletedRows : main.HistoryPane.FileRows).All(match);
+
+    private static readonly Dictionary<string, ActivityFilter> FilterByLabel = new()
+    {
+        ["All"] = ActivityFilter.All, ["Uploaded"] = ActivityFilter.Uploaded, ["Downloaded"] = ActivityFilter.Downloaded,
+        ["Deleted"] = ActivityFilter.Deleted, ["Conflicts"] = ActivityFilter.Conflicts,
+    };
+
+    private static NoticeKind NoticeOf(string switchName) => switchName switch
+    {
+        "NotifyJoin" => NoticeKind.JoinRequest,
+        "NotifyUpdate" => NoticeKind.Update,
+        _ => NoticeKind.Attention,
+    };
+
+    private static bool ShowsFileInHistory(MainWindow main, string path)
+    {
+        var history = main.HistoryPane;
+        if (main.Page != MainPage.History)
+            return false;
+        return history.IsDeletedMode
+            ? history.DeletedRows.Any(f => f.Path == path)
+            : history.FileList.SelectedItem is ServerFile chosen && chosen.Path == path && history.VersionRowCount > 0;
+    }
+
+    private static IEnumerable<ActivityItem> ShownItems(MainWindow main) =>
+        main.ActivityPane.ShownRows.SelectMany(r => r is ActivityFolder f ? f.Items : r is ActivityItem i ? [i] : []);
 
     private static readonly IReadOnlyList<Rule> MainWindowRules =
     [
@@ -566,12 +657,36 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
             c => c.Bench.Actions.Calls.Items.Contains("attention:" + ((AttentionItem)((Button)c.Target.Element).CommandParameter).Title)),
         new(t => t.Element is Button { CommandParameter: VersionRow }, "restore that version and say so",
             c => c.Bench.History.Restored.Items.Contains((((VersionRow)((Button)c.Target.Element).CommandParameter).Path, ((VersionRow)((Button)c.Target.Element).CommandParameter).Version.Id))
-                && ((MainWindow)c.Window).RestoreMessage.IsVisible),
+                && ((MainWindow)c.Window).HistoryPane.RestoreMessage.IsVisible),
+        new(t => t.Element is Button { CommandParameter: ServerFile }, "restore the newest stored copy of that deleted file and say so",
+            c => c.Bench.History.Restored.Items.Contains((((ServerFile)((Button)c.Target.Element).CommandParameter).Path, "20261006T100000000Z-c0ffee00"))
+                && ((MainWindow)c.Window).HistoryPane.RestoreMessage.IsVisible
+                && ((MainWindow)c.Window).HistoryPane.RestoreText.StartsWith("Restored.", StringComparison.Ordinal)),
         new(t => t.Kind == PressKind.MenuItem && t.Label == "Show in folder", "show that file in Explorer",
             c => c.Bench.Actions.Calls.Items.Contains($"RevealFile({((ActivityItem)c.Item!).Path})")),
-        new(t => t.Kind == PressKind.MenuItem && t.Label == "Show versions…", "open History on that file",
-            c => ((MainWindow)c.Window).Page == MainPage.History
-                && (((MainWindow)c.Window).FileList.SelectedItem as ServerFile)?.Path == ((ActivityItem)c.Item!).Path),
+        new(t => t.Kind == PressKind.MenuItem && t.Label == "Show versions…", "open History on that file (its versions, or the deleted table when it was deleted)",
+            c => ShowsFileInHistory((MainWindow)c.Window, ((ActivityItem)c.Item!).Path!)),
+
+        // The Activity page.
+        new(t => t.Element is RadioButton { GroupName: "activityfilter" }, "show only that kind of row",
+            c => ((MainWindow)c.Window).ActivityPane.Filter == FilterByLabel[c.Target.Label]
+                && ShownItems((MainWindow)c.Window).All(i => ActivityView.Matches(i, FilterByLabel[c.Target.Label]))),
+        new(t => t.Element is Button && t.Label.StartsWith("Show the ", StringComparison.Ordinal), "open the folder row to show its first files",
+            c => ((MainWindow)c.Window).ActivityPane.OpenFolders.Count == 1),
+        new(t => t.Element is Button && t.Label.StartsWith("Hide the ", StringComparison.Ordinal), "close the folder row", c => ((MainWindow)c.Window).ActivityPane.OpenFolders.Count == 0),
+        new(t => t.Element is Button && t.Label.StartsWith("Show all ", StringComparison.Ordinal), "show every file of the folder",
+            c => !Presser.Find(c.Window).Any(x => x.Label.StartsWith("Show all ", StringComparison.Ordinal))),
+        On("Open your folder", "open the synced folder", Called("OpenFolder")),
+
+        // Needs you and the Devices page.
+        new(t => t.Element.Name == "JoinChip", "show the Needs you page", OnPage(MainPage.Attention)),
+        new(t => t.Element.Name == "CardMoreButton", "open the nest's Devices page", Called("ManageDevices")),
+
+        // The Account page.
+        new(t => t.Element.Name is "NotifyAttention" or "NotifyJoin" or "NotifyUpdate", "tell the app to keep or stop that kind of notification",
+            c => c.Bench.Actions.Calls.Items.Contains($"SetNotifies({NoticeOf(c.Target.Element.Name)},{c.WasChecked != true})")),
+        On("Manage your account on sync.pairnets.app", "open the account website", Called("OpenAccountSite")),
+        On("Sign out", "ask the app to sign out", Called("SignOut")),
 
         // The sidebar.
         On("Overview", "show the Overview page", OnPage(MainPage.Overview)),
@@ -585,7 +700,8 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
         On("Fold into the dock", "fold the left side into the dock", c => ((MainWindow)c.Window).SideFolded),
         On("Open the side panel", "open the left side again", c => !((MainWindow)c.Window).SideFolded),
         On("Fold the group", "fold the other computers away", c => ((MainWindow)c.Window).GroupGrid.Visibility != Visibility.Visible),
-        new(t => t.Element.Name is "AccountButton" or "DockAccount", "ask the app for the Settings page (the Account page comes later)", Called("ShowSettings")),
+        new(t => t.Element.Name is "AccountButton" or "DockAccount", "show the Account page, with no page tile chosen",
+            c => OnPage(MainPage.Account)(c) && ((MainWindow)c.Window).NavOverview.IsChecked != true && ((MainWindow)c.Window).NavSettings.IsChecked != true),
         new(t => t.Element.Name is "ThisCard" or "DockThis", "show the Overview page", OnPage(MainPage.Overview)),
         new(t => t.Element.Name is "NestRow" or "DockNest" or "DockOther1" or "DockOther2" or "DockMore" || t.Element.Tag as string == "SideCell",
             "show the Devices page", OnPage(MainPage.Devices)),
@@ -610,16 +726,19 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
         On("Open your account page", "ask the app for the Settings page (the Account page comes later)", Called("ShowSettings")),
 
         // History.
-        On("Deleted files", "list the deleted files", c => ((MainWindow)c.Window).DeletedTab.IsChecked == true && ListShows((MainWindow)c.Window, f => f.Deleted)),
-        On("All files", "list the current files", c => ((MainWindow)c.Window).FilesTab.IsChecked == true && ListShows((MainWindow)c.Window, f => !f.Deleted)),
-        On("HistorySearch", $"list only files matching \"{Presser.TypedText}\"",
-            c => ((MainWindow)c.Window).SearchHint.Visibility != Visibility.Visible && ListShows((MainWindow)c.Window, f => f.Path.Contains(Presser.TypedText, StringComparison.OrdinalIgnoreCase))),
+        On("Deleted files", "list the deleted files", c => ((MainWindow)c.Window).HistoryPane.DeletedTab.IsChecked == true && ListShows((MainWindow)c.Window, f => f.Deleted)),
+        On("All files", "list the current files", c => ((MainWindow)c.Window).HistoryPane.FilesTab.IsChecked == true && ListShows((MainWindow)c.Window, f => !f.Deleted)),
+        new(t => t.Element.Name == "SearchInput", $"list only what matches \"{Presser.TypedText}\"",
+            c => c.Window is MainWindow { Page: MainPage.Activity } activity
+                ? ShownItems(activity).Any() && ShownItems(activity).All(i => ActivityView.Matches(i, Presser.TypedText))
+                : ((MainWindow)c.Window).HistoryPane is { HistorySearch.HintVisible: false } && ListShows((MainWindow)c.Window, f => f.Path.Contains(Presser.TypedText, StringComparison.OrdinalIgnoreCase))),
         On(["Reload from the server", "Try again"], "read the server's files again", c => c.Bench.History.Reads.Items.Contains("files")),
         On("FileList", "show the chosen file and its versions",
-            c => ((MainWindow)c.Window) is { DetailPanel.IsVisible: true } main && main.FileList.SelectedItem is ServerFile f && main.DetailName.Text == f.Name),
+            c => ((MainWindow)c.Window).HistoryPane is { DetailPanel.IsVisible: true } history && history.FileList.SelectedItem is ServerFile f && history.DetailName.Text == f.Name),
+        On("Show in folder", "show the chosen file in Explorer", c => c.Bench.Actions.Calls.Items.Any(x => x.StartsWith("RevealFile(", StringComparison.Ordinal))),
 
         // Devices.
-        On("+ Add a computer…", "explain how to add a computer", Called("AddComputer")),
+        On("Add a computer…", "explain how to add a computer", Called("AddComputer")),
         On("Manage devices on your nest", "open the nest's Devices page", Called("ManageDevices")),
     ];
 
@@ -644,6 +763,7 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
         view.SignOutRequested += () => b.Events.Add("SignOutRequested");
         view.ResetRequested += () => b.Events.Add("ResetRequested");
         view.ManageDevicesRequested += () => b.Events.Add("ManageDevicesRequested");
+        view.ReportBugRequested += () => b.Events.Add("ReportBugRequested");
         view.OpenLinkRequested += b.Opened.Add;
         var host = new Window { Title = "Settings", Width = 700, Height = 560, Content = view };
         ThemeManager.Attach(host);
@@ -662,12 +782,13 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
     private static readonly IReadOnlyList<Rule> SettingsRules =
     [
         Switch,
-        On("Manage devices on the web", "ask the app to open the nest's Devices page", c => c.Bench.Events.Items.Contains("ManageDevicesRequested")),
-        On("Sign out of this computer", "ask the app to sign this computer out", c => c.Bench.Events.Items.Contains("SignOutRequested")),
-        On("Advanced: server address and token ▸", "show the server address and token", c => View(c).AddressFields.IsVisible),
+        On("Manage devices on your nest", "ask the app to open the nest's Devices page", c => c.Bench.Events.Items.Contains("ManageDevicesRequested")),
+        On(["Sign out", "Sign in again"], "ask the app to sign this computer out (it then opens the sign-in)", c => c.Bench.Events.Items.Contains("SignOutRequested")),
+        On("Report a bug…", "ask the app to open a bug report", c => c.Bench.Events.Items.Contains("ReportBugRequested")),
+        On("Advanced: server address and token", "show the server address and token", c => View(c).AddressFields.IsVisible),
         On("Test connection", "test the connection and show the result",
             c => View(c).TestResult.Text is { Length: > 0 } text && !text.StartsWith("Testing", StringComparison.Ordinal), seconds: 20),
-        On("Browse…", "let you choose the folder and show it", c => View(c).FolderBox.Text == c.Bench.Script.Folder),
+        On("Change…", "let you choose the folder and show it", c => View(c).FolderBox.Text == c.Bench.Script.Folder),
         new(t => t.Element is Expander, "open the files-to-ignore section", c => ((Expander)c.Target.Element).IsExpanded != c.WasChecked),
         On("Check now", "look for an app update and say what it found", c => View(c).VersionText.Text.Contains("is available", StringComparison.Ordinal), seconds: 20),
         new(t => t.Element is RadioButton { GroupName: "par" }, "choose that many files at the same time", c => ((RadioButton)c.Target.Element).IsChecked == true),

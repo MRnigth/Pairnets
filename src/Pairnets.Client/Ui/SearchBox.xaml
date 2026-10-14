@@ -1,0 +1,14 @@
+<UserControl x:Class="Pairnets.Client.Ui.SearchBox"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="clr-namespace:Pairnets.Client.Ui"
+             Focusable="False">
+  <Grid>
+    <TextBox x:Name="SearchInput" Style="{StaticResource PgInput}" Padding="38,0,12,0" FontWeight="Normal" FontSize="13"
+             VerticalAlignment="Stretch" VerticalContentAlignment="Center" TextChanged="OnTextChanged" />
+    <ui:LineIcon Width="15" Height="15" Margin="14,0,0,0" HorizontalAlignment="Left" StrokeThickness="2" IsHitTestVisible="False"
+                 Stroke="{DynamicResource T.Muted}" Data="{StaticResource I.Search}" />
+    <TextBlock x:Name="Hint" Margin="38,0,12,0" VerticalAlignment="Center" FontSize="13" IsHitTestVisible="False"
+               Foreground="{DynamicResource T.TextSoft}" TextTrimming="CharacterEllipsis" />
+  </Grid>
+</UserControl>

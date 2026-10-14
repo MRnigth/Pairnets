@@ -4,217 +4,506 @@
              xmlns:ui="clr-namespace:Pairnets.Client.Ui"
              xmlns:core="clr-namespace:Pairnets.Core;assembly=Pairnets.Core">
   <UserControl.Resources>
+    <BooleanToVisibilityConverter x:Key="Visible" />
     <Style x:Key="CardIcon" TargetType="ui:LineIcon">
-      <Setter Property="Width" Value="17" />
-      <Setter Property="Height" Value="17" />
+      <Setter Property="Width" Value="18" />
+      <Setter Property="Height" Value="18" />
       <Setter Property="Margin" Value="0,0,8,0" />
+      <Setter Property="StrokeThickness" Value="1.9" />
       <Setter Property="Stroke" Value="{DynamicResource T.Text}" />
       <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
-    <Style x:Key="Field" TargetType="StackPanel">
-      <Setter Property="Margin" Value="0,10,0,0" />
+    <Style x:Key="Section" TargetType="Border" BasedOn="{StaticResource PgCard}">
+      <Setter Property="Padding" Value="20,16" />
+    </Style>
+    <Style x:Key="RowTitle" TargetType="TextBlock">
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+    <!-- A switch with an off label: shows the number box only while on -->
+    <Style x:Key="OffNote" TargetType="TextBlock" BasedOn="{StaticResource PgSmall}">
+      <Setter Property="FontSize" Value="13" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
   </UserControl.Resources>
 
-  <ScrollViewer x:Name="Scroller" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
-                PreviewMouseWheel="OnScrollWheel">
-  <!-- Inside the main window, which has its own margins. -->
-  <StackPanel x:Name="Form" Margin="0,0,14,16">
-    <!-- Server -->
-    <Border Style="{StaticResource Card}">
+  <Grid>
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="*" />
+    </Grid.RowDefinitions>
+
+    <!-- Header: the title, and Cancel and Save -->
+    <Grid Margin="28,40,28,16">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="*" />
+        <ColumnDefinition Width="Auto" />
+        <ColumnDefinition Width="Auto" />
+      </Grid.ColumnDefinitions>
       <StackPanel>
-        <StackPanel Orientation="Horizontal">
-          <ui:LineIcon Style="{StaticResource CardIcon}" Data="{StaticResource I.Server}" />
-          <TextBlock x:Name="ServerHeading" Style="{StaticResource H2}" Text="Your server" />
-        </StackPanel>
-        <!-- Signed in with this computer's own key: who it is, and signing out. -->
-        <StackPanel x:Name="SignedInPanel" Visibility="Collapsed" Margin="0,10,0,0">
-          <TextBlock x:Name="SignedInText" TextWrapping="Wrap" />
-          <WrapPanel Margin="0,12,0,0">
-            <Button Style="{StaticResource SubtleButton}" Content="Manage devices on the web" Margin="0,0,8,0" Click="OnManageDevices" />
-            <Button Style="{StaticResource SubtleButton}" Content="Sign out of this computer" Click="OnSignOut" />
-          </WrapPanel>
-          <Button x:Name="ShowAddressButton" Style="{StaticResource LinkButton}" Content="Advanced: server address and token ▸" HorizontalAlignment="Left" Margin="0,10,0,0" Click="OnShowAddress" />
-        </StackPanel>
-        <StackPanel x:Name="AddressFields">
-        <StackPanel Style="{StaticResource Field}">
-          <TextBlock Style="{StaticResource Label}" Text="Server address" />
-          <TextBox x:Name="ServerUrlBox" Style="{StaticResource Input}"
-                   ToolTip="For example https://sync.example.com/: the address the install command printed on the server" />
-        </StackPanel>
-        <StackPanel Style="{StaticResource Field}">
-          <TextBlock Style="{StaticResource Label}" Text="Token" />
-          <PasswordBox x:Name="TokenBox" Style="{StaticResource PasswordInput}" ToolTip="Leave empty to keep the saved token" />
-        </StackPanel>
-        <Grid Margin="0,12,0,0">
-          <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="Auto" />
-            <ColumnDefinition Width="*" />
-          </Grid.ColumnDefinitions>
-          <Button x:Name="TestButton" Style="{StaticResource SubtleButton}" Content="Test connection" Click="OnTest" VerticalAlignment="Top" />
-          <Border x:Name="TestChip" Grid.Column="1" Style="{StaticResource Chip}" Margin="10,0,0,0" Visibility="Collapsed" HorizontalAlignment="Left">
-            <TextBlock x:Name="TestResult" TextWrapping="Wrap" />
-          </Border>
-        </Grid>
-        </StackPanel>
+        <TextBlock Style="{StaticResource PgTitle}" Text="Settings" />
+        <TextBlock Style="{StaticResource PgSub}" FontSize="13" Text="Your nest, the folder, and how Pairnets behaves on this computer." />
       </StackPanel>
-    </Border>
-
-    <!-- Folder -->
-    <Border Style="{StaticResource Card}" Margin="0,12,0,0">
-      <StackPanel>
+      <Button Grid.Column="1" Style="{StaticResource PgButton}" Content="Cancel" Padding="16,0" Margin="8,0,0,0" VerticalAlignment="Center" Click="OnCancel" />
+      <Button x:Name="SaveButton" Grid.Column="2" Style="{StaticResource PgPrimary}" IsDefault="True" Padding="18,0" Margin="8,0,0,0" VerticalAlignment="Center" Click="OnSave">
         <StackPanel Orientation="Horizontal">
-          <ui:LineIcon Style="{StaticResource CardIcon}" Data="{StaticResource I.Folder}" />
-          <TextBlock Style="{StaticResource H2}" Text="Folder to keep in sync" />
+          <ui:LineIcon Width="16" Height="16" Margin="0,0,8,0" StrokeThickness="2.4" Stroke="White" Data="{StaticResource I.Check}" />
+          <TextBlock Text="Save" VerticalAlignment="Center" />
         </StackPanel>
-        <Grid Margin="0,10,0,0">
-          <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="*" />
-            <ColumnDefinition Width="Auto" />
-          </Grid.ColumnDefinitions>
-          <TextBox x:Name="FolderBox" Style="{StaticResource Input}" VerticalContentAlignment="Center" />
-          <Button Grid.Column="1" Style="{StaticResource SubtleButton}" Content="Browse…" Margin="8,0,0,0" Click="OnBrowse" />
-        </Grid>
-      </StackPanel>
-    </Border>
+      </Button>
+    </Grid>
 
-    <!-- This computer -->
-    <Border Style="{StaticResource Card}" Margin="0,12,0,0">
-      <StackPanel>
-        <StackPanel Orientation="Horizontal">
-          <ui:LineIcon Style="{StaticResource CardIcon}" Data="{StaticResource I.Computer}" />
-          <TextBlock Style="{StaticResource H2}" Text="This computer" />
-        </StackPanel>
-        <StackPanel Style="{StaticResource Field}">
-          <TextBlock Style="{StaticResource Label}" Text="Device name" />
-          <TextBox x:Name="DeviceBox" Style="{StaticResource Input}" />
-          <TextBlock Style="{StaticResource MutedSmall}" Margin="0,5,0,0" TextWrapping="Wrap"
-                     Text="Shown in conflict file names. Use a different name on each computer." />
-        </StackPanel>
-        <CheckBox x:Name="AutoStartBox" Style="{StaticResource Switch}" Content="Start Pairnets when I sign in to Windows" Margin="0,14,0,0" />
-        <Expander Style="{StaticResource Disclosure}" Header="Advanced: files to ignore" Margin="0,14,0,0">
-          <StackPanel>
-            <TextBox x:Name="IgnoreBox" Style="{StaticResource Input}" Height="76" AcceptsReturn="True"
-                     VerticalScrollBarVisibility="Auto" ToolTip="One pattern per line, e.g. *.bak or node_modules/" />
-            <TextBlock Style="{StaticResource MutedSmall}" Margin="0,5,0,0" TextWrapping="Wrap"
-                       Text="One pattern per line, e.g. *.bak or node_modules/. Temporary and system files (~$*, *.tmp, Thumbs.db, .git/ …) are always ignored." />
-          </StackPanel>
-        </Expander>
-      </StackPanel>
-    </Border>
+    <ScrollViewer x:Name="Scroller" Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" PreviewMouseWheel="OnScrollWheel">
+      <StackPanel x:Name="Form" Margin="28,0,28,24">
 
-    <!-- Updates and speed -->
-    <Border Style="{StaticResource Card}" Margin="0,12,0,0">
-      <StackPanel>
-        <StackPanel Orientation="Horizontal">
-          <ui:LineIcon Style="{StaticResource CardIcon}" Data="{StaticResource I.Bolt}" />
-          <TextBlock Style="{StaticResource H2}" Text="Updates and speed" />
-        </StackPanel>
-
-        <CheckBox x:Name="UpdateBox" Style="{StaticResource Switch}" Content="Check for updates when Pairnets starts" Margin="0,12,0,0" />
-        <TextBlock Style="{StaticResource MutedSmall}" TextWrapping="Wrap" Margin="50,4,0,0"
-                   Text="Looks for a new version on GitHub at start-up and once a day. Nothing is installed until you click Update." />
-        <StackPanel Orientation="Horizontal" Margin="50,4,0,0">
-          <TextBlock x:Name="VersionText" Style="{StaticResource MutedSmall}" VerticalAlignment="Center" />
-          <Button x:Name="CheckNowButton" Style="{StaticResource FlatButton}" Padding="6,3" FontSize="12" Margin="6,0,0,0"
-                  Foreground="{DynamicResource T.Accent}" Content="Check now" Click="OnCheckNow" />
-        </StackPanel>
-        <TextBlock x:Name="ServerVersionText" Style="{StaticResource MutedSmall}" Margin="50,4,0,0" />
-        <CheckBox x:Name="AutoServerBox" Style="{StaticResource Switch}" Content="Update the server automatically" Margin="0,12,0,0" />
-        <TextBlock Style="{StaticResource MutedSmall}" TextWrapping="Wrap" Margin="50,4,0,0"
-                   Text="When this app finds the server on an older version, it updates it without asking (about 30 seconds; your files are not touched)." />
-        <CheckBox x:Name="DebugBox" Style="{StaticResource Switch}" Content="Debug mode" Margin="0,12,0,0" />
-        <TextBlock Style="{StaticResource MutedSmall}" TextWrapping="Wrap" Margin="50,4,0,0"
-                   Text="Writes more detail to the log and shows the server's update log in the update window. Turn it on when updating the server does not work." />
-        <Border Style="{StaticResource Divider}" Margin="0,12,0,0" />
-
-        <CheckBox x:Name="MapSpeedBox" Style="{StaticResource Switch}" Content="Show speed on the map" Margin="0,12,0,0" />
-        <TextBlock Style="{StaticResource MutedSmall}" TextWrapping="Wrap" Margin="50,4,0,0"
-                   Text="Shows how fast files move (MB/s) on the lines between the computers on the overview." />
-        <Border Style="{StaticResource Divider}" Margin="0,12,0,0" />
-
-        <CheckBox x:Name="WaitBox" Style="{StaticResource Switch}" Content="Wait while my other computer uploads many files" Margin="0,12,0,0" />
-        <TextBlock Style="{StaticResource MutedSmall}" TextWrapping="Wrap" Margin="50,4,0,0"
-                   Text="When the other computer sends more than 100 files, download them in one go after it finishes instead of a few at a time." />
-        <Border Style="{StaticResource Divider}" Margin="0,12,0,0" />
-
-        <TextBlock Style="{StaticResource Label}" Text="Files at the same time" Margin="0,12,0,6" />
-        <Border Style="{StaticResource Segments}" HorizontalAlignment="Left">
-          <StackPanel Orientation="Horizontal">
-            <RadioButton x:Name="Par1" Style="{StaticResource Seg}" GroupName="par" Content="1" />
-            <RadioButton x:Name="Par2" Style="{StaticResource Seg}" GroupName="par" Content="2" />
-            <RadioButton x:Name="Par4" Style="{StaticResource Seg}" GroupName="par" Content="4" />
-            <RadioButton x:Name="Par8" Style="{StaticResource Seg}" GroupName="par" Content="8" />
-          </StackPanel>
-        </Border>
-        <TextBlock Style="{StaticResource MutedSmall}" TextWrapping="Wrap" Margin="0,5,0,0"
-                   Text="4 is fastest for most connections. Use 1 on a very slow or metered connection." />
-        <Border Style="{StaticResource Divider}" Margin="0,12,0,0" />
-
-        <TextBlock Style="{StaticResource Label}" Text="Speed limits" Margin="0,12,0,8" />
         <Grid>
           <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="Auto" />
-            <ColumnDefinition Width="90" />
-            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="16" />
+            <ColumnDefinition Width="*" />
           </Grid.ColumnDefinitions>
-          <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-          </Grid.RowDefinitions>
-          <CheckBox x:Name="UpLimitBox" Style="{StaticResource Switch}" Content="Limit upload to the server to" VerticalAlignment="Center" Margin="0,0,12,8" />
-          <TextBox x:Name="UpLimitValue" Grid.Column="1" Style="{StaticResource Input}" Text="5" Margin="0,0,8,8" />
-          <TextBlock Grid.Column="2" Style="{StaticResource Muted}" Text="MB/s" VerticalAlignment="Center" Margin="0,0,0,8" />
-          <CheckBox x:Name="DownLimitBox" Grid.Row="1" Style="{StaticResource Switch}" Content="Limit download from the server to" VerticalAlignment="Center" Margin="0,0,12,0" />
-          <TextBox x:Name="DownLimitValue" Grid.Row="1" Grid.Column="1" Style="{StaticResource Input}" Text="10" Margin="0,0,8,0" />
-          <TextBlock Grid.Row="1" Grid.Column="2" Style="{StaticResource Muted}" Text="MB/s" VerticalAlignment="Center" />
+
+          <!-- ============ Left column ============ -->
+          <StackPanel VerticalAlignment="Top">
+
+            <!-- Your nest -->
+            <Border Style="{StaticResource Section}">
+              <StackPanel>
+                <Grid>
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                  </Grid.ColumnDefinitions>
+                  <ui:LineIcon Style="{StaticResource CardIcon}" Data="{StaticResource I.Nest}" />
+                  <TextBlock x:Name="ServerHeading" Grid.Column="1" Style="{StaticResource PgCardTitle}" Text="Your nest" VerticalAlignment="Center" />
+                  <Border x:Name="ConnectedPill" Grid.Column="2" Height="24" CornerRadius="12" Padding="10,0" Background="{DynamicResource T.OkPill}">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                      <Ellipse x:Name="ConnectedDot" Width="7" Height="7" Margin="0,0,6,0" Fill="{DynamicResource T.OkText}" />
+                      <TextBlock x:Name="ConnectedText" Text="Connected" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource T.OkText}" />
+                    </StackPanel>
+                  </Border>
+                </Grid>
+
+                <Grid Margin="0,14,0,0">
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                  </Grid.ColumnDefinitions>
+                  <Border Width="40" Height="40" CornerRadius="12" Margin="0,0,12,0" Background="{DynamicResource T.AccentSoft}">
+                    <TextBlock x:Name="NestInitial" FontSize="17" FontWeight="ExtraBold" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="{DynamicResource T.AccentInk}" />
+                  </Border>
+                  <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                    <TextBlock x:Name="NestHost" FontSize="15" FontWeight="ExtraBold" TextTrimming="CharacterEllipsis" />
+                    <TextBlock x:Name="SignedInText" Style="{StaticResource PgSub}" Margin="0" FontSize="13" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" />
+                  </StackPanel>
+                </Grid>
+
+                <!-- Signed in with this computer's own key: signing in again or out -->
+                <StackPanel x:Name="SignedInPanel" Visibility="Collapsed">
+                  <StackPanel Orientation="Horizontal" Margin="0,14,0,0">
+                    <Button Style="{StaticResource PgChipButton}" Height="34" Padding="13,0" Margin="0,0,8,0" Click="OnSignOut">
+                      <StackPanel Orientation="Horizontal">
+                        <ui:LineIcon Width="15" Height="15" Margin="0,0,7,0" StrokeThickness="2" Stroke="{DynamicResource T.Text}" Data="{StaticResource I.SignIn}" />
+                        <TextBlock Text="Sign in again" VerticalAlignment="Center" />
+                      </StackPanel>
+                    </Button>
+                    <Button Style="{StaticResource PgChipButton}" Height="34" Padding="13,0" Foreground="{DynamicResource T.BadText}" Click="OnSignOut">
+                      <StackPanel Orientation="Horizontal">
+                        <ui:LineIcon Width="15" Height="15" Margin="0,0,7,0" StrokeThickness="2" Stroke="{DynamicResource T.BadText}" Data="{StaticResource I.SignOut}" />
+                        <TextBlock Text="Sign out" VerticalAlignment="Center" />
+                      </StackPanel>
+                    </Button>
+                  </StackPanel>
+                  <WrapPanel Margin="-6,8,0,0">
+                    <Button Style="{StaticResource PgLink}" Padding="6,4" Content="Manage devices on your nest" Click="OnManageDevices" />
+                    <Button x:Name="ShowAddressButton" Style="{StaticResource PgLink}" Padding="6,4" Content="Advanced: server address and token" Click="OnShowAddress" />
+                  </WrapPanel>
+                </StackPanel>
+
+                <StackPanel x:Name="AddressFields" Margin="0,2,0,0">
+                  <StackPanel Margin="0,12,0,0">
+                    <TextBlock Style="{StaticResource Label}" FontSize="13" FontWeight="Bold" Text="Server address" />
+                    <TextBox x:Name="ServerUrlBox" Style="{StaticResource PgInput}"
+                             ToolTip="For example https://sync.example.com/: the address the install command printed on the server" />
+                  </StackPanel>
+                  <StackPanel Margin="0,12,0,0">
+                    <TextBlock Style="{StaticResource Label}" FontSize="13" FontWeight="Bold" Text="Token" />
+                    <PasswordBox x:Name="TokenBox" Style="{StaticResource PgPassword}" ToolTip="Leave empty to keep the saved token" />
+                  </StackPanel>
+                  <Grid Margin="0,12,0,0">
+                    <Grid.ColumnDefinitions>
+                      <ColumnDefinition Width="Auto" />
+                      <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Button x:Name="TestButton" Style="{StaticResource PgChipButton}" Height="34" Content="Test connection" Click="OnTest" VerticalAlignment="Top" />
+                    <Border x:Name="TestChip" Grid.Column="1" Style="{StaticResource Chip}" Margin="10,0,0,0" Visibility="Collapsed" HorizontalAlignment="Left">
+                      <TextBlock x:Name="TestResult" TextWrapping="Wrap" />
+                    </Border>
+                  </Grid>
+                </StackPanel>
+              </StackPanel>
+            </Border>
+
+            <!-- This computer -->
+            <Border Style="{StaticResource Section}" Margin="0,16,0,0">
+              <StackPanel>
+                <StackPanel Orientation="Horizontal">
+                  <ui:LineIcon Style="{StaticResource CardIcon}" Data="{StaticResource I.Desktop}" />
+                  <TextBlock Style="{StaticResource PgCardTitle}" Text="This computer" VerticalAlignment="Center" />
+                </StackPanel>
+                <StackPanel Margin="0,14,0,0">
+                  <TextBlock FontSize="13" FontWeight="Bold" Margin="0,0,0,6" Text="Folder to keep in sync" />
+                  <Grid>
+                    <Grid.ColumnDefinitions>
+                      <ColumnDefinition Width="*" />
+                      <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <Grid>
+                      <TextBox x:Name="FolderBox" Style="{StaticResource PgInput}" Padding="36,0,12,0" VerticalContentAlignment="Center" />
+                      <ui:LineIcon Width="16" Height="16" Margin="12,0,0,0" HorizontalAlignment="Left" StrokeThickness="1.9" IsHitTestVisible="False"
+                                   Stroke="{DynamicResource T.Folder}" Data="{StaticResource I.Folder}" />
+                    </Grid>
+                    <Button Grid.Column="1" Style="{StaticResource PgChipButton}" Height="38" Content="Change…" Margin="8,0,0,0" Click="OnBrowse" />
+                  </Grid>
+                </StackPanel>
+                <StackPanel Margin="0,14,0,0">
+                  <TextBlock FontSize="13" FontWeight="Bold" Margin="0,0,0,6" Text="This computer's name" />
+                  <TextBox x:Name="DeviceBox" Style="{StaticResource PgInput}" FontSize="14" />
+                  <TextBlock Style="{StaticResource PgSmall}" Margin="0,6,0,0" TextWrapping="Wrap" Text="Shown in conflict file names. Use a different name on each computer." />
+                </StackPanel>
+                <Border Style="{StaticResource PgHair}" Margin="0,14" />
+                <Grid>
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                  </Grid.ColumnDefinitions>
+                  <TextBlock x:Name="AutoStartLabel" Style="{StaticResource RowTitle}" VerticalAlignment="Center" Text="Start Pairnets with Windows" />
+                  <CheckBox x:Name="AutoStartBox" Grid.Column="1" Style="{StaticResource PgSwitch}" AutomationProperties.Name="Start Pairnets with Windows" />
+                </Grid>
+              </StackPanel>
+            </Border>
+
+            <!-- Advanced: files to ignore (folds open) -->
+            <Expander x:Name="IgnoreExpander" Margin="0,16,0,0" Foreground="{DynamicResource T.Text}">
+              <Expander.Header>
+                <Grid>
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                  </Grid.ColumnDefinitions>
+                  <ui:LineIcon Width="16" Height="16" Margin="0,0,12,0" StrokeThickness="2.2" Stroke="{DynamicResource T.Muted}" Data="{StaticResource I.ChevronRight}" RenderTransformOrigin="0.5,0.5">
+                    <ui:LineIcon.Style>
+                      <Style TargetType="ui:LineIcon">
+                        <Style.Triggers>
+                          <DataTrigger Binding="{Binding IsExpanded, RelativeSource={RelativeSource AncestorType=Expander}}" Value="True">
+                            <Setter Property="RenderTransform">
+                              <Setter.Value>
+                                <RotateTransform Angle="90" />
+                              </Setter.Value>
+                            </Setter>
+                          </DataTrigger>
+                        </Style.Triggers>
+                      </Style>
+                    </ui:LineIcon.Style>
+                  </ui:LineIcon>
+                  <StackPanel Grid.Column="1">
+                    <TextBlock Text="Advanced: files to ignore" FontWeight="Bold" Foreground="{DynamicResource T.Text}" />
+                    <TextBlock Style="{StaticResource PgSmall}" Text="Add your own rules on top of the usual ones." />
+                  </StackPanel>
+                  <TextBlock x:Name="IgnoreCount" Grid.Column="2" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource T.TextSoft}" VerticalAlignment="Center" />
+                </Grid>
+              </Expander.Header>
+              <Expander.Template>
+                <ControlTemplate TargetType="Expander">
+                  <Border Style="{StaticResource PgCard}">
+                    <StackPanel>
+                      <ToggleButton IsChecked="{Binding IsExpanded, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}" Cursor="Hand" FocusVisualStyle="{x:Null}">
+                        <ToggleButton.Template>
+                          <ControlTemplate TargetType="ToggleButton">
+                            <Border Background="Transparent" Padding="20,14">
+                              <ContentPresenter />
+                            </Border>
+                          </ControlTemplate>
+                        </ToggleButton.Template>
+                        <ContentPresenter ContentSource="Header" />
+                      </ToggleButton>
+                      <ContentPresenter x:Name="body" Margin="20,0,20,16" Visibility="Collapsed" />
+                    </StackPanel>
+                  </Border>
+                  <ControlTemplate.Triggers>
+                    <Trigger Property="IsExpanded" Value="True">
+                      <Setter TargetName="body" Property="Visibility" Value="Visible" />
+                    </Trigger>
+                  </ControlTemplate.Triggers>
+                </ControlTemplate>
+              </Expander.Template>
+              <StackPanel>
+                <TextBox x:Name="IgnoreBox" Style="{StaticResource PgInput}" Height="96" AcceptsReturn="True" VerticalContentAlignment="Top" Padding="12,8"
+                         VerticalScrollBarVisibility="Auto" ToolTip="One rule per line, e.g. *.bak or node_modules/" />
+                <TextBlock Style="{StaticResource PgSmall}" Margin="0,6,0,0" TextWrapping="Wrap"
+                           Text="One rule per line, e.g. *.bak or node_modules/. Files that match are not synced. Temporary and system files (~$*, *.tmp, Thumbs.db, .git/ …) are always ignored." />
+              </StackPanel>
+            </Expander>
+          </StackPanel>
+
+          <!-- ============ Right column ============ -->
+          <StackPanel Grid.Column="2" VerticalAlignment="Top">
+
+            <!-- Updates -->
+            <Border Style="{StaticResource Section}">
+              <StackPanel>
+                <Grid>
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                  </Grid.ColumnDefinitions>
+                  <ui:LineIcon Style="{StaticResource CardIcon}" Data="{StaticResource I.Download}" />
+                  <TextBlock Grid.Column="1" Style="{StaticResource PgCardTitle}" Text="Updates" VerticalAlignment="Center" />
+                  <TextBlock x:Name="AppVersionText" Grid.Column="2" Style="{StaticResource PgSmall}" VerticalAlignment="Center" />
+                </Grid>
+                <Grid Margin="0,14,0,0">
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                  </Grid.ColumnDefinitions>
+                  <StackPanel VerticalAlignment="Center">
+                    <TextBlock Style="{StaticResource RowTitle}" Text="Check for updates by itself" />
+                    <TextBlock Style="{StaticResource PgSmall}" TextWrapping="Wrap" Text="Looks once a day. You choose when to install." />
+                  </StackPanel>
+                  <CheckBox x:Name="UpdateBox" Grid.Column="1" Style="{StaticResource PgSwitch}" Margin="16,0,0,0" AutomationProperties.Name="Check for updates by itself" />
+                </Grid>
+                <Border CornerRadius="12" Padding="12,7,7,7" Margin="0,14,0,0" Background="{DynamicResource T.Chip}">
+                  <Grid>
+                    <Grid.ColumnDefinitions>
+                      <ColumnDefinition Width="Auto" />
+                      <ColumnDefinition Width="*" />
+                      <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <ui:LineIcon Width="16" Height="16" Margin="0,0,10,0" StrokeThickness="2.2" Stroke="{DynamicResource T.OkText}" Data="{StaticResource I.CircleCheck}" />
+                    <TextBlock x:Name="VersionText" Grid.Column="1" FontSize="13" Foreground="{DynamicResource T.Muted}" VerticalAlignment="Center" TextWrapping="Wrap" />
+                    <Button x:Name="CheckNowButton" Grid.Column="2" Style="{StaticResource PgSmallButton}" Height="30" Margin="10,0,0,0" Click="OnCheckNow">
+                      <StackPanel Orientation="Horizontal">
+                        <ui:LineIcon Width="14" Height="14" Margin="0,0,6,0" StrokeThickness="2.4" Stroke="{DynamicResource T.Text}" Data="{StaticResource I.Refresh}" />
+                        <TextBlock Text="Check now" VerticalAlignment="Center" />
+                      </StackPanel>
+                    </Button>
+                  </Grid>
+                </Border>
+                <Border Style="{StaticResource PgHair}" Margin="0,14" />
+                <Grid>
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                  </Grid.ColumnDefinitions>
+                  <StackPanel VerticalAlignment="Center">
+                    <TextBlock Style="{StaticResource RowTitle}" Text="Update the nest by itself" />
+                    <TextBlock Style="{StaticResource PgSmall}" TextWrapping="Wrap" Text="Your files are never touched." />
+                    <TextBlock x:Name="ServerVersionText" Style="{StaticResource PgSmall}" TextWrapping="Wrap" Margin="0,2,0,0" />
+                  </StackPanel>
+                  <CheckBox x:Name="AutoServerBox" Grid.Column="1" Style="{StaticResource PgSwitch}" Margin="16,0,0,0" AutomationProperties.Name="Update the nest by itself" />
+                </Grid>
+              </StackPanel>
+            </Border>
+
+            <!-- Speed -->
+            <Border Style="{StaticResource Section}" Margin="0,16,0,0">
+              <StackPanel>
+                <StackPanel Orientation="Horizontal">
+                  <ui:LineIcon Style="{StaticResource CardIcon}" Data="{StaticResource I.Gauge}" />
+                  <TextBlock Style="{StaticResource PgCardTitle}" Text="Speed" VerticalAlignment="Center" />
+                </StackPanel>
+                <Grid Margin="0,14,0,0">
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                  </Grid.ColumnDefinitions>
+                  <StackPanel VerticalAlignment="Center">
+                    <TextBlock Style="{StaticResource RowTitle}" Text="Wait when another computer sends a lot" />
+                    <TextBlock Style="{StaticResource PgSmall}" TextWrapping="Wrap" Text="Over 100 files: get them in one go at the end." />
+                  </StackPanel>
+                  <CheckBox x:Name="WaitBox" Grid.Column="1" Style="{StaticResource PgSwitch}" Margin="16,0,0,0" AutomationProperties.Name="Wait when another computer sends a lot" />
+                </Grid>
+                <Grid Margin="0,14,0,0">
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                  </Grid.ColumnDefinitions>
+                  <StackPanel VerticalAlignment="Center">
+                    <TextBlock Style="{StaticResource RowTitle}" Text="Files at the same time" />
+                    <TextBlock Style="{StaticResource PgSmall}" TextWrapping="Wrap" Text="4 suits most connections. Use 1 on a slow or metered one." />
+                  </StackPanel>
+                  <Border Grid.Column="1" Margin="16,0,0,0" CornerRadius="11" Padding="2" BorderThickness="1" VerticalAlignment="Center"
+                          Background="{DynamicResource T.Chip}" BorderBrush="{DynamicResource T.Border}">
+                    <StackPanel Orientation="Horizontal">
+                      <RadioButton x:Name="Par1" Style="{StaticResource PgSeg}" GroupName="par" Content="1" />
+                      <RadioButton x:Name="Par2" Style="{StaticResource PgSeg}" GroupName="par" Content="2" />
+                      <RadioButton x:Name="Par4" Style="{StaticResource PgSeg}" GroupName="par" Content="4" />
+                      <RadioButton x:Name="Par8" Style="{StaticResource PgSeg}" GroupName="par" Content="8" />
+                    </StackPanel>
+                  </Border>
+                </Grid>
+                <Grid Margin="0,14,0,0">
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                  </Grid.ColumnDefinitions>
+                  <StackPanel VerticalAlignment="Center">
+                    <TextBlock Style="{StaticResource RowTitle}" Text="Show speed on the map" />
+                    <TextBlock Style="{StaticResource PgSmall}" TextWrapping="Wrap" Text="Shows how fast files move (MB/s) on the lines between the computers." />
+                  </StackPanel>
+                  <CheckBox x:Name="MapSpeedBox" Grid.Column="1" Style="{StaticResource PgSwitch}" Margin="16,0,0,0" AutomationProperties.Name="Show speed on the map" />
+                </Grid>
+                <Border Style="{StaticResource PgHair}" Margin="0,14" />
+                <Grid>
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                  </Grid.ColumnDefinitions>
+                  <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                  </Grid.RowDefinitions>
+                  <CheckBox x:Name="UpLimitBox" Style="{StaticResource PgSwitch}" AutomationProperties.Name="Limit upload" Margin="0,0,12,10" />
+                  <TextBlock Grid.Column="1" Style="{StaticResource RowTitle}" VerticalAlignment="Center" Margin="0,0,0,10" Text="Limit upload to" />
+                  <StackPanel Grid.Column="2" Orientation="Horizontal" Margin="0,0,0,10">
+                    <TextBox x:Name="UpLimitValue" Style="{StaticResource PgInput}" Width="60" MinHeight="34" Height="34" Padding="10,0" TextAlignment="Right" Text="5" FontWeight="Bold"
+                             Visibility="{Binding IsChecked, ElementName=UpLimitBox, Converter={StaticResource Visible}}" />
+                    <TextBlock x:Name="UpLimitUnit" Text="MB/s" Style="{StaticResource OffNote}" Margin="8,0,0,0"
+                               Visibility="{Binding IsChecked, ElementName=UpLimitBox, Converter={StaticResource Visible}}" />
+                    <TextBlock x:Name="UpLimitOff" Text="No limit" Style="{StaticResource OffNote}">
+                      <TextBlock.Visibility>
+                        <Binding Path="IsChecked" ElementName="UpLimitBox">
+                          <Binding.Converter>
+                            <ui:InverseVisibilityConverter />
+                          </Binding.Converter>
+                        </Binding>
+                      </TextBlock.Visibility>
+                    </TextBlock>
+                  </StackPanel>
+                  <CheckBox x:Name="DownLimitBox" Grid.Row="1" Style="{StaticResource PgSwitch}" AutomationProperties.Name="Limit download" Margin="0,0,12,0" />
+                  <TextBlock Grid.Row="1" Grid.Column="1" Style="{StaticResource RowTitle}" VerticalAlignment="Center" Text="Limit download to" />
+                  <StackPanel Grid.Row="1" Grid.Column="2" Orientation="Horizontal">
+                    <TextBox x:Name="DownLimitValue" Style="{StaticResource PgInput}" Width="60" MinHeight="34" Height="34" Padding="10,0" TextAlignment="Right" Text="10" FontWeight="Bold"
+                             Visibility="{Binding IsChecked, ElementName=DownLimitBox, Converter={StaticResource Visible}}" />
+                    <TextBlock x:Name="DownLimitUnit" Text="MB/s" Style="{StaticResource OffNote}" Margin="8,0,0,0"
+                               Visibility="{Binding IsChecked, ElementName=DownLimitBox, Converter={StaticResource Visible}}" />
+                    <TextBlock x:Name="DownLimitOff" Text="No limit" Style="{StaticResource OffNote}">
+                      <TextBlock.Visibility>
+                        <Binding Path="IsChecked" ElementName="DownLimitBox">
+                          <Binding.Converter>
+                            <ui:InverseVisibilityConverter />
+                          </Binding.Converter>
+                        </Binding>
+                      </TextBlock.Visibility>
+                    </TextBlock>
+                  </StackPanel>
+                </Grid>
+                <TextBlock Style="{StaticResource PgSmall}" Margin="0,8,0,0" TextWrapping="Wrap"
+                           Text="Files from your other computers always come through your nest, so the download limit covers them too." />
+              </StackPanel>
+            </Border>
+          </StackPanel>
         </Grid>
-        <TextBlock Style="{StaticResource MutedSmall}" TextWrapping="Wrap" Margin="0,8,0,0"
-                   Text="Files from your other computers always come through the server, so the download limit covers them too. All files at once stay under the limit together." />
-      </StackPanel>
-    </Border>
 
-    <!-- Start over -->
-    <Border Style="{StaticResource Card}" Margin="0,12,0,0">
-      <StackPanel>
-        <StackPanel Orientation="Horizontal">
-          <ui:LineIcon Style="{StaticResource CardIcon}" Data="{StaticResource I.Trash}" />
-          <TextBlock Style="{StaticResource H2}" Text="Start over" />
-        </StackPanel>
-        <TextBlock Style="{StaticResource MutedSmall}" TextWrapping="Wrap" Margin="0,8,0,0"
-                   Text="Forgets every setting, signs this computer out of your nest and starts again from the sign-in screen. The files in your sync folder are never deleted." />
-        <Button x:Name="ResetButton" Style="{StaticResource DangerButton}" Content="Reset this app…" HorizontalAlignment="Left" Margin="0,12,0,0" Click="OnReset" />
-      </StackPanel>
-    </Border>
+        <!-- Help: a bug report, and debug mode -->
+        <Border Style="{StaticResource PgCard}" Margin="0,16,0,0">
+          <Grid>
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <Button x:Name="ReportBugButton" Style="{StaticResource PgFlat}" Click="OnReportBug">
+              <Grid Margin="20,14">
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="Auto" />
+                  <ColumnDefinition Width="*" />
+                  <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <Border Style="{StaticResource PgChipSquare}" Margin="0,0,12,0">
+                  <ui:LineIcon Width="17" Height="17" StrokeThickness="1.9" Stroke="{DynamicResource T.Muted}" Data="{StaticResource I.Bug}" />
+                </Border>
+                <StackPanel Grid.Column="1" VerticalAlignment="Center" HorizontalAlignment="Left">
+                  <TextBlock Text="Report a bug…" FontWeight="Bold" Foreground="{DynamicResource T.Text}" />
+                  <TextBlock Style="{StaticResource PgSmall}" Text="Makes a report to paste. Nothing is sent." />
+                </StackPanel>
+                <ui:LineIcon Grid.Column="2" Width="16" Height="16" StrokeThickness="2.2" Stroke="{DynamicResource T.TextSoft}" Data="{StaticResource I.ChevronRight}" />
+              </Grid>
+            </Button>
+            <Border Grid.Column="1" BorderThickness="1,0,0,0" BorderBrush="{DynamicResource T.Border}" Padding="20,14">
+              <Grid>
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="Auto" />
+                  <ColumnDefinition Width="*" />
+                  <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <Border Style="{StaticResource PgChipSquare}" Margin="0,0,12,0">
+                  <ui:LineIcon Width="17" Height="17" StrokeThickness="2" Stroke="{DynamicResource T.Muted}" Data="{StaticResource I.Terminal}" />
+                </Border>
+                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                  <TextBlock Text="Debug mode" FontWeight="Bold" />
+                  <TextBlock Style="{StaticResource PgSmall}" TextWrapping="Wrap" Text="Writes more detail to the log." />
+                </StackPanel>
+                <CheckBox x:Name="DebugBox" Grid.Column="2" Style="{StaticResource PgSwitch}" Margin="12,0,0,0" AutomationProperties.Name="Debug mode" />
+              </Grid>
+            </Border>
+          </Grid>
+        </Border>
 
-    <!-- About: version and licence, and the website's help and legal pages (each link's CommandParameter is its address) -->
-    <Border Style="{StaticResource Card}" Margin="0,12,0,0">
-      <StackPanel>
-        <StackPanel Orientation="Horizontal">
-          <ui:LineIcon Style="{StaticResource CardIcon}" Data="{StaticResource I.Info}" />
-          <TextBlock Style="{StaticResource H2}" Text="About Pairnets" />
-        </StackPanel>
-        <TextBlock x:Name="AboutText" Style="{StaticResource MutedSmall}" TextWrapping="Wrap" Margin="0,8,0,0" />
-        <WrapPanel x:Name="AboutLinks" Margin="-6,8,0,0">
-          <Button x:Name="DonateLink" Style="{StaticResource LinkButton}" Content="Support Pairnets ♥" CommandParameter="{x:Static core:PairnetsLinks.Donate}" Click="OnAboutLink" />
-          <Button x:Name="HelpLink" Style="{StaticResource LinkButton}" Content="Help" CommandParameter="{x:Static core:PairnetsLinks.Help}" Click="OnAboutLink" />
-          <Button x:Name="FaqLink" Style="{StaticResource LinkButton}" Content="FAQ" CommandParameter="{x:Static core:PairnetsLinks.Faq}" Click="OnAboutLink" />
-          <Button x:Name="ContactLink" Style="{StaticResource LinkButton}" Content="Contact" CommandParameter="{x:Static core:PairnetsLinks.Contact}" Click="OnAboutLink" />
-          <Button x:Name="PrivacyLink" Style="{StaticResource LinkButton}" Content="Privacy" CommandParameter="{x:Static core:PairnetsLinks.Privacy}" Click="OnAboutLink" />
-          <Button x:Name="TermsLink" Style="{StaticResource LinkButton}" Content="Terms" CommandParameter="{x:Static core:PairnetsLinks.Terms}" Click="OnAboutLink" />
-          <Button x:Name="GuidelinesLink" Style="{StaticResource LinkButton}" Content="Guidelines" CommandParameter="{x:Static core:PairnetsLinks.Guidelines}" Click="OnAboutLink" />
-          <Button x:Name="CookiesLink" Style="{StaticResource LinkButton}" Content="Cookie settings" CommandParameter="{x:Static core:PairnetsLinks.Cookies}" Click="OnAboutLink" />
-          <Button x:Name="SecurityLink" Style="{StaticResource LinkButton}" Content="Security" CommandParameter="{x:Static core:PairnetsLinks.Security}" Click="OnAboutLink" />
-          <Button x:Name="LicensesLink" Style="{StaticResource LinkButton}" Content="Open-source licences" CommandParameter="{x:Static core:PairnetsLinks.Licenses}" Click="OnAboutLink" />
-          <Button x:Name="DeleteAccountLink" Style="{StaticResource LinkButton}" Content="Delete my account" CommandParameter="{x:Static core:PairnetsLinks.DeleteAccount}" Click="OnAboutLink" />
-        </WrapPanel>
-      </StackPanel>
-    </Border>
+        <!-- Start over -->
+        <Border Style="{StaticResource PgCard}" Padding="20,18" Margin="0,16,0,0" BorderBrush="{DynamicResource T.BadBorder}">
+          <Grid>
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="Auto" />
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <Border Width="44" Height="44" CornerRadius="14" Margin="0,0,16,0" Background="{DynamicResource T.BadPill}">
+              <ui:LineIcon Width="22" Height="22" StrokeThickness="2.1" Stroke="{DynamicResource T.BadText}" Data="{StaticResource I.Reset}" />
+            </Border>
+            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+              <TextBlock Style="{StaticResource PgCardTitle}" Text="Start over" />
+              <TextBlock Style="{StaticResource PgSub}" FontSize="13" Margin="0,2,0,0"
+                         Text="Forgets every setting and signs this computer out of your nest, then opens the sign-in screen so you can set it up again." />
+              <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                <ui:LineIcon Width="16" Height="16" Margin="0,0,6,0" StrokeThickness="2.2" Stroke="{DynamicResource T.OkText}" Data="{StaticResource I.Shield}" />
+                <TextBlock x:Name="StayText" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource T.OkText}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+              </StackPanel>
+            </StackPanel>
+            <Button x:Name="ResetButton" Grid.Column="2" Style="{StaticResource PgDanger}" Content="Reset this app…" Padding="16,0" Margin="16,0,0,0" VerticalAlignment="Center" Click="OnReset" />
+          </Grid>
+        </Border>
 
-    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
-      <Button Style="{StaticResource SubtleButton}" Content="Cancel" Margin="0,0,8,0" Click="OnCancel" />
-      <Button x:Name="SaveButton" Style="{StaticResource AccentButton}" Content="Save" IsDefault="True" Click="OnSave" />
-    </StackPanel>
-  </StackPanel>
-  </ScrollViewer>
+        <!-- About: version and licence, and the website's help and legal pages (each link's CommandParameter is its address) -->
+        <Border Style="{StaticResource Section}" Margin="0,16,0,0">
+          <StackPanel>
+            <StackPanel Orientation="Horizontal">
+              <ui:LineIcon Style="{StaticResource CardIcon}" Data="{StaticResource I.InfoCircle}" />
+              <TextBlock Style="{StaticResource PgCardTitle}" Text="About Pairnets" VerticalAlignment="Center" />
+            </StackPanel>
+            <TextBlock x:Name="AboutText" Style="{StaticResource PgSmall}" TextWrapping="Wrap" Margin="0,8,0,0" />
+            <WrapPanel x:Name="AboutLinks" Margin="-6,8,0,0">
+              <Button x:Name="DonateLink" Style="{StaticResource PgLink}" Padding="6,4" Content="Support Pairnets ♥" CommandParameter="{x:Static core:PairnetsLinks.Donate}" Click="OnAboutLink" />
+              <Button x:Name="HelpLink" Style="{StaticResource PgLink}" Padding="6,4" Content="Help" CommandParameter="{x:Static core:PairnetsLinks.Help}" Click="OnAboutLink" />
+              <Button x:Name="FaqLink" Style="{StaticResource PgLink}" Padding="6,4" Content="FAQ" CommandParameter="{x:Static core:PairnetsLinks.Faq}" Click="OnAboutLink" />
+              <Button x:Name="ContactLink" Style="{StaticResource PgLink}" Padding="6,4" Content="Contact" CommandParameter="{x:Static core:PairnetsLinks.Contact}" Click="OnAboutLink" />
+              <Button x:Name="PrivacyLink" Style="{StaticResource PgLink}" Padding="6,4" Content="Privacy" CommandParameter="{x:Static core:PairnetsLinks.Privacy}" Click="OnAboutLink" />
+              <Button x:Name="TermsLink" Style="{StaticResource PgLink}" Padding="6,4" Content="Terms" CommandParameter="{x:Static core:PairnetsLinks.Terms}" Click="OnAboutLink" />
+              <Button x:Name="GuidelinesLink" Style="{StaticResource PgLink}" Padding="6,4" Content="Guidelines" CommandParameter="{x:Static core:PairnetsLinks.Guidelines}" Click="OnAboutLink" />
+              <Button x:Name="CookiesLink" Style="{StaticResource PgLink}" Padding="6,4" Content="Cookie settings" CommandParameter="{x:Static core:PairnetsLinks.Cookies}" Click="OnAboutLink" />
+              <Button x:Name="SecurityLink" Style="{StaticResource PgLink}" Padding="6,4" Content="Security" CommandParameter="{x:Static core:PairnetsLinks.Security}" Click="OnAboutLink" />
+              <Button x:Name="LicensesLink" Style="{StaticResource PgLink}" Padding="6,4" Content="Open-source licences" CommandParameter="{x:Static core:PairnetsLinks.Licenses}" Click="OnAboutLink" />
+              <Button x:Name="DeleteAccountLink" Style="{StaticResource PgLink}" Padding="6,4" Content="Delete my account" CommandParameter="{x:Static core:PairnetsLinks.DeleteAccount}" Click="OnAboutLink" />
+            </WrapPanel>
+          </StackPanel>
+        </Border>
+
+        <TextBlock x:Name="FooterText" Style="{StaticResource PgSmall}" HorizontalAlignment="Center" Margin="0,16,0,0" />
+      </StackPanel>
+    </ScrollViewer>
+  </Grid>
 </UserControl>

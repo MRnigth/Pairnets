@@ -8,6 +8,38 @@ public sealed record ActivityFolder(string Folder, ActivityKind Kind, DateTimeOf
 {
     public string Primary => Folder;
 
+    /// <summary>The folder's own name ("Holiday 2026"), the last part of <see cref="Folder"/>.</summary>
+    public string Name => Paths.PathRules.FileName(Folder);
+
+    /// <summary>The folder it is in ("Photos"), or empty at the top.</summary>
+    public string Where => Paths.PathRules.Parent(Folder) ?? string.Empty;
+
+    /// <summary>"37 photos" when every file is a picture, otherwise "12 files".</summary>
+    public string CountText
+    {
+        get
+        {
+            var n = Format.Count(Items.Count);
+            return Items.All(i => IsPicture(i.Path)) ? n + " photos" : n + " files";
+        }
+    }
+
+    /// <summary>The row's second line: "Uploaded · Photos" or "Deleted here · Archive".</summary>
+    public string Detail
+    {
+        get
+        {
+            var title = Items.Count > 0 ? Items[0].Title : Kind.ToString();
+            return Where.Length > 0 ? title + " · " + Where : title;
+        }
+    }
+
+    /// <summary>The files shown when the row is opened before "Show all".</summary>
+    public const int Preview = 2;
+
+    private static bool IsPicture(string? path) =>
+        path is not null && System.IO.Path.GetExtension(path).ToLowerInvariant() is ".jpg" or ".jpeg" or ".png" or ".gif" or ".heic" or ".webp" or ".bmp" or ".tif" or ".tiff" or ".raw" or ".cr2" or ".nef" or ".arw";
+
     /// <summary>"18 files uploaded".</summary>
     public string Secondary => $"{Items.Count} files {Verb}";
 

@@ -189,13 +189,14 @@ public sealed class TrayControllerTests
         var main = app.Tray.Window!;
         await app.Press(main, "History");
         await app.Press(main, "All files");
-        await app.WaitUntil(() => main.FileList.Items.Cast<ServerFile>().Any(f => f.Path == "notes.txt"), "notes.txt in History");
-        await app.Wpf.Ui(() => main.FileList.SelectedItem = main.FileList.Items.Cast<ServerFile>().Single(f => f.Path == "notes.txt"));
-        await app.WaitUntil(() => main.VersionList.Items.Count == 1, "the older version of notes.txt");
+        var history = main.HistoryPane;
+        await app.WaitUntil(() => history.FileRows.Any(f => f.Path == "notes.txt"), "notes.txt in History");
+        await app.Wpf.Ui(() => history.FileList.SelectedItem = history.FileRows.Single(f => f.Path == "notes.txt"));
+        await app.WaitUntil(() => history.VersionRowCount == 1, "the older version of notes.txt");
         await app.Press(main, "Restore");
 
-        await app.WaitUntil(() => main.RestoreMessage.IsVisible, "History to say it restored the file");
-        Assert.StartsWith("Restored.", await app.Wpf.Ui(() => main.RestoreMessageText.Text));
+        await app.WaitUntil(() => history.RestoreMessage.IsVisible, "History to say it restored the file");
+        Assert.StartsWith("Restored.", await app.Wpf.Ui(() => history.RestoreText));
         // The app may still be writing the file when we look (Windows then refuses the read): look again.
         await app.WaitUntil(() =>
         {
@@ -279,7 +280,7 @@ public sealed class TrayControllerTests
         await app.Menu("Settings…");
         var main = app.Tray.Window!;
         app.Dialogs.When("Sign out of this computer?", MessageBoxResult.OK);
-        await app.Press(main, "Sign out of this computer");
+        await app.Press(main, "Sign out");
 
         await app.Showing<SettingsWindow>("the sign-in window after signing out");
         Assert.False(Auth(nest).GetDevice(app.Grant!.Id)!.IsActive); // its key no longer works on the nest
@@ -442,13 +443,14 @@ public sealed class TrayControllerTests
         var main = app.Tray.Window!;
 
         await app.Press(main, "Devices");
-        await app.WaitUntil(() => main.DevicesList.Items.Cast<DeviceRowView>().Any(d => d.Title.Contains("DESKTOP", StringComparison.Ordinal)), "this computer in the Devices list");
-        await app.Press(main, "+ Add a computer…");
+        await app.WaitUntil(() => main.DevicesPane.Cards.Any(c => c.NameLabel.Contains("DESKTOP", StringComparison.Ordinal)), "this computer in the Devices grid");
+        await app.Press(main, "Add a computer…");
         var steps = Assert.Single(app.Dialogs.Asked.Items);
         Assert.Contains("type localhost and press \"Sign in with your browser\"", steps.Text);
         await app.Press(main, "Manage devices on your nest");
         Assert.Equal("https://localhost/devices", app.Platform.Opened.Items[^1]);
 
+        await app.Press(main, "Overview"); // the "…" menu belongs to the Overview's header
         await app.Press(main, "More");
         await app.Press(main, "View log");
         var log = app.Platform.Opened.Items[^1];

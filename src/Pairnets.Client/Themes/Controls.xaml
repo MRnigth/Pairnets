@@ -3,6 +3,7 @@
                     xmlns:ui="clr-namespace:Pairnets.Client.Ui">
   <ResourceDictionary.MergedDictionaries>
     <ResourceDictionary Source="pack://application:,,,/Pairnets;component/Themes/Icons.xaml" />
+    <ResourceDictionary Source="pack://application:,,,/Pairnets;component/Themes/Pages.xaml" />
   </ResourceDictionary.MergedDictionaries>
 
   <!-- The bundled font (Plus Jakarta Sans, 5 static faces linked as Resources). Segoe UI is the fallback. -->

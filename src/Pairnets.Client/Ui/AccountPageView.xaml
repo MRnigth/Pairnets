@@ -1,0 +1,182 @@
+<UserControl x:Class="Pairnets.Client.Ui.AccountPageView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="clr-namespace:Pairnets.Client.Ui">
+  <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+    <StackPanel Margin="28,40,28,24">
+      <StackPanel>
+        <TextBlock Style="{StaticResource PgTitle}" Text="Account" />
+        <TextBlock Style="{StaticResource PgSub}" FontSize="13" Text="Who is signed in on this computer, and when Pairnets should tell you things." />
+      </StackPanel>
+
+      <!-- Who you are -->
+      <Border Style="{StaticResource PgCard}" Padding="24" Margin="0,16,0,0">
+        <StackPanel>
+          <Grid>
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="Auto" />
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <Grid Width="76" Height="76" Margin="0,0,20,0">
+              <Ellipse StrokeThickness="3" Stroke="{DynamicResource T.Accent}" Fill="{DynamicResource T.AccentSoft}" />
+              <TextBlock x:Name="Initial" FontSize="34" FontWeight="ExtraBold" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="{DynamicResource T.AccentInk}" />
+            </Grid>
+            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+              <TextBlock x:Name="TitleText" FontSize="24" FontWeight="ExtraBold" TextTrimming="CharacterEllipsis" />
+              <TextBlock x:Name="SubtitleText" Style="{StaticResource PgSub}" Margin="0" />
+              <Border Height="24" CornerRadius="12" Padding="10,0" Margin="0,8,0,0" HorizontalAlignment="Left" Background="{DynamicResource T.OkPill}">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                  <Ellipse Width="7" Height="7" Margin="0,0,6,0" Fill="{DynamicResource T.OkText}" />
+                  <TextBlock Text="Signed in" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource T.OkText}" />
+                </StackPanel>
+              </Border>
+            </StackPanel>
+            <StackPanel Grid.Column="2" VerticalAlignment="Center">
+              <Button x:Name="ManageButton" Style="{StaticResource PgPrimary}" Padding="16,0" Click="OnManageAccount">
+                <StackPanel Orientation="Horizontal">
+                  <TextBlock Text="Manage your account on sync.pairnets.app" VerticalAlignment="Center" />
+                  <ui:LineIcon Width="16" Height="16" Margin="8,0,0,0" StrokeThickness="2.2" Stroke="White" Data="{StaticResource I.External}" />
+                </StackPanel>
+              </Button>
+              <Button x:Name="SignOutButton" Style="{StaticResource PgChipButton}" HorizontalAlignment="Right" Margin="0,8,0,0" Padding="14,0" Foreground="{DynamicResource T.BadText}" Click="OnSignOut">
+                <StackPanel Orientation="Horizontal">
+                  <ui:LineIcon Width="16" Height="16" Margin="0,0,8,0" StrokeThickness="2" Stroke="{DynamicResource T.BadText}" Data="{StaticResource I.SignOut}" />
+                  <TextBlock Text="Sign out" VerticalAlignment="Center" />
+                </StackPanel>
+              </Button>
+            </StackPanel>
+          </Grid>
+          <Border Style="{StaticResource PgHair}" Margin="0,20" />
+          <UniformGrid Columns="4">
+            <Grid Margin="0,0,12,0">
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+              </Grid.ColumnDefinitions>
+              <Border Style="{StaticResource PgChipSquare}" Width="36" Height="36" Margin="0,0,10,0">
+                <ui:LineIcon Width="17" Height="17" StrokeThickness="1.9" Stroke="{DynamicResource T.Muted}" Data="{StaticResource I.Key}" />
+              </Border>
+              <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                <TextBlock Style="{StaticResource PgSmall}" Text="Signed in with" />
+                <TextBlock x:Name="MethodValue" FontWeight="Bold" TextTrimming="CharacterEllipsis" />
+              </StackPanel>
+            </Grid>
+            <Grid Margin="0,0,12,0">
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+              </Grid.ColumnDefinitions>
+              <Border Style="{StaticResource PgChipSquare}" Width="36" Height="36" Margin="0,0,10,0">
+                <ui:LineIcon Width="17" Height="17" StrokeThickness="1.9" Stroke="{DynamicResource T.Muted}" Data="{StaticResource I.Calendar}" />
+              </Border>
+              <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                <TextBlock Style="{StaticResource PgSmall}" Text="This computer added" />
+                <TextBlock x:Name="AddedValue" FontWeight="Bold" TextTrimming="CharacterEllipsis" />
+              </StackPanel>
+            </Grid>
+            <Grid Margin="0,0,12,0">
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+              </Grid.ColumnDefinitions>
+              <Border Style="{StaticResource PgChipSquare}" Width="36" Height="36" Margin="0,0,10,0">
+                <ui:LineIcon Width="17" Height="17" StrokeThickness="1.8" Stroke="{DynamicResource T.Muted}" Data="{StaticResource I.Desktop}" />
+              </Border>
+              <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                <TextBlock Style="{StaticResource PgSmall}" Text="This computer" />
+                <TextBlock x:Name="DeviceValue" FontWeight="Bold" TextTrimming="CharacterEllipsis" />
+              </StackPanel>
+            </Grid>
+            <Grid>
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+              </Grid.ColumnDefinitions>
+              <Border Style="{StaticResource PgChipSquare}" Width="36" Height="36" Margin="0,0,10,0">
+                <ui:LineIcon Width="17" Height="17" StrokeThickness="1.8" Stroke="{DynamicResource T.Muted}" Data="{StaticResource I.Nest}" />
+              </Border>
+              <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                <TextBlock Style="{StaticResource PgSmall}" Text="Your nest" />
+                <TextBlock x:Name="NestValue" FontWeight="Bold" TextTrimming="CharacterEllipsis" />
+              </StackPanel>
+            </Grid>
+          </UniformGrid>
+        </StackPanel>
+      </Border>
+
+      <!-- Notifications -->
+      <Border Style="{StaticResource PgCard}" Padding="22,18,22,6" Margin="0,16,0,0">
+        <StackPanel>
+          <Grid Margin="0,0,0,6">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="Auto" />
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <ui:LineIcon Width="18" Height="18" Margin="0,0,8,0" StrokeThickness="2" Stroke="{DynamicResource T.Text}" Data="{StaticResource I.Bell}" />
+            <TextBlock Grid.Column="1" Text="Notifications" FontSize="16" FontWeight="ExtraBold" />
+            <TextBlock Grid.Column="2" Style="{StaticResource PgSmall}" VerticalAlignment="Center" Text="Small pop-ups in the corner of the screen" />
+          </Grid>
+
+          <Border BorderThickness="0,1,0,0" BorderBrush="{DynamicResource T.Border}" Padding="0,12">
+            <Grid>
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+              </Grid.ColumnDefinitions>
+              <Border Style="{StaticResource PgChipSquare}" Width="36" Height="36" Margin="0,0,14,0" Background="{DynamicResource T.WarnPill}">
+                <ui:LineIcon Width="18" Height="18" StrokeThickness="2" Stroke="{DynamicResource T.WarnText}" Data="{StaticResource I.Warning}" />
+              </Border>
+              <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                <TextBlock Text="When something needs you" FontWeight="SemiBold" />
+                <TextBlock Style="{StaticResource PgSmall}" Text="A file to compare, or deletions waiting for your OK." />
+              </StackPanel>
+              <CheckBox x:Name="NotifyAttention" Grid.Column="2" Style="{StaticResource PgSwitch}" Checked="OnNotifyChanged" Unchecked="OnNotifyChanged"
+                        AutomationProperties.Name="When something needs you" />
+            </Grid>
+          </Border>
+          <Border BorderThickness="0,1,0,0" BorderBrush="{DynamicResource T.Border}" Padding="0,12">
+            <Grid>
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+              </Grid.ColumnDefinitions>
+              <Border Style="{StaticResource PgChipSquare}" Width="36" Height="36" Margin="0,0,14,0" Background="{DynamicResource T.AccentSoft}">
+                <ui:LineIcon Width="18" Height="18" StrokeThickness="2" Stroke="{DynamicResource T.AccentInk}" Data="{StaticResource I.UserPlus}" />
+              </Border>
+              <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                <TextBlock Text="When a computer asks to join" FontWeight="SemiBold" />
+                <TextBlock Style="{StaticResource PgSmall}" Text="So you can let it in, or say no." />
+              </StackPanel>
+              <CheckBox x:Name="NotifyJoin" Grid.Column="2" Style="{StaticResource PgSwitch}" Checked="OnNotifyChanged" Unchecked="OnNotifyChanged"
+                        AutomationProperties.Name="When a computer asks to join" />
+            </Grid>
+          </Border>
+          <Border BorderThickness="0,1,0,0" BorderBrush="{DynamicResource T.Border}" Padding="0,12">
+            <Grid>
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+              </Grid.ColumnDefinitions>
+              <Border Style="{StaticResource PgChipSquare}" Width="36" Height="36" Margin="0,0,14,0">
+                <ui:LineIcon Width="18" Height="18" StrokeThickness="2" Stroke="{DynamicResource T.Muted}" Data="{StaticResource I.Download}" />
+              </Border>
+              <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                <TextBlock Text="When an app update is ready" FontWeight="SemiBold" />
+                <TextBlock Style="{StaticResource PgSmall}" Text="You still choose when to install it." />
+              </StackPanel>
+              <CheckBox x:Name="NotifyUpdate" Grid.Column="2" Style="{StaticResource PgSwitch}" Checked="OnNotifyChanged" Unchecked="OnNotifyChanged"
+                        AutomationProperties.Name="When an app update is ready" />
+            </Grid>
+          </Border>
+        </StackPanel>
+      </Border>
+
+      <TextBlock Style="{StaticResource PgSmall}" Margin="0,16,0,0" Text="These choices apply to this computer only. Each computer keeps its own." />
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>
