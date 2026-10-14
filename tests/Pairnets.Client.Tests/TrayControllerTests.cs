@@ -74,6 +74,23 @@ public sealed class TrayControllerTests
     }
 
     [Fact]
+    public async Task FirstRun_ClickingTheIconAgain_BringsTheSignInForwardInsteadOfOpeningAnother()
+    {
+        await using var app = await TrayHarness.CreateAsync();
+        var started = app.StartFirstRun();
+        var signIn = await app.Showing<SettingsWindow>("the sign-in window on the first start");
+
+        await app.ClickIcon();
+        await app.ClickIcon();
+
+        var open = await app.Wpf.Ui(() => System.Windows.Application.Current.Windows.OfType<SettingsWindow>().Count());
+        Assert.Equal(1, open);
+        Assert.Same(signIn, await app.Showing<SettingsWindow>("the same sign-in window"));
+        await app.Wpf.Ui(signIn.Close);
+        await started.WaitAsync(TimeSpan.FromSeconds(30));
+    }
+
+    [Fact]
     public async Task FirstRun_GoogleAndEmailButtons_OpenTheNest()
     {
         await using var nest = await TestServer.StartWithWebsiteAsync(TrayHarness.BehindATunnel(new()

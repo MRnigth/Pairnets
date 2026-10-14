@@ -77,6 +77,19 @@ public sealed class DesktopControllerTests
     }
 
     [AvaloniaFact]
+    public async Task FirstRun_ClickingTheIconAgain_BringsTheSignInForwardInsteadOfOpeningAnother()
+    {
+        await using var app = await AppUnderTest.StartAsync(signedIn: false);
+        var signIn = await app.WindowAsync("Pairnets – sign in");
+
+        app.App.ClickTrayIcon();
+        app.App.ClickTrayIcon();
+
+        Assert.Single(app.Desktop.Windows, w => w.IsVisible && w.Title == "Pairnets – sign in");
+        Assert.Same(signIn, await app.WindowAsync("Pairnets – sign in"));
+    }
+
+    [AvaloniaFact]
     public async Task FirstRun_GoogleAndEmailButtons_OpenTheNest()
     {
         await using var app = await AppUnderTest.StartAsync(signedIn: false, nestConfig: AppUnderTest.GoogleAndEmail);

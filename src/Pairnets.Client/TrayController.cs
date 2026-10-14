@@ -619,6 +619,8 @@ public sealed class TrayController : ITrayActions, IDisposable
         StartSession(null);
     }
 
+    private SettingsWindow? _signInWindow;
+
     /// <summary>Signing in is a window of its own; later, Settings is a page of the main window.</summary>
     public void ShowSettings(bool firstRun)
     {
@@ -627,8 +629,26 @@ public sealed class TrayController : ITrayActions, IDisposable
             ShowMainWindow(MainPage.Settings);
             return;
         }
+        // A second tray click or toast while the sign-in is open brings it forward instead of opening another.
+        if (_signInWindow is { } open)
+        {
+            if (open.WindowState == WindowState.Minimized)
+                open.WindowState = WindowState.Normal;
+            open.Activate();
+            return;
+        }
         var window = new SettingsWindow(_settings, _platform.Secrets, Shell, _session?.Status.NestUrl);
-        if (window.ShowDialog() != true || window.Result is null)
+        _signInWindow = window;
+        bool? accepted;
+        try
+        {
+            accepted = window.ShowDialog();
+        }
+        finally
+        {
+            _signInWindow = null;
+        }
+        if (accepted != true || window.Result is null)
             return;
         ApplySettings(window.Result, window.PlainToken);
         ShowMainWindow();

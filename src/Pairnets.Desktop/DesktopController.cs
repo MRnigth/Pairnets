@@ -742,12 +742,24 @@ public sealed class DesktopController : ITrayActions, IDisposable
         dialog.Show();
     }
 
+    private SettingsWindow? _signInWindow;
+
     /// <summary>The sign-in window: the only way to set up (or set up again) this computer.</summary>
     private void ShowSignIn()
     {
+        // Already open (another tray click while signed out): bring it forward, don't open a second one.
+        if (_signInWindow is { } open)
+        {
+            if (open.WindowState == WindowState.Minimized)
+                open.WindowState = WindowState.Normal;
+            open.Activate();
+            return;
+        }
         var window = new SettingsWindow(_settings, _platform.Secrets, SafeIsAutoStart(), _platform.Open, _session?.Status.NestUrl);
+        _signInWindow = window;
         window.Closed += (_, _) =>
         {
+            _signInWindow = null;
             if (window.Result is null)
                 return;
             ApplySettings(window.Result, window.PlainToken);
