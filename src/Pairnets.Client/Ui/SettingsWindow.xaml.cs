@@ -35,8 +35,20 @@ public partial class SettingsWindow : Window
         KeyDown += (_, e) =>
         {
             if (e.Key == System.Windows.Input.Key.Escape)
-                Close();
+                EscapePressed();
         };
+    }
+
+    /// <summary>
+    /// Escape closes the window, but must not throw away a sign-in that is under way (waiting in the browser, or an
+    /// email typed in): then it asks first.
+    /// </summary>
+    internal void EscapePressed()
+    {
+        if (SignIn.InProgress && Dialogs.Ask(this, "Stop signing in?", "Pairnets", System.Windows.MessageBoxButton.YesNo,
+                System.Windows.MessageBoxImage.Question, System.Windows.MessageBoxResult.No) != System.Windows.MessageBoxResult.Yes)
+            return;
+        Close();
     }
 
     /// <summary>The sign-in steps.</summary>

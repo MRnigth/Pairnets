@@ -146,12 +146,20 @@
     <Setter Property="Cursor" Value="Hand" />
     <Setter Property="Template">
       <ControlTemplate>
-        <Border x:Name="bd" Background="Transparent" CornerRadius="8" Padding="14,6">
+        <Border x:Name="bd" Background="Transparent" BorderBrush="Transparent" BorderThickness="1.5" CornerRadius="8" Padding="12.5,4.5">
           <ContentPresenter Content="{TemplateBinding Content}" Foreground="{TemplateBinding Foreground}"
                             HorizontalAlignment="Center" VerticalAlignment="Center" />
         </Border>
       </ControlTemplate>
     </Setter>
+  </Style>
+  <!-- Keyboard focus (Tab / arrow keys) only, never on mouse clicks -->
+  <Style Selector="RadioButton.seg:focus-visible /template/ Border#bd, RadioButton.nav:focus-visible /template/ Border#bd">
+    <Setter Property="BorderBrush" Value="{DynamicResource T.Accent}" />
+  </Style>
+  <Style Selector="ListBox.rows ListBoxItem:focus-visible /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="BorderBrush" Value="{DynamicResource T.Accent}" />
+    <Setter Property="BorderThickness" Value="1.5" />
   </Style>
   <Style Selector="RadioButton.seg:checked">
     <Setter Property="Foreground" Value="{DynamicResource T.Text}" />
@@ -256,7 +264,7 @@
     <Setter Property="HorizontalAlignment" Value="Stretch" />
     <Setter Property="Template">
       <ControlTemplate>
-        <Border x:Name="bd" Background="Transparent" CornerRadius="9" Padding="11,9">
+        <Border x:Name="bd" Background="Transparent" BorderBrush="Transparent" BorderThickness="1.5" CornerRadius="9" Padding="9.5,7.5">
           <ContentPresenter Content="{TemplateBinding Content}" Foreground="{TemplateBinding Foreground}" />
         </Border>
       </ControlTemplate>

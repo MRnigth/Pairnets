@@ -77,6 +77,52 @@ public sealed class DesktopControllerTests
     }
 
     [AvaloniaFact]
+    public async Task FirstRun_ClickingTheIconAgain_BringsTheSignInForwardInsteadOfOpeningAnother()
+    {
+        await using var app = await AppUnderTest.StartAsync(signedIn: false);
+        var signIn = await app.WindowAsync("Pairnets – sign in");
+
+        app.App.ClickTrayIcon();
+        app.App.ClickTrayIcon();
+
+        Assert.Single(app.Desktop.Windows, w => w.IsVisible && w.Title == "Pairnets – sign in");
+        Assert.Same(signIn, await app.WindowAsync("Pairnets – sign in"));
+    }
+
+    [AvaloniaFact]
+    public async Task FirstRun_Escape_ClosesAnIdleSignIn_ButAsksWhenAnEmailWasTyped()
+    {
+        await using var app = await AppUnderTest.StartAsync(signedIn: false);
+        var signIn = await app.WindowAsync("Pairnets – sign in");
+
+        // Typed an email: Escape asks first, and "No" keeps the window and the email.
+        var email = Screen.Named<TextBox>(signIn, "AccountEmailBox");
+        Person.Type(email, "me@example.com");
+        Person.PressEscape(email);
+        Assert.Equal("Stop signing in?", AppUnderTest.TextOf(await app.DialogAsync("Pairnets")));
+        await app.AnswerAsync("Pairnets", "No");
+        Assert.True(signIn.IsVisible);
+        Assert.Equal("me@example.com", email.Text);
+
+        // "Yes" closes it.
+        Person.PressEscape(email);
+        await app.AnswerAsync("Pairnets", "Yes");
+        await Wait.Until(() => !signIn.IsVisible, "the sign-in window to close");
+    }
+
+    [AvaloniaFact]
+    public async Task SignInWindow_FillsInTheSavedAccountEmail_AndEscapeStillClosesWithoutAsking()
+    {
+        await using var app = await AppUnderTest.StartAsync(signedIn: false, rememberedWhenSignedOut: s => s.AccountEmail = "saved@example.com");
+        var signIn = await app.WindowAsync("Pairnets – sign in");
+        var email = Screen.Named<TextBox>(signIn, "AccountEmailBox");
+
+        Assert.Equal("saved@example.com", email.Text);
+        Person.PressEscape(email); // nothing was typed: no question
+        await Wait.Until(() => !signIn.IsVisible, "the sign-in window to close");
+    }
+
+    [AvaloniaFact]
     public async Task FirstRun_GoogleAndEmailButtons_OpenTheNest()
     {
         await using var app = await AppUnderTest.StartAsync(signedIn: false, nestConfig: AppUnderTest.GoogleAndEmail);
@@ -294,6 +340,22 @@ public sealed class DesktopControllerTests
         Assert.Equal(app.Folder, saved.Folder); // signing in again offers the same folder
         Assert.Null(app.App.Session);
         Assert.True(File.Exists(Path.Combine(app.Folder, "mine.txt")));
+    }
+
+    [AvaloniaFact]
+    public async Task SignOut_PressedTwice_AsksAndWorksOnlyOnce()
+    {
+        await using var app = await AppUnderTest.StartAsync();
+        await app.WaitUntilIdleAsync();
+
+        app.App.SignOut();
+        app.App.SignOut(); // a second press while the question is open does nothing
+        await app.DialogAsync("Pairnets – sign out");
+        Assert.Single(app.Desktop.Windows, w => w.IsVisible && w.Title == "Pairnets – sign out");
+        await app.AnswerAsync("Pairnets – sign out", "Sign out");
+
+        await app.WindowAsync("Pairnets – sign in");
+        Assert.DoesNotContain(app.Desktop.Windows, w => w.IsVisible && w.Title == "Pairnets – sign out");
     }
 
     [AvaloniaFact]

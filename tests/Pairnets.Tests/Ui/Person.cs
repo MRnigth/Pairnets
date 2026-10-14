@@ -88,6 +88,14 @@ public static class Person
         Dispatcher.UIThread.RunJobs();
     }
 
+    /// <summary>Presses and releases Escape in the window that holds <paramref name="inside"/>.</summary>
+    public static void PressEscape(Control inside)
+    {
+        var top = TopLevel.GetTopLevel(inside)!;
+        // Only the press: Escape may close the window, and there is nothing left to release the key in.
+        Input(() => top.KeyPressQwerty(PhysicalKey.Escape, RawInputModifiers.None));
+    }
+
     private static void Input(Action action)
     {
         var before = SynchronizationContext.Current;
