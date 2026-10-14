@@ -420,6 +420,8 @@ public sealed class DesktopController : ITrayActions, IDisposable
 
     private void Notify(string key, string title, string text)
     {
+        if (!NotifyPolicy.Allows(_settings, key))
+            return; // turned off in the notification switches
         lock (_lastNotice)
         {
             var now = DateTime.UtcNow;

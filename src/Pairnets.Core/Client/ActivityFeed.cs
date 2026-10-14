@@ -65,6 +65,17 @@ public sealed record ActivityItem(DateTimeOffset Time, ActivityKind Kind, string
 
     /// <summary>"2 min ago", computed when read (lists are redrawn regularly).</summary>
     public string WhenText => Format.RelativeTime(Time, DateTimeOffset.Now);
+
+    /// <summary>The colour of the row's glyph: "move" (uploads and downloads), "warn", "bad" or "muted".</summary>
+    public string Tone => ToneOf(Kind);
+
+    internal static string ToneOf(ActivityKind kind) => kind switch
+    {
+        ActivityKind.Uploaded or ActivityKind.Downloaded => "move",
+        ActivityKind.Conflict or ActivityKind.Blocked => "warn",
+        ActivityKind.DeletedHere or ActivityKind.DeletedOnServer or ActivityKind.Warning or ActivityKind.Error => "bad",
+        _ => "muted",
+    };
 }
 
 /// <summary>Bounded, thread-safe list of recent activity, newest first.</summary>
@@ -121,6 +132,21 @@ public static class ActivityDays
                 day = d;
             }
             rows.Add(item);
+        }
+        return rows;
+    }
+
+    /// <summary>
+    /// Like <see cref="Rows"/>, with runs of same-folder files folded into <see cref="ActivityFolder"/> rows
+    /// (a run never crosses a day heading).
+    /// </summary>
+    public static IReadOnlyList<object> GroupedRows(IReadOnlyList<ActivityItem> items, DateTimeOffset now)
+    {
+        var rows = new List<object>(items.Count + 4);
+        foreach (var day in items.GroupBy(i => i.Time.ToLocalTime().Date))
+        {
+            rows.Add(new ActivityDay(Format.Day(day.Key, now), day.Key));
+            rows.AddRange(ActivityGroups.Group(day.ToList()));
         }
         return rows;
     }

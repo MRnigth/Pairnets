@@ -235,7 +235,8 @@ public sealed partial class ApiTour
         Step("A computer asks to join, the owner allows it on the website, and it collects its own key");
         _laptop = await JoinAsync($"LAPTOP {_tag}", approve: true, [_oldHub]);
         _laptopApi = Api(_laptop.Key, "whatever the app sends");
-        Assert.Equal(new DeviceMe(_laptop.Id, _laptop.Name, DeviceMe.KindDeviceKey), await Read<DeviceMe>(Get(_laptopApi, "api/me")));
+        var laptopMe = await Read<DeviceMe>(Get(_laptopApi, "api/me"));
+        Assert.Equal((_laptop.Id, _laptop.Name, DeviceMe.KindDeviceKey), (laptopMe.Id, laptopMe.Name, laptopMe.Kind));
         _laptopHub = await Listen($"{_laptop.Name}'s push channel", _laptop.Key, _laptop.Name);
 
         Step("One the owner turns away");
@@ -294,7 +295,9 @@ public sealed partial class ApiTour
         _secrets.Add(outcome.Key!);
         Assert.Equal(PairPollResponse.Used, (await Read<PairPollResponse>(Post(app, "api/pair/poll", new PairPollRequest(start.PollToken)))).Status);
         // Like the app, it uses its key at once (and so shows up in the list of computers).
-        Assert.Equal(new DeviceMe(outcome.Id, name, DeviceMe.KindDeviceKey), await Read<DeviceMe>(Get(Api(outcome.Key, name), "api/me")));
+        var me = await Read<DeviceMe>(Get(Api(outcome.Key, name), "api/me"));
+        Assert.Equal((outcome.Id, name, DeviceMe.KindDeviceKey), (me.Id, me.Name, me.Kind));
+        Assert.NotNull(me.Added); // and it says when it was let in
         return new Computer(outcome.Id!, outcome.Name!, outcome.Key!);
     }
 

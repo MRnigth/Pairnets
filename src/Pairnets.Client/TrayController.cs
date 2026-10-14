@@ -445,6 +445,8 @@ public sealed class TrayController : ITrayActions, IDisposable
     /// <summary>Balloon tips render as Windows 10/11 toast notifications. Same key at most once per 10 minutes.</summary>
     private void Toast(string key, string title, string text, Forms.ToolTipIcon icon, Action? onClick)
     {
+        if (!NotifyPolicy.Allows(_settings, key))
+            return; // turned off in the notification switches
         var now = DateTime.UtcNow;
         if (_lastToast.TryGetValue(key, out var last) && now - last < TimeSpan.FromMinutes(10))
             return;
