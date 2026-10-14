@@ -281,6 +281,12 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
                 w.ShowStatus(Idle, "/Users/me/Work", "MacBook");
                 w.Navigate(MainPage.Devices);
             })),
+            new("the main window (folded into the dock)", s => MainStage(s, w =>
+            {
+                w.ShowStatus(Idle, "/Users/me/Work", "MacBook");
+                w.ShowAttention([Attention(s)]);
+                w.SideFolded = true;
+            })),
             new("the main window (Needs attention page)", s => MainStage(s, w =>
             {
                 w.ShowAttention([Attention(s), Attention(s)]);
@@ -411,11 +417,18 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
         s.Expect["OnManageDevices"] = Calls(a, "manage-devices");
         s.Expect["OnReviewAttention"] = OnPage(w, MainPage.Attention);
         s.Expect["OnSeeAllActivity"] = OnPage(w, MainPage.Activity);
-        s.Expect["OnNav:Overview"] = OnPage(w, MainPage.Overview);
-        s.Expect["OnNav:Activity"] = OnPage(w, MainPage.Activity);
+        s.Expect["OnNav:Overview*"] = OnPage(w, MainPage.Overview);
+        s.Expect["OnNav:Activity*"] = OnPage(w, MainPage.Activity);
         s.Expect["OnNav:History"] = All(OnPage(w, MainPage.History), That(() => w.HistoryRows == 4, "the deleted files show"));
-        s.Expect["OnNav:Devices"] = All(OnPage(w, MainPage.Devices), Calls(a, "devices"));
-        s.Expect["OnNav:Needs attention*"] = OnPage(w, MainPage.Attention);
+        s.Expect["OnNav:Devices*"] = All(OnPage(w, MainPage.Devices), Calls(a, "devices"));
+        s.Expect["OnNav:Needs you*"] = OnPage(w, MainPage.Attention);
+        s.Expect["OnFoldSide"] = That(() => w.SideFolded, "the left side fold into the dock");
+        s.Expect["OnUnfoldSide"] = That(() => !w.SideFolded, "the left side open again");
+        s.Expect["OnFoldGroup"] = That(() => !w.GroupGrid.IsVisible, "the other computers fold away");
+        s.Expect["OnAccount"] = Calls(a, "settings"); // the Account page comes later
+        s.Expect["OnThisComputer"] = OnPage(w, MainPage.Overview);
+        s.Expect["OnNestRow"] = OnPage(w, MainPage.Devices);
+        s.Expect["OnDevices"] = OnPage(w, MainPage.Devices);
         s.Expect["OnNav:Settings"] = Calls(a, "settings"); // the controller hands over a fresh form
         s.Expect["OnRevealActivity"] = That(() => a.Calls.Count == 1 && a.Calls[0].StartsWith("reveal:", StringComparison.Ordinal), "the app show the file in its folder");
         s.Expect["OnActivityVersions"] = That(() => w.Page == MainPage.History && w.HistoryRows == 1 && w.VersionRows == 3, "History open on that file with its versions");

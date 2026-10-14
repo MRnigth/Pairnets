@@ -464,7 +464,15 @@ public sealed class TrayController : ITrayActions, IDisposable
             return;
         }
         var opening = _window is not { IsVisible: true };
-        _window ??= new MainWindow(this);
+        if (_window is null)
+        {
+            _window = new MainWindow(this) { SideFolded = _settings.SideFolded };
+            _window.SideFoldedChanged += folded =>
+            {
+                _settings.SideFolded = folded;
+                SettingsStore.Save(_env.SettingsPath, _settings);
+            };
+        }
         _window.Show();
         if (_window.WindowState == WindowState.Minimized)
             _window.WindowState = WindowState.Normal;

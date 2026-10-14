@@ -110,7 +110,7 @@ public sealed class AppUnderTest : IAsyncDisposable
         Wait.Until(() => App.Session?.Status.Status == RunnerStatus.Idle, "syncing to settle (\"Up to date\")", seconds: 30);
 
     /// <summary>A sidebar page of the main window, clicked as a person would.</summary>
-    public void Open(string page) => Person.Click(Screen.Find<RadioButton>(MainWindow, page));
+    public void Open(string page) => Person.Click(Screen.Named<RadioButton>(MainWindow, "Nav" + page));
 
     /// <summary>The Settings page's form (opens it).</summary>
     public async Task<SettingsView> SettingsPageAsync()

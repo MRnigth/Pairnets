@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:ui="clr-namespace:Pairnets.Client.Ui"
         xmlns:c="clr-namespace:Pairnets.Core.Client;assembly=Pairnets.Core"
-        Title="Pairnets" Width="980" Height="700" MinWidth="800" MinHeight="560"
+        Title="Pairnets" Width="1180" Height="780" MinWidth="940" MinHeight="560"
         WindowStartupLocation="CenterScreen">
   <Window.Resources>
     <ui:ActivityBrushConverter x:Key="KindBrush" />
@@ -66,94 +66,276 @@
 
   <Grid>
     <Grid.ColumnDefinitions>
-      <ColumnDefinition Width="220" />
+      <ColumnDefinition x:Name="SideColumn" Width="320" />
       <ColumnDefinition Width="*" />
     </Grid.ColumnDefinitions>
 
-    <!-- ======================= Sidebar ======================= -->
-    <Border Style="{StaticResource Sidebar}">
-      <DockPanel Margin="12,18,12,14">
-        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="8,0,0,22">
-          <Image x:Name="AppIcon" Width="30" Height="30" Margin="0,0,10,0" />
-          <TextBlock Text="Pairnets" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center" />
-        </StackPanel>
-
-        <!-- Bottom: the app update (instead of a banner over everything) and the version -->
-        <StackPanel DockPanel.Dock="Bottom">
-          <Border x:Name="UpdateCard" Style="{StaticResource Banner}" Padding="12,10" Margin="0,0,0,10" Visibility="Collapsed">
-            <StackPanel>
-              <StackPanel Orientation="Horizontal">
-                <ui:LineIcon x:Name="UpdateIcon" Width="16" Height="16" Margin="0,0,7,0" Stroke="{DynamicResource T.Accent}" Data="{StaticResource I.Download}" VerticalAlignment="Top" />
-                <TextBlock x:Name="UpdateTitle" FontWeight="SemiBold" FontSize="12" TextWrapping="Wrap" MaxWidth="150" />
-              </StackPanel>
-              <TextBlock x:Name="UpdateDetail" Style="{StaticResource MutedSmall}" TextWrapping="Wrap" Margin="0,6,0,0" />
-              <ProgressBar x:Name="UpdateProgress" Style="{StaticResource ThinProgress}" Minimum="0" Maximum="100" Margin="0,6,0,0" Visibility="Collapsed" />
-              <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
-                <Button x:Name="UpdateButton" Style="{StaticResource AccentButton}" Padding="11,5" FontSize="12.5" Content="Update now" Click="OnUpdateNow" />
-                <Button x:Name="UpdateLater" Style="{StaticResource FlatButton}" Padding="9,5" FontSize="12.5" Margin="4,0,0,0" Content="Later" Click="OnUpdateLater" />
-              </StackPanel>
-            </StackPanel>
-          </Border>
-          <Grid>
+    <!-- ======================= Left side, open ======================= -->
+    <Grid x:Name="SideOpen" Margin="12,12,0,12">
+      <Border Style="{StaticResource SidePanel}">
+        <DockPanel Margin="14,16,14,14">
+          <!-- Top: logo, fold, account -->
+          <Grid DockPanel.Dock="Top" Margin="4,0,0,0">
             <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="Auto" />
               <ColumnDefinition Width="*" />
               <ColumnDefinition Width="Auto" />
+              <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
-            <TextBlock x:Name="AppVersion" Style="{StaticResource MutedSmall}" Margin="10,0,8,0" VerticalAlignment="Center"
-                       TextTrimming="CharacterEllipsis" />
-            <RadioButton x:Name="NavSettings" Grid.Column="1" Style="{StaticResource Nav}" GroupName="page" Margin="0"
-                         ToolTip="Settings" Checked="OnNav">
-              <StackPanel Orientation="Horizontal">
-                <ui:LineIcon Data="{StaticResource I.Settings}" Width="16" Height="16" Margin="0,0,7,0" />
-                <TextBlock Text="Settings" FontSize="12.5" VerticalAlignment="Center" />
-              </StackPanel>
-            </RadioButton>
+            <Image x:Name="AppIcon" Width="30" Height="30" Margin="0,0,8,0" />
+            <TextBlock Grid.Column="1" Text="Pairnets" FontSize="16" FontWeight="ExtraBold" VerticalAlignment="Center" />
+            <Button x:Name="FoldButton" Grid.Column="2" Style="{StaticResource RoundIconButton}" Width="32" Height="32" MinWidth="32" MinHeight="32"
+                    Margin="0,0,8,0" ToolTip="Fold into the dock" AutomationProperties.Name="Fold into the dock" Click="OnFoldSide">
+              <ui:LineIcon Width="16" Height="16" StrokeThickness="2.2" Stroke="{DynamicResource T.Muted}" Data="{StaticResource I.FoldLeft}" />
+            </Button>
+            <Button x:Name="AccountButton" Grid.Column="3" Style="{StaticResource RoundIconButton}" Width="32" Height="32" MinWidth="32" MinHeight="32"
+                    Background="{DynamicResource T.AccentSoft}" Foreground="{DynamicResource T.AccentInk}" BorderBrush="Transparent" BorderThickness="2"
+                    Tag="{DynamicResource T.AccentSoft}" Click="OnAccount">
+              <TextBlock x:Name="AccountInitial" Text="A" FontSize="14" FontWeight="ExtraBold" HorizontalAlignment="Center" VerticalAlignment="Center" />
+            </Button>
           </Grid>
-        </StackPanel>
 
-        <StackPanel>
-          <RadioButton x:Name="NavOverview" Style="{StaticResource Nav}" GroupName="page" IsChecked="True" Checked="OnNav">
-            <StackPanel Orientation="Horizontal">
-              <ui:LineIcon Data="{StaticResource I.Home}" Margin="0,0,11,0" />
-              <TextBlock Text="Overview" VerticalAlignment="Center" />
-            </StackPanel>
-          </RadioButton>
-          <RadioButton x:Name="NavActivity" Style="{StaticResource Nav}" GroupName="page" Checked="OnNav">
-            <StackPanel Orientation="Horizontal">
-              <ui:LineIcon Data="{StaticResource I.Activity}" Margin="0,0,11,0" />
-              <TextBlock Text="Activity" VerticalAlignment="Center" />
-            </StackPanel>
-          </RadioButton>
-          <RadioButton x:Name="NavHistory" Style="{StaticResource Nav}" GroupName="page" Checked="OnNav">
-            <StackPanel Orientation="Horizontal">
-              <ui:LineIcon Data="{StaticResource I.History}" Margin="0,0,11,0" />
-              <TextBlock Text="History" VerticalAlignment="Center" />
-            </StackPanel>
-          </RadioButton>
-          <RadioButton x:Name="NavDevices" Style="{StaticResource Nav}" GroupName="page" Checked="OnNav">
-            <StackPanel Orientation="Horizontal">
-              <ui:LineIcon Data="{StaticResource I.Computer}" Margin="0,0,11,0" />
-              <TextBlock Text="Devices" VerticalAlignment="Center" />
-            </StackPanel>
-          </RadioButton>
-          <RadioButton x:Name="NavAttention" Style="{StaticResource Nav}" GroupName="page" Checked="OnNav">
-            <Grid>
-              <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="Auto" />
-              </Grid.ColumnDefinitions>
-              <ui:LineIcon Data="{StaticResource I.Warning}" />
-              <TextBlock Grid.Column="1" Text="Needs attention" VerticalAlignment="Center" Margin="11,0,0,0" />
-              <Border x:Name="AttentionBadge" Grid.Column="2" Style="{StaticResource Badge}" Margin="6,0,0,0" Visibility="Collapsed">
-                <TextBlock x:Name="AttentionCount" Foreground="White" FontSize="11" FontWeight="SemiBold"
-                           HorizontalAlignment="Center" VerticalAlignment="Center" />
+          <!-- Bottom: the app update, then the page tiles -->
+          <StackPanel DockPanel.Dock="Bottom">
+            <Border x:Name="UpdateCard" Background="{DynamicResource T.AccentSoft}" CornerRadius="14" Padding="12,8,8,8" Margin="0,10,0,0" Visibility="Collapsed">
+              <StackPanel>
+                <Grid>
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                  </Grid.ColumnDefinitions>
+                  <ui:LineIcon x:Name="UpdateIcon" Width="16" Height="16" StrokeThickness="2.2" Margin="0,0,8,0" Stroke="{DynamicResource T.AccentInk}" Data="{StaticResource I.Download}" VerticalAlignment="Center" />
+                  <TextBlock x:Name="UpdateTitle" Grid.Column="1" FontWeight="ExtraBold" FontSize="13" TextWrapping="Wrap" VerticalAlignment="Center" />
+                  <TextBlock x:Name="UpdatePercent" Grid.Column="2" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource T.AccentInk}" VerticalAlignment="Center" Margin="8,0,4,0" Visibility="Collapsed" />
+                  <Button x:Name="UpdateButton" Grid.Column="3" Style="{StaticResource AccentButton}" Height="30" MinHeight="30" Padding="12,0" FontSize="12" Margin="8,0,0,0" Content="Update" Click="OnUpdateNow" />
+                  <Button x:Name="UpdateLater" Grid.Column="4" Style="{StaticResource RoundIconButton}" Width="26" Height="26" MinWidth="26" MinHeight="26" Margin="4,0,0,0"
+                          Background="Transparent" ToolTip="Later" AutomationProperties.Name="Later" Click="OnUpdateLater">
+                    <ui:LineIcon Width="12" Height="12" StrokeThickness="2.4" Stroke="{DynamicResource T.Muted}" Data="{StaticResource I.Close}" />
+                  </Button>
+                </Grid>
+                <ProgressBar x:Name="UpdateProgress" Style="{StaticResource RoundProgress}" Height="5" Minimum="0" Maximum="100" Margin="0,8,4,2" Visibility="Collapsed" />
+              </StackPanel>
+            </Border>
+
+            <TextBlock Style="{StaticResource SmallLabel}" Foreground="{DynamicResource T.TextSoft}" Text="PAGES" Margin="4,16,0,4" />
+            <UniformGrid Columns="2" Margin="-4,0,-4,0">
+              <RadioButton x:Name="NavOverview" Style="{StaticResource SideTile}" GroupName="page" IsChecked="True" Checked="OnNav">
+                <Grid>
+                  <TextBlock Text="Overview" VerticalAlignment="Bottom" FontSize="14" />
+                  <ui:LineIcon Data="{StaticResource I.Home}" />
+                  <TextBlock x:Name="OverviewNote" HorizontalAlignment="Right" VerticalAlignment="Top" FontSize="14" />
+                </Grid>
+              </RadioButton>
+              <RadioButton x:Name="NavActivity" Style="{StaticResource SideTile}" GroupName="page" Checked="OnNav">
+                <Grid>
+                  <TextBlock Text="Activity" VerticalAlignment="Bottom" FontSize="14" />
+                  <ui:LineIcon Data="{StaticResource I.Activity}" />
+                  <TextBlock x:Name="ActivityNote" HorizontalAlignment="Right" VerticalAlignment="Top" FontSize="14" />
+                </Grid>
+              </RadioButton>
+              <RadioButton x:Name="NavAttention" Style="{StaticResource SideTile}" GroupName="page" Checked="OnNav">
+                <Grid>
+                  <TextBlock Text="Needs you" VerticalAlignment="Bottom" FontSize="14" />
+                  <ui:LineIcon Data="{StaticResource I.Warning}" />
+                  <TextBlock x:Name="AttentionCount" HorizontalAlignment="Right" VerticalAlignment="Top" FontSize="20" />
+                </Grid>
+              </RadioButton>
+              <RadioButton x:Name="NavHistory" Style="{StaticResource SideTile}" GroupName="page" Checked="OnNav">
+                <Grid>
+                  <TextBlock Text="History" VerticalAlignment="Bottom" FontSize="14" />
+                  <ui:LineIcon Data="{StaticResource I.History}" />
+                </Grid>
+              </RadioButton>
+              <RadioButton x:Name="NavDevices" Style="{StaticResource SideTile}" GroupName="page" Checked="OnNav">
+                <Grid>
+                  <TextBlock Text="Devices" VerticalAlignment="Bottom" FontSize="14" />
+                  <ui:LineIcon Data="{StaticResource I.Desktop}" />
+                  <TextBlock x:Name="DevicesNote" HorizontalAlignment="Right" VerticalAlignment="Top" FontSize="13" />
+                </Grid>
+              </RadioButton>
+              <RadioButton x:Name="NavSettings" Style="{StaticResource SideTile}" GroupName="page" Checked="OnNav">
+                <Grid>
+                  <TextBlock Text="Settings" VerticalAlignment="Bottom" FontSize="14" />
+                  <ui:LineIcon Data="{StaticResource I.Gear}" StrokeThickness="1.8" />
+                </Grid>
+              </RadioButton>
+            </UniformGrid>
+          </StackPanel>
+
+          <!-- Your computers (scrolls when the window is short) -->
+          <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False">
+            <StackPanel>
+              <TextBlock Style="{StaticResource SmallLabel}" Foreground="{DynamicResource T.TextSoft}" Text="YOUR COMPUTERS" Margin="4,16,0,8" />
+
+              <!-- This computer -->
+              <Button x:Name="ThisCard" Style="{StaticResource SideRow}" Click="OnThisComputer">
+                <StackPanel>
+                  <Grid>
+                    <Grid.ColumnDefinitions>
+                      <ColumnDefinition Width="Auto" />
+                      <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Grid Margin="0,0,10,0" VerticalAlignment="Center">
+                      <Border x:Name="ThisIconSq" Style="{StaticResource IconSquare}" />
+                      <ui:LineIcon x:Name="ThisIcon" Width="17" Height="17" StrokeThickness="1.8" Stroke="{DynamicResource T.Text}" Data="{StaticResource I.Desktop}" />
+                      <Ellipse x:Name="ThisDot" Width="10" Height="10" StrokeThickness="2" Stroke="{DynamicResource T.Card}" Fill="{DynamicResource T.Ok}"
+                               HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,-2,-2" />
+                    </Grid>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                      <TextBlock x:Name="ThisName" FontWeight="ExtraBold" Text="DESKTOP" TextTrimming="CharacterEllipsis" />
+                      <TextBlock x:Name="ThisSub" FontSize="12" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                    </StackPanel>
+                  </Grid>
+                  <ProgressBar x:Name="ThisBar" Style="{StaticResource RoundProgress}" Height="5" Minimum="0" Maximum="100" Margin="0,9,0,0" Visibility="Collapsed" />
+                </StackPanel>
+              </Button>
+
+              <!-- The nest -->
+              <Button x:Name="NestRow" Style="{StaticResource SideRow}" Margin="0,6,0,0" Click="OnNestRow">
+                <Grid>
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                  </Grid.ColumnDefinitions>
+                  <Grid Margin="0,0,10,0" VerticalAlignment="Center">
+                    <Border Style="{StaticResource IconSquare}" />
+                    <ui:LineIcon Width="17" Height="17" StrokeThickness="1.8" Stroke="{DynamicResource T.Text}" Data="{StaticResource I.Nest}" />
+                    <Ellipse x:Name="NestDot" Width="10" Height="10" StrokeThickness="2" Stroke="{DynamicResource T.Card}" Fill="{DynamicResource T.Ok}"
+                             HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,-2,-2" />
+                  </Grid>
+                  <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                    <TextBlock FontWeight="ExtraBold" Text="Your nest" />
+                    <TextBlock x:Name="NestSub" FontSize="12" FontWeight="Medium" TextTrimming="CharacterEllipsis" />
+                  </StackPanel>
+                </Grid>
+              </Button>
+
+              <!-- Other computers, as one group -->
+              <Border Background="{DynamicResource T.Tile}" BorderBrush="{DynamicResource T.Border}" BorderThickness="1" CornerRadius="16" Padding="12,10" Margin="0,6,0,0">
+                <StackPanel>
+                  <Grid>
+                    <Grid.ColumnDefinitions>
+                      <ColumnDefinition Width="*" />
+                      <ColumnDefinition Width="Auto" />
+                      <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="Other computers" FontWeight="ExtraBold" VerticalAlignment="Center" />
+                    <TextBlock x:Name="GroupNote" Grid.Column="1" Style="{StaticResource SoftText}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                    <Button x:Name="GroupFold" Grid.Column="2" Style="{StaticResource RoundIconButton}" Width="24" Height="24" MinWidth="24" MinHeight="24"
+                            Background="Transparent" ToolTip="Fold the group" AutomationProperties.Name="Fold the group" Click="OnFoldGroup">
+                      <ui:LineIcon x:Name="GroupFoldIcon" Width="14" Height="14" StrokeThickness="2.4" Stroke="{DynamicResource T.Muted}" Data="{StaticResource I.ChevronUp}" />
+                    </Button>
+                  </Grid>
+                  <UniformGrid x:Name="GroupGrid" Columns="3" Margin="-2,6,-2,0" />
+                </StackPanel>
               </Border>
-            </Grid>
-          </RadioButton>
+            </StackPanel>
+          </ScrollViewer>
+        </DockPanel>
+      </Border>
+    </Grid>
+
+    <!-- ======================= Left side, folded into the dock ======================= -->
+    <Grid x:Name="SideDock" Visibility="Collapsed" Margin="0,18">
+      <Grid.RowDefinitions>
+        <RowDefinition Height="Auto" />
+        <RowDefinition Height="*" />
+        <RowDefinition Height="Auto" />
+      </Grid.RowDefinitions>
+      <StackPanel HorizontalAlignment="Center">
+        <Image x:Name="DockIcon" Width="38" Height="38" />
+        <Button x:Name="DockUnfold" Style="{StaticResource RoundIconButton}" Width="32" Height="32" MinWidth="32" MinHeight="32" Margin="0,10,0,0"
+                ToolTip="Open the side panel" AutomationProperties.Name="Open the side panel" Click="OnUnfoldSide">
+          <ui:LineIcon Width="16" Height="16" StrokeThickness="2.2" Stroke="{DynamicResource T.Muted}" Data="{StaticResource I.FoldRight}" />
+        </Button>
+      </StackPanel>
+
+      <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False" Margin="0,8">
+        <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+          <!-- Pages -->
+          <Border Style="{StaticResource DockPill}">
+            <StackPanel>
+              <RadioButton x:Name="DockOverview" Style="{StaticResource DockPage}" GroupName="dock" IsChecked="True" ToolTip="Overview" AutomationProperties.Name="Overview" Checked="OnNav">
+                <ui:LineIcon Data="{StaticResource I.Home}" />
+              </RadioButton>
+              <RadioButton x:Name="DockActivity" Style="{StaticResource DockPage}" GroupName="dock" ToolTip="Activity" AutomationProperties.Name="Activity" Checked="OnNav">
+                <ui:LineIcon Data="{StaticResource I.Activity}" />
+              </RadioButton>
+              <Grid>
+                <RadioButton x:Name="DockAttention" Style="{StaticResource DockPage}" GroupName="dock" ToolTip="Needs you" AutomationProperties.Name="Needs you" Checked="OnNav">
+                  <ui:LineIcon Data="{StaticResource I.Warning}" />
+                </RadioButton>
+                <Border x:Name="DockBadge" Width="20" Height="20" CornerRadius="10" BorderThickness="2" BorderBrush="{DynamicResource T.Card}" Background="{DynamicResource T.NeedsActive}"
+                        HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-2,-2,0" IsHitTestVisible="False" Visibility="Collapsed">
+                  <TextBlock x:Name="DockBadgeText" Foreground="{DynamicResource T.NeedsActiveText}" FontSize="10" FontWeight="ExtraBold" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Border>
+              </Grid>
+              <RadioButton x:Name="DockHistory" Style="{StaticResource DockPage}" GroupName="dock" ToolTip="History" AutomationProperties.Name="History" Checked="OnNav">
+                <ui:LineIcon Data="{StaticResource I.History}" />
+              </RadioButton>
+              <RadioButton x:Name="DockDevices" Style="{StaticResource DockPage}" GroupName="dock" ToolTip="Devices" AutomationProperties.Name="Devices" Checked="OnNav">
+                <ui:LineIcon Data="{StaticResource I.Desktop}" />
+              </RadioButton>
+              <Border Style="{StaticResource Divider}" Width="24" Margin="0,4" />
+              <RadioButton x:Name="DockSettings" Style="{StaticResource DockPage}" GroupName="dock" ToolTip="Settings" AutomationProperties.Name="Settings" Checked="OnNav">
+                <ui:LineIcon Data="{StaticResource I.Gear}" StrokeThickness="1.8" />
+              </RadioButton>
+            </StackPanel>
+          </Border>
+
+          <!-- Computers -->
+          <Border Style="{StaticResource DockPill}" Margin="0,12,0,0">
+            <StackPanel>
+              <Button x:Name="DockThis" Style="{StaticResource DockButton}" Background="{DynamicResource T.AccentSoft}" Click="OnThisComputer">
+                <Grid Width="44" Height="44">
+                  <Ellipse x:Name="DockRingTrack" Stroke="{DynamicResource T.Track}" StrokeThickness="2.5" Visibility="Collapsed" />
+                  <Ellipse x:Name="DockRing" Stroke="{DynamicResource T.Accent}" StrokeThickness="2.5" StrokeDashCap="Round" RenderTransformOrigin="0.5,0.5" Visibility="Collapsed">
+                    <Ellipse.RenderTransform>
+                      <RotateTransform Angle="-90" />
+                    </Ellipse.RenderTransform>
+                  </Ellipse>
+                  <ui:LineIcon x:Name="DockThisIcon" Width="18" Height="18" StrokeThickness="1.8" Stroke="{DynamicResource T.Text}" Data="{StaticResource I.Desktop}" />
+                </Grid>
+              </Button>
+              <Button x:Name="DockNest" Style="{StaticResource DockButton}" Click="OnNestRow">
+                <Grid Width="44" Height="44">
+                  <ui:LineIcon Width="18" Height="18" StrokeThickness="1.8" Stroke="{DynamicResource T.Text}" Data="{StaticResource I.Nest}" />
+                  <Ellipse x:Name="DockNestDot" Width="11" Height="11" StrokeThickness="2" Stroke="{DynamicResource T.Card}" Fill="{DynamicResource T.Ok}"
+                           HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,1,1" />
+                </Grid>
+              </Button>
+              <Button x:Name="DockOther1" Style="{StaticResource DockButton}" Click="OnDevices">
+                <Grid Width="44" Height="44">
+                  <ui:LineIcon x:Name="DockOther1Icon" Width="18" Height="18" StrokeThickness="1.8" Stroke="{DynamicResource T.Text}" Data="{StaticResource I.Desktop}" />
+                  <Ellipse x:Name="DockOther1Dot" Width="11" Height="11" StrokeThickness="2" Stroke="{DynamicResource T.Card}" Fill="{DynamicResource T.Ok}"
+                           HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,1,1" />
+                </Grid>
+              </Button>
+              <Button x:Name="DockOther2" Style="{StaticResource DockButton}" Click="OnDevices">
+                <Grid Width="44" Height="44">
+                  <ui:LineIcon x:Name="DockOther2Icon" Width="18" Height="18" StrokeThickness="1.8" Stroke="{DynamicResource T.Text}" Data="{StaticResource I.Desktop}" />
+                  <Ellipse x:Name="DockOther2Dot" Width="11" Height="11" StrokeThickness="2" Stroke="{DynamicResource T.Card}" Fill="{DynamicResource T.Ok}"
+                           HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,1,1" />
+                </Grid>
+              </Button>
+              <Button x:Name="DockMore" Style="{StaticResource DockButton}" Background="{DynamicResource T.Hover}" BorderBrush="{DynamicResource T.Dash}" BorderThickness="1.5" Click="OnDevices"
+                      FontSize="13" FontWeight="ExtraBold">
+                <TextBlock x:Name="DockMoreText" HorizontalAlignment="Center" VerticalAlignment="Center" />
+              </Button>
+            </StackPanel>
+          </Border>
         </StackPanel>
-      </DockPanel>
-    </Border>
+      </ScrollViewer>
+
+      <Button x:Name="DockAccount" Grid.Row="2" Style="{StaticResource RoundIconButton}" Width="42" Height="42" MinWidth="42" MinHeight="42" HorizontalAlignment="Center"
+              Background="{DynamicResource T.AccentSoft}" Foreground="{DynamicResource T.AccentInk}" BorderBrush="{DynamicResource T.Border}" BorderThickness="2"
+              Tag="{DynamicResource T.AccentSoft}" Click="OnAccount">
+        <TextBlock x:Name="DockAccountInitial" Text="A" FontSize="16" FontWeight="ExtraBold" HorizontalAlignment="Center" VerticalAlignment="Center" />
+      </Button>
+    </Grid>
 
     <!-- ======================= Page ======================= -->
     <Grid Grid.Column="1">

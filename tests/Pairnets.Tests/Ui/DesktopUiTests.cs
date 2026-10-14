@@ -375,7 +375,7 @@ public class DesktopUiTests
     {
         var now = DateTimeOffset.Now;
         var actions = new SampleActions();
-        var window = new MainWindow(actions) { Width = 980, Height = 700 };
+        var window = new MainWindow(actions) { Width = 1200, Height = 860 };
         window.Show();
         var feed = new ActivityFeed();
         feed.Add(new ActivityItem(now.AddDays(-1).AddHours(-2), ActivityKind.Uploaded, "Projects/2026/budget.xlsx", "Uploaded"));
@@ -403,6 +403,10 @@ public class DesktopUiTests
         [
             new("MacBook", utc.AddDays(-30), utc, true, "1.0.58", "macOS"),
             new("DESKTOP", utc.AddDays(-30), utc, true, "1.0.58", "Windows"),
+            new("LAPTOP", utc.AddDays(-30), utc, true, "1.0.58", "Windows"),
+            new("MINI-PC", utc.AddDays(-30), utc.AddSeconds(-3), true, "1.0.58", "Linux"),
+            new("MEDIA-PC", utc.AddDays(-30), utc.AddDays(-2), false, "1.0.58", "Linux"),
+            new("OFFICE-PC", utc.AddDays(-30), utc.AddDays(-3), false, "1.0.58", "Windows"),
         ];
         window.ShowUpdate("Pairnets 1.0.58 is available", "You have 1.0.52. Your settings are kept.", "Download");
         window.ShowStatus(StatusSnapshot.Initial with
@@ -414,6 +418,7 @@ public class DesktopUiTests
             Peers = new Dictionary<string, PeerActivity>
             {
                 ["DESKTOP"] = new(new Pairnets.Core.TransferReport(0, 3_400_000, 0, 0, 0, 0, Downloading: true), utc, 80, utc.AddMinutes(-2)),
+                ["LAPTOP"] = new(new Pairnets.Core.TransferReport(0, 2.6 * (1 << 20), 12, 120, 0, 0, Downloading: true), utc, 80, utc.AddMinutes(-2)),
             },
             LimitText = "Limited to 5 MB/s", Server = server, Devices = devices,
             Active =
@@ -425,6 +430,9 @@ public class DesktopUiTests
             ],
         }, "/Users/me/Work", "MacBook");
         Save(window, outDir, $"main-window-syncing-{suffix}.png");
+        window.SideFolded = true;
+        Save(window, outDir, $"main-window-folded-{suffix}.png");
+        window.SideFolded = false;
 
         window.ShowStatus(StatusSnapshot.Initial with
         {
@@ -440,6 +448,10 @@ public class DesktopUiTests
         window.ShowAttentionTab(false);
         window.ShowStatus(StatusSnapshot.Initial with { Status = RunnerStatus.Idle, Text = "Up to date", LastSyncAt = now, Server = server, Devices = devices }, "/Users/me/Work", "MacBook");
         Save(window, outDir, $"main-window-idle-{suffix}.png");
+
+        // This computer can't reach the nest: the others show when they were last seen.
+        window.ShowStatus(StatusSnapshot.Initial with { Status = RunnerStatus.Offline, Text = "Offline: timeout", LastSyncAt = now.AddMinutes(-70), Devices = devices }, "/Users/me/Work", "MacBook");
+        Save(window, outDir, $"main-window-offline-{suffix}.png");
 
         window.ShowStatus(StatusSnapshot.Initial with
         {

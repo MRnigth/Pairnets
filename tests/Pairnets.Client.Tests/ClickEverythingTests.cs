@@ -176,6 +176,18 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
         new("LAPTOP", Utc.AddDays(-30), Utc.AddHours(-3), false, "1.0.58", "Windows"),
     ];
 
+    /// <summary>Seven computers: six others, so the left side shows "+1" in its group and the dock folds four into "+4".</summary>
+    private static readonly IReadOnlyList<DeviceInfo> ManyDevices =
+    [
+        new("DESKTOP", Utc.AddDays(-30), Utc, true, "1.0.58", "Windows"),
+        new("LAPTOP", Utc.AddDays(-30), Utc, true, "1.0.58", "Windows"),
+        new("MINI-PC", Utc.AddDays(-30), Utc, true, "1.0.58", "Linux"),
+        new("MEDIA-PC", Utc.AddDays(-30), Utc.AddDays(-2), false, "1.0.58", "Linux"),
+        new("OFFICE-PC", Utc.AddDays(-30), Utc.AddDays(-3), false, "1.0.58", "Windows"),
+        new("KITCHEN-PC", Utc.AddDays(-30), Utc.AddDays(-4), false, "1.0.58", "Windows"),
+        new("GARAGE-PC", Utc.AddDays(-30), Utc.AddDays(-5), false, "1.0.58", "Windows"),
+    ];
+
     /// <summary>Recent activity: files that the sample History also has, and a message without a file.</summary>
     private static IReadOnlyList<ActivityItem> Rows()
     {
@@ -520,6 +532,20 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
                 FolderPath, "DESKTOP");
             main.Navigate(MainPage.Devices);
         }));
+        yield return new Screen(name, "the left side open with seven computers", NewMainWindow, (b, w) => Wpf.Ui(() =>
+        {
+            var main = (MainWindow)w;
+            main.ShowStatus(StatusSnapshot.Initial with { Status = RunnerStatus.Idle, Text = "Up to date", Server = CurrentServer, Devices = ManyDevices },
+                FolderPath, "DESKTOP");
+        }));
+        yield return new Screen(name, "the left side folded into the dock, with seven computers", NewMainWindow, (b, w) => Wpf.Ui(() =>
+        {
+            var main = (MainWindow)w;
+            main.ShowAttention(Attention(b));
+            main.ShowStatus(StatusSnapshot.Initial with { Status = RunnerStatus.Idle, Text = "Up to date", Server = CurrentServer, Devices = ManyDevices },
+                FolderPath, "DESKTOP");
+            main.SideFolded = true;
+        }));
         yield return new Screen(name, "the Needs attention page", NewMainWindow, (b, w) => Wpf.Ui(() =>
         {
             var main = (MainWindow)w;
@@ -553,8 +579,16 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
             c => OnPage(MainPage.History)(c) && (c.WasChecked == true || c.Bench.History.Reads.Items.Contains("files"))),
         On("Devices", "show the Devices page and ask the server for its computers",
             c => OnPage(MainPage.Devices)(c) && (c.WasChecked == true || Called("RefreshDevices")(c))),
-        On("Needs attention", "show the Needs attention page", OnPage(MainPage.Attention)),
+        new(t => t.Label.StartsWith("Needs you", StringComparison.Ordinal), "show the Needs attention page", OnPage(MainPage.Attention)),
         On("Settings", "ask the app for the Settings page", Called("ShowSettings")),
+        On("Fold into the dock", "fold the left side into the dock", c => ((MainWindow)c.Window).SideFolded),
+        On("Open the side panel", "open the left side again", c => !((MainWindow)c.Window).SideFolded),
+        On("Fold the group", "fold the other computers away", c => ((MainWindow)c.Window).GroupGrid.Visibility != Visibility.Visible),
+        new(t => t.Element.Name is "AccountButton" or "DockAccount", "ask the app for the Settings page (the Account page comes later)", Called("ShowSettings")),
+        new(t => t.Element.Name is "ThisCard" or "DockThis", "show the Overview page", OnPage(MainPage.Overview)),
+        new(t => t.Element.Name is "NestRow" or "DockNest" or "DockOther1" or "DockOther2" or "DockMore" || t.Element.Tag as string == "SideCell",
+            "show the Devices page", OnPage(MainPage.Devices)),
+        new(t => t.Element.Tag as string == "SideAdd", "explain how to add a computer", Called("AddComputer")),
         On(["Update now", "Download"], "start the app update", Called("UpdateNow")),
         On("Later", "put the app update away", Called("DismissUpdate")),
 

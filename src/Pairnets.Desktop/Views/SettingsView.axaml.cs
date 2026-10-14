@@ -268,6 +268,7 @@ public partial class SettingsView : UserControl
                 StartWithWindows = AutoStartBox.IsChecked == true,
                 FirstRunCompleted = true,
                 Paused = _original.Paused,
+                SideFolded = _original.SideFolded,
                 CheckForUpdates = UpdateBox.IsChecked == true,
                 WaitForPeerBatches = WaitBox.IsChecked == true,
                 ShowMapSpeed = MapSpeedBox.IsChecked == true,

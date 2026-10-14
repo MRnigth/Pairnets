@@ -42,6 +42,9 @@ public sealed class ClientSettings
 
     public bool Paused { get; set; }
 
+    /// <summary>The main window's left side is folded into the dock (page buttons and computers); false = open.</summary>
+    public bool SideFolded { get; set; }
+
     /// <summary>Look for a new Pairnets version at start-up and once a day.</summary>
     public bool CheckForUpdates { get; set; } = true;
 

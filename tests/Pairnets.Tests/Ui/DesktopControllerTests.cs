@@ -450,7 +450,7 @@ public sealed class DesktopControllerTests
 
         var main = app.MainWindow;
         app.App.RefreshNow();
-        Assert.Equal("Pairnets 99.0.0 is available", Screen.Named<TextBlock>(main, "UpdateTitle").Text);
+        Assert.Equal("Pairnets 99.0.0 is ready", Screen.Named<TextBlock>(main, "UpdateTitle").Text);
         Person.Click(Screen.Find<Button>(main, "Download"));
         Assert.Equal(app.Feed.ReleasePage.ToString(), app.Platform.Opened[^1]); // the app is unsigned: download by hand
         Person.Click(Screen.Find<Button>(main, "Later"));

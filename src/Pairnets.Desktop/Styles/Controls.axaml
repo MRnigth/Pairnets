@@ -755,4 +755,144 @@
       </Animation>
     </Style.Animations>
   </Style>
+  <!-- ================= New look (stage 2): the left side and the dock ================= -->
+  <Style Selector="Border.sidepanel">
+    <Setter Property="Background" Value="{DynamicResource T.Card}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource T.Border}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="24" />
+  </Style>
+  <!-- A flat clickable row (this computer, the nest): the background is the state colour, set from code -->
+  <Style Selector="Button.siderow">
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="CornerRadius" Value="16" />
+    <Setter Property="Padding" Value="12,10" />
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+    <Setter Property="Cursor" Value="Hand" />
+  </Style>
+  <!-- A computer cell in the group: no chrome -->
+  <Style Selector="Button.sidecell">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="CornerRadius" Value="10" />
+    <Setter Property="Padding" Value="0,2" />
+    <Setter Property="MinHeight" Value="0" />
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="Cursor" Value="Hand" />
+  </Style>
+  <!-- Page tiles (2x3, 72 high, radius 18). Blue when chosen, with white text. -->
+  <Style Selector="RadioButton.sidetile">
+    <Setter Property="Foreground" Value="{DynamicResource T.Text}" />
+    <Setter Property="Height" Value="72" />
+    <Setter Property="Margin" Value="4" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="FontWeight" Value="ExtraBold" />
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+    <Setter Property="VerticalContentAlignment" Value="Stretch" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Border x:Name="bd" Background="{DynamicResource T.Tile}" BorderBrush="{DynamicResource T.Border}" BorderThickness="1" CornerRadius="18" Padding="12,11">
+          <ContentPresenter Content="{TemplateBinding Content}" Foreground="{TemplateBinding Foreground}" />
+        </Border>
+      </ControlTemplate>
+    </Setter>
+  </Style>
+  <Style Selector="RadioButton.sidetile:pointerover /template/ Border#bd">
+    <Setter Property="Background" Value="{DynamicResource T.Hover}" />
+  </Style>
+  <Style Selector="RadioButton.sidetile:checked">
+    <Setter Property="Foreground" Value="White" />
+  </Style>
+  <Style Selector="RadioButton.sidetile:checked /template/ Border#bd">
+    <Setter Property="Background" Value="{DynamicResource T.AccentButton}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource T.AccentButton}" />
+  </Style>
+  <Style Selector="RadioButton.sidetile v|LineIcon">
+    <Setter Property="Width" Value="20" />
+    <Setter Property="Height" Value="20" />
+    <Setter Property="StrokeThickness" Value="2" />
+    <Setter Property="Stroke" Value="{DynamicResource T.Muted}" />
+    <Setter Property="HorizontalAlignment" Value="Left" />
+    <Setter Property="VerticalAlignment" Value="Top" />
+  </Style>
+  <Style Selector="RadioButton.sidetile:checked v|LineIcon">
+    <Setter Property="Stroke" Value="White" />
+  </Style>
+  <!-- The Needs-you tile: amber, and solid amber when chosen -->
+  <Style Selector="RadioButton.sidetile.amber">
+    <Setter Property="Foreground" Value="{DynamicResource T.WarnText}" />
+  </Style>
+  <Style Selector="RadioButton.sidetile.amber /template/ Border#bd">
+    <Setter Property="Background" Value="{DynamicResource T.WarnPill}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource T.WarnBorder}" />
+  </Style>
+  <Style Selector="RadioButton.sidetile.amber:checked">
+    <Setter Property="Foreground" Value="{DynamicResource T.NeedsActiveText}" />
+  </Style>
+  <Style Selector="RadioButton.sidetile.amber:checked /template/ Border#bd">
+    <Setter Property="Background" Value="{DynamicResource T.NeedsActive}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource T.NeedsActive}" />
+  </Style>
+  <Style Selector="RadioButton.sidetile.amber v|LineIcon">
+    <Setter Property="Stroke" Value="{DynamicResource T.WarnText}" />
+  </Style>
+  <Style Selector="RadioButton.sidetile.amber:checked v|LineIcon">
+    <Setter Property="Stroke" Value="{DynamicResource T.NeedsActiveText}" />
+  </Style>
+  <!-- The folded dock: pills of round 44 px buttons -->
+  <Style Selector="Border.dockpill">
+    <Setter Property="Background" Value="{DynamicResource T.Card}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource T.Border}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="30" />
+    <Setter Property="Padding" Value="7,5" />
+    <Setter Property="Width" Value="60" />
+    <Setter Property="BoxShadow" Value="0 6 20 0 #40000000" />
+  </Style>
+  <Style Selector="Button.dockbtn">
+    <Setter Property="Width" Value="44" />
+    <Setter Property="Height" Value="44" />
+    <Setter Property="MinHeight" Value="0" />
+    <Setter Property="Margin" Value="0,3" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="CornerRadius" Value="22" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Background" Value="{DynamicResource T.Chip}" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="Cursor" Value="Hand" />
+  </Style>
+  <Style Selector="RadioButton.dockpage">
+    <Setter Property="Width" Value="44" />
+    <Setter Property="Height" Value="44" />
+    <Setter Property="Margin" Value="0,3" />
+    <Setter Property="Foreground" Value="{DynamicResource T.Muted}" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Border x:Name="bd" Background="Transparent" CornerRadius="22">
+          <ContentPresenter Content="{TemplateBinding Content}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+        </Border>
+      </ControlTemplate>
+    </Setter>
+  </Style>
+  <Style Selector="RadioButton.dockpage:pointerover /template/ Border#bd">
+    <Setter Property="Background" Value="{DynamicResource T.Hover}" />
+  </Style>
+  <Style Selector="RadioButton.dockpage:checked /template/ Border#bd">
+    <Setter Property="Background" Value="{DynamicResource T.AccentButton}" />
+  </Style>
+  <Style Selector="RadioButton.dockpage v|LineIcon">
+    <Setter Property="Width" Value="20" />
+    <Setter Property="Height" Value="20" />
+    <Setter Property="StrokeThickness" Value="2" />
+    <Setter Property="Stroke" Value="{DynamicResource T.Muted}" />
+  </Style>
+  <Style Selector="RadioButton.dockpage:checked v|LineIcon">
+    <Setter Property="Stroke" Value="White" />
+  </Style>
 </Styles>

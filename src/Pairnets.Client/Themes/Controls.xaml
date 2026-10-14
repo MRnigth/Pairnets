@@ -604,4 +604,218 @@
     <Setter Property="CornerRadius" Value="11" />
     <Setter Property="Background" Value="{DynamicResource T.Chip}" />
   </Style>
+
+  <!-- ================= New look (stage 2): the left side and the dock ================= -->
+  <!-- The open panel: radius 24 -->
+  <Style x:Key="SidePanel" TargetType="Border">
+    <Setter Property="Background" Value="{DynamicResource T.Card}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource T.Border}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="24" />
+  </Style>
+
+  <!-- A flat clickable row (this computer, the nest): the background is the state colour -->
+  <Style x:Key="SideRow" TargetType="Button">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Foreground" Value="{DynamicResource T.Text}" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="Button">
+          <Grid>
+            <Border x:Name="bd" Background="{TemplateBinding Background}" CornerRadius="16" />
+            <Border x:Name="hv" Background="{DynamicResource T.Hover}" CornerRadius="16" Opacity="0" IsHitTestVisible="False" />
+            <ContentPresenter Margin="12,10" HorizontalAlignment="Stretch" TextElement.Foreground="{TemplateBinding Foreground}" />
+          </Grid>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+              <Setter TargetName="hv" Property="Opacity" Value="0.55" />
+            </Trigger>
+            <Trigger Property="IsKeyboardFocused" Value="True">
+              <Setter TargetName="hv" Property="Opacity" Value="0.55" />
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <!-- A computer cell in the group: no chrome -->
+  <Style x:Key="SideCell" TargetType="Button">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="Button">
+          <Border x:Name="bd" Background="Transparent" CornerRadius="10" Padding="0,2">
+            <ContentPresenter HorizontalAlignment="Center" />
+          </Border>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+              <Setter TargetName="bd" Property="Background" Value="{DynamicResource T.Hover}" />
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <!-- Page tiles (2x3, 72 high, radius 18). Blue when chosen, with white text. -->
+  <Style x:Key="SideTile" TargetType="RadioButton">
+    <Setter Property="Foreground" Value="{DynamicResource T.Text}" />
+    <Setter Property="Height" Value="72" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="FontWeight" Value="ExtraBold" />
+    <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+    <Setter Property="Margin" Value="4" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="RadioButton">
+          <Border x:Name="bd" Background="{DynamicResource T.Tile}" BorderBrush="{DynamicResource T.Border}" BorderThickness="1" CornerRadius="18" Padding="12,11">
+            <ContentPresenter />
+          </Border>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+              <Setter TargetName="bd" Property="Background" Value="{DynamicResource T.Hover}" />
+            </Trigger>
+            <Trigger Property="IsChecked" Value="True">
+              <Setter TargetName="bd" Property="Background" Value="{DynamicResource T.AccentButton}" />
+              <Setter TargetName="bd" Property="BorderBrush" Value="{DynamicResource T.AccentButton}" />
+              <Setter Property="Foreground" Value="White" />
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+    <Style.Resources>
+      <Style TargetType="ui:LineIcon">
+        <Setter Property="Width" Value="20" />
+        <Setter Property="Height" Value="20" />
+        <Setter Property="StrokeThickness" Value="2" />
+        <Setter Property="Stroke" Value="{DynamicResource T.Muted}" />
+        <Setter Property="HorizontalAlignment" Value="Left" />
+        <Setter Property="VerticalAlignment" Value="Top" />
+        <Style.Triggers>
+          <DataTrigger Binding="{Binding IsChecked, RelativeSource={RelativeSource AncestorType=RadioButton}}" Value="True">
+            <Setter Property="Stroke" Value="White" />
+          </DataTrigger>
+        </Style.Triggers>
+      </Style>
+    </Style.Resources>
+  </Style>
+  <!-- The Needs-you tile: amber, and solid amber when chosen -->
+  <Style x:Key="SideTileAmber" TargetType="RadioButton" BasedOn="{StaticResource SideTile}">
+    <Setter Property="Foreground" Value="{DynamicResource T.WarnText}" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="RadioButton">
+          <Border x:Name="bd" Background="{DynamicResource T.WarnPill}" BorderBrush="{DynamicResource T.WarnBorder}" BorderThickness="1" CornerRadius="18" Padding="12,11">
+            <ContentPresenter />
+          </Border>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsChecked" Value="True">
+              <Setter TargetName="bd" Property="Background" Value="{DynamicResource T.NeedsActive}" />
+              <Setter TargetName="bd" Property="BorderBrush" Value="{DynamicResource T.NeedsActive}" />
+              <Setter Property="Foreground" Value="{DynamicResource T.NeedsActiveText}" />
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+    <Style.Resources>
+      <Style TargetType="ui:LineIcon">
+        <Setter Property="Width" Value="20" />
+        <Setter Property="Height" Value="20" />
+        <Setter Property="StrokeThickness" Value="2" />
+        <Setter Property="Stroke" Value="{DynamicResource T.WarnText}" />
+        <Setter Property="HorizontalAlignment" Value="Left" />
+        <Setter Property="VerticalAlignment" Value="Top" />
+        <Style.Triggers>
+          <DataTrigger Binding="{Binding IsChecked, RelativeSource={RelativeSource AncestorType=RadioButton}}" Value="True">
+            <Setter Property="Stroke" Value="{DynamicResource T.NeedsActiveText}" />
+          </DataTrigger>
+        </Style.Triggers>
+      </Style>
+    </Style.Resources>
+  </Style>
+
+  <!-- The folded dock: pills of round 44 px buttons -->
+  <Style x:Key="DockPill" TargetType="Border">
+    <Setter Property="Background" Value="{DynamicResource T.Card}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource T.Border}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="30" />
+    <Setter Property="Padding" Value="7,5" />
+    <Setter Property="Width" Value="60" />
+    <Setter Property="Effect">
+      <Setter.Value>
+        <DropShadowEffect BlurRadius="20" ShadowDepth="6" Direction="270" Opacity="0.25" Color="Black" />
+      </Setter.Value>
+    </Setter>
+  </Style>
+  <Style x:Key="DockButton" TargetType="Button">
+    <Setter Property="Width" Value="44" />
+    <Setter Property="Height" Value="44" />
+    <Setter Property="Margin" Value="0,3" />
+    <Setter Property="Background" Value="{DynamicResource T.Chip}" />
+    <Setter Property="Foreground" Value="{DynamicResource T.Text}" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="Button">
+          <Border x:Name="bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="22">
+            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" TextElement.Foreground="{TemplateBinding Foreground}" />
+          </Border>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+              <Setter TargetName="bd" Property="Opacity" Value="0.85" />
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+  <Style x:Key="DockPage" TargetType="RadioButton">
+    <Setter Property="Width" Value="44" />
+    <Setter Property="Height" Value="44" />
+    <Setter Property="Margin" Value="0,3" />
+    <Setter Property="Foreground" Value="{DynamicResource T.Muted}" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="RadioButton">
+          <Border x:Name="bd" Background="Transparent" CornerRadius="22">
+            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+          </Border>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+              <Setter TargetName="bd" Property="Background" Value="{DynamicResource T.Hover}" />
+            </Trigger>
+            <Trigger Property="IsChecked" Value="True">
+              <Setter TargetName="bd" Property="Background" Value="{DynamicResource T.AccentButton}" />
+              <Setter Property="Foreground" Value="White" />
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+    <Style.Resources>
+      <Style TargetType="ui:LineIcon">
+        <Setter Property="Width" Value="20" />
+        <Setter Property="Height" Value="20" />
+        <Setter Property="StrokeThickness" Value="2" />
+        <Setter Property="Stroke" Value="{DynamicResource T.Muted}" />
+        <Style.Triggers>
+          <DataTrigger Binding="{Binding IsChecked, RelativeSource={RelativeSource AncestorType=RadioButton}}" Value="True">
+            <Setter Property="Stroke" Value="White" />
+          </DataTrigger>
+        </Style.Triggers>
+      </Style>
+    </Style.Resources>
+  </Style>
 </ResourceDictionary>

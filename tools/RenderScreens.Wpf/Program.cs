@@ -94,7 +94,7 @@ public static class Program
     {
         var now = DateTimeOffset.Now;
         var utc = DateTimeOffset.UtcNow;
-        var window = new MainWindow(new SampleActions()) { Width = 980, Height = 700 };
+        var window = new MainWindow(new SampleActions()) { Width = 1200, Height = 860 };
         Place(window);
         var feed = new ActivityFeed();
         feed.Add(new ActivityItem(now.AddDays(-1).AddHours(-2), ActivityKind.Uploaded, "Projects/2026/budget.xlsx", "Uploaded"));
@@ -115,10 +115,15 @@ public static class Program
         const string folder = @"D:\Sync\Work";
 
         var server = new ServerInfo("id", 1, 1, "1.0.58", 412L << 30, 1L << 40);
+        // Six computers, as the design draws the left side: three online, three not reachable.
         IReadOnlyList<DeviceInfo> devices =
         [
             new("DESKTOP", utc.AddDays(-30), utc, true, "1.0.58", "Windows"),
             new("LAPTOP", utc.AddDays(-30), utc, true, "1.0.58", "Windows"),
+            new("MINI-PC", utc.AddDays(-30), utc.AddSeconds(-3), true, "1.0.58", "Linux"),
+            new("MEDIA-PC", utc.AddDays(-30), utc.AddDays(-2), false, "1.0.58", "Linux"),
+            new("OFFICE-PC", utc.AddDays(-30), utc.AddDays(-3), false, "1.0.58", "Windows"),
+            new("KITCHEN-PC", utc.AddDays(-30), utc.AddDays(-4), false, "1.0.58", "Windows"),
         ];
         window.ShowUpdate("Pairnets 1.0.58 is available", "You have 1.0.52. It takes about 10 seconds and Pairnets restarts by itself.", "Update now");
         window.ShowStatus(StatusSnapshot.Initial with
@@ -127,6 +132,13 @@ public static class Program
             CurrentPath = "Videos/presentation-final.mp4", Operation = "upload", BytesDone = 67_108_864, BytesTotal = 104_857_600,
             FilesDone = 37, FilesTotal = 120, PassBytesDone = 412L << 20, PassBytesTotal = 1331L << 20, BytesPerSecond = 4.9 * (1 << 20),
             LimitText = "Limited to 5 MB/s", Server = server, Devices = devices,
+            UpBytesPerSecond = 4.9 * (1 << 20),
+            // LAPTOP and MINI-PC are getting the files, at different speeds.
+            Peers = new Dictionary<string, PeerActivity>
+            {
+                ["LAPTOP"] = new(new TransferReport(0, 4.1 * (1 << 20), 30, 120, 0, 0, Downloading: true), DateTimeOffset.UtcNow, 0, null),
+                ["MINI-PC"] = new(new TransferReport(0, 2.6 * (1 << 20), 12, 120, 0, 0, Downloading: true), DateTimeOffset.UtcNow, 0, null),
+            },
             Active =
             [
                 new ActiveTransfer("Photos/summer/holiday-0412.jpg", "upload", 78, 100),
@@ -136,6 +148,9 @@ public static class Program
             ],
         }, folder, "DESKTOP");
         Save(window, outDir, $"windows-main-syncing-{suffix}.png", print);
+        window.SideFolded = true;
+        Save(window, outDir, $"windows-main-folded-{suffix}.png", print);
+        window.SideFolded = false;
 
         window.ShowStatus(StatusSnapshot.Initial with
         {
@@ -160,6 +175,10 @@ public static class Program
             WaitingFor = new PeerWait("LAPTOP", 340, 212),
         }, folder, "DESKTOP");
         Save(window, outDir, $"windows-main-waiting-{suffix}.png", print);
+
+        // This computer can't reach the nest: the others show when they were last seen.
+        window.ShowStatus(StatusSnapshot.Initial with { Status = RunnerStatus.Offline, Text = "Offline: timeout", LastSyncAt = now.AddMinutes(-70), Devices = devices }, folder, "DESKTOP");
+        Save(window, outDir, $"windows-main-offline-{suffix}.png", print);
 
         // Saying what it does instead of a bare "Syncing" (two PCs: PC-1 here on Windows, PC-2 on Linux).
         foreach (var (name, state) in SyncFeedbackStates(server, utc, now))

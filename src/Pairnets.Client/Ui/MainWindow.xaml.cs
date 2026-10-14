@@ -81,6 +81,9 @@ public partial class MainWindow : Window
     private string? _tintKey;
     private bool _navigating;
     private bool _deletedMode = true;
+    private StatusSnapshot _status = StatusSnapshot.Initial;
+    private SideUpdate _update = SideUpdate.None;
+    private int _attentionCount;
 
     private static readonly TimeSpan HistoryFreshFor = TimeSpan.FromMinutes(1);
 
@@ -97,10 +100,9 @@ public partial class MainWindow : Window
         FileList.ItemsSource = _shownFiles;
         VersionList.ItemsSource = _versions;
         DevicesList.ItemsSource = _devices;
-        // Just the version, so it never runs under the Settings button; the full line is in Settings → About.
-        AppVersion.Text = "Pairnets " + PairnetsInfo.ProductVersion;
-        AppVersion.ToolTip = PairnetsLinks.AboutLine;
         AppIcon.Source = AppIcons.Large;
+        DockIcon.Source = AppIcons.Large;
+        RefreshSide();
         IsVisibleChanged += (_, _) =>
         {
             if (!IsVisible)
@@ -138,6 +140,7 @@ public partial class MainWindow : Window
         try
         {
             NavFor(page).IsChecked = true;
+            DockFor(page).IsChecked = true;
         }
         finally
         {
@@ -156,16 +159,37 @@ public partial class MainWindow : Window
         _ => NavOverview,
     };
 
+    private RadioButton DockFor(MainPage page) => page switch
+    {
+        MainPage.Activity => DockActivity,
+        MainPage.History => DockHistory,
+        MainPage.Devices => DockDevices,
+        MainPage.Attention => DockAttention,
+        MainPage.Settings => DockSettings,
+        _ => DockOverview,
+    };
+
     private void OnNav(object sender, RoutedEventArgs e)
     {
         if (sender is not RadioButton nav || _navigating || PageTitle is null)
             return; // Checked also fires during InitializeComponent
-        var page = nav == NavActivity ? MainPage.Activity
-            : nav == NavHistory ? MainPage.History
-            : nav == NavDevices ? MainPage.Devices
-            : nav == NavAttention ? MainPage.Attention
-            : nav == NavSettings ? MainPage.Settings
+        var page = nav == NavActivity || nav == DockActivity ? MainPage.Activity
+            : nav == NavHistory || nav == DockHistory ? MainPage.History
+            : nav == NavDevices || nav == DockDevices ? MainPage.Devices
+            : nav == NavAttention || nav == DockAttention ? MainPage.Attention
+            : nav == NavSettings || nav == DockSettings ? MainPage.Settings
             : MainPage.Overview;
+        // The tile and the dock button of a page are one choice.
+        _navigating = true;
+        try
+        {
+            NavFor(page).IsChecked = true;
+            DockFor(page).IsChecked = true;
+        }
+        finally
+        {
+            _navigating = false;
+        }
         if (page == MainPage.Settings && _actions is not null)
         {
             _actions.ShowSettings(); // comes back through ShowSettingsPage with a fresh form
@@ -226,6 +250,8 @@ public partial class MainWindow : Window
         if (device is not null)
             ThisDevice = device;
         device ??= ThisDevice;
+        _status = s;
+        RefreshSide();
         ShowDevices(s);
         var brush = Badge.Show(s, StatusBadge, StatusGlyph, StatusGlyph2, 23, animate: true);
         Tint(brush);
@@ -312,25 +338,32 @@ public partial class MainWindow : Window
         HeroTint.Background = Visuals.Wash(brushKey, 0x24, 0.75);
     }
 
-    /// <summary>Shows or hides the app update card. <paramref name="progress"/> 0–100 while downloading.</summary>
+    /// <summary>Shows or hides the slim app update card. <paramref name="progress"/> 0–100 while downloading.</summary>
     public void ShowUpdate(string? title, string detail, string button, double? progress = null, bool busy = false)
     {
-        UpdateCard.Visibility = Show(title is not null);
-        Motion.Bob(UpdateIcon, title is not null && !busy);
-        if (title is null)
+        _update = SideUpdate.From(title, detail, button, progress, busy);
+        UpdateCard.Visibility = Show(_update.Visible);
+        Motion.Bob(UpdateIcon, _update.Visible && !busy);
+        if (!_update.Visible)
             return;
-        UpdateTitle.Text = title;
-        UpdateDetail.Text = detail;
+        UpdateTitle.Text = _update.Title;
+        UpdateTitle.ToolTip = detail.Length > 0 ? detail : null;
         UpdateButton.Content = button;
-        UpdateButton.IsEnabled = !busy;
+        UpdateButton.Visibility = Show(!busy);
         UpdateLater.Visibility = Show(!busy);
-        UpdateProgress.Visibility = Show(progress is not null);
+        UpdatePercent.Visibility = Show(busy);
+        UpdatePercent.Text = _update.PercentText;
+        UpdateProgress.Visibility = Show(_update.ShowBar);
         Motion.Glide(UpdateProgress, progress ?? 0);
     }
+
+    /// <summary>The longer words behind the update card's title (its tooltip), for the tests.</summary>
+    public string UpdateDetailText => UpdateTitle.ToolTip as string ?? string.Empty;
 
     public void ShowActivity(IReadOnlyList<ActivityItem> items)
     {
         _activityItems = items;
+        RefreshSide();
         LiveLists.Sync(_recent, items.Take(5).ToList());
         if (Page == MainPage.Activity)
             LiveLists.Sync(_activityRows, ActivityDays.Rows(items, DateTimeOffset.Now));
@@ -376,8 +409,8 @@ public partial class MainWindow : Window
         _attention.Clear();
         foreach (var item in items)
             _attention.Add(item);
-        AttentionBadge.Visibility = Show(items.Count > 0);
-        AttentionCount.Text = items.Count.ToString(CultureInfo.InvariantCulture);
+        _attentionCount = items.Count;
+        RefreshSide();
         AttentionCallout.Visibility = Show(items.Count > 0);
         AttentionCalloutText.Text = items.Count == 1 ? "1 thing needs your attention" : $"{items.Count} things need your attention";
         UpdatePanels();

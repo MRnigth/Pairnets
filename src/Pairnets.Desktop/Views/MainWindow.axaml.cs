@@ -72,6 +72,9 @@ public partial class MainWindow : Window
     private string? _shownState;
     private string? _tintKey;
     private bool _navigating;
+    private StatusSnapshot _status = StatusSnapshot.Initial;
+    private SideUpdate _update = SideUpdate.None;
+    private int _attentionCount;
     private bool _deletedMode = true;
     private string? _filteredSearch;
 
@@ -93,11 +96,12 @@ public partial class MainWindow : Window
         FileList.ItemsSource = _shownFiles;
         VersionList.ItemsSource = _versions;
         DevicesList.ItemsSource = _devices;
-        // Just the version, so it never runs under the Settings button; the full line is in Settings → About.
-        AppVersion.Text = "Pairnets " + PairnetsInfo.ProductVersion;
-        ToolTip.SetTip(AppVersion, PairnetsLinks.AboutLine);
+        RefreshSide();
         UpdatePanels();
     }
+
+    /// <summary>The longer words behind the update card's title (its tooltip), for the tests.</summary>
+    internal string UpdateDetailText => ToolTip.GetTip(UpdateTitle) as string ?? string.Empty;
 
     /// <summary>Set when the app exits, so closing really closes instead of hiding.</summary>
     public bool AllowClose { get; set; }
@@ -128,6 +132,7 @@ public partial class MainWindow : Window
         try
         {
             NavFor(page).IsChecked = true;
+            DockFor(page).IsChecked = true;
         }
         finally
         {
@@ -135,6 +140,16 @@ public partial class MainWindow : Window
         }
         ShowPage(page);
     }
+
+    private RadioButton DockFor(MainPage page) => page switch
+    {
+        MainPage.Activity => DockActivity,
+        MainPage.History => DockHistory,
+        MainPage.Devices => DockDevices,
+        MainPage.Attention => DockAttention,
+        MainPage.Settings => DockSettings,
+        _ => DockOverview,
+    };
 
     private RadioButton NavFor(MainPage page) => page switch
     {
@@ -150,12 +165,23 @@ public partial class MainWindow : Window
     {
         if (sender is not RadioButton { IsChecked: true } nav || _navigating)
             return;
-        var page = nav == NavActivity ? MainPage.Activity
-            : nav == NavHistory ? MainPage.History
-            : nav == NavDevices ? MainPage.Devices
-            : nav == NavAttention ? MainPage.Attention
-            : nav == NavSettings ? MainPage.Settings
+        var page = nav == NavActivity || nav == DockActivity ? MainPage.Activity
+            : nav == NavHistory || nav == DockHistory ? MainPage.History
+            : nav == NavDevices || nav == DockDevices ? MainPage.Devices
+            : nav == NavAttention || nav == DockAttention ? MainPage.Attention
+            : nav == NavSettings || nav == DockSettings ? MainPage.Settings
             : MainPage.Overview;
+        // The tile and the dock button of a page are one choice.
+        _navigating = true;
+        try
+        {
+            NavFor(page).IsChecked = true;
+            DockFor(page).IsChecked = true;
+        }
+        finally
+        {
+            _navigating = false;
+        }
         if (page == MainPage.Settings && _actions is not null)
         {
             _actions.ShowSettings(); // comes back through ShowSettingsPage with a fresh form
@@ -217,6 +243,8 @@ public partial class MainWindow : Window
         if (device is not null)
             ThisDevice = device;
         device ??= ThisDevice;
+        _status = s;
+        RefreshSide();
         ShowDevices(s);
         var brush = Badge.Show(s, StatusBadge, StatusGlyph, StatusGlyph2, 23);
         Tint(brush);
@@ -317,21 +345,26 @@ public partial class MainWindow : Window
     /// </summary>
     public void ShowUpdate(string? title, string detail, string button, double? progress = null, bool busy = false)
     {
-        UpdateCard.IsVisible = title is not null;
-        if (title is null)
+        _update = SideUpdate.From(title, detail, button, progress, busy);
+        UpdateCard.IsVisible = _update.Visible;
+        UpdateIcon.Classes.Set("bob", _update.Visible && !busy);
+        if (!_update.Visible)
             return;
-        UpdateTitle.Text = title;
-        UpdateDetail.Text = detail;
+        UpdateTitle.Text = _update.Title;
+        ToolTip.SetTip(UpdateTitle, detail.Length > 0 ? detail : null);
         UpdateButton.Content = button;
-        UpdateButton.IsEnabled = !busy;
+        UpdateButton.IsVisible = !busy;
         UpdateLater.IsVisible = !busy;
-        UpdateProgress.IsVisible = progress is not null;
+        UpdatePercent.IsVisible = busy;
+        UpdatePercent.Text = _update.PercentText;
+        UpdateProgress.IsVisible = _update.ShowBar;
         UpdateProgress.Value = progress ?? 0;
     }
 
     public void ShowActivity(IReadOnlyList<ActivityItem> items)
     {
         _activityItems = items;
+        RefreshSide();
         LiveLists.Sync(_recent, items.Take(5).ToList());
         if (Page == MainPage.Activity)
             LiveLists.Sync(_activityRows, ActivityDays.Rows(items, DateTimeOffset.Now));
@@ -363,8 +396,8 @@ public partial class MainWindow : Window
         _attention.Clear();
         foreach (var item in items)
             _attention.Add(item);
-        AttentionBadge.IsVisible = items.Count > 0;
-        AttentionCount.Text = items.Count.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        _attentionCount = items.Count;
+        RefreshSide();
         AttentionCallout.IsVisible = items.Count > 0;
         AttentionCalloutText.Text = items.Count == 1 ? "1 thing needs your attention" : $"{items.Count} things need your attention";
         UpdatePanels();

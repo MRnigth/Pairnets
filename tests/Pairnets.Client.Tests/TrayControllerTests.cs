@@ -373,7 +373,7 @@ public sealed class TrayControllerTests
         var main = app.Tray.Window!;
         await app.Press(main, "Check now");
         await app.WaitUntil(() => main.UpdateCard.IsVisible, "the update card");
-        Assert.Equal("Pairnets 99.0.0 is available", await app.Wpf.Ui(() => main.UpdateTitle.Text));
+        Assert.Equal("Pairnets 99.0.0 is ready", await app.Wpf.Ui(() => main.UpdateTitle.Text));
         Assert.Contains(app.Notifications.Items, n => n.Title == "Pairnets update available");
 
         await app.Press(main, "Download");
@@ -406,7 +406,7 @@ public sealed class TrayControllerTests
         await app.WaitUntil(() => main.UpdateCard.IsVisible, "the update card");
         await app.Press(main, "Update now");
         await app.WaitUntil(() => main.UpdateTitle.Text == "Pairnets 99.0.0 could not be installed", "the app to refuse the tampered download");
-        Assert.Contains("didn't match its checksum", await app.Wpf.Ui(() => main.UpdateDetail.Text));
+        Assert.Contains("didn't match its checksum", await app.Wpf.Ui(() => main.UpdateDetailText));
         Assert.Equal("Open download page", await app.Wpf.Ui(() => main.UpdateButton.Content));
         Assert.Empty(app.Platform.Installers.Items);
         Assert.Equal(0, app.Shutdowns);
@@ -414,7 +414,7 @@ public sealed class TrayControllerTests
         // A good release: downloaded, checked, started, and Pairnets closes so the installer can replace it.
         feed.Publish("99.0.1");
         await app.Press(main, "Check now");
-        await app.WaitUntil(() => main.UpdateTitle.Text == "Pairnets 99.0.1 is available", "the next release");
+        await app.WaitUntil(() => main.UpdateTitle.Text == "Pairnets 99.0.1 is ready", "the next release");
         await app.Press(main, "Update now");
         await app.WaitUntil(() => app.Platform.Installers.Count == 1, "the installer to start");
         var (setup, arguments) = app.Platform.Installers.Items[0];
