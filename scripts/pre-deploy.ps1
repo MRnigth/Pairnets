@@ -599,7 +599,8 @@ function Step-LinuxBox($Ctx) {
         $okB = Invoke-BoxCheck $Ctx 'upgrade from the published release (phase B)' 'bash tests/linux-server/upgrade-check.sh --feed /root/pd/feed1'
         Read-BoxToken $Ctx | Out-Null
         $okLint = Invoke-BoxCheck $Ctx 'shellcheck' 'bash tests/linux-server/lint.sh'
-        $failedB = -not ($okB -and $okLint)
+        $okLinks = Invoke-BoxCheck $Ctx 'updater ignores planted symlinks' 'bash tests/linux-server/update-symlink-check.sh'
+        $failedB = -not ($okB -and $okLint -and $okLinks)
         Save-BoxJournal $Ctx 'phase-b'
     }
     $kept = @()
