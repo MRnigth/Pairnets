@@ -16,7 +16,7 @@ namespace Pairnets.Tools;
 /// Renders the Windows main and settings windows (light and dark) with sample data to PNG files.
 /// Usage: RenderScreens.Wpf &lt;output-dir&gt; [--print] (--print also writes base64 to stdout for log-only access).
 /// </summary>
-public static class Program
+public static partial class Program
 {
     private sealed class NoProtector : ISecretProtector
     {
@@ -83,7 +83,10 @@ public static class Program
             foreach (var dark in new[] { false, true })
             {
                 ThemeManager.Apply(app, dark);
-                RenderAll(outDir, dark ? "dark" : "light", print);
+                if (args.Contains("--stage3"))
+                    RenderStage3(outDir, dark ? "dark" : "light", print);
+                else
+                    RenderAll(outDir, dark ? "dark" : "light", print);
             }
             app.Shutdown();
         }).GetAwaiter().GetResult();
@@ -166,7 +169,7 @@ public static class Program
         window.ShowAttentionTab(false);
         window.ShowStatus(StatusSnapshot.Initial with { Status = RunnerStatus.Idle, Text = "Up to date", LastSyncAt = now, Server = server, Devices = devices }, folder, "DESKTOP");
         Save(window, outDir, $"windows-main-idle-{suffix}.png", print);
-        if (window.MapOtherText != "LAPTOP: Online")
+        if (window.MapOtherText != "LAPTOP: in sync")
             throw new InvalidOperationException("The overview's picture shows " + window.MapOtherText);
 
         window.ShowStatus(StatusSnapshot.Initial with

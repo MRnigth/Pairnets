@@ -548,7 +548,7 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
             int total;
             lock (_gate)
                 total = _burstOffset + _passTotal + pending;
-            Update(s => s with { FilesTotal = Math.Max(total, s.FilesDone) });
+            Update(s => s with { FilesTotal = Math.Max(total, s.FilesDone), PendingChanges = pending });
         };
         Runner.PeerWaitChanged += wait => Update(s => s with { WaitingFor = wait });
         Runner.PeerSynced += (device, version) =>
@@ -602,6 +602,7 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
                 LastSyncAt = Runner.LastSyncAt,
                 BlockReason = r.Outcome == PassOutcome.Blocked ? r.BlockReason : BlockReason.None,
                 PendingDeletes = r.BlockedDeletes.Count,
+                PendingDeletePaths = r.BlockedDeletes.Take(8).Select(d => d.Path).ToList(),
                 Warnings = SafeWarningCount(),
                 CurrentPath = null,
             });

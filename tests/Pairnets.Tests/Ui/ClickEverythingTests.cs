@@ -418,6 +418,9 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
         s.Expect["OnFix"] = Calls(a, "fix");
         s.Expect["OnDownloadNow"] = Calls(a, "download");
         s.Expect["OnUpdateServer"] = Calls(a, "server");
+        s.Expect["OnSeeList"] = OnPage(w, MainPage.Attention);
+        s.Expect["OnOpenAccount"] = Calls(a, "settings");
+        s.Expect["OnMoreComputers"] = OnPage(w, MainPage.Devices);
         s.Expect["OnAddComputer"] = Calls(a, "add-computer");
         s.Expect["OnManageDevices"] = Calls(a, "manage-devices");
         s.Expect["OnReviewAttention"] = OnPage(w, MainPage.Attention);

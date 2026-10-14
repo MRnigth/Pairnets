@@ -51,6 +51,9 @@ public enum NestDot
 public sealed record NestMapThis(NestLineKind Kind, string Label, NestDot Dot, DeviceIconKind Icon)
 {
     public bool HasPill => Kind == NestLineKind.Active && Label.Length > 0;
+
+    /// <summary>True while the files go towards the nest (the pill starts with an up arrow).</summary>
+    public bool GoesUp => Kind == NestLineKind.Active && Label.StartsWith('↑');
     public bool HasCross => Kind == NestLineKind.Unreachable;
 }
 
@@ -58,6 +61,9 @@ public sealed record NestMapThis(NestLineKind Kind, string Label, NestDot Dot, D
 public sealed record NestMapOther(string Name, DeviceIconKind Icon, NestLineKind Kind, string? Speed, string Status, NestDot Dot, bool Online)
 {
     public bool HasPill => Kind == NestLineKind.Active && !string.IsNullOrEmpty(Speed);
+
+    /// <summary>True while this computer sends to the nest (its status says "sending").</summary>
+    public bool GoesUp => Kind == NestLineKind.Active && Status.StartsWith("sending", StringComparison.Ordinal);
     public bool HasCross => Kind == NestLineKind.Unreachable;
 }
 

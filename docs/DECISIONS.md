@@ -870,3 +870,24 @@ owner picked option A from three designed options.
   that list, and the pre-deploy check of an older branch can still pass.
 * **Made-up names in test data.** A test used the owner's first name for a laptop; it now says "Alex". The old
   commits were left as they are rather than rewriting main.
+
+## New look, stage 3: the Overview and the nest picture (2026-10-14)
+
+* **One model draws the page in both apps.** `OverviewModel` (Core) holds every word, button and card of the nine states;
+  `NestMapModel` holds the picture of the computers. The two apps only draw them (`OverviewView`, `HubView`), so a change
+  to the words is made once and tested once.
+* **The old `DeviceMapView` stays for the tray panel.** The Overview uses the new `HubView`; the tray panel is another
+  helper's job and still draws the old small picture until it moves over.
+* **Only what the app knows is shown.** The design shows a list of what a stopped sync would delete, how many changes wait
+  while offline, and what another computer is about to send. The status now carries `PendingDeletePaths` (the first
+  eight files) and `PendingChanges`. The offline "Next try" tile says "In a few seconds" because the retry time is not
+  in the status, and "Coming next from LAPTOP" and "Waiting to go up" show "Latest changes" instead, because the engine
+  has no such lists.
+* **Folder rows are open or closed with a click.** The first folder starts open; "Moving now" lists the files that move
+  now (or the first waiting ones when nothing moves yet).
+* **More than five other computers:** the picture draws four and a "+N more" link that opens Devices.
+* **Motion:** active lines carry a few light dashes that travel along them. They stop when Windows is set to fewer
+  animations. The Mac/Linux app has no such setting yet, so its lines always move while the window is visible.
+* **Tests that checked the old status card** now check the new title ("Uploading 3 files to your nest", "Stopped to keep
+  your files safe") and the picture's direction instead of the old badge glyph; the intent (the page says what it does and
+  moves the right way) is the same.
