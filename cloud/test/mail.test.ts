@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createWorker } from "../src/app";
-import { loginEmail, noticeEmail, ResendMailer, RESEND_URL } from "../src/mail";
+import { loginEmail, makeMailer, noticeEmail, parseAddress, ResendMailer, RESEND_URL } from "../src/mail";
 import { FakeNet, Harness, jsonResponse, linkNest } from "./helpers";
 import { createExecutionContext, waitOnExecutionContext } from "cloudflare:test";
 
@@ -19,6 +19,78 @@ describe("mail", () => {
 
     net.on(RESEND_URL, () => jsonResponse(429, { message: "slow" }));
     await expect(m.send({ to: "a@example.com", subject: "s", text: "t", html: "h" })).rejects.toThrow("Resend answered 429");
+  });
+
+  it("Cloudflare Email Service sends first, from mail.pairnets.app, with the reply address", async () => {
+    const sent: unknown[] = [];
+    const net = new FakeNet();
+    const mailer = makeMailer(
+      {
+        EMAIL: { send: async (m) => (sent.push(m), { messageId: "m1" }) },
+        MAIL_FROM_CF: "Pairnets <signin@mail.pairnets.app>",
+        MAIL_FROM: "Pairnets <signin@pairnets.app>",
+        MAIL_REPLY_TO: "Pairnets Support <support@pairnets.app>",
+        RESEND_API_KEY: "re_test_key",
+      },
+      net.fetch,
+    );
+    await mailer.send({ to: "you@example.com", subject: "Hi", text: "Hello", html: "<p>Hello</p>" });
+    expect(sent).toEqual([
+      {
+        from: { email: "signin@mail.pairnets.app", name: "Pairnets" },
+        to: "you@example.com",
+        replyTo: { email: "support@pairnets.app", name: "Pairnets Support" },
+        subject: "Hi",
+        text: "Hello",
+        html: "<p>Hello</p>",
+      },
+    ]);
+    expect(net.calls).toHaveLength(0);
+  });
+
+  it("when Cloudflare's send fails, the same email goes through Resend", async () => {
+    const net = new FakeNet();
+    net.on(RESEND_URL, () => jsonResponse(200, { id: "x" }));
+    const mailer = makeMailer(
+      {
+        EMAIL: { send: async () => { throw new Error("E_DAILY_LIMIT_EXCEEDED"); } },
+        MAIL_FROM_CF: "Pairnets <signin@mail.pairnets.app>",
+        MAIL_FROM: "Pairnets <signin@pairnets.app>",
+        RESEND_API_KEY: "re_test_key",
+      },
+      net.fetch,
+    );
+    await mailer.send({ to: "you@example.com", subject: "Hi", text: "Hello", html: "<p>Hello</p>" });
+    expect(net.calls).toHaveLength(1);
+    expect(JSON.parse(net.calls[0].body).from).toBe("Pairnets <signin@pairnets.app>");
+  });
+
+  it("without the EMAIL binding, Resend sends alone", async () => {
+    const net = new FakeNet();
+    net.on(RESEND_URL, () => jsonResponse(200, { id: "x" }));
+    const mailer = makeMailer({ MAIL_FROM_CF: "Pairnets <signin@mail.pairnets.app>", MAIL_FROM: "Pairnets <signin@pairnets.app>", RESEND_API_KEY: "k" }, net.fetch);
+    await mailer.send({ to: "you@example.com", subject: "Hi", text: "Hello", html: "<p>Hello</p>" });
+    expect(net.calls).toHaveLength(1);
+  });
+
+  it("parseAddress reads a name and an address", () => {
+    expect(parseAddress("Pairnets <signin@mail.pairnets.app>")).toEqual({ email: "signin@mail.pairnets.app", name: "Pairnets" });
+    expect(parseAddress("a@b.c")).toEqual({ email: "a@b.c" });
+  });
+
+  it("Resend: replies go to MAIL_REPLY_TO when it is set", async () => {
+    const net = new FakeNet();
+    net.on(RESEND_URL, () => jsonResponse(200, { id: "x" }));
+    const m = new ResendMailer("re_test_key", "Pairnets <signin@pairnets.app>", net.fetch, "Pairnets Support <support@pairnets.app>");
+    await m.send({ to: "you@example.com", subject: "Hi", text: "Hello", html: "<p>Hello</p>" });
+    expect(JSON.parse(net.calls[0].body)).toEqual({
+      from: "Pairnets <signin@pairnets.app>",
+      to: ["you@example.com"],
+      reply_to: "Pairnets Support <support@pairnets.app>",
+      subject: "Hi",
+      text: "Hello",
+      html: "<p>Hello</p>",
+    });
   });
 
   it("the Worker uses Resend when no mailer is given, and a failed send still answers 202", async () => {

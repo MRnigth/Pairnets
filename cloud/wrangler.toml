@@ -15,7 +15,10 @@ routes = [{ pattern = "sync.pairnets.app", custom_domain = true }]
 
 [vars]
 PUBLIC_ORIGIN = "https://sync.pairnets.app"
-MAIL_FROM = "Pairnets <noreply@pairnets.app>"
+MAIL_FROM = "Pairnets <signin@pairnets.app>"
+MAIL_REPLY_TO = "Pairnets Support <support@pairnets.app>"
+# Cloudflare Email Service sends first, from the mail.pairnets.app subdomain; Resend (MAIL_FROM) is the fallback.
+MAIL_FROM_CF = "Pairnets <signin@mail.pairnets.app>"
 EMAIL_DAILY_LIMIT = "80"
 # Relayed servers in all. Cloudflare allows 1,000 tunnels per account; stay well under it.
 MAX_NESTS = "900"
@@ -26,6 +29,10 @@ HOSTED_LOGIN_DISABLED = "0"
 # GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
 # GOOGLE_JWKS_URL = "https://www.googleapis.com/oauth2/v3/certs"
 # CF_API_URL = "http://127.0.0.1:8790/client/v4"   # local end-to-end runs only: a stand-in Cloudflare API
+
+# Cloudflare Email Service (outbound). mail.pairnets.app and news.pairnets.app are set up as sending domains.
+[[send_email]]
+name = "EMAIL"
 
 [[d1_databases]]
 binding = "DB"

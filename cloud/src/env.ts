@@ -1,5 +1,7 @@
 // Worker bindings (CONTRACT.md appendix B, RELAY.md section 8).
 
+import type { EmailSendBinding } from "./mail";
+
 export interface Env {
   DB: D1Database;
   /** Service binding to the pairnets-router Worker (cloud/router), which holds one VPC link per relayed nest. */
@@ -28,7 +30,14 @@ export interface Env {
   PUBLIC_ORIGIN: string;
   GOOGLE_CLIENT_ID: string;
   TURNSTILE_SITE_KEY: string;
+  /** The Resend sender (pairnets.app); used alone, or as the fallback when Cloudflare's send fails. */
   MAIL_FROM: string;
+  /** The Cloudflare Email Service sender, on mail.pairnets.app. Used first when it and the EMAIL binding are set. */
+  MAIL_FROM_CF?: string;
+  /** Cloudflare Email Service binding (`[[send_email]]`). */
+  EMAIL?: EmailSendBinding;
+  /** Where replies to the service's emails go (support@). */
+  MAIL_REPLY_TO?: string;
   EMAIL_DAILY_LIMIT: string;
   /** Relay nests in all (default 900, under Cloudflare's 1,000 tunnels per account). */
   MAX_NESTS?: string;

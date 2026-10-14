@@ -195,7 +195,7 @@ export class Harness {
       RESEND_API_KEY: "test-resend-key",
       GOOGLE_CLIENT_ID,
       TURNSTILE_SITE_KEY: "test-site-key",
-      MAIL_FROM: "Pairnets <noreply@pairnets.app>",
+      MAIL_FROM: "Pairnets <signin@pairnets.app>",
       EMAIL_DAILY_LIMIT: "80",
       HOSTED_LOGIN_DISABLED: "0",
       GOOGLE_AUTH_URL: GOOGLE_AUTH,
@@ -204,6 +204,8 @@ export class Harness {
       CF_API_TOKEN: CF_TOKEN,
       CF_ACCOUNT_ID: CF_ACCOUNT,
       MAX_NESTS: "900",
+      // The tests send through the fake Resend; a test that wants Cloudflare Email Service passes EMAIL itself.
+      EMAIL: undefined,
       ...overrides,
     };
     const h = new Harness(env, signing, hbMaster);

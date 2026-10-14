@@ -6,7 +6,7 @@ import { type Ctx, defaultDeps, type Deps } from "./context";
 import { sweep } from "./cron";
 import type { Env } from "./env";
 import { apiError, finalize, HttpError, htmlResponse, MESSAGES, redirect, SIGNED_IN_PATH } from "./http";
-import { ResendMailer } from "./mail";
+import { makeMailer } from "./mail";
 import { errorPage } from "./pages";
 import { hit, limitAddress, MINUTE } from "./ratelimit";
 import { relay } from "./relay";
@@ -242,7 +242,7 @@ export function createWorker(overrides: Partial<Deps> = {}): ExportedHandler<Env
         ipKey: limitAddress(ip),
         body: new Uint8Array(0),
         setCookies: [],
-        mailer: deps.mailer ?? new ResendMailer(env.RESEND_API_KEY ?? "", env.MAIL_FROM ?? "", deps.fetch),
+        mailer: deps.mailer ?? makeMailer(env, deps.fetch),
         defer: (p) => exec.waitUntil(p),
       };
       if (isRelayPath(url.pathname)) return relay(ctx);
