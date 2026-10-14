@@ -1,3 +1,4 @@
+using Pairnets.Core.Api;
 using Microsoft.Extensions.Logging;
 using Pairnets.Core.Hashing;
 using Pairnets.Core.Paths;
@@ -206,7 +207,7 @@ public sealed class LocalScanner
             catch (UnauthorizedAccessException ex)
             {
                 if (relDir.Length == 0)
-                    throw new ScanFailedException($"Cannot list the sync folder: {ex.Message}", ex);
+                    throw new ScanFailedException($"Pairnets cannot read the sync folder. {FriendlyErrors.Describe(ex)}", ex);
                 _log.LogWarning("Cannot list folder {Folder}; its files are treated as unknown: {Error}", relDir, ex.Message);
                 result.UnknownPrefixes.Add(relDir);
                 continue;
@@ -220,7 +221,7 @@ public sealed class LocalScanner
             }
             catch (IOException ex)
             {
-                throw new ScanFailedException($"Cannot list folder '{relDir}': {ex.Message}", ex);
+                throw new ScanFailedException($"Pairnets cannot read the folder '{relDir}'. {FriendlyErrors.Describe(ex)}", ex);
             }
 
             foreach (var entry in entries)

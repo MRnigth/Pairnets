@@ -1,3 +1,4 @@
+using Pairnets.Core.Api;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
@@ -365,7 +366,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
-                notes.Add("Start at login could not be turned off: " + ex.Message);
+                notes.Add("Start at login could not be turned off: " + FriendlyErrors.Describe(ex));
             }
             if (hadOwnKey && !removed)
                 notes.Add("Your nest could not be told. " + Relay.RemoveByHandHint(serverUrl));
@@ -633,7 +634,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
         }
         catch (IOException ex)
         {
-            await Dialogs.InfoAsync(_window, "Pairnets", ex.Message);
+            await Dialogs.InfoAsync(_window, "Pairnets", FriendlyErrors.Describe(ex));
         }
         _settings.Folder = newFolder;
         SaveSettings();

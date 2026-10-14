@@ -277,7 +277,8 @@ public class RelayTests
             new RecordingNest(_ => Json(HttpStatusCode.ServiceUnavailable, "{\"code\":\"busy\",\"message\":\"Busy.\"}")));
         var error = await Assert.ThrowsAsync<PairnetsNetworkException>(() => busy.GetInfoAsync(CancellationToken.None));
         Assert.Null(error.Code);
-        Assert.StartsWith("Server error 503", error.Message);
+        Assert.Equal(FriendlyErrors.ServerProblem, error.Message);
+        Assert.Contains("503", error.Details);
     }
 
     private static HttpResponseMessage CloudflarePage(HttpStatusCode status)

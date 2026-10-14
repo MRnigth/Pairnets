@@ -18,9 +18,12 @@ public sealed class PairnetsAuthException(string message, string? code = null) :
 /// The server could not be reached, timed out, stalled, or failed (5xx). The pass is aborted and retried later.
 /// <see cref="Code"/> is <see cref="ServiceErrors.NestOffline"/> when the Pairnets service said the server is not connected.
 /// </summary>
-public class PairnetsNetworkException(string message, Exception? inner = null, string? code = null) : Exception(message, inner)
+public class PairnetsNetworkException(string message, Exception? inner = null, string? code = null, string? details = null) : Exception(message, inner)
 {
     public string? Code { get; } = code;
+
+    /// <summary>The technical side (status, original message) for the log and the bug report; never shown to people.</summary>
+    public string? Details { get; } = details;
 }
 
 /// <summary>
@@ -42,7 +45,11 @@ public sealed class PairnetsSlowDownException(TimeSpan retryAfter)
 public sealed class DownloadMismatchException(string message) : PairnetsNetworkException(message);
 
 /// <summary>The server answered something unexpected for one file. Only that file is skipped.</summary>
-public sealed class PairnetsProtocolException(string message) : Exception(message);
+public sealed class PairnetsProtocolException(string message, string? details = null, Exception? inner = null) : Exception(message, inner)
+{
+    /// <summary>The technical side (status, parser text) for the log and the bug report; never shown to people.</summary>
+    public string? Details { get; } = details;
+}
 
 /// <summary>Reading the local file failed during an upload (locked, vanished, I/O error).</summary>
 public sealed class LocalFileReadException(string message, Exception inner) : IOException(message, inner);

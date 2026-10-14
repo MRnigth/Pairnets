@@ -251,11 +251,11 @@ public sealed class PairingFlow
         }
         catch (PairnetsNetworkException ex)
         {
-            return Set(new(PairingStage.Failed, Message: "Can't reach your nest: " + ex.Message));
+            return Set(new(PairingStage.Failed, Message: "Can't reach your nest. " + FriendlyErrors.Describe(ex)));
         }
         catch (PairnetsProtocolException ex)
         {
-            return Set(new(PairingStage.Failed, Message: ex.Message));
+            return Set(new(PairingStage.Failed, Message: FriendlyErrors.Describe(ex)));
         }
         if (start is null)
             return Set(new(PairingStage.Failed, Message: "This server cannot approve sign-ins. Update the server, and give your nest its own name, then try again."));

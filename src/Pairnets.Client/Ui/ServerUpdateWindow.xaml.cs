@@ -1,3 +1,4 @@
+using Pairnets.Core.Api;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Shapes;
@@ -99,7 +100,7 @@ public partial class ServerUpdateWindow : Window
         }
         catch (Exception ex)
         {
-            result = new ServerUpdateResult(false, $"Unexpected error: {ex.GetType().Name}: {ex.Message}", ServerVersion, CanUpdateItself: true);
+            result = new ServerUpdateResult(false, "Something went wrong while updating the server. " + FriendlyErrors.Describe(ex) + " Nothing was changed on the server.", ServerVersion, CanUpdateItself: true);
         }
         ShowResult(result);
     }

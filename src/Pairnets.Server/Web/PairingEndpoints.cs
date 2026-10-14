@@ -16,6 +16,13 @@ public static class PairingEndpoints
 {
     public const string RateLimitPolicy = "pairing";
     public const string PairRequestedMethod = "PairRequested";
+
+    /// <summary>
+    /// The same announcement with the address the request came from as a fourth argument. A new method, not a longer
+    /// "PairRequested": an old app that gets a call with the wrong number of arguments drops it. The nest sends this one
+    /// first, then the old one; a new app shows the first and ignores the second (same code), an old app only hears the old one.
+    /// </summary>
+    public const string PairRequestedFromMethod = "PairRequestedFrom";
     public const string PairDecidedMethod = "PairDecided";
 
     /// <summary>At most this many requests may wait at once (from one address / in total).</summary>
@@ -41,11 +48,12 @@ public static class PairingEndpoints
             if (auth.ListPendingPairRequests(address).Count >= MaxPendingPerAddress || auth.ListPendingPairRequests().Count >= MaxPending)
                 return Error(StatusCodes.Status429TooManyRequests, ErrorCodes.BadRequest, "Too many computers are waiting to be approved. Try again in a few minutes.");
 
-            var (request, secret) = auth.CreatePairRequest(name, body?.System, body?.AppVersion, address);
+            var (request, secret) = auth.CreatePairRequest(name, PlainText.Clean(body?.System) is { Length: > 0 } system ? system : null, body?.AppVersion, address);
             log.LogInformation("{Name} ({System}) asks to join from {Address}: code {Code}", request.Name, request.System, address, request.DisplayCode);
             try
             {
                 // The other computers show "LAPTOP-2 wants to join" with a link to the approval page.
+                await hub.Clients.All.SendAsync(PairRequestedFromMethod, request.DisplayCode, request.Name, request.System ?? string.Empty, request.Address ?? string.Empty, CancellationToken.None);
                 await hub.Clients.All.SendAsync(PairRequestedMethod, request.DisplayCode, request.Name, request.System ?? string.Empty, CancellationToken.None);
             }
             catch (Exception ex)

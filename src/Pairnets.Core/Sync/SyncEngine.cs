@@ -163,7 +163,7 @@ public sealed class SyncEngine
         catch (PairnetsNetworkException ex)
         {
             result.Outcome = PassOutcome.Offline;
-            result.Message = ex.Message;
+            result.Message = FriendlyErrors.Describe(ex);
             _log.LogWarning("Pass aborted, server unreachable: {Error}", ex.Message);
         }
         catch (PairnetsAuthException ex) when (ex.NeedsSignIn)
@@ -171,13 +171,13 @@ public sealed class SyncEngine
             // Not a typo in Settings: the nest no longer lets this computer in. Nothing is retried until it signs in again.
             result.Outcome = PassOutcome.Blocked;
             result.BlockReason = BlockReason.SignedOut;
-            result.Message = ex.Message;
+            result.Message = FriendlyErrors.Describe(ex);
             _log.LogWarning("Pass stopped: {Error}", ex.Message);
         }
         catch (PairnetsAuthException ex)
         {
             result.Outcome = PassOutcome.AuthFailed;
-            result.Message = ex.Message;
+            result.Message = FriendlyErrors.Describe(ex);
             _log.LogError("Pass aborted: {Error}", ex.Message);
         }
         catch (ScanFailedException ex)
@@ -191,20 +191,20 @@ public sealed class SyncEngine
             else
             {
                 result.Outcome = PassOutcome.Failed;
-                result.Message = ex.Message;
+                result.Message = FriendlyErrors.Describe(ex);
             }
             _log.LogWarning("Pass aborted, scan failed: {Error}", ex.Message);
         }
         catch (PairnetsProtocolException ex)
         {
             result.Outcome = PassOutcome.Failed;
-            result.Message = ex.Message;
+            result.Message = FriendlyErrors.Describe(ex);
             _log.LogError("Pass aborted, unexpected server answer: {Error}", ex.Message);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or Microsoft.Data.Sqlite.SqliteException)
         {
             result.Outcome = PassOutcome.Failed;
-            result.Message = ex.Message;
+            result.Message = FriendlyErrors.Describe(ex);
             _log.LogError(ex, "Pass aborted by a local error");
         }
 
@@ -439,9 +439,9 @@ public sealed class SyncEngine
             lock (ctx.Gate)
             {
                 ctx.Result.Errors++;
-                ctx.Result.ErrorMessages.Add($"{item.Path}: {ex.Message}");
+                ctx.Result.ErrorMessages.Add($"{item.Path}: {FriendlyErrors.Describe(ex)}");
             }
-            _log.LogWarning("{Action} failed for {Path}: {Error}", item.Action, item.Path, ex.Message);
+            _log.LogWarning("{Action} failed for {Path}: {Error}", item.Action, item.Path, FriendlyErrors.Technical(ex));
         }
         finally
         {

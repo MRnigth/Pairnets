@@ -547,7 +547,7 @@ public partial class SignInView : UserControl
             {
                 // The preview is a courtesy; syncing itself never deletes or overwrites on a first pass.
             }
-            var protectedKey = _protector?.Protect(grant.Key) ?? throw new InvalidOperationException("No secret store to keep this computer's key in.");
+            var protectedKey = _protector?.Protect(grant.Key) ?? throw new PlainMessageException("No secret store to keep this computer's key in.");
             var startAtLogin = AutoStartBox.IsChecked == true;
             var settings = _accountResult is { } account
                 ? AccountSignIn.SettingsAfterSignIn(_current, account, folder, startAtLogin, protectedKey)
@@ -556,7 +556,7 @@ public partial class SignInView : UserControl
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
         {
-            Ask(ex.Message, MessageBoxButton.OK, MessageBoxImage.Warning);
+            Ask(FriendlyErrors.Describe(ex), MessageBoxButton.OK, MessageBoxImage.Warning);
         }
         finally
         {

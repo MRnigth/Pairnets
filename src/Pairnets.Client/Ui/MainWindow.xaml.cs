@@ -1,3 +1,4 @@
+using Pairnets.Core.Api;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Globalization;
@@ -436,7 +437,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            ShowHistoryMessage("Could not read the files on the server: " + ex.Message, retry: true);
+            ShowHistoryMessage("Could not read the files on the server. " + FriendlyErrors.Describe(ex), retry: true);
         }
     }
 
@@ -544,7 +545,7 @@ public partial class MainWindow : Window
         catch (Exception ex)
         {
             if (!cts.IsCancellationRequested)
-                VersionsMessage.Text = "Could not read the versions: " + ex.Message;
+                VersionsMessage.Text = "Could not read the versions. " + FriendlyErrors.Describe(ex);
         }
     }
 

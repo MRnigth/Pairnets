@@ -497,12 +497,8 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
             Update(s => s with { Peers = WithPeer(s, device, p => p with { SyncedVersion = version, SyncedAt = at }) });
         };
         Engine.ChangeSent += version => Update(s => version > s.MyChangeVersion ? s with { MyChangeVersion = version } : s);
-        Runner.JoinRequested += (code, name, system) =>
-        {
-            var request = new JoinRequest(code, name, system, _clock.GetUtcNow());
-            Update(s => s with { JoinRequests = [request, .. LiveJoinRequests(s).Where(r => r.Code != code)] });
-            JoinRequested?.Invoke(request);
-        };
+        Runner.JoinRequestedFrom += (code, name, system, address) => OnJoinRequested(code, name, system, address);
+        Runner.JoinRequested += (code, name, system) => OnJoinRequested(code, name, system, null);
         Runner.JoinDecided += code => Update(s => s with { JoinRequests = LiveJoinRequests(s).Where(r => r.Code != code).ToList() });
         Runner.DeviceListChanged += (id, name, removed) =>
         {
@@ -620,6 +616,25 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
             Interlocked.Exchange(ref _liveTickRunning, 0);
         }
     }
+
+    /// <summary>
+    /// A computer asks to join. Its name comes from a stranger on a nest with its own address, so it is cleaned here again.
+    /// A newer nest says it twice (with and without the address); the second one is the same request and is ignored.
+    /// </summary>
+    private void OnJoinRequested(string code, string name, string system, string? address)
+    {
+        var request = new JoinRequest(code, PlainText.Clean(name) is { Length: > 0 } who ? who : "Another computer", PlainText.Clean(system),
+            _clock.GetUtcNow(), PlainText.Clean(address, 45) is { Length: > 0 } from ? from : null);
+        lock (_joinGate)
+        {
+            if (LiveJoinRequests(Status).Any(r => r.Code == code))
+                return;
+            Update(s => s with { JoinRequests = [request, .. LiveJoinRequests(s).Where(r => r.Code != code)] });
+        }
+        JoinRequested?.Invoke(request);
+    }
+
+    private readonly object _joinGate = new();
 
     /// <summary>The join requests whose code still works.</summary>
     private IEnumerable<JoinRequest> LiveJoinRequests(StatusSnapshot s)
@@ -779,7 +794,7 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             _log.LogError(ex, "Server update failed unexpectedly");
-            result = new ServerUpdateResult(false, $"Unexpected error: {ex.GetType().Name}: {ex.Message}",
+            result = new ServerUpdateResult(false, "Something went wrong while updating the server. " + FriendlyErrors.Describe(ex) + " Nothing was changed on the server.",
                 Status.Server?.ServerVersion, CanUpdateItself: true);
         }
         Trace((result.Success ? "Done: " : "Not updated: ") + result.Message, result.Success ? LogLevel.Information : LogLevel.Warning);
@@ -801,7 +816,7 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            return "Could not read the server's updater details: " + ex.Message;
+            return "Could not read the server's updater details. " + FriendlyErrors.Describe(ex);
         }
     }
 
@@ -817,7 +832,7 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
         }
         catch (Exception ex) when (ex is PairnetsNetworkException or PairnetsAuthException or PairnetsProtocolException)
         {
-            return new ServerUpdateResult(false, "Could not reach the server: " + ex.Message, before, CanUpdateItself: true);
+            return new ServerUpdateResult(false, "Could not reach the server. " + FriendlyErrors.Describe(ex), before, CanUpdateItself: true);
         }
         trace("The server answered the request: " + request switch
         {
@@ -951,7 +966,7 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
         }
         catch (Exception ex) when (ex is PairnetsNetworkException or PairnetsAuthException or PairnetsProtocolException)
         {
-            return "Could not reach the server: " + ex.Message;
+            return "Could not reach the server. " + FriendlyErrors.Describe(ex);
         }
         if (result.Outcome != ApiOutcome.Ok)
             return result.Outcome == ApiOutcome.NotFound

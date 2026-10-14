@@ -1,3 +1,4 @@
+using Pairnets.Core.Api;
 using System.Net.Http;
 using System.Windows;
 using System.Windows.Threading;
@@ -306,7 +307,7 @@ public sealed class TrayController : ITrayActions, IDisposable
             }
             catch (Exception ex) when (ex is UnauthorizedAccessException or IOException or System.Security.SecurityException)
             {
-                notes.Add("Start with Windows could not be turned off: " + ex.Message);
+                notes.Add("Start with Windows could not be turned off: " + FriendlyErrors.Describe(ex));
             }
             if (hadOwnKey && !removed)
                 notes.Add("Your nest could not be told. " + Relay.RemoveByHandHint(serverUrl));
@@ -612,7 +613,7 @@ public sealed class TrayController : ITrayActions, IDisposable
         }
         catch (IOException ex)
         {
-            Dialogs.Ask(null, ex.Message, "Pairnets", MessageBoxButton.OK, MessageBoxImage.Warning);
+            Dialogs.Ask(null, FriendlyErrors.Describe(ex), "Pairnets", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
         _settings.Folder = folder;
         SettingsStore.Save(_env.SettingsPath, _settings);
@@ -725,10 +726,10 @@ public sealed class TrayController : ITrayActions, IDisposable
         }
         catch (Exception ex) when (ex is UpdateVerificationException or HttpRequestException or IOException or System.ComponentModel.Win32Exception)
         {
-            _log.LogWarning("Update failed: {Error}", ex.Message);
+            _log.LogWarning("Update failed: {Error}", FriendlyErrors.Technical(ex));
             _updateError = ex is UpdateVerificationException
                 ? "The download didn't match its checksum, so Pairnets didn't install it and kept your current version."
-                : "The download failed: " + ex.Message;
+                : "The download failed. " + FriendlyErrors.Describe(ex);
             _updateProgress = null;
             _dirty = true;
         }
@@ -865,7 +866,7 @@ public sealed class TrayController : ITrayActions, IDisposable
         }
         catch (Exception ex) when (ex is UnauthorizedAccessException or IOException or System.Security.SecurityException)
         {
-            Dialogs.Ask(null, "Could not change the startup setting: " + ex.Message, "Pairnets");
+            Dialogs.Ask(null, "Could not change the startup setting: " + FriendlyErrors.Describe(ex), "Pairnets");
         }
     }
 

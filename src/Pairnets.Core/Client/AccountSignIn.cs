@@ -352,11 +352,11 @@ public sealed class AccountSignIn
         }
         catch (OperationCanceledException ex) when (!ct.IsCancellationRequested)
         {
-            throw new PairnetsNetworkException("The request timed out.", ex);
+            throw new PairnetsNetworkException(FriendlyErrors.TimedOut, ex);
         }
         catch (Exception ex) when (ex is HttpRequestException or IOException)
         {
-            throw new PairnetsNetworkException(ex.Message, ex);
+            throw new PairnetsNetworkException(FriendlyErrors.Offline, ex, details: ex.Message);
         }
     }
 
