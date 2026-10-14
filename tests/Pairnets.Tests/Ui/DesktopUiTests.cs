@@ -712,6 +712,7 @@ public class DesktopUiTests
         Assert.Contains("MIT licence", view.AboutText.Text);
         var expected = new (Avalonia.Controls.Button Link, string Url)[]
         {
+            (view.DonateLink, "https://pairnets.app/donate"),
             (view.HelpLink, "https://pairnets.app/help/"),
             (view.FaqLink, "https://pairnets.app/faq/"),
             (view.ContactLink, "https://pairnets.app/contact/"),

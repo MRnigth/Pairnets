@@ -196,6 +196,7 @@
         </StackPanel>
         <TextBlock x:Name="AboutText" Style="{StaticResource MutedSmall}" TextWrapping="Wrap" Margin="0,8,0,0" />
         <WrapPanel x:Name="AboutLinks" Margin="-6,8,0,0">
+          <Button x:Name="DonateLink" Style="{StaticResource LinkButton}" Content="Support Pairnets ♥" CommandParameter="{x:Static core:PairnetsLinks.Donate}" Click="OnAboutLink" />
           <Button x:Name="HelpLink" Style="{StaticResource LinkButton}" Content="Help" CommandParameter="{x:Static core:PairnetsLinks.Help}" Click="OnAboutLink" />
           <Button x:Name="FaqLink" Style="{StaticResource LinkButton}" Content="FAQ" CommandParameter="{x:Static core:PairnetsLinks.Faq}" Click="OnAboutLink" />
           <Button x:Name="ContactLink" Style="{StaticResource LinkButton}" Content="Contact" CommandParameter="{x:Static core:PairnetsLinks.Contact}" Click="OnAboutLink" />

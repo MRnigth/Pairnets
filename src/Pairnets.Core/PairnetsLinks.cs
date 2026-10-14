@@ -18,6 +18,9 @@ public static class PairnetsLinks
     public const string DeleteAccount = Website + "delete-account/";
     public const string Licenses = Website + "licenses/";
 
+    /// <summary>"Support Pairnets ♥": the site's _redirects sends it on to the Ko-fi page, so the service can change without an app update.</summary>
+    public const string Donate = Website + "donate";
+
     /// <summary>"Made by MRnigth in Denmark": who runs Pairnets, as the website's footer and legal pages say.</summary>
     public const string MadeBy = "Made by MRnigth in Denmark";
 

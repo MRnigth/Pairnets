@@ -611,6 +611,24 @@ yet"), the same in both apps.
   browsers keep `/assets/*` for an hour. sync.pairnets.app now links every stylesheet and script as
   `/assets/<name>?v=<fingerprint of its text>`, so a changed file has a new address. pairnets.app (plain files, no
   build step) has its `/assets/*` checked on every visit instead (`max-age=0, must-revalidate`; unchanged files get a 304).
+
+## Donations: "Support Pairnets ♥" through Ko-fi (11 October 2026)
+
+* **What the owner asked for**: a "buy me a coffee" link so people who like Pairnets can help keep it running.
+  It shows in four places: a "Like Pairnets?" box at the bottom of the home page, a "Support Pairnets ♥" link in
+  every page's footer, the same link first under Settings → About Pairnets in both apps, and GitHub's Sponsor button
+  (`.github/FUNDING.yml`, which GitHub only reads from the default branch).
+* **Ko-fi, not Buy Me a Coffee**: Ko-fi takes 0% of one-off donations (only PayPal's or Stripe's card fee); Buy Me a
+  Coffee takes 5%. The owner makes the Ko-fi page themselves.
+* **Everything links `https://pairnets.app/donate`**, and only `site/_redirects` names the Ko-fi page. Switching
+  services (or the page's name) is a website deploy, never an app update. `SiteTests` checks that the footer, the home
+  page, `PairnetsLinks.Donate` and `FUNDING.yml` all agree.
+* **No Ko-fi widget or button image**: the site's CSP allows no outside scripts, frames or images, so the coffee cup is
+  an inline SVG drawn in the site's own colours.
+* **Nothing is paywalled**: the Terms say a donation is a gift that buys no features, support or promise that the
+  service stays up. The Privacy Policy says what Ko-fi shows the owner (name, amount, message), that it is used only to
+  say thank you and for tax records, and that it is never linked to a Pairnets account.
+
 ## Faster uploads, and Resume that carries on (10 October 2026)
 
 What the owner saw on a test setup (two computers and a nest on one PC, all through sync.pairnets.app): uploads
