@@ -92,6 +92,10 @@ public sealed class OverviewView : UserControl
 
     internal string OtherText => _hub.OtherText;
 
+    internal Geometry? ThisIconData => _hub.ThisIconData;
+
+    internal Geometry? OtherIconData => _hub.OtherIconData;
+
     internal bool ThisFlowing => _hub.ThisFlowing;
 
     internal bool NeedsVisible => _needs.Visibility == Visibility.Visible;

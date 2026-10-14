@@ -22,11 +22,8 @@
                        Stroke="{DynamicResource T.Text}" Data="{StaticResource I.Desktop}" />
           <Ellipse x:Name="Dot" Width="11" Height="11" StrokeThickness="2" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,-2,-2"
                    Stroke="{DynamicResource T.Card}" Fill="{DynamicResource T.Ok}" />
-          <!-- The pencil: built and named, hidden and without an action until the chooser is added -->
-          <Button x:Name="PencilButton" Style="{StaticResource PgButton}" Width="20" Height="20" Padding="0" ui:Pg.Radius="10"
-                  HorizontalAlignment="Left" VerticalAlignment="Top" Margin="-6,-6,0,0" Visibility="Collapsed">
-            <ui:LineIcon Width="10" Height="10" StrokeThickness="2.6" Stroke="{DynamicResource T.Muted}" Data="{StaticResource I.Pencil}" />
-          </Button>
+          <!-- The pencil: opens the icon chooser; shown only when the nest can save icons -->
+          <ui:DeviceIconPencil x:Name="PencilButton" Visibility="Collapsed" />
         </Grid>
 
         <StackPanel Grid.Column="1" VerticalAlignment="Center">

@@ -21,7 +21,7 @@ public enum DeviceCardTone
 /// <param name="StatusText">"Online", or "Last seen yesterday".</param>
 /// <param name="StatusNote">"in sync", "↓ 4.10 MB/s" or empty.</param>
 /// <param name="LastChangeText">"Last change today 10:45" or "No changes yet".</param>
-/// <param name="CanChooseIcon">The nest knows icons and this computer has an id: the pencil may show (a later stage turns it on).</param>
+/// <param name="CanChooseIcon">The nest knows icons and this computer has an id: the pencil may show (the pencil shows).</param>
 public sealed record DeviceCard(
     string Name,
     string? Id,

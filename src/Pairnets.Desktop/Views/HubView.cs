@@ -79,6 +79,11 @@ public sealed class HubView : UserControl
     /// <summary>What the first other computer's line says ("LAPTOP: in sync"), for the checks.</summary>
     internal string OtherText => _slots[0].Text;
 
+    /// <summary>The drawing of this computer's icon and of the first other computer's icon, for the checks.</summary>
+    internal Geometry? ThisIconData => _thisGlyph.Data;
+
+    internal Geometry? OtherIconData => _slots[0].IconData;
+
     protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
     {
         base.OnAttachedToVisualTree(e);
@@ -242,20 +247,11 @@ public sealed class HubView : UserControl
         _ => "T.Ok",
     };
 
-    private static string IconKey(DeviceIconKind kind) => kind switch
-    {
-        DeviceIconKind.Laptop => "I.Laptop",
-        DeviceIconKind.Office => "I.Office",
-        DeviceIconKind.Mini => "I.MiniPc",
-        DeviceIconKind.Tv => "I.Tv",
-        _ => "I.Desktop",
-    };
-
     public void Show(NestMapModel m, string? thisName)
     {
         // This computer
         _thisName.Text = string.IsNullOrEmpty(thisName) ? "This computer" : thisName;
-        _thisGlyph.Data = Visuals.Resource<Geometry>(IconKey(m.This.Icon));
+        _thisGlyph.Data = DeviceIconArt.For(m.This.Icon);
         Paint(_thisDot, Shape.FillProperty, DotKey(m.This.Dot));
         var line = m.This;
         var pill = line.HasPill && ShowSpeed;
@@ -538,6 +534,8 @@ public sealed class HubView : UserControl
 
         public bool Flowing => _curve.IsVisible && _curve.Flowing;
 
+        public Geometry? IconData => _glyph.Data;
+
         public string Text => _name.IsVisible ? $"{_name.Text}: {_status.Text}" : string.Empty;
 
         public void AddTo(Canvas canvas)
@@ -581,7 +579,7 @@ public sealed class HubView : UserControl
             Paint(_status, TextBlock.ForegroundProperty, InkKey(o.Kind));
             Paint(_icon, Border.BackgroundProperty, o.Online ? "T.Chip" : "T.ChipDim");
             Paint(_glyph, LineIcon.StrokeProperty, o.Online ? "T.Text" : "T.TextSoft");
-            _glyph.Data = Visuals.Resource<Geometry>(IconKey(o.Icon));
+            _glyph.Data = DeviceIconArt.For(o.Icon);
             _icon.IsVisible = true;
             Paint(_dot, Shape.FillProperty, DotKey(o.Dot));
             ToolTip.SetTip(_row, $"{o.Name}: {o.Status}");

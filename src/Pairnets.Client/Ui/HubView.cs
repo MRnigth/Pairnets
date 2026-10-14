@@ -81,6 +81,11 @@ public sealed class HubView : UserControl
     /// <summary>What the first other computer's line says ("DESKTOP: online"), for the checks.</summary>
     internal string OtherText => _slots[0].Text;
 
+    /// <summary>The drawing of this computer's icon and of the first other computer's icon, for the checks.</summary>
+    internal Geometry? ThisIconData => _thisGlyph.Data;
+
+    internal Geometry? OtherIconData => _slots[0].IconData;
+
     // ------------------------------------------------------------------ building
 
     private static LineIcon Icon(double size, double thickness) => new() { Width = size, Height = size, StrokeThickness = thickness };
@@ -230,20 +235,11 @@ public sealed class HubView : UserControl
         _ => "T.Ok",
     };
 
-    private static string IconKey(DeviceIconKind kind) => kind switch
-    {
-        DeviceIconKind.Laptop => "I.Laptop",
-        DeviceIconKind.Office => "I.Office",
-        DeviceIconKind.Mini => "I.MiniPc",
-        DeviceIconKind.Tv => "I.Tv",
-        _ => "I.Desktop",
-    };
-
     public void Show(NestMapModel m, string? thisName)
     {
         // This computer
         _thisName.Text = string.IsNullOrEmpty(thisName) ? "This computer" : thisName;
-        _thisGlyph.Data = Visuals.Resource<Geometry>(IconKey(m.This.Icon));
+        _thisGlyph.Data = DeviceIconArt.For(m.This.Icon);
         _thisDot.SetResourceReference(Shape.FillProperty, DotKey(m.This.Dot));
         var line = m.This;
         var pill = line.HasPill && ShowSpeed;
@@ -528,6 +524,8 @@ public sealed class HubView : UserControl
 
         public bool Flowing => _curve.Visibility == Visibility.Visible && _curve.Flowing;
 
+        public Geometry? IconData => _glyph.Data;
+
         public string Text => _name.Visibility == Visibility.Visible ? $"{_name.Text}: {_status.Text}" : string.Empty;
 
         public void AddTo(Canvas canvas)
@@ -578,7 +576,7 @@ public sealed class HubView : UserControl
             _status.SetResourceReference(TextBlock.ForegroundProperty, InkKey(o.Kind));
             _icon.SetResourceReference(Border.BackgroundProperty, o.Online ? "T.Chip" : "T.ChipDim");
             _glyph.SetResourceReference(LineIcon.StrokeProperty, o.Online ? "T.Text" : "T.TextSoft");
-            _glyph.Data = Visuals.Resource<Geometry>(IconKey(o.Icon));
+            _glyph.Data = DeviceIconArt.For(o.Icon);
             _icon.Visibility = Visibility.Visible;
             _dot.SetResourceReference(Shape.FillProperty, DotKey(o.Dot));
             ToolTipService.SetToolTip(_row, $"{o.Name}: {o.Status}");

@@ -6,7 +6,8 @@ namespace Pairnets.Core.Client;
 /// One line in the Devices tab: "MacBook (this computer)", "Online" (or what it moves right now, "↓ 4.20 MB/s"),
 /// "macOS · Pairnets 1.0.38 · last change 5 min ago".
 /// </summary>
-public sealed record DeviceRow(string Name, bool IsThisComputer, bool Online, string StatusText, string Detail)
+public sealed record DeviceRow(string Name, bool IsThisComputer, bool Online, string StatusText, string Detail,
+    string? Id = null, DeviceIconKind Icon = DeviceIconKind.Desktop, bool CanChooseIcon = false)
 {
     public string Title => IsThisComputer ? Name + " (this computer)" : Name;
 
@@ -16,6 +17,10 @@ public sealed record DeviceRow(string Name, bool IsThisComputer, bool Online, st
     /// "Online" or when they were last seen.
     /// </summary>
     public static IReadOnlyList<DeviceRow> From(IReadOnlyList<DeviceInfo> devices, string? thisDevice, DateTimeOffset now, StatusSnapshot? status = null) =>
+        From(devices, thisDevice, now, status, status?.DeviceIconsSupported ?? false);
+
+    /// <summary>With <paramref name="supportsIcons"/> false (an older nest) every computer shows the guess and has no pencil.</summary>
+    public static IReadOnlyList<DeviceRow> From(IReadOnlyList<DeviceInfo> devices, string? thisDevice, DateTimeOffset now, StatusSnapshot? status, bool supportsIcons) =>
         devices
             .Select(d => (Device: d, IsThis: string.Equals(d.Name, thisDevice, StringComparison.OrdinalIgnoreCase)))
             .OrderByDescending(x => x.IsThis)
@@ -27,7 +32,8 @@ public sealed record DeviceRow(string Name, bool IsThisComputer, bool Online, st
                 var online = x.Device.Online || live is not null;
                 return new DeviceRow(x.Device.Name, x.IsThis, online,
                     live is not null ? Format.Live(live) : online ? "Online" : "Last seen " + Ago(now - x.Device.LastSeen),
-                    DetailFor(x.Device, now));
+                    DetailFor(x.Device, now),
+                    x.Device.Id, DeviceIcon.For(x.Device, supportsIcons), supportsIcons && !string.IsNullOrEmpty(x.Device.Id));
             })
             .ToList();
 

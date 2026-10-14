@@ -59,15 +59,6 @@ internal static class TrayBranches
         _ => "T.TextSoft",
     };
 
-    private static string IconKey(DeviceIconKind icon) => icon switch
-    {
-        DeviceIconKind.Laptop => "I.Laptop",
-        DeviceIconKind.Office => "I.Office",
-        DeviceIconKind.Mini => "I.MiniPc",
-        DeviceIconKind.Tv => "I.Tv",
-        _ => "I.Desktop",
-    };
-
     private static Line Dash(string brushKey, bool dashed, double width = double.NaN)
     {
         var line = new Line { X1 = 0, X2 = 1, Y1 = 0, Y2 = 0, Stretch = Stretch.Fill, StrokeThickness = 2, VerticalAlignment = VerticalAlignment.Center, Width = width };
@@ -142,7 +133,7 @@ internal static class TrayBranches
         // The computer's icon with its dot
         var square = new Border { Width = 24, Height = 24, CornerRadius = new CornerRadius(8) };
         square.SetResourceReference(Border.BackgroundProperty, b.Dot is NestDot.Off or NestDot.Bad ? "T.ChipDim" : "T.Chip");
-        var icon = new LineIcon { Width = 13, Height = 13, StrokeThickness = 2, Data = Visuals.Resource<Geometry>(IconKey(b.Icon)) };
+        var icon = new LineIcon { Width = 13, Height = 13, StrokeThickness = 2, Data = DeviceIconArt.For(b.Icon) };
         icon.SetResourceReference(LineIcon.StrokeProperty, b.Dot is NestDot.Off or NestDot.Bad ? "T.TextSoft" : "T.Text");
         var dot = new Ellipse { Width = 9, Height = 9, StrokeThickness = 2, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, -2, -2) };
         dot.SetResourceReference(Shape.StrokeProperty, "T.Card");
@@ -206,7 +197,7 @@ internal static class TrayBranches
             var dash = new Border { Width = 20, Height = 20, CornerRadius = new CornerRadius(10), BorderThickness = new Thickness(1), Margin = new Thickness(i == 0 ? 0 : -5, 0, 0, 0) };
             dash.SetResourceReference(Border.BackgroundProperty, "T.ChipDim");
             dash.SetResourceReference(Border.BorderBrushProperty, "T.Bad");
-            var glyph = new LineIcon { Width = 10, Height = 10, StrokeThickness = 2.2, Data = Visuals.Resource<Geometry>(IconKey(gone.Icons[i])) };
+            var glyph = new LineIcon { Width = 10, Height = 10, StrokeThickness = 2.2, Data = DeviceIconArt.For(gone.Icons[i]) };
             glyph.SetResourceReference(LineIcon.StrokeProperty, "T.TextSoft");
             dash.Child = glyph;
             pile.Children.Add(dash);

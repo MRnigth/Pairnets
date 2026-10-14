@@ -43,6 +43,9 @@ public partial class DeviceMapView : UserControl
         ShowNode(map.Other, OtherRing, OtherDot, OtherName, OtherDetail);
         HereRing.Classes.Set("online", false); // only the server's ring is green when connected; the computers show a dot
         OtherRing.Classes.Set("online", false);
+        HereIcon.Data = DeviceIconArt.For(map.Here.Icon);
+        if (map.Other.Icon is { } otherIcon)
+            OtherIcon.Data = DeviceIconArt.For(otherIcon);
         OtherMore.Text = map.MoreText;
         OtherMore.IsVisible = map.MoreComputers > 0;
         HereLine.Linked = map.HereLinked;

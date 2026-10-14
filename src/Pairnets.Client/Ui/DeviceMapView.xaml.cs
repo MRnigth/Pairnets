@@ -56,6 +56,9 @@ public partial class DeviceMapView : UserControl
         ShowNode(map.Here, HereRing, HereDot, HereName, HereDetail, isServer: false);
         ShowNode(map.Server, ServerRing, ServerDot, ServerName, ServerDetail, isServer: true);
         ShowNode(map.Other, OtherRing, OtherDot, OtherName, OtherDetail, isServer: false);
+        HereIcon.Data = DeviceIconArt.For(map.Here.Icon);
+        if (map.Other.Icon is { } otherIcon)
+            OtherIcon.Data = DeviceIconArt.For(otherIcon);
         OtherMore.Text = map.MoreText;
         OtherMore.Visibility = map.MoreComputers > 0 ? Visibility.Visible : Visibility.Collapsed;
         HereLine.Linked = map.HereLinked;

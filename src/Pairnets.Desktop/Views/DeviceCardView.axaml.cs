@@ -10,12 +10,6 @@ namespace Pairnets.Desktop.Views;
 /// <summary>One computer on the Devices page: a card drawn from a <see cref="DeviceCard"/> (its DataContext).</summary>
 public partial class DeviceCardView : UserControl
 {
-    /// <summary>
-    /// The pencil that opens the icon chooser. It stays hidden and does nothing until the chooser is built: then the
-    /// only change here is this flag (and the click handler).
-    /// </summary>
-    public const bool PencilEnabled = false;
-
     /// <summary>Raised (bubbling) when the card's "…" button is pressed; its source is the card.</summary>
     public static readonly RoutedEvent<RoutedEventArgs> MoreRequestedEvent =
         RoutedEvent.Register<DeviceCardView, RoutedEventArgs>(nameof(MoreRequested), RoutingStrategies.Bubble);
@@ -36,15 +30,7 @@ public partial class DeviceCardView : UserControl
     internal DeviceCard? Data => DataContext as DeviceCard;
 
     /// <summary>The icon slot is a single place: the glyph for <paramref name="icon"/> is chosen here and only here.</summary>
-    private void DrawIcon(DeviceIconKind icon) =>
-        Glyph.Data = Visuals.Resource<Geometry>(icon switch
-        {
-            DeviceIconKind.Laptop => "I.Laptop",
-            DeviceIconKind.Office => "I.Office",
-            DeviceIconKind.Mini => "I.MiniPc",
-            DeviceIconKind.Tv => "I.Tv",
-            _ => "I.Desktop",
-        });
+    private void DrawIcon(DeviceIconKind icon) => Glyph.Data = DeviceIconArt.For(icon);
 
     private void Draw(DeviceCard? card)
     {
@@ -62,7 +48,10 @@ public partial class DeviceCardView : UserControl
         NoteText.IsVisible = card.StatusNote.Length > 0;
         LastChangeText.Text = card.LastChangeText;
         DrawIcon(card.Icon);
-        PencilButton.IsVisible = PencilEnabled && card.CanChooseIcon;
+        PencilButton.DeviceId = card.Id;
+        PencilButton.DeviceName = card.Name;
+        PencilButton.Current = card.Icon;
+        PencilButton.IsVisible = card.CanChooseIcon;
         AutomationProperties.SetName(PencilButton, card.IconLabel);
         ToolTip.SetTip(MoreButton, card.MoreLabel);
         AutomationProperties.SetName(MoreButton, card.MoreLabel);

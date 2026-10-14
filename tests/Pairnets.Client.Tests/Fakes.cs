@@ -197,6 +197,11 @@ public sealed class RecordingActions(IHistorySource? history = null) : ITrayActi
     public void UpdateServer() => Calls.Add(nameof(UpdateServer));
     public void ReportBug() => Calls.Add(nameof(ReportBug));
     public void RefreshDevices() => Calls.Add(nameof(RefreshDevices));
+    public Task<bool> SetDeviceIcon(string id, string icon)
+    {
+        Calls.Add($"icon:{id}:{icon}");
+        return Task.FromResult(true);
+    }
     public void AddComputer() => Calls.Add(nameof(AddComputer));
     public void ManageDevices() => Calls.Add(nameof(ManageDevices));
     public void RevealFile(string syncPath) => Calls.Add($"{nameof(RevealFile)}({syncPath})");

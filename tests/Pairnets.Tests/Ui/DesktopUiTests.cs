@@ -79,6 +79,11 @@ public sealed class SampleActions : ITrayActions
     public void ReportBug() => Calls.Add("bug");
     public void RevealFile(string syncPath) => Calls.Add("reveal:" + syncPath);
     public void RefreshDevices() => Calls.Add("devices");
+    public Task<bool> SetDeviceIcon(string id, string icon)
+    {
+        Calls.Add($"icon:{id}:{icon}");
+        return Task.FromResult(true);
+    }
 
     public void AddComputer() => Calls.Add("add-computer");
 

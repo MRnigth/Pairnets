@@ -258,7 +258,7 @@ public class Stage4PagesTests
     }
 
     [AvaloniaFact]
-    public void TheComputerCardKeepsTheIconSlotAndHidesThePencil()
+    public void TheComputerCardKeepsTheIconSlotAndHidesThePencilOnAnOldNest()
     {
         var window = Open(new SampleActions());
         window.ShowStatus(SixComputers(join: false), "/home/me/Work", "DESKTOP");

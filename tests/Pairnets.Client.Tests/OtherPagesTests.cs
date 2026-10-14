@@ -307,7 +307,7 @@ public sealed class OtherPagesTests
         Assert.Equal("DESKTOP", await Wpf.Ui(() => cards[0].NameLabel));
         Assert.True(await Wpf.Ui(() => cards[0].ShowsThisPill));
         Assert.StartsWith("Last seen", await Wpf.Ui(() => cards[^1].StatusLine), StringComparison.Ordinal);
-        Assert.False(await Wpf.Ui(() => cards.Any(c => c.PencilShows)), "The pencil stays hidden until the icon chooser exists.");
+        Assert.False(await Wpf.Ui(() => cards.Any(c => c.PencilShows)), "The pencil stays hidden on a nest that cannot save icons.");
 
         await Wpf.Settle(); // layout of the page just opened
         await Wpf.Ui(() => Presser.Press(Presser.Find(window).Single(t => t.Element.Name == "JoinChip")));

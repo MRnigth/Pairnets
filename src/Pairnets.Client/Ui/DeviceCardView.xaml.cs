@@ -7,20 +7,16 @@ namespace Pairnets.Client.Ui;
 
 /// <summary>
 /// One computer's card on the Devices page, drawn from a <see cref="DeviceCard"/>: its icon, name, system, whether it is
-/// online (or when it was last seen) and its last change. The icon is drawn in one place (<see cref="DrawIcon"/>), where the
-/// per-computer icon chooser plugs in later; its pencil is built but hidden until then.
+/// online (or when it was last seen) and its last change. The icon is drawn in one place (<see cref="DrawIcon"/>), whose pencil opens the
+/// icon chooser (shown only when the nest can save icons).
 /// </summary>
 public partial class DeviceCardView : UserControl
 {
-    /// <summary>Whether the pencil on the icon shows. Off until the icon chooser exists.</summary>
-    public const bool PencilEnabled = false;
-
     private DeviceCard? _card;
 
     public DeviceCardView()
     {
         InitializeComponent();
-        PencilButton.Visibility = PencilEnabled ? Visibility.Visible : Visibility.Collapsed;
     }
 
     /// <summary>"More" was pressed (the page opens the nest's Devices page).</summary>
@@ -38,19 +34,12 @@ public partial class DeviceCardView : UserControl
     }
 
     /// <summary>The geometry key of each kind of computer icon.</summary>
-    public static string GlyphFor(DeviceIconKind kind) => kind switch
-    {
-        DeviceIconKind.Laptop => "I.Laptop",
-        DeviceIconKind.Office => "I.Office",
-        DeviceIconKind.Mini => "I.MiniPc",
-        DeviceIconKind.Tv => "I.Tv",
-        _ => "I.Desktop",
-    };
+    public static string GlyphFor(DeviceIconKind kind) => DeviceIcon.ResourceKey(kind);
 
     /// <summary>The one place that draws a computer's icon (from <see cref="DeviceCard.Icon"/>).</summary>
     private void DrawIcon(DeviceCard card)
     {
-        IconSlot.Data = Visuals.Resource<Geometry>(GlyphFor(card.Icon));
+        IconSlot.Data = DeviceIconArt.For(card.Icon);
         IconSlot.SetResourceReference(LineIcon.StrokeProperty, card.Online ? "T.Text" : "T.TextSoft");
     }
 
@@ -87,6 +76,10 @@ public partial class DeviceCardView : UserControl
         LastChangeText.Text = card.LastChangeText;
 
         Frame.SetResourceReference(Border.BorderBrushProperty, card.IsThis ? "T.AccentRing" : "T.Border");
+        PencilButton.DeviceId = card.Id;
+        PencilButton.DeviceName = card.Name;
+        PencilButton.Current = card.Icon;
+        PencilButton.Visibility = card.CanChooseIcon ? Visibility.Visible : Visibility.Collapsed;
         PencilButton.ToolTip = card.IconLabel;
         System.Windows.Automation.AutomationProperties.SetName(PencilButton, card.IconLabel);
         CardMoreButton.ToolTip = card.MoreLabel;

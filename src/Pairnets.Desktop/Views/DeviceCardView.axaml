@@ -7,17 +7,14 @@
   <Border x:Name="Card" Classes="devcard">
     <StackPanel Spacing="12">
       <Grid ColumnDefinitions="Auto,*,Auto">
-        <!-- Computer icon slot: the glyph, the pencil (hidden until the chooser exists), the online dot -->
+        <!-- Computer icon slot: the glyph, the pencil (opens the icon chooser), the online dot -->
         <Panel x:Name="IconSlot" Width="40" Height="40" Margin="0,0,12,0" VerticalAlignment="Center">
           <Border Classes="devicon">
             <v:LineIcon x:Name="Glyph" Classes="icon" Width="20" Height="20" StrokeThickness="1.8" HorizontalAlignment="Center" VerticalAlignment="Center" />
           </Border>
           <Rectangle x:Name="DashRing" RadiusX="12" RadiusY="12" StrokeThickness="1" StrokeDashArray="3,3" Stroke="{DynamicResource T.Dash}"
                      IsVisible="False" IsHitTestVisible="False" />
-          <Button x:Name="PencilButton" Classes="mini pencil" Width="20" Height="20" CornerRadius="10" HorizontalAlignment="Left" VerticalAlignment="Top"
-                  Margin="-6,-6,0,0" IsVisible="False">
-            <v:LineIcon Classes="icon ink-soft" Width="11" Height="11" StrokeThickness="2.2" Data="{StaticResource I.Pencil}" />
-          </Button>
+          <v:DeviceIconPencil x:Name="PencilButton" IsVisible="False" />
           <Ellipse x:Name="StateDot" Classes="sdot" Width="11" Height="11" Stroke="{DynamicResource T.Card}" StrokeThickness="2"
                    HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,-3,-3" />
         </Panel>

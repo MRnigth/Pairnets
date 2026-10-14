@@ -777,7 +777,7 @@
                     </StackPanel>
                   </Button>
                 </Grid>
-                <ItemsControl x:Name="DevicesList">
+                <ItemsControl x:Name="DevicesList" v:DeviceIconPencil.IconChosen="OnDeviceIconChosen">
                   <ItemsControl.ItemsPanel>
                     <ItemsPanelTemplate>
                       <UniformGrid Columns="3" />
