@@ -43,7 +43,7 @@
 <li>Your Pairnets account stores your email address, your username if you set one, how you sign in, and which computers and nests you have linked.</li>
 <li>No ads, no tracking, no analytics. We never sell your data or share it for marketing.</li>
 <li>This website, pairnets.app, sets no cookies. Its pages ask sync.pairnets.app whether you are signed in, and Cloudflare, which delivers the site, handles visitors' IP addresses. It collects nothing else.</li>
-<li>You can see most of it on your account page, and delete all of it with one button.</li>
+<li>You can see most of it on your account page, and delete all of it with one button. An account nobody uses for a year is deleted, after a warning email.</li>
 </ul>
 </div>
 
@@ -91,12 +91,14 @@
 <tr><td>Your <strong>Google account ID</strong>, only if you use “Continue with Google”</td><td>To recognise you the next time. We only ask Google for your email address and account ID: never your name, photo, contacts or files.</td></tr>
 <tr><td><strong>Signed-in browsers and apps</strong>: the browser type, the computer's name, when it signed in and when it was last used</td><td>So you can see them on your account page and sign them out.</td></tr>
 <tr><td><strong>Computers asking to join</strong>: the computer's name, its system (for example Windows) and its Pairnets version</td><td>So you can recognise the computer before you press Allow. When you allow it, your nest gets the same details.</td></tr>
-<tr><td><strong>Your nests</strong>: the name you gave each one, its address, Pairnets version, whether it's online and when it was last seen</td><td>To connect your computers to it and show you how it's doing.</td></tr>
+<tr><td><strong>Your nests</strong> (up to 3 per account): the name you gave each one, its address, Pairnets version, whether it's online and when it was last seen</td><td>To connect your computers to it and show you how it's doing.</td></tr>
 <tr><td>An <strong>activity log</strong>: sign-ins, computers allowed or removed, nests added or removed, with the time</td><td>To keep your account safe and to look into problems.</td></tr>
+<tr><td><strong>Server logs</strong>: sign-ins and errors</td><td>To find and fix problems, and to spot abuse.</td></tr>
 <tr><td><strong>IP addresses</strong>: not stored</td><td>Used for a moment to stop abuse. To count requests we keep only a scrambled form, for 2 days. The address is also passed to Cloudflare's bot check on the sign-in page, and to your nest, so it can slow down anyone guessing keys.</td></tr>
 </tbody>
 </table></div>
-<p><strong>Emails.</strong> We only send sign-in links and notices about your account, from <code>noreply@pairnets.app</code>. No newsletters, no marketing.</p>
+<p><strong>Emails.</strong> We only send sign-in links, security notices and other notices about your account, from <code>signin@mail.pairnets.app</code>. They go out through Cloudflare's email service, or through Resend if that fails. No newsletters, no marketing.</p>
+<p><strong>Support email.</strong> Email to <a href="mailto:support@pairnets.app">support@pairnets.app</a> is received by Cloudflare and forwarded to our mailbox at Google (Gmail). Our replies are sent through Resend.</p>
 <p><strong>Google sign-in.</strong> Pairnets' use and transfer of information received from Google APIs will adhere to the <a href="https://developers.google.com/terms/api-services-user-data-policy">Google API Services User Data Policy</a>, including the Limited Use requirements. We use your Google email address and account ID only to sign you in. We don't use them for ads, we don't sell them, and no person reads them unless you ask us to, for security, or because the law requires it.</p>
 
 <h2 id="files">4. Your files</h2>
@@ -138,11 +140,12 @@
 <div class="table-wrap"><table>
 <thead><tr><th>Company</th><th>What for</th><th>What they handle</th></tr></thead>
 <tbody>
-<tr><td><a href="https://www.cloudflare.com/privacypolicy/">Cloudflare, Inc.</a></td><td>Hosts this website and the account service (database included), runs the tunnels to nests, and the bot check on the sign-in page</td><td>Everything the service handles, including traffic to your nest while it passes through</td></tr>
-<tr><td><a href="https://resend.com/legal/privacy-policy">Resend, Inc.</a></td><td>Sends sign-in emails</td><td>Your email address and the email</td></tr>
+<tr><td><a href="https://www.cloudflare.com/privacypolicy/">Cloudflare, Inc.</a></td><td>Hosts this website and the account service (database included), runs the tunnels to nests and the bot check on the sign-in page, sends sign-in and security emails, and receives email to support@pairnets.app</td><td>Everything the service handles, including traffic to your nest while it passes through, and those emails</td></tr>
+<tr><td><a href="https://resend.com/legal/privacy-policy">Resend, Inc.</a></td><td>Sends sign-in and security emails when Cloudflare's email service fails, and our replies to support emails</td><td>Your email address and the email</td></tr>
+<tr><td><a href="https://policies.google.com/privacy">Google LLC</a> (Gmail)</td><td>Our mailbox: email to support@pairnets.app is forwarded there</td><td>The emails you send us, our replies, and your email address</td></tr>
 </tbody>
 </table></div>
-<p>These services act on their own, as independent controllers under their own privacy policies. We don't instruct them, and they are not processors for us:</p>
+<p>These services act on their own, as independent controllers under their own privacy policies. (Google is on both lists: Gmail holds our support mail for us, while “Continue with Google” is Google's own service.) We don't instruct them, and they are not processors for us:</p>
 <div class="table-wrap"><table>
 <thead><tr><th>Company</th><th>What for</th><th>What they handle</th></tr></thead>
 <tbody>
@@ -167,19 +170,20 @@
 <div class="table-wrap"><table>
 <thead><tr><th>What</th><th>How long</th></tr></thead>
 <tbody>
-<tr><td>Your account: email address and how you sign in</td><td>Until you delete your account</td></tr>
+<tr><td>Your account: email address and how you sign in</td><td>Until you delete your account, or after 1 year with no sign-in or other activity. We email you 30 days before, and signing in once keeps the account.</td></tr>
 <tr><td>Your nests' links to your account</td><td>Until you remove the nest or delete your account</td></tr>
 <tr><td>Signed-in browsers</td><td>30 days after you last use them, 90 days at most</td></tr>
 <tr><td>App sign-ins</td><td>1 hour (a computer's lasting key lives on your nest, not with us)</td></tr>
 <tr><td>Email sign-in links</td><td>15 minutes</td></tr>
 <tr><td>Computers waiting for you to allow them</td><td>10 minutes (30 minutes while waiting for a new nest)</td></tr>
 <tr><td>Activity log</td><td>90 days</td></tr>
+<tr><td>Server logs (sign-ins, errors)</td><td>30 days, then deleted</td></tr>
 <tr><td>Scrambled request counters</td><td>2 days</td></tr>
 <tr><td>Database backups</td><td>Roll over within 30 days</td></tr>
 <tr><td>What Ko-fi shows us about a donation</td><td>As long as tax rules require, then deleted</td></tr>
 </tbody>
 </table></div>
-<p>When you delete your account, everything above is deleted at once. Only the database's automatic backups keep a copy until they roll over, within 30 days.</p>
+<p>When you delete your account, or an unused account is deleted, everything above is deleted at once. Only the server logs, deleted after 30 days, and the database's automatic backups, which roll over within 30 days, keep a copy for a while.</p>
 
 <h2 id="rights">11. Your rights</h2>
 <p>Under the GDPR you can ask to see the data we hold about you, to have it corrected or deleted, to get a copy in a common format, and to restrict or object to how we use it.</p>
@@ -194,7 +198,7 @@
 </div>
 
 <h2 id="security">12. Security</h2>
-<p>We use HTTPS everywhere. Sign-in links, keys and sessions are stored only in hashed form. Cookies can only be read by our own site. Every computer has its own key, which you can remove at any time. The service doesn't store your files.</p>
+<p>We use HTTPS everywhere. Sign-in links, keys and sessions are stored only in hashed form. Cookies can only be read by our own site. Every computer has its own key, which you can remove at any time. The service doesn't store your files. The apps and nests only install updates signed by Pairnets.</p>
 <p>It isn't perfect. There's no end-to-end encryption yet, so Cloudflare sees traffic in transit. Anyone who can sign in to your Pairnets account, and the service itself, can allow a new computer to reach your nest. Protect your email and Google account. More on the <a href="/security/">Security</a> page.</p>
 
 <h2 id="children">13. Children</h2>
