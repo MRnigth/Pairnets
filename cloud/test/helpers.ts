@@ -204,6 +204,8 @@ export class Harness {
       CF_API_TOKEN: CF_TOKEN,
       CF_ACCOUNT_ID: CF_ACCOUNT,
       MAX_NESTS: "900",
+      // The tests send through the fake Resend; a test that wants Cloudflare Email Service passes EMAIL itself.
+      EMAIL: undefined,
       ...overrides,
     };
     const h = new Harness(env, signing, hbMaster);

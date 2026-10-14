@@ -45,6 +45,72 @@ export class ResendMailer implements Mailer {
   }
 }
 
+/** "Name <a@b>" or "a@b" as Cloudflare's address object. */
+export function parseAddress(s: string): { email: string; name?: string } {
+  const m = /^\s*(.*?)\s*<([^>]+)>\s*$/.exec(s);
+  if (!m) return { email: s.trim() };
+  return m[1] ? { email: m[2].trim(), name: m[1].replace(/^"|"$/g, "") } : { email: m[2].trim() };
+}
+
+/** The part of Cloudflare's `send_email` binding (Email Service) this Worker uses. */
+export interface EmailSendBinding {
+  send(msg: {
+    from: { email: string; name?: string };
+    to: string;
+    replyTo?: { email: string; name?: string };
+    subject: string;
+    text: string;
+    html: string;
+  }): Promise<{ messageId: string }>;
+}
+
+/** Sends through Cloudflare Email Service (the EMAIL binding), from the mail.pairnets.app subdomain. */
+export class CloudflareMailer implements Mailer {
+  constructor(
+    private readonly binding: EmailSendBinding,
+    private readonly from: string,
+    private readonly replyTo = "",
+  ) {}
+
+  async send(msg: MailMessage): Promise<void> {
+    await this.binding.send({
+      from: parseAddress(this.from),
+      to: msg.to,
+      ...(this.replyTo ? { replyTo: parseAddress(this.replyTo) } : {}),
+      subject: msg.subject,
+      text: msg.text,
+      html: msg.html,
+    });
+  }
+}
+
+/** Tries the first mailer and, when it fails, sends the same email through the second (Cloudflare first, Resend after). */
+export class FallbackMailer implements Mailer {
+  constructor(
+    private readonly first: Mailer,
+    private readonly second: Mailer,
+  ) {}
+
+  async send(msg: MailMessage): Promise<void> {
+    try {
+      await this.first.send(msg);
+    } catch (e) {
+      console.warn(`mail: Cloudflare send failed, using Resend (${e instanceof Error ? e.message : String(e)})`);
+      await this.second.send(msg);
+    }
+  }
+}
+
+/** Cloudflare Email Service when the EMAIL binding and MAIL_FROM_CF are set, with Resend as the fallback; Resend alone otherwise. */
+export function makeMailer(
+  env: { EMAIL?: EmailSendBinding; MAIL_FROM_CF?: string; RESEND_API_KEY?: string; MAIL_FROM?: string; MAIL_REPLY_TO?: string },
+  fetchFn: typeof fetch,
+): Mailer {
+  const resend = new ResendMailer(env.RESEND_API_KEY ?? "", env.MAIL_FROM ?? "", fetchFn, env.MAIL_REPLY_TO ?? "");
+  if (!env.EMAIL || !env.MAIL_FROM_CF) return resend;
+  return new FallbackMailer(new CloudflareMailer(env.EMAIL, env.MAIL_FROM_CF, env.MAIL_REPLY_TO ?? ""), resend);
+}
+
 /** All emails, notices included: 95 per UTC day (Resend's free plan is 100). */
 export const ALL_MAIL_DAILY_LIMIT = 95;
 
