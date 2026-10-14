@@ -66,8 +66,7 @@ public partial class SignInView : UserControl
         _current = current;
         _protector = protector;
         _openUrl = openUrl;
-        AccountIcon.Source = AppIcons.Large;
-        AppIcon.Source = AppIcons.Large;
+        LogoImage.Source = AppIcons.Large;
         FolderBox.Text = current.Folder ?? string.Empty;
         AutoStartBox.IsChecked = current.StartWithWindows || !current.FirstRunCompleted;
         AddressBox.Text = SuggestedAddress(current, nestHint);
@@ -146,9 +145,155 @@ public partial class SignInView : UserControl
         AccountWaitFooter.Visibility = AccountWaitStep.Visibility;
         NoNestFooter.Visibility = NoNestStep.Visibility;
         AddressFooter.Visibility = WelcomeStep.Visibility;
-        Footer.Visibility = Shown(step is SignInStep.Account or SignInStep.AccountWait or SignInStep.NoNest or SignInStep.Address);
         Motion.Spin(AccountRing, step == SignInStep.AccountWait);
         Motion.Spin(NoNestRing, step == SignInStep.NoNest);
+        Frame(step);
+    }
+
+    /// <summary>The top bar's step, the picture, the title and the bottom note of a step (its own parts fill in the rest).</summary>
+    private void Frame(SignInStep step)
+    {
+        SignedInChip.Visibility = Shown(step == SignInStep.Folder);
+        SubText.Visibility = Visibility.Visible;
+        switch (step)
+        {
+            case SignInStep.Account:
+                DrawSteps(1);
+                Picture.ShowIcon(StepIcons.User, PictureTone.Accent);
+                Say("Sign in to Pairnets", "Keep one folder the same on all your computers.");
+                Foot(null);
+                break;
+            case SignInStep.AccountWait:
+                DrawSteps(3);
+                Picture.ShowIcon(Visuals.Resource<Geometry>("I.Browser")!, PictureTone.Accent);
+                Say("Finish in your browser", null); // the intro sits in the step itself (it names the page)
+                Foot("Only computers you allow can get into your nest.");
+                break;
+            case SignInStep.NoNest:
+                DrawSteps(3);
+                Picture.ShowNest(NestPictureKind.Start);
+                Say("Your account has no nest yet", "A nest is your own Linux computer that keeps your folder. Set it up once with one command, and every computer you sign in finds it by itself.");
+                Foot(null);
+                break;
+            case SignInStep.Address:
+                FrameAddress();
+                Foot("Only computers you allow can get into your nest.");
+                break;
+            case SignInStep.Wait:
+                FrameWait(_state);
+                Foot(null);
+                break;
+            case SignInStep.Folder:
+                DrawSteps(4);
+                Picture.ShowIcon(Visuals.Resource<Geometry>("I.Folder")!, PictureTone.Accent, "T.Folder", StepIcons.Sync, PictureTone.Accent);
+                Say("Choose your folder", "This folder stays the same on all your computers. Files already in it are kept and merged, never replaced.");
+                Foot("You can change the folder later in Settings.", Visuals.Resource<Geometry>("I.Settings"));
+                break;
+        }
+    }
+
+    private void Say(string title, string? sub)
+    {
+        TitleText.Text = title;
+        SubText.Text = sub ?? string.Empty;
+        SubText.Visibility = Shown(!string.IsNullOrEmpty(sub));
+    }
+
+    /// <summary>The short note at the bottom (null: none); the icon defaults to the shield.</summary>
+    private void Foot(string? text, Geometry? icon = null)
+    {
+        FootNote.Visibility = Shown(text is not null);
+        FootText.Text = text ?? string.Empty;
+        FootIcon.Data = icon ?? StepIcons.Shield;
+    }
+
+    /// <summary>"Step N of 4" and its four dots: the ones done and the one on show in the accent.</summary>
+    private void DrawSteps(int step)
+    {
+        StepText.Text = $"Step {step} of 4";
+        if (StepDots.Children.Count == 0)
+        {
+            for (var i = 0; i < 4; i++)
+                StepDots.Children.Add(new Border { Height = 6, CornerRadius = new CornerRadius(3), Margin = new Thickness(0, 0, i < 3 ? 5 : 0, 0) });
+        }
+        for (var i = 0; i < 4; i++)
+        {
+            var dot = (Border)StepDots.Children[i];
+            dot.Width = i + 1 == step ? 18 : 6;
+            dot.SetResourceReference(Border.BackgroundProperty, i + 1 <= step ? "T.Accent" : "T.Dash");
+        }
+    }
+
+    /// <summary>The own-nest address step: find it, found it, or no answer.</summary>
+    private void FrameAddress()
+    {
+        var found = _check is { CanSignIn: true };
+        var bad = _check?.Status is NestCheckStatus.Unreachable or NestCheckStatus.Invalid or NestCheckStatus.NotPairnets;
+        var browserOnly = found && _check?.Hello?.Methods is { } m && !(m.Google || m.Email);
+        DrawSteps(found ? 2 : 1);
+        if (bad)
+        {
+            Picture.ShowNest(NestPictureKind.NoAnswer);
+            Say("Can’t reach that nest", "Check that the name is spelled right, and that this computer is online. Then try again.");
+        }
+        else if (found)
+        {
+            Picture.ShowNest(NestPictureKind.Found);
+            Say("Found your nest", browserOnly ? "This nest signs you in on its own web page, in your browser." : "Now sign in. You only do this once on this computer.");
+        }
+        else
+        {
+            Picture.ShowNest(NestPictureKind.Start);
+            Say("Find your nest", "Your nest is the home server that keeps your folder. Type its name to connect this computer.");
+        }
+        AddressBox.SetResourceReference(Control.BorderBrushProperty, bad ? "T.Bad" : "T.InputBorder");
+        AddressIcon.SetResourceReference(LineIcon.StrokeProperty, bad ? "T.BadText" : "T.AccentInk");
+        CheckButtonText.Text = bad ? "Try again" : "Continue";
+        CheckButton.Visibility = Shown(!found);
+        AddressInfo.Visibility = Shown(!found);
+        AddressInfoText.Text = bad
+            ? "The name is the address you open to see your nest in a web browser, like nest.example.com."
+            : "It’s the address you open to see your nest in a web browser. Not sure? Ask whoever set the nest up.";
+        MethodsPanel.Visibility = Shown(found);
+        NextSteps.Visibility = Shown(browserOnly);
+    }
+
+    /// <summary>The waiting step: the code to compare, or why it ended (turned down, ran out, did not work).</summary>
+    private void FrameWait(PairingState? state)
+    {
+        DrawSteps(3);
+        switch (state?.Stage)
+        {
+            case PairingStage.Denied:
+                Picture.ShowIcon(Visuals.Resource<Geometry>("I.Computer")!, PictureTone.Bad, "T.Muted", Visuals.Resource<Geometry>("I.X"), PictureTone.Bad);
+                Say("Your nest said no", "Someone pressed Deny in the browser, so this computer didn’t get in. If that was a mistake, start over and press Allow this time.");
+                OutcomeIconBox.SetResourceReference(Border.BackgroundProperty, "T.BadPill");
+                OutcomeIcon.SetResourceReference(LineIcon.StrokeProperty, "T.BadText");
+                OutcomeIcon.Data = StepIcons.Denied;
+                break;
+            case PairingStage.Expired:
+                Picture.ShowIcon(StepIcons.Hourglass, PictureTone.Warn, null, null, PictureTone.Warn, "0:00");
+                Say("The code ran out", "Codes last 10 minutes, and nobody pressed Allow in time. No harm done. Get a new code and try again.");
+                OutcomeIconBox.SetResourceReference(Border.BackgroundProperty, "T.WarnPill");
+                OutcomeIcon.SetResourceReference(LineIcon.StrokeProperty, "T.WarnText");
+                OutcomeIcon.Data = Visuals.Resource<Geometry>("I.Clock");
+                break;
+            case PairingStage.Failed:
+                Picture.ShowIcon(Visuals.Resource<Geometry>("I.Warning")!, PictureTone.Warn);
+                Say("That didn’t work", "Your nest could not be asked for a code. Check the name and your connection, then try again.");
+                OutcomeIconBox.SetResourceReference(Border.BackgroundProperty, "T.WarnPill");
+                OutcomeIcon.SetResourceReference(LineIcon.StrokeProperty, "T.WarnText");
+                OutcomeIcon.Data = Visuals.Resource<Geometry>("I.Info");
+                break;
+            case PairingStage.Starting:
+                Picture.ShowIcon(Visuals.Resource<Geometry>("I.Browser")!, PictureTone.Accent);
+                Say("Allow this computer", "Asking your nest for a code…");
+                break;
+            default:
+                Picture.ShowIcon(Visuals.Resource<Geometry>("I.Browser")!, PictureTone.Accent);
+                Say("Allow this computer", "Your browser opened your nest. Check that it shows this same code, then press Allow there.");
+                break;
+        }
     }
 
     private static Visibility Shown(bool on) => on ? Visibility.Visible : Visibility.Collapsed;
@@ -337,10 +482,11 @@ public partial class SignInView : UserControl
             NestCheckStatus.NoSignIn => ("I.Info", "S.Orange"),
             _ => ("I.Wait", "T.Muted"),
         };
-        CheckIcon.Data = Visuals.Resource<Geometry>(icon);
-        CheckIcon.Stroke = Visuals.Resource<Brush>(brush);
-        CheckText.Foreground = check.Status == NestCheckStatus.Found ? Visuals.Resource<Brush>("S.Green")
-            : check.Status == NestCheckStatus.Empty ? Visuals.Resource<Brush>("T.Muted") : Visuals.Resource<Brush>("T.Text");
+        var bad = check.Status is NestCheckStatus.Unreachable or NestCheckStatus.Invalid or NestCheckStatus.NotPairnets;
+        CheckIcon.Data = Visuals.Resource<Geometry>(bad ? "I.Info" : icon);
+        CheckIcon.SetResourceReference(LineIcon.StrokeProperty, bad ? "T.BadText" : brush);
+        CheckText.SetResourceReference(TextBlock.ForegroundProperty,
+            check.Status == NestCheckStatus.Found ? "T.OkText" : bad ? "T.BadText" : check.Status == NestCheckStatus.Empty ? "T.Muted" : "T.Text");
         DrawMethods();
     }
 
@@ -358,9 +504,25 @@ public partial class SignInView : UserControl
         EmailBox.IsEnabled = email;
         EmailButton.IsEnabled = email && Nest.LooksLikeEmail(EmailBox.Text);
         // With no button of its own on show, the browser is the one way in and takes the accent.
-        BrowserButton.Content = google || email ? "More ways to sign in in your browser" : "Sign in with your browser";
-        BrowserButton.Style = Visuals.Resource<Style>(google || email ? "SubtleButton" : "AccentButton");
+        var others = google || email;
+        BrowserButton.Content = others ? "More ways in your browser" : "Sign in with your browser";
+        BrowserButton.Style = TryFindResource(others ? "LinkButton" : "BigAccent") as Style;
+        BrowserButton.Margin = others ? new Thickness(0, 8, 0, 0) : new Thickness(0, 14, 0, 0);
+        BrowserButton.HorizontalAlignment = others ? HorizontalAlignment.Center : HorizontalAlignment.Stretch;
+        BrowserButton.FontSize = others ? 13 : 15;
+        BrowserButton.MinHeight = others ? 38 : 48;
         BrowserButton.IsEnabled = can;
+        if (Step == SignInStep.Address)
+            FrameAddress();
+    }
+
+    /// <summary>"Continue" / "Try again": look for the nest now, without waiting for the typing to pause.</summary>
+    private void OnCheck(object sender, RoutedEventArgs e)
+    {
+        if (!string.IsNullOrWhiteSpace(AddressBox.Text))
+            CheckSoon(TimeSpan.Zero);
+        else
+            AddressBox.Focus();
     }
 
     private void OnSignIn(object sender, RoutedEventArgs e) => StartChecked(null, null);
@@ -423,18 +585,15 @@ public partial class SignInView : UserControl
         OpenAgainButton.Visibility = !finished && state.VerifyUrl is not null ? Visibility.Visible : Visibility.Collapsed;
         CopyButton.Visibility = OpenAgainButton.Visibility;
         RetryButton.Visibility = finished ? Visibility.Visible : Visibility.Collapsed;
-        RetryButton.Content = state.Stage == PairingStage.Denied ? "Start over" : "Get a new code";
+        RetryText.Text = state.Stage == PairingStage.Denied ? "Start over" : "Get a new code";
         BackButton.Content = finished ? "Back" : "Cancel";
         OutcomeBox.Visibility = finished || state.Message is not null ? Visibility.Visible : Visibility.Collapsed;
         OutcomeText.Text = state.Stage switch
         {
-            PairingStage.Denied => "Your nest said no. If that was a mistake, start over and allow it this time.",
-            PairingStage.Expired => "The code expired before it was approved (codes last 10 minutes).",
+            PairingStage.Denied => $"Denied in the browser · code {state.Code}",
+            PairingStage.Expired => $"This code no longer works · {state.Code}",
             _ => state.Message ?? string.Empty,
         };
-        WaitIntro.Text = state.Stage == PairingStage.Starting
-            ? "Asking your nest for a code…"
-            : "Your browser opened your nest. Sign in there and check that it shows this code:";
         if (finished)
             _clock.Stop();
         else

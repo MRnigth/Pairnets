@@ -57,7 +57,7 @@ public sealed class TrayControllerTests
             Assert.Equal(HttpStatusCode.OK, (await owner.PostAsync($"web/api/pair/{TrayHarness.CodeIn(link)}/approve", null)).StatusCode);
         await app.WaitUntil(() => signIn.SignIn.FolderStep.IsVisible, "the folder step after approving on the nest");
 
-        await app.Press(signIn, "Browse…");
+        await app.Press(signIn, "Choose…");
         Assert.Equal(app.Folder, await app.Wpf.Ui(() => signIn.SignIn.Folder));
         File.WriteAllText(Path.Combine(app.Folder, "brought-along.txt"), "already here");
         await app.Press(signIn, "Start syncing");
@@ -330,7 +330,7 @@ public sealed class TrayControllerTests
 
         // An older server: the app asks by itself.
         var ask = await app.Showing<ServerUpdateWindow>("the app to offer updating the older server");
-        await app.Press(ask, "Later");
+        await app.Press(ask, "Not now");
         Assert.False(await app.Wpf.Ui(() => ask.IsVisible));
         Assert.Equal((null, false), (app.SavedSettings.SkippedServerVersion, app.SavedSettings.AutoUpdateServer));
 
@@ -338,22 +338,22 @@ public sealed class TrayControllerTests
         var main = app.Tray.Window!;
         await app.Press(main, "Update server…");
         var update = await app.Showing<ServerUpdateWindow>("the server update window");
-        await app.Press(update, "Update server");
+        await app.Press(update, "Update the nest");
         await app.WaitUntil(() => update.CommandPanel.IsVisible, "the one-time setup the nest needs");
         Assert.Equal(["POST /api/update"], updateRequests.Items);
-        await app.Press(update, "Copy command");
+        await app.Press(update, "Copy");
         Assert.Contains("get.sh | sudo bash", Assert.Single(app.Dialogs.Copied.Items));
         await app.Press(update, "Close");
 
         await app.Press(main, "Update server…");
         var skip = await app.Showing<ServerUpdateWindow>("the server update window");
-        await app.Press(skip, "Don't ask for this version");
+        await app.Press(skip, "Don’t ask for this version");
         await app.WaitUntil(() => app.SavedSettings.SkippedServerVersion == "0.9.0", "the skipped version to be saved");
 
         await app.Press(main, "Update server…");
         var always = await app.Showing<ServerUpdateWindow>("the server update window");
-        await app.Press(always, "From now on, update the server automatically");
-        await app.Press(always, "Later");
+        await app.Press(always, "From now on, update the nest by itself");
+        await app.Press(always, "Not now");
         await app.WaitUntil(() => app.SavedSettings.AutoUpdateServer, "automatic server updates to be saved");
     }
 
@@ -465,7 +465,7 @@ public sealed class TrayControllerTests
         Assert.StartsWith("Pairnets bug report", copied);
         Assert.Contains("DESKTOP", copied);
         Assert.DoesNotContain(app.Grant!.Key, copied); // never the key
-        await app.Press(report, "Open file");
+        await app.Press(report, "Open the saved file");
         var saved = app.Platform.Opened.Items[^1];
         Assert.StartsWith(app.Env.LogsDir, saved);
         Assert.Equal(copied, File.ReadAllText(saved));

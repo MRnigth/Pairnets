@@ -259,6 +259,12 @@ public static class Program
         signIn.SignIn.ShowPairing(new PairingState(PairingStage.Waiting, "KQ7M-4PXD", "https://nest.pairnets.app/link?code=KQ7M-4PXD",
             DateTimeOffset.UtcNow.AddMinutes(9).AddSeconds(41)), openBrowser: false);
         Save(signIn, outDir, $"windows-sign-in-waiting-{suffix}.png", print);
+        signIn.SignIn.ShowAddress("nest.example.com", new NestCheck(NestCheckStatus.Unreachable, null, null, "Can't reach nest.example.com. Check the spelling and your internet."));
+        Save(signIn, outDir, $"windows-sign-in-cant-reach-{suffix}.png", print);
+        signIn.SignIn.ShowPairing(new PairingState(PairingStage.Denied, "KQ7M-4PXD", "https://nest.pairnets.app/link?code=KQ7M-4PXD", null), openBrowser: false);
+        Save(signIn, outDir, $"windows-sign-in-denied-{suffix}.png", print);
+        signIn.SignIn.ShowPairing(new PairingState(PairingStage.Expired, "KQ7M-4PXD", "https://nest.pairnets.app/link?code=KQ7M-4PXD", null), openBrowser: false);
+        Save(signIn, outDir, $"windows-sign-in-expired-{suffix}.png", print);
         signIn.Close();
 
         var serverUpdate = new ServerUpdateWindow(null, "1.0.52", "1.0.58");
@@ -271,6 +277,14 @@ public static class Program
         serverUpdate.ShowResult(new ServerUpdateResult(false, "This server can't update itself yet.", "1.0.52", CanUpdateItself: false));
         Save(serverUpdate, outDir, $"windows-server-update-manual-{suffix}.png", print);
         serverUpdate.Close();
+
+        var bugText = string.Join("\n", "Pairnets bug report", "Created:   2026-10-11 10:15:00", "App:       Windows app 1.0.49",
+            "Nest:      nest.example.com (1.0.48)", "Computer:  DESKTOP", @"Folder:    D:\Sync\Work", "Status:    Up to date, last sync 10:14", "",
+            "## Last log lines", "10:14:01 INF Uploaded report-q3.xlsx (1.2 MB)", "10:14:02 INF Up to date");
+        var bugReport = new BugReportWindow(() => Task.FromResult(bugText), _ => { }, logsDir: Path.Combine(Path.GetTempPath(), "pairnets-bug-shots"));
+        Place(bugReport);
+        Save(bugReport, outDir, $"windows-bug-report-{suffix}.png", print);
+        bugReport.Close();
     }
 
     /// <summary>

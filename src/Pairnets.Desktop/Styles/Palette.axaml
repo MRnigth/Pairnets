@@ -51,6 +51,7 @@
       <SolidColorBrush x:Key="T.Folder" Color="#D99A1E" />
       <SolidColorBrush x:Key="T.NeedsActive" Color="#FFB547" />
       <SolidColorBrush x:Key="T.NeedsActiveText" Color="#2B1A00" />
+      <SolidColorBrush x:Key="T.Code" Color="#F0F2F6" />
     </ResourceDictionary>
     <ResourceDictionary x:Key="Dark">
       <SolidColorBrush x:Key="T.Bg" Color="#0E1014" />
@@ -101,6 +102,7 @@
       <SolidColorBrush x:Key="T.Folder" Color="#F0B43C" />
       <SolidColorBrush x:Key="T.NeedsActive" Color="#FFB547" />
       <SolidColorBrush x:Key="T.NeedsActiveText" Color="#2B1A00" />
+      <SolidColorBrush x:Key="T.Code" Color="#0A0C10" />
     </ResourceDictionary>
   </ResourceDictionary.ThemeDictionaries>
 

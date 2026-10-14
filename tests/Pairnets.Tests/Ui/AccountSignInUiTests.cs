@@ -103,7 +103,7 @@ public class AccountSignInUiTests
         service.AfterScript = "approved";
         WaitFor(() => view.Step == SignInStep.Folder, "the folder step");
         Assert.Equal("✓ Signed in as LAPTOP on soro", view.SignedInText.Text);
-        Assert.False(view.Footer.IsVisible);
+        Assert.False(view.AccountFooter.IsVisible || view.AddressFooter.IsVisible || view.NoNestFooter.IsVisible || view.AccountWaitFooter.IsVisible); // no sign-in links on the folder step
         Assert.Equal(2, window.Opened.Count); // the page was opened once, not again for every answer
 
         view.Folder = folder.Path;
