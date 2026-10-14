@@ -24,13 +24,22 @@ export class ResendMailer implements Mailer {
     private readonly apiKey: string,
     private readonly from: string,
     private readonly fetchFn: typeof fetch,
+    /** Where replies go (the sending address takes no mail). Left out of the request when empty. */
+    private readonly replyTo = "",
   ) {}
 
   async send(msg: MailMessage): Promise<void> {
     const resp = await this.fetchFn(RESEND_URL, {
       method: "POST",
       headers: { Authorization: `Bearer ${this.apiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ from: this.from, to: [msg.to], subject: msg.subject, text: msg.text, html: msg.html }),
+      body: JSON.stringify({
+        from: this.from,
+        to: [msg.to],
+        ...(this.replyTo ? { reply_to: this.replyTo } : {}),
+        subject: msg.subject,
+        text: msg.text,
+        html: msg.html,
+      }),
     });
     if (!resp.ok) throw new Error(`Resend answered ${resp.status}`);
   }

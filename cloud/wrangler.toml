@@ -15,7 +15,8 @@ routes = [{ pattern = "sync.pairnets.app", custom_domain = true }]
 
 [vars]
 PUBLIC_ORIGIN = "https://sync.pairnets.app"
-MAIL_FROM = "Pairnets <noreply@pairnets.app>"
+MAIL_FROM = "Pairnets <signin@pairnets.app>"
+MAIL_REPLY_TO = "Pairnets Support <support@pairnets.app>"
 EMAIL_DAILY_LIMIT = "80"
 # Relayed servers in all. Cloudflare allows 1,000 tunnels per account; stay well under it.
 MAX_NESTS = "900"

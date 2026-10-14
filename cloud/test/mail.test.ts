@@ -21,6 +21,21 @@ describe("mail", () => {
     await expect(m.send({ to: "a@example.com", subject: "s", text: "t", html: "h" })).rejects.toThrow("Resend answered 429");
   });
 
+  it("Resend: replies go to MAIL_REPLY_TO when it is set", async () => {
+    const net = new FakeNet();
+    net.on(RESEND_URL, () => jsonResponse(200, { id: "x" }));
+    const m = new ResendMailer("re_test_key", "Pairnets <signin@pairnets.app>", net.fetch, "Pairnets Support <support@pairnets.app>");
+    await m.send({ to: "you@example.com", subject: "Hi", text: "Hello", html: "<p>Hello</p>" });
+    expect(JSON.parse(net.calls[0].body)).toEqual({
+      from: "Pairnets <signin@pairnets.app>",
+      to: ["you@example.com"],
+      reply_to: "Pairnets Support <support@pairnets.app>",
+      subject: "Hi",
+      text: "Hello",
+      html: "<p>Hello</p>",
+    });
+  });
+
   it("the Worker uses Resend when no mailer is given, and a failed send still answers 202", async () => {
     const h = await Harness.create();
     let status = 200;

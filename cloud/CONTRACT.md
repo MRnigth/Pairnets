@@ -1236,7 +1236,8 @@ also covered by unit tests of the pure verifier and the HMAC helpers.
 | `RESEND_API_KEY` | secret | |
 | `PUBLIC_ORIGIN` | variable | `https://id.pairnets.app` |
 | `GOOGLE_CLIENT_ID`, `TURNSTILE_SITE_KEY` | secrets | public values, kept in the secret store so no id is in the code |
-| `MAIL_FROM` | variable | `Pairnets <noreply@pairnets.app>` |
+| `MAIL_FROM` | variable | `Pairnets <signin@pairnets.app>` |
+| `MAIL_REPLY_TO` | variable | `Pairnets Support <support@pairnets.app>` (replies; optional) |
 | `EMAIL_DAILY_LIMIT` | variable | `80` |
 | `HOSTED_LOGIN_DISABLED` | variable | `"1"` = emergency: `/nest-login` refuses, heartbeats answer `disableHostedLogin: true` |
 | `GOOGLE_AUTH_URL`, `GOOGLE_TOKEN_URL`, `GOOGLE_JWKS_URL` | variables | Google's real URLs by default; tests point them at mocks |

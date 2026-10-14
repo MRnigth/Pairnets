@@ -29,6 +29,8 @@ export interface Env {
   GOOGLE_CLIENT_ID: string;
   TURNSTILE_SITE_KEY: string;
   MAIL_FROM: string;
+  /** Where replies to the service's emails go (support@). */
+  MAIL_REPLY_TO?: string;
   EMAIL_DAILY_LIMIT: string;
   /** Relay nests in all (default 900, under Cloudflare's 1,000 tunnels per account). */
   MAX_NESTS?: string;

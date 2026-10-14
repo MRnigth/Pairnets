@@ -242,7 +242,7 @@ export function createWorker(overrides: Partial<Deps> = {}): ExportedHandler<Env
         ipKey: limitAddress(ip),
         body: new Uint8Array(0),
         setCookies: [],
-        mailer: deps.mailer ?? new ResendMailer(env.RESEND_API_KEY ?? "", env.MAIL_FROM ?? "", deps.fetch),
+        mailer: deps.mailer ?? new ResendMailer(env.RESEND_API_KEY ?? "", env.MAIL_FROM ?? "", deps.fetch, env.MAIL_REPLY_TO ?? ""),
         defer: (p) => exec.waitUntil(p),
       };
       if (isRelayPath(url.pathname)) return relay(ctx);
