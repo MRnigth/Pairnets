@@ -779,7 +779,7 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             _log.LogError(ex, "Server update failed unexpectedly");
-            result = new ServerUpdateResult(false, $"Unexpected error: {ex.GetType().Name}: {ex.Message}",
+            result = new ServerUpdateResult(false, "Something went wrong while updating the server. " + FriendlyErrors.Describe(ex) + " Nothing was changed on the server.",
                 Status.Server?.ServerVersion, CanUpdateItself: true);
         }
         Trace((result.Success ? "Done: " : "Not updated: ") + result.Message, result.Success ? LogLevel.Information : LogLevel.Warning);
@@ -801,7 +801,7 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            return "Could not read the server's updater details: " + ex.Message;
+            return "Could not read the server's updater details. " + FriendlyErrors.Describe(ex);
         }
     }
 
@@ -817,7 +817,7 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
         }
         catch (Exception ex) when (ex is PairnetsNetworkException or PairnetsAuthException or PairnetsProtocolException)
         {
-            return new ServerUpdateResult(false, "Could not reach the server: " + ex.Message, before, CanUpdateItself: true);
+            return new ServerUpdateResult(false, "Could not reach the server. " + FriendlyErrors.Describe(ex), before, CanUpdateItself: true);
         }
         trace("The server answered the request: " + request switch
         {
@@ -951,7 +951,7 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
         }
         catch (Exception ex) when (ex is PairnetsNetworkException or PairnetsAuthException or PairnetsProtocolException)
         {
-            return "Could not reach the server: " + ex.Message;
+            return "Could not reach the server. " + FriendlyErrors.Describe(ex);
         }
         if (result.Outcome != ApiOutcome.Ok)
             return result.Outcome == ApiOutcome.NotFound

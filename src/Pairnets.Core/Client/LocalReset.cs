@@ -1,3 +1,4 @@
+using Pairnets.Core.Api;
 using System.Text.RegularExpressions;
 using Pairnets.Core.Paths;
 using Pairnets.Core.Settings;
@@ -39,7 +40,7 @@ public static partial class LocalReset
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or System.ComponentModel.Win32Exception)
             {
-                problems.Add($"The saved key could not be removed from the system's secret store ({ex.Message}).");
+                problems.Add($"The saved key could not be removed from the system's secret store ({FriendlyErrors.Describe(ex)}).");
             }
         }
 
@@ -87,7 +88,7 @@ public static partial class LocalReset
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            problems.Add($"{Path.GetFileName(path)} could not be removed ({ex.Message}).");
+            problems.Add($"{Path.GetFileName(path)} could not be removed ({FriendlyErrors.Describe(ex)}).");
             return false;
         }
     }
@@ -101,7 +102,7 @@ public static partial class LocalReset
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            problems.Add($"{Path.GetFileName(path)} could not be removed ({ex.Message}).");
+            problems.Add($"{Path.GetFileName(path)} could not be removed ({FriendlyErrors.Describe(ex)}).");
         }
     }
 

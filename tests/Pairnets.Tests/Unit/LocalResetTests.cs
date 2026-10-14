@@ -1,3 +1,4 @@
+using Pairnets.Core.Api;
 using Pairnets.Core.Client;
 using Pairnets.Core.Paths;
 using Pairnets.Core.Settings;
@@ -122,7 +123,7 @@ public sealed class LocalResetTests
     public void AKeyThatCannotBeForgottenIsReportedAndTheRestStillGoes()
     {
         using var pc = new Computer();
-        var protector = new RecordingProtector { FailWith = new InvalidOperationException("keyring is locked") };
+        var protector = new RecordingProtector { FailWith = new PlainMessageException("keyring is locked") };
 
         var result = LocalReset.Run(pc.Settings, protector, pc.SettingsPath, pc.LocalDir);
 
