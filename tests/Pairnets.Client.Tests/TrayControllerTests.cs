@@ -343,6 +343,26 @@ public sealed class TrayControllerTests
     }
 
     [Fact]
+    public async Task SignOut_PressedTwice_AsksAndWorksOnlyOnce()
+    {
+        await using var nest = await TestServer.StartWithWebsiteAsync();
+        await using var app = await TrayHarness.CreateAsync(nest);
+        await app.StartAsync();
+        await app.SyncedOnce();
+        app.Dialogs.When("Sign out of this computer?", MessageBoxResult.OK);
+
+        // Two presses before the first has finished (it waits for the nest): the second does nothing.
+        await app.Wpf.Ui(() =>
+        {
+            app.Tray.SignOut();
+            app.Tray.SignOut();
+        });
+
+        await app.Showing<SettingsWindow>("the sign-in window after signing out");
+        Assert.Single(app.Dialogs.Asked.Items, q => q.Text.StartsWith("Sign out of this computer?", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task Reset_ForgetsEverythingAndShowsSignIn()
     {
         await using var nest = await TestServer.StartWithWebsiteAsync();

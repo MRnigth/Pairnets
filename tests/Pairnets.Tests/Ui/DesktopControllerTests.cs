@@ -343,6 +343,22 @@ public sealed class DesktopControllerTests
     }
 
     [AvaloniaFact]
+    public async Task SignOut_PressedTwice_AsksAndWorksOnlyOnce()
+    {
+        await using var app = await AppUnderTest.StartAsync();
+        await app.WaitUntilIdleAsync();
+
+        app.App.SignOut();
+        app.App.SignOut(); // a second press while the question is open does nothing
+        await app.DialogAsync("Pairnets – sign out");
+        Assert.Single(app.Desktop.Windows, w => w.IsVisible && w.Title == "Pairnets – sign out");
+        await app.AnswerAsync("Pairnets – sign out", "Sign out");
+
+        await app.WindowAsync("Pairnets – sign in");
+        Assert.DoesNotContain(app.Desktop.Windows, w => w.IsVisible && w.Title == "Pairnets – sign out");
+    }
+
+    [AvaloniaFact]
     public async Task Reset_ForgetsEverythingAndShowsSignIn()
     {
         await using var app = await AppUnderTest.StartAsync();

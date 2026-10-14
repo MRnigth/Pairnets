@@ -243,30 +243,42 @@ public sealed class TrayController : ITrayActions, IDisposable
     /// </summary>
     public async void SignOut()
     {
-        if (Dialogs.Ask(null, $"Sign out of this computer?\n\nSyncing stops. Your files in {_settings.Folder} stay here. Sign in again to continue.",
-                "Pairnets – sign out", MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK)
-            return;
-        var removed = false;
+        if (_signingOut)
+            return; // a second click while the first is still working
+        _signingOut = true;
         try
         {
-            removed = _session is not null && await _session.SignOutAsync();
+            if (Dialogs.Ask(null, $"Sign out of this computer?\n\nSyncing stops. Your files in {_settings.Folder} stay here. Sign in again to continue.",
+                    "Pairnets – sign out", MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK)
+                return;
+            var removed = false;
+            try
+            {
+                removed = _session is not null && await _session.SignOutAsync();
+            }
+            catch (Exception ex) when (ex is Pairnets.Core.Api.PairnetsNetworkException or Pairnets.Core.Api.PairnetsAuthException or Pairnets.Core.Api.PairnetsProtocolException)
+            {
+                _log.LogWarning("Could not remove this computer on the nest: {Error}", ex.Message);
+            }
+            StopSession();
+            _settings.ProtectedToken = null;
+            _settings.DeviceId = null;
+            _settings.FirstRunCompleted = false;
+            SettingsStore.Save(_env.SettingsPath, _settings);
+            _dirty = true;
+            if (!removed)
+                Dialogs.Ask(null, "Signed out here, but your nest could not be told. " + Relay.RemoveByHandHint(_settings.ServerUrl),
+                    "Pairnets", MessageBoxButton.OK, MessageBoxImage.Warning);
+            _window?.Navigate(MainPage.Overview);
         }
-        catch (Exception ex) when (ex is Pairnets.Core.Api.PairnetsNetworkException or Pairnets.Core.Api.PairnetsAuthException or Pairnets.Core.Api.PairnetsProtocolException)
+        finally
         {
-            _log.LogWarning("Could not remove this computer on the nest: {Error}", ex.Message);
+            _signingOut = false;
         }
-        StopSession();
-        _settings.ProtectedToken = null;
-        _settings.DeviceId = null;
-        _settings.FirstRunCompleted = false;
-        SettingsStore.Save(_env.SettingsPath, _settings);
-        _dirty = true;
-        if (!removed)
-            Dialogs.Ask(null, "Signed out here, but your nest could not be told. " + Relay.RemoveByHandHint(_settings.ServerUrl),
-                "Pairnets", MessageBoxButton.OK, MessageBoxImage.Warning);
-        _window?.Navigate(MainPage.Overview);
         ShowSettings(firstRun: true);
     }
+
+    private bool _signingOut;
 
     private bool _resetting;
 
