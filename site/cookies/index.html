@@ -6,12 +6,16 @@
 <title>Cookie settings · Pairnets</title>
 <meta name="description" content="Pairnets only uses the cookies it needs to sign you in. No analytics or advertising cookies, so there's nothing to switch off.">
 <meta name="referrer" content="no-referrer">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#FFFFFF" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1D2026" media="(prefers-color-scheme: dark)">
 <link rel="icon" href="/assets/logo.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/assets/icon-256.png">
 <link rel="stylesheet" href="/assets/site.css">
 <script src="/assets/site.js" defer></script>
 </head>
 <body>
+<a class="skip" href="#main">Skip to content</a>
 <header class="top">
   <div class="wrap">
     <a class="brand" href="/"><img src="/assets/logo.svg" alt=""><span>Pairnets</span></a>
@@ -24,7 +28,7 @@
     <a class="button accent" id="account-button" href="https://sync.pairnets.app/account">Sign in →</a>
   </div>
 </header>
-<main>
+<main id="main" tabindex="-1">
   <div class="wrap narrow">
     <div class="hero tight">
       <h1>Cookie settings</h1>
@@ -35,15 +39,15 @@
 <h2 id="settings">Your settings</h2>
 <div class="setting">
 <div><h3>Necessary</h3><p>Keep you signed in to your Pairnets account and keep signing in safe. Pairnets can't work without them.</p></div>
-<label class="switch"><input type="checkbox" checked disabled> Always on</label>
+<label class="switch"><input type="checkbox" checked disabled aria-label="Necessary cookies: always on"> Always on</label>
 </div>
 <div class="setting">
 <div><h3>Analytics</h3><p>Pairnets doesn't use any analytics or statistics cookies.</p></div>
-<label class="switch"><input type="checkbox" disabled> Not used</label>
+<label class="switch"><input type="checkbox" disabled aria-label="Analytics cookies: not used"> Not used</label>
 </div>
 <div class="setting">
 <div><h3>Advertising</h3><p>Pairnets has no ads, and no advertising or tracking cookies.</p></div>
-<label class="switch"><input type="checkbox" disabled> Not used</label>
+<label class="switch"><input type="checkbox" disabled aria-label="Advertising cookies: not used"> Not used</label>
 </div>
 <p>Because Pairnets only uses necessary cookies, the law doesn't ask us to get your consent, and there's nothing to choose. The cookie notice at the bottom of our pages just tells you this, and remembers that you closed it. If we ever want optional cookies, we'll ask you first, and these switches will work.</p>
 

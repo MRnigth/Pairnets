@@ -6,12 +6,16 @@
 <title>Pairnets: one folder, the same on all your computers</title>
 <meta name="description" content="Pairnets keeps a folder identical on your computers through a small server you own. No cloud storage in between.">
 <meta name="referrer" content="no-referrer">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#FFFFFF" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1D2026" media="(prefers-color-scheme: dark)">
 <link rel="icon" href="/assets/logo.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/assets/icon-256.png">
 <link rel="stylesheet" href="/assets/site.css">
 <script src="/assets/site.js" defer></script>
 </head>
 <body>
+<a class="skip" href="#main">Skip to content</a>
 <header class="top">
   <div class="wrap">
     <a class="brand" href="/"><img src="/assets/logo.svg" alt=""><span>Pairnets</span></a>
@@ -24,7 +28,7 @@
     <a class="button accent" id="account-button" href="https://sync.pairnets.app/account">Sign in →</a>
   </div>
 </header>
-<main>
+<main id="main" tabindex="-1">
   <div class="wrap">
     <div class="hero">
       <h1>One folder, the same<br>on all your computers.</h1>

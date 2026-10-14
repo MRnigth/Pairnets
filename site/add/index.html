@@ -6,12 +6,16 @@
 <title>Add a computer · Pairnets</title>
 <meta name="description" content="Add a computer to your Pairnets nest in three steps, without copying any token.">
 <meta name="referrer" content="no-referrer">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#FFFFFF" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1D2026" media="(prefers-color-scheme: dark)">
 <link rel="icon" href="/assets/logo.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/assets/icon-256.png">
 <link rel="stylesheet" href="/assets/site.css">
 <script src="/assets/site.js" defer></script>
 </head>
 <body>
+<a class="skip" href="#main">Skip to content</a>
 <header class="top">
   <div class="wrap">
     <a class="brand" href="/"><img src="/assets/logo.svg" alt=""><span>Pairnets</span></a>
@@ -24,7 +28,7 @@
     <a class="button accent" id="account-button" href="https://sync.pairnets.app/account">Sign in →</a>
   </div>
 </header>
-<main>
+<main id="main" tabindex="-1">
   <div class="wrap narrow">
     <div class="hero tight">
       <h1>Add a computer</h1>
@@ -32,17 +36,17 @@
     </div>
     <ol class="steps">
       <li>
-        <h3>Install Pairnets</h3>
+        <h2>Install Pairnets</h2>
         <div class="row"><a class="button accent" href="/download/windows">Windows</a><a class="button accent" href="/download/mac-apple-silicon">Mac</a><a class="button accent" href="/download/linux">Linux</a></div>
         <p class="muted small gap">Intel Mac? <a href="/download/mac-intel">Use this one</a>.</p>
       </li>
       <li>
-        <h3>Sign in with your account</h3>
+        <h2>Sign in with your account</h2>
         <p>Open Pairnets and choose <strong>Continue with email</strong> (or <strong>Continue with Google</strong>), with the same account your nest belongs to. Your browser opens <code>sync.pairnets.app</code>, where you check that the code matches and press <strong>Allow</strong>. Nothing to type about your nest, no token to copy.</p>
         <p class="muted small">Your nest runs on its own domain? Choose "I run my own nest on my own domain" at the bottom of the window instead.</p>
       </li>
       <li>
-        <h3>Pick a folder</h3>
+        <h2>Pick a folder</h2>
         <p>Choose the folder to keep in sync. It catches up with your other computers, then stays in sync on its own.</p>
       </li>
     </ol>
