@@ -54,7 +54,7 @@ function requestPlace(ctx: Ctx): { country: string | null; city: string | null }
 
 // POST /v1/app/start
 export async function appStartRoute(ctx: Ctx): Promise<Response> {
-  await enforce(ctx, "app-start", ctx.ip, 10, HOUR);
+  await enforce(ctx, "app-start", ctx.ipKey, 10, HOUR);
   const b = jsonBody(ctx);
   const name = cleanText(b.name, 64);
   const system = cleanText(b.system, 64);

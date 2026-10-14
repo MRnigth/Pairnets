@@ -59,7 +59,7 @@ function shownStatus(s: ServerLinkRow["status"]): string {
 
 // POST /v1/servers/start
 export async function serverStartRoute(ctx: Ctx): Promise<Response> {
-  await enforce(ctx, "server-start", ctx.ip, STARTS_PER_HOUR, HOUR);
+  await enforce(ctx, "server-start", ctx.ipKey, STARTS_PER_HOUR, HOUR);
   const b = jsonBody(ctx, true);
   const hostname = cleanText(b.hostname, 64);
   const serverVersion = cleanText(b.serverVersion, 64);

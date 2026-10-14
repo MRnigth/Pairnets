@@ -43,7 +43,7 @@ export function emailLandingRoute(): Response {
 
 // POST /v1/login/email
 export async function loginEmailRoute(ctx: Ctx): Promise<Response> {
-  await enforce(ctx, "email-ip", ctx.ip, 10, HOUR);
+  await enforce(ctx, "email-ip", ctx.ipKey, 10, HOUR);
   const b = jsonBody(ctx);
   const email = normaliseEmail(b.email);
   const nextOk = b.next === undefined || b.next === null || typeof b.next === "string";
@@ -75,7 +75,7 @@ export async function loginEmailRoute(ctx: Ctx): Promise<Response> {
 
 // POST /v1/login/email/confirm
 export async function loginEmailConfirmRoute(ctx: Ctx): Promise<Response> {
-  await enforce(ctx, "email-confirm-ip", ctx.ip, 30, HOUR);
+  await enforce(ctx, "email-confirm-ip", ctx.ipKey, 30, HOUR);
   const b = jsonBody(ctx);
   if (typeof b.code !== "string") throw new HttpError(400, "bad_request");
   if (b.code.length !== 32 || !isStrictB64url(b.code, 24)) throw new HttpError(400, "invalid_code");
@@ -101,7 +101,7 @@ export async function loginEmailConfirmRoute(ctx: Ctx): Promise<Response> {
 
 // GET /login/google?next=&reauth=1
 export async function googleStartRoute(ctx: Ctx): Promise<Response> {
-  await enforce(ctx, "google-ip", ctx.ip, 30, 600);
+  await enforce(ctx, "google-ip", ctx.ipKey, 30, 600);
   const next = safeNext(ctx.url.searchParams.get("next"));
   const reauth = ctx.url.searchParams.get("reauth") === "1";
   const state = randomToken(16);
