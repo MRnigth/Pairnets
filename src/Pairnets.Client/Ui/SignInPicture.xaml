@@ -1,0 +1,82 @@
+<UserControl x:Class="Pairnets.Client.Ui.SignInPicture"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="clr-namespace:Pairnets.Client.Ui"
+             Focusable="False" IsHitTestVisible="False">
+  <!-- The big picture at the top of a sign-in step: this computer, the link, the nest, other computers (NestRow),
+       or one soft circle with an icon in it and an optional badge (IconBox). Colours are the design's tones. -->
+  <Grid HorizontalAlignment="Center">
+
+    <StackPanel x:Name="NestRow" Orientation="Horizontal" VerticalAlignment="Top">
+      <!-- this computer -->
+      <StackPanel Width="64">
+        <Grid Height="104">
+          <Border Width="60" Height="60" CornerRadius="20" Background="{DynamicResource T.Card}" BorderBrush="{DynamicResource T.Border}" BorderThickness="1">
+            <ui:LineIcon Width="26" Height="26" StrokeThickness="1.8" Stroke="{DynamicResource T.Muted}" Data="{StaticResource I.Computer}" />
+          </Border>
+        </Grid>
+        <TextBlock Text="This computer" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource T.TextSoft}" HorizontalAlignment="Center"
+                   Margin="-16,8,-16,0" TextAlignment="Center" />
+      </StackPanel>
+
+      <!-- the link to the nest: solid green, dashed grey, or broken (red dashes and a cross) -->
+      <Grid Width="52" Height="104" VerticalAlignment="Top">
+        <Border x:Name="LinkSolid" Height="3" Width="40" CornerRadius="2" Background="{DynamicResource T.OkLine}" Visibility="Collapsed" />
+        <Line x:Name="LinkDashed" X1="6" X2="46" Y1="52" Y2="52" Stroke="{DynamicResource T.Dash}" StrokeThickness="2" StrokeDashArray="2,2" />
+        <Grid x:Name="LinkBroken" Visibility="Collapsed">
+          <Line X1="6" X2="46" Y1="52" Y2="52" Stroke="{DynamicResource T.Bad}" Opacity="0.55" StrokeThickness="2" StrokeDashArray="2,2" />
+          <Border Width="26" Height="26" CornerRadius="13" Background="{DynamicResource T.Card}" BorderBrush="{DynamicResource T.Bad}" BorderThickness="1.5"
+                  VerticalAlignment="Center" HorizontalAlignment="Center">
+            <ui:LineIcon Width="12" Height="12" StrokeThickness="3.2" Stroke="{DynamicResource T.BadText}" Data="{StaticResource I.X}" />
+          </Border>
+        </Grid>
+      </Grid>
+
+      <!-- the nest -->
+      <StackPanel Width="104">
+        <Grid Width="104" Height="104">
+          <Ellipse x:Name="NestHalo" Fill="{DynamicResource T.AccentSoft}" />
+          <Border x:Name="NestTile" Width="72" Height="72" CornerRadius="24" Background="{DynamicResource T.Card}" BorderBrush="{DynamicResource T.Border}" BorderThickness="1">
+            <ui:LineIcon x:Name="NestIcon" Width="32" Height="32" StrokeThickness="1.8" Stroke="{DynamicResource T.AccentInk}" Data="{StaticResource I.Nest}" />
+          </Border>
+          <Border x:Name="NestBadge" Width="32" Height="32" CornerRadius="16" Background="{DynamicResource T.Ok}" BorderBrush="{DynamicResource T.Bg}" BorderThickness="3"
+                  HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,2,2" Visibility="Collapsed">
+            <ui:LineIcon Width="15" Height="15" StrokeThickness="3.2" Stroke="White" Data="{StaticResource I.Check}" />
+          </Border>
+        </Grid>
+        <TextBlock x:Name="NestLabel" Text="Your nest" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource T.Muted}" HorizontalAlignment="Center" Margin="0,8,0,0" />
+      </StackPanel>
+
+      <!-- other computers (not linked yet) -->
+      <Grid x:Name="OtherLink" Width="52" Height="104" VerticalAlignment="Top">
+        <Line X1="6" X2="46" Y1="52" Y2="52" Stroke="{DynamicResource T.Dash}" StrokeThickness="2" StrokeDashArray="2,2" />
+      </Grid>
+      <StackPanel x:Name="OtherColumn" Width="64">
+        <Grid Height="104">
+          <Border Width="60" Height="60" CornerRadius="20" BorderBrush="{DynamicResource T.Dash}" BorderThickness="1.5">
+            <ui:LineIcon Width="26" Height="26" StrokeThickness="1.8" Stroke="{DynamicResource T.TextSoft}"
+                         Data="M5.5,5 L18.5,5 A1.5,1.5 0 0 1 20,6.5 L20,14.5 A1.5,1.5 0 0 1 18.5,16 L5.5,16 A1.5,1.5 0 0 1 4,14.5 L4,6.5 A1.5,1.5 0 0 1 5.5,5 Z M2,19 L22,19" />
+          </Border>
+        </Grid>
+        <TextBlock Text="Other computers" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource T.TextSoft}" HorizontalAlignment="Center"
+                   Margin="-24,8,-24,0" TextAlignment="Center" />
+      </StackPanel>
+    </StackPanel>
+
+    <!-- one soft circle with an icon in it -->
+    <Grid x:Name="IconBox" Width="112" Height="112" VerticalAlignment="Top" Visibility="Collapsed">
+      <Ellipse x:Name="IconHalo" Fill="{DynamicResource T.AccentSoft}" />
+      <Border Width="76" Height="76" CornerRadius="26" Background="{DynamicResource T.Card}" BorderBrush="{DynamicResource T.Border}" BorderThickness="1">
+        <ui:LineIcon x:Name="IconGlyph" Width="34" Height="34" StrokeThickness="1.8" Stroke="{DynamicResource T.AccentInk}" />
+      </Border>
+      <Border x:Name="IconBadge" MinWidth="34" Height="34" CornerRadius="17" Background="{DynamicResource T.AccentButton}" BorderBrush="{DynamicResource T.Bg}" BorderThickness="3"
+              HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,2,2" Visibility="Collapsed">
+        <Grid>
+          <ui:LineIcon x:Name="IconBadgeGlyph" Width="15" Height="15" StrokeThickness="3" Stroke="White" />
+          <TextBlock x:Name="IconBadgeText" FontSize="12" FontWeight="ExtraBold" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"
+                     Margin="8,0" Visibility="Collapsed" />
+        </Grid>
+      </Border>
+    </Grid>
+  </Grid>
+</UserControl>

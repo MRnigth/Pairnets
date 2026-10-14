@@ -3,249 +3,408 @@
              xmlns:v="using:Pairnets.Desktop.Views"
              x:Class="Pairnets.Desktop.Views.SignInView">
   <!-- Signing in with a Pairnets account: sign in → finish in the browser → (no nest yet) → choose the folder.
-       "I run my own nest" leads to the nest's own sign-in: its address → approve this computer there → choose the folder. -->
-  <Grid RowDefinitions="*,Auto">
-    <ScrollViewer HorizontalScrollBarVisibility="Disabled">
-      <Panel Margin="28,26,28,24">
+       "I run my own nest" leads to the nest's own sign-in: its address → approve this computer there → choose the folder.
+       The "New look" sign-in: a top bar with the step, one big picture, a title, then the step's own part. -->
+  <UserControl.Styles>
+    <Style Selector="TextBlock.steptitle">
+      <Setter Property="FontSize" Value="24" />
+      <Setter Property="FontWeight" Value="ExtraBold" />
+      <Setter Property="HorizontalAlignment" Value="Center" />
+      <Setter Property="TextAlignment" Value="Center" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+      <Setter Property="Margin" Value="0,18,0,0" />
+    </Style>
+    <Style Selector="TextBlock.stepsub">
+      <Setter Property="Foreground" Value="{DynamicResource T.Muted}" />
+      <Setter Property="FontSize" Value="14.5" />
+      <Setter Property="HorizontalAlignment" Value="Center" />
+      <Setter Property="TextAlignment" Value="Center" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+      <Setter Property="LineHeight" Value="22" />
+      <Setter Property="MaxWidth" Value="390" />
+      <Setter Property="Margin" Value="0,8,0,0" />
+    </Style>
+    <Style Selector="Button.big">
+      <Setter Property="MinHeight" Value="48" />
+      <Setter Property="FontSize" Value="15" />
+      <Setter Property="FontWeight" Value="Bold" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Button.quiet">
+      <Setter Property="MinHeight" Value="40" />
+      <Setter Property="FontWeight" Value="Bold" />
+      <Setter Property="HorizontalAlignment" Value="Center" />
+      <Setter Property="Foreground" Value="{DynamicResource T.Muted}" />
+    </Style>
+    <Style Selector="Button.quiet /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Foreground" Value="{DynamicResource T.Muted}" />
+    </Style>
+    <Style Selector="TextBlock.fieldlabel">
+      <Setter Property="FontSize" Value="13" />
+      <Setter Property="FontWeight" Value="Bold" />
+      <Setter Property="Margin" Value="0,0,0,8" />
+    </Style>
+    <Style Selector="TextBox.biginput">
+      <Setter Property="MinHeight" Value="50" />
+      <Setter Property="Height" Value="50" />
+      <Setter Property="FontSize" Value="15" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Padding" Value="46,0,16,0" />
+    </Style>
+    <Style Selector="Border.rowcard">
+      <Setter Property="Background" Value="{DynamicResource T.Card}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource T.Border}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="16" />
+      <Setter Property="Padding" Value="14,12" />
+    </Style>
+    <Style Selector="Border.waitpill">
+      <Setter Property="Background" Value="{DynamicResource T.AccentSoft}" />
+      <Setter Property="CornerRadius" Value="17" />
+      <Setter Property="Padding" Value="14,0" />
+      <Setter Property="Height" Value="34" />
+      <Setter Property="HorizontalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="TextBlock.waittext">
+      <Setter Property="FontSize" Value="13" />
+      <Setter Property="FontWeight" Value="Bold" />
+      <Setter Property="Foreground" Value="{DynamicResource T.AccentInk}" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+  </UserControl.Styles>
+  <Grid RowDefinitions="Auto,*,Auto">
+
+    <!-- The top bar: logo, and which step of 4 -->
+    <Grid Height="56" Margin="18,0,18,0" ColumnDefinitions="*,Auto,*">
+      <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+        <Image Source="avares://Pairnets/Assets/pairnets-icon-256.png" Width="24" Height="24" />
+        <TextBlock Text="Pairnets" FontSize="15" FontWeight="ExtraBold" Margin="8,0,0,0" VerticalAlignment="Center" />
+      </StackPanel>
+      <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+        <StackPanel x:Name="StepDots" Orientation="Horizontal" VerticalAlignment="Center" />
+        <TextBlock x:Name="StepText" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource T.TextSoft}" Margin="10,0,0,0" VerticalAlignment="Center" />
+      </StackPanel>
+    </Grid>
+
+    <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+      <StackPanel MaxWidth="424" Margin="48,8,48,6">
+
+        <!-- Signed in (the folder step only) -->
+        <Border x:Name="SignedInChip" Classes="ok" CornerRadius="15" Padding="10,6,12,6" HorizontalAlignment="Center" Margin="0,0,0,14" IsVisible="False">
+          <TextBlock x:Name="SignedInText" FontSize="12.5" FontWeight="Bold" VerticalAlignment="Center" TextWrapping="Wrap" />
+        </Border>
+
+        <v:SignInPicture x:Name="Picture" HorizontalAlignment="Center" Margin="0,10,0,0" />
+        <TextBlock x:Name="TitleText" Classes="steptitle" />
+        <TextBlock x:Name="SubText" Classes="stepsub" />
+
+        <Border x:Name="AccountOutcomeBox" Classes="callout" Margin="0,18,0,0" IsVisible="False">
+          <TextBlock x:Name="AccountOutcomeText" TextWrapping="Wrap" />
+        </Border>
 
         <!-- 1. Sign in to Pairnets: Google, or email -->
-        <StackPanel x:Name="AccountStep" MaxWidth="364" Margin="0,30,0,0">
-          <Image Source="avares://Pairnets/Assets/pairnets-icon-256.png" Width="52" Height="52" HorizontalAlignment="Center" />
-          <TextBlock Classes="h1" FontSize="26" Text="Sign in to Pairnets" HorizontalAlignment="Center" Margin="0,18,0,0" />
-          <TextBlock Classes="muted" Text="Keep one folder the same on all your computers." HorizontalAlignment="Center"
-                     TextAlignment="Center" TextWrapping="Wrap" Margin="0,6,0,0" />
-          <Border x:Name="AccountOutcomeBox" Classes="callout" Margin="0,18,0,-12" IsVisible="False">
-            <TextBlock x:Name="AccountOutcomeText" TextWrapping="Wrap" />
-          </Border>
-
-          <!-- "Continue with Google": the browser page signs in with Google -->
-          <Button x:Name="AccountGoogleButton" Classes="subtle" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
-                  Padding="13,12" Margin="0,30,0,0" Click="OnAccountGoogle">
-            <StackPanel Orientation="Horizontal" Spacing="10">
-              <Viewbox Width="18" Height="18" VerticalAlignment="Center">
-                <Canvas Width="48" Height="48">
-                  <Path Fill="#EA4335" Data="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z" />
-                  <Path Fill="#4285F4" Data="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z" />
-                  <Path Fill="#34A853" Data="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z" />
-                  <Path Fill="#FBBC05" Data="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z" />
-                </Canvas>
-              </Viewbox>
+        <StackPanel x:Name="AccountStep" Margin="0,24,0,0">
+          <!-- "Continue with Google": the browser page signs in with Google (a plain person icon, not Google's logo) -->
+          <Button x:Name="AccountGoogleButton" Classes="subtle big" Click="OnAccountGoogle">
+            <StackPanel Orientation="Horizontal">
+              <v:LineIcon Width="20" Height="20" StrokeThickness="1.9" Stroke="{DynamicResource T.Text}" Data="{StaticResource I.User}" Margin="0,0,10,0" />
               <TextBlock Text="Continue with Google" VerticalAlignment="Center" />
             </StackPanel>
           </Button>
 
           <!-- or -->
-          <Grid ColumnDefinitions="*,Auto,*" Margin="0,12,0,0">
+          <Grid Margin="0,12,0,0" ColumnDefinitions="*,Auto,*">
             <Border Height="1" Background="{DynamicResource T.Border}" VerticalAlignment="Center" />
             <TextBlock Grid.Column="1" Classes="muted small" Text="or" Margin="12,0" />
             <Border Grid.Column="2" Height="1" Background="{DynamicResource T.Border}" VerticalAlignment="Center" />
           </Grid>
 
           <!-- "Continue with email": the browser page sends a sign-in link to this address -->
-          <TextBox x:Name="AccountEmailBox" Watermark="Enter your email" Padding="13,11" Margin="0,12,0,0" />
-          <TextBlock x:Name="AccountEmailProblem" Classes="small" Foreground="{DynamicResource T.BadText}" Margin="2,6,0,0"
+          <Panel Margin="0,12,0,0">
+            <TextBox x:Name="AccountEmailBox" Classes="biginput" Watermark="Enter your email" />
+            <v:LineIcon Width="18" Height="18" StrokeThickness="1.9" Stroke="{DynamicResource T.AccentInk}" HorizontalAlignment="Left" Margin="16,0,0,0" IsHitTestVisible="False"
+                        Data="{StaticResource I.Mail}" />
+          </Panel>
+          <TextBlock x:Name="AccountEmailProblem" Classes="muted small" Foreground="{DynamicResource T.BadText}" FontWeight="SemiBold" Margin="2,8,0,0"
                      Text="Type your email address first." IsVisible="False" />
-          <Button x:Name="AccountEmailButton" Classes="accent" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
-                  Padding="13,12" Margin="0,12,0,0" Content="Continue with email" Click="OnAccountEmail" />
+          <Button x:Name="AccountEmailButton" Classes="accent big" Content="Continue with email" Margin="0,12,0,0" Click="OnAccountEmail" />
 
           <!-- Accounts are made by signing in: the service's sign-in page -->
           <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,14,0,0">
             <TextBlock Classes="muted" Text="New here?" VerticalAlignment="Center" />
             <Button x:Name="MakeAccountButton" Classes="link" Padding="4,3" Margin="1,0,0,0" VerticalAlignment="Center" Click="OnMakeAccount">
-              <TextBlock Text="Make an account" FontSize="13.5" FontWeight="SemiBold" Foreground="{DynamicResource T.Text}" TextDecorations="Underline" />
+              <TextBlock Text="Make an account" FontSize="13.5" FontWeight="Bold" Foreground="{DynamicResource T.AccentInk}" />
             </Button>
           </StackPanel>
 
           <!-- The small print: continuing means agreeing to the Terms and the Privacy Policy (pages on pairnets.app) -->
-          <WrapPanel HorizontalAlignment="Center" Margin="0,10,0,0">
+          <WrapPanel HorizontalAlignment="Center" Margin="0,8,0,0">
             <TextBlock Classes="muted small" Text="By continuing, you agree to the" VerticalAlignment="Center" />
             <Button x:Name="TermsButton" Classes="link" Padding="3,2" VerticalAlignment="Center" Click="OnTerms">
-              <TextBlock Classes="small" Text="Terms" Foreground="{DynamicResource T.Text}" TextDecorations="Underline" />
+              <TextBlock Classes="muted small" Text="Terms" Foreground="{DynamicResource T.Text}" TextDecorations="Underline" />
             </Button>
             <TextBlock Classes="muted small" Text="and the" VerticalAlignment="Center" />
             <Button x:Name="PrivacyButton" Classes="link" Padding="3,2,0,2" VerticalAlignment="Center" Click="OnPrivacy">
-              <TextBlock Classes="small" Text="Privacy Policy" Foreground="{DynamicResource T.Text}" TextDecorations="Underline" />
+              <TextBlock Classes="muted small" Text="Privacy Policy" Foreground="{DynamicResource T.Text}" TextDecorations="Underline" />
             </Button>
             <TextBlock Classes="muted small" Text="." VerticalAlignment="Center" />
           </WrapPanel>
         </StackPanel>
 
         <!-- 2. Finish in your browser: the code to compare, until this computer is allowed there -->
-        <StackPanel x:Name="AccountWaitStep" MaxWidth="364" Margin="0,38,0,0" IsVisible="False">
-          <Border Width="52" Height="52" CornerRadius="26" Background="{DynamicResource T.Pill}" HorizontalAlignment="Center">
-            <v:LineIcon Width="24" Height="24" StrokeThickness="1.8" Stroke="{DynamicResource T.Text}" Data="{StaticResource I.Browser}" />
-          </Border>
-          <TextBlock Classes="h1" FontSize="26" Text="Finish in your browser" HorizontalAlignment="Center" Margin="0,18,0,0" />
-          <TextBlock x:Name="AccountWaitIntro" Classes="muted" TextAlignment="Center" TextWrapping="Wrap" LineHeight="20" Margin="0,8,0,0">
-            <Run Text="We opened " /><Run x:Name="AccountServiceRun" Text="sync.pairnets.app" Foreground="{DynamicResource T.Text}" FontWeight="SemiBold" /><Run Text=". Sign in there and press Allow." />
+        <StackPanel x:Name="AccountWaitStep" Margin="0,18,0,0" IsVisible="False">
+          <TextBlock x:Name="AccountWaitIntro" Classes="stepsub" Margin="0">
+            <Run Text="We opened " /><Run x:Name="AccountServiceRun" Text="sync.pairnets.app" Foreground="{DynamicResource T.Text}" FontWeight="Bold" /><Run Text=". Sign in there and press Allow." />
           </TextBlock>
-          <TextBlock x:Name="AccountStartingText" Classes="muted" TextAlignment="Center" TextWrapping="Wrap" LineHeight="20" Margin="0,8,0,0"
-                     Text="Asking Pairnets for a code…" IsVisible="False" />
-          <Border BorderBrush="{DynamicResource T.Border}" BorderThickness="1" CornerRadius="12" Padding="12,18,12,20" Margin="0,26,0,0">
+          <TextBlock x:Name="AccountStartingText" Classes="stepsub" Margin="0" Text="Asking Pairnets for a code…" IsVisible="False" />
+          <Border Classes="card" Padding="20,14,20,16" Margin="0,18,0,0">
             <StackPanel>
-              <TextBlock Classes="muted" FontSize="12.5" Text="The page shows this code. It should match:" HorizontalAlignment="Center"
-                         TextAlignment="Center" TextWrapping="Wrap" />
-              <TextBlock x:Name="AccountCodeText" FontFamily="Menlo, Consolas, DejaVu Sans Mono, monospace" FontSize="32" FontWeight="SemiBold"
-                         LetterSpacing="5" HorizontalAlignment="Center" Margin="0,8,0,0" />
+              <TextBlock Classes="SmallLabel" Text="THE PAGE SHOWS THIS CODE. IT SHOULD MATCH" HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" />
+              <TextBlock x:Name="AccountCodeText" FontFamily="Menlo, Consolas, DejaVu Sans Mono, monospace" FontSize="34" FontWeight="Bold"
+                         HorizontalAlignment="Center" Margin="0,6,0,0" />
             </StackPanel>
           </Border>
-          <Grid ColumnDefinitions="Auto,*" Margin="0,18,0,0" HorizontalAlignment="Center">
-            <Panel Width="18" Height="18" Margin="0,0,10,0" VerticalAlignment="Top">
-              <Ellipse Width="16.4" Height="16.4" Stroke="{DynamicResource T.Track}" StrokeThickness="2.4" />
-              <Arc x:Name="AccountRing" Classes="spin" Width="16.4" Height="16.4" StartAngle="-60" SweepAngle="90" StrokeThickness="2.4"
-                   Stroke="{DynamicResource T.Accent}" StrokeLineCap="Round" />
-            </Panel>
-            <TextBlock x:Name="AccountWaitText" Grid.Column="1" TextWrapping="Wrap" VerticalAlignment="Center" />
-          </Grid>
-          <TextBlock x:Name="AccountExpiresText" Classes="muted small" HorizontalAlignment="Center" Margin="0,6,0,0" />
+          <Border Classes="waitpill" Margin="0,14,0,0">
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+              <Panel Width="18" Height="18" Margin="0,0,10,0" VerticalAlignment="Center">
+                <Ellipse Width="16.4" Height="16.4" Stroke="{DynamicResource T.Track}" StrokeThickness="2.4" />
+                <Arc x:Name="AccountRing" Classes="spin" Width="16.4" Height="16.4" StartAngle="-60" SweepAngle="90" StrokeThickness="2.4"
+                     Stroke="{DynamicResource T.Accent}" StrokeLineCap="Round" />
+              </Panel>
+              <TextBlock x:Name="AccountWaitText" Classes="waittext" />
+            </StackPanel>
+          </Border>
+          <TextBlock x:Name="AccountExpiresText" Classes="muted small" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,8,0,0" />
         </StackPanel>
 
         <!-- 3. Allowed, but the account has no nest yet: how to set one up, until it has one -->
-        <StackPanel x:Name="NoNestStep" MaxWidth="364" Margin="0,30,0,0" IsVisible="False">
-          <Border Classes="ok" CornerRadius="14" Padding="12,5" HorizontalAlignment="Center">
-            <StackPanel Orientation="Horizontal" Spacing="7">
-              <v:LineIcon Width="13" Height="13" StrokeThickness="2.8" Stroke="{DynamicResource T.OkText}" Data="{StaticResource I.Check}"
-                          VerticalAlignment="Center" />
-              <TextBlock x:Name="NoNestAccountText" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" />
+        <StackPanel x:Name="NoNestStep" Margin="0,18,0,0" IsVisible="False">
+          <Border Classes="rowcard">
+            <StackPanel Orientation="Horizontal">
+              <Border Classes="IconSquare" Width="36" Height="36" CornerRadius="18" Background="{DynamicResource T.OkPill}">
+                <v:LineIcon Width="18" Height="18" StrokeThickness="2.6" Stroke="{DynamicResource T.OkText}" Data="{StaticResource I.Check}" />
+              </Border>
+              <TextBlock x:Name="NoNestAccountText" Foreground="{DynamicResource T.OkText}" FontSize="14" FontWeight="Bold" VerticalAlignment="Center" Margin="12,0,0,0" TextWrapping="Wrap" />
             </StackPanel>
           </Border>
-          <TextBlock Classes="h1" FontSize="26" Text="Your account has no nest yet" HorizontalAlignment="Center" TextAlignment="Center"
-                     TextWrapping="Wrap" Margin="0,22,0,0" />
-          <TextBlock Classes="muted" TextAlignment="Center" TextWrapping="Wrap" LineHeight="20" Margin="0,10,0,0"
-                     Text="A nest is your own Linux computer that keeps your folder. Set it up once with one command, and every computer you sign in finds it by itself." />
-          <Button x:Name="ShowMeHowButton" Classes="accent" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
-                  Padding="13,12" Margin="0,28,0,0" Content="Show me how" Click="OnShowMeHow" />
-          <Grid ColumnDefinitions="Auto,*" Margin="0,18,0,0" HorizontalAlignment="Center">
-            <Panel Width="18" Height="18" Margin="0,0,10,0" VerticalAlignment="Top">
-              <Ellipse Width="16.4" Height="16.4" Stroke="{DynamicResource T.Track}" StrokeThickness="2.4" />
-              <Arc x:Name="NoNestRing" Classes="spin" Width="16.4" Height="16.4" StartAngle="-60" SweepAngle="90" StrokeThickness="2.4"
-                   Stroke="{DynamicResource T.Accent}" StrokeLineCap="Round" />
-            </Panel>
-            <TextBlock x:Name="NoNestWaitText" Grid.Column="1" TextWrapping="Wrap" VerticalAlignment="Center" Text="Waiting for your nest…" />
-          </Grid>
+          <Button x:Name="ShowMeHowButton" Classes="accent big" Margin="0,16,0,0" Click="OnShowMeHow">
+            <StackPanel Orientation="Horizontal">
+              <TextBlock Text="Show me how" VerticalAlignment="Center" />
+              <v:LineIcon Width="18" Height="18" StrokeThickness="2.2" Stroke="White" Data="{StaticResource I.Arrow}" Margin="8,0,0,0" />
+            </StackPanel>
+          </Button>
+          <Border Classes="waitpill" Margin="0,16,0,0">
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+              <Panel Width="18" Height="18" Margin="0,0,10,0" VerticalAlignment="Center">
+                <Ellipse Width="16.4" Height="16.4" Stroke="{DynamicResource T.Track}" StrokeThickness="2.4" />
+                <Arc x:Name="NoNestRing" Classes="spin" Width="16.4" Height="16.4" StartAngle="-60" SweepAngle="90" StrokeThickness="2.4"
+                     Stroke="{DynamicResource T.Accent}" StrokeLineCap="Round" />
+              </Panel>
+              <TextBlock x:Name="NoNestWaitText" Classes="waittext" Text="Waiting for your nest…" />
+            </StackPanel>
+          </Border>
         </StackPanel>
 
         <!-- 4. I run my own nest: which nest, then the ways to sign in there -->
-        <StackPanel x:Name="WelcomeStep" Spacing="14" MaxWidth="470" IsVisible="False">
-          <Image Source="avares://Pairnets/Assets/pairnets-icon-256.png" Width="64" Height="64" HorizontalAlignment="Center" />
-          <StackPanel Spacing="4">
-            <TextBlock Classes="h1" Text="Sign in" HorizontalAlignment="Center" />
-            <TextBlock Classes="muted" Text="Keep one folder the same on all your computers." HorizontalAlignment="Center" TextWrapping="Wrap" />
-          </StackPanel>
-          <Border Classes="card">
-            <StackPanel Spacing="0">
-              <StackPanel Spacing="6">
-                <TextBlock Classes="label" Text="Your nest" />
-                <TextBox x:Name="AddressBox" Watermark="nest.example.com" />
-                <StackPanel x:Name="CheckRow" Orientation="Horizontal" Spacing="6" IsVisible="False">
-                  <v:LineIcon x:Name="CheckIcon" Classes="icon" Width="14" Height="14" VerticalAlignment="Top" Margin="0,2,0,0" />
-                  <TextBlock x:Name="CheckText" Classes="small" TextWrapping="Wrap" MaxWidth="380" />
-                </StackPanel>
+        <StackPanel x:Name="WelcomeStep" Margin="0,20,0,0" IsVisible="False">
+          <Border x:Name="FoundCard" Classes="rowcard" Padding="14,12,12,12" IsVisible="False">
+            <Grid ColumnDefinitions="Auto,*,Auto">
+              <Border Width="36" Height="36" CornerRadius="18" Background="{DynamicResource T.OkPill}" Margin="0,0,12,0">
+                <v:LineIcon Width="18" Height="18" StrokeThickness="2.6" Stroke="{DynamicResource T.OkText}" Data="{StaticResource I.Check}" />
+              </Border>
+              <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                <TextBlock x:Name="FoundName" FontSize="15" FontWeight="ExtraBold" TextTrimming="CharacterEllipsis" />
+                <TextBlock x:Name="FoundNote" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource T.OkText}" TextTrimming="CharacterEllipsis" />
               </StackPanel>
-
-              <!-- "Continue with Google": the browser signs in with Google right away -->
-              <Button x:Name="GoogleButton" Classes="subtle" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
-                      Padding="13,10" Margin="0,16,0,0" Click="OnGoogle" IsEnabled="False" IsVisible="False">
-                <StackPanel Orientation="Horizontal" Spacing="10">
-                  <Viewbox Width="18" Height="18" VerticalAlignment="Center">
-                    <Canvas Width="48" Height="48">
-                      <Path Fill="#EA4335" Data="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z" />
-                      <Path Fill="#4285F4" Data="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z" />
-                      <Path Fill="#34A853" Data="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z" />
-                      <Path Fill="#FBBC05" Data="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z" />
-                    </Canvas>
-                  </Viewbox>
-                  <TextBlock Text="Continue with Google" VerticalAlignment="Center" />
-                </StackPanel>
-              </Button>
-
-              <!-- or -->
-              <Grid x:Name="OrRow" ColumnDefinitions="*,Auto,*" Margin="0,14,0,2" IsVisible="False">
-                <Border Height="1" Background="{DynamicResource T.Border}" VerticalAlignment="Center" />
-                <TextBlock Grid.Column="1" Classes="muted small" Text="OR" Margin="10,0" />
-                <Border Grid.Column="2" Height="1" Background="{DynamicResource T.Border}" VerticalAlignment="Center" />
-              </Grid>
-
-              <!-- "Continue with email": a sign-in link lands in the owner's inbox -->
-              <StackPanel x:Name="EmailPanel" Spacing="10" IsVisible="False">
-                <TextBox x:Name="EmailBox" Watermark="Enter your email" Margin="0,12,0,0" IsEnabled="False" />
-                <Button x:Name="EmailButton" Classes="accent" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
-                        Padding="13,10" Content="Continue with email" Click="OnEmail" IsEnabled="False" />
-              </StackPanel>
-
-              <!-- password, passkey, and everything else live on the nest's own page -->
-              <Button x:Name="BrowserButton" Classes="accent" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
-                      Padding="13,10" Margin="0,16,0,0" Content="Sign in with your browser" Click="OnSignIn" IsEnabled="False" />
-            </StackPanel>
+              <Button x:Name="ChangeButton" Grid.Column="2" Classes="small" Background="{DynamicResource T.Chip}" BorderThickness="0" FontWeight="Bold" Content="Change" Margin="10,0,0,0" />
+            </Grid>
           </Border>
-          <TextBlock Classes="muted small" TextWrapping="Wrap" TextAlignment="Center"
-                     Text="Your nest is your own server. New computers only get in when you allow them there." />
+          <StackPanel x:Name="AddressEdit">
+          <TextBlock x:Name="AddressLabel" Classes="fieldlabel" Text="Your nest’s name" />
+          <Panel>
+            <TextBox x:Name="AddressBox" Classes="biginput" Watermark="nest.example.com" />
+            <v:LineIcon x:Name="AddressIcon" Width="18" Height="18" StrokeThickness="1.9" Stroke="{DynamicResource T.AccentInk}" Data="{StaticResource I.Nest}"
+                        HorizontalAlignment="Left" Margin="16,0,0,0" IsHitTestVisible="False" />
+          </Panel>
+          <StackPanel x:Name="CheckRow" Orientation="Horizontal" Margin="0,9,0,0" IsVisible="False">
+            <v:LineIcon x:Name="CheckIcon" Width="16" Height="16" Margin="0,1,8,0" VerticalAlignment="Top" StrokeThickness="2.2" />
+            <TextBlock x:Name="CheckText" FontSize="12.5" FontWeight="SemiBold" TextWrapping="Wrap" MaxWidth="380" />
+          </StackPanel>
+          </StackPanel>
+          <Button x:Name="CheckButton" Classes="accent big" Margin="0,14,0,0" Click="OnCheck">
+            <StackPanel Orientation="Horizontal">
+              <TextBlock x:Name="CheckButtonText" Text="Continue" VerticalAlignment="Center" />
+              <v:LineIcon x:Name="CheckButtonIcon" Width="18" Height="18" StrokeThickness="2.2" Stroke="White" Data="{StaticResource I.Arrow}" Margin="8,0,0,0" />
+            </StackPanel>
+          </Button>
+          <StackPanel x:Name="AddressInfo" Orientation="Horizontal" Margin="0,16,0,0">
+            <v:LineIcon Width="16" Height="16" StrokeThickness="2" Stroke="{DynamicResource T.TextSoft}" Margin="0,1,9,0" VerticalAlignment="Top"
+                        Data="{StaticResource I.InfoCircle}" />
+            <TextBlock x:Name="AddressInfoText" Classes="muted" FontSize="12.5" TextWrapping="Wrap" MaxWidth="380"
+                       Text="It’s the address you open to see your nest in a web browser. Not sure? Ask whoever set the nest up." />
+          </StackPanel>
+
+          <!-- the ways in, once the nest is found -->
+          <StackPanel x:Name="MethodsPanel">
+            <!-- "Continue with Google": the browser signs in with Google right away (a plain person icon, not Google's logo) -->
+            <Button x:Name="GoogleButton" Classes="subtle big" Margin="0,12,0,0" Click="OnGoogle" IsEnabled="False" IsVisible="False">
+              <StackPanel Orientation="Horizontal">
+                <v:LineIcon Width="20" Height="20" StrokeThickness="1.9" Stroke="{DynamicResource T.Text}" Data="{StaticResource I.User}" Margin="0,0,10,0" />
+                <TextBlock Text="Continue with Google" VerticalAlignment="Center" />
+              </StackPanel>
+            </Button>
+
+            <!-- or -->
+            <Grid x:Name="OrRow" Margin="0,12,0,0" ColumnDefinitions="*,Auto,*" IsVisible="False">
+              <Border Height="1" Background="{DynamicResource T.Border}" VerticalAlignment="Center" />
+              <TextBlock Grid.Column="1" Classes="muted small" Text="or" Margin="12,0" />
+              <Border Grid.Column="2" Height="1" Background="{DynamicResource T.Border}" VerticalAlignment="Center" />
+            </Grid>
+
+            <!-- "Continue with email": a sign-in link lands in the owner's inbox -->
+            <StackPanel x:Name="EmailPanel" IsVisible="False">
+              <Panel x:Name="EmailBoxHost" Margin="0,8,0,0">
+                <TextBox x:Name="EmailBox" Classes="biginput" Watermark="Enter your email" IsEnabled="False" />
+                <v:LineIcon Width="18" Height="18" StrokeThickness="1.9" Stroke="{DynamicResource T.AccentInk}" HorizontalAlignment="Left" Margin="16,0,0,0" IsHitTestVisible="False"
+                            Data="{StaticResource I.Mail}" />
+              </Panel>
+              <Button x:Name="EmailButton" Classes="subtle big" Content="Continue with email" Margin="0,8,0,0" Click="OnEmail" IsEnabled="False" />
+            </StackPanel>
+
+            <!-- what happens next, when the browser is the one way in -->
+            <Border x:Name="NextSteps" Background="{DynamicResource T.Chip}" CornerRadius="16" Padding="16,10" Margin="0,12,0,0" IsVisible="False">
+              <StackPanel>
+                <StackPanel Orientation="Horizontal">
+                  <Border Width="22" Height="22" CornerRadius="11" Background="{DynamicResource T.Card}">
+                    <TextBlock Text="1" FontSize="11" FontWeight="ExtraBold" Foreground="{DynamicResource T.AccentInk}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                  </Border>
+                  <TextBlock Text="Your browser opens your nest" Classes="muted" FontSize="13" Margin="10,0,0,0" VerticalAlignment="Center" />
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                  <Border Width="22" Height="22" CornerRadius="11" Background="{DynamicResource T.Card}">
+                    <TextBlock Text="2" FontSize="11" FontWeight="ExtraBold" Foreground="{DynamicResource T.AccentInk}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                  </Border>
+                  <TextBlock Text="You sign in there" Classes="muted" FontSize="13" Margin="10,0,0,0" VerticalAlignment="Center" />
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                  <Border Width="22" Height="22" CornerRadius="11" Background="{DynamicResource T.Card}">
+                    <TextBlock Text="3" FontSize="11" FontWeight="ExtraBold" Foreground="{DynamicResource T.AccentInk}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                  </Border>
+                  <TextBlock Text="You check a code and press Allow" Classes="muted" FontSize="13" Margin="10,0,0,0" VerticalAlignment="Center" />
+                </StackPanel>
+              </StackPanel>
+            </Border>
+
+            <!-- password, passkey, and everything else live on the nest's own page -->
+            <Button x:Name="BrowserButton" Classes="accent big" Content="Sign in with your browser" Margin="0,14,0,0" Click="OnSignIn" IsEnabled="False" />
+          </StackPanel>
         </StackPanel>
 
         <!-- 5. Waiting: the code to compare, until it is approved on the nest -->
-        <StackPanel x:Name="WaitStep" Spacing="14" MaxWidth="470" IsVisible="False">
-          <TextBlock Classes="h1" Text="Approve this computer" />
-          <TextBlock x:Name="WaitIntro" TextWrapping="Wrap"
-                     Text="Your browser opened your nest. Sign in there and check that it shows this code:" />
-          <Border Classes="card" Padding="12,18">
-            <TextBlock x:Name="CodeText" FontFamily="Menlo, Consolas, DejaVu Sans Mono, monospace" FontSize="34" FontWeight="SemiBold"
-                       LetterSpacing="6" HorizontalAlignment="Center" />
+        <StackPanel x:Name="WaitStep" Margin="0,18,0,0" IsVisible="False">
+          <Border x:Name="CodeCard" Classes="card" Padding="20,14,20,16">
+            <StackPanel>
+              <TextBlock Classes="SmallLabel" Text="YOUR CODE" HorizontalAlignment="Center" />
+              <TextBlock x:Name="CodeText" FontFamily="Menlo, Consolas, DejaVu Sans Mono, monospace" FontSize="40" FontWeight="Bold"
+                         HorizontalAlignment="Center" Margin="0,2,0,0" />
+            </StackPanel>
           </Border>
-          <StackPanel x:Name="WaitRow" Orientation="Horizontal" Spacing="8">
-            <v:LineIcon x:Name="WaitIcon" Classes="icon muted spin" Width="16" Height="16" Data="{StaticResource I.Sync}" />
-            <TextBlock x:Name="WaitText" Classes="muted" />
+          <Border x:Name="WaitRow" Classes="waitpill" Margin="0,14,0,0">
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+              <Ellipse Width="6" Height="6" Fill="{DynamicResource T.Accent}" Margin="0,0,4,0" />
+              <Ellipse Width="6" Height="6" Fill="{DynamicResource T.Accent}" Opacity="0.6" Margin="0,0,4,0" />
+              <Ellipse Width="6" Height="6" Fill="{DynamicResource T.Accent}" Opacity="0.3" Margin="0,0,10,0" />
+              <TextBlock x:Name="WaitText" Classes="waittext" />
+            </StackPanel>
+          </Border>
+          <Border x:Name="OutcomeBox" Classes="rowcard" Margin="0,18,0,0" IsVisible="False">
+            <StackPanel Orientation="Horizontal">
+              <Border x:Name="OutcomeIconBox" Width="36" Height="36" CornerRadius="18" Background="{DynamicResource T.BadPill}" VerticalAlignment="Top">
+                <v:LineIcon x:Name="OutcomeIcon" Width="18" Height="18" StrokeThickness="2.2" Stroke="{DynamicResource T.BadText}" />
+              </Border>
+              <TextBlock x:Name="OutcomeText" FontSize="13.5" FontWeight="SemiBold" TextWrapping="Wrap" VerticalAlignment="Center" Margin="12,0,0,0" MaxWidth="330" />
+            </StackPanel>
+          </Border>
+          <StackPanel x:Name="WaitButtons" Margin="0,16,0,0">
+            <Button x:Name="RetryButton" Classes="accent big" Click="OnRetry" IsVisible="False">
+              <StackPanel Orientation="Horizontal">
+                <v:LineIcon Width="18" Height="18" StrokeThickness="2.2" Stroke="White" Data="{StaticResource I.Retry}" Margin="0,0,8,0" />
+                <TextBlock x:Name="RetryText" Text="Get a new code" VerticalAlignment="Center" />
+              </StackPanel>
+            </Button>
+            <Button x:Name="OpenAgainButton" Classes="subtle big" Click="OnOpenAgain">
+              <StackPanel Orientation="Horizontal">
+                <v:LineIcon Width="16" Height="16" StrokeThickness="2.1" Stroke="{DynamicResource T.Text}" Margin="0,0,8,0" Data="{StaticResource I.External}" />
+                <TextBlock Text="Open the browser again" VerticalAlignment="Center" />
+              </StackPanel>
+            </Button>
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,6,0,0">
+              <Button x:Name="CopyButton" Classes="flat quiet" Content="Copy link" Margin="0,0,6,0" Click="OnCopy" />
+              <Button x:Name="BackButton" Classes="flat quiet" Content="Cancel" Click="OnBack" />
+            </StackPanel>
           </StackPanel>
-          <TextBlock x:Name="WaitHint" Classes="muted small" TextWrapping="Wrap"
-                     Text="Your other computers show a “wants to join” notice too; it leads to the same page." />
-          <Border x:Name="OutcomeBox" Classes="callout" IsVisible="False">
-            <TextBlock x:Name="OutcomeText" TextWrapping="Wrap" />
-          </Border>
-          <WrapPanel x:Name="WaitButtons">
-            <Button x:Name="OpenAgainButton" Classes="subtle" Content="Open the browser again" Margin="0,0,8,8" Click="OnOpenAgain" />
-            <Button x:Name="CopyButton" Classes="subtle" Content="Copy link" Margin="0,0,8,8" Click="OnCopy" />
-            <Button x:Name="RetryButton" Classes="accent" Content="Get a new code" Margin="0,0,8,8" Click="OnRetry" IsVisible="False" />
-            <Button x:Name="BackButton" Classes="flat" Content="Cancel" Margin="0,0,8,8" Click="OnBack" />
-          </WrapPanel>
+          <StackPanel x:Name="WaitHint" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,6,0,0">
+            <v:LineIcon Width="14" Height="14" StrokeThickness="2" Stroke="{DynamicResource T.TextSoft}" Margin="0,2,8,0" VerticalAlignment="Top" Data="{StaticResource I.Computer}" />
+            <TextBlock Classes="SoftText" TextWrapping="Wrap" MaxWidth="360" LineHeight="17" FontSize="12"
+                       Text="Your other computers show a “wants to join” notice too. It leads to the same page." />
+          </StackPanel>
         </StackPanel>
 
         <!-- 6. Signed in: which folder to keep in sync -->
-        <StackPanel x:Name="FolderStep" Spacing="14" MaxWidth="470" IsVisible="False">
-          <Border Classes="ok" HorizontalAlignment="Left" Padding="12,6" CornerRadius="10">
-            <TextBlock x:Name="SignedInText" TextWrapping="Wrap" />
+        <StackPanel x:Name="FolderStep" Margin="0,22,0,0" IsVisible="False">
+          <Border Classes="rowcard" Padding="14,12,12,12">
+            <Grid ColumnDefinitions="Auto,*,Auto">
+              <Border Classes="IconSquare" Width="40" Height="40" CornerRadius="12" Margin="0,0,12,0">
+                <v:LineIcon Width="20" Height="20" StrokeThickness="1.8" Stroke="{DynamicResource T.Folder}" Data="{StaticResource I.Folder}" />
+              </Border>
+              <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                <TextBlock Classes="SoftText" FontSize="12" Text="Folder on this computer" />
+                <TextBox x:Name="FolderBox" BorderThickness="0" Background="Transparent" MinHeight="0" Watermark="Choose a folder…"
+                         FontSize="15" FontWeight="ExtraBold" Padding="0" Margin="0,1,0,0" />
+              </StackPanel>
+              <Button Grid.Column="2" Classes="SecondaryButton" Content="Choose…" MinHeight="36" Margin="10,0,0,0" Click="OnBrowse" />
+            </Grid>
           </Border>
-          <TextBlock Classes="h1" Text="Choose the folder to keep in sync" TextWrapping="Wrap" />
-          <Border Classes="card">
-            <StackPanel Spacing="12">
-              <Grid ColumnDefinitions="*,Auto">
-                <TextBox x:Name="FolderBox" Watermark="Choose a folder…" />
-                <Button Grid.Column="1" Classes="subtle" Content="Browse…" Margin="8,0,0,0" Click="OnBrowse" />
-              </Grid>
-              <TextBlock Classes="muted small" TextWrapping="Wrap"
-                         Text="Files on your nest are copied here. Files already in this folder are kept and merged, never replaced." />
-              <ToggleSwitch x:Name="AutoStartBox" OnContent="Start Pairnets when I log in" OffContent="Start Pairnets when I log in" />
+          <Border Classes="rowcard" Margin="0,10,0,0">
+            <Grid ColumnDefinitions="Auto,*">
+              <Border Classes="IconSquare" Width="40" Height="40" CornerRadius="12" Margin="0,0,12,0">
+                <v:LineIcon Width="18" Height="18" StrokeThickness="2" Stroke="{DynamicResource T.Muted}" Data="{StaticResource I.Power}" />
+              </Border>
+              <ToggleSwitch x:Name="AutoStartBox" Grid.Column="1" OnContent="Start Pairnets when I log in" OffContent="Start Pairnets when I log in"
+                            FontWeight="SemiBold" VerticalAlignment="Center" />
+            </Grid>
+          </Border>
+          <Button x:Name="StartButton" Classes="accent big" Margin="0,18,0,0" Click="OnStart">
+            <StackPanel Orientation="Horizontal">
+              <TextBlock Text="Start syncing" VerticalAlignment="Center" />
+              <v:LineIcon Width="18" Height="18" StrokeThickness="2.2" Stroke="White" Data="{StaticResource I.Arrow}" Margin="8,0,0,0" />
             </StackPanel>
-          </Border>
-          <Button x:Name="StartButton" Classes="accent" HorizontalAlignment="Right" Padding="18,10" Content="Start syncing" Click="OnStart" />
+          </Button>
         </StackPanel>
 
-      </Panel>
+      </StackPanel>
     </ScrollViewer>
 
-    <!-- The bottom line of the steps above that have one -->
-    <Panel x:Name="Footer" Grid.Row="1" MaxWidth="364" Margin="28,0,28,28">
-      <Border x:Name="AccountFooter" BorderBrush="{DynamicResource T.Border}" BorderThickness="0,1,0,0" Padding="0,10,0,0">
+    <!-- The bottom line of the steps above: a short note, and the links that have one -->
+    <StackPanel x:Name="Footer" Grid.Row="2" MaxWidth="424" Margin="28,0,28,12">
+      <StackPanel x:Name="FootNote" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,8">
+        <v:LineIcon x:Name="FootIcon" Width="14" Height="14" StrokeThickness="2" Stroke="{DynamicResource T.TextSoft}" Margin="0,1,7,0" Data="{StaticResource I.Shield}" />
+        <TextBlock x:Name="FootText" Classes="SoftText" FontSize="12" Text="Only computers you allow can get into your nest." />
+      </StackPanel>
+      <Border x:Name="AccountFooter" BorderBrush="{DynamicResource T.Border}" BorderThickness="0,1,0,0" Padding="0,8,0,0">
         <Button x:Name="OwnNestButton" Classes="link" HorizontalAlignment="Center" Click="OnOwnNest">
           <TextBlock Text="I run my own nest on my own domain: use its address" Foreground="{DynamicResource T.Muted}" TextDecorations="Underline"
                      TextWrapping="Wrap" TextAlignment="Center" />
         </Button>
       </Border>
       <StackPanel x:Name="AccountWaitFooter" Orientation="Horizontal" HorizontalAlignment="Center" IsVisible="False">
-        <Button x:Name="AccountOpenAgainButton" Classes="subtle" Content="Open the page again" Padding="14,10" Margin="0,0,8,0"
+        <Button x:Name="AccountOpenAgainButton" Classes="subtle big" HorizontalAlignment="Center" Content="Open the page again" Padding="18,0" Margin="0,0,8,0"
                 Click="OnAccountOpenAgain" />
-        <Button x:Name="AccountCancelButton" Classes="flat" Content="Cancel" Padding="14,10" Foreground="{DynamicResource T.Muted}"
-                Click="OnAccountCancel" />
+        <Button x:Name="AccountCancelButton" Classes="flat quiet" Content="Cancel" Padding="18,0" Click="OnAccountCancel" />
       </StackPanel>
-      <Border x:Name="NoNestFooter" BorderBrush="{DynamicResource T.Border}" BorderThickness="0,1,0,0" Padding="0,10,0,0" IsVisible="False">
+      <Border x:Name="NoNestFooter" BorderBrush="{DynamicResource T.Border}" BorderThickness="0,1,0,0" Padding="0,8,0,0" IsVisible="False">
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
           <Button x:Name="NoNestOwnNestButton" Classes="link" Click="OnOwnNest">
             <TextBlock Text="I run my own nest: use its address" Foreground="{DynamicResource T.Muted}" TextDecorations="Underline" />
@@ -256,11 +415,11 @@
           </Button>
         </StackPanel>
       </Border>
-      <Border x:Name="AddressFooter" BorderBrush="{DynamicResource T.Border}" BorderThickness="0,1,0,0" Padding="0,10,0,0" IsVisible="False">
+      <Border x:Name="AddressFooter" BorderBrush="{DynamicResource T.Border}" BorderThickness="0,1,0,0" Padding="0,8,0,0" IsVisible="False">
         <Button x:Name="BackToAccountButton" Classes="link" HorizontalAlignment="Center" Click="OnBackToAccount">
           <TextBlock Text="Sign in with a Pairnets account instead" Foreground="{DynamicResource T.Muted}" TextDecorations="Underline" />
         </Button>
       </Border>
-    </Panel>
+    </StackPanel>
   </Grid>
 </UserControl>

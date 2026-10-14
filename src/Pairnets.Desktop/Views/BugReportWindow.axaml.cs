@@ -1,3 +1,5 @@
+using Avalonia;
+using Avalonia.Styling;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Pairnets.Core.Client;
@@ -62,9 +64,20 @@ public partial class BugReportWindow : Window
         var copied = await CopyAsync(report);
         CopyButton.IsEnabled = true;
         Heading.Text = copied ? "Bug report copied" : "Bug report ready";
-        Explanation.Text = (copied ? "It is on the clipboard" : "Copy it with \"Copy again\"")
-            + (_path is null ? "" : $" and saved as {Path.GetFileName(_path)} in the Pairnets log folder")
-            + ". Paste it to whoever helps you; nothing was sent anywhere.";
+        StatusCircle.Bind(Border.BackgroundProperty, StatusCircle.GetResourceObservable("T.OkPill"));
+        StatusIcon.Bind(LineIcon.StrokeProperty, StatusIcon.GetResourceObservable("T.OkText"));
+        StatusIcon.Data = Visuals.Resource<Avalonia.Media.Geometry>("I.Check");
+        Explanation.Text = null;
+        Explanation.Inlines ??= new Avalonia.Controls.Documents.InlineCollection();
+        Explanation.Inlines.Clear();
+        Explanation.Inlines.Add(new Avalonia.Controls.Documents.Run((copied ? "It’s on your clipboard" : "Copy it with “Copy again”") + (_path is null ? "" : " and saved as ")));
+        if (_path is not null)
+        {
+            var name = new Avalonia.Controls.Documents.Run(Path.GetFileName(_path)) { FontFamily = new Avalonia.Media.FontFamily("Menlo, Consolas, DejaVu Sans Mono, monospace"), FontSize = 12 };
+            name.Bind(Avalonia.Controls.Documents.TextElement.ForegroundProperty, this.GetResourceObservable("T.Text"));
+            Explanation.Inlines.Add(name);
+        }
+        Explanation.Inlines.Add(new Avalonia.Controls.Documents.Run(". Paste it to whoever helps you."));
     }
 
     private async Task<bool> CopyAsync(string text)

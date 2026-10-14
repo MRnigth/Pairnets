@@ -399,7 +399,7 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
     private static readonly Rule Switch = new(t => t.Element is CheckBox, "turn the switch the other way",
         c => ((CheckBox)c.Target.Element).IsChecked != c.WasChecked);
 
-    private static readonly Rule Closes = On(["Close", "Later"], "close the window", c => c.Bench.Closed);
+    private static readonly Rule Closes = On(["Close", "Later", "Not now"], "close the window", c => c.Bench.Closed);
 
     // ------------------------------------------------------------------ the tray panel
 
@@ -689,6 +689,8 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
                 NoNest: true, AccountEmail: FakeSyncService.Email), openBrowser: false)), Modal: true);
         yield return new Screen(name, "a nest found, the browser the one way in", SignInWindow,
             (b, w) => Wpf.Ui(() => SignIn(w).ShowAddress(Address, BrowserOnly)), Modal: true);
+        yield return new Screen(name, "a nest address typed that could not be reached", SignInWindow,
+            (b, w) => Wpf.Ui(() => SignIn(w).ShowAddress(Address, new NestCheck(NestCheckStatus.Unreachable, null, null, "Can't reach it."))), Modal: true);
         yield return new Screen(name, "a nest with Google and email sign-in, an email typed", SignInWindow, (b, w) => Wpf.Ui(() =>
         {
             SignIn(w).ShowAddress(Address, fixture.Found);
@@ -743,13 +745,14 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
         On("Privacy Policy", "open the Privacy Policy on pairnets.app", c => c.Bench.Opened.Items.SequenceEqual([PairnetsLinks.Privacy])),
         On(["I run my own nest on my own domain: use its address", "I run my own nest: use its address"], "go to the step for a nest's own address",
             c => OnStep(c, SignInStep.Address) && SignIn(c.Window).WelcomeStep.IsVisible),
+        On(["Continue", "Try again"], "check the typed address", c => OnStep(c, SignInStep.Address)),
         On("Sign in with a Pairnets account instead", "go back to the Pairnets account step", c => OnStep(c, SignInStep.Account)),
         // Finish in your browser, and no nest yet.
         On("Open the page again", "open the service's page again", c => c.Bench.Opened.Items.SequenceEqual([AccountLink])),
         new(t => t.Handlers.Contains("SignInView.OnAccountCancel"), "stop and go back to the Pairnets account step (Cancel, or Sign out with no nest yet)", c => OnStep(c, SignInStep.Account)),
         On("Show me how", "open the account page, which says how to add a nest", c => c.Bench.Opened.Items.SequenceEqual([$"{ServiceOrigin}/account"])),
         // A nest's own address.
-        On(["Sign in with your browser", "More ways to sign in in your browser"], "ask the nest for a code and open it in the browser", OpensTheNest(null), seconds: 15),
+        On(["Sign in with your browser", "More ways to sign in in your browser", "More ways in your browser"], "ask the nest for a code and open it in the browser", OpensTheNest(null), seconds: 15),
         On("Continue with Google", "ask the nest for a code and open its Google sign-in", OpensTheNest("&method=google"), seconds: 15),
         On("Continue with email", "ask the nest for a code and open its email sign-in",
             OpensTheNest("&method=email&email=" + Uri.EscapeDataString(ClickFixture.OwnerEmail)), seconds: 15),
@@ -759,7 +762,7 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
         On(["Start over", "Get a new code"], "ask the nest for a new code",
             c => SignIn(c.Window) is { WaitStep.IsVisible: true, RetryButton.IsVisible: false } && c.Bench.Opened.Items.Any(l => l.Contains("/link?code=", StringComparison.Ordinal)),
             seconds: 15),
-        On("Browse…", "let you choose the folder and show it", c => SignIn(c.Window).FolderBox.Text == c.Bench.Script.Folder),
+        On(["Browse…", "Choose…"], "let you choose the folder and show it", c => SignIn(c.Window).FolderBox.Text == c.Bench.Script.Folder),
         On("Start syncing", "finish signing in and close the window", c => ((SettingsWindow)c.Window).Result is { DeviceId: not null } && c.Bench.Closed, seconds: 20),
     ];
 
@@ -780,10 +783,10 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
     [
         Switch,
         Closes,
-        On("Don't ask for this version", "remember to skip this version and close", c => ((ServerUpdateWindow)c.Window).Skipped && c.Bench.Closed),
-        On(["Update server", "Check for update", "Try again"], "ask the server to update and show how it went",
+        On(["Don't ask for this version", "Don’t ask for this version"], "remember to skip this version and close", c => ((ServerUpdateWindow)c.Window).Skipped && c.Bench.Closed),
+        On(["Update server", "Update the nest", "Check for update", "Try again"], "ask the server to update and show how it went",
             c => ((ServerUpdateWindow)c.Window) is { ResultPanel.IsVisible: true } u && u.Explanation.Text.Contains("Not connected", StringComparison.Ordinal)),
-        On("Copy command", "copy the install command", c => c.Bench.Script.Copied.Items.Contains(((ServerUpdateWindow)c.Window).CommandText.Text)),
+        On(["Copy command", "Copy"], "copy the install command", c => c.Bench.Script.Copied.Items.Contains(((ServerUpdateWindow)c.Window).CommandText.Text)),
         On("Copy details", "copy the details", c => c.Bench.Script.Copied.Count == 1),
     ];
 
@@ -799,7 +802,7 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
     private static readonly IReadOnlyList<Rule> BugReportRules =
     [
         Closes,
-        On("Open file", "open the saved report",
+        On(["Open file", "Open the saved file"], "open the saved report",
             c => c.Bench.Opened.Items is [var file] && file.StartsWith(c.Bench.Dir, StringComparison.OrdinalIgnoreCase) && File.Exists(file)),
         On("Copy again", "copy the report again", c => c.Bench.Script.Copied.Items.Any(t => t.StartsWith("Pairnets bug report", StringComparison.Ordinal))),
     ];

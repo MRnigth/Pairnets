@@ -54,7 +54,7 @@ public sealed class DesktopControllerTests
         var start = await Wait.For(() => Screen.All<Button>(signIn).FirstOrDefault(b => b.IsEffectivelyVisible && Screen.Describe(b) == "Start syncing"),
             "the folder step after approving");
         using (AppUnderTest.Picking(app.Folder))
-            Person.Click(Screen.Find<Button>(signIn, "Browse…"));
+            Person.Click(Screen.Find<Button>(signIn, "Choose…"));
         Assert.Equal(app.Folder, Screen.Named<TextBox>(signIn, "FolderBox").Text);
         Person.Click(start);
         await app.AnswerAsync("Pairnets", "Yes"); // "The folder … does not exist. Create it?"
@@ -86,7 +86,7 @@ public sealed class DesktopControllerTests
         Person.Type(Screen.Named<TextBox>(signIn, "AddressBox"), app.Nest.Url.ToString());
         var google = Screen.Named<Button>(signIn, "GoogleButton");
         await Wait.Until(() => google.IsEffectivelyVisible && google.IsEffectivelyEnabled, "\"Continue with Google\" to show");
-        Assert.Equal("More ways to sign in in your browser", Screen.Describe(Screen.Named<Button>(signIn, "BrowserButton")));
+        Assert.Equal("More ways in your browser", Screen.Describe(Screen.Named<Button>(signIn, "BrowserButton")));
 
         Person.Click(google);
         var googleLink = await Wait.For(() => app.Platform.Opened.FirstOrDefault(o => o.Contains("method=google", StringComparison.Ordinal)), "the nest to open on Google");
@@ -340,32 +340,32 @@ public sealed class DesktopControllerTests
             configureNest: b => b.Services.AddSingleton<IStartupFilter>(older));
 
         // The app finds the nest on an older version and asks by itself.
-        var asked = (ServerUpdateWindow)await app.WindowAsync("Pairnets – update the server");
-        Assert.Equal("Your server should be updated", asked.HeadingText);
-        Assert.Contains("0.9.0", asked.ExplanationText);
-        Person.Click(Screen.Find<Button>(asked, "Don't ask for this version"));
+        var asked = (ServerUpdateWindow)await app.WindowAsync("Update your nest");
+        Assert.Equal("This app is newer than your nest", asked.HeadingText);
+        Assert.Equal("0.9.0", asked.NestVersionText.Text);
+        Person.Click(Screen.Find<Button>(asked, "Don’t ask for this version"));
         await Wait.Until(() => !asked.IsVisible, "the window to close");
         Assert.Equal("0.9.0", SettingsStore.Load(app.Env.SettingsPath).SkippedServerVersion);
 
-        // "Later" changes nothing.
+        // "Not now" changes nothing.
         app.App.RefreshNow();
         var serverButton = Screen.Named<Button>(app.MainWindow, "VersionButton");
         Person.Click(serverButton);
-        var later = await app.WindowAsync("Pairnets – update the server", not: asked);
-        Person.Click(Screen.Find<Button>(later, "Later"));
+        var later = await app.WindowAsync("Update your nest", not: asked);
+        Person.Click(Screen.Find<Button>(later, "Not now"));
         await Wait.Until(() => !later.IsVisible, "the window to close");
         Assert.False(SettingsStore.Load(app.Env.SettingsPath).AutoUpdateServer);
 
-        // "From now on, update the server automatically" is kept.
+        // "From now on, update the nest by itself" is kept.
         Person.Click(serverButton);
-        var always = await app.WindowAsync("Pairnets – update the server", not: later);
-        Person.Click(Screen.Find<CheckBox>(always, "From now on, update the server automatically"));
-        Person.Click(Screen.Find<Button>(always, "Later"));
+        var always = await app.WindowAsync("Update your nest", not: later);
+        Person.Click(Screen.Find<ToggleSwitch>(always, "From now on, update the nest by itself"));
+        Person.Click(Screen.Find<Button>(always, "Not now"));
         await Wait.Until(() => SettingsStore.Load(app.Env.SettingsPath).AutoUpdateServer, "\"update automatically\" to be saved");
 
-        // "Update server" asks the nest (POST /api/update); its updater installs the new version.
+        // "Update the nest" asks the nest (POST /api/update); its updater installs the new version.
         Person.Click(serverButton);
-        var update = (ServerUpdateWindow)await app.WindowAsync("Pairnets – update the server", not: always);
+        var update = (ServerUpdateWindow)await app.WindowAsync("Update your nest", not: always);
         var updater = app.Nest.Services.GetRequiredService<ServerUpdater>();
         var asks = 0;
         using var stop = new CancellationTokenSource();
@@ -383,8 +383,8 @@ public sealed class DesktopControllerTests
                 await Task.Delay(100);
             }
         });
-        Person.Click(Screen.Find<Button>(update, "Update server"));
-        await Wait.Until(() => update.HeadingText == $"Server updated to {PairnetsInfo.ProductVersion}", "the window to say the server was updated", seconds: 40);
+        Person.Click(Screen.Find<Button>(update, "Update the nest"));
+        await Wait.Until(() => update.HeadingText == $"Your nest is on {PairnetsInfo.ProductVersion}", "the window to say the server was updated", seconds: 40);
         stop.Cancel();
         await root;
         Assert.Equal(1, asks);
@@ -487,8 +487,8 @@ public sealed class DesktopControllerTests
 
         Person.Click(Screen.Find<Button>(main, "More"));
         Person.Click(Screen.Find<MenuItem>(main, "Report a bug…"));
-        var report = await app.WindowAsync("Pairnets – report a bug");
-        var open = Screen.Find<Button>(report, "Open file");
+        var report = await app.WindowAsync("Report a bug");
+        var open = Screen.Find<Button>(report, "Open the saved file");
         await Wait.Until(() => open.IsEffectivelyEnabled, "the bug report to be ready");
         Person.Click(open);
         var saved = app.Platform.Opened[^1];
@@ -553,7 +553,7 @@ public sealed class DesktopControllerTests
         Assert.Equal(app.App.LogFile, app.Platform.Opened[^1]);
 
         Press("Report a bug…");
-        var report = await app.WindowAsync("Pairnets – report a bug");
+        var report = await app.WindowAsync("Report a bug");
         report.Close();
 
         Press("Pause syncing");

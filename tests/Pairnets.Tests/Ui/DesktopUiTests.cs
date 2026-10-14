@@ -194,17 +194,17 @@ public class DesktopUiTests
 
         var unknownVersion = new ServerUpdateWindow(null, string.Empty, "1.0.58");
         unknownVersion.Show();
-        Assert.Equal("Your server should be updated", unknownVersion.HeadingText);
+        Assert.Equal("Your nest should be updated", unknownVersion.HeadingText);
         unknownVersion.Close();
 
         var upToDate = new ServerUpdateWindow(null, "1.0.58", "1.0.58");
         upToDate.Show();
-        Assert.Equal("Your server is up to date", upToDate.HeadingText);
+        Assert.Equal("Your nest is up to date", upToDate.HeadingText);
         Assert.Equal("S.Green", upToDate.BadgeKey); // nothing is wrong: no orange warning badge
         Assert.False(upToDate.Bobbing);
         Assert.False(upToDate.DetailsShown); // only in Debug mode
         upToDate.ShowResult(new ServerUpdateResult(true, "Already up to date (1.0.58).", "1.0.58", CanUpdateItself: true, AlreadyUpToDate: true));
-        Assert.Equal("Your server is up to date", upToDate.HeadingText);
+        Assert.Equal("Your nest is up to date", upToDate.HeadingText);
         Assert.Equal("S.Green", upToDate.BadgeKey);
         upToDate.Close();
 
@@ -226,7 +226,7 @@ public class DesktopUiTests
         noSession.Show();
         Assert.True(noSession.RunUpdateAsync().IsCompleted);
         Assert.Equal("Not updated yet", noSession.HeadingText);
-        Assert.Contains("Not connected to the server", noSession.ExplanationText);
+        Assert.Contains("Not connected to your nest", noSession.ExplanationText);
         noSession.Close();
 
         using var reports = new TempDir("bug-reports");
@@ -238,7 +238,7 @@ public class DesktopUiTests
 
         var dialog = new ServerUpdateWindow(null, "1.0.52", "1.0.58");
         dialog.Show();
-        Assert.Equal("Your server should be updated", dialog.HeadingText);
+        Assert.Equal("This app is newer than your nest", dialog.HeadingText);
         Assert.True(dialog.Bobbing);
         dialog.ShowBusy("Installing");
         Assert.True(dialog.Spinning);
@@ -251,7 +251,7 @@ public class DesktopUiTests
         Assert.Equal("Not updated yet", dialog.HeadingText);
         Assert.True(dialog.RetryShown);
         dialog.ShowResult(new ServerUpdateResult(true, "ok", "1.0.58", CanUpdateItself: true));
-        Assert.Equal("Server updated to 1.0.58", dialog.HeadingText);
+        Assert.Equal("Your nest is on 1.0.58", dialog.HeadingText);
         Assert.False(dialog.Spinning);
         dialog.Close();
     }
@@ -526,30 +526,52 @@ public class DesktopUiTests
         signIn.SignIn.Folder = "/Users/me/Work";
         Save(signIn, outDir, $"sign-in-folder-{suffix}.png");
 
-        // "I run my own nest": its address, then approving this computer on it.
-        signIn.SignIn.ShowAddress("nest.pairnets.app", new NestCheck(NestCheckStatus.Found, new Uri("https://nest.pairnets.app/"),
-            new ServerHello("Pairnets", 1, "1.0.80", "https://nest.pairnets.app", true, true, new SignInMethods(true, true, true, true)),
+        // "I run my own nest": its address (find it, found it, the browser as the only way in, no answer), then approving this computer on it.
+        signIn.SignIn.ShowAddress(string.Empty, new NestCheck(NestCheckStatus.Empty, null, null, string.Empty));
+        Save(signIn, outDir, $"sign-in-start-{suffix}.png");
+        signIn.SignIn.ShowAddress("nest.example.com", new NestCheck(NestCheckStatus.Found, new Uri("https://nest.example.com/"),
+            new ServerHello("Pairnets", 1, "1.0.80", "https://nest.example.com", true, true, new SignInMethods(true, true, true, true)),
             "Found it (Pairnets server 1.0.80)"));
         Save(signIn, outDir, $"sign-in-own-nest-{suffix}.png");
-        signIn.SignIn.ShowAddress("nest.pairnets.app", new NestCheck(NestCheckStatus.Unreachable, new Uri("https://nest.pairnets.app/"), null, "Can't reach it. Check the name, and that this computer is online."));
+        signIn.SignIn.ShowAddress("nest.example.com", new NestCheck(NestCheckStatus.Found, new Uri("https://nest.example.com/"),
+            new ServerHello("Pairnets", 1, "1.0.80", "https://nest.example.com", true, true, new SignInMethods(true, true, false, false)),
+            "Found it (Pairnets server 1.0.80)"));
+        Save(signIn, outDir, $"sign-in-browser-only-{suffix}.png");
+        signIn.SignIn.ShowAddress("nest.example.com", new NestCheck(NestCheckStatus.Unreachable, new Uri("https://nest.example.com/"), null, "Can't reach it. Check the name, and that this computer is online."));
         Save(signIn, outDir, $"sign-in-unreachable-{suffix}.png");
-        signIn.SignIn.ShowPairing(new PairingState(PairingStage.Waiting, "KQ7M-4PXD", "https://nest.pairnets.app/link?code=KQ7M-4PXD",
+        signIn.SignIn.ShowPairing(new PairingState(PairingStage.Waiting, "KQ7M-4PXD", "https://nest.example.com/link?code=KQ7M-4PXD",
             DateTimeOffset.UtcNow.AddMinutes(9).AddSeconds(41)), openBrowser: false);
         Save(signIn, outDir, $"sign-in-waiting-{suffix}.png");
-        signIn.SignIn.ShowPairing(new PairingState(PairingStage.Denied, "KQ7M-4PXD", "https://nest.pairnets.app/link?code=KQ7M-4PXD"), openBrowser: false);
+        signIn.SignIn.ShowPairing(new PairingState(PairingStage.Denied, "KQ7M-4PXD", "https://nest.example.com/link?code=KQ7M-4PXD"), openBrowser: false);
         Save(signIn, outDir, $"sign-in-denied-{suffix}.png");
+        signIn.SignIn.ShowPairing(new PairingState(PairingStage.Expired, "KQ7M-4PXD", "https://nest.example.com/link?code=KQ7M-4PXD"), openBrowser: false);
+        Save(signIn, outDir, $"sign-in-expired-{suffix}.png");
         signIn.Close();
 
-        var serverUpdate = new ServerUpdateWindow(null, "1.0.52", "1.0.58");
+        // The nest update window: offer, busy, done, and the one-time setup.
+        var serverUpdate = new ServerUpdateWindow(null, "1.0.48", "1.0.49", nestName: "nest.example.com", computerName: "DESKTOP");
         serverUpdate.Show();
         Save(serverUpdate, outDir, $"server-update-{suffix}.png");
         serverUpdate.ShowBusy("Installing and restarting the server");
         Save(serverUpdate, outDir, $"server-update-busy-{suffix}.png");
-        serverUpdate.ShowResult(new ServerUpdateResult(true, "ok", "1.0.58", CanUpdateItself: true));
+        serverUpdate.ShowResult(new ServerUpdateResult(true, "ok", "1.0.49", CanUpdateItself: true));
         Save(serverUpdate, outDir, $"server-update-done-{suffix}.png");
-        serverUpdate.ShowResult(new ServerUpdateResult(false, "This server can't update itself yet.", "1.0.52", CanUpdateItself: false));
+        serverUpdate.ShowResult(new ServerUpdateResult(false, "This nest can't update itself yet.", "1.0.48", CanUpdateItself: false));
         Save(serverUpdate, outDir, $"server-update-manual-{suffix}.png");
         serverUpdate.Close();
+
+        // The bug report window, with a sample report.
+        var bugDir = Path.Combine(Path.GetTempPath(), "pairnets-bug-shots");
+        var bug = new BugReportWindow(() => Task.FromResult(string.Join("\n",
+            "Pairnets bug report", "Created:   2026-10-11 10:15:00", "App:       Windows app 1.0.49", "System:    Windows 11 (x64)",
+            "Nest:      nest.example.com (1.0.48)", "Computer:  DESKTOP", @"Folder:    D:\Sync\Work", "Status:    Up to date, last sync 10:14", "",
+            "## Last log lines", "10:13:58 INF Saw a change: report-q3.xlsx", "10:14:01 INF Uploaded report-q3.xlsx (1.2 MB)",
+            "10:14:02 INF Downloaded holiday-0412.jpg from LAPTOP", "10:14:02 INF Pass finished: 3 up, 1 down, 0 deleted", "10:14:02 INF Up to date")),
+            _ => { }, saveDirectory: bugDir);
+        bug.Show();
+        bug.BuildAsync().GetAwaiter().GetResult();
+        Save(bug, outDir, $"bug-report-{suffix}.png");
+        bug.Close();
     }
 
     /// <summary>

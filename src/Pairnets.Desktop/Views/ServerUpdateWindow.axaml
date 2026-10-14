@@ -2,76 +2,206 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:v="using:Pairnets.Desktop.Views"
         x:Class="Pairnets.Desktop.Views.ServerUpdateWindow"
-        Title="Pairnets – update the server" Width="540" SizeToContent="Height" CanResize="False"
+        Title="Update your nest" Width="520" SizeToContent="Height" CanResize="False"
         WindowStartupLocation="CenterScreen" Icon="avares://Pairnets/Assets/pairnets-icon-256.png">
-  <StackPanel Margin="22" Spacing="14">
-    <Grid ColumnDefinitions="Auto,*">
-      <Grid Width="60" Height="60" Margin="0,0,12,0" VerticalAlignment="Top">
-        <!-- Spinning ring while the server updates -->
-        <Arc x:Name="Ring" Classes="spin" Width="60" Height="60" StartAngle="0" SweepAngle="110" StrokeThickness="3"
-             Stroke="{DynamicResource T.Accent}" StrokeLineCap="Round" IsVisible="False" />
-        <!-- The server badge: bobs while it waits for an answer, pops when done -->
-        <Grid x:Name="BadgeHost" Classes="bob" Width="44" Height="44">
-          <Ellipse x:Name="Badge" Fill="{StaticResource S.Orange}" />
-          <v:LineIcon x:Name="BadgeIcon" Classes="icon white" Width="22" Height="22" StrokeThickness="2.2" Data="{StaticResource I.Server}" />
-        </Grid>
+  <!-- The nest update window (new look): a round icon, a title and one line, then the state's own part and its buttons. -->
+  <Grid RowDefinitions="*,Auto" MinHeight="400">
+    <Grid Margin="28,10,28,24" RowDefinitions="Auto,*">
+      <!-- Header -->
+      <Grid ColumnDefinitions="Auto,*">
+        <!-- The round badge: the nest (bobs while it waits for an answer, pops when done), a ring around it while it updates -->
+        <Panel Width="48" Height="48" Margin="0,0,16,0" VerticalAlignment="Top">
+          <Arc x:Name="Ring" Classes="spin" Width="45" Height="45" StartAngle="-90" SweepAngle="100" StrokeThickness="3"
+               Stroke="{DynamicResource T.Accent}" StrokeLineCap="Round" IsVisible="False" />
+          <Ellipse x:Name="RingTrack" Width="45" Height="45" Stroke="{DynamicResource T.Track}" StrokeThickness="3" IsVisible="False" />
+          <Panel x:Name="BadgeHost" Classes="bob" Width="48" Height="48">
+            <Border x:Name="Badge" Width="48" Height="48" CornerRadius="24" Background="{DynamicResource T.AccentSoft}">
+              <v:LineIcon x:Name="BadgeIcon" Width="22" Height="22" StrokeThickness="1.8" Stroke="{DynamicResource T.AccentInk}" Data="{StaticResource I.Nest}" />
+            </Border>
+            <Border x:Name="BadgeUp" Width="20" Height="20" CornerRadius="10" Background="{DynamicResource T.AccentButton}" BorderBrush="{DynamicResource T.Bg}" BorderThickness="2"
+                    HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,-3,-3">
+              <v:LineIcon Width="10" Height="10" StrokeThickness="3.4" Stroke="White" Data="{StaticResource I.UpArrow}" />
+            </Border>
+          </Panel>
+        </Panel>
+        <StackPanel Grid.Column="1" Spacing="4">
+          <TextBlock x:Name="Heading" FontSize="20" FontWeight="ExtraBold" TextWrapping="Wrap" Text="This app is newer than your nest" />
+          <TextBlock x:Name="Explanation" Classes="muted" FontSize="13" TextWrapping="Wrap" />
+        </StackPanel>
       </Grid>
-      <StackPanel Grid.Column="1" Spacing="4" VerticalAlignment="Center">
-        <TextBlock x:Name="Heading" Classes="h2" FontSize="18" Text="Your server should be updated" />
-        <TextBlock x:Name="Explanation" Classes="muted" TextWrapping="Wrap" />
-      </StackPanel>
+
+      <Panel Grid.Row="1">
+        <!-- 1. Ask -->
+        <Grid x:Name="AskPanel" RowDefinitions="Auto,*,Auto" Margin="0,20,0,0">
+          <StackPanel>
+            <!-- The two versions -->
+            <Grid ColumnDefinitions="*,Auto,*">
+              <Border x:Name="NestVersionCard" Classes="card" CornerRadius="20" Padding="16,14" Background="{DynamicResource T.Card}">
+                <StackPanel>
+                  <StackPanel Orientation="Horizontal" Spacing="7">
+                    <v:LineIcon Width="15" Height="15" StrokeThickness="1.9" Stroke="{DynamicResource T.Muted}" Data="{StaticResource I.Nest}" />
+                    <TextBlock x:Name="NestCardLabel" FontSize="12" FontWeight="Bold" Classes="muted" Text="Your nest now" />
+                  </StackPanel>
+                  <TextBlock x:Name="NestVersionText" Classes="muted" FontSize="28" FontWeight="ExtraBold" LineHeight="34" Margin="0,4,0,0" />
+                  <TextBlock x:Name="NestNameText" Classes="soft" FontSize="11.5" TextTrimming="CharacterEllipsis" />
+                </StackPanel>
+              </Border>
+              <Border x:Name="Arrow" Grid.Column="1" Width="36" Height="36" CornerRadius="18" Background="{DynamicResource T.AccentButton}" Margin="10,0">
+                <v:LineIcon x:Name="ArrowIcon" Width="18" Height="18" StrokeThickness="2.4" Stroke="White" Data="{StaticResource I.Arrow}" />
+              </Border>
+              <Border x:Name="AppVersionCard" Grid.Column="2" CornerRadius="20" Padding="16,14" Background="{DynamicResource T.AccentSoft}"
+                      BorderBrush="{DynamicResource T.BannerBorder}" BorderThickness="1">
+                <StackPanel>
+                  <StackPanel Orientation="Horizontal" Spacing="7">
+                    <v:LineIcon Width="15" Height="15" StrokeThickness="1.9" Stroke="{DynamicResource T.AccentInk}" Data="{StaticResource I.Computer}" />
+                    <TextBlock FontSize="12" FontWeight="Bold" Foreground="{DynamicResource T.AccentInk}" Text="This app" />
+                  </StackPanel>
+                  <TextBlock x:Name="AppVersionText" FontSize="28" FontWeight="ExtraBold" LineHeight="34" Margin="0,4,0,0" />
+                  <TextBlock x:Name="AppNoteText" Classes="muted" FontSize="11.5" TextTrimming="CharacterEllipsis" Text="The nest gets this one" />
+                </StackPanel>
+              </Border>
+            </Grid>
+
+            <!-- What happens -->
+            <StackPanel Margin="0,16,0,0" Spacing="6">
+              <StackPanel Orientation="Horizontal" Spacing="10">
+                <v:LineIcon Width="16" Height="16" StrokeThickness="2" Stroke="{DynamicResource T.Muted}" Data="{StaticResource I.Clock2}" />
+                <TextBlock Classes="muted" FontSize="13" Text="Takes about a minute. Syncing pauses meanwhile." />
+              </StackPanel>
+              <StackPanel Orientation="Horizontal" Spacing="10">
+                <v:LineIcon Width="16" Height="16" StrokeThickness="2" Stroke="{DynamicResource T.Muted}" Data="{StaticResource I.Shield}" />
+                <TextBlock Classes="muted" FontSize="13" Text="Your files stay as they are." />
+              </StackPanel>
+            </StackPanel>
+
+            <!-- Auto-update switch -->
+            <ToggleSwitch x:Name="AlwaysBox" Margin="0,16,0,0" HorizontalAlignment="Left" FontWeight="SemiBold" FontSize="13"
+                          OnContent="From now on, update the nest by itself" OffContent="From now on, update the nest by itself" />
+          </StackPanel>
+          <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="8" Margin="0,16,0,0">
+            <Button x:Name="SkipButton" Classes="flat" Foreground="{DynamicResource T.Muted}" MinHeight="40" Padding="4,0" FontWeight="SemiBold" Content="Don’t ask for this version" Click="OnSkip" />
+          </StackPanel>
+          <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right" Margin="0,16,0,0">
+            <Button Classes="SecondaryButton" MinHeight="40" Content="Not now" Click="OnLater" />
+            <Button x:Name="UpdateButton" Classes="accent" MinHeight="40" Click="OnUpdate">
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <v:LineIcon Width="16" Height="16" StrokeThickness="2.2" Stroke="White" Data="{StaticResource I.DownTray}" />
+                <TextBlock x:Name="UpdateButtonText" Text="Update the nest" VerticalAlignment="Center" />
+              </StackPanel>
+            </Button>
+          </StackPanel>
+        </Grid>
+
+        <!-- 2. Updating -->
+        <Grid x:Name="BusyPanel" RowDefinitions="Auto,*,Auto" Margin="0,18,0,0" IsVisible="False">
+          <Border Classes="card" Padding="18,14">
+            <StackPanel>
+              <Grid ColumnDefinitions="Auto,*">
+                <TextBlock x:Name="StepText" FontSize="12" FontWeight="ExtraBold" Text="Step 1 of 3" />
+                <TextBlock x:Name="StepWhere" Grid.Column="1" Classes="soft" FontSize="12" HorizontalAlignment="Right" TextTrimming="CharacterEllipsis" />
+              </Grid>
+              <Border Height="6" CornerRadius="3" Background="{DynamicResource T.Track}" Margin="0,8,0,0">
+                <Grid x:Name="BarGrid" ColumnDefinitions="55*,45*"><Border Height="6" CornerRadius="3" Background="{DynamicResource T.Accent}" /></Grid>
+              </Border>
+              <StackPanel x:Name="StepsHost" Margin="0,14,0,0" />
+            </StackPanel>
+          </Border>
+          <Grid Grid.Row="2" ColumnDefinitions="*,Auto" Margin="0,16,0,0">
+            <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+              <v:LineIcon Width="16" Height="16" StrokeThickness="2" Stroke="{DynamicResource T.Muted}" Data="{StaticResource I.InfoCircle}" />
+              <TextBlock Classes="muted" FontSize="12.5" TextWrapping="Wrap" MaxWidth="320" Text="You can close this window. Pairnets reconnects by itself." />
+            </StackPanel>
+            <Button Grid.Column="1" Classes="SecondaryButton" MinHeight="40" Padding="18,0" Content="Close" Click="OnLater" />
+          </Grid>
+        </Grid>
+
+        <!-- 3. Done, one-time setup, or not updated -->
+        <Grid x:Name="ResultPanel" RowDefinitions="Auto,*,Auto" Margin="0,20,0,0" IsVisible="False">
+          <StackPanel>
+            <!-- Done: the two versions, now the same -->
+            <StackPanel x:Name="DonePanel" IsVisible="False">
+              <Grid ColumnDefinitions="*,Auto,*">
+                <Border Classes="card" CornerRadius="20" Padding="16,14">
+                  <StackPanel>
+                    <StackPanel Orientation="Horizontal" Spacing="7">
+                      <v:LineIcon Width="15" Height="15" StrokeThickness="1.9" Stroke="{DynamicResource T.Muted}" Data="{StaticResource I.Nest}" />
+                      <TextBlock FontSize="12" FontWeight="Bold" Classes="muted" Text="Your nest" />
+                    </StackPanel>
+                    <TextBlock x:Name="DoneNestVersion" FontSize="28" FontWeight="ExtraBold" LineHeight="34" Margin="0,4,0,0" />
+                    <TextBlock x:Name="DoneNestName" Classes="soft" FontSize="11.5" TextTrimming="CharacterEllipsis" />
+                  </StackPanel>
+                </Border>
+                <Border Grid.Column="1" Width="36" Height="36" CornerRadius="18" Background="{DynamicResource T.OkPill}" Margin="10,0">
+                  <v:LineIcon Width="18" Height="18" StrokeThickness="2.8" Stroke="{DynamicResource T.OkText}" Data="{StaticResource I.Check}" />
+                </Border>
+                <Border Grid.Column="2" Classes="card" CornerRadius="20" Padding="16,14">
+                  <StackPanel>
+                    <StackPanel Orientation="Horizontal" Spacing="7">
+                      <v:LineIcon Width="15" Height="15" StrokeThickness="1.9" Stroke="{DynamicResource T.Muted}" Data="{StaticResource I.Computer}" />
+                      <TextBlock FontSize="12" FontWeight="Bold" Classes="muted" Text="This app" />
+                    </StackPanel>
+                    <TextBlock x:Name="DoneAppVersion" FontSize="28" FontWeight="ExtraBold" LineHeight="34" Margin="0,4,0,0" />
+                    <TextBlock x:Name="DoneAppName" Classes="soft" FontSize="11.5" TextTrimming="CharacterEllipsis" />
+                  </StackPanel>
+                </Border>
+              </Grid>
+              <Border Background="{DynamicResource T.OkPill}" CornerRadius="16" Padding="14,12" Margin="0,16,0,0">
+                <StackPanel Spacing="6">
+                  <Grid ColumnDefinitions="Auto,*,Auto">
+                    <Ellipse Width="9" Height="9" Fill="{DynamicResource T.Ok}" Margin="3,0,13,0" />
+                    <TextBlock Grid.Column="1" FontSize="13" FontWeight="Bold" Foreground="{DynamicResource T.OkText}" Text="Syncing is back on" />
+                    <TextBlock x:Name="DoneSince" Grid.Column="2" Classes="muted" FontSize="12" />
+                  </Grid>
+                  <StackPanel Orientation="Horizontal" Spacing="10">
+                    <v:LineIcon Width="16" Height="16" StrokeThickness="2" Stroke="{DynamicResource T.Muted}" Data="{StaticResource I.Shield}" />
+                    <TextBlock Classes="muted" FontSize="13" Text="Your files stayed as they are." />
+                  </StackPanel>
+                </StackPanel>
+              </Border>
+            </StackPanel>
+
+            <!-- One-time setup: the install command, once, on the nest -->
+            <StackPanel x:Name="CommandPanel" IsVisible="False">
+              <StackPanel Orientation="Horizontal" Spacing="9">
+                <v:LineIcon Width="16" Height="16" StrokeThickness="1.9" Stroke="{DynamicResource T.AccentInk}" Data="{StaticResource I.Nest}" />
+                <TextBlock FontSize="13" FontWeight="SemiBold" Text="Run it on the nest itself, in its terminal or over SSH." />
+              </StackPanel>
+              <Border CornerRadius="16" Background="{DynamicResource T.Code}" BorderBrush="{DynamicResource T.Border}" BorderThickness="1" Padding="16,12,12,12" Margin="0,10,0,0">
+                <Grid ColumnDefinitions="*,Auto">
+                  <SelectableTextBlock x:Name="CommandText" FontFamily="Menlo, Consolas, DejaVu Sans Mono, monospace" FontSize="12.5" LineHeight="21" TextWrapping="Wrap"
+                                       Margin="0,4,12,0"
+                                       Text="curl -fsSL https://raw.githubusercontent.com/MRnigth/Pairnets/main/deploy/get.sh | sudo bash" />
+                  <Button Grid.Column="1" Classes="accent" VerticalAlignment="Top" MinHeight="34" CornerRadius="10" Padding="14,0" Click="OnCopy">
+                    <StackPanel Orientation="Horizontal" Spacing="7">
+                      <v:LineIcon Width="15" Height="15" StrokeThickness="2" Stroke="White" Data="{StaticResource I.Copy}" />
+                      <TextBlock Text="Copy" VerticalAlignment="Center" />
+                    </StackPanel>
+                  </Button>
+                </Grid>
+              </Border>
+              <StackPanel Orientation="Horizontal" Spacing="9" Margin="0,12,0,0">
+                <v:LineIcon Width="15" Height="15" StrokeThickness="2" Stroke="{DynamicResource T.Muted}" Data="{StaticResource I.Lock}" />
+                <TextBlock Classes="muted" FontSize="12.5" Text="It may ask for the nest’s password. Your files stay as they are." />
+              </StackPanel>
+            </StackPanel>
+          </StackPanel>
+          <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="0,16,0,0">
+            <Button x:Name="RetryButton" Classes="SecondaryButton" MinHeight="40" Content="Try again" Click="OnUpdate" IsVisible="False" />
+            <Button x:Name="CloseButton" Classes="accent" MinHeight="40" Padding="22,0" Content="Close" Click="OnLater" />
+          </StackPanel>
+        </Grid>
+      </Panel>
     </Grid>
 
-    <!-- 1. Ask -->
-    <StackPanel x:Name="AskPanel" Spacing="14">
-      <Border Classes="pill" CornerRadius="10" Padding="12,10">
-        <Grid ColumnDefinitions="110,*" RowDefinitions="Auto,Auto,Auto">
-          <TextBlock Classes="muted small" Text="Server" />
-          <TextBlock x:Name="VersionsText" Grid.Column="1" Classes="strong small" />
-          <TextBlock Grid.Row="1" Classes="muted small" Text="Takes" Margin="0,4,0,0" />
-          <TextBlock Grid.Row="1" Grid.Column="1" Classes="small" Text="about 30 seconds" Margin="0,4,0,0" />
-          <TextBlock Grid.Row="2" Classes="muted small" Text="Your files" Margin="0,4,0,0" />
-          <TextBlock Grid.Row="2" Grid.Column="1" Classes="small" Text="stay as they are; syncing pauses briefly" Margin="0,4,0,0" />
-        </Grid>
-      </Border>
-      <CheckBox x:Name="AlwaysBox" Content="From now on, update the server automatically" />
-      <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
-        <Button x:Name="SkipButton" Classes="flat" Content="Don't ask for this version" Click="OnSkip" />
-        <Button Classes="subtle" Content="Later" Click="OnLater" />
-        <Button x:Name="UpdateButton" Classes="accent" Content="Update server" Click="OnUpdate" />
-      </StackPanel>
-    </StackPanel>
-
-    <!-- 2. Updating -->
-    <StackPanel x:Name="BusyPanel" Spacing="6" IsVisible="False">
-      <TextBlock x:Name="StepText" Classes="strong small" />
-      <TextBlock Classes="muted small" Text="You can close this window. Pairnets reconnects by itself." />
-    </StackPanel>
-
-    <!-- 3. Done, one-time setup, or not updated -->
-    <StackPanel x:Name="ResultPanel" Spacing="10" IsVisible="False">
-      <StackPanel x:Name="CommandPanel" Spacing="8" IsVisible="False">
-        <Border Classes="pill" CornerRadius="8" Padding="10,8">
-          <SelectableTextBlock x:Name="CommandText" FontFamily="Menlo, Consolas, DejaVu Sans Mono, monospace" FontSize="12" TextWrapping="Wrap"
-                               Text="curl -fsSL https://raw.githubusercontent.com/MRnigth/Pairnets/main/deploy/get.sh | sudo bash" />
-        </Border>
-        <Button Classes="subtle" Content="Copy command" HorizontalAlignment="Left" Click="OnCopy" />
-      </StackPanel>
-      <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
-        <Button x:Name="RetryButton" Classes="subtle" Content="Try again" Click="OnUpdate" IsVisible="False" />
-        <Button Classes="accent" Content="Close" Click="OnLater" />
-      </StackPanel>
-    </StackPanel>
-
-    <!-- Debug mode: every step of the app and what the server's updater reports -->
-    <StackPanel x:Name="DetailsPanel" Spacing="6" IsVisible="False">
+    <!-- Debug mode: every step of the app and what the nest's updater reports -->
+    <StackPanel x:Name="DetailsPanel" Grid.Row="1" Margin="28,0,28,24" Spacing="6" IsVisible="False">
       <TextBlock Classes="muted small" Text="Details (Debug mode)" />
-      <Border Classes="pill" CornerRadius="8" Padding="10,8">
+      <Border Classes="card" CornerRadius="12" Padding="10,8">
         <ScrollViewer x:Name="DetailsScroller" MaxHeight="220" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
           <SelectableTextBlock x:Name="DetailsText" FontFamily="Menlo, Consolas, DejaVu Sans Mono, monospace" FontSize="11" />
         </ScrollViewer>
       </Border>
-      <Button Classes="subtle" Content="Copy details" HorizontalAlignment="Left" Click="OnCopyDetails" />
+      <Button Classes="SecondaryButton" Content="Copy details" HorizontalAlignment="Left" Click="OnCopyDetails" />
     </StackPanel>
-  </StackPanel>
+  </Grid>
 </Window>

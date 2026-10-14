@@ -54,6 +54,9 @@ public partial class BugReportWindow : Window
         }
         var copied = Copy(report);
         CopyButton.IsEnabled = true;
+        StateCircle.SetResourceReference(System.Windows.Controls.Border.BackgroundProperty, "T.OkPill");
+        StateIcon.SetResourceReference(LineIcon.StrokeProperty, "T.OkText");
+        StateIcon.Data = Visuals.Resource<System.Windows.Media.Geometry>("I.Check");
         Heading.Text = copied ? "Bug report copied" : "Bug report ready";
         Explanation.Text = (copied ? "It is on the clipboard" : "Copy it with \"Copy again\"")
             + (_path is null ? "" : $" and saved as {Path.GetFileName(_path)} in the Pairnets log folder")

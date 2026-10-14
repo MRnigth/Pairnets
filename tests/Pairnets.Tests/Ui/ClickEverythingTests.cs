@@ -316,6 +316,11 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
                 view.ShowAccount(new AccountSignInState(PairingStage.Waiting, FakeSyncService.UserCode, AccountLink, DateTimeOffset.UtcNow.AddMinutes(29),
                     NoNest: true, AccountEmail: FakeSyncService.Email), openBrowser: false))),
             new("the sign-in window (nest found)", s => SignInStage(s)),
+            new("the sign-in window (a nest address typed that could not be reached)", s => SignInStage(s, view =>
+            {
+                view.ShowAddress(fixture.Website.Url.ToString(), new NestCheck(NestCheckStatus.Unreachable, null, null, "Can't reach it."));
+                return Task.CompletedTask;
+            })),
             new("the sign-in window (email typed)", s => SignInStage(s, view =>
             {
                 Screen.Named<TextBox>(view, "EmailBox").Text = "owner@example.com";
@@ -562,6 +567,9 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
         s.Expect["OnBackToAccount"] = That(() => view.Step == SignInStep.Account, "the Pairnets account step show");
         s.Expect["OnRetry"] = That(() => Waiting() && Screen.Named<TextBlock>(view, "CodeText").Text != shownCode, "a new code show");
         s.Expect["OnBrowse"] = That(() => view.Folder == fixture.PickedFolder, "the picked folder fill the field");
+        s.Expect["OnCheck"] = That(() => view.Step == SignInStep.Address && Screen.Named<Border>(view, "FoundCard").IsEffectivelyVisible, "the nest be found");
+        s.Expect["OnChange"] = That(() => !Screen.Named<Border>(view, "FoundCard").IsEffectivelyVisible && Screen.Named<TextBox>(view, "AddressBox").IsEffectivelyVisible,
+            "the name field show again");
         s.Expect["OnStart"] = That(() => window.Result is { } r && r.Folder == fixture.Folder && r.FirstRunCompleted && !window.IsVisible,
             "the window close with this computer signed in");
     }
@@ -630,7 +638,7 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
     {
         Directory.CreateDirectory(fixture.Reports);
         var window = s.Show(new BugReportWindow(() => Task.FromResult("Pairnets bug report\nline two"), s.Opened.Add, saveDirectory: fixture.Reports));
-        await Wait.Until(() => window.SavedPath is not null && Screen.Find<Button>(window, "Open file").IsEffectivelyEnabled, "the report to be ready");
+        await Wait.Until(() => window.SavedPath is not null && Screen.Find<Button>(window, "Open the saved file").IsEffectivelyEnabled, "the report to be ready");
         s.Expect["OnOpenFile"] = That(() => s.Opened.SequenceEqual([window.SavedPath!]), "the saved report open");
         s.Expect["OnCopy"] = All(Clipboard(window, () => "Pairnets bug report\nline two"), That(() => Screen.Named<TextBlock>(window, "Heading").Text == "Bug report copied", "it say it was copied"));
         s.Expect["OnClose"] = That(() => !window.IsVisible, "the window close");
