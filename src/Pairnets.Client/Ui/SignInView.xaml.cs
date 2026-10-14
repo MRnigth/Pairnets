@@ -70,6 +70,7 @@ public partial class SignInView : UserControl
         FolderBox.Text = current.Folder ?? string.Empty;
         AutoStartBox.IsChecked = current.StartWithWindows || !current.FirstRunCompleted;
         AddressBox.Text = SuggestedAddress(current, nestHint);
+        ChangeButton.Click += OnChange; // wired here so both apps keep the same handlers in their view files
         AddressBox.TextChanged += (_, _) =>
         {
             if (!_quiet)
@@ -256,6 +257,24 @@ public partial class SignInView : UserControl
             : "It’s the address you open to see your nest in a web browser. Not sure? Ask whoever set the nest up.";
         MethodsPanel.Visibility = Shown(found);
         NextSteps.Visibility = Shown(browserOnly);
+        // Found: the name becomes a card ("Change" brings the field back).
+        FoundCard.Visibility = Shown(found);
+        AddressEdit.Visibility = Shown(!found);
+        if (found)
+        {
+            FoundName.Text = _check?.Url?.Host ?? AddressBox.Text.Trim();
+            FoundNote.Text = _check?.Hello?.ServerVersion is { Length: > 0 } version ? $"Found it · Pairnets server {version}" : "Found it";
+        }
+    }
+
+    /// <summary>"Change" on the found nest: back to the name field.</summary>
+    private void OnChange(object sender, RoutedEventArgs e)
+    {
+        _checking?.Cancel();
+        _check = null;
+        DrawMethods();
+        AddressBox.Focus();
+        AddressBox.SelectAll();
     }
 
     /// <summary>The waiting step: the code to compare, or why it ended (turned down, ran out, did not work).</summary>
@@ -499,7 +518,7 @@ public partial class SignInView : UserControl
         var email = can && methods?.Email == true;
         GoogleButton.Visibility = google ? Visibility.Visible : Visibility.Collapsed;
         GoogleButton.IsEnabled = google;
-        OrRow.Visibility = google && email ? Visibility.Visible : Visibility.Collapsed;
+        OrRow.Visibility = Visibility.Collapsed; // the design has no "or" here: the buttons stack
         EmailPanel.Visibility = email ? Visibility.Visible : Visibility.Collapsed;
         EmailBox.IsEnabled = email;
         EmailButton.IsEnabled = email && Nest.LooksLikeEmail(EmailBox.Text);
@@ -510,7 +529,7 @@ public partial class SignInView : UserControl
         BrowserButton.Margin = others ? new Thickness(0, 8, 0, 0) : new Thickness(0, 14, 0, 0);
         BrowserButton.HorizontalAlignment = others ? HorizontalAlignment.Center : HorizontalAlignment.Stretch;
         BrowserButton.FontSize = others ? 13 : 15;
-        BrowserButton.MinHeight = others ? 38 : 48;
+        BrowserButton.MinHeight = others ? 28 : 48;
         BrowserButton.IsEnabled = can;
         if (Step == SignInStep.Address)
             FrameAddress();

@@ -62,10 +62,21 @@
       </StackPanel>
     </Grid>
 
-    <StackPanel Grid.Row="1">
+    <Grid Grid.Row="1">
+      <Grid.RowDefinitions>
+        <RowDefinition Height="*" />
+        <RowDefinition Height="Auto" />
+      </Grid.RowDefinitions>
+      <!-- The three steps share one place; each keeps its buttons pinned to the bottom edge -->
+      <Grid>
 
       <!-- 1. Ask -->
-      <StackPanel x:Name="AskPanel">
+      <Grid x:Name="AskPanel">
+        <Grid.RowDefinitions>
+          <RowDefinition Height="*" />
+          <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+        <StackPanel>
         <Grid Margin="0,20,0,0">
           <Grid.ColumnDefinitions>
             <ColumnDefinition Width="*" />
@@ -111,18 +122,23 @@
         </StackPanel>
         <CheckBox x:Name="AlwaysBox" Style="{StaticResource Switch}" Content="From now on, update the nest by itself" FontSize="13" FontWeight="SemiBold"
                   HorizontalAlignment="Left" Margin="0,16,0,0" />
-        <Grid Margin="0,28,0,0">
+        </StackPanel>
+        <Grid Grid.Row="1" Margin="0,16,0,0">
           <Button x:Name="SkipButton" Style="{StaticResource FlatButton}" Foreground="{DynamicResource T.Muted}" Content="Don’t ask for this version" HorizontalAlignment="Left" Padding="4,0" Click="OnSkip" />
           <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
             <Button Style="{StaticResource SecondaryButton}" Content="Not now" Click="OnLater" />
             <Button x:Name="UpdateButton" Style="{StaticResource AccentButton}" Content="Update the nest" Margin="8,0,0,0" Click="OnUpdate" />
           </StackPanel>
         </Grid>
-      </StackPanel>
+      </Grid>
 
       <!-- 2. Updating -->
-      <StackPanel x:Name="BusyPanel" Visibility="Collapsed">
-        <Border Style="{StaticResource VersionCard}" Margin="0,18,0,0" Padding="18,14">
+      <Grid x:Name="BusyPanel" Visibility="Collapsed">
+        <Grid.RowDefinitions>
+          <RowDefinition Height="*" />
+          <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+        <Border Style="{StaticResource VersionCard}" Margin="0,18,0,0" Padding="18,14" VerticalAlignment="Top">
           <StackPanel>
             <Grid>
               <TextBlock x:Name="StepCount" FontSize="12" FontWeight="ExtraBold" Text="Step 1 of 3" />
@@ -134,17 +150,22 @@
             <StackPanel x:Name="Steps" Margin="0,14,0,0" />
           </StackPanel>
         </Border>
-        <Grid Margin="0,24,0,0">
+        <Grid Grid.Row="1" Margin="0,16,0,0">
           <Button Style="{StaticResource SecondaryButton}" Content="Close" HorizontalAlignment="Right" Padding="18,0" Click="OnLater" />
           <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Left">
             <ui:LineIcon Width="16" Height="16" StrokeThickness="2" Stroke="{DynamicResource T.Muted}" Data="M3,12 A9,9 0 1 1 21,12 A9,9 0 1 1 3,12 M12,11 L12,16 M12,8 L12,8.5" Margin="0,0,10,0" />
             <TextBlock x:Name="StepText" Style="{StaticResource Note}" FontSize="12.5" />
           </StackPanel>
         </Grid>
-      </StackPanel>
+      </Grid>
 
       <!-- 3. Done, failed, or the one-time setup -->
-      <StackPanel x:Name="ResultPanel" Visibility="Collapsed">
+      <Grid x:Name="ResultPanel" Visibility="Collapsed">
+        <Grid.RowDefinitions>
+          <RowDefinition Height="*" />
+          <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+        <StackPanel>
         <StackPanel x:Name="DonePanel" Visibility="Collapsed">
           <Grid Margin="0,20,0,0">
             <Grid.ColumnDefinitions>
@@ -219,14 +240,16 @@
           </StackPanel>
         </StackPanel>
 
-        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,28,0,0">
+        </StackPanel>
+        <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
           <Button x:Name="RetryButton" Style="{StaticResource SecondaryButton}" Content="Try again" Margin="0,0,8,0" Click="OnUpdate" Visibility="Collapsed" />
           <Button x:Name="CloseButton" Style="{StaticResource AccentButton}" Content="Close" Padding="22,0" Click="OnLater" />
         </StackPanel>
-      </StackPanel>
+      </Grid>
+      </Grid>
 
       <!-- Debug mode: every step of the app and what the nest's updater reports -->
-      <StackPanel x:Name="DetailsPanel" Margin="0,14,0,0" Visibility="Collapsed">
+      <StackPanel x:Name="DetailsPanel" Grid.Row="1" Margin="0,14,0,0" Visibility="Collapsed">
         <TextBlock Style="{StaticResource MutedSmall}" Text="Details (Debug mode)" />
         <Border Style="{StaticResource CodeBox}" Margin="0,4,0,0">
           <TextBox x:Name="DetailsText" IsReadOnly="True" BorderThickness="0" Background="Transparent" Foreground="{DynamicResource T.Text}"
@@ -235,7 +258,7 @@
         </Border>
         <Button Style="{StaticResource SubtleButton}" Content="Copy details" HorizontalAlignment="Left" Margin="0,8,0,0" Click="OnCopyDetails" />
       </StackPanel>
-    </StackPanel>
+    </Grid>
   </Grid>
   </Grid>
 </Window>

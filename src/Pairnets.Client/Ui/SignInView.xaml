@@ -12,7 +12,7 @@
       <Setter Property="HorizontalAlignment" Value="Center" />
       <Setter Property="TextAlignment" Value="Center" />
       <Setter Property="TextWrapping" Value="Wrap" />
-      <Setter Property="Margin" Value="0,20,0,0" />
+      <Setter Property="Margin" Value="0,18,0,0" />
     </Style>
     <Style x:Key="StepSub" TargetType="TextBlock" BasedOn="{StaticResource Muted}">
       <Setter Property="FontSize" Value="14.5" />
@@ -47,7 +47,7 @@
       <Setter Property="Margin" Value="0,0,0,8" />
     </Style>
     <Style x:Key="BigInput" TargetType="TextBox" BasedOn="{StaticResource Input}">
-      <Setter Property="Height" Value="50" />
+      <Setter Property="Height" Value="48" />
       <Setter Property="FontSize" Value="15" />
       <Setter Property="FontWeight" Value="SemiBold" />
       <Setter Property="Padding" Value="46,0,16,0" />
@@ -86,7 +86,7 @@
     </Grid>
 
     <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-      <StackPanel MaxWidth="424" Margin="48,8,48,20">
+      <StackPanel MaxWidth="424" Margin="48,8,48,6">
 
         <!-- Signed in (the folder step only) -->
         <Border x:Name="SignedInChip" Style="{StaticResource OkChip}" CornerRadius="15" Padding="10,6,12,6" HorizontalAlignment="Center" Margin="0,0,0,14" Visibility="Collapsed">
@@ -214,16 +214,37 @@
         </StackPanel>
 
         <!-- 4. I run my own nest: which nest, then the ways to sign in there -->
-        <StackPanel x:Name="WelcomeStep" Margin="0,24,0,0" Visibility="Collapsed">
+        <StackPanel x:Name="WelcomeStep" Margin="0,14,0,0" Visibility="Collapsed">
+          <!-- Found: the name becomes a card ("Change" brings the field back) -->
+          <Border x:Name="FoundCard" Style="{StaticResource RowCard}" Padding="14,12,12,12" Visibility="Collapsed">
+            <Grid>
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+              </Grid.ColumnDefinitions>
+              <Border Width="36" Height="36" CornerRadius="18" Background="{DynamicResource T.OkPill}" Margin="0,0,12,0">
+                <ui:LineIcon Width="18" Height="18" StrokeThickness="2.6" Stroke="{DynamicResource T.OkText}" Data="{StaticResource I.Check}" />
+              </Border>
+              <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                <TextBlock x:Name="FoundName" FontSize="15" FontWeight="ExtraBold" TextTrimming="CharacterEllipsis" />
+                <TextBlock x:Name="FoundNote" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource T.OkText}" TextTrimming="CharacterEllipsis" />
+              </StackPanel>
+              <Button x:Name="ChangeButton" Grid.Column="2" Style="{StaticResource SubtleButton}" MinHeight="32" Height="32" Padding="12,0" FontSize="12" FontWeight="Bold"
+                      Background="{DynamicResource T.Chip}" BorderThickness="0" Tag="{DynamicResource T.SubtleHover}" Content="Change" Margin="10,0,0,0" />
+            </Grid>
+          </Border>
+          <StackPanel x:Name="AddressEdit">
           <TextBlock x:Name="AddressLabel" Style="{StaticResource FieldLabel}" Text="Your nest’s name" />
-          <Grid>
-            <TextBox x:Name="AddressBox" Style="{StaticResource BigInput}" ToolTip="Your nest's name, for example nest.example.com" />
-            <ui:LineIcon x:Name="AddressIcon" Width="18" Height="18" StrokeThickness="1.9" Stroke="{DynamicResource T.AccentInk}" Data="{StaticResource I.Nest}"
-                         HorizontalAlignment="Left" Margin="16,0,0,0" IsHitTestVisible="False" />
-          </Grid>
-          <StackPanel x:Name="CheckRow" Orientation="Horizontal" Margin="0,9,0,0" Visibility="Collapsed">
-            <ui:LineIcon x:Name="CheckIcon" Width="16" Height="16" Margin="0,1,8,0" VerticalAlignment="Top" StrokeThickness="2.2" />
-            <TextBlock x:Name="CheckText" FontSize="12.5" FontWeight="SemiBold" TextWrapping="Wrap" MaxWidth="380" />
+            <Grid>
+              <TextBox x:Name="AddressBox" Style="{StaticResource BigInput}" ToolTip="Your nest's name, for example nest.example.com" />
+              <ui:LineIcon x:Name="AddressIcon" Width="18" Height="18" StrokeThickness="1.9" Stroke="{DynamicResource T.AccentInk}" Data="{StaticResource I.Nest}"
+                           HorizontalAlignment="Left" Margin="16,0,0,0" IsHitTestVisible="False" />
+            </Grid>
+            <StackPanel x:Name="CheckRow" Orientation="Horizontal" Margin="0,9,0,0" Visibility="Collapsed">
+              <ui:LineIcon x:Name="CheckIcon" Width="16" Height="16" Margin="0,1,8,0" VerticalAlignment="Top" StrokeThickness="2.2" />
+              <TextBlock x:Name="CheckText" FontSize="12.5" FontWeight="SemiBold" TextWrapping="Wrap" MaxWidth="380" />
+            </StackPanel>
           </StackPanel>
           <Button x:Name="CheckButton" Style="{StaticResource BigAccent}" Margin="0,14,0,0" Click="OnCheck">
             <StackPanel Orientation="Horizontal">
@@ -241,7 +262,7 @@
           <!-- the ways in, once the nest is found -->
           <StackPanel x:Name="MethodsPanel">
             <!-- "Continue with Google": the browser signs in with Google right away (a plain person icon, not Google's logo) -->
-            <Button x:Name="GoogleButton" Style="{StaticResource BigSecondary}" Margin="0,16,0,0" Click="OnGoogle" IsEnabled="False" Visibility="Collapsed">
+            <Button x:Name="GoogleButton" Style="{StaticResource BigSecondary}" Margin="0,12,0,0" Click="OnGoogle" IsEnabled="False" Visibility="Collapsed">
               <StackPanel Orientation="Horizontal">
                 <ui:LineIcon Width="20" Height="20" StrokeThickness="1.9" Stroke="{DynamicResource T.Text}" Data="M2.5,12 A9.5,9.5 0 1 1 21.5,12 A9.5,9.5 0 1 1 2.5,12 M9,10 A3,3 0 1 1 15,10 A3,3 0 1 1 9,10 M6.5,18.5 A6.5,6.5 0 0 1 17.5,18.5" Margin="0,0,10,0" />
                 <TextBlock Text="Continue with Google" VerticalAlignment="Center" />
@@ -262,14 +283,14 @@
 
             <!-- "Continue with email": a sign-in link lands in the owner's inbox -->
             <StackPanel x:Name="EmailPanel" Visibility="Collapsed">
-              <Grid Margin="0,12,0,0">
+              <Grid Margin="0,8,0,0">
                 <TextBox x:Name="EmailBox" Style="{StaticResource BigInput}" IsEnabled="False" />
                 <ui:LineIcon Width="18" Height="18" StrokeThickness="1.9" Stroke="{DynamicResource T.AccentInk}" HorizontalAlignment="Left" Margin="16,0,0,0" IsHitTestVisible="False"
                              Data="M5.5,5 L18.5,5 A2.5,2.5 0 0 1 21,7.5 L21,16.5 A2.5,2.5 0 0 1 18.5,19 L5.5,19 A2.5,2.5 0 0 1 3,16.5 L3,7.5 A2.5,2.5 0 0 1 5.5,5 Z M4,7 L12,13 L20,7" />
                 <TextBlock x:Name="EmailHint" Style="{StaticResource Muted}" FontSize="15" Text="Enter your email" Margin="46,0,0,0"
                            VerticalAlignment="Center" IsHitTestVisible="False" />
               </Grid>
-              <Button x:Name="EmailButton" Style="{StaticResource BigSecondary}" Content="Continue with email" Margin="0,10,0,0" Click="OnEmail" IsEnabled="False" IsDefault="True" />
+              <Button x:Name="EmailButton" Style="{StaticResource BigSecondary}" Content="Continue with email" Margin="0,8,0,0" Click="OnEmail" IsEnabled="False" IsDefault="True" />
             </StackPanel>
 
             <!-- what happens next, when the browser is the one way in -->
@@ -396,7 +417,7 @@
     </ScrollViewer>
 
     <!-- The bottom line of the steps above: a short note, and the links that have one -->
-    <StackPanel x:Name="Footer" Grid.Row="2" MaxWidth="424" Margin="28,0,28,20">
+    <StackPanel x:Name="Footer" Grid.Row="2" MaxWidth="424" Margin="28,0,28,12">
       <StackPanel x:Name="FootNote" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,8">
         <ui:LineIcon x:Name="FootIcon" Width="14" Height="14" StrokeThickness="2" Stroke="{DynamicResource T.TextSoft}" Margin="0,1,7,0"
                      Data="M12,3 L5,6 L5,11 C5,15.5 8,19.3 12,21 C16,19.3 19,15.5 19,11 L19,6 Z M9,12 L11,14 L15,10" />

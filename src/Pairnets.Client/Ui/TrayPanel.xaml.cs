@@ -20,14 +20,18 @@ public interface ITrayActions : IMainActions
 
 /// <summary>
 /// The quick look that opens when the tray icon is clicked, next to the taskbar (like the
-/// OneDrive or Dropbox flyout): status, the two computers, the transfer, recent changes and the
-/// main buttons. It hides when it loses focus.
+/// OneDrive or Dropbox flyout): status, the nest with a small
+/// branch per computer, the latest changes and the main buttons. It hides when it loses focus.
 /// </summary>
 public partial class TrayPanel : Window
 {
     private readonly ITrayActions? _actions;
-    private readonly ObservableCollection<ActivityItem> _recent = [];
-    private string? _tintKey;
+    private readonly ObservableCollection<TrayChange> _recent = [];
+    private StatusSnapshot _status = StatusSnapshot.Initial;
+    private string? _device;
+    private IReadOnlyList<ActivityItem> _items = [];
+    private int _attention;
+    private string? _drawnKey;
     private bool _menuOpen;
 
     public TrayPanel(ITrayActions? actions)
@@ -36,7 +40,7 @@ public partial class TrayPanel : Window
         InitializeComponent();
         Icon = AppIcons.WindowIcon;
         _actions = actions;
-        Map.Compact = true;
+        Logo.Source = AppIcons.Large;
         RecentList.ItemsSource = _recent;
         Deactivated += (_, _) =>
         {
@@ -56,6 +60,8 @@ public partial class TrayPanel : Window
         {
             if (!IsVisible)
                 Motion.Spin(StatusGlyph, false);
+            else
+                Redraw();
         };
     }
 
@@ -107,53 +113,101 @@ public partial class TrayPanel : Window
 
     public void ShowStatus(StatusSnapshot s, string? device)
     {
-        var brush = Badge.Show(s, StatusBadge, StatusGlyph, StatusGlyph2, 19, animate: IsVisible);
-        if (_tintKey != brush)
-        {
-            _tintKey = brush;
-            Head.Background = Visuals.Wash(brush, 0x26, 1);
-        }
-        Headline.Text = s.Headline;
-        // Waiting: the other computer's progress (the window has a bar for it; the panel has only this line).
-        Detail.Text = s.IsWaiting ? s.WaitingProgressText : s.DetailText.Length > 0 ? s.DetailText : s.LastSyncText;
-        FixButton.Visibility = s.FixLabel is not null ? Visibility.Visible : Visibility.Collapsed;
-        FixButton.Content = s.FixLabel;
-        PauseText.Text = s.Paused ? "Resume" : "Pause";
-        PauseGlyph.Data = Visuals.Resource<Geometry>(s.Paused ? "I.Play" : "I.Pause");
-        Map.Show(DeviceMap.Build(s, device, DateTimeOffset.UtcNow));
-
-        TransferCard.Visibility = s.IsTransferring ? Visibility.Visible : Visibility.Collapsed;
-        if (s.IsTransferring)
-        {
-            TransferTitle.Text = s.BatchTitle;
-            var stalled = s.Motion == SyncMotion.Stalled;
-            TransferSpeed.Text = stalled ? "Stalled" : s.BytesPerSecond >= 1 ? Format.Speed(s.BytesPerSecond) : string.Empty;
-            TransferSpeed.SetResourceReference(TextBlock.ForegroundProperty, stalled ? "T.WarnText" : "T.Muted");
-            Motion.Glide(TransferProgress, s.OverallPercent ?? 0);
-            TransferOverall.Text = s.OverallText;
-            var uploading = s.GoingUp || !s.GoingDown;
-            TransferArrow.Data = Visuals.Resource<Geometry>(uploading ? "I.Up" : "I.Down");
-            TransferArrow.SetResourceReference(LineIcon.StrokeProperty, uploading ? "S.Green" : "S.Blue");
-            TransferArrow.Opacity = stalled ? 0.5 : 1;
-            Motion.Travel(TransferArrow, IsVisible && !stalled ? uploading : null, distance: 3);
-        }
-        else
-        {
-            Motion.Travel(TransferArrow, null);
-        }
+        _status = s;
+        _device = device;
+        Redraw();
     }
 
     public void ShowActivity(IReadOnlyList<ActivityItem> items)
     {
-        LiveLists.Sync(_recent, items.Take(4).ToList());
-        RecentEmpty.Visibility = _recent.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        _items = items;
+        Redraw();
     }
 
     public void ShowAttention(int count)
     {
-        AttentionButton.Visibility = count > 0 ? Visibility.Visible : Visibility.Collapsed;
-        AttentionText.Text = count == 1 ? "1 thing needs your attention" : $"{count} things need your attention";
+        _attention = count;
+        Redraw();
     }
+
+    private void Redraw()
+    {
+        var now = DateTimeOffset.UtcNow;
+        var m = TrayPanelModel.Build(_status, _device, now);
+
+        // The status circle
+        var (fill, ink, glyph, size, stroke) = m.Tone switch
+        {
+            TrayTone.Ok => ("T.OkPill", "T.OkText", "I.Check", 22, 2.6),
+            TrayTone.Paused => ("T.WarnPill", "T.WarnText", "I.Pause", 20, 2.6),
+            TrayTone.Warn => ("T.WarnPill", "T.WarnText", "I.Warning", 22, 2.2),
+            TrayTone.Bad => ("T.BadPill", "T.BadText", "I.CloudOff", 22, 2.2),
+            _ => ("T.AccentSoft", "T.AccentInk", "I.Sync", 20, 2.2),
+        };
+        StatusBadge.SetResourceReference(Shape.FillProperty, fill);
+        StatusGlyph.SetResourceReference(LineIcon.StrokeProperty, ink);
+        StatusGlyph.Data = Visuals.Resource<Geometry>(glyph);
+        StatusGlyph.Width = StatusGlyph.Height = size;
+        StatusGlyph.StrokeThickness = stroke;
+        Motion.Spin(StatusGlyph, IsVisible && m.Tone == TrayTone.Syncing, slow: true);
+
+        Headline.Text = m.Headline;
+        Detail.Text = m.Detail;
+        Detail.ToolTip = m.Detail;
+
+        PercentText.Visibility = Show(m.ShowsProgress);
+        Progress.Visibility = Show(m.ShowsProgress);
+        ProgressLine.Visibility = Show(m.ShowsProgress && (m.FilesText is not null || m.LeftText is not null));
+        if (m.Percent is { } percent)
+        {
+            PercentText.Text = percent + "%";
+            Motion.Glide(Progress, percent);
+        }
+        FilesText.Text = m.FilesText ?? string.Empty;
+        LeftText.Text = m.LeftText ?? string.Empty;
+        PausedNote.Visibility = Show(m.PausedNote is not null);
+        PausedNoteText.Text = m.PausedNote ?? string.Empty;
+
+        // The nest and its branches
+        NestSub.Text = m.NestSub;
+        NestDotShape.SetResourceReference(Shape.FillProperty, m.NestDot switch
+        {
+            NestDot.Bad => "T.Bad",
+            NestDot.Warn => "T.Warn",
+            NestDot.Off => "T.Off",
+            _ => "T.Ok",
+        });
+        if (_drawnKey != m.BranchKey)
+        {
+            _drawnKey = m.BranchKey;
+            TrayBranches.Fill(Branches, m);
+        }
+        MoreText.Visibility = Show(m.MoreText is not null);
+        MoreText.Text = m.MoreText is null ? string.Empty : m.MoreText + " computers";
+
+        // Buttons
+        FixButton.Visibility = Show(m.FixLabel is not null);
+        FixButton.Content = m.FixLabel;
+        var attention = TrayPanelModel.AttentionText(_attention);
+        AttentionButton.Visibility = Show(attention is not null);
+        AttentionText.Text = attention ?? string.Empty;
+        PauseText.Text = m.PauseLabel;
+        PauseGlyph.Data = Visuals.Resource<Geometry>(m.Paused ? "I.Play" : "I.Pause");
+        PauseButton.Style = (Style)FindResource(m.ResumeIsPrimary ? "AccentButton" : "SubtleButton");
+        OpenButton.Style = (Style)FindResource(m.ResumeIsPrimary ? "SubtleButton" : "AccentButton");
+
+        // Latest changes
+        var changes = TrayPanelModel.Changes(_status, _items, m.ChangesLimit(attention is not null), now);
+        if (!_recent.SequenceEqual(changes))
+        {
+            _recent.Clear();
+            foreach (var change in changes)
+                _recent.Add(change);
+        }
+        RecentEmpty.Visibility = Show(_recent.Count == 0);
+    }
+
+    private static Visibility Show(bool on) => on ? Visibility.Visible : Visibility.Collapsed;
 
     private void Run(Action<ITrayActions> action)
     {
@@ -184,6 +238,7 @@ public partial class TrayPanel : Window
     private void OnPause(object sender, RoutedEventArgs e) => _actions?.TogglePause();
     private void OnOpenFolder(object sender, RoutedEventArgs e) => Run(a => a.OpenFolder());
     private void OnOpenApp(object sender, RoutedEventArgs e) => Run(a => a.OpenWindow(MainPage.Overview));
+    private void OnSeeAll(object sender, RoutedEventArgs e) => Run(a => a.OpenWindow(MainPage.Activity));
     private void OnAttention(object sender, MouseButtonEventArgs e) => Run(a => a.OpenWindow(MainPage.Attention));
     private void OnSettings(object sender, RoutedEventArgs e) => Run(a => a.OpenWindow(MainPage.Settings));
     private void OnHistory(object sender, RoutedEventArgs e) => Run(a => a.OpenWindow(MainPage.History));

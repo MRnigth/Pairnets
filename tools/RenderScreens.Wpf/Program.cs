@@ -218,6 +218,10 @@ public static class Program
 
         var panel = new TrayPanel(new SampleActions());
         Place(panel);
+        // Without the shadow and its margin, so the picture is the panel itself (a margin shifts what the brush below copies).
+        var trayShell = (FrameworkElement)panel.Content;
+        trayShell.Effect = null;
+        trayShell.Margin = new Thickness(0);
         panel.ShowActivity(feed.Items);
         panel.ShowAttention(2);
         panel.ShowStatus(StatusSnapshot.Initial with
@@ -234,6 +238,34 @@ public static class Program
             panel.ShowStatus(state, "PC-1");
             Save(panel, outDir, $"windows-tray-panel-{name}-{suffix}.png", print);
         }
+
+        // The three designed states of the tray panel: six computers, three of them not reachable.
+        var trayFeed = new ActivityFeed();
+        trayFeed.Add(new ActivityItem(now.AddMinutes(-12), ActivityKind.Downloaded, "Photos/holiday-0412.jpg", "Downloaded"));
+        trayFeed.Add(new ActivityItem(now.AddMinutes(-20), ActivityKind.Uploaded, "Notes/meeting-2026-10-02.md", "Uploaded"));
+        trayFeed.Add(new ActivityItem(now.AddMinutes(-31), ActivityKind.Uploaded, "report-q3.xlsx", "Uploaded"));
+        trayFeed.Add(new ActivityItem(now.AddMinutes(-42), ActivityKind.Downloaded, "Videos/presentation-final.mp4", "Downloaded"));
+        panel.ShowActivity(trayFeed.Items);
+        panel.ShowAttention(3);
+        panel.ShowStatus(StatusSnapshot.Initial with
+        {
+            Status = RunnerStatus.Syncing, Text = "Syncing", LastSyncAt = now.AddMinutes(-1), Server = server, Devices = devices,
+            CurrentPath = "Videos/presentation-final.mp4", Operation = "upload", BytesDone = 12, BytesTotal = 100,
+            FilesDone = 37, FilesTotal = 120, PassBytesDone = 412L << 20, PassBytesTotal = 1331L << 20,
+            BytesPerSecond = 4.9 * (1 << 20), UpBytesPerSecond = 4.9 * (1 << 20), MovingUp = true,
+            Active = [new ActiveTransfer("Videos/presentation-final.mp4", "upload", 12, 100)],
+            Peers = new Dictionary<string, PeerActivity>
+            {
+                ["LAPTOP"] = new(new TransferReport(0, 4.1 * (1 << 20), 30, 120, 0, 0, Downloading: true), DateTimeOffset.UtcNow, 0, null),
+                ["MINI-PC"] = new(new TransferReport(0, 2.6 * (1 << 20), 12, 120, 0, 0, Downloading: true), DateTimeOffset.UtcNow, 0, null),
+            },
+        }, "DESKTOP");
+        Save(panel, outDir, $"tray-syncing-{suffix}.png", print);
+        panel.ShowAttention(0);
+        panel.ShowStatus(StatusSnapshot.Initial with { Status = RunnerStatus.Idle, Text = "Up to date", LastSyncAt = now.AddMinutes(-15), Server = server, Devices = devices }, "DESKTOP");
+        Save(panel, outDir, $"tray-uptodate-{suffix}.png", print);
+        panel.ShowStatus(StatusSnapshot.Initial with { Status = RunnerStatus.Paused, Paused = true, Text = "Paused", LastSyncAt = now.AddMinutes(-30), Server = server, Devices = devices }, "DESKTOP");
+        Save(panel, outDir, $"tray-paused-{suffix}.png", print);
         panel.Close();
 
         // Signing in with a Pairnets account: the first screen, the browser step, "no nest yet", the folder.
