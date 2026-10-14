@@ -83,7 +83,7 @@ public partial class MainWindow : Window
     private readonly ObservableCollection<AttentionItem> _attention = [];
     private readonly ObservableCollection<ServerFile> _shownFiles = [];
     private readonly ObservableCollection<VersionRow> _versions = [];
-    private readonly ObservableCollection<DeviceRowView> _devices = [];
+    private readonly ObservableCollection<DeviceCard> _devices = [];
     private IReadOnlyList<ActivityItem> _activityItems = [];
     private IReadOnlyList<ServerFile>? _serverFiles;
     private DateTimeOffset _serverFilesAt;
@@ -117,6 +117,10 @@ public partial class MainWindow : Window
         FileList.ItemsSource = _shownFiles;
         VersionList.ItemsSource = _versions;
         DevicesList.ItemsSource = _devices;
+        DeletedList.ItemsSource = _shownFiles;
+        AccountPage.Attach(actions);
+        WirePages();
+        AttentionSubtitle.Text = AttentionSubtitleText(0);
         RefreshSide();
         UpdatePanels();
     }
@@ -152,14 +156,27 @@ public partial class MainWindow : Window
         _navigating = true;
         try
         {
-            NavFor(page).IsChecked = true;
-            DockFor(page).IsChecked = true;
+            CheckTiles(page);
         }
         finally
         {
             _navigating = false;
         }
         ShowPage(page);
+    }
+
+    /// <summary>Checks the left side's tile and dock button of a page; the Account page has none, so none is checked.</summary>
+    private void CheckTiles(MainPage page)
+    {
+        if (page == MainPage.Account)
+        {
+            foreach (var tile in new[] { NavOverview, NavActivity, NavAttention, NavHistory, NavDevices, NavSettings,
+                         DockOverview, DockActivity, DockAttention, DockHistory, DockDevices, DockSettings })
+                tile.IsChecked = false;
+            return;
+        }
+        NavFor(page).IsChecked = true;
+        DockFor(page).IsChecked = true;
     }
 
     private RadioButton DockFor(MainPage page) => page switch
@@ -196,8 +213,7 @@ public partial class MainWindow : Window
         _navigating = true;
         try
         {
-            NavFor(page).IsChecked = true;
-            DockFor(page).IsChecked = true;
+            CheckTiles(page);
         }
         finally
         {
@@ -223,23 +239,28 @@ public partial class MainWindow : Window
             MainPage.Devices => ("Devices", "Every computer that uses your server: online now, or when it was last seen."),
             MainPage.Attention => ("Needs attention", "Things Pairnets can't decide for you."),
             MainPage.Settings => ("Settings", "Your server, the folder, and how Pairnets behaves."),
+            MainPage.Account => ("Account", "Who is signed in on this computer, and when Pairnets should tell you things."),
             _ => ("Overview", string.Empty),
         };
         PageSubtitle.IsVisible = PageSubtitle.Text.Length > 0;
+        HeaderRow.IsVisible = page == MainPage.Overview; // every other page draws its own header
         OverviewPage.IsVisible = page == MainPage.Overview;
         ActivityPage.IsVisible = page == MainPage.Activity;
         HistoryPage.IsVisible = page == MainPage.History;
         DevicesPage.IsVisible = page == MainPage.Devices;
         AttentionPage.IsVisible = page == MainPage.Attention;
         SettingsPage.IsVisible = page == MainPage.Settings;
-        foreach (var shown in new Control[] { OverviewPage, ActivityPage, HistoryPage, DevicesPage, AttentionPage, SettingsPage })
+        AccountPage.IsVisible = page == MainPage.Account;
+        foreach (var shown in new Control[] { OverviewPage, ActivityPage, HistoryPage, DevicesPage, AttentionPage, SettingsPage, AccountPage })
         {
             shown.Classes.Remove("enter");
             if (shown.IsVisible)
                 shown.Classes.Add("enter");
         }
         if (page == MainPage.Activity)
-            LiveLists.Sync(_activityRows, ActivityDays.Rows(_activityItems, DateTimeOffset.Now));
+            RebuildActivity();
+        if (page == MainPage.Account)
+            AccountPage.Show(_status, ThisDevice);
         if (page == MainPage.Devices)
             _actions?.RefreshDevices();
         if (page == MainPage.History && (_serverFiles is null || DateTimeOffset.Now - _serverFilesAt > HistoryFreshFor))
@@ -268,6 +289,9 @@ public partial class MainWindow : Window
         _status = s;
         RefreshSide();
         ShowDevices(s);
+        if (Page == MainPage.Account)
+            AccountPage.Show(s, ThisDevice);
+        ActivityEmptyText.Text = EmptyFolderText();
         PauseText.Text = s.Paused ? "Resume" : "Pause";
         PauseGlyph.Data = Visuals.Resource<Geometry>(s.Paused ? "I.Play" : "I.Pause");
         RefreshOverview();
@@ -319,19 +343,58 @@ public partial class MainWindow : Window
         }
     }
 
-    /// <summary>The Devices page: the server's list, with what each computer moves right now (updated in place).</summary>
+    /// <summary>The Devices page: the nest, and the server's list with what each computer moves right now.</summary>
     private void ShowDevices(StatusSnapshot s)
     {
+        var nest = NestCard.From(s, null);
+        NestAddress.Text = nest.Address;
+        NestVersion.Text = nest.Version;
+        NestVersionNote.Text = nest.VersionNote;
+        NestVersionNote.Foreground = Visuals.Resource<IBrush>(nest.VersionOlder ? "T.WarnText" : "T.OkText");
+        NestSpace.Text = nest.FreeSpace;
+        NestKeeps.Text = nest.Keeps;
+        NestOnlineText.Text = nest.OnlineText;
+        NestOnlinePill.Classes.Set("pillok", nest.Online);
+        if (nest.Online) NestOnlinePill.ClearValue(Border.BackgroundProperty); else NestOnlinePill.Background = Visuals.Resource<IBrush>("T.BadPill");
+        NestOnlineDot.Fill = Visuals.Resource<IBrush>(nest.Online ? "T.Ok" : "T.Bad");
+        NestOnlineText.Foreground = Visuals.Resource<IBrush>(nest.Online ? "T.OkText" : "T.BadText");
+
         if (s.DevicesUnsupported)
-            DevicesEmptyText.Text = "Update the server to see the computers that use it.";
-        if (s.Devices is null)
+            DevicesEmptyText.Text = "Update your nest to see the computers that use it.";
+        if (s.Devices is not null)
+        {
+            var cards = DeviceCard.From(s, ThisDevice, DateTimeOffset.UtcNow);
+            var count = _devices.Count;
+            SyncCards(cards);
+            DevicesSummaryText.Text = DevicesSummary.Line(cards);
+            var join = DevicesSummary.JoinText(s);
+            JoinChip.IsVisible = join is not null;
+            JoinChipText.Text = join ?? string.Empty;
+            if (s.Devices.Count == 0 && !s.DevicesUnsupported)
+                DevicesEmptyText.Text = "No computers have used this nest yet.";
+            if (count != _devices.Count)
+                UpdatePanels();
+        }
+    }
+
+    /// <summary>Brings the cards to the new list: the same computers stay in place (live speeds change every second).</summary>
+    private void SyncCards(IReadOnlyList<DeviceCard> cards)
+    {
+        var same = _devices.Count == cards.Count;
+        for (var i = 0; same && i < cards.Count; i++)
+            same = string.Equals(_devices[i].Name, cards[i].Name, StringComparison.Ordinal) && _devices[i].IsThis == cards[i].IsThis;
+        if (!same)
+        {
+            _devices.Clear();
+            foreach (var card in cards)
+                _devices.Add(card);
             return;
-        var count = _devices.Count;
-        LiveLists.Sync(_devices, DeviceRow.From(s.Devices, ThisDevice, DateTimeOffset.UtcNow, s));
-        if (s.Devices.Count == 0 && !s.DevicesUnsupported)
-            DevicesEmptyText.Text = "No computers have used this server yet.";
-        if (count != _devices.Count)
-            UpdatePanels();
+        }
+        for (var i = 0; i < cards.Count; i++)
+        {
+            if (_devices[i] != cards[i])
+                _devices[i] = cards[i];
+        }
     }
 
     /// <summary>
@@ -361,7 +424,7 @@ public partial class MainWindow : Window
         RefreshSide();
         RefreshOverview();
         if (Page == MainPage.Activity)
-            LiveLists.Sync(_activityRows, ActivityDays.Rows(items, DateTimeOffset.Now));
+            RebuildActivity();
         UpdatePanels();
     }
 
@@ -377,35 +440,129 @@ public partial class MainWindow : Window
         _attentionCount = items.Count;
         RefreshSide();
         RefreshOverview();
+        AttentionSubtitle.Text = AttentionSubtitleText(items.Count);
         UpdatePanels();
     }
 
+    private static string AttentionSubtitleText(int count) => count switch
+    {
+        0 => "Nothing needs a decision right now. Everything keeps syncing.",
+        1 => "1 thing only you can decide. Everything else keeps syncing meanwhile.",
+        _ => $"{count} things only you can decide. Everything else keeps syncing meanwhile.",
+    };
+
     private void UpdatePanels()
     {
-        ActivityPanel.IsVisible = _activityItems.Count > 0;
         ActivityEmpty.IsVisible = _activityItems.Count == 0;
+        ActivityTools.IsVisible = ActivityListCard.IsVisible = _activityItems.Count > 0;
         AttentionList.IsVisible = _attention.Count > 0;
         AttentionEmpty.IsVisible = _attention.Count == 0;
         DevicesPanel.IsVisible = _devices.Count > 0;
         DevicesEmpty.IsVisible = _devices.Count == 0;
     }
 
+    // ------------------------------------------------------------------ activity
+
+    private ActivityFilter _activityFilter = ActivityFilter.All;
+    private string _activitySearchText = string.Empty;
+    private readonly Dictionary<ActivityFilter, (Button Button, TextBlock Count)> _pills = [];
+
+    /// <summary>Builds the pieces of the pages that are not in the XAML (the filter pills) and hooks their events.</summary>
+    private void WirePages()
+    {
+        foreach (var filter in ActivityView.Filters)
+        {
+            var count = new TextBlock { Classes = { "n" }, FontWeight = FontWeight.SemiBold, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center };
+            var button = new Button
+            {
+                Classes = { "fpill" },
+                Tag = filter,
+                Content = new StackPanel
+                {
+                    Orientation = Avalonia.Layout.Orientation.Horizontal,
+                    Spacing = 6,
+                    Children = { new TextBlock { Text = ActivityView.Label(filter), VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center }, count },
+                },
+            };
+            button.Click += OnFilterClick;
+            _pills[filter] = (button, count);
+            ActivityFilters.Children.Add(button);
+        }
+        ActivitySearch.TextChanged += OnActivitySearch;
+        ShowInFolderButton.Click += OnShowInFolder;
+        AddHandler(DeviceCardView.MoreRequestedEvent, OnDeviceMore);
+        DrawPills();
+    }
+
+    private void OnFilterClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: ActivityFilter filter })
+            SetActivityFilter(filter);
+    }
+
+    private void OnActivitySearch(object? sender, TextChangedEventArgs e)
+    {
+        var text = ActivitySearch.Text ?? string.Empty;
+        if (text == _activitySearchText)
+            return;
+        _activitySearchText = text;
+        RebuildActivity();
+    }
+
+    internal void SetActivityFilter(ActivityFilter filter)
+    {
+        _activityFilter = filter;
+        RebuildActivity();
+    }
+
+    private void DrawPills()
+    {
+        var counts = ActivityView.Counts(_activityItems, _activitySearchText);
+        foreach (var (filter, (button, count)) in _pills)
+        {
+            button.Classes.Set("sel", filter == _activityFilter);
+            count.Text = Format.Count(counts.Of(filter));
+        }
+    }
+
+    /// <summary>Draws the Activity list for the chosen filter and search (the same Core rows as the Windows app).</summary>
+    private void RebuildActivity()
+    {
+        DrawPills();
+        var rows = ActivityView.Rows(_activityItems, _activityFilter, _activitySearchText, DateTimeOffset.Now);
+        LiveLists.Sync(_activityRows, rows);
+        var none = rows.Count == 0 && _activityItems.Count > 0;
+        ActivityNoMatch.IsVisible = none;
+        ActivityNoMatch.Text = ActivityView.EmptyText(_activityItems, _activityFilter, _activitySearchText);
+        ActivityPanel.IsVisible = rows.Count > 0;
+    }
+
+    private string EmptyFolderText() =>
+        $"Put a file in {(string.IsNullOrWhiteSpace(_folder) ? "your synced folder" : _folder)} and it shows up here as soon as it is safe on your nest.";
+
+    private void OnReviewConflict(object? sender, RoutedEventArgs e) => Navigate(MainPage.Attention);
+
+    private void OnReviewJoin(object? sender, RoutedEventArgs e) => Navigate(MainPage.Attention);
+
+    private void OnDeviceMore(object? sender, RoutedEventArgs e) => _actions?.ManageDevices();
+
     // ------------------------------------------------------------------ history
 
-    /// <summary>Reads the server's file list (deleted files included) for the History page.</summary>
+    /// <summary>Reads the nest's file list (deleted files included) for the History page.</summary>
     internal async Task LoadHistoryAsync()
     {
         var source = _actions?.History;
         if (source is null)
         {
-            ShowHistoryMessage("Not connected to the server. History appears here once Pairnets is connected.", retry: false);
+            ShowHistoryMessage("Not connected to your nest. History appears here once Pairnets is connected.", retry: false);
             return;
         }
-        ShowHistoryMessage("Loading the files on the server…", retry: false);
+        ShowHistoryMessage("Loading the files on your nest…", retry: false);
         try
         {
             _serverFiles = await source.GetServerFilesAsync(CancellationToken.None);
             _serverFilesAt = DateTimeOffset.Now;
+            DeletedCount.Text = HistoryQuery.Filter(_serverFiles, true, null, DateTimeOffset.UtcNow).Total.ToString(System.Globalization.CultureInfo.InvariantCulture);
             if (_selectAfterLoad is { } path && _serverFiles.FirstOrDefault(f => f.Path == path) is { } target)
             {
                 _navigating = true;
@@ -428,11 +585,11 @@ public partial class MainWindow : Window
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            ShowHistoryMessage("Could not read the files on the server: " + ex.Message, retry: true);
+            ShowHistoryMessage("Could not read the files on your nest: " + ex.Message, retry: true);
         }
     }
 
-    /// <summary>Opens History on one file (from the activity list).</summary>
+    /// <summary>Opens History on one file (from the activity list): a current file in "All files" with its versions, a deleted one in "Deleted files".</summary>
     public void ShowVersionsFor(string path)
     {
         _selectAfterLoad = path;
@@ -448,8 +605,9 @@ public partial class MainWindow : Window
     private void ShowHistoryMessage(string text, bool retry)
     {
         _shownFiles.Clear();
-        FileList.IsVisible = false;
-        HistoryMessage.IsVisible = true;
+        DeletedPane.IsVisible = false;
+        FilesPane.IsVisible = false;
+        HistoryMessageCard.IsVisible = true;
         HistoryMessageText.Text = text;
         HistoryRetry.IsVisible = retry;
         HistorySummary.Text = string.Empty;
@@ -462,14 +620,16 @@ public partial class MainWindow : Window
         var deleted = _deletedMode;
         var search = HistorySearch.Text;
         _filteredSearch = search ?? string.Empty;
+        HistorySearch.Watermark = deleted ? "Search deleted files by name or folder" : "Search all files by name or folder";
         var (rows, total) = HistoryQuery.Filter(_serverFiles, deleted, search, DateTimeOffset.UtcNow);
         var selected = (FileList.SelectedItem as ServerFile)?.Path;
         _shownFiles.Clear();
         foreach (var row in rows)
             _shownFiles.Add(row);
         HistorySummary.Text = HistoryQuery.Summary(rows.Count, total, deleted, !string.IsNullOrWhiteSpace(search));
-        FileList.IsVisible = rows.Count > 0;
-        HistoryMessage.IsVisible = rows.Count == 0;
+        DeletedPane.IsVisible = deleted && rows.Count > 0;
+        FilesPane.IsVisible = !deleted && rows.Count > 0;
+        HistoryMessageCard.IsVisible = rows.Count == 0;
         HistoryRetry.IsVisible = false;
         HistoryMessageIcon.Data = Visuals.Resource<Geometry>(deleted ? "I.Trash" : "I.File");
         HistoryMessageText.Text = HistorySummary.Text;
@@ -485,21 +645,35 @@ public partial class MainWindow : Window
         if (sender is not RadioButton { IsChecked: true } tab || _navigating)
             return;
         _deletedMode = tab == DeletedTab;
+        DeletedMessage.IsVisible = false;
         FilterHistory();
     }
 
-    private void OnHistorySearch(object? sender, TextChangedEventArgs e)
+    private void OnTextChanged(object? sender, TextChangedEventArgs e)
     {
         // Avalonia reports a search the code typed in later, through the dispatcher, when _navigating is off again.
         // The list already shows that search; filtering again would reselect the file and hide what the page just
         // said (the "Restored." after Restore).
         if (!_navigating && (HistorySearch.Text ?? string.Empty) != _filteredSearch)
+        {
+            DeletedMessage.IsVisible = false;
             FilterHistory();
+        }
     }
 
-    private void OnHistoryReload(object? sender, RoutedEventArgs e) => _ = LoadHistoryAsync();
+    private void OnHistoryReload(object? sender, RoutedEventArgs e)
+    {
+        DeletedMessage.IsVisible = false;
+        _ = LoadHistoryAsync();
+    }
 
     private void OnFileSelected(object? sender, SelectionChangedEventArgs e) => ShowDetail(FileList.SelectedItem as ServerFile);
+
+    private void OnShowInFolder(object? sender, RoutedEventArgs e)
+    {
+        if (FileList.SelectedItem is ServerFile { Deleted: false } file)
+            _actions?.RevealFile(file.Path);
+    }
 
     private async void ShowDetail(ServerFile? file)
     {
@@ -511,12 +685,13 @@ public partial class MainWindow : Window
         if (file is null)
             return;
         DetailName.Text = file.Name;
-        DetailFolder.Text = file.Folder;
-        var now = DateTimeOffset.UtcNow;
-        DetailState.Text = file.Deleted
-            ? $"Deleted {Format.Moment(file.ChangedAt, now)}"
-            : $"Current version · {Format.Bytes(file.Size)} · changed {Format.Moment(file.ChangedAt, now)}";
-        DetailStatePill.Classes.Set("warn", file.Deleted);
+        DetailFolder.Text = file.InFolderText;
+        ShowInFolderButton.IsVisible = !file.Deleted;
+        CurrentVersion.IsVisible = !file.Deleted;
+        var when = file.WhenText;
+        CurrentWhen.Text = when.Length > 0 ? char.ToUpperInvariant(when[0]) + when[1..] : when;
+        CurrentSize.Text = file.SizeText;
+        VersionCount.Text = string.Empty;
         VersionsMessage.IsVisible = true;
         VersionsMessage.Text = "Loading versions…";
         if (_actions?.History is not { } source)
@@ -529,9 +704,11 @@ public partial class MainWindow : Window
                 return;
             foreach (var row in VersionRow.For(file, versions, DateTimeOffset.UtcNow))
                 _versions.Add(row);
+            var total = _versions.Count + (file.Deleted ? 0 : 1);
+            VersionCount.Text = total == 1 ? "1 version" : total + " versions";
             VersionsMessage.IsVisible = _versions.Count == 0;
             VersionsMessage.Text = file.Deleted
-                ? "The server no longer has a copy: it was deleted more than 30 days ago."
+                ? "Your nest no longer has a copy: it was deleted more than 30 days ago."
                 : "No older versions: this file has not been changed or replaced in the last 30 days.";
         }
         catch (OperationCanceledException)
@@ -577,6 +754,46 @@ public partial class MainWindow : Window
         RestoreMessageText.Text = message;
     }
 
+    private async void OnRestoreFile(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: ServerFile file } button)
+            return;
+        button.IsEnabled = false;
+        try
+        {
+            await RestoreDeletedAsync(file);
+        }
+        finally
+        {
+            button.IsEnabled = true;
+        }
+    }
+
+    /// <summary>"Restore" on a row of the Deleted files table: brings back the file's newest stored version.</summary>
+    internal async Task RestoreDeletedAsync(ServerFile file)
+    {
+        if (_actions?.History is not { } source)
+            return;
+        string? error;
+        try
+        {
+            var versions = await source.GetVersionsAsync(file.Path, CancellationToken.None);
+            error = versions.Count == 0
+                ? "Your nest no longer has a copy of this file."
+                : await source.RestoreVersionAsync(file.Path, versions[0], CancellationToken.None);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            error = "Could not restore it: " + ex.Message;
+        }
+        if (error is null)
+            await LoadHistoryAsync(); // the file is a current one again: it leaves this table
+        DeletedMessage.IsVisible = true;
+        DeletedMessage.Classes.Set("ok", error is null);
+        DeletedMessage.Classes.Set("bad", error is not null);
+        DeletedMessageText.Text = error ?? $"Restored. {file.Name} is back on your computers in a few seconds.";
+    }
+
     // Exposed for the headless UI test.
     internal string HeadlineText => Overview.TitleText;
     internal bool FixVisible => _overview?.HasFix == true;
@@ -594,10 +811,33 @@ public partial class MainWindow : Window
     internal bool MapHereFlowing => Overview.ThisFlowing;
     internal int HistoryRows => _shownFiles.Count;
     internal int VersionRows => _versions.Count;
-    internal string RestoreText => RestoreMessage.IsVisible ? RestoreMessageText.Text ?? string.Empty : string.Empty;
+    internal string RestoreText => DeletedMessage.IsVisible ? DeletedMessageText.Text ?? string.Empty
+        : RestoreMessage.IsVisible ? RestoreMessageText.Text ?? string.Empty : string.Empty;
     internal bool CalloutVisible => Overview.NeedsVisible;
     internal int DeviceRows => _devices.Count;
     internal bool DevicesShown => DevicesPanel.IsVisible && DevicesPage.IsVisible;
+    internal bool JoinChipShown => JoinChip.IsVisible;
+    internal string JoinChipValue => JoinChipText.Text ?? string.Empty;
+    internal string DevicesSummaryValue => DevicesSummaryText.Text ?? string.Empty;
+    internal int AttentionCards => _attention.Count;
+    internal string AttentionSubtitleValue => AttentionSubtitle.Text ?? string.Empty;
+    internal bool AttentionEmptyShown => AttentionEmpty.IsVisible;
+    internal bool ActivityEmptyShown => ActivityEmpty.IsVisible;
+    internal string ActivityEmptyValue => ActivityEmptyText.Text ?? string.Empty;
+    internal string ActivityNoMatchValue => ActivityNoMatch.IsVisible ? ActivityNoMatch.Text ?? string.Empty : string.Empty;
+    internal ActivityFilter ActivityFilterNow => _activityFilter;
+    internal string ActivityPillText(ActivityFilter filter) => ActivityView.Label(filter) + " " + _pills[filter].Count.Text;
+    internal bool DeletedPaneShown => DeletedPane.IsVisible;
+    internal bool FilesPaneShown => FilesPane.IsVisible;
+    internal bool AccountShown => AccountPage.IsVisible;
+    internal AccountPageView Account => AccountPage;
+    internal bool HeaderRowShown => HeaderRow.IsVisible;
+    internal string DeletedCountValue => DeletedCount.Text ?? string.Empty;
+    internal string HistorySearchWatermark => HistorySearch.Watermark ?? string.Empty;
+
+    internal void SearchActivity(string text) => ActivitySearch.Text = text;
+
+    internal Task RestoreDeletedRowAsync(int index) => RestoreDeletedAsync(_shownFiles[index]);
 
     /// <summary>Switches to the Devices page (used by the headless UI test).</summary>
     internal void ShowDevicesTab() => Navigate(MainPage.Devices);

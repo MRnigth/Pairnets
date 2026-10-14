@@ -284,7 +284,7 @@ public sealed class DesktopControllerTests
         File.WriteAllText(Path.Combine(app.Folder, "mine.txt"), "stays here");
 
         var page = await app.SettingsPageAsync();
-        Person.Click(Screen.Find<Button>(page, "Sign out of this computer"));
+        Person.Click(Screen.Find<Button>(page, "Sign out"));
         await app.AnswerAsync("Pairnets – sign out", "Sign out");
 
         await app.WindowAsync("Pairnets – sign in");
@@ -471,7 +471,7 @@ public sealed class DesktopControllerTests
 
         app.Open("Devices");
         await Wait.Until(() => main.DeviceRows >= 1, "this computer to be listed on the Devices page");
-        Person.Click(Screen.Find<Button>(main, "+ Add a computer…"));
+        Person.Click(Screen.Find<Button>(main, "Add a computer…"));
         var steps = await app.DialogAsync("Pairnets – add a computer");
         Assert.Contains("type localhost and press \"Sign in with your browser\"", AppUnderTest.TextOf(steps));
         await app.AnswerAsync("Pairnets – add a computer", "OK");
@@ -479,6 +479,7 @@ public sealed class DesktopControllerTests
         Person.Click(Screen.Find<Button>(main, "Manage devices on your nest"));
         Assert.Equal("https://localhost/devices", app.Platform.Opened[^1]);
 
+        app.Open("Overview"); // the "More" menu is in the Overview's header (every other page draws its own)
         Person.Click(Screen.Find<Button>(main, "More"));
         Person.Click(Screen.Find<MenuItem>(main, "View log"));
         Assert.Equal(app.App.LogFile, app.Platform.Opened[^1]);

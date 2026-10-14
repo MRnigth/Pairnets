@@ -278,7 +278,7 @@
 
     <!-- ======================= Page ======================= -->
     <Grid Grid.Column="1" RowDefinitions="Auto,*">
-      <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto" Margin="28,22,28,0">
+      <Grid x:Name="HeaderRow" ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto" Margin="28,22,28,0">
         <TextBlock x:Name="PageTitle" Classes="title" Text="Overview" VerticalAlignment="Center" />
         <TextBlock x:Name="PageSubtitle" Grid.Row="1" Grid.ColumnSpan="2" Classes="muted" Margin="0,4,0,0" TextWrapping="Wrap" IsVisible="False" />
         <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
@@ -319,207 +319,569 @@
         </ScrollViewer>
 
         <!-- ============ Activity ============ -->
-        <Border x:Name="ActivityPage" Classes="card" Margin="28,18,28,24" Padding="8,4,8,8" IsVisible="False">
-          <Grid>
-            <ScrollViewer x:Name="ActivityPanel">
-              <ItemsControl x:Name="ActivityList" />
-            </ScrollViewer>
-            <StackPanel x:Name="ActivityEmpty" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="8">
-              <v:LineIcon Classes="icon muted" Width="30" Height="30" StrokeThickness="1.6" Data="{StaticResource I.Activity}" HorizontalAlignment="Center" />
-              <TextBlock Classes="muted" Text="Nothing has happened yet. Changes appear here as they sync." />
+        <Grid x:Name="ActivityPage" RowDefinitions="Auto,Auto,*" Margin="28,40,28,24" IsVisible="False">
+          <Grid ColumnDefinitions="*,Auto">
+            <StackPanel VerticalAlignment="Center">
+              <TextBlock Classes="PageTitle" Text="Activity" />
+              <TextBlock Classes="t2" Margin="0,2,0,0" Text="Everything that synced, newest first." />
             </StackPanel>
+            <Button Grid.Column="1" Classes="SecondaryButton" Height="38" Padding="14,0" Click="OnOpenFolder" ToolTip.Tip="Open the synced folder">
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <v:LineIcon Classes="icon" Width="16" Height="16" Data="{StaticResource I.Folder}" />
+                <TextBlock Text="Open folder" VerticalAlignment="Center" />
+              </StackPanel>
+            </Button>
           </Grid>
-        </Border>
+
+          <Grid x:Name="ActivityTools" Grid.Row="1" ColumnDefinitions="*,Auto" Margin="0,16,0,0">
+            <WrapPanel x:Name="ActivityFilters" VerticalAlignment="Top" />
+            <TextBox x:Name="ActivitySearch" Grid.Column="1" Classes="search" Width="250" VerticalAlignment="Top" Watermark="Search files and folders">
+              <TextBox.InnerLeftContent>
+                <v:LineIcon Classes="icon muted" Width="15" Height="15" Margin="12,0,0,0" Data="{StaticResource I.Search}" />
+              </TextBox.InnerLeftContent>
+            </TextBox>
+          </Grid>
+
+          <Border x:Name="ActivityListCard" Grid.Row="2" Classes="pcard" Margin="0,10,0,0" Padding="12,6">
+            <Grid>
+              <ScrollViewer x:Name="ActivityPanel" HorizontalScrollBarVisibility="Disabled">
+                <ItemsControl x:Name="ActivityList">
+                  <ItemsControl.DataTemplates>
+                    <DataTemplate DataType="c:ActivityDay">
+                      <Grid ColumnDefinitions="*,Auto" Margin="10,14,10,6">
+                        <TextBlock Classes="heading" Text="{Binding Text, Converter={x:Static v:UpperText.Instance}}" VerticalAlignment="Bottom" />
+                        <TextBlock Grid.Column="1" Classes="t3" Text="{Binding CountText}" VerticalAlignment="Bottom" />
+                      </Grid>
+                    </DataTemplate>
+                    <DataTemplate DataType="c:ActivityItem">
+                      <Border Background="Transparent" Padding="10,6" ToolTip.Tip="{Binding TimeText}">
+                        <Border.ContextMenu>
+                          <ContextMenu IsVisible="{Binding Path, Converter={x:Static ObjectConverters.IsNotNull}}">
+                            <MenuItem Header="Show in folder" Click="OnRevealActivity" />
+                            <MenuItem Header="Show versions…" Click="OnActivityVersions" />
+                          </ContextMenu>
+                        </Border.ContextMenu>
+                        <Grid ColumnDefinitions="Auto,*,Auto,Auto,44,30">
+                          <Border Classes="sq34" Margin="0,0,12,0" VerticalAlignment="Center"
+                                  Classes.tint-warn="{Binding Kind, Converter={x:Static v:KindIs.Instance}, ConverterParameter='Conflict,Blocked,Warning'}">
+                            <Panel>
+                              <v:LineIcon Classes="icon ink-accent" Width="17" Height="17" StrokeThickness="2.2" Data="{StaticResource I.Up}"
+                                          IsVisible="{Binding Kind, Converter={x:Static v:KindIs.Instance}, ConverterParameter='Uploaded'}" />
+                              <v:LineIcon Classes="icon ink-ok" Width="17" Height="17" StrokeThickness="2.2" Data="{StaticResource I.Down}"
+                                          IsVisible="{Binding Kind, Converter={x:Static v:KindIs.Instance}, ConverterParameter='Downloaded'}" />
+                              <v:LineIcon Classes="icon ink-warn" Width="17" Height="17" StrokeThickness="2" Data="{StaticResource I.Warning}"
+                                          IsVisible="{Binding Kind, Converter={x:Static v:KindIs.Instance}, ConverterParameter='Conflict,Blocked,Warning'}" />
+                              <v:LineIcon Classes="icon ink-soft" Width="17" Height="17" StrokeThickness="2" Data="{StaticResource I.Trash}"
+                                          IsVisible="{Binding Kind, Converter={x:Static v:KindIs.Instance}, ConverterParameter='DeletedHere,DeletedOnServer'}" />
+                              <v:LineIcon Classes="icon ink-bad" Width="17" Height="17" StrokeThickness="2" Data="{StaticResource I.Bang}"
+                                          IsVisible="{Binding Kind, Converter={x:Static v:KindIs.Instance}, ConverterParameter='Error'}" />
+                              <v:LineIcon Classes="icon ink-soft" Width="17" Height="17" StrokeThickness="2" Data="{StaticResource I.CloudOff}"
+                                          IsVisible="{Binding Kind, Converter={x:Static v:KindIs.Instance}, ConverterParameter='Offline,Info'}" />
+                            </Panel>
+                          </Border>
+                          <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <TextBlock Text="{Binding Primary}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                            <TextBlock Text="{Binding Secondary}" Classes="t3" TextTrimming="CharacterEllipsis" />
+                          </StackPanel>
+                          <Button Grid.Column="2" Classes="small" Content="Review" Margin="12,0,0,0" VerticalAlignment="Center" FontWeight="Bold"
+                                  BorderBrush="{DynamicResource T.WarnBorder}" Click="OnReviewConflict"
+                                  IsVisible="{Binding Kind, Converter={x:Static v:KindIs.Instance}, ConverterParameter='Conflict'}" />
+                          <TextBlock Grid.Column="4" Text="{Binding Time, Converter={x:Static v:ClockText.Instance}}" Classes="t3" TextAlignment="Right" VerticalAlignment="Center" />
+                        </Grid>
+                      </Border>
+                    </DataTemplate>
+                    <DataTemplate DataType="c:ActivityFolder">
+                      <StackPanel>
+                        <Grid ColumnDefinitions="Auto,*,44,30" Margin="10,6">
+                          <Border Classes="sq34" Margin="0,0,12,0" VerticalAlignment="Center">
+                            <v:LineIcon Classes="icon ink-folder" Width="17" Height="17" StrokeThickness="2" Data="{StaticResource I.Folder}" />
+                          </Border>
+                          <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                              <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                              <Border Classes="countchip" VerticalAlignment="Center"><TextBlock Text="{Binding CountText}" /></Border>
+                            </StackPanel>
+                            <TextBlock Text="{Binding Detail}" Classes="t3" TextTrimming="CharacterEllipsis" />
+                          </StackPanel>
+                          <TextBlock Grid.Column="2" Text="{Binding Time, Converter={x:Static v:ClockText.Instance}}" Classes="t3" TextAlignment="Right" VerticalAlignment="Center" />
+                          <ToggleButton x:Name="FolderChevron" Grid.Column="3" Classes="chev" VerticalAlignment="Center" ToolTip.Tip="Show the files">
+                            <Panel>
+                              <v:LineIcon Classes="icon ink-soft" Width="14" Height="14" StrokeThickness="2.4" Data="{StaticResource I.ChevronDown}"
+                                          IsVisible="{Binding !#FolderChevron.IsChecked}" />
+                              <v:LineIcon Classes="icon ink-soft" Width="14" Height="14" StrokeThickness="2.4" Data="{StaticResource I.ChevronUp}"
+                                          IsVisible="{Binding #FolderChevron.IsChecked}" />
+                            </Panel>
+                          </ToggleButton>
+                        </Grid>
+                        <Border IsVisible="{Binding #FolderChevron.IsChecked}" Margin="56,0,40,6" Padding="14,0,0,0" BorderThickness="2,0,0,0" BorderBrush="{DynamicResource T.Track}">
+                          <StackPanel>
+                            <ItemsControl ItemsSource="{Binding Items, Converter={x:Static v:FirstItems.Instance}, ConverterParameter=2}"
+                                          IsVisible="{Binding !#ShowAllToggle.IsChecked}">
+                              <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="c:ActivityItem">
+                                  <Grid ColumnDefinitions="*,Auto" Height="26">
+                                    <TextBlock Text="{Binding Primary}" FontSize="13" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                                    <TextBlock Grid.Column="1" Text="{Binding Time, Converter={x:Static v:ClockText.Instance}}" Classes="t3" VerticalAlignment="Center" Margin="10,0,0,0" />
+                                  </Grid>
+                                </DataTemplate>
+                              </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <ItemsControl ItemsSource="{Binding Items}" IsVisible="{Binding #ShowAllToggle.IsChecked}">
+                              <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="c:ActivityItem">
+                                  <Grid ColumnDefinitions="*,Auto" Height="26">
+                                    <TextBlock Text="{Binding Primary}" FontSize="13" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                                    <TextBlock Grid.Column="1" Text="{Binding Time, Converter={x:Static v:ClockText.Instance}}" Classes="t3" VerticalAlignment="Center" Margin="10,0,0,0" />
+                                  </Grid>
+                                </DataTemplate>
+                              </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <ToggleButton x:Name="ShowAllToggle" Classes="link2" HorizontalAlignment="Left" Height="26"
+                                          Content="{Binding CountText, Converter={x:Static v:ShowAllText.Instance}}"
+                                          IsVisible="{Binding !#ShowAllToggle.IsChecked}" />
+                          </StackPanel>
+                        </Border>
+                      </StackPanel>
+                    </DataTemplate>
+                  </ItemsControl.DataTemplates>
+                </ItemsControl>
+              </ScrollViewer>
+              <TextBlock x:Name="ActivityNoMatch" Classes="t2" HorizontalAlignment="Center" VerticalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" MaxWidth="360" IsVisible="False" />
+            </Grid>
+          </Border>
+
+          <!-- Nothing has synced yet -->
+          <Border x:Name="ActivityEmpty" Grid.Row="1" Grid.RowSpan="2" Classes="pcard" Margin="0,16,0,0" Padding="32" IsVisible="False">
+            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+              <Canvas Width="340" Height="150" HorizontalAlignment="Center">
+                <Line StartPoint="60,75" EndPoint="280,75" Stroke="{DynamicResource T.Track}" StrokeThickness="2" StrokeDashArray="2,2" />
+                <Border Canvas.Left="16" Canvas.Top="52" Width="48" Height="48" CornerRadius="15" Background="{DynamicResource T.Chip}" BorderBrush="{DynamicResource T.Border}" BorderThickness="1"
+                        RenderTransformOrigin="50%,50%">
+                  <Border.RenderTransform><RotateTransform Angle="-6" /></Border.RenderTransform>
+                  <v:LineIcon Classes="icon ink-soft" Width="22" Height="22" StrokeThickness="1.8" Data="{StaticResource I.Desktop}" />
+                </Border>
+                <Border Canvas.Left="276" Canvas.Top="52" Width="48" Height="48" CornerRadius="15" Background="{DynamicResource T.Chip}" BorderBrush="{DynamicResource T.Border}" BorderThickness="1"
+                        RenderTransformOrigin="50%,50%">
+                  <Border.RenderTransform><RotateTransform Angle="6" /></Border.RenderTransform>
+                  <v:LineIcon Classes="icon ink-soft" Width="22" Height="22" StrokeThickness="1.8" Data="{StaticResource I.Laptop}" />
+                </Border>
+                <Border Canvas.Left="110" Canvas.Top="15" Width="120" Height="120" CornerRadius="60" Background="{DynamicResource T.Card}">
+                  <Border CornerRadius="60" Background="{DynamicResource T.AccentSoft}">
+                    <Border Width="68" Height="68" CornerRadius="22" Background="{DynamicResource T.Card}" BorderBrush="{DynamicResource T.Border}" BorderThickness="1"
+                            HorizontalAlignment="Center" VerticalAlignment="Center">
+                      <v:LineIcon Stroke="{DynamicResource T.Accent}" Width="30" Height="30" StrokeThickness="2.2" Data="{StaticResource I.Activity}" />
+                    </Border>
+                  </Border>
+                </Border>
+                <Border Canvas.Left="96" Canvas.Top="8" Width="30" Height="30" CornerRadius="10" Background="{DynamicResource T.Card}" BorderBrush="{DynamicResource T.Border}" BorderThickness="1"
+                        RenderTransformOrigin="50%,50%">
+                  <Border.RenderTransform><RotateTransform Angle="-10" /></Border.RenderTransform>
+                  <v:LineIcon Classes="icon ink-folder" Width="15" Height="15" StrokeThickness="2" Data="{StaticResource I.Folder}" />
+                </Border>
+                <Border Canvas.Left="216" Canvas.Top="114" Width="30" Height="30" CornerRadius="10" Background="{DynamicResource T.Card}" BorderBrush="{DynamicResource T.Border}" BorderThickness="1"
+                        RenderTransformOrigin="50%,50%">
+                  <Border.RenderTransform><RotateTransform Angle="9" /></Border.RenderTransform>
+                  <v:LineIcon Classes="icon ink-soft" Width="15" Height="15" StrokeThickness="2" Data="{StaticResource I.File}" />
+                </Border>
+              </Canvas>
+              <TextBlock Text="Nothing has synced yet" FontSize="22" FontWeight="ExtraBold" HorizontalAlignment="Center" Margin="0,26,0,0" />
+              <TextBlock x:Name="ActivityEmptyText" Classes="t2" TextAlignment="Center" TextWrapping="Wrap" MaxWidth="440" HorizontalAlignment="Center" Margin="0,8,0,0" />
+              <Button Classes="accent" Height="38" Padding="16,0" HorizontalAlignment="Center" Margin="0,22,0,0" Click="OnOpenFolder">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                  <v:LineIcon Classes="icon white" Width="16" Height="16" Data="{StaticResource I.Folder}" />
+                  <TextBlock Text="Open your folder" VerticalAlignment="Center" />
+                </StackPanel>
+              </Button>
+            </StackPanel>
+          </Border>
+        </Grid>
 
         <!-- ============ History ============ -->
-        <Grid x:Name="HistoryPage" RowDefinitions="Auto,*" Margin="28,18,28,24" IsVisible="False">
-          <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,12">
-            <Border Classes="segments">
-              <StackPanel Orientation="Horizontal">
-                <RadioButton x:Name="DeletedTab" Classes="seg" GroupName="history" IsChecked="True" IsCheckedChanged="OnHistoryModeChanged">
-                  <StackPanel Orientation="Horizontal" Spacing="6">
+        <Grid x:Name="HistoryPage" RowDefinitions="Auto,Auto,*" Margin="28,40,28,24" IsVisible="False">
+          <StackPanel>
+            <TextBlock Classes="PageTitle" Text="History" />
+            <TextBlock Classes="t2" Margin="0,2,0,0" TextWrapping="Wrap" Text="Get back deleted files and older versions. Your nest keeps them for 30 days." />
+          </StackPanel>
+          <Grid Grid.Row="1" ColumnDefinitions="Auto,*,Auto" Margin="0,16,0,0">
+            <Border Classes="tabs" VerticalAlignment="Center">
+              <StackPanel Orientation="Horizontal" Spacing="4">
+                <RadioButton x:Name="DeletedTab" Classes="tab" GroupName="history" IsChecked="True" IsCheckedChanged="OnHistoryModeChanged">
+                  <StackPanel Orientation="Horizontal" Spacing="7">
                     <v:LineIcon Classes="icon" Width="14" Height="14" Stroke="{Binding $parent[RadioButton].Foreground}" Data="{StaticResource I.Trash}" />
                     <TextBlock Text="Deleted files" />
+                    <TextBlock x:Name="DeletedCount" FontWeight="SemiBold" />
                   </StackPanel>
                 </RadioButton>
-                <RadioButton x:Name="FilesTab" Classes="seg" GroupName="history" IsCheckedChanged="OnHistoryModeChanged">
-                  <StackPanel Orientation="Horizontal" Spacing="6">
+                <RadioButton x:Name="FilesTab" Classes="tab" GroupName="history" IsCheckedChanged="OnHistoryModeChanged">
+                  <StackPanel Orientation="Horizontal" Spacing="7">
                     <v:LineIcon Classes="icon" Width="14" Height="14" Stroke="{Binding $parent[RadioButton].Foreground}" Data="{StaticResource I.File}" />
                     <TextBlock Text="All files" />
                   </StackPanel>
                 </RadioButton>
               </StackPanel>
             </Border>
-            <TextBox x:Name="HistorySearch" Grid.Column="1" Margin="12,0,8,0" Watermark="Search by name or folder"
-                     TextChanged="OnHistorySearch" VerticalContentAlignment="Center">
+            <TextBox x:Name="HistorySearch" Grid.Column="1" Classes="search" Margin="10,0" Height="42" MinHeight="42" CornerRadius="14" Watermark="Search deleted files by name or folder"
+                     TextChanged="OnTextChanged" VerticalContentAlignment="Center">
               <TextBox.InnerLeftContent>
-                <v:LineIcon Classes="icon muted" Width="15" Height="15" Margin="10,0,0,0" Data="{StaticResource I.Search}" />
+                <v:LineIcon Classes="icon muted" Width="15" Height="15" Margin="12,0,0,0" Data="{StaticResource I.Search}" />
               </TextBox.InnerLeftContent>
             </TextBox>
-            <Button Grid.Column="2" Classes="icon" ToolTip.Tip="Reload from the server" Click="OnHistoryReload">
+            <Button Grid.Column="2" Classes="SecondaryButton" Width="42" Height="42" MinHeight="42" Padding="0" CornerRadius="14" ToolTip.Tip="Reload from your nest" AutomationProperties.Name="Reload from your nest" Click="OnHistoryReload">
               <v:LineIcon Classes="icon" Width="17" Height="17" Data="{StaticResource I.Sync}" />
             </Button>
           </Grid>
 
-          <Grid Grid.Row="1" ColumnDefinitions="11*,10*">
-            <Border Classes="card" Padding="8" Margin="0,0,7,0">
-              <Grid RowDefinitions="Auto,*">
-                <TextBlock x:Name="HistorySummary" Classes="muted small" Margin="8,4,8,6" />
-                <ListBox x:Name="FileList" Grid.Row="1" Classes="rows" SelectionChanged="OnFileSelected">
-                  <ListBox.ItemTemplate>
-                    <DataTemplate DataType="c:ServerFile">
-                      <Grid ColumnDefinitions="Auto,*">
-                        <Border Width="32" Height="32" CornerRadius="8" Background="{DynamicResource T.Pill}" Margin="0,0,11,0">
-                          <Panel>
-                            <v:LineIcon Classes="icon" Width="17" Height="17" StrokeThickness="2" Data="{StaticResource I.File}" IsVisible="{Binding !Deleted}" />
-                            <v:LineIcon Classes="icon" Width="17" Height="17" StrokeThickness="2" Stroke="{StaticResource S.Red}" Data="{StaticResource I.Trash}" IsVisible="{Binding Deleted}" />
-                          </Panel>
-                        </Border>
-                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
-                          <TextBlock Text="{Binding Name}" Classes="strong" TextTrimming="CharacterEllipsis" />
-                          <TextBlock Text="{Binding Secondary}" Classes="muted small" TextTrimming="CharacterEllipsis" />
-                        </StackPanel>
-                      </Grid>
-                    </DataTemplate>
-                  </ListBox.ItemTemplate>
-                </ListBox>
-                <StackPanel x:Name="HistoryMessage" Grid.Row="1" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="10" IsVisible="False">
-                  <v:LineIcon x:Name="HistoryMessageIcon" Classes="icon muted" Width="30" Height="30" StrokeThickness="1.6" Data="{StaticResource I.History}" HorizontalAlignment="Center" />
-                  <TextBlock x:Name="HistoryMessageText" Classes="muted" TextWrapping="Wrap" TextAlignment="Center" MaxWidth="300" />
-                  <Button x:Name="HistoryRetry" Classes="subtle" Content="Try again" HorizontalAlignment="Center" Click="OnHistoryReload" IsVisible="False" />
-                </StackPanel>
-              </Grid>
-            </Border>
+          <Panel Grid.Row="2" Margin="0,16,0,0">
+            <!-- Deleted files: one wide table -->
+            <ScrollViewer x:Name="DeletedPane" HorizontalScrollBarVisibility="Disabled">
+              <StackPanel Spacing="10">
+                <Border x:Name="DeletedMessage" Classes="msg" IsVisible="False">
+                  <TextBlock x:Name="DeletedMessageText" TextWrapping="Wrap" FontSize="12.5" />
+                </Border>
+                <Border Classes="pcard" Padding="10,4,10,6">
+                  <StackPanel>
+                    <Grid ColumnDefinitions="*,150,96" Margin="12,12,12,8">
+                      <TextBlock Classes="heading" Text="FILE" Margin="48,0,0,0" />
+                      <TextBlock Grid.Column="1" Classes="heading" Text="DELETED" />
+                    </Grid>
+                    <ItemsControl x:Name="DeletedList">
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="c:ServerFile">
+                          <Border BorderThickness="0,1,0,0" BorderBrush="{DynamicResource T.Border}" Padding="12,9">
+                            <Grid ColumnDefinitions="Auto,*,150,96">
+                              <Border Classes="sq34" Margin="0,0,14,0" VerticalAlignment="Center">
+                                <v:LineIcon Classes="icon ink-soft" Width="17" Height="17" StrokeThickness="2" Data="{StaticResource I.File}" />
+                              </Border>
+                              <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                                <TextBlock Text="{Binding Folder}" Classes="t3" TextTrimming="CharacterEllipsis" />
+                              </StackPanel>
+                              <StackPanel Grid.Column="2" VerticalAlignment="Center">
+                                <TextBlock Text="{Binding WhenText}" FontSize="13" />
+                                <TextBlock Text="{Binding DaysLeftText}" Classes="t3" Classes.warn="{Binding ExpiresSoon}" />
+                              </StackPanel>
+                              <Button Grid.Column="3" Classes="small" HorizontalAlignment="Right" VerticalAlignment="Center" FontWeight="Bold" Click="OnRestoreFile" Tag="{Binding}">
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                  <v:LineIcon Classes="icon" Width="14" Height="14" Data="{StaticResource I.Restore}" />
+                                  <TextBlock Text="Restore" />
+                                </StackPanel>
+                              </Button>
+                            </Grid>
+                          </Border>
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                  </StackPanel>
+                </Border>
+                <TextBlock Classes="t3" FontSize="13" Margin="4,2,0,8" TextWrapping="Wrap"
+                           Text="Restored files go back to the folder they came from. After 30 days your nest removes deleted files for good." />
+              </StackPanel>
+            </ScrollViewer>
 
-            <Border Grid.Column="1" Classes="card" Margin="7,0,0,0" Padding="18,16">
-              <Grid>
-                <StackPanel x:Name="DetailEmpty" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="10">
-                  <v:LineIcon Classes="icon muted" Width="30" Height="30" StrokeThickness="1.6" Data="{StaticResource I.Restore}" HorizontalAlignment="Center" />
-                  <TextBlock Classes="muted" TextWrapping="Wrap" TextAlignment="Center" MaxWidth="260"
-                             Text="Choose a file to see the versions the server keeps, and get one back." />
-                </StackPanel>
-                <DockPanel x:Name="DetailPanel" IsVisible="False">
-                  <StackPanel DockPanel.Dock="Top" Spacing="3">
-                    <TextBlock x:Name="DetailName" Classes="h2" TextWrapping="Wrap" />
-                    <TextBlock x:Name="DetailFolder" Classes="muted small" TextWrapping="Wrap" />
-                    <Border x:Name="DetailStatePill" Classes="pill" HorizontalAlignment="Left" Margin="0,8,0,0">
-                      <TextBlock x:Name="DetailState" FontSize="12" />
-                    </Border>
-                    <Border x:Name="RestoreMessage" Margin="0,10,0,0" IsVisible="False">
+            <!-- All files: the list, and the versions of the chosen file -->
+            <Grid x:Name="FilesPane" ColumnDefinitions="*,1.12*" IsVisible="False">
+              <Border Classes="pcard" Padding="8,6" Margin="0,0,8,0">
+                <Grid RowDefinitions="Auto,*">
+                  <TextBlock x:Name="HistorySummary" Classes="t3" Margin="10,10,10,8" />
+                  <ListBox x:Name="FileList" Grid.Row="1" Classes="frows" SelectionChanged="OnFileSelected">
+                    <ListBox.ItemTemplate>
+                      <DataTemplate DataType="c:ServerFile">
+                        <Grid ColumnDefinitions="Auto,*">
+                          <Border Classes="sq34" Margin="0,0,12,0">
+                            <v:LineIcon Classes="icon ink-soft" Width="17" Height="17" StrokeThickness="2" Data="{StaticResource I.File}" />
+                          </Border>
+                          <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                            <TextBlock Text="{Binding FolderAndWhen}" Classes="t3" TextTrimming="CharacterEllipsis" />
+                          </StackPanel>
+                        </Grid>
+                      </DataTemplate>
+                    </ListBox.ItemTemplate>
+                  </ListBox>
+                </Grid>
+              </Border>
+
+              <Border Grid.Column="1" Classes="pcard" Padding="22,20" Margin="8,0,0,0">
+                <Grid>
+                  <StackPanel x:Name="DetailEmpty" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="10">
+                    <v:LineIcon Classes="icon muted" Width="30" Height="30" StrokeThickness="1.6" Data="{StaticResource I.Restore}" HorizontalAlignment="Center" />
+                    <TextBlock Classes="t2" TextWrapping="Wrap" TextAlignment="Center" MaxWidth="260"
+                               Text="Choose a file to see the versions your nest keeps, and get one back." />
+                  </StackPanel>
+                  <Grid x:Name="DetailPanel" RowDefinitions="Auto,Auto,Auto,Auto,*" IsVisible="False">
+                    <Grid ColumnDefinitions="Auto,*,Auto">
+                      <Border Width="48" Height="48" CornerRadius="14" Classes="tint-ok" Margin="0,0,14,0">
+                        <v:LineIcon Classes="icon ink-ok" Width="22" Height="22" StrokeThickness="1.9" Data="{StaticResource I.File}" />
+                      </Border>
+                      <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                        <TextBlock x:Name="DetailName" FontSize="18" FontWeight="ExtraBold" TextTrimming="CharacterEllipsis" />
+                        <TextBlock x:Name="DetailFolder" Classes="t3" TextTrimming="CharacterEllipsis" />
+                      </StackPanel>
+                      <Button x:Name="ShowInFolderButton" Grid.Column="2" Classes="small" Height="34" VerticalAlignment="Center" FontWeight="Bold" Margin="10,0,0,0">
+                        <StackPanel Orientation="Horizontal" Spacing="7">
+                          <v:LineIcon Classes="icon" Width="14" Height="14" Data="{StaticResource I.Folder}" />
+                          <TextBlock Text="Show in folder" />
+                        </StackPanel>
+                      </Button>
+                    </Grid>
+                    <Border Grid.Row="1" Classes="hair" Margin="0,18,0,16" />
+                    <Grid Grid.Row="2" ColumnDefinitions="*,Auto" Margin="0,0,0,4">
+                      <TextBlock Classes="heading" Text="VERSIONS ON YOUR NEST" />
+                      <TextBlock x:Name="VersionCount" Grid.Column="1" Classes="t3" />
+                    </Grid>
+                    <Border x:Name="RestoreMessage" Grid.Row="3" Classes="msg" Margin="0,8,0,4" IsVisible="False">
                       <TextBlock x:Name="RestoreMessageText" TextWrapping="Wrap" FontSize="12.5" />
                     </Border>
-                    <TextBlock Classes="caps" Text="VERSIONS ON THE SERVER" Margin="0,16,0,4" />
-                  </StackPanel>
-                  <Grid>
-                    <ScrollViewer>
-                      <ItemsControl x:Name="VersionList">
-                        <ItemsControl.ItemTemplate>
-                          <DataTemplate DataType="c:VersionRow">
-                            <Border Classes="row enter">
-                              <Grid ColumnDefinitions="Auto,*,Auto">
-                                <Ellipse Width="9" Height="9" Fill="{DynamicResource T.Line}" Margin="2,0,12,0" VerticalAlignment="Center" />
-                                <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
-                                  <TextBlock Text="{Binding Title}" Classes="strong" TextTrimming="CharacterEllipsis" />
-                                  <TextBlock Text="{Binding Detail}" Classes="muted small" TextTrimming="CharacterEllipsis" />
-                                </StackPanel>
-                                <Button Grid.Column="2" Classes="subtle" VerticalAlignment="Center" Margin="10,0,0,0" Click="OnRestore" Tag="{Binding}">
-                                  <StackPanel Orientation="Horizontal" Spacing="6">
-                                    <v:LineIcon Classes="icon" Width="15" Height="15" Data="{StaticResource I.Restore}" />
-                                    <TextBlock Text="Restore" />
-                                  </StackPanel>
-                                </Button>
-                              </Grid>
+                    <ScrollViewer Grid.Row="4" HorizontalScrollBarVisibility="Disabled">
+                      <Grid VerticalAlignment="Top">
+                        <Border Width="2" CornerRadius="1" HorizontalAlignment="Left" Margin="7,30,0,30" Background="{DynamicResource T.Track}" />
+                        <StackPanel>
+                          <Grid x:Name="CurrentVersion" ColumnDefinitions="16,*,Auto" Margin="0,10">
+                            <Border Width="16" Height="16" CornerRadius="8" Background="{DynamicResource T.Accent}" BorderBrush="{DynamicResource T.Card}" BorderThickness="3" VerticalAlignment="Center" />
+                            <StackPanel Grid.Column="1" Margin="14,0,0,0" VerticalAlignment="Center">
+                              <TextBlock x:Name="CurrentWhen" FontWeight="Bold" />
+                              <TextBlock x:Name="CurrentSize" Classes="t3" />
+                            </StackPanel>
+                            <Border Grid.Column="2" Classes="pillok" VerticalAlignment="Center">
+                              <StackPanel Orientation="Horizontal" Spacing="6">
+                                <v:LineIcon Classes="icon ink-ok" Width="12" Height="12" StrokeThickness="2.6" Data="{StaticResource I.Check}" VerticalAlignment="Center" />
+                                <TextBlock Text="Current version" />
+                              </StackPanel>
                             </Border>
-                          </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                      </ItemsControl>
+                          </Grid>
+                          <ItemsControl x:Name="VersionList">
+                            <ItemsControl.ItemTemplate>
+                              <DataTemplate DataType="c:VersionRow">
+                                <Grid ColumnDefinitions="16,*,Auto" Margin="0,10" Classes="enter">
+                                  <Border Width="14" Height="14" CornerRadius="7" Background="{DynamicResource T.Card}" BorderBrush="{DynamicResource T.TextSoft}" BorderThickness="2" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                  <StackPanel Grid.Column="1" Margin="14,0,0,0" VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding Title}" FontWeight="Bold" TextTrimming="CharacterEllipsis" />
+                                    <TextBlock Text="{Binding Detail}" Classes="t3" TextTrimming="CharacterEllipsis" />
+                                  </StackPanel>
+                                  <Button Grid.Column="2" Classes="small" FontWeight="Bold" VerticalAlignment="Center" Margin="10,0,0,0" Click="OnRestore" Tag="{Binding}">
+                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                      <v:LineIcon Classes="icon" Width="14" Height="14" Data="{StaticResource I.Restore}" />
+                                      <TextBlock Text="Restore" />
+                                    </StackPanel>
+                                  </Button>
+                                </Grid>
+                              </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                          </ItemsControl>
+                          <TextBlock x:Name="VersionsMessage" Classes="t2" TextWrapping="Wrap" Margin="30,8,0,8" IsVisible="False" />
+                        </StackPanel>
+                      </Grid>
                     </ScrollViewer>
-                    <TextBlock x:Name="VersionsMessage" Classes="muted" TextWrapping="Wrap" Margin="8" IsVisible="False" />
                   </Grid>
-                </DockPanel>
-              </Grid>
+                </Grid>
+              </Border>
+            </Grid>
+
+            <!-- Loading, unreachable, nothing found -->
+            <Border x:Name="HistoryMessageCard" Classes="pcard" IsVisible="False">
+              <StackPanel x:Name="HistoryMessage" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="10" Margin="32">
+                <v:LineIcon x:Name="HistoryMessageIcon" Classes="icon muted" Width="30" Height="30" StrokeThickness="1.6" Data="{StaticResource I.History}" HorizontalAlignment="Center" />
+                <TextBlock x:Name="HistoryMessageText" Classes="t2" TextWrapping="Wrap" TextAlignment="Center" MaxWidth="320" />
+                <Button x:Name="HistoryRetry" Classes="subtle" Content="Try again" HorizontalAlignment="Center" Click="OnHistoryReload" IsVisible="False" />
+              </StackPanel>
             </Border>
-          </Grid>
+          </Panel>
         </Grid>
 
-        <!-- ============ Devices: every computer that uses the server ============ -->
-        <Border x:Name="DevicesPage" Classes="card" Margin="28,18,28,24" Padding="8" IsVisible="False">
-          <Grid RowDefinitions="*,Auto">
-            <ScrollViewer x:Name="DevicesPanel" IsVisible="False">
-              <ItemsControl x:Name="DevicesList">
-                <ItemsControl.ItemTemplate>
-                  <DataTemplate DataType="c:DeviceRowView">
-                    <Border Classes="row enter" Padding="10,10">
-                      <Grid ColumnDefinitions="Auto,*,Auto">
-                        <Panel Width="40" Height="40" Margin="0,0,14,0">
-                          <Ellipse Classes="ring" />
-                          <v:LineIcon Classes="icon" Width="20" Height="20" StrokeThickness="1.9" Data="{StaticResource I.Computer}" />
-                          <Ellipse Classes="dot" Width="12" Height="12" HorizontalAlignment="Right" VerticalAlignment="Bottom"
-                                   Fill="{StaticResource S.Green}" IsVisible="{Binding Online}" />
-                          <Ellipse Classes="dot" Width="12" Height="12" HorizontalAlignment="Right" VerticalAlignment="Bottom"
-                                   Fill="{StaticResource S.Grey}" IsVisible="{Binding !Online}" />
-                        </Panel>
-                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
-                          <TextBlock Text="{Binding Title}" Classes="strong" TextTrimming="CharacterEllipsis" />
-                          <TextBlock Text="{Binding Detail}" Classes="muted small" TextTrimming="CharacterEllipsis" />
+        <!-- ============ Devices: the nest and every computer that uses it ============ -->
+        <Grid x:Name="DevicesPage" RowDefinitions="Auto,*" Margin="28,40,28,24" IsVisible="False">
+          <Grid ColumnDefinitions="*,Auto,Auto">
+            <StackPanel VerticalAlignment="Center">
+              <TextBlock Classes="PageTitle" Text="Devices" />
+              <TextBlock Classes="t2" Margin="0,2,0,0" TextWrapping="Wrap" Text="Every computer on your nest, and the nest itself." />
+            </StackPanel>
+            <Button Grid.Column="1" Classes="SecondaryButton" Height="38" Padding="14,0" Margin="8,0" VerticalAlignment="Center" Click="OnManageDevices">
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <v:LineIcon Classes="icon" Width="16" Height="16" Data="{StaticResource I.External}" />
+                <TextBlock Text="Manage devices on your nest" VerticalAlignment="Center" />
+              </StackPanel>
+            </Button>
+            <Button Grid.Column="2" Classes="accent" Height="38" Padding="16,0" VerticalAlignment="Center" Click="OnAddComputer">
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <v:LineIcon Classes="icon white" Width="16" Height="16" Data="{StaticResource I.Plus}" />
+                <TextBlock Text="Add a computer…" VerticalAlignment="Center" />
+              </StackPanel>
+            </Button>
+          </Grid>
+
+          <ScrollViewer Grid.Row="1" Margin="0,16,0,0" HorizontalScrollBarVisibility="Disabled">
+            <StackPanel Spacing="16">
+              <!-- The nest -->
+              <Border x:Name="NestCardBox" Classes="pcard" Padding="24,22">
+                <StackPanel Spacing="18">
+                  <Grid ColumnDefinitions="Auto,*,Auto">
+                    <Border Width="52" Height="52" CornerRadius="16" Classes="tint-accent" Margin="0,0,16,0">
+                      <v:LineIcon Classes="icon ink-accent" Width="24" Height="24" StrokeThickness="1.8" Data="{StaticResource I.Nest}" />
+                    </Border>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                      <TextBlock Text="Your nest" FontSize="20" FontWeight="ExtraBold" />
+                      <TextBlock Classes="t2" Text="The home server that keeps your files and their history." TextTrimming="CharacterEllipsis" />
+                    </StackPanel>
+                    <Border x:Name="NestOnlinePill" Grid.Column="2" Classes="pillok" Height="28" VerticalAlignment="Center" Margin="12,0,0,0">
+                      <StackPanel Orientation="Horizontal" Spacing="7">
+                        <Ellipse x:Name="NestOnlineDot" Width="7" Height="7" Fill="{DynamicResource T.Ok}" VerticalAlignment="Center" />
+                        <TextBlock x:Name="NestOnlineText" />
+                      </StackPanel>
+                    </Border>
+                  </Grid>
+                  <Border Classes="hair" />
+                  <UniformGrid Columns="4">
+                    <Border Classes="infochip" Margin="0,0,5,0">
+                      <StackPanel>
+                        <TextBlock Classes="t3" Foreground="{DynamicResource T.Muted}" Text="Address" />
+                        <TextBlock x:Name="NestAddress" FontSize="15" FontWeight="Bold" TextTrimming="CharacterEllipsis" />
+                      </StackPanel>
+                    </Border>
+                    <Border Classes="infochip" Margin="5,0">
+                      <StackPanel>
+                        <TextBlock Classes="t3" Foreground="{DynamicResource T.Muted}" Text="Version" />
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                          <TextBlock x:Name="NestVersion" FontSize="15" FontWeight="Bold" />
+                          <TextBlock x:Name="NestVersionNote" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource T.OkText}" VerticalAlignment="Bottom" Margin="0,0,0,1" />
                         </StackPanel>
-                        <Border Grid.Column="2" Classes="pill" VerticalAlignment="Center" Margin="12,0,4,0">
-                          <TextBlock Text="{Binding StatusText}" FontSize="12" />
+                      </StackPanel>
+                    </Border>
+                    <Border Classes="infochip" Margin="5,0">
+                      <StackPanel>
+                        <TextBlock Classes="t3" Foreground="{DynamicResource T.Muted}" Text="Free space" />
+                        <TextBlock x:Name="NestSpace" FontSize="15" FontWeight="Bold" />
+                      </StackPanel>
+                    </Border>
+                    <Border Classes="infochip" Margin="5,0,0,0">
+                      <StackPanel>
+                        <TextBlock Classes="t3" Foreground="{DynamicResource T.Muted}" Text="Keeps deleted files" />
+                        <TextBlock x:Name="NestKeeps" FontSize="15" FontWeight="Bold" />
+                      </StackPanel>
+                    </Border>
+                  </UniformGrid>
+                </StackPanel>
+              </Border>
+
+              <!-- Computers -->
+              <StackPanel x:Name="DevicesPanel" Spacing="10" IsVisible="False">
+                <Grid ColumnDefinitions="Auto,*,Auto" Height="32" Margin="4,0,0,0">
+                  <TextBlock Classes="ctitle" Text="Computers" VerticalAlignment="Center" />
+                  <TextBlock x:Name="DevicesSummaryText" Grid.Column="1" Classes="t3" VerticalAlignment="Center" Margin="12,0" />
+                  <Button x:Name="JoinChip" Grid.Column="2" Height="32" MinHeight="32" Padding="12,0,8,0" CornerRadius="16" IsVisible="False" Click="OnReviewJoin"
+                          Background="{DynamicResource T.WarnPill}" BorderBrush="{DynamicResource T.WarnBorder}" Foreground="{DynamicResource T.WarnText}">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                      <v:LineIcon Classes="icon ink-warn" Width="15" Height="15" Data="{StaticResource I.UserPlus}" />
+                      <TextBlock x:Name="JoinChipText" FontSize="12" FontWeight="Bold" VerticalAlignment="Center" />
+                      <TextBlock Text="Review" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource T.Muted}" VerticalAlignment="Center" />
+                      <v:LineIcon Classes="icon ink-soft" Width="13" Height="13" StrokeThickness="2.4" Data="{StaticResource I.ChevronRight}" />
+                    </StackPanel>
+                  </Button>
+                </Grid>
+                <ItemsControl x:Name="DevicesList">
+                  <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                      <UniformGrid Columns="3" />
+                    </ItemsPanelTemplate>
+                  </ItemsControl.ItemsPanel>
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate DataType="c:DeviceCard">
+                      <v:DeviceCardView Margin="6" />
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </StackPanel>
+              <StackPanel x:Name="DevicesEmpty" HorizontalAlignment="Center" Spacing="10" Margin="0,24">
+                <v:LineIcon Classes="icon muted" Width="30" Height="30" StrokeThickness="1.6" Data="{StaticResource I.Server}" HorizontalAlignment="Center" />
+                <TextBlock x:Name="DevicesEmptyText" Classes="t2" TextWrapping="Wrap" TextAlignment="Center" MaxWidth="340"
+                           Text="Loading the computers that use your nest…" />
+              </StackPanel>
+              <StackPanel Orientation="Horizontal" Spacing="8" Margin="4,0,0,0">
+                <v:LineIcon Classes="icon ink-soft" Width="16" Height="16" StrokeThickness="2" Data="{StaticResource I.InfoCircle}" VerticalAlignment="Center" />
+                <TextBlock Classes="t2" FontSize="13" VerticalAlignment="Center" TextWrapping="Wrap"
+                           Text="To remove a computer or turn off its access, use Manage devices on your nest. Its files stay where they are." />
+              </StackPanel>
+            </StackPanel>
+          </ScrollViewer>
+        </Grid>
+
+        <!-- ============ Needs you ============ -->
+        <Grid x:Name="AttentionPage" RowDefinitions="Auto,*" Margin="28,40,28,24" IsVisible="False">
+          <StackPanel>
+            <TextBlock Classes="PageTitle" Text="Needs you" />
+            <TextBlock x:Name="AttentionSubtitle" Classes="t2" Margin="0,2,0,0" TextWrapping="Wrap" />
+          </StackPanel>
+          <ScrollViewer Grid.Row="1" Margin="0,16,0,0" HorizontalScrollBarVisibility="Disabled">
+            <StackPanel>
+              <ItemsControl x:Name="AttentionList">
+                <ItemsControl.ItemsPanel>
+                  <ItemsPanelTemplate>
+                    <StackPanel Spacing="16" />
+                  </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate>
+                    <Border Classes="pcard enter" Padding="22,18">
+                      <Grid ColumnDefinitions="Auto,*">
+                        <Border Classes="sq44" Margin="0,0,16,0" VerticalAlignment="Top"
+                                Classes.tint-accent="{Binding Kind, Converter={x:Static v:KindIs.Instance}, ConverterParameter='Join'}"
+                                Classes.tint-warn="{Binding Kind, Converter={x:Static v:KindIs.Instance}, ConverterParameter='Conflict,Warning'}">
+                          <Panel>
+                            <v:LineIcon Classes="icon ink-accent" Width="22" Height="22" StrokeThickness="1.9" Data="{StaticResource I.UserPlus}"
+                                        IsVisible="{Binding Kind, Converter={x:Static v:KindIs.Instance}, ConverterParameter='Join'}" />
+                            <v:LineIcon Classes="icon ink-warn" Width="22" Height="22" StrokeThickness="1.9" Data="{StaticResource I.Warning}"
+                                        IsVisible="{Binding Kind, Converter={x:Static v:KindIs.Instance}, ConverterParameter='Conflict,Warning'}" />
+                            <TextBlock Text="Aa" FontSize="16" FontWeight="ExtraBold" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                       IsVisible="{Binding Kind, Converter={x:Static v:KindIs.Instance}, ConverterParameter='NameClash'}" />
+                          </Panel>
                         </Border>
+                        <StackPanel Grid.Column="1" Spacing="12">
+                          <StackPanel Spacing="4">
+                            <Grid ColumnDefinitions="*,Auto">
+                              <TextBlock Text="{Binding Title}" FontSize="16" FontWeight="ExtraBold" TextWrapping="Wrap" />
+                              <TextBlock Grid.Column="1" Classes="t3" VerticalAlignment="Top" Margin="12,3,0,0" Text="{Binding At, Converter={x:Static v:MomentText.Instance}}" />
+                            </Grid>
+                            <TextBlock Classes="t2" TextWrapping="Wrap" Text="{Binding Detail}"
+                                       IsVisible="{Binding Kind, Converter={x:Static v:KindIs.Instance}, ConverterParameter='Conflict,Warning,NameClash'}" />
+                            <TextBlock Classes="t2" TextWrapping="Wrap" Text="Allow it only if you are setting that computer up right now. Its screen should show this same code. You allow or deny it on your nest."
+                                       IsVisible="{Binding Kind, Converter={x:Static v:KindIs.Instance}, ConverterParameter='Join'}" />
+                          </StackPanel>
+                          <Grid ColumnDefinitions="Auto,*,Auto">
+                            <Border Classes="codechip" IsVisible="{Binding Code, Converter={x:Static v:HasText.Instance}}">
+                              <StackPanel Orientation="Horizontal" Spacing="14">
+                                <TextBlock Text="{Binding Title, Converter={x:Static v:JoinComputer.Instance}}" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource T.Muted}" VerticalAlignment="Center" />
+                                <TextBlock Text="{Binding Code}" FontSize="20" FontWeight="ExtraBold" LetterSpacing="2.4" VerticalAlignment="Center" />
+                              </StackPanel>
+                            </Border>
+                            <Button Grid.Column="2" Content="{Binding ActionLabel}" Height="38" Padding="16,0" FontWeight="Bold" VerticalAlignment="Center" HorizontalAlignment="Right"
+                                    Classes.accent="{Binding Kind, Converter={x:Static v:KindIs.Instance}, ConverterParameter='Join'}"
+                                    Click="OnAttentionAction" Tag="{Binding}" />
+                          </Grid>
+                        </StackPanel>
                       </Grid>
                     </Border>
                   </DataTemplate>
                 </ItemsControl.ItemTemplate>
               </ItemsControl>
-            </ScrollViewer>
-            <StackPanel x:Name="DevicesEmpty" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="10">
-              <v:LineIcon Classes="icon muted" Width="30" Height="30" StrokeThickness="1.6" Data="{StaticResource I.Server}" HorizontalAlignment="Center" />
-              <TextBlock x:Name="DevicesEmptyText" Classes="muted" TextWrapping="Wrap" TextAlignment="Center" MaxWidth="340"
-                         Text="Loading the computers that use your server…" />
+              <Border x:Name="AttentionEmpty" Classes="pcard" Padding="32,48" IsVisible="False">
+                <StackPanel HorizontalAlignment="Center" Spacing="10">
+                  <Grid Width="56" Height="56" HorizontalAlignment="Center">
+                    <Ellipse Fill="{DynamicResource T.OkPill}" />
+                    <v:LineIcon Classes="icon ink-ok" Width="28" Height="28" StrokeThickness="2.2" Data="{StaticResource I.Check}" />
+                  </Grid>
+                  <TextBlock FontSize="22" FontWeight="ExtraBold" HorizontalAlignment="Center" Text="Nothing needs you" />
+                  <TextBlock Classes="t2" HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" MaxWidth="420"
+                             Text="Conflicts, computers asking to join and files Pairnets can't sync show up here. Everything is in order." />
+                </StackPanel>
+              </Border>
             </StackPanel>
-            <!-- Adding happens on the new computer (it signs in); removing and renaming on the nest's website. -->
-            <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource T.Border}" Padding="6,12,6,4" Margin="0,6,0,0">
-              <StackPanel Orientation="Horizontal" Spacing="14">
-                <Button Classes="subtle" Content="+ Add a computer…" Click="OnAddComputer" />
-                <Button Classes="link" Content="Manage devices on your nest" VerticalAlignment="Center" Click="OnManageDevices" />
-              </StackPanel>
-            </Border>
-          </Grid>
-        </Border>
+          </ScrollViewer>
+        </Grid>
 
-        <!-- ============ Needs attention ============ -->
-        <ScrollViewer x:Name="AttentionPage" IsVisible="False">
-          <StackPanel Margin="28,18,28,24">
-            <ItemsControl x:Name="AttentionList">
-              <ItemsControl.ItemTemplate>
-                <DataTemplate>
-                  <Border Classes="card enter" Margin="0,0,0,10" Padding="0">
-                    <Grid ColumnDefinitions="5,*,Auto">
-                      <Border Width="5" CornerRadius="12,0,0,12" Background="{StaticResource S.Orange}" />
-                      <StackPanel Grid.Column="1" Margin="16,14,0,14" Spacing="3">
-                        <TextBlock Text="{Binding Title}" Classes="strong" TextWrapping="Wrap" />
-                        <TextBlock Text="{Binding Detail}" Classes="muted small" TextWrapping="Wrap" />
-                      </StackPanel>
-                      <Button Grid.Column="2" Classes="subtle" Content="{Binding ActionLabel}" Margin="16,0,16,0"
-                              VerticalAlignment="Center" Click="OnAttentionAction" Tag="{Binding}" />
-                    </Grid>
-                  </Border>
-                </DataTemplate>
-              </ItemsControl.ItemTemplate>
-            </ItemsControl>
-            <StackPanel x:Name="AttentionEmpty" HorizontalAlignment="Center" Margin="0,80,0,0" Spacing="10" IsVisible="False">
-              <Grid Width="56" Height="56" HorizontalAlignment="Center">
-                <Ellipse Fill="{DynamicResource T.OkPill}" />
-                <v:LineIcon Classes="icon" Width="28" Height="28" StrokeThickness="2.2" Stroke="{StaticResource S.Green}" Data="{StaticResource I.Check}" />
-              </Grid>
-              <TextBlock Classes="h2" HorizontalAlignment="Center" Text="Nothing needs your attention" />
-              <TextBlock Classes="muted" HorizontalAlignment="Center" Text="Conflicts and files Pairnets can't sync show up here." />
-            </StackPanel>
-          </StackPanel>
-        </ScrollViewer>
+        <!-- ============ Account ============ -->
+        <v:AccountPageView x:Name="AccountPage" Margin="28,40,28,24" IsVisible="False" />
 
         <!-- ============ Settings (the form is a SettingsView the controller provides) ============ -->
-        <ContentControl x:Name="SettingsPage" Margin="28,12,14,6" IsVisible="False" />
+        <ContentControl x:Name="SettingsPage" Margin="28,40,28,24" IsVisible="False" />
       </Panel>
     </Grid>
   </Grid>

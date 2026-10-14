@@ -1,0 +1,520 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:v="using:Pairnets.Desktop.Views">
+  <!-- New look (stage 4): Activity, Needs you, History, Devices, Settings and Account. Colours are the T.* brushes. -->
+
+  <!-- A white (dark: panel) card; padding is set where it is used. -->
+  <Style Selector="Border.pcard">
+    <Setter Property="Background" Value="{DynamicResource T.Card}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource T.Border}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="20" />
+  </Style>
+  <Style Selector="Border.dangercard">
+    <Setter Property="BorderBrush" Value="{DynamicResource T.BadBorder}" />
+    <Setter Property="Background" Value="{DynamicResource T.Card}" />
+    <Setter Property="Padding" Value="0" />
+  </Style>
+  <Style Selector="Border.hair">
+    <Setter Property="Height" Value="1" />
+    <Setter Property="Background" Value="{DynamicResource T.Border}" />
+  </Style>
+
+  <!-- The little rounded square behind a row's icon (34) or a card's icon (44) -->
+  <Style Selector="Border.sq34">
+    <Setter Property="Width" Value="34" />
+    <Setter Property="Height" Value="34" />
+    <Setter Property="CornerRadius" Value="11" />
+    <Setter Property="Background" Value="{DynamicResource T.Chip}" />
+  </Style>
+  <Style Selector="Border.sq36">
+    <Setter Property="Width" Value="36" />
+    <Setter Property="Height" Value="36" />
+    <Setter Property="CornerRadius" Value="11" />
+    <Setter Property="Background" Value="{DynamicResource T.Chip}" />
+  </Style>
+  <Style Selector="Border.sq44">
+    <Setter Property="Width" Value="44" />
+    <Setter Property="Height" Value="44" />
+    <Setter Property="CornerRadius" Value="14" />
+    <Setter Property="Background" Value="{DynamicResource T.Chip}" />
+  </Style>
+  <Style Selector="Border.tint-accent">
+    <Setter Property="Background" Value="{DynamicResource T.AccentSoft}" />
+  </Style>
+  <Style Selector="Border.tint-warn">
+    <Setter Property="Background" Value="{DynamicResource T.WarnPill}" />
+  </Style>
+  <Style Selector="Border.tint-ok">
+    <Setter Property="Background" Value="{DynamicResource T.OkPill}" />
+  </Style>
+  <Style Selector="Border.tint-bad">
+    <Setter Property="Background" Value="{DynamicResource T.BadPill}" />
+  </Style>
+
+  <Style Selector="TextBlock.t3">
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="Foreground" Value="{DynamicResource T.TextSoft}" />
+  </Style>
+  <Style Selector="TextBlock.t2">
+    <Setter Property="Foreground" Value="{DynamicResource T.Muted}" />
+  </Style>
+  <Style Selector="TextBlock.ctitle">
+    <Setter Property="FontSize" Value="16" />
+    <Setter Property="FontWeight" Value="ExtraBold" />
+  </Style>
+  <Style Selector="TextBlock.stitle">
+    <Setter Property="FontSize" Value="15" />
+    <Setter Property="FontWeight" Value="ExtraBold" />
+    <Setter Property="Foreground" Value="{DynamicResource T.Text}" />
+  </Style>
+  <Style Selector="TextBlock.heading">
+    <Setter Property="FontSize" Value="11" />
+    <Setter Property="FontWeight" Value="Bold" />
+    <Setter Property="LetterSpacing" Value="0.9" />
+    <Setter Property="Foreground" Value="{DynamicResource T.TextSoft}" />
+  </Style>
+
+  <!-- Filter pills (Activity) -->
+  <Style Selector="Button.fpill">
+    <Setter Property="MinHeight" Value="36" />
+    <Setter Property="Height" Value="36" />
+    <Setter Property="Padding" Value="14,0" />
+    <Setter Property="CornerRadius" Value="18" />
+    <Setter Property="Margin" Value="0,0,6,6" />
+    <Setter Property="Background" Value="{DynamicResource T.Card}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource T.Border}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="Foreground" Value="{DynamicResource T.Text}" />
+  </Style>
+  <Style Selector="Button.fpill /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource T.Card}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource T.Border}" />
+    <Setter Property="Foreground" Value="{DynamicResource T.Text}" />
+  </Style>
+  <Style Selector="Button.fpill:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource T.Hover}" />
+  </Style>
+  <Style Selector="Button.fpill.sel">
+    <Setter Property="Foreground" Value="{DynamicResource T.AccentInk}" />
+    <Setter Property="FontWeight" Value="Bold" />
+  </Style>
+  <Style Selector="Button.fpill.sel /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource T.AccentSoft}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource T.AccentSoft}" />
+    <Setter Property="Foreground" Value="{DynamicResource T.AccentInk}" />
+  </Style>
+  <Style Selector="Button.fpill TextBlock.n">
+    <Setter Property="Foreground" Value="{DynamicResource T.TextSoft}" />
+  </Style>
+  <Style Selector="Button.fpill.sel TextBlock.n">
+    <Setter Property="Foreground" Value="{DynamicResource T.AccentInk}" />
+  </Style>
+
+  <!-- Search boxes -->
+  <Style Selector="TextBox.search">
+    <Setter Property="MinHeight" Value="38" />
+    <Setter Property="CornerRadius" Value="12" />
+  </Style>
+  <Style Selector="TextBox.search /template/ Border#PART_BorderElement">
+    <Setter Property="Background" Value="{DynamicResource T.Card}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource T.Border}" />
+  </Style>
+  <Style Selector="TextBox.search:pointerover /template/ Border#PART_BorderElement">
+    <Setter Property="Background" Value="{DynamicResource T.Card}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource T.TextSoft}" />
+  </Style>
+  <Style Selector="TextBox.search:focus /template/ Border#PART_BorderElement">
+    <Setter Property="Background" Value="{DynamicResource T.Card}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource T.Accent}" />
+  </Style>
+  <Style Selector="TextBox.field /template/ Border#PART_BorderElement">
+    <Setter Property="Background" Value="{DynamicResource T.Field}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource T.Border}" />
+  </Style>
+  <Style Selector="TextBox.field:pointerover /template/ Border#PART_BorderElement">
+    <Setter Property="Background" Value="{DynamicResource T.Field}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource T.TextSoft}" />
+  </Style>
+  <Style Selector="TextBox.field:focus /template/ Border#PART_BorderElement">
+    <Setter Property="Background" Value="{DynamicResource T.Field}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource T.Accent}" />
+  </Style>
+
+  <!-- History tabs and the numbers segment -->
+  <Style Selector="Border.tabs">
+    <Setter Property="Background" Value="{DynamicResource T.Card}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource T.Border}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="14" />
+    <Setter Property="Padding" Value="4" />
+  </Style>
+  <Style Selector="RadioButton.tab">
+    <Setter Property="Foreground" Value="{DynamicResource T.Muted}" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Border x:Name="bd" Background="Transparent" CornerRadius="10" Padding="14,0" Height="32">
+          <ContentPresenter Content="{TemplateBinding Content}" Foreground="{TemplateBinding Foreground}"
+                            HorizontalAlignment="Center" VerticalAlignment="Center" />
+        </Border>
+      </ControlTemplate>
+    </Setter>
+  </Style>
+  <Style Selector="RadioButton.tab:checked">
+    <Setter Property="FontWeight" Value="Bold" />
+    <Setter Property="Foreground" Value="{DynamicResource T.AccentInk}" />
+  </Style>
+  <Style Selector="RadioButton.tab:checked /template/ Border#bd">
+    <Setter Property="Background" Value="{DynamicResource T.AccentSoft}" />
+  </Style>
+  <Style Selector="RadioButton.tab:pointerover:not(:checked) /template/ Border#bd">
+    <Setter Property="Background" Value="{DynamicResource T.Hover}" />
+  </Style>
+  <Style Selector="Border.numsegs">
+    <Setter Property="Background" Value="{DynamicResource T.Chip}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource T.Border}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="11" />
+    <Setter Property="Padding" Value="3" />
+  </Style>
+  <Style Selector="RadioButton.numseg">
+    <Setter Property="Foreground" Value="{DynamicResource T.Muted}" />
+    <Setter Property="FontWeight" Value="Bold" />
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="Margin" Value="1,0" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Border x:Name="bd" Background="Transparent" CornerRadius="8" Width="32" Height="28">
+          <ContentPresenter Content="{TemplateBinding Content}" Foreground="{TemplateBinding Foreground}"
+                            HorizontalAlignment="Center" VerticalAlignment="Center" />
+        </Border>
+      </ControlTemplate>
+    </Setter>
+  </Style>
+  <Style Selector="RadioButton.numseg:checked">
+    <Setter Property="FontWeight" Value="ExtraBold" />
+    <Setter Property="Foreground" Value="White" />
+  </Style>
+  <Style Selector="RadioButton.numseg:checked /template/ Border#bd">
+    <Setter Property="Background" Value="{DynamicResource T.AccentButton}" />
+  </Style>
+
+  <!-- Secondary buttons that sit on a chip colour (Settings, Account) -->
+  <Style Selector="Button.chipbtn">
+    <Setter Property="MinHeight" Value="34" />
+    <Setter Property="Height" Value="34" />
+    <Setter Property="Padding" Value="13,0" />
+    <Setter Property="CornerRadius" Value="11" />
+    <Setter Property="Background" Value="{DynamicResource T.Chip}" />
+  </Style>
+  <Style Selector="Button.chipbtn /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource T.Chip}" />
+  </Style>
+  <Style Selector="Button.chipbtn:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource T.SubtleHover}" />
+  </Style>
+  <Style Selector="Button.chipbtn.redtext">
+    <Setter Property="Foreground" Value="{DynamicResource T.BadText}" />
+  </Style>
+  <Style Selector="Button.chipbtn.redtext /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Foreground" Value="{DynamicResource T.BadText}" />
+  </Style>
+  <Style Selector="Button.reset">
+    <Setter Property="Background" Value="{DynamicResource T.DangerButton}" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Foreground" Value="White" />
+    <Setter Property="FontWeight" Value="Bold" />
+  </Style>
+  <Style Selector="Button.reset /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource T.DangerButton}" />
+    <Setter Property="Foreground" Value="White" />
+  </Style>
+  <Style Selector="Button.reset:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource T.DangerButton}" />
+    <Setter Property="Opacity" Value="0.88" />
+  </Style>
+  <!-- A plain row that is a button (Help, "Report a bug…"), and the "Advanced" header -->
+  <Style Selector="Button.rowbtn">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="20,14" />
+    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="CornerRadius" Value="0" />
+    <Setter Property="Cursor" Value="Hand" />
+  </Style>
+  <Style Selector="Button.rowbtn /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+  </Style>
+  <Style Selector="Button.rowbtn:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource T.Hover}" />
+  </Style>
+  <Style Selector="Button.rowbtn.cardbtn">
+    <Setter Property="CornerRadius" Value="20" />
+    <Setter Property="Background" Value="{DynamicResource T.Card}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource T.Border}" />
+    <Setter Property="BorderThickness" Value="1" />
+  </Style>
+  <Style Selector="Button.rowbtn.cardbtn /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource T.Card}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource T.Border}" />
+    <Setter Property="BorderThickness" Value="1" />
+  </Style>
+  <Style Selector="Button.rowbtn.cardbtn:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource T.Hover}" />
+  </Style>
+
+  <!-- Small round "…" / pencil buttons on the Devices cards -->
+  <Style Selector="Button.mini">
+    <Setter Property="MinHeight" Value="0" />
+    <Setter Property="MinWidth" Value="0" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Cursor" Value="Hand" />
+  </Style>
+  <Style Selector="Button.mini /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+  </Style>
+  <Style Selector="Button.mini:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource T.Hover}" />
+  </Style>
+  <Style Selector="Button.pencil">
+    <Setter Property="Background" Value="{DynamicResource T.Card}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource T.Border}" />
+    <Setter Property="BorderThickness" Value="1" />
+  </Style>
+  <Style Selector="Button.pencil /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource T.Card}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource T.Border}" />
+    <Setter Property="BorderThickness" Value="1" />
+  </Style>
+
+  <!-- The computer cards -->
+  <Style Selector="Border.devcard">
+    <Setter Property="Background" Value="{DynamicResource T.Card}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource T.Border}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="18" />
+    <Setter Property="Padding" Value="16" />
+  </Style>
+  <Style Selector="Border.devcard.this">
+    <Setter Property="BorderBrush" Value="{DynamicResource T.AccentRing}" />
+  </Style>
+  <Style Selector="Border.devicon">
+    <Setter Property="Background" Value="{DynamicResource T.Chip}" />
+    <Setter Property="CornerRadius" Value="12" />
+    <Setter Property="Width" Value="40" />
+    <Setter Property="Height" Value="40" />
+  </Style>
+  <Style Selector="Border.devcard.off Border.devicon">
+    <Setter Property="Background" Value="{DynamicResource T.ChipDim}" />
+  </Style>
+  <Style Selector="TextBlock.devstatus">
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="FontWeight" Value="Bold" />
+    <Setter Property="Foreground" Value="{DynamicResource T.OkText}" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+  <Style Selector="Border.devcard.off TextBlock.devstatus">
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Foreground" Value="{DynamicResource T.Muted}" />
+  </Style>
+  <Style Selector="TextBlock.devnote">
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="FontWeight" Value="Medium" />
+    <Setter Property="Foreground" Value="{DynamicResource T.TextSoft}" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+  <Style Selector="Border.devcard.moving TextBlock.devnote">
+    <Setter Property="FontWeight" Value="Bold" />
+    <Setter Property="Foreground" Value="{DynamicResource T.AccentInk}" />
+  </Style>
+  <Style Selector="Ellipse.sdot">
+    <Setter Property="Fill" Value="{DynamicResource T.Ok}" />
+  </Style>
+  <Style Selector="Border.devcard.off Ellipse.sdot">
+    <Setter Property="Fill" Value="{DynamicResource T.Off}" />
+  </Style>
+  <Style Selector="Border.devcard.off TextBlock.devname">
+    <Setter Property="Foreground" Value="{DynamicResource T.Muted}" />
+  </Style>
+
+  <!-- Needs-you cards, the code chip, Activity day headings -->
+  <Style Selector="Border.codechip">
+    <Setter Property="Background" Value="{DynamicResource T.Chip}" />
+    <Setter Property="CornerRadius" Value="14" />
+    <Setter Property="Height" Value="44" />
+    <Setter Property="Padding" Value="16,0" />
+  </Style>
+  <Style Selector="Border.infochip">
+    <Setter Property="Background" Value="{DynamicResource T.Chip}" />
+    <Setter Property="CornerRadius" Value="14" />
+    <Setter Property="Padding" Value="14" />
+  </Style>
+  <Style Selector="Border.pillok">
+    <Setter Property="Background" Value="{DynamicResource T.OkPill}" />
+    <Setter Property="CornerRadius" Value="999" />
+    <Setter Property="Padding" Value="11,0" />
+    <Setter Property="Height" Value="26" />
+  </Style>
+  <Style Selector="Border.pillok TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource T.OkText}" />
+    <Setter Property="FontWeight" Value="Bold" />
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+  <Style Selector="Border.countchip">
+    <Setter Property="Background" Value="{DynamicResource T.Chip}" />
+    <Setter Property="CornerRadius" Value="10" />
+    <Setter Property="Height" Value="20" />
+    <Setter Property="Padding" Value="8,0" />
+  </Style>
+  <Style Selector="Border.countchip TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource T.Muted}" />
+    <Setter Property="FontSize" Value="11" />
+    <Setter Property="FontWeight" Value="Bold" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+  <Style Selector="Border.msg">
+    <Setter Property="CornerRadius" Value="12" />
+    <Setter Property="Padding" Value="14,10" />
+  </Style>
+  <Style Selector="Border.msg.ok">
+    <Setter Property="Background" Value="{DynamicResource T.OkPill}" />
+  </Style>
+  <Style Selector="Border.msg.bad">
+    <Setter Property="Background" Value="{DynamicResource T.BadPill}" />
+  </Style>
+  <Style Selector="Border.msg.ok TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource T.OkText}" />
+  </Style>
+  <Style Selector="Border.msg.bad TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource T.BadText}" />
+  </Style>
+  <Style Selector="Border.warnchip">
+    <Setter Property="Background" Value="{DynamicResource T.WarnPill}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource T.WarnBorder}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="16" />
+    <Setter Property="Height" Value="32" />
+    <Setter Property="Padding" Value="12,0,8,0" />
+  </Style>
+  <Style Selector="Button.link2">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Foreground" Value="{DynamicResource T.AccentInk}" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="MinHeight" Value="0" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="FontWeight" Value="Bold" />
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="Cursor" Value="Hand" />
+  </Style>
+  <Style Selector="Button.link2 /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Foreground" Value="{DynamicResource T.AccentInk}" />
+  </Style>
+  <Style Selector="Button.link2:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Foreground" Value="{DynamicResource T.AccentHover}" />
+  </Style>
+
+  <!-- History rows (All files) -->
+  <Style Selector="ListBox.frows">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Padding" Value="0" />
+  </Style>
+  <Style Selector="ListBox.frows ListBoxItem">
+    <Setter Property="Padding" Value="10,8" />
+    <Setter Property="Margin" Value="0,1" />
+    <Setter Property="CornerRadius" Value="14" />
+    <Setter Property="Cursor" Value="Hand" />
+  </Style>
+  <Style Selector="ListBox.frows ListBoxItem:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource T.Hover}" />
+  </Style>
+  <Style Selector="ListBox.frows ListBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource T.AccentSoft}" />
+  </Style>
+  <Style Selector="ListBox.frows ListBoxItem:selected:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource T.AccentSoft}" />
+  </Style>
+  <Style Selector="ListBox.frows ListBoxItem:selected Border.sq34">
+    <Setter Property="Background" Value="{DynamicResource T.Card}" />
+  </Style>
+
+  <!-- Expander used for "Advanced: files to ignore" is a plain card; keep the heading readable in dark -->
+  <Style Selector="TextBlock.advtitle">
+    <Setter Property="FontWeight" Value="Bold" />
+    <Setter Property="FontSize" Value="14" />
+    <Setter Property="Foreground" Value="{DynamicResource T.Text}" />
+  </Style>
+  <!-- Icon colours (LineIcon strokes) -->
+  <Style Selector="v|LineIcon.ink-accent"><Setter Property="Stroke" Value="{DynamicResource T.AccentInk}" /></Style>
+  <Style Selector="v|LineIcon.ink-ok"><Setter Property="Stroke" Value="{DynamicResource T.OkText}" /></Style>
+  <Style Selector="v|LineIcon.ink-warn"><Setter Property="Stroke" Value="{DynamicResource T.WarnText}" /></Style>
+  <Style Selector="v|LineIcon.ink-bad"><Setter Property="Stroke" Value="{DynamicResource T.BadText}" /></Style>
+  <Style Selector="v|LineIcon.ink-soft"><Setter Property="Stroke" Value="{DynamicResource T.Muted}" /></Style>
+  <Style Selector="v|LineIcon.ink-dim"><Setter Property="Stroke" Value="{DynamicResource T.TextSoft}" /></Style>
+  <Style Selector="v|LineIcon.ink-folder"><Setter Property="Stroke" Value="{DynamicResource T.Folder}" /></Style>
+  <Style Selector="v|LineIcon.ink-text"><Setter Property="Stroke" Value="{DynamicResource T.Text}" /></Style>
+
+  <!-- Chevron and "Show all" toggles on folder rows -->
+  <Style Selector="ToggleButton.chev">
+    <Setter Property="Width" Value="30" />
+    <Setter Property="Height" Value="30" />
+    <Setter Property="MinHeight" Value="0" />
+    <Setter Property="MinWidth" Value="0" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="CornerRadius" Value="10" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="Cursor" Value="Hand" />
+  </Style>
+  <Style Selector="ToggleButton.chev /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource T.Chip}" />
+    <Setter Property="CornerRadius" Value="10" />
+  </Style>
+  <Style Selector="ToggleButton.chev:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource T.SubtleHover}" />
+  </Style>
+  <Style Selector="ToggleButton.chev:checked /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource T.Chip}" />
+  </Style>
+  <Style Selector="ToggleButton.link2">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Foreground" Value="{DynamicResource T.AccentInk}" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="MinHeight" Value="0" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="FontWeight" Value="Bold" />
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="Cursor" Value="Hand" />
+  </Style>
+  <Style Selector="ToggleButton.link2 /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Foreground" Value="{DynamicResource T.AccentInk}" />
+  </Style>
+  <Style Selector="ToggleButton.link2:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Foreground" Value="{DynamicResource T.AccentHover}" />
+  </Style>
+  <Style Selector="ToggleButton.link2:checked /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Foreground" Value="{DynamicResource T.AccentInk}" />
+  </Style>
+  <!-- A switch whose label sits beside it, not inside it (the label is still its accessible name) -->
+  <Style Selector="ToggleSwitch.bare /template/ ContentPresenter#PART_OffContentPresenter">
+    <Setter Property="IsVisible" Value="False" />
+  </Style>
+  <Style Selector="ToggleSwitch.bare:checked /template/ ContentPresenter#PART_OnContentPresenter">
+    <Setter Property="IsVisible" Value="False" />
+  </Style>
+</Styles>

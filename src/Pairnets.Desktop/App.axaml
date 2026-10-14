@@ -16,5 +16,6 @@
   <Application.Styles>
     <FluentTheme />
     <StyleInclude Source="avares://Pairnets/Styles/Controls.axaml" />
+    <StyleInclude Source="avares://Pairnets/Styles/Pages.axaml" />
   </Application.Styles>
 </Application>

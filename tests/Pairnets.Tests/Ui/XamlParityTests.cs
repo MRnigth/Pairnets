@@ -36,7 +36,24 @@ public class XamlParityTests
         // Avalonia's menu takes the focus from the tray panel, which hides when it loses focus; the panel stays
         // open while its own menu is open. WPF's ContextMenu does not take the focus.
         ("TrayPanel", "OnMenuOpened", MacLinuxApp, "the panel stays open while its menu is open"),
+        // The Windows pages build these rows in code (ActivityPageView, HistoryPageView, NeedsPageView); the Mac/Linux
+        // MainWindow.axaml writes them in XAML with a handler on the button.
+        ("MainWindow", "OnRevealActivity", MacLinuxApp, "the Show in folder item of an Activity row's menu"),
+        ("MainWindow", "OnActivityVersions", MacLinuxApp, "the Show versions item of an Activity row's menu"),
+        ("MainWindow", "OnReviewConflict", MacLinuxApp, "the Review button of a conflict row in Activity"),
+        ("MainWindow", "OnRestore", MacLinuxApp, "the Restore button of a version row in History"),
+        ("MainWindow", "OnAttentionAction", MacLinuxApp, "the button of a Needs you card"),
+        // The Windows pages wire these from code.
+        ("MainWindow", "OnFilter", WindowsApp, "the Activity filter pills are built in code on the Mac/Linux page"),
+        ("MainWindow", "OnShowInFolder", WindowsApp, "the Show in folder button of a History row is built in code on the Mac/Linux page"),
     ];
+
+    /// <summary>
+    /// Pages the Windows app keeps in a view of their own, and the Mac/Linux app draws inside MainWindow.axaml: their
+    /// handlers are compared with MainWindow's there.
+    /// </summary>
+    private static readonly string[] PagesInsideTheMacLinuxMainWindow =
+        ["ActivityPageView", "HistoryPageView", "DevicesPageView", "NeedsPageView", "SearchBox"];
 
     private const string WindowsApp = "the Windows app";
     private const string MacLinuxApp = "the Mac/Linux app";
@@ -50,8 +67,10 @@ public class XamlParityTests
     {
         var wpf = WpfViews.Keys.ToHashSet();
         var avalonia = AvaloniaViews.Keys.ToHashSet();
-        var problems = wpf.Except(avalonia).Select(v => $"{v} is in {WindowsApp} (src/Pairnets.Client/Ui/{v}.xaml) but not in {MacLinuxApp}.")
-            .Concat(avalonia.Except(wpf).Select(v => $"{v} is in {MacLinuxApp} (src/Pairnets.Desktop/Views/{v}.axaml) but not in {WindowsApp}."))
+        var problems = wpf.Except(avalonia).Where(v => !PagesInsideTheMacLinuxMainWindow.Contains(v))
+            .Select(v => $"{v} is in {WindowsApp} (src/Pairnets.Client/Ui/{v}.xaml) but not in {MacLinuxApp}.")
+            .Concat(avalonia.Except(wpf)
+                .Select(v => $"{v} is in {MacLinuxApp} (src/Pairnets.Desktop/Views/{v}.axaml) but not in {WindowsApp}."))
             .ToList();
         Assert.True(problems.Count == 0, string.Join(Environment.NewLine, problems));
         Assert.Contains("MainWindow", avalonia); // the folders were read at all
@@ -60,7 +79,7 @@ public class XamlParityTests
     [Fact]
     public void BothAppsHaveTheSameButtonsBehindEachWindow()
     {
-        var wpf = WpfViews;
+        var wpf = FoldPages(WpfViews);
         var avalonia = AvaloniaViews;
         var problems = new List<string>();
         foreach (var view in wpf.Keys.Intersect(avalonia.Keys).Order(StringComparer.Ordinal))
@@ -79,7 +98,7 @@ public class XamlParityTests
     [Fact]
     public void TheListOfIntendedDifferencesIsStillTrue()
     {
-        var wpf = WpfViews;
+        var wpf = FoldPages(WpfViews);
         var avalonia = AvaloniaViews;
         var stale = Intended
             .Where(d => !(d.OnlyIn == WindowsApp
@@ -88,6 +107,14 @@ public class XamlParityTests
             .Select(d => $"{d.View}: {d.Handler} is no longer only in {d.OnlyIn} ({d.Why}); take it off the list in XamlParityTests.")
             .ToList();
         Assert.True(stale.Count == 0, string.Join(Environment.NewLine, stale));
+    }
+
+    /// <summary>The Windows MainWindow with the handlers of the pages the Mac/Linux window draws itself.</summary>
+    private static Dictionary<string, IReadOnlyList<string>> FoldPages(Dictionary<string, IReadOnlyList<string>> views)
+    {
+        var folded = new Dictionary<string, IReadOnlyList<string>>(views, StringComparer.Ordinal);
+        folded["MainWindow"] = views["MainWindow"].Concat(PagesInsideTheMacLinuxMainWindow.SelectMany(v => views.GetValueOrDefault(v, []))).Distinct().Order(StringComparer.Ordinal).ToList();
+        return folded;
     }
 
     private static bool IsIntended(string view, string handler, string onlyIn) =>

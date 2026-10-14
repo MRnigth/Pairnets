@@ -1,0 +1,48 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:v="using:Pairnets.Desktop.Views"
+             x:Class="Pairnets.Desktop.Views.DeviceCardView">
+  <!-- One computer on the Devices page. Its data is a DeviceCard (Core). The computer's icon is drawn in ONE place
+       (DeviceCardView.DrawIcon, called with card.Icon), so the icon chooser only has to change that. -->
+  <Border x:Name="Card" Classes="devcard">
+    <StackPanel Spacing="12">
+      <Grid ColumnDefinitions="Auto,*,Auto">
+        <!-- Computer icon slot: the glyph, the pencil (hidden until the chooser exists), the online dot -->
+        <Panel x:Name="IconSlot" Width="40" Height="40" Margin="0,0,12,0" VerticalAlignment="Center">
+          <Border Classes="devicon">
+            <v:LineIcon x:Name="Glyph" Classes="icon" Width="20" Height="20" StrokeThickness="1.8" HorizontalAlignment="Center" VerticalAlignment="Center" />
+          </Border>
+          <Rectangle x:Name="DashRing" RadiusX="12" RadiusY="12" StrokeThickness="1" StrokeDashArray="3,3" Stroke="{DynamicResource T.Dash}"
+                     IsVisible="False" IsHitTestVisible="False" />
+          <Button x:Name="PencilButton" Classes="mini pencil" Width="20" Height="20" CornerRadius="10" HorizontalAlignment="Left" VerticalAlignment="Top"
+                  Margin="-6,-6,0,0" IsVisible="False">
+            <v:LineIcon Classes="icon ink-soft" Width="11" Height="11" StrokeThickness="2.2" Data="{StaticResource I.Pencil}" />
+          </Button>
+          <Ellipse x:Name="StateDot" Classes="sdot" Width="11" Height="11" Stroke="{DynamicResource T.Card}" StrokeThickness="2"
+                   HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,-3,-3" />
+        </Panel>
+        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+          <TextBlock x:Name="NameText" Classes="devname" FontSize="15" FontWeight="ExtraBold" TextTrimming="CharacterEllipsis" />
+          <TextBlock x:Name="SystemText" Classes="t3" TextTrimming="CharacterEllipsis" />
+        </StackPanel>
+        <Button x:Name="MoreButton" Grid.Column="2" Classes="mini" Click="OnMore" Width="28" Height="28" CornerRadius="9" VerticalAlignment="Center" Margin="6,0,0,0">
+          <v:LineIcon Classes="icon ink-soft" Width="16" Height="16" StrokeThickness="3.2" Data="{StaticResource I.More}" />
+        </Button>
+      </Grid>
+      <Border Classes="hair" />
+      <StackPanel Spacing="3">
+        <Grid ColumnDefinitions="Auto,*,Auto" Height="20">
+          <Ellipse Classes="sdot" Width="8" Height="8" Margin="0,0,8,0" VerticalAlignment="Center" />
+          <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+            <TextBlock x:Name="StatusText" Classes="devstatus" TextTrimming="CharacterEllipsis" />
+            <TextBlock x:Name="NoteText" Classes="devnote" TextTrimming="CharacterEllipsis" />
+          </StackPanel>
+          <Border x:Name="ThisPill" Grid.Column="2" Classes="pill" Height="20" Padding="8,0" Background="{DynamicResource T.AccentSoft}" VerticalAlignment="Center" IsVisible="False">
+            <TextBlock Text="This computer" FontSize="11" Foreground="{DynamicResource T.AccentInk}" VerticalAlignment="Center" />
+          </Border>
+        </Grid>
+        <TextBlock x:Name="LastChangeText" Classes="t3" TextTrimming="CharacterEllipsis" />
+      </StackPanel>
+    </StackPanel>
+  </Border>
+</UserControl>

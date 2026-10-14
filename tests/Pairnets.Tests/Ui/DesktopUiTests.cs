@@ -84,6 +84,20 @@ public sealed class SampleActions : ITrayActions
 
     public void ManageDevices() => Calls.Add("manage-devices");
 
+    public Dictionary<NoticeKind, bool> Notify { get; } = [];
+
+    public bool Notifies(NoticeKind kind) => Notify.GetValueOrDefault(kind, true);
+
+    public void SetNotifies(NoticeKind kind, bool on)
+    {
+        Notify[kind] = on;
+        Calls.Add($"notify:{kind}:{on}");
+    }
+
+    public void SignOut() => Calls.Add("sign-out");
+
+    public void OpenAccountSite() => Calls.Add("account-site");
+
     public void OpenWindow(MainPage page) => Calls.Add("open:" + page);
 
     public void Quit() => Calls.Add("quit");
@@ -373,6 +387,7 @@ public class DesktopUiTests
 
     private static void RenderAll(string? outDir, string suffix)
     {
+        Stage4Screens.Render(outDir, suffix);
         var now = DateTimeOffset.Now;
         var actions = new SampleActions();
         var window = new MainWindow(actions) { Width = 1200, Height = 860 };
@@ -684,7 +699,7 @@ public class DesktopUiTests
         return new AccountSignInResult(Relay.AddressOf(nestId), nestId, "soro", new DeviceKeyGrant("id", name, "unused"), "maria@example.com");
     }
 
-    private static void Save(Avalonia.Controls.Window window, string? outDir, string name)
+    internal static void Save(Avalonia.Controls.Window window, string? outDir, string name)
     {
         // Let pages and rows finish fading in: animations follow the real clock, even headless.
         Avalonia.Threading.Dispatcher.UIThread.RunJobs();
@@ -730,7 +745,7 @@ public class DesktopUiTests
 
         Assert.NotNull(button);
         Assert.True(button.IsVisible); // also for a computer that is not signed in with its own key
-        Assert.Contains("danger", button.Classes);
+        Assert.Contains("reset", button.Classes); // the red "cannot be undone" button
         button.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Avalonia.Controls.Button.ClickEvent));
         Assert.Equal(1, asked);
         window.Close();
