@@ -82,25 +82,41 @@ export function sendLater(ctx: Ctx, msg: MailMessage): void {
   );
 }
 
-/** Every email ends with who sent it and where the privacy policy is. */
+/** Every email ends with why the person got it, who sent it, where to ask and where the privacy policy is. */
 export const PRIVACY_URL = "https://pairnets.app/privacy/";
-const TEXT_FOOTER = `\n--\nPairnets account service (sync.pairnets.app)\nPrivacy: ${PRIVACY_URL}\n`;
+export const SUPPORT_EMAIL = "support@pairnets.app";
+/** The blue of the website. */
+const ACCENT = "#2563EB";
+/** The account page: the one address the help lines point to, and the only text that becomes a link. */
+const ACCOUNT_URL = "https://sync.pairnets.app/account";
+const REASON_LOGIN = "You got this because someone asked to sign in to Pairnets with this address.";
+const REASON_ACCOUNT = "You got this because this address belongs to a Pairnets account.";
 
-function paragraphsHtml(lines: string[]): string {
-  return lines.map((p) => `<p>${escapeHtml(p)}</p>`).join("\n");
+function textFooter(reason: string): string {
+  return `\n--\n${reason}\nQuestions? Write to ${SUPPORT_EMAIL}\nPairnets account service (sync.pairnets.app)\nPrivacy: ${PRIVACY_URL}\n`;
 }
 
-function layout(title: string, before: string[], link?: { href: string; text: string }, after: string[] = []): string {
+/** Escaped text where only our own account page address becomes a link (never anything a computer's name could hold). */
+function linkified(text: string): string {
+  return escapeHtml(text).split(ACCOUNT_URL).join(`<a href="${ACCOUNT_URL}" style="color:${ACCENT}">${ACCOUNT_URL}</a>`);
+}
+
+function paragraphsHtml(lines: string[]): string {
+  return lines.map((p) => `<p>${linkified(p)}</p>`).join("\n");
+}
+
+function layout(reason: string, title: string, before: string[], link?: { href: string; text: string }, after: string[] = []): string {
   const button = link
-    ? `<p><a href="${escapeHtml(link.href)}" style="display:inline-block;padding:10px 18px;background:#1f6feb;color:#ffffff;text-decoration:none;border-radius:6px">${escapeHtml(link.text)}</a></p>
+    ? `<p><a href="${escapeHtml(link.href)}" style="display:inline-block;padding:10px 18px;background:${ACCENT};color:#ffffff;text-decoration:none;border-radius:6px">${escapeHtml(link.text)}</a></p>
 <p style="color:#555555;font-size:13px">Or copy this address into the browser: ${escapeHtml(link.href)}</p>`
     : "";
-  return `<!doctype html><html><body style="font-family:system-ui,sans-serif;line-height:1.5;color:#111111">
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>${escapeHtml(title)}</title></head><body style="font-family:system-ui,sans-serif;line-height:1.5;color:#111111">
 <h2>${escapeHtml(title)}</h2>
 ${paragraphsHtml(before)}
 ${button}
 ${paragraphsHtml(after)}
-<p style="color:#555555;font-size:13px">Pairnets account service (sync.pairnets.app) · <a href="${PRIVACY_URL}" style="color:#555555">Privacy</a></p>
+<p style="color:#555555;font-size:13px">${escapeHtml(reason)}</p>
+<p style="color:#555555;font-size:13px">Questions? Write to <a href="mailto:${SUPPORT_EMAIL}" style="color:#555555">${SUPPORT_EMAIL}</a><br>Pairnets account service (sync.pairnets.app) · <a href="${PRIVACY_URL}" style="color:#555555">Privacy</a></p>
 </body></html>`;
 }
 
@@ -114,8 +130,8 @@ export function loginEmail(to: string, link: string): MailMessage {
   return {
     to,
     subject,
-    text: `${lines[0]}\n\n${link}\n\n${lines[1]}\n${lines[2]}\n${TEXT_FOOTER}`,
-    html: layout(subject, lines.slice(0, 1), { href: link, text: "Sign in" }, lines.slice(1)),
+    text: `${lines[0]}\n\n${link}\n\n${lines[1]}\n${lines[2]}\n${textFooter(REASON_LOGIN)}`,
+    html: layout(REASON_LOGIN, subject, lines.slice(0, 1), { href: link, text: "Sign in" }, lines.slice(1)),
   };
 }
 
@@ -139,7 +155,7 @@ export interface AppAllowedDetail {
 
 /** `url` is the nest's address for own-domain nests, and the server's name for relayed servers. */
 export function noticeEmail(to: string, kind: NoticeKind, url?: string, detail?: AppAllowedDetail): MailMessage {
-  const help = "If this was not you, sign in at https://sync.pairnets.app/account, check your nests and signed-in browsers, and remove anything you do not know.";
+  const help = `If this was not you, sign in at ${ACCOUNT_URL}, check your nests and signed-in browsers, and remove anything you do not know.`;
   let subject: string;
   let lines: string[];
   switch (kind) {
@@ -178,7 +194,7 @@ export function noticeEmail(to: string, kind: NoticeKind, url?: string, detail?:
       subject = `A computer was allowed to use your account: ${url}`;
       lines = [
         `The computer "${url}" was allowed to sign in to your Pairnets account at ${when}. It can now sync with ${nest}. ${place}`,
-        "If this wasn't you, remove it at https://sync.pairnets.app/account (open your nest and remove the computer), and remove anything else you do not know.",
+        `If this wasn't you, remove it at ${ACCOUNT_URL} (open your nest and remove the computer), and remove anything else you do not know.`,
       ];
       break;
     }
@@ -187,7 +203,7 @@ export function noticeEmail(to: string, kind: NoticeKind, url?: string, detail?:
       lines = ["Your Pairnets account and everything stored about it were deleted. Your nests keep their files."];
       break;
   }
-  return { to, subject, text: `${lines.join("\n\n")}\n${TEXT_FOOTER}`, html: layout(subject, lines) };
+  return { to, subject, text: `${lines.join("\n\n")}\n${textFooter(REASON_ACCOUNT)}`, html: layout(REASON_ACCOUNT, subject, lines) };
 }
 
 /** A notice email within the daily budget; when the budget is used up it is skipped and audited. */
