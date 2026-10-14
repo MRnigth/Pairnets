@@ -62,6 +62,16 @@ public static class Endpoints
                 : Json(new DeviceMe(renamed.Id, renamed.Name, DeviceMe.KindDeviceKey));
         });
 
+        // Choose the icon of a computer (any signed-in computer may, like removing one); picking saves on the nest.
+        app.MapPatch("/api/devices/{id}/icon", (string id, DeviceIconRequest? body, DeviceKeys keys) =>
+        {
+            if (!DeviceIcons.IsValid(body?.Icon))
+                return Error(StatusCodes.Status400BadRequest, ErrorCodes.BadRequest, "icon must be one of: " + string.Join(", ", DeviceIcons.All) + ".");
+            return keys.Store.SetDeviceIcon(id, body!.Icon!)
+                ? Json(new { id, icon = body.Icon })
+                : Error(StatusCodes.Status404NotFound, ErrorCodes.NotFound, "No such computer.");
+        });
+
         app.MapGet("/api/info", (SyncStore store, ServerUpdater updater) =>
         {
             var (free, total) = ServerUpdater.DiskSpace(store.Paths.DataDir);
@@ -82,8 +92,9 @@ public static class Endpoints
         app.MapGet("/api/devices", (DeviceRegistry devices, DeviceKeys keys) =>
         {
             // Computers removed from the command line (another process) drop out here too.
-            var active = keys.Store.ListDevices().Select(d => d.Id).ToHashSet(StringComparer.Ordinal);
-            return Json(devices.List().Where(d => d.Id is null || active.Contains(d.Id)).ToList());
+            var keyed = keys.Store.ListDevices();
+            var active = keyed.Select(d => d.Id).ToHashSet(StringComparer.Ordinal);
+            return Json(devices.List(keyed).Where(d => d.Id is null || active.Contains(d.Id)).ToList());
         });
 
         // Debug mode in the apps: why an update did not happen (status, request, path unit, update.log).

@@ -95,7 +95,24 @@ public sealed record DeviceInfo(
     string? AppVersion = null,
     string? System = null,
     DateTimeOffset? LastChange = null,
-    string? Id = null);
+    string? Id = null,
+    string? Icon = null);
+
+/// <summary>The icons a computer can be given on the nest (<c>PATCH /api/devices/{id}/icon</c>).</summary>
+public static class DeviceIcons
+{
+    public const string Desktop = "desktop", Laptop = "laptop", Office = "office", Mini = "mini", Tv = "tv";
+
+    public static readonly IReadOnlyList<string> All = [Desktop, Laptop, Office, Mini, Tv];
+
+    public static bool IsValid(string? icon) => icon is not null && All.Contains(icon, StringComparer.Ordinal);
+}
+
+/// <summary>The Devices list and whether the nest that sent it knows icons.</summary>
+public sealed record DevicesAnswer(IReadOnlyList<DeviceInfo> Devices, bool IconsSupported);
+
+/// <summary>Body of <c>PATCH /api/devices/{id}/icon</c>.</summary>
+public sealed record DeviceIconRequest(string? Icon);
 
 /// <summary>
 /// Answer of <c>GET /api/hello</c> (no sign-in needed): "this is a Pairnets server". <see cref="PublicUrl"/> is

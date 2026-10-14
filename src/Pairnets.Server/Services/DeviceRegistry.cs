@@ -203,6 +203,13 @@ public sealed class DeviceRegistry : IDisposable
         }
     }
 
+    /// <summary>Like <see cref="List()"/>, with each keyed computer's chosen icon (from auth.db) filled in.</summary>
+    public IReadOnlyList<DeviceInfo> List(IEnumerable<Storage.PairedDevice> keyed)
+    {
+        var icons = keyed.Where(k => k.Icon is not null).ToDictionary(k => k.Id, k => k.Icon, StringComparer.Ordinal);
+        return List().Select(d => d.Id is { } id && icons.TryGetValue(id, out var icon) ? d with { Icon = icon } : d).ToList();
+    }
+
     private static string? IdOf(string key) => key.StartsWith("id:", StringComparison.Ordinal) ? key[3..] : null;
 
     /// <summary>"1.0.38; Windows" → ("1.0.38", "Windows"); anything odd is ignored.</summary>

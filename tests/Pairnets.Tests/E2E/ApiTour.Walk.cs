@@ -446,6 +446,9 @@ public sealed partial class ApiTour
         await _laptopHub.WaitForAsync(SyncHub.DeviceRenamedMethod, a => Equals(a[0], _tablet.Id) && Equals(a[1], kitchen));
         Assert.Contains(await Read<List<DeviceInfo>>(Get(_laptopApi, "api/devices")), d => d.Id == _tablet.Id && d.Name == kitchen);
         _tablet = _tablet with { Name = kitchen };
+        await Call(_laptopApi, HttpMethod.Patch, $"api/devices/{_tablet.Id}/icon", new { icon = "tv" });
+        await Call(_laptopApi, HttpMethod.Patch, $"api/devices/{_tablet.Id}/icon", new { icon = "toaster" }, HttpStatusCode.BadRequest);
+        await Call(_laptopApi, HttpMethod.Patch, "api/devices/no-such-computer/icon", new { icon = "tv" }, HttpStatusCode.NotFound);
     }
 
     private async Task RemovingAsync()
