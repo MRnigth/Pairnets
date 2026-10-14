@@ -153,7 +153,8 @@ public sealed class SignInFlowTests : IAsyncLifetime
             await Task.WhenAny(heard.Task, Task.Delay(TimeSpan.FromSeconds(3)));
         }
         var request = await heard.Task.WaitAsync(TimeSpan.FromSeconds(10));
-        Assert.Equal($"{request.Name} (Windows) wants to join", request.Title);
+        Assert.StartsWith($"{request.Name} (Windows) wants to join from ", request.Title); // the address the request came from
+        Assert.False(string.IsNullOrEmpty(request.Address));
         Assert.Contains(session.Status.JoinRequests, r => r.Code == request.Code);
         Assert.Equal($"https://localhost/link?code={request.Code}", session.Status.ReviewUrl(request));
 
