@@ -142,6 +142,7 @@ describe("adding a server", () => {
 
     const late = await startServer(h, "late", "198.51.100.43");
     h.advance(901);
+    await b.signInByEmail("you@example.com"); // allowing needs a recent sign-in; the request itself has run out
     const r = await b.call("POST", "/v1/servers/approve", { body: { userCode: late.userCode, approve: true } });
     expect(r.status).toBe(400);
     expect(r.json.error).toBe("expired");
@@ -352,5 +353,32 @@ describe("adding a server", () => {
     expect((await b.call("GET", "/v1/nests")).json).toEqual({ nests: [] });
     expect((await b.call("PATCH", `/v1/nests/${nest.nestId}`, { body: { label: "x" } })).status).toBe(404);
     expect((await b.call("DELETE", `/v1/nests/${nest.nestId}`)).status).toBe(404);
+  });
+});
+
+describe("adding a server needs a recent sign-in", () => {
+  it("an old sign-in is sent to sign in again and cannot add; refusing still works; a fresh sign-in adds in one go", async () => {
+    const { h, b } = await setup();
+    h.advance(901); // signed in long ago; the requests below are new
+    const one = await startServer(h);
+    const two = await startServer(h, "other", "198.51.100.44");
+    const page = await b.call("GET", `/add?code=${one.userCode}`);
+    expect(page.status).toBe(302);
+    expect(page.location).toBe(`/login?reauth=1&next=${encodeURIComponent(`/add?code=${one.userCode}`)}`);
+    const old = await b.call("POST", "/v1/servers/approve", { body: { userCode: one.userCode, approve: true } });
+    expect(old.status).toBe(401);
+    expect(old.json.error).toBe("reauth_required");
+    expect((await b.call("POST", "/v1/servers/approve", { body: { userCode: two.userCode, approve: false } })).json).toEqual({ status: "denied" });
+    expect((await h.client().call("POST", "/v1/servers/poll", { body: { deviceCode: one.deviceCode } })).json.status).toBe("pending");
+
+    await b.signInByEmail("you@example.com", `/add?code=${one.userCode}`);
+    expect((await b.call("GET", `/add?code=${one.userCode}`)).status).toBe(200);
+    expect((await b.call("POST", "/v1/servers/approve", { body: { userCode: one.userCode, approve: true } })).json.status).toBe("approved");
+  });
+
+  it("the page script sends reauth_required to the sign-in page with reauth=1", async () => {
+    const { b } = await setup();
+    const js = await b.call("GET", "/assets/add.js");
+    expect(js.text).toContain('res.body.error === "reauth_required" ? "reauth=1&" : ""');
   });
 });

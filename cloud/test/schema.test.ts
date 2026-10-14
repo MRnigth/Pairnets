@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 import contract from "../CONTRACT.md?raw";
 import migration from "../migrations/0001_init.sql?raw";
 import migration2 from "../migrations/0002_relay.sql?raw";
+import migration3 from "../migrations/0003_username.sql?raw";
+import migration4 from "../migrations/0004_request_place.sql?raw";
 import { b64urlEncode } from "../src/b64";
 import { FakeGoogle } from "./fake-google";
 import { claim, Harness, lastEmailCode, startServer } from "./helpers";
@@ -84,6 +86,29 @@ describe("schema", () => {
     // Deleting the account still takes its nests with it.
     await db.prepare("DELETE FROM accounts").run();
     expect((await db.prepare("SELECT COUNT(*) AS n FROM nests").first<{ n: number }>())!.n).toBe(0);
+    // The database is shared by the tests after this one: bring it back to the full schema.
+    await runSql(db, migration3);
+    await runSql(db, migration4);
+  });
+
+  it("migration 0004 adds the nullable place columns to device_logins and keeps its rows", async () => {
+    const db = env.DB;
+    for (const t of TABLES) await db.prepare(`DROP TABLE IF EXISTS ${t}`).run();
+    await runSql(db, migration);
+    await runSql(db, migration2);
+    await runSql(db, migration3);
+    await db
+      .prepare(
+        `INSERT INTO device_logins (id, device_code_hash, user_code, name, status, created_at, expires_at)
+         VALUES ('dvl_testlogin00000000000000001', x'00', 'ABCDEFGH', 'Laptop', 'pending', 1, 2)`,
+      )
+      .run();
+    await runSql(db, migration4);
+    expect(await db.prepare("SELECT name, request_country, request_city FROM device_logins").first()).toEqual({
+      name: "Laptop",
+      request_country: null,
+      request_city: null,
+    });
   });
 
   it("no secret is stored in clear", async () => {
@@ -135,6 +160,7 @@ describe("schema", () => {
     // App sign-in: the device code, the app token and the device key the server made.
     const app = h.client();
     const s = await app.call("POST", "/v1/app/start", { body: { name: "Laptop" } });
+    await b.signInByEmail("you@example.com"); // allowing a computer needs a recent sign-in
     await b.call("POST", "/v1/app/approve", { body: { userCode: s.json.userCode, approve: true, nestId: server.nestId } });
     h.advance(3);
     const done = (await app.call("POST", "/v1/app/poll", { body: { deviceCode: s.json.deviceCode } })).json;

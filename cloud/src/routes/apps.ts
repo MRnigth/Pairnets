@@ -5,13 +5,14 @@
 import { audit } from "../audit";
 import type { Ctx } from "../context";
 import { B32_UPPER, newId, randomBase32, randomToken } from "../crypto";
-import { cleanText, DEVICE_ID_RE, displayUserCode, iso, maskEmail, NEST_ID_RE, normaliseUserCode } from "../formats";
+import { cleanText, DEVICE_ID_RE, displayUserCode, iso, maskEmail, NEST_ID_RE, normaliseUserCode, placeName } from "../formats";
 import { HttpError, htmlResponse, json, noContent, redirect } from "../http";
 import { adminCall, markReached, NestOffline } from "../nestadmin";
+import { sendNotice } from "../mail";
 import { appPage } from "../pages";
 import { enforce, HOUR } from "../ratelimit";
 import { jsonBody } from "../request";
-import { APP_TOKEN_LIFETIME, bearerToken, loadBrowserSession, requireBrowser, secretHash, startAppSession } from "../sessions";
+import { APP_TOKEN_LIFETIME, bearerToken, isRecent, loadBrowserSession, requireBrowser, requireRecent, secretHash, startAppSession } from "../sessions";
 import type { NestRow } from "./account";
 import { relayUrl, serversOf } from "./servers";
 
@@ -35,11 +36,25 @@ interface DeviceLoginRow {
   decided_at: number | null;
   last_poll_at: number | null;
   nest_id: string | null;
+  /** Where the sign-in request came from, as Cloudflare saw it at /v1/app/start: two-letter country and city only. */
+  request_country: string | null;
+  request_city: string | null;
+}
+
+/**
+ * The country and city Cloudflare puts on the request, and nothing else (never the address). An app on the same
+ * network as the person shows the same place; an attacker's request shows theirs, which is the point.
+ */
+function requestPlace(ctx: Ctx): { country: string | null; city: string | null } {
+  const cf = (ctx.req as Request & { cf?: { country?: unknown; city?: unknown } }).cf;
+  const country = typeof cf?.country === "string" && /^[A-Z]{2}$/.test(cf.country) ? cf.country : null;
+  const city = cleanText(cf?.city, 64);
+  return { country, city: city === "invalid" ? null : city };
 }
 
 // POST /v1/app/start
 export async function appStartRoute(ctx: Ctx): Promise<Response> {
-  await enforce(ctx, "app-start", ctx.ip, 10, HOUR);
+  await enforce(ctx, "app-start", ctx.ipKey, 10, HOUR);
   const b = jsonBody(ctx);
   const name = cleanText(b.name, 64);
   const system = cleanText(b.system, 64);
@@ -48,14 +63,15 @@ export async function appStartRoute(ctx: Ctx): Promise<Response> {
     throw new HttpError(400, "bad_request");
   }
   const deviceCode = `pcd_${randomToken(32)}`;
+  const place = requestPlace(ctx);
   for (let attempt = 0; attempt < 5; attempt++) {
     const userCode = randomBase32(8, B32_UPPER);
     const r = await ctx.env.DB.prepare(
-      `INSERT INTO device_logins (id, device_code_hash, user_code, name, system, app_version, status, account_id, created_at, expires_at, decided_at, last_poll_at)
-       VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'pending', NULL, ?7, ?8, NULL, NULL)
+      `INSERT INTO device_logins (id, device_code_hash, user_code, name, system, app_version, status, account_id, created_at, expires_at, decided_at, last_poll_at, request_country, request_city)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'pending', NULL, ?7, ?8, NULL, NULL, ?9, ?10)
        ON CONFLICT DO NOTHING`,
     )
-      .bind(newId("dvl"), await secretHash(deviceCode), userCode, name, system, appVersion, ctx.now, ctx.now + DEVICE_LOGIN_LIFETIME)
+      .bind(newId("dvl"), await secretHash(deviceCode), userCode, name, system, appVersion, ctx.now, ctx.now + DEVICE_LOGIN_LIFETIME, place.country, place.city)
       .run();
     if (r.meta.changes !== 1) continue; // that user code is taken right now: pick another
     const shown = displayUserCode(userCode);
@@ -106,6 +122,11 @@ export async function appPageRoute(ctx: Ctx): Promise<Response> {
     return redirect(`/login?next=${encodeURIComponent(next)}`);
   }
   const row = typed ? await visibleRequest(ctx, typed, s.accountId) : null;
+  // Allowing a computer gives it a key to the nest, so a sign-in older than a few minutes is asked for again first
+  // (the same rule as deleting a nest). A fresh sign-in comes straight back here and allows in one go.
+  if (row && row.status === "pending" && !isRecent(ctx, s)) {
+    return redirect(`/login?reauth=1&next=${encodeURIComponent(`/app?code=${displayUserCode(row.user_code)}`)}`);
+  }
   // Pending: the nests to choose from. Answered: the account's nests, to name the one it joined.
   const servers = row ? await serversOf(ctx, s.accountId) : [];
   return htmlResponse(
@@ -122,6 +143,7 @@ export async function appPageRoute(ctx: Ctx): Promise<Response> {
             decidedAt: row.decided_at,
             status: row.status,
             nestId: row.nest_id,
+            place: placeName(row.request_country, row.request_city),
             now: ctx.now,
           }
         : null,
@@ -136,6 +158,8 @@ export async function appApproveRoute(ctx: Ctx): Promise<Response> {
   const s = await requireBrowser(ctx);
   const b = jsonBody(ctx);
   if (typeof b.userCode !== "string" || typeof b.approve !== "boolean") throw new HttpError(400, "bad_request");
+  // Allowing hands the computer a key to the nest: only right after a sign-in (refusing is always fine).
+  if (b.approve) requireRecent(ctx, s);
   // The nest this computer joins: required when approving, unless the account has no nest yet. Then the app is told
   // so and waits; the login joins the first nest the account adds (RELAY.md §6, "No nest yet").
   const withoutNest = b.approve && (b.nestId === undefined || b.nestId === null);
@@ -172,6 +196,17 @@ export async function appApproveRoute(ctx: Ctx): Promise<Response> {
     .run();
   if (r.meta.changes !== 1) throw new HttpError(409, "already_decided");
   await audit(ctx, b.approve ? "app_approved" : "app_denied", s.accountId, nestId, { name: row.name });
+  if (b.approve) {
+    const account = await ctx.env.DB.prepare("SELECT email FROM accounts WHERE id = ?1").bind(s.accountId).first<{ email: string }>();
+    if (account) {
+      const nestLabel = nestId ? (await ctx.env.DB.prepare("SELECT label FROM nests WHERE id = ?1").bind(nestId).first<{ label: string }>())?.label : null;
+      await sendNotice(ctx, s.accountId, account.email, "app_allowed", row.name, {
+        nest: nestLabel ?? null,
+        at: ctx.now,
+        place: placeName(row.request_country, row.request_city),
+      });
+    }
+  }
   return json(200, { status });
 }
 

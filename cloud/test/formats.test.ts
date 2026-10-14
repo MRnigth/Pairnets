@@ -5,6 +5,8 @@ import {
   ACCOUNT_ID_RE,
   checkPublicUrl,
   cleanLabel,
+  cleanText,
+  placeName,
   maskEmail,
   NEST_ID_RE,
   normaliseClaimCode,
@@ -142,5 +144,36 @@ describe("small formats", () => {
 
   it("writes ISO times with seconds", () => {
     expect(iso(1791504000)).toBe("2026-10-09T00:00:00Z");
+  });
+});
+
+describe("cleanText hides nothing invisible", () => {
+  it("drops control, bidi and other invisible format characters, keeps letters of every script", () => {
+    const hidden = ["\u00ad", "\u061c", "\u180e", "\u200b", "\u200c", "\u200d", "\u200e", "\u200f", "\u202a", "\u202b", "\u202c", "\u202d", "\u202e", "\u2060", "\u2061", "\u2064", "\u2066", "\u2067", "\u2068", "\u2069", "\ufeff"];
+    for (const c of hidden) {
+      expect(cleanText(`Ma${c}rie's PC`, 64), `U+${c.codePointAt(0)!.toString(16)}`).toBe("Marie's PC");
+    }
+    // A name that tries to read as something else ("... exe" flipped) loses its override.
+    expect(cleanText("Alex\u202e's laptop\u2066", 64)).toBe("Alex's laptop");
+    expect(cleanText("\u200b\u200b", 64)).toBeNull();
+    expect(cleanLabel("Home\u202e nest\ufeff")).toBe("Home nest");
+    for (const ok of ["Søren's bærbare", "Ünal", "山田のPC", "Привет", "مرحبا", "עברית", "ไทย", "👩‍💻"]) {
+      expect(cleanText(ok, 64) !== null, ok).toBe(true);
+    }
+    expect(cleanText("Søren 山田 Привет", 64)).toBe("Søren 山田 Привет");
+    // The length limit counts what is left, not what was typed.
+    expect(cleanText("\u200b".repeat(100) + "ok", 64)).toBe("ok");
+  });
+});
+
+describe("placeName", () => {
+  it("names city and country, and says nothing for unknown places", () => {
+    expect(placeName("DK", "Copenhagen")).toBe("Copenhagen, Denmark");
+    expect(placeName("DK", null)).toBe("Denmark");
+    expect(placeName(null, "Copenhagen")).toBe("Copenhagen");
+    expect(placeName("XX", null)).toBeNull();
+    expect(placeName("T1", null)).toBeNull();
+    expect(placeName("denmark", null)).toBeNull();
+    expect(placeName(null, null)).toBeNull();
   });
 });

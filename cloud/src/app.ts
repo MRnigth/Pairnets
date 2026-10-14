@@ -8,7 +8,7 @@ import type { Env } from "./env";
 import { apiError, finalize, HttpError, htmlResponse, MESSAGES, redirect, SIGNED_IN_PATH } from "./http";
 import { ResendMailer } from "./mail";
 import { errorPage } from "./pages";
-import { hit, MINUTE } from "./ratelimit";
+import { hit, limitAddress, MINUTE } from "./ratelimit";
 import { relay } from "./relay";
 import {
   accountPageRoute,
@@ -185,9 +185,10 @@ async function route(ctx: Ctx, isApi: boolean): Promise<Response> {
   const method = req.method.toUpperCase();
   const path = url.pathname;
 
-  // Any request: 300 a minute per IP.
-  const global = await hit(ctx, "req", ctx.ip, 300, MINUTE);
-  if (global.limited) throw new HttpError(429, "rate_limited", undefined, { "Retry-After": String(global.retryAfter) });
+  // Any request: 300 a minute per IP. The static files under /assets/ are cached and never touch the database, so they
+  // are not counted (a page load would otherwise spend a dozen of the 300 on files).
+  const global = path.startsWith("/assets/") ? null : await hit(ctx, "req", ctx.ipKey, 300, MINUTE);
+  if (global?.limited) throw new HttpError(429, "rate_limited", undefined, { "Retry-After": String(global.retryAfter) });
 
   // CSRF rule: every mutation carries exactly our Origin, except the server/app endpoints that never read cookies.
   if (MUTATING.has(method) && !ORIGIN_EXEMPT.has(path) && req.headers.get("Origin") !== ctx.env.PUBLIC_ORIGIN) {
@@ -229,6 +230,7 @@ export function createWorker(overrides: Partial<Deps> = {}): ExportedHandler<Env
       const url = new URL(req.url);
       const isApi = url.pathname.startsWith("/v1/");
       const isAsset = url.pathname.startsWith("/assets/");
+      const ip = req.headers.get("CF-Connecting-IP") || "unknown";
       const ctx: Ctx = {
         req,
         url,
@@ -236,7 +238,8 @@ export function createWorker(overrides: Partial<Deps> = {}): ExportedHandler<Env
         deps,
         exec,
         now: deps.now(),
-        ip: req.headers.get("CF-Connecting-IP") || "unknown",
+        ip,
+        ipKey: limitAddress(ip),
         body: new Uint8Array(0),
         setCookies: [],
         mailer: deps.mailer ?? new ResendMailer(env.RESEND_API_KEY ?? "", env.MAIL_FROM ?? "", deps.fetch),

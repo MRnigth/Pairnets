@@ -188,14 +188,33 @@ describe("JSON API basics", () => {
   it("limits any request to 300 a minute per IP", async () => {
     const h = await Harness.create();
     const b = h.browser("203.0.113.77");
-    for (let i = 0; i < 300; i++) expect((await b.call("GET", "/assets/style.css")).status).toBe(200);
+    // Static files are not counted: any number of them, and the limit is still all there for the pages and the API.
+    for (let i = 0; i < 350; i++) expect((await b.call("GET", "/assets/style.css")).status).toBe(200);
+    expect(await h.query("SELECT bucket FROM rate_counters WHERE bucket LIKE 'req:%'")).toHaveLength(0);
+    for (let i = 0; i < 300; i++) expect((await b.call("GET", "/v1/me")).status).toBe(401);
     const over = await b.call("GET", "/v1/me");
     expect(over.status).toBe(429);
     expect(over.json.error).toBe("rate_limited");
     expect(Number(over.headers.get("retry-after"))).toBeGreaterThan(0);
-    expect((await h.browser("203.0.113.78").call("GET", "/assets/style.css")).status).toBe(200);
+    // Refused requests do not write to the database any more: the counter stays where the limit stopped it.
+    for (let i = 0; i < 5; i++) expect((await b.call("GET", "/v1/me")).status).toBe(429);
+    expect(await h.query("SELECT count FROM rate_counters WHERE bucket LIKE 'req:%'")).toEqual([{ count: 300 }]);
+    expect((await h.browser("203.0.113.78").call("GET", "/v1/me")).status).toBe(401);
     h.advance(60);
-    expect((await b.call("GET", "/assets/style.css")).status).toBe(200);
+    expect((await b.call("GET", "/v1/me")).status).toBe(401);
+  }, 60_000);
+
+  it("counts an IPv6 caller by its /64: a new address inside it does not start a new budget", async () => {
+    const h = await Harness.create();
+    for (let i = 0; i < 300; i++) {
+      const b = h.browser(`2001:db8:1:2:${(i + 1).toString(16)}::${i + 7}`);
+      expect((await b.call("GET", "/v1/me")).status).toBe(401);
+    }
+    expect((await h.browser("2001:db8:1:2:ffff:ffff:ffff:ffff").call("GET", "/v1/me")).status).toBe(429);
+    expect(await h.query("SELECT bucket FROM rate_counters WHERE bucket LIKE 'req:%'")).toHaveLength(1);
+    // The next /64 and an IPv4 address are other callers.
+    expect((await h.browser("2001:db8:1:3::1").call("GET", "/v1/me")).status).toBe(401);
+    expect((await h.browser("203.0.113.9").call("GET", "/v1/me")).status).toBe(401);
   }, 60_000);
 
   it("answers 500 server_error without details when the configuration is broken", async () => {

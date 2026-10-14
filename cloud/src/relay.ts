@@ -148,8 +148,10 @@ function tooMany(retryAfter: number): HttpError {
 
 /** ANY /n/... : never throws; JSON errors, relayed answers made inert for browsers (http.ts finalizeRelay). */
 export async function relay(ctx: Ctx): Promise<Response> {
+  const nestId = ctx.url.pathname.split("/")[2] ?? "";
+  const where = NEST_ID_RE.test(nestId) ? { url: ctx.url, nestId } : undefined;
   try {
-    return finalizeRelay(await forward(ctx));
+    return finalizeRelay(await forward(ctx), where);
   } catch (e) {
     if (e instanceof HttpError) return finalizeRelay(apiError(e.status, e.code, e.message, e.headers));
     console.error("relay: unexpected error", e instanceof Error ? `${e.name}: ${e.message}` : "unknown");
@@ -171,21 +173,21 @@ export function deviceKeyOf(req: Request, url: URL): string | null {
 
 /** Counts one request against the address's budget for keyless and failing traffic; over it, the address is blocked. */
 async function countAgainstAddress(ctx: Ctx): Promise<boolean> {
-  if (await allowed(ctx, "RELAY_FAIL_LIMIT", ctx.ip)) return true;
-  if (blockedAddresses.size >= NEST_CACHE_MAX && !blockedAddresses.has(ctx.ip)) blockedAddresses.clear();
-  blockedAddresses.set(ctx.ip, ctx.now + RELAY_LIMIT_PERIOD);
+  if (await allowed(ctx, "RELAY_FAIL_LIMIT", ctx.ipKey)) return true;
+  if (blockedAddresses.size >= NEST_CACHE_MAX && !blockedAddresses.has(ctx.ipKey)) blockedAddresses.clear();
+  blockedAddresses.set(ctx.ipKey, ctx.now + RELAY_LIMIT_PERIOD);
   return false;
 }
 
 async function forward(ctx: Ctx): Promise<Response> {
   // 6. An address that used up its budget for keyless and failing requests gets nothing more for a while, and no
   //    address gets more than the flood ceiling (the relay's own limits, instead of the 300 of the account pages).
-  const blocked = blockedAddresses.get(ctx.ip);
+  const blocked = blockedAddresses.get(ctx.ipKey);
   if (blocked !== undefined) {
     if (blocked > ctx.now) throw tooMany(blocked - ctx.now);
-    blockedAddresses.delete(ctx.ip);
+    blockedAddresses.delete(ctx.ipKey);
   }
-  if (!(await allowed(ctx, "RELAY_LIMIT", ctx.ip))) throw tooMany(RELAY_LIMIT_PERIOD);
+  if (!(await allowed(ctx, "RELAY_LIMIT", ctx.ipKey))) throw tooMany(RELAY_LIMIT_PERIOD);
 
   // 1. A relayed nest that is linked. The row is reused for NEST_CACHE_SECONDS (the relay reads it on every request
   //    otherwise), so a nest that was removed or unlinked stops being relayed within 30 s at most.
