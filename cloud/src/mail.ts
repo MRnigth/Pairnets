@@ -111,10 +111,18 @@ export type NoticeKind =
   | "nest_unlinked"
   | "server_added"
   | "server_removed"
+  | "app_allowed"
   | "account_deleted";
 
+/** What an "app_allowed" notice says besides the computer's name: which nest, when, and where the request came from. */
+export interface AppAllowedDetail {
+  nest: string | null;
+  at: number;
+  place: string | null;
+}
+
 /** `url` is the nest's address for own-domain nests, and the server's name for relayed servers. */
-export function noticeEmail(to: string, kind: NoticeKind, url?: string): MailMessage {
+export function noticeEmail(to: string, kind: NoticeKind, url?: string, detail?: AppAllowedDetail): MailMessage {
   const help = "If this was not you, sign in at https://sync.pairnets.app/account, check your nests and signed-in browsers, and remove anything you do not know.";
   let subject: string;
   let lines: string[];
@@ -147,6 +155,17 @@ export function noticeEmail(to: string, kind: NoticeKind, url?: string): MailMes
       subject = `A nest was removed from your account: ${url}`;
       lines = [`The nest "${url}" was removed from your Pairnets account. Its computers no longer reach it through Pairnets; its files stay on it.`, help];
       break;
+    case "app_allowed": {
+      const when = detail ? `${new Date(detail.at * 1000).toISOString().slice(0, 16).replace("T", " ")} UTC` : "just now";
+      const nest = detail?.nest ? `the nest "${detail.nest}"` : "your nest (it joins the first nest you add)";
+      const place = detail?.place ? `The request came from ${detail.place}.` : "We could not tell where the request came from.";
+      subject = `A computer was allowed to use your account: ${url}`;
+      lines = [
+        `The computer "${url}" was allowed to sign in to your Pairnets account at ${when}. It can now sync with ${nest}. ${place}`,
+        "If this wasn't you, remove it at https://sync.pairnets.app/account (open your nest and remove the computer), and remove anything else you do not know.",
+      ];
+      break;
+    }
     case "account_deleted":
       subject = "Your Pairnets account was deleted";
       lines = ["Your Pairnets account and everything stored about it were deleted. Your nests keep their files."];
@@ -156,10 +175,10 @@ export function noticeEmail(to: string, kind: NoticeKind, url?: string): MailMes
 }
 
 /** A notice email within the daily budget; when the budget is used up it is skipped and audited. */
-export async function sendNotice(ctx: Ctx, accountId: string | null, to: string, kind: NoticeKind, url?: string): Promise<void> {
+export async function sendNotice(ctx: Ctx, accountId: string | null, to: string, kind: NoticeKind, url?: string, detail?: AppAllowedDetail): Promise<void> {
   if (!(await reserveMail(ctx, "notice"))) {
     if (accountId) await audit(ctx, "notice_skipped", accountId, null, { kind });
     return;
   }
-  sendLater(ctx, noticeEmail(to, kind, url));
+  sendLater(ctx, noticeEmail(to, kind, url, detail));
 }

@@ -114,6 +114,8 @@ export interface CallOptions {
   origin?: string | null;
   headers?: Record<string, string>;
   contentType?: string | null;
+  /** What Cloudflare would put on the request (request.cf): country and city. */
+  cf?: { country?: string; city?: string };
 }
 
 const MUTATING = new Set(["POST", "PATCH", "PUT", "DELETE"]);
@@ -270,7 +272,7 @@ export class Browser {
     if (opts.rawBody !== undefined) body = opts.rawBody;
     else if (opts.body !== undefined) body = JSON.stringify(opts.body);
     if (body !== undefined && opts.contentType !== null) headers.set("Content-Type", opts.contentType ?? "application/json");
-    const res = await this.h.fetch(new Request(`${ORIGIN}${path}`, { method, headers, body, redirect: "manual" }));
+    const res = await this.h.fetch(new Request(`${ORIGIN}${path}`, { method, headers, body, redirect: "manual", ...(opts.cf ? { cf: opts.cf } : {}) } as RequestInit));
     for (const c of res.setCookies) {
       const [pair, ...attrs] = c.split(";").map((s) => s.trim());
       const eq = pair.indexOf("=");

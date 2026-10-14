@@ -24,7 +24,7 @@ import { addPage } from "../pages";
 import { enforce, HOUR } from "../ratelimit";
 import { jsonBody } from "../request";
 import { runRouterLogged } from "../router";
-import { loadBrowserSession, requireBrowser, requireRecent, secretHash } from "../sessions";
+import { isRecent, loadBrowserSession, requireBrowser, requireRecent, secretHash } from "../sessions";
 import { MAX_NESTS_PER_ACCOUNT, type NestRow } from "./account";
 
 export const SERVER_LINK_LIFETIME = 900;
@@ -122,6 +122,10 @@ export async function addPageRoute(ctx: Ctx): Promise<Response> {
     return redirect(`/login?next=${encodeURIComponent(next)}`);
   }
   const row = typed ? await visibleLink(ctx, typed, s.accountId) : null;
+  // Adding a nest is a security step: an older sign-in is asked for again, then comes straight back here.
+  if (row && row.status === "pending" && !isRecent(ctx, s)) {
+    return redirect(`/login?reauth=1&next=${encodeURIComponent(`/add?code=${displayUserCode(row.user_code)}`)}`);
+  }
   const view = row
     ? { userCode: row.user_code, hostname: row.hostname, serverVersion: row.server_version, createdAt: row.created_at, status: row.status }
     : null;
@@ -135,6 +139,8 @@ export async function serverApproveRoute(ctx: Ctx): Promise<Response> {
   if (typeof b.userCode !== "string" || typeof b.approve !== "boolean") throw new HttpError(400, "bad_request");
   const label = cleanLabel(b.label);
   if (label === "invalid") throw new HttpError(400, "bad_request");
+  // Adding a nest only right after a sign-in (refusing is always fine).
+  if (b.approve) requireRecent(ctx, s);
   const code = normaliseUserCode(b.userCode);
   if (!code) throw new HttpError(404, "not_found");
   const link = await ctx.env.DB.prepare("SELECT * FROM server_links WHERE user_code = ?1").bind(code).first<ServerLinkRow>();
@@ -352,6 +358,7 @@ export async function listServersRoute(ctx: Ctx): Promise<Response> {
 // DELETE /v1/servers/{id}/devices/{deviceId}
 export async function removeDeviceRoute(ctx: Ctx, nestId: string, deviceId: string): Promise<Response> {
   const s = await requireBrowser(ctx);
+  requireRecent(ctx, s);
   const n = await ownServer(ctx, s.accountId, nestId);
   if (!DEVICE_ID_RE.test(deviceId)) throw new HttpError(404, "not_found");
   let r;

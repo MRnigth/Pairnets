@@ -890,7 +890,8 @@ old `rate_counters`, and `audit` rows older than 90 days.
 All times are Unix seconds. `*_hash` columns are 32-byte BLOBs: SHA-256 of the UTF-8 secret (whole string, prefix
 included). D1 enforces foreign keys, so deleting an account removes everything that belongs to it. Later migrations
 add to it: `0002_relay.sql` (RELAY.md) and `0003_username.sql` (`accounts.username TEXT`; NULL = not set; a display
-name only, not unique, never used to sign in).
+name only, not unique, never used to sign in), and `0004_request_place.sql` (`device_logins.request_country` and
+`request_city`, both nullable: where an app's sign-in request came from, shown on the Allow page).
 
 ```sql
 -- Pairnets Cloud, migration 0001. Additive migrations only from here on.

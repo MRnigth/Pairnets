@@ -241,6 +241,8 @@ export interface AppRequestView {
   status: string;
   /** The nest an allowed sign-in joins; null while the account had none (the app then waits for one). */
   nestId: string | null;
+  /** "Copenhagen, Denmark": where the request came from, or null when Cloudflare could not tell. */
+  place: string | null;
   /** When the page is drawn ("asked 2 min ago", "the code works for 8 more minutes"). */
   now: number;
 }
@@ -319,6 +321,9 @@ ${options}
 </div>
 </fieldset>`;
   }
+  const where = req.place
+    ? `<p class="q-note">This request came from <b>${e(req.place)}</b>. If that isn't where your computer is, don't allow it.</p>`
+    : `<p class="q-note">We couldn't tell where this request came from. Only allow it if you just started Pairnets on that computer.</p>`;
   const facts = [
     req.system,
     req.appVersion ? `Pairnets ${req.appVersion}` : null,
@@ -334,6 +339,7 @@ ${options}
     `<span class="q-badge">${icon("computer")}</span>
 <h1 id="screen-ask-title" tabindex="-1">Allow ${name} to sign in?</h1>
 <p class="q-lead">A computer called <b>${name}</b> is asking to use your Pairnets account.</p>
+${where}
 <div class="q-codebox">
 <p class="q-q">Does Pairnets on ${name} show this code?</p>
 <p class="q-code">${e(displayUserCode(req.userCode))}</p>
