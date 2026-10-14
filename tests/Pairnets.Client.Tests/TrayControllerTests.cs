@@ -91,6 +91,41 @@ public sealed class TrayControllerTests
     }
 
     [Fact]
+    public async Task FirstRun_Escape_ClosesAnIdleSignIn_ButAsksWhenAnEmailWasTyped()
+    {
+        await using var app = await TrayHarness.CreateAsync();
+        var started = app.StartFirstRun();
+        var signIn = await app.Showing<SettingsWindow>("the sign-in window on the first start");
+
+        // Typed an email: Escape asks first, and "No" keeps the window and the email.
+        await app.Type(signIn.SignIn.AccountEmailBox, "me@example.com");
+        await app.Wpf.Ui(signIn.EscapePressed);
+        Assert.Contains(app.Dialogs.Asked.Items, q => q.Text == "Stop signing in?");
+        Assert.True(await app.Wpf.Ui(() => signIn.IsVisible));
+        Assert.Equal("me@example.com", await app.Wpf.Ui(() => signIn.SignIn.AccountEmailBox.Text));
+
+        // "Yes" closes it.
+        app.Dialogs.When("Stop signing in?", MessageBoxResult.Yes);
+        await app.Wpf.Ui(signIn.EscapePressed);
+        await started.WaitAsync(TimeSpan.FromSeconds(30));
+        Assert.False(await app.Wpf.Ui(() => signIn.IsVisible));
+    }
+
+    [Fact]
+    public async Task SignInWindow_FillsInTheSavedAccountEmail_AndEscapeStillClosesWithoutAsking()
+    {
+        await using var app = await TrayHarness.CreateAsync(settings: s => s.AccountEmail = "saved@example.com"); // signed out, but remembers who
+        var started = app.StartFirstRun();
+        var signIn = await app.Showing<SettingsWindow>("the sign-in window");
+
+        Assert.Equal("saved@example.com", await app.Wpf.Ui(() => signIn.SignIn.AccountEmailBox.Text));
+        await app.Wpf.Ui(signIn.EscapePressed); // nothing was typed: no question
+        await started.WaitAsync(TimeSpan.FromSeconds(30));
+        Assert.DoesNotContain(app.Dialogs.Asked.Items, q => q.Text == "Stop signing in?");
+        Assert.False(await app.Wpf.Ui(() => signIn.IsVisible));
+    }
+
+    [Fact]
     public async Task FirstRun_GoogleAndEmailButtons_OpenTheNest()
     {
         await using var nest = await TestServer.StartWithWebsiteAsync(TrayHarness.BehindATunnel(new()

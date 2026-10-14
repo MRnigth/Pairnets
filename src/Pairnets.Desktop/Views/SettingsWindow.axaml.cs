@@ -27,6 +27,15 @@ public partial class SettingsWindow : Window
             Close();
         };
         Host.Content = SignIn;
+        KeyDown += async (_, e) =>
+        {
+            if (e.Key != Avalonia.Input.Key.Escape)
+                return;
+            e.Handled = true;
+            // Escape must not throw away a sign-in that is under way (waiting in the browser, or an email typed in).
+            if (!SignIn.InProgress || await Dialogs.ConfirmAsync(this, "Pairnets", "Stop signing in?"))
+                Close();
+        };
     }
 
     /// <summary>The sign-in steps.</summary>

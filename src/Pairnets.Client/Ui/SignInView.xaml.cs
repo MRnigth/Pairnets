@@ -59,6 +59,7 @@ public partial class SignInView : UserControl
     private bool _browserOpened;
     private bool _accountBrowserOpened;
     private bool _quiet;
+    private bool _typedSomething;
 
     public SignInView(ClientSettings current, ISecretProtector? protector, Action<string> openUrl, string? nestHint = null)
     {
@@ -78,11 +79,13 @@ public partial class SignInView : UserControl
         };
         EmailBox.TextChanged += (_, _) =>
         {
+            _typedSomething |= EmailBox.Text.Length > 0;
             EmailHint.Visibility = EmailBox.Text.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
             EmailButton.IsEnabled = _check is { CanSignIn: true } && Nest.LooksLikeEmail(EmailBox.Text);
         };
         AccountEmailBox.TextChanged += (_, _) =>
         {
+            _typedSomething |= AccountEmailBox.Text != (current.AccountEmail ?? string.Empty);
             AccountEmailHint.Visibility = AccountEmailBox.Text.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
             AccountEmailProblem.Visibility = Visibility.Collapsed;
         };
@@ -102,6 +105,9 @@ public partial class SignInView : UserControl
             _checking?.Cancel();
         };
         ShowStep(SignInStep.Account);
+        // The account this computer was signed in with last time, so signing in again doesn't mean typing it again.
+        if (!string.IsNullOrWhiteSpace(current.AccountEmail))
+            AccountEmailBox.Text = current.AccountEmail.Trim();
         if (!string.IsNullOrWhiteSpace(AddressBox.Text))
             CheckSoon(TimeSpan.Zero);
     }
@@ -114,6 +120,12 @@ public partial class SignInView : UserControl
 
     /// <summary>How often the account sign-in asks how it went (tests); by default what the service says.</summary>
     internal TimeSpan? AccountPollInterval { get; set; }
+
+    /// <summary>
+    /// True while closing the window would throw something away: waiting for the browser, or an address typed in.
+    /// (An address filled in from the saved account does not count.)
+    /// </summary>
+    internal bool InProgress => Step is SignInStep.AccountWait or SignInStep.Wait || _typedSomething;
 
     /// <summary>The step on show.</summary>
     internal SignInStep Step { get; private set; }
