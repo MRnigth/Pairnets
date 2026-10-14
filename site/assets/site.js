@@ -48,15 +48,16 @@
 
   const close = () => {
     try { window.localStorage.setItem(KEY, "ok"); } catch (e) { /* storage blocked: hidden for this page view only */ }
-    document.removeEventListener("keydown", onKey);
     box.remove();
   };
-  const onKey = (ev) => {
+  // Escape closes the notice only while focus is inside it, never from elsewhere on the page.
+  box.addEventListener("keydown", (ev) => {
     if (ev.key === "Escape" && !ev.defaultPrevented) close();
-  };
+  });
   ok.addEventListener("click", close);
-  document.addEventListener("keydown", onKey);
-  document.body.prepend(box); // first in the tab order, so keyboard users reach it at once
+  // Right after the "Skip to content" link, so that stays the first stop for keyboard users and the notice the second.
+  const skip = document.querySelector("a.skip");
+  if (skip) skip.after(box); else document.body.prepend(box);
 })();
 
 // Signed in at sync.pairnets.app? Then the top bar shows your username (a round letter and the name) and an

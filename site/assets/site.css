@@ -1,6 +1,6 @@
 /* pairnets.app: same palette and shapes as the apps and the nest's website. */
 :root {
-  --bg: #F3F5F8; --card: #FFFFFF; --text: #1B1F24; --muted: #6B7280; --border: #E3E7ED;
+  --bg: #F3F5F8; --card: #FFFFFF; --text: #1B1F24; --muted: #596270; --border: #E3E7ED;
   --accent: #2563EB; --accent-hover: #1D4FC4; --accent-text: #FFFFFF;
   --subtle: #E9EDF2; --subtle-hover: #DDE3EA; --pill: #EEF2F7;
   --banner: #EAF1FE; --banner-border: #C9DAFB; --warn-pill: #FFF1DE; --warn-text: #9A4A0B;
@@ -20,14 +20,22 @@
   }
 }
 * { box-sizing: border-box; }
-html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
+html { -webkit-text-size-adjust: 100%; scroll-padding-top: 84px; }
+@media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
 body {
   margin: 0; background: var(--bg); color: var(--text);
   font: 16px/1.6 "Segoe UI Variable Text", "Segoe UI", -apple-system, BlinkMacSystemFont, "Inter", "Helvetica Neue", system-ui, sans-serif;
 }
 [hidden] { display: none !important; }
-a { color: var(--accent); text-decoration: none; }
-a:hover { text-decoration: underline; }
+a { color: var(--accent); text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 2px; }
+a:hover { text-decoration-thickness: 2px; }
+/* Links in running text are underlined (not only coloured). Buttons, the brand, menus and the account chip are not. */
+.button, .brand, nav.main a, nav.foot a, .account-chip { text-decoration: none; }
+.button:hover, .brand:hover, nav.main a:hover, nav.foot a:hover, .account-chip:hover { text-decoration: none; }
+nav.foot a:hover { text-decoration: underline; }
+.skip { position: absolute; left: 16px; top: -100px; z-index: 30; padding: 10px 16px; border-radius: 10px; background: var(--accent); color: var(--accent-text); font-weight: 650; text-decoration: none; }
+.skip:focus { top: 12px; }
+main:focus { outline: none; }
 h1 { font-size: clamp(30px, 5vw, 46px); line-height: 1.12; letter-spacing: -.02em; margin: 0 0 16px; font-weight: 650; }
 h2 { font-size: 24px; line-height: 1.25; letter-spacing: -.01em; margin: 0 0 10px; font-weight: 650; }
 h3 { font-size: 17px; margin: 0 0 6px; font-weight: 650; }
@@ -43,7 +51,6 @@ pre code { background: none; padding: 0; }
 header.top { background: var(--card); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 10; }
 header.top .wrap { display: flex; align-items: center; gap: 18px; padding-top: 12px; padding-bottom: 12px; }
 .brand { display: flex; align-items: center; gap: 10px; font-weight: 650; font-size: 19px; color: var(--text); }
-.brand:hover { text-decoration: none; }
 .brand img { width: 32px; height: 32px; }
 nav.main { display: flex; gap: 4px; margin-left: 12px; }
 nav.main a { color: var(--muted); padding: 6px 12px; border-radius: 8px; font-weight: 500; }
@@ -120,8 +127,11 @@ footer .copy { grid-column: 1 / -1; max-width: none; padding-top: 18px; border-t
 /* Long text pages: privacy, terms, guidelines and the rest. */
 .updated { color: var(--muted); font-size: 14px; margin: -12px 0 0; }
 .doc { padding-top: 8px; }
-.doc h2 { font-size: 22px; margin: 38px 0 10px; scroll-margin-top: 84px; }
+.doc h2 { font-size: 22px; margin: 38px 0 10px; }
 .doc h3 { margin: 22px 0 6px; }
+/* The first heading inside a box or a step list is an h2 for the outline, and looks like the h3 it replaced. */
+.callout h2, ol.steps h2 { font-size: 17px; letter-spacing: 0; margin: 0 0 6px; }
+.doc .callout h2, .doc ol.steps h2 { margin: 22px 0 6px; }
 .doc ul, .doc ol:not(.steps) { margin: 0 0 14px; padding-left: 22px; }
 .doc li { margin: 0 0 6px; }
 .doc .callout { margin: 0 0 14px; }
@@ -169,6 +179,7 @@ td code { white-space: nowrap; }
   .wrap { padding: 0 16px; }
   .hero { padding: 44px 0 28px; }
   .cards, .downloads { grid-template-columns: minmax(0, 1fr); }
+  html { scroll-padding-top: 128px; } /* the top bar is two rows tall here */
   header.top .wrap { flex-wrap: wrap; gap: 8px 12px; }
   nav.main { margin-left: 0; order: 3; width: 100%; }
   ol.steps > li { padding-left: 46px; }
