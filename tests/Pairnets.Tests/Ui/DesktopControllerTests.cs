@@ -410,23 +410,26 @@ public sealed class DesktopControllerTests
         Assert.Equal("0.9.0", SettingsStore.Load(app.Env.SettingsPath).SkippedServerVersion);
 
         // "Not now" changes nothing.
+        // The overview shows the nest version (and its update button) once it is up to date, not while a sync
+        // runs, and it is rebuilt on every status change: wait for the button each time, as a person would.
         app.App.RefreshNow();
-        var serverButton = Screen.Named<Button>(app.MainWindow, "VersionButton");
-        Person.Click(serverButton);
+        Task<Button> ServerButton() => Wait.For(() => Screen.All<Button>(app.MainWindow).FirstOrDefault(b => b.Name == "VersionButton"),
+            "the overview to show the nest version with its update button");
+        Person.Click(await ServerButton());
         var later = await app.WindowAsync("Update your nest", not: asked);
         Person.Click(Screen.Find<Button>(later, "Not now"));
         await Wait.Until(() => !later.IsVisible, "the window to close");
         Assert.False(SettingsStore.Load(app.Env.SettingsPath).AutoUpdateServer);
 
         // "From now on, update the nest by itself" is kept.
-        Person.Click(serverButton);
+        Person.Click(await ServerButton());
         var always = await app.WindowAsync("Update your nest", not: later);
         Person.Click(Screen.Find<ToggleSwitch>(always, "From now on, update the nest by itself"));
         Person.Click(Screen.Find<Button>(always, "Not now"));
         await Wait.Until(() => SettingsStore.Load(app.Env.SettingsPath).AutoUpdateServer, "\"update automatically\" to be saved");
 
         // "Update the nest" asks the nest (POST /api/update); its updater installs the new version.
-        Person.Click(serverButton);
+        Person.Click(await ServerButton());
         var update = (ServerUpdateWindow)await app.WindowAsync("Update your nest", not: always);
         var updater = app.Nest.Services.GetRequiredService<ServerUpdater>();
         var asks = 0;
