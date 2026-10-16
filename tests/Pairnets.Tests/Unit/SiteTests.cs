@@ -65,7 +65,7 @@ public sealed class SiteTests
         Assert.Equal("https://github.com/MRnigth/Pairnets/releases/download/latest/get.sh", Redirects()["/get.sh"]);
         Assert.True(File.Exists(Path.Combine(RepoRoot, "deploy", "get.sh")));
         Assert.DoesNotContain("raw.githubusercontent.com", File.ReadAllText(Path.Combine(Root, "_redirects")));
-        Assert.Equal(2, Regex.Matches(workflow, @"cp deploy/get\.sh assets/get\.sh").Count); // both the release and the latest-build job upload it (and checksum it)
+        Assert.Equal(2, Regex.Matches(workflow, @"cp deploy/get\.sh release-files/get\.sh").Count); // both the release and the latest-build job upload it (and checksum it)
     }
 
     [Fact]
