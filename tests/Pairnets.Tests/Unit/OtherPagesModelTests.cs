@@ -194,4 +194,29 @@ public class OtherPagesModelTests
         Assert.Equal("D", old.Initial);
         Assert.Equal("–", old.MethodName);
     }
+
+    [Fact]
+    public void ANestReachedThroughSyncPairnetsAppIsNamedByThatAddressAndTheSignedInEmailIsShown()
+    {
+        // No website of its own and no "who am I" answer from the nest: the 1.0.55 local test showed "Not signed in to
+        // a nest" and an address of "Not connected" here, next to a green Online.
+        var s = StatusSnapshot.Initial with
+        {
+            Status = RunnerStatus.Idle, LastSyncAt = Now, IsRelay = true,
+            ServerUrl = "https://sync.pairnets.app/n/nst_0000example/",
+            AccountEmail = "alex@example.com",
+            Server = new ServerInfo("id", 1, 1, "1.0.55", 412L << 30, 1L << 40),
+        };
+        var page = AccountSummary.Build(s, "PC-1", null);
+        Assert.Equal("sync.pairnets.app", page.NestHost);
+        Assert.Equal("Signed in on sync.pairnets.app", page.Subtitle);
+        Assert.Equal(("A", "alex@example.com", "alex@example.com"), (page.Initial, page.Title, page.Email));
+        Assert.Equal("sync.pairnets.app", NestCard.From(s, null).Address);
+
+        // The nest's own answer and website still come first.
+        var answered = s with { NestUrl = "https://nest.example.com", Account = new AccountInfo("owner@example.com", "google", null) };
+        Assert.Equal("nest.example.com", AccountSummary.Build(answered, "PC-1", null).NestHost);
+        Assert.Equal("owner@example.com", AccountSummary.Build(answered, "PC-1", null).Email);
+        Assert.Equal("nest.example.com", NestCard.From(answered, null).Address);
+    }
 }

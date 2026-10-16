@@ -90,7 +90,7 @@
                 <TextBlock Text="Your nest now" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource T.Muted}" />
               </StackPanel>
               <TextBlock x:Name="NestVersion" Style="{StaticResource Big}" Foreground="{DynamicResource T.Muted}" />
-              <TextBlock x:Name="NestSub" Style="{StaticResource Tiny}" Text="nest.example.com" />
+              <TextBlock x:Name="NestSub" Style="{StaticResource Tiny}" TextTrimming="CharacterEllipsis" />
             </StackPanel>
           </Border>
           <Border Grid.Column="1" Width="36" Height="36" CornerRadius="18" Background="{DynamicResource T.AccentButton}" Margin="10,0">
@@ -180,7 +180,7 @@
                   <TextBlock Text="Your nest" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource T.Muted}" />
                 </StackPanel>
                 <TextBlock x:Name="DoneNestVersion" Style="{StaticResource Big}" />
-                <TextBlock Style="{StaticResource Tiny}" Text="nest.example.com" />
+                <TextBlock x:Name="DoneNestSub" Style="{StaticResource Tiny}" TextTrimming="CharacterEllipsis" />
               </StackPanel>
             </Border>
             <Border Grid.Column="1" Width="36" Height="36" CornerRadius="18" Background="{DynamicResource T.OkPill}" Margin="10,0">

@@ -17,23 +17,27 @@ public partial class ServerUpdateWindow : Window
     private readonly Func<bool> _debugMode;
     private readonly bool _upToDate;
     private readonly string _appVersion;
+    private readonly string? _nestName;
     private bool _debug;
 
     /// <param name="session">The current session, looked up on every click: saving Settings replaces it.</param>
     /// <param name="debug">Whether Debug mode is on, also looked up on every click.</param>
-    public ServerUpdateWindow(Func<ClientSession?>? session, string serverVersion, string? appVersion = null, Func<bool>? debug = null)
+    /// <param name="nestName">How the nest is called on the cards (default: the address of the session's nest).</param>
+    public ServerUpdateWindow(Func<ClientSession?>? session, string serverVersion, string? appVersion = null, Func<bool>? debug = null, string? nestName = null)
     {
         ThemeManager.Attach(this);
         InitializeComponent();
         Icon = AppIcons.WindowIcon;
         _session = session ?? (() => null);
         _debugMode = debug ?? (() => false);
+        _nestName = nestName;
         _debug = _debugMode();
         DetailsPanel.Visibility = _debug ? Visibility.Visible : Visibility.Collapsed;
         ServerVersion = serverVersion;
         appVersion ??= PairnetsInfo.ProductVersion;
         _appVersion = appVersion;
         AppVersion.Text = appVersion;
+        NestSub.Text = NestName();
         if (serverVersion.Length == 0)
         {
             // A nest too old to report its version (installed before it could say).
@@ -68,6 +72,16 @@ public partial class ServerUpdateWindow : Window
             Motion.Bob(BadgeHost, false);
             Motion.Spin(Ring, false);
         };
+    }
+
+    /// <summary>"sync.pairnets.app" or "nest.example.com": the nest's address under its version on the cards.</summary>
+    public string NestNameText => NestSub.Text;
+
+    private string NestName()
+    {
+        if (!string.IsNullOrEmpty(_nestName))
+            return _nestName;
+        return _session()?.Settings.ServerUrl is { } url && Uri.TryCreate(url, UriKind.Absolute, out var uri) ? uri.Host : string.Empty;
     }
 
     /// <summary>Set when the user ticked "From now on, update the nest by itself".</summary>
@@ -256,6 +270,7 @@ public partial class ServerUpdateWindow : Window
             Heading.Text = $"Your nest is on {result.ServerVersion}";
             Explanation.Text = "Syncing has resumed. The nest and this app now match.";
             DoneNestVersion.Text = result.ServerVersion;
+            DoneNestSub.Text = NestName();
             DoneAppVersion.Text = _appVersion;
             DoneAppSub.Text = "This computer";
             DonePanel.Visibility = Visibility.Visible;

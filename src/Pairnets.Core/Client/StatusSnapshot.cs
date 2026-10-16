@@ -381,6 +381,12 @@ public sealed record StatusSnapshot(
     /// <summary>The Pairnets account this computer signed in with ("you@example.com"), or null.</summary>
     public string? AccountEmail { get; init; }
 
+    /// <summary>
+    /// The server address in this computer's settings ("https://sync.pairnets.app/n/&lt;nest id&gt;/"), or null before a
+    /// session starts. The Account and Devices pages name the nest by it when the nest has no website of its own.
+    /// </summary>
+    public string? ServerUrl { get; init; }
+
     // ---- the server
 
     /// <summary>Last known server info (version, free space, updater), or null before the first answer.</summary>

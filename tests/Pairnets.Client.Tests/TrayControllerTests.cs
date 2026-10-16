@@ -403,6 +403,7 @@ public sealed class TrayControllerTests
 
         // An older server: the app asks by itself.
         var ask = await app.Showing<ServerUpdateWindow>("the app to offer updating the older server");
+        Assert.Equal(nest.Url.Host, await app.Wpf.Ui(() => ask.NestNameText)); // the real nest, not sample text
         await app.Press(ask, "Not now");
         Assert.False(await app.Wpf.Ui(() => ask.IsVisible));
         Assert.Equal((null, false), (app.SavedSettings.SkippedServerVersion, app.SavedSettings.AutoUpdateServer));

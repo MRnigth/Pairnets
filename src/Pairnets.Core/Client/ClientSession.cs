@@ -402,6 +402,7 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
             LimitText = settings.LimitText,
             IsRelay = api.IsRelay,
             AccountEmail = string.IsNullOrWhiteSpace(settings.AccountEmail) ? null : settings.AccountEmail,
+            ServerUrl = string.IsNullOrWhiteSpace(settings.ServerUrl) ? null : settings.ServerUrl,
         };
         if (settings.Paused)
             runner.Pause(); // before it starts, so a paused app never begins a pass

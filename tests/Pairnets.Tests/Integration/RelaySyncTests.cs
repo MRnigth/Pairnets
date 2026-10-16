@@ -76,6 +76,7 @@ public sealed class RelaySyncTests : IAsyncLifetime
         await using var session = Start(Settings(result), result.Device.Key, _service.Url);
         Assert.True(session.Status.IsRelay);
         Assert.Equal(FakeSyncService.Email, session.Status.AccountEmail);
+        Assert.Equal(session.Settings.ServerUrl, session.Status.ServerUrl); // names the nest on the Account and Devices pages
 
         await WaitUntil(() => _nest.Store.ReadManifest(null).Entries.Any(e => e.Path == "from-laptop.txt" && !e.Deleted), "upload through the relay");
         await WaitUntil(() => session.Runner.HubConnected, "push channel through the relay");

@@ -27,7 +27,10 @@ public sealed record AccountSummary(
     string DeviceName,
     string DeviceDetail)
 {
-    /// <summary>The account's email, or null for an older nest that did not send it (the page then shows the computer name).</summary>
+    /// <summary>
+    /// The account's email: from the nest, else the one this computer signed in with. Null for a computer that never
+    /// signed in with an account on an older nest (the page then shows the computer name).
+    /// </summary>
     public string? Email { get; init; }
 
     /// <summary>"Google", "Email" or "–": how the owner signed in, for the "Signed in with" tile.</summary>
@@ -37,12 +40,18 @@ public sealed record AccountSummary(
     public string AddedText { get; init; } = "–";
     /// <param name="s">The latest status.</param>
     /// <param name="device">This computer's name.</param>
-    /// <param name="serverUrl">The server address in the settings (used when the nest has no website address).</param>
+    /// <param name="serverUrl">
+    /// The server address in the settings (used when the nest has no website address); null falls back to the one in
+    /// <paramref name="s"/>.
+    /// </param>
     public static AccountSummary Build(StatusSnapshot s, string? device, string? serverUrl)
     {
         var name = string.IsNullOrWhiteSpace(device) ? "This computer" : device.Trim();
-        var host = Host(s.NestUrl) ?? Host(serverUrl);
-        var email = s.Account?.Email is { Length: > 0 } e ? e.Trim() : null;
+        // A nest reached through sync.pairnets.app has no website of its own: name it by the address this computer uses.
+        var host = Host(s.NestUrl) ?? Host(serverUrl) ?? Host(s.ServerUrl);
+        var email = s.Account?.Email is { Length: > 0 } e ? e.Trim()
+            : s.AccountEmail is { Length: > 0 } signedIn ? signedIn.Trim()
+            : null;
         var title = email ?? name;
         var subtitle = s.Account?.MethodText ?? (host is null ? "Not signed in to a nest" : "Signed in on " + host);
 

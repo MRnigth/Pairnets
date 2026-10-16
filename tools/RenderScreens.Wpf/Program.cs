@@ -472,7 +472,7 @@ public static partial class Program
         Save(signIn, outDir, $"windows-sign-in-expired-{suffix}.png", print);
         signIn.Close();
 
-        var serverUpdate = new ServerUpdateWindow(null, "1.0.52", "1.0.58");
+        var serverUpdate = new ServerUpdateWindow(null, "1.0.52", "1.0.58", nestName: "nest.example.com");
         Place(serverUpdate);
         Save(serverUpdate, outDir, $"windows-server-update-{suffix}.png", print);
         serverUpdate.ShowBusy("Installing and restarting the server");

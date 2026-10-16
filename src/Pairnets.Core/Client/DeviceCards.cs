@@ -108,7 +108,8 @@ public sealed record NestCard(bool Online, string OnlineText, string Address, st
 {
     public static NestCard From(StatusSnapshot s, string? serverUrl)
     {
-        var host = Host(s.NestUrl) ?? Host(serverUrl);
+        // A nest reached through sync.pairnets.app has no website of its own: name it by the address this computer uses.
+        var host = Host(s.NestUrl) ?? Host(serverUrl) ?? Host(s.ServerUrl);
         var online = s.IsConnected;
         var version = s.Server?.ServerVersion is { Length: > 0 } v ? v : null;
         return new NestCard(
