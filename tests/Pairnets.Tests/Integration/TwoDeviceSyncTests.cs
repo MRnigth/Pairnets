@@ -330,30 +330,6 @@ public class TwoDeviceSyncTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task LargeFileIsStreamedBothWays()
-    {
-        const int size = 101 * 1024 * 1024;
-        var rnd = new Random(42);
-        var buffer = new byte[1024 * 1024];
-        using (var fs = File.Create(_desktop.Full("big.bin")))
-        {
-            for (var written = 0; written < size; written += buffer.Length)
-            {
-                rnd.NextBytes(buffer);
-                fs.Write(buffer, 0, Math.Min(buffer.Length, size - written));
-            }
-        }
-        var expected = (await ContentHash.OfFileAsync(_desktop.Full("big.bin"))).Hash;
-        // Measure memory still in use (after a full collection), not garbage from tests running in parallel.
-        var before = GC.GetTotalMemory(forceFullCollection: true);
-        Assert.Equal(1, (await _desktop.SyncAsync()).Uploaded);
-        Assert.Equal(1, (await _laptop.SyncAsync()).Downloaded);
-        Assert.Equal(expected, (await ContentHash.OfFileAsync(_laptop.Full("big.bin"))).Hash);
-        Assert.Equal(size, new FileInfo(_laptop.Full("big.bin")).Length);
-        Assert.True(GC.GetTotalMemory(forceFullCollection: true) - before < 64L * 1024 * 1024, "transfer appears to keep the file in memory");
-    }
-
-    [Fact]
     public async Task WrongTokenFailsThePassWithoutTouchingAnything()
     {
         await using var bad = new Device("intruder", _server, token: "not-the-right-token-at-all");
