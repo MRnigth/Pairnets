@@ -8,6 +8,31 @@ import { sendNotice } from "./mail";
 export type Provider = "google" | "email";
 
 /**
+ * Deletes an account and everything stored about it ("Delete account", and accounts unused for a year, inactive.ts).
+ * Returns the tunnel ids of its relayed servers: their rows go with the account, and the caller runs the router,
+ * which drops their links and deletes the tunnels (the hourly cron deletes any tunnel left over).
+ */
+export async function deleteAccountRows(ctx: Ctx, id: string, email: string): Promise<string[]> {
+  const db = ctx.env.DB;
+  const tunnels = (
+    await db.prepare("SELECT tunnel_id FROM nests WHERE account_id = ?1 AND mode = 'relay' AND tunnel_id IS NOT NULL").bind(id).all<{ tunnel_id: string }>()
+  ).results.map((r) => r.tunnel_id);
+  // Foreign keys cascade from accounts; the explicit deletes make the result independent of that setting.
+  await db.batch([
+    db.prepare("DELETE FROM sessions WHERE account_id = ?1").bind(id),
+    db.prepare("DELETE FROM identities WHERE account_id = ?1").bind(id),
+    db.prepare("DELETE FROM nests WHERE account_id = ?1").bind(id),
+    db.prepare("DELETE FROM claim_codes WHERE account_id = ?1").bind(id),
+    db.prepare("DELETE FROM device_logins WHERE account_id = ?1").bind(id),
+    db.prepare("DELETE FROM server_links WHERE account_id = ?1").bind(id),
+    db.prepare("DELETE FROM audit WHERE account_id = ?1").bind(id),
+    db.prepare("DELETE FROM login_challenges WHERE email = ?1").bind(email),
+    db.prepare("DELETE FROM accounts WHERE id = ?1").bind(id),
+  ]);
+  return tunnels;
+}
+
+/**
  * Finds or makes the account for a verified identity:
  *  1. the identity exists -> its account (the identity's email and last_used_at are updated);
  *  2. an account has that verified email -> the identity is added to it, a notice goes to the account address;

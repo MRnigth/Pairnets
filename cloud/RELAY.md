@@ -181,7 +181,7 @@ does (revoke, forget the cached key, `DeviceRemoved` on the hub, close the devic
 5. The first successful answer from a `pending` nest marks it `active` (`confirmed_at`). The update only matches
    `pending` rows, and the reused row (step 1) is marked active at once, so it is one write per server, not one per
    request.
-6. Rate limits on the relay, three budgets (`relay.ts`; reasons in `docs/DECISIONS.md`), each counted by one of
+6. Rate limits on the relay, four budgets (`relay.ts`; reasons in `docs/DECISIONS.md`), each counted by one of
    Cloudflare's Workers Rate Limiting bindings, not in D1, so a relayed request costs no database write. The counts are
    per Cloudflare location and approximate, which is fine for limits that only stop floods and abuse.
    - per address, **20,000 requests a minute** for everything (`RELAY_LIMIT`): a flood ceiling, checked first.
@@ -192,6 +192,9 @@ does (revoke, forget the cached key, `DeviceRemoved` on the hub, close the devic
      unknown nest, a refused path, a key the nest answers 401/403, a nest that is offline (`RELAY_FAIL_LIMIT`). The
      request that goes over it turns the address off: every relayed request from it then gets 429 for 60 s (remembered
      by the Worker instance, as a binding cannot be read without counting).
+   - per nest, **30,000 requests a minute** for everything relayed to it, from all its computers and addresses
+     together (`RELAY_NEST_LIMIT`): five computers at their full budget fit under it, so it only stops one nest from
+     taking the whole service. Going over it is not the caller's doing, so it isn't counted against the address.
 
    Every 429 is `{"error":"rate_limited",...}` with `Retry-After` (60, or the seconds left of a turned-off address).
    The apps wait that long, send the same request again and go on one at a time for a while. Bodies are not limited
@@ -261,11 +264,13 @@ The hourly cron also: deletes expired server links; redeploys the router when ne
 ## 8. Limits and configuration
 
 - `MAX_NESTS` (default 900): relay nests in all, under Cloudflare's 1,000 tunnels per account.
-- At most 3 nests per account; 10 server starts an hour per IP; 20 approvals an hour per account.
-- The relay's three limits (§5 step 6) are Workers Rate Limiting bindings in `wrangler.toml` (`[[ratelimits]]`):
+- At most 3 nests per account (`MAX_NESTS_PER_ACCOUNT`, both kinds together; lowering it never removes a nest an account
+  has); 10 server starts an hour per IP; 20 approvals an hour per account.
+- The relay's four limits (§5 step 6) are Workers Rate Limiting bindings in `wrangler.toml` (`[[ratelimits]]`):
   `RELAY_LIMIT` (`namespace_id = "1001"`, 20,000 a minute per address), `RELAY_DEVICE_LIMIT` (`"1002"`, 6,000 a
   minute per nest and computer key) and `RELAY_FAIL_LIMIT` (`"1003"`, 600 a minute per address for keyless and
-  failing requests). `RELAY_PER_MINUTE`, `RELAY_DEVICE_PER_MINUTE` and `RELAY_IP_PER_MINUTE` in `src/relay.ts` name the
+  failing requests) and `RELAY_NEST_LIMIT` (`"1004"`, 30,000 a minute per nest). `RELAY_PER_MINUTE`,
+  `RELAY_DEVICE_PER_MINUTE`, `RELAY_IP_PER_MINUTE` and `RELAY_NEST_PER_MINUTE` in `src/relay.ts` name the
   same numbers, and a test checks that they match. A `namespace_id` is a number chosen here, not an account id or a
   key; it only has to differ from any other rate limiter on the account. Nothing to create by hand: `wrangler deploy`
   sets the bindings up. Without them (a local run) the relay does not limit and logs one warning each; it never falls

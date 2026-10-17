@@ -261,8 +261,24 @@ export function createWorker(overrides: Partial<Deps> = {}): ExportedHandler<Env
       return finalize(resp, isAsset && resp.status === 200, ctx.setCookies, website);
     },
 
-    async scheduled(_controller: ScheduledController, env: Env): Promise<void> {
-      const counts = await sweep(env, deps.now(), deps.fetch);
+    async scheduled(_controller: ScheduledController, env: Env, exec: ExecutionContext): Promise<void> {
+      // The sweep sends email (accounts unused for a year), so it gets a context like a request's, from no one.
+      const url = new URL("https://pairnets-cron/");
+      const ctx: Ctx = {
+        req: new Request(url),
+        url,
+        env,
+        deps,
+        exec,
+        now: deps.now(),
+        ip: "cron",
+        ipKey: "cron",
+        body: new Uint8Array(0),
+        setCookies: [],
+        mailer: deps.mailer ?? makeMailer(env, deps.fetch),
+        defer: (p) => exec.waitUntil(p),
+      };
+      const counts = await sweep(ctx);
       console.log("sweep", JSON.stringify(counts));
     },
   };

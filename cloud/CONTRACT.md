@@ -883,6 +883,13 @@ Emails: sign-in link; notices for identity added, nest linked (confirmed), nest 
 Hourly (`17 * * * *`): delete expired sessions, challenges, app logins, claim codes, `pending` nests older than 1 hour,
 old `rate_counters`, and `audit` rows older than 90 days.
 
+Accounts nobody uses (`src/inactive.ts`, migration 0005): "used" is the newest of the account's creation, a sign-in
+(`identities.last_used_at`), a session seen (`sessions.last_seen_at`) and one of its nests online
+(`nests.last_seen_at`; the relay writes it at most once a day per server). Unused for 335 days: a warning email
+("will be deleted on <day>"), at most 20 a day and only within the day's email budget; `accounts.inactive_warned_at`
+is set only when it was sent. Used again after that: the warning is cleared. Warned 30 days ago and still unused: the
+account is deleted exactly as `DELETE /v1/me` does it (tunnels included), and a last email says so.
+
 ---
 
 ## 7. D1 schema (migration `cloud/migrations/0001_init.sql`)

@@ -22,6 +22,7 @@ import {
   requireRecent,
   type Session,
 } from "../sessions";
+import { deleteAccountRows } from "../accounts";
 import { serversOf } from "./servers";
 
 /** Nests per account, both kinds together (pending ones count), unless wrangler.toml's MAX_NESTS_PER_ACCOUNT says otherwise. */
@@ -205,25 +206,7 @@ export async function deleteMeRoute(ctx: Ctx): Promise<Response> {
   requireRecent(ctx, s);
   const account = await accountRow(ctx, s.accountId);
   if (account) await sendNotice(ctx, null, account.email, "account_deleted");
-  const db = ctx.env.DB;
-  const id = s.accountId;
-  // The account's relayed servers: their rows go with the account; the router deploy that follows drops their links
-  // and then deletes their tunnels (the hourly cron deletes any tunnel left over).
-  const tunnels = (
-    await db.prepare("SELECT tunnel_id FROM nests WHERE account_id = ?1 AND mode = 'relay' AND tunnel_id IS NOT NULL").bind(id).all<{ tunnel_id: string }>()
-  ).results.map((r) => r.tunnel_id);
-  // Foreign keys cascade from accounts; the explicit deletes make the result independent of that setting.
-  await db.batch([
-    db.prepare("DELETE FROM sessions WHERE account_id = ?1").bind(id),
-    db.prepare("DELETE FROM identities WHERE account_id = ?1").bind(id),
-    db.prepare("DELETE FROM nests WHERE account_id = ?1").bind(id),
-    db.prepare("DELETE FROM claim_codes WHERE account_id = ?1").bind(id),
-    db.prepare("DELETE FROM device_logins WHERE account_id = ?1").bind(id),
-    db.prepare("DELETE FROM server_links WHERE account_id = ?1").bind(id),
-    db.prepare("DELETE FROM audit WHERE account_id = ?1").bind(id),
-    db.prepare("DELETE FROM login_challenges WHERE email = ?1").bind(account?.email ?? ""),
-    db.prepare("DELETE FROM accounts WHERE id = ?1").bind(id),
-  ]);
+  const tunnels = await deleteAccountRows(ctx, s.accountId, account?.email ?? "");
   clearSessionCookie(ctx);
   if (tunnels.length) ctx.defer(runRouterLogged(ctx.env, ctx.now, ctx.deps.fetch, { alsoDelete: tunnels }));
   return noContent();

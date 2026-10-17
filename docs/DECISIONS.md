@@ -956,6 +956,19 @@ fixed here, the fourth (who runs the service, by legal name and address) is the 
   contrast. `/get.sh` now points at the copy in the latest release, so it answers 404 until the next release
   includes it: release before deploying the site.
 
+## Relay budget per nest, nest limit, unused accounts (2026-10-17)
+
+The owner's answers to the 2026-10-14 audit questions:
+
+* **A relay budget per nest of 30,000 requests a minute** (`RELAY_NEST_LIMIT`), about five computers syncing flat out.
+  Requests, not bytes: Cloudflare bills a Worker by requests, and bytes passing through cost nothing, so a request
+  budget is the one that protects the bill. The apps already wait out a 429 (`BackPressure`).
+* **3 nests per account**, as before, now `MAX_NESTS_PER_ACCOUNT` in wrangler.toml. Nests an account already has are
+  never removed; only a new one is refused.
+* **Accounts unused for a year are deleted, 30 days after a warning email** (`src/inactive.ts`). A nest that is online,
+  or a computer that uses the account, counts as use, so nobody whose setup is running loses it. No warning that went
+  out, no delete. The daily cap of 20 warnings keeps them from using up the emails sign-ins need.
+
 ## Signed releases (2026-10-17)
 
 * **What is signed:** `SHA256SUMS.txt` only, with ECDSA P-256 / SHA-256, as the DER signature `openssl dgst -sign`
