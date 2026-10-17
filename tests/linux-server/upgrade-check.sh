@@ -6,12 +6,13 @@
 #
 #   sudo tests/linux-server/upgrade-check.sh --feed <feed-dir> [--timeout <seconds>]
 #
-# PAIRNETS_PUBLISHED_GET_SH overrides where the one-liner comes from (default: get.sh on GitHub's main).
+# PAIRNETS_PUBLISHED_GET_SH overrides where the one-liner comes from (default: the published release's own get.sh,
+# where pairnets.app/get.sh points; main's copy can be newer than the release, e.g. check a signature it lacks).
 set -euo pipefail
 # shellcheck source=tests/linux-server/lib.sh
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
-GET_SH="${PAIRNETS_PUBLISHED_GET_SH:-https://raw.githubusercontent.com/MRnigth/Pairnets/main/deploy/get.sh}"
+GET_SH="${PAIRNETS_PUBLISHED_GET_SH:-https://github.com/MRnigth/Pairnets/releases/latest/download/get.sh}"
 FEED=""
 TIMEOUT=600
 while [[ $# -gt 0 ]]; do

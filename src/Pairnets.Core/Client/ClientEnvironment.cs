@@ -26,6 +26,9 @@ public sealed record ClientEnvironment
     /// <summary>The release page the app opens when it cannot install an update itself.</summary>
     public Uri UpdateReleasePage { get; init; } = UpdateChecker.DefaultReleasePage;
 
+    /// <summary>The key update checksums must be signed with (PEM); null is the Pairnets release key. Tests set their own.</summary>
+    public string? UpdateSigningKey { get; init; }
+
     /// <summary>The folder the installer puts the app in; null means "where the installer normally puts it".</summary>
     public string? InstallDir { get; init; }
 
@@ -47,5 +50,5 @@ public sealed record ClientEnvironment
     };
 
     /// <summary>The update checker for this environment.</summary>
-    public UpdateChecker CreateUpdateChecker(HttpClient? http = null) => new(http ?? new HttpClient(), UpdateDownloadBase, UpdateReleasePage);
+    public UpdateChecker CreateUpdateChecker(HttpClient? http = null) => new(http ?? new HttpClient(), UpdateDownloadBase, UpdateReleasePage, UpdateSigningKey);
 }

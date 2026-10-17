@@ -30,7 +30,7 @@ public sealed class AppUnderTest : IAsyncDisposable
         Nest = nest;
         Feed = feed;
         Root = root;
-        Env = ClientEnvironment.Isolated(root.Path, feed.DownloadBase) with { UpdateReleasePage = feed.ReleasePage };
+        Env = ClientEnvironment.Isolated(root.Path, feed.DownloadBase) with { UpdateReleasePage = feed.ReleasePage, UpdateSigningKey = FakeReleaseFeed.SigningKey };
         Folder = root.Combine("Work");
     }
 

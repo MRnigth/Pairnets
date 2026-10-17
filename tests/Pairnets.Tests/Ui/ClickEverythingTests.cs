@@ -541,7 +541,7 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
             Folder = fixture.Folder,
             FirstRunCompleted = true,
         };
-        var updates = new UpdateService(new UpdateChecker(new HttpClient(), fixture.Feed.DownloadBase, fixture.Feed.ReleasePage), "1.0.0", fixture.Feed.Asset);
+        var updates = new UpdateService(new UpdateChecker(new HttpClient(), fixture.Feed.DownloadBase, fixture.Feed.ReleasePage, FakeReleaseFeed.SigningKey), "1.0.0", fixture.Feed.Asset);
         s.Cleanup.Add(() =>
         {
             updates.Dispose();

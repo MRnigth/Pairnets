@@ -955,3 +955,24 @@ fixed here, the fourth (who runs the service, by legal name and address) is the 
   what is true today; Google, GitHub and Ko-fi are listed as independent controllers; muted text and links meet
   contrast. `/get.sh` now points at the copy in the latest release, so it answers 404 until the next release
   includes it: release before deploying the site.
+
+## Signed releases (2026-10-17)
+
+* **What is signed:** `SHA256SUMS.txt` only, with ECDSA P-256 / SHA-256, as the DER signature `openssl dgst -sign`
+  writes (`SHA256SUMS.txt.sig`). It lists every release file, `version.json` included, so one signature covers the
+  installers and the version number: an old signed release can't be passed off as a newer one.
+* **One public key, four places:** `deploy/release-signing.pub` (built into Pairnets.Core) and copies in
+  `deploy/update.sh` and `deploy/get.sh`, which must work without the repository. A test checks the copies match
+  and that the apps accept a signature openssl made with the real key.
+* **Fail closed.** No secret, or a secret that doesn't match the public key: `scripts/sign-release.sh` fails and
+  nothing is published. No or a bad signature: the apps show "isn't signed by Pairnets" and offer only Hide (never
+  the download page), update.sh changes nothing, get.sh stops.
+* **The switch-over needs nothing special.** Apps and servers up to 1.0.56 don't check, so they update to the first
+  signed release as before; from then on they check. `upgrade-check.sh` installs the published release with that
+  release's own `get.sh` (where pairnets.app/get.sh points), because main's copy checks a signature that a release
+  from before the switch doesn't have.
+* **Tests use throwaway keys** (`TestReleaseKey`, `make-feed.sh`'s `feed-signing.key`), handed to the scripts as
+  `PAIRNETS_RELEASE_KEY`. That override is an environment variable of a root service or of the person running
+  get.sh, the same trust as the existing `PAIRNETS_BASE_URL`.
+* **A lost or leaked key** means a new pair, a new secret and a release with the new public key, signed with the
+  old key, so installed apps still take it.

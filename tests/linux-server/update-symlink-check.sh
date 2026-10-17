@@ -25,10 +25,14 @@ mkdir "$T/pkg/pairnets-server-linux-x64"
 echo 1.0.1 > "$T/pkg/pairnets-server-linux-x64/VERSION"
 tar -czf "$T/feed/pairnets-server-linux-x64.tar.gz" -C "$T/pkg" pairnets-server-linux-x64
 (cd "$T/feed" && sha256sum pairnets-server-linux-x64.tar.gz > SHA256SUMS.txt)
+# Signed with a throwaway key (TEST ONLY), which the updater is given as PAIRNETS_RELEASE_KEY.
+openssl ecparam -name prime256v1 -genkey -noout -out "$T/test.key"
+openssl pkey -in "$T/test.key" -pubout -out "$T/test.pub"
+openssl dgst -sha256 -sign "$T/test.key" -out "$T/feed/SHA256SUMS.txt.sig" "$T/feed/SHA256SUMS.txt"
 
 run_update() {
   PAIRNETS_BASE_URL="$T/feed" PAIRNETS_UPDATE_DIR="$T/update" PAIRNETS_INSTALL_DIR="$T/install" \
-    PAIRNETS_UPDATE_DRY_RUN=1 bash "$SCRIPT" >"$T/run.out" 2>&1 || true
+    PAIRNETS_RELEASE_KEY="$T/test.pub" PAIRNETS_UPDATE_DRY_RUN=1 bash "$SCRIPT" >"$T/run.out" 2>&1 || true
 }
 new_update_dir() {
   rm -rf "$T/update"

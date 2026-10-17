@@ -746,7 +746,7 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
 
     private Window SettingsHost(Bench b, bool ownKey)
     {
-        b.Updates = new UpdateService(new UpdateChecker(new HttpClient(), fixture.Feed.DownloadBase, fixture.Feed.ReleasePage),
+        b.Updates = new UpdateService(new UpdateChecker(new HttpClient(), fixture.Feed.DownloadBase, fixture.Feed.ReleasePage, FakeReleaseFeed.SigningKey),
             PairnetsInfo.ProductVersion, UpdateChecker.AssetForThisPlatform());
         var settings = new ClientSettings
         {

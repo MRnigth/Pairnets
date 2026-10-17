@@ -90,7 +90,8 @@ installed_version() { tr -d '[:space:]' < "$INSTALL_DIR/VERSION" 2>/dev/null || 
 version_newer() { [[ "$1" != "$2" && "$(printf '%s\n%s\n' "$2" "$1" | sort -V | tail -n1)" == "$1" ]]; }
 
 check_feed() {
-  [[ -f "$1/$PACKAGE.tar.gz" && -f "$1/SHA256SUMS.txt" ]] || die "$1 is not a feed (needs $PACKAGE.tar.gz and SHA256SUMS.txt; see scripts/make-feed.sh)"
+  [[ -f "$1/$PACKAGE.tar.gz" && -f "$1/SHA256SUMS.txt" && -f "$1/SHA256SUMS.txt.sig" && -f "$1/test-signing.pub" ]] ||
+    die "$1 is not a feed (needs $PACKAGE.tar.gz, SHA256SUMS.txt, its .sig and test-signing.pub; see scripts/make-feed.sh)"
 }
 
 # Copies a feed to a folder only root can change, so the root updater never reads from a user's checkout.
@@ -215,6 +216,7 @@ point_updater_at() { # point_updater_at <staged feed>
 # Pre-deploy test only (tests/linux-server): install updates from a local feed instead of GitHub.
 [Service]
 Environment=PAIRNETS_BASE_URL=$1
+Environment=PAIRNETS_RELEASE_KEY=$1/test-signing.pub
 CONF
   chmod 0644 "$UPDATE_DROPIN"
   systemctl daemon-reload

@@ -88,6 +88,8 @@ public sealed class DesktopController : ITrayActions, IDisposable
         {
             _updateDismissed = false;
             _dirty = true;
+            if (!u.Signed)
+                return; // (the banner says it was not installed; no "update available" notice for it)
             Notify("update:" + u.Version, "Pairnets update available", $"Version {u.Version} is ready. Open Pairnets to download it.");
         };
     }
@@ -479,7 +481,9 @@ public sealed class DesktopController : ITrayActions, IDisposable
         }
         if (_window is { IsVisible: true })
         {
-            if (_updates.Available is { } update && !_updateDismissed)
+            if (_updates.Available is { Signed: false } unsigned && !_updateDismissed)
+                _window.ShowUpdate($"Pairnets {unsigned.Version} could not be installed", ReleaseSigning.NotSignedMessage, "Hide");
+            else if (_updates.Available is { } update && !_updateDismissed)
                 _window.ShowUpdate($"Pairnets {update.Version} is available",
                     $"You have {PairnetsInfo.ProductVersion}. Download it and replace the app (your settings are kept).", "Download");
             else
@@ -718,7 +722,9 @@ public sealed class DesktopController : ITrayActions, IDisposable
     /// <summary>The app is unsigned on Mac and Linux, so it does not replace itself: open the download page.</summary>
     public void UpdateNow()
     {
-        if (_updates.Available is { } update)
+        if (_updates.Available is { Signed: false })
+            DismissUpdate(); // never point people at a release Pairnets did not sign
+        else if (_updates.Available is { } update)
             _platform.Open(update.ReleasePage.ToString());
     }
 

@@ -2,13 +2,15 @@
 # Pairnets server self-update, run as root by pairnets-update.service when the server (which has no
 # root rights) creates /var/lib/pairnets/update/request after an app asked for an update.
 #
-# It only ever installs the newest official release from the fixed GitHub address below,
-# verifies it against SHA256SUMS.txt, refuses the same or an older version, and then runs that
+# It only ever installs the newest official release from the fixed GitHub address below, checks that
+# SHA256SUMS.txt is signed by the Pairnets release key (RELEASE_KEY below, = deploy/release-signing.pub),
+# verifies the download against it, refuses the same or an older version, and then runs that
 # release's install.sh (which keeps the token, address and data). The request file's content is
 # never read. Progress goes to /var/lib/pairnets/update/status.json for the apps to show, and every
 # run is logged to /var/lib/pairnets/update/update.log, which the apps show in Debug mode.
 #
 # Testing: PAIRNETS_BASE_URL=<folder or url> PAIRNETS_UPDATE_DIR=<dir> PAIRNETS_INSTALL_DIR=<dir>
+#          PAIRNETS_RELEASE_KEY=<public key file> (a test feed's key, scripts/make-feed.sh)
 #          PAIRNETS_UPDATE_DRY_RUN=1 skips running install.sh.
 set -Eeuo pipefail
 
@@ -17,6 +19,11 @@ UPDATE_DIR="${PAIRNETS_UPDATE_DIR:-/var/lib/pairnets/update}"
 INSTALL_DIR="${PAIRNETS_INSTALL_DIR:-/opt/pairnets}"
 ASSET=pairnets-server-linux-x64.tar.gz
 MIN_INTERVAL=600 # seconds between attempts
+# The Pairnets release public key (deploy/release-signing.pub; a test checks the copies match).
+RELEASE_KEY='-----BEGIN PUBLIC KEY-----
+MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEtZRM91EOrqbsMUwpOpSY2w95wiay
+sYrj9VYxXFA1adeBmWwUhKl4BOHZhdhFbdNWz05lNDRi1Od1cK7Wx0zXfg==
+-----END PUBLIC KEY-----'
 
 REQUEST="$UPDATE_DIR/request"
 STATUS="$UPDATE_DIR/status.json"
@@ -111,6 +118,20 @@ if ! fetch SHA256SUMS.txt || ! fetch "$ASSET"; then
   status failed "Could not download the release. Is the repository public and the server online?"
   exit 0
 fi
+
+# SHA256SUMS.txt counts only when Pairnets signed it (SHA256SUMS.txt.sig, made by the release workflow).
+if ! command -v openssl >/dev/null; then
+  status failed "openssl is needed to check that the update is signed by Pairnets (sudo apt install openssl). Nothing was changed."
+  exit 0
+fi
+if [[ -n "${PAIRNETS_RELEASE_KEY:-}" ]]; then cp "$PAIRNETS_RELEASE_KEY" "$WORK/release-signing.pub"
+else printf '%s\n' "$RELEASE_KEY" > "$WORK/release-signing.pub"; fi
+if ! fetch SHA256SUMS.txt.sig ||
+   ! openssl dgst -sha256 -verify "$WORK/release-signing.pub" -signature "$WORK/SHA256SUMS.txt.sig" "$WORK/SHA256SUMS.txt" >/dev/null 2>&1; then
+  status failed "This update isn't signed by Pairnets, so it wasn't installed. Nothing was changed."
+  exit 0
+fi
+log "signature OK"
 
 line="$(grep -E "[[:space:]]\*?$ASSET\$" "$WORK/SHA256SUMS.txt" || true)"
 if [[ -z "$line" ]] || ! (cd "$WORK" && echo "$line" | sha256sum --check --status); then

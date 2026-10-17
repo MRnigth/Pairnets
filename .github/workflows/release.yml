@@ -288,8 +288,12 @@ jobs:
           # Every release file is a plain file; a folder here would also break the upload below.
           dirs="$(find . -mindepth 1 -maxdepth 1 ! -type f)"
           if [ -n "$dirs" ]; then echo "::error::not a plain file, cannot be a release file: $dirs"; exit 1; fi
-          find . -maxdepth 1 -type f ! -name SHA256SUMS.txt -printf '%P\0' | sort -z | xargs -0 sha256sum > SHA256SUMS.txt
+          find . -maxdepth 1 -type f ! -name 'SHA256SUMS.txt*' -printf '%P\0' | sort -z | xargs -0 sha256sum > SHA256SUMS.txt
           cat SHA256SUMS.txt
+      - name: Sign the checksums (the apps, update.sh and get.sh only install a signed release)
+        env:
+          RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
+        run: bash scripts/sign-release.sh release-files
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -332,8 +336,12 @@ jobs:
           # Every release file is a plain file; a folder here would also break the upload below.
           dirs="$(find . -mindepth 1 -maxdepth 1 ! -type f)"
           if [ -n "$dirs" ]; then echo "::error::not a plain file, cannot be a release file: $dirs"; exit 1; fi
-          find . -maxdepth 1 -type f ! -name SHA256SUMS.txt -printf '%P\0' | sort -z | xargs -0 sha256sum > SHA256SUMS.txt
+          find . -maxdepth 1 -type f ! -name 'SHA256SUMS.txt*' -printf '%P\0' | sort -z | xargs -0 sha256sum > SHA256SUMS.txt
           cat SHA256SUMS.txt
+      - name: Sign the checksums (the apps, update.sh and get.sh only install a signed release)
+        env:
+          RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
+        run: bash scripts/sign-release.sh release-files
       - name: Replace the "latest" release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -348,4 +356,5 @@ jobs:
           * Linux desktop: pairnets-desktop-linux-x64.tar.gz
           * Server: pairnets-server-linux-x64.tar.gz
 
-          Check downloads against SHA256SUMS.txt."
+          Check downloads against SHA256SUMS.txt. SHA256SUMS.txt.sig is its signature by the Pairnets release key
+          (deploy/release-signing.pub): openssl dgst -sha256 -verify release-signing.pub -signature SHA256SUMS.txt.sig SHA256SUMS.txt"
