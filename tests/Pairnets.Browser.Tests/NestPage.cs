@@ -93,8 +93,14 @@ public sealed partial class NestPage : IAsyncDisposable
     public Task HiddenAsync(string selector) => Page.Locator(selector).WaitForAsync(new() { State = WaitForSelectorState.Hidden });
 
     /// <summary>Waits until the address is <paramref name="pathAndQuery"/> ("/devices", "/link?code=ABCD-EFGH").</summary>
+    /// <remarks>
+    /// Looks at the address again and again until it matches. WaitForURLAsync looked once and then waited for the next
+    /// navigation, so a page that tidies its own address (history.replaceState on /security?connected=google) right
+    /// between the two left it waiting 30 s for something that had already happened.
+    /// </remarks>
     public Task AtAsync(string pathAndQuery) =>
-        Page.WaitForURLAsync(url => Uri.TryCreate(url, UriKind.Absolute, out var u) && u.PathAndQuery == pathAndQuery);
+        Assertions.Expect(Page).ToHaveURLAsync(
+            new Regex("^[a-z]+://[^/]+" + Regex.Escape(pathAndQuery) + "(#.*)?$"), new() { Timeout = 30_000 });
 
     /// <summary>Waits until <paramref name="selector"/> shows <paramref name="text"/> somewhere in it.</summary>
     public Task ShowsAsync(string selector, string text) =>
