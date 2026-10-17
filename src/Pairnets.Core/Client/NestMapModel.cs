@@ -3,7 +3,7 @@ using Pairnets.Core.Sync;
 
 namespace Pairnets.Core.Client;
 
-/// <summary>The nine states the Overview and the nest picture show.</summary>
+/// <summary>The states the Overview and the nest picture show.</summary>
 public enum NestMapState
 {
     Syncing,
@@ -14,6 +14,8 @@ public enum NestMapState
     Stopped,
     SignIn,
     SignedOut,
+    /// <summary>Signed out with this computer's own Sign out button: grey, nothing is wrong.</summary>
+    SignedOutByYou,
     Offline,
     Paused,
     FolderMissing,
@@ -85,7 +87,7 @@ public sealed record NestMapModel(
     /// <summary>"+3 more" (opens the Devices page), or null when every computer is drawn.</summary>
     public string? MoreText => MoreCount > 0 ? "+" + MoreCount.ToString(CultureInfo.InvariantCulture) + " more" : null;
 
-    /// <summary>Which of the nine states applies. Same decisions as the Overview's status card.</summary>
+    /// <summary>Which state applies. Same decisions as the Overview's status card.</summary>
     public static NestMapState StateOf(StatusSnapshot s)
     {
         if (s.Status == RunnerStatus.Paused)
@@ -97,6 +99,7 @@ public sealed record NestMapModel(
             return s.BlockReason switch
             {
                 BlockReason.SignedOut => NestMapState.SignedOut,
+                BlockReason.SignedOutByYou => NestMapState.SignedOutByYou,
                 BlockReason.SignInRequired => NestMapState.SignIn,
                 BlockReason.FolderMissing or BlockReason.MarkerMissing or BlockReason.MarkerMismatch => NestMapState.FolderMissing,
                 _ => NestMapState.Stopped,
@@ -126,6 +129,7 @@ public sealed record NestMapModel(
             NestMapState.Stopped => (NestLineKind.Warn, "stopped", NestDot.Warn, NestDot.Ok),
             NestMapState.SignIn => (NestLineKind.Warn, "sign in first", NestDot.Warn, NestDot.Warn),
             NestMapState.SignedOut => (NestLineKind.Bad, "signed out", NestDot.Bad, NestDot.Bad),
+            NestMapState.SignedOutByYou => (NestLineKind.Next, "signed out", NestDot.Off, NestDot.Off),
             NestMapState.Offline => (NestLineKind.Unreachable, "can’t reach", NestDot.Off, NestDot.Bad),
             NestMapState.Paused => (NestLineKind.Next, "paused", NestDot.Off, NestDot.Ok),
             _ => (NestLineKind.Warn, "folder missing", NestDot.Warn, NestDot.Ok),
@@ -135,6 +139,7 @@ public sealed record NestMapModel(
         {
             NestMapState.Offline => "can’t reach it",
             NestMapState.SignedOut => "removed this one",
+            NestMapState.SignedOutByYou => "signed out",
             _ => s.Server?.DiskFreeBytes is { } free ? Format.Bytes(free) + " free" : "online",
         };
 
@@ -181,7 +186,7 @@ public sealed record NestMapModel(
         var seen = "seen " + d.LastSeen.ToLocalTime().ToString("HH:mm", CultureInfo.InvariantCulture);
 
         // This computer cannot reach the nest: it knows nothing newer about the others than when they were last seen.
-        if (state == NestMapState.Offline)
+        if (state is NestMapState.Offline or NestMapState.SignedOutByYou)
             return new NestMapOther(d.Name, icon, NestLineKind.Next, null, seen, NestDot.Off, false);
         if (!online)
             return new NestMapOther(d.Name, icon, NestLineKind.Unreachable, null, "can’t reach", NestDot.Bad, false);

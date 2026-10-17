@@ -196,6 +196,21 @@ public class OverviewModelTests
     }
 
     [Fact]
+    public void SignedOutHere_IsCalmWithOneWayBackIn()
+    {
+        var m = Build(StatusSnapshot.SignedOut);
+
+        Assert.Equal(NestMapState.SignedOutByYou, m.State);
+        Assert.NotEqual(OverviewTone.Bad, m.Border);
+        Assert.Equal(OverviewTone.Neutral, m.GlyphTone);
+        Assert.Equal("You’re signed out", m.Title);
+        Assert.DoesNotContain("reach", m.Detail, StringComparison.OrdinalIgnoreCase);
+        var button = Assert.Single(m.Buttons);
+        Assert.Equal(("Sign in…", OverviewAction.Fix), (button.Label, button.Action));
+        Assert.Null(m.HeadButton);
+    }
+
+    [Fact]
     public void Offline_ShowsTryNowAndWhatWaits()
     {
         var m = Build(Base(RunnerStatus.Offline) with { PendingChanges = 12, NestUrl = "https://nest.example.com" });

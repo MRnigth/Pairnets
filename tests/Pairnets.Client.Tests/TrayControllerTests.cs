@@ -341,6 +341,12 @@ public sealed class TrayControllerTests
         Assert.Null(app.Tray.Session);
         Assert.True(File.Exists(Path.Combine(app.Folder, "keep-me.txt")));
         Assert.DoesNotContain(app.Dialogs.Asked.Items, q => q.Text.StartsWith("Signed out here, but your nest could not be told", StringComparison.Ordinal));
+
+        // The main window behind the sign-in window says so calmly, not a red "Can't reach it · trying again".
+        await app.WaitUntil(() => ((TextBlock)main.FindName("NestSub")).Text == "Signed out", "the side to say Signed out");
+        var texts = await app.Wpf.Ui(() => Presser.Elements(main).OfType<TextBlock>().Where(t => t.IsVisible).Select(t => t.Text).ToList());
+        Assert.Contains("You’re signed out", texts);
+        Assert.DoesNotContain(texts, t => t.Contains("reach", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]

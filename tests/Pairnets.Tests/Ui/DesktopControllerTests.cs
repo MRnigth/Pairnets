@@ -340,6 +340,12 @@ public sealed class DesktopControllerTests
         Assert.Equal(app.Folder, saved.Folder); // signing in again offers the same folder
         Assert.Null(app.App.Session);
         Assert.True(File.Exists(Path.Combine(app.Folder, "mine.txt")));
+
+        // The main window behind the sign-in window says so calmly, not a red "Can't reach it · trying again".
+        await Wait.Until(() => Screen.Named<TextBlock>(app.MainWindow, "NestSub").Text == "Signed out", "the side to say Signed out");
+        var texts = Screen.All<TextBlock>(app.MainWindow).Where(t => t.IsEffectivelyVisible).Select(t => t.Text ?? "").ToList();
+        Assert.Contains("You’re signed out", texts);
+        Assert.DoesNotContain(texts, t => t.Contains("reach", StringComparison.OrdinalIgnoreCase));
     }
 
     [AvaloniaFact]

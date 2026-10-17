@@ -151,6 +151,18 @@ public class SidePanelModelTests
     }
 
     [Fact]
+    public void SignedOutHereIsGreyNotRed()
+    {
+        var m = Build(StatusSnapshot.SignedOut, activity: 0, attention: 0);
+        Assert.Equal("This one · signed out", m.This.Text);
+        Assert.Equal((SideDot.Off, SideTone.Neutral), (m.This.Dot, m.This.Tone));
+        Assert.Equal("Signed out", m.Nest.Text);
+        Assert.Equal((SideDot.Off, SideTone.Neutral), (m.Nest.Dot, m.Nest.Tone));
+        Assert.Equal("signed out", m.GroupNote);
+        Assert.Equal("Off", m.Tiles.OverviewNote);
+    }
+
+    [Fact]
     public void OfflineCannotCheckTheOthersAndShowsWhenTheyWereSeen()
     {
         var s = Base(RunnerStatus.Offline) with { Server = null };

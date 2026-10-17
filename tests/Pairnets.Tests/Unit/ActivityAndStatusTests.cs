@@ -36,6 +36,21 @@ public class ActivityAndStatusTests
     }
 
     [Fact]
+    public void WithoutASessionTheAppsSaySignedOutOnlyAfterASignOut()
+    {
+        // Signed out: the nest's address stays, the key is gone.
+        var signedOut = StatusSnapshot.WithoutSession(new Pairnets.Core.Settings.ClientSettings { ServerUrl = "https://sync.example.com", Folder = "/home/a/Pairnets" });
+        Assert.Equal(BlockReason.SignedOutByYou, signedOut.BlockReason);
+        Assert.Equal("Signed out", signedOut.Headline);
+        Assert.Equal(RunnerStatus.Offline, signedOut.IconStatus); // a grey tray icon, not the orange "needs you"
+
+        // Never set up: not "signed out".
+        var fresh = StatusSnapshot.WithoutSession(new Pairnets.Core.Settings.ClientSettings());
+        Assert.NotEqual(BlockReason.SignedOutByYou, fresh.BlockReason);
+        Assert.Equal("Not set up yet: open Settings", fresh.Text);
+    }
+
+    [Fact]
     public void ServerVersionIsShownWithAWayToUpdate()
     {
         Assert.Null(StatusSnapshot.Initial.ServerVersionText); // before the server has answered

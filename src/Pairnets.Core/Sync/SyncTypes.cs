@@ -36,6 +36,9 @@ public enum BlockReason
 
     /// <summary>Still set up with the shared token although the nest signs computers in: sign in to keep syncing.</summary>
     SignInRequired,
+
+    /// <summary>Signed out on purpose from this computer's own Sign out button: nothing is wrong, nothing syncs.</summary>
+    SignedOutByYou,
 }
 
 /// <summary>What a running pass is doing now, so the apps can say it instead of a bare "Syncing".</summary>

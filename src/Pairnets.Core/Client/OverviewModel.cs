@@ -333,6 +333,18 @@ public sealed record OverviewModel
                     ],
                 };
 
+            case NestMapState.SignedOutByYou:
+                return model with
+                {
+                    Glyph = OverviewIcon.UserX,
+                    GlyphTone = OverviewTone.Neutral,
+                    Title = "You’re signed out",
+                    Detail = "Sign in to keep this folder in sync. Your files here stay as they are.",
+                    Buttons = [new OverviewButton("Sign in…", OverviewIcon.SignIn, OverviewAction.Fix, OverviewButtonKind.Primary)],
+                    Lower = OverviewLower.Strip,
+                    Facts = [open, new OverviewFact(OverviewIcon.Key, "Account", "Signed out")],
+                };
+
             case NestMapState.Offline:
             {
                 var detail = s.DetailText;

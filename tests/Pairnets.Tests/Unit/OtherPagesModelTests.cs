@@ -146,6 +146,8 @@ public class OtherPagesModelTests
         var none = NestCard.From(StatusSnapshot.Initial, null);
         Assert.Equal("Not connected", none.Address);
         Assert.Equal("–", none.Version);
+
+        Assert.Equal("Signed out", NestCard.From(StatusSnapshot.SignedOut, null).OnlineText);
     }
 
     [Fact]

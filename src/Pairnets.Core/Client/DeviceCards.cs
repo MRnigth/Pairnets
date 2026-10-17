@@ -1,4 +1,5 @@
 using System.Globalization;
+using Pairnets.Core.Sync;
 
 namespace Pairnets.Core.Client;
 
@@ -113,7 +114,7 @@ public sealed record NestCard(bool Online, string OnlineText, string Address, st
         var online = s.IsConnected;
         var version = s.Server?.ServerVersion is { Length: > 0 } v ? v : null;
         return new NestCard(
-            online, online ? "Online" : "Can't reach",
+            online, online ? "Online" : s.BlockReason == BlockReason.SignedOutByYou ? "Signed out" : "Can't reach",
             host ?? "Not connected",
             version ?? "–",
             version is null ? string.Empty : s.ServerIsOlder ? "update available" : "up to date",

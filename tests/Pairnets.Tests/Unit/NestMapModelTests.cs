@@ -117,6 +117,16 @@ public class NestMapModelTests
     }
 
     [Fact]
+    public void SignedOutHere_IsGreyWithNoCross()
+    {
+        var m = Map(StatusSnapshot.SignedOut);
+        Assert.Equal(NestMapState.SignedOutByYou, m.State);
+        Assert.Equal((NestLineKind.Next, "signed out", NestDot.Off, NestDot.Off), (m.This.Kind, m.This.Label, m.This.Dot, m.NestDot));
+        Assert.Equal("signed out", m.NestSub);
+        Assert.False(m.This.HasCross);
+    }
+
+    [Fact]
     public void Offline_OnlyThisLineIsUnreachable_TheOthersAreGreyAndSeen()
     {
         var s = Base(RunnerStatus.Offline, Dev(Me), Dev("LAPTOP", seenMinutesAgo: 15), Dev("MINI-PC", online: false, seenMinutesAgo: 20));

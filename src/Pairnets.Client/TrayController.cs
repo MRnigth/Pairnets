@@ -383,12 +383,12 @@ public sealed class TrayController : ITrayActions, IDisposable
         if (!_dirty)
             return;
         _dirty = false;
-        var status = _session?.Status ?? StatusSnapshot.Initial with { Text = "Not set up yet: open Settings" };
+        var status = _session?.Status ?? StatusSnapshot.WithoutSession(_settings);
 
-        if (_shownStatus != status.Status)
+        if (_shownStatus != status.IconStatus)
         {
-            _icon.Icon = TrayIcons.For(status.Status);
-            _shownStatus = status.Status;
+            _icon.Icon = TrayIcons.For(status.IconStatus);
+            _shownStatus = status.IconStatus;
         }
         // What it is doing in one line: "Checking files · 12,000 of 38,206", "Uploading · 37 of 120 files · 4.90 MB/s · …".
         var line = status.StatusLine;
@@ -582,9 +582,9 @@ public sealed class TrayController : ITrayActions, IDisposable
             _ = session.RefreshDevicesAsync();
         var cursor = Forms.Cursor.Position;
         var screen = Forms.Screen.FromPoint(cursor);
-        _panel.ShowStatus(_session?.Status ?? StatusSnapshot.Initial, _settings.DeviceName);
+        _panel.ShowStatus(_session?.Status ?? StatusSnapshot.WithoutSession(_settings), _settings.DeviceName);
         _panel.ShowActivity(_session?.Activity.Items ?? []);
-        _panel.ShowAttention(BuildAttention(_session?.Status ?? StatusSnapshot.Initial).Count);
+        _panel.ShowAttention(BuildAttention(_session?.Status ?? StatusSnapshot.WithoutSession(_settings)).Count);
         _panel.Open(cursor, screen.Bounds, screen.WorkingArea);
         _dirty = true;
     }
@@ -606,7 +606,12 @@ public sealed class TrayController : ITrayActions, IDisposable
     public void FixBlocked()
     {
         if (_session is null)
+        {
+            // Signed out here: the Overview's and the tray menu's "Sign in…" open the sign-in window.
+            if (StatusSnapshot.WithoutSession(_settings).BlockReason == BlockReason.SignedOutByYou)
+                ShowSettings(firstRun: true);
             return;
+        }
         var status = _session.Status;
         switch (status.BlockReason)
         {

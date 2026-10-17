@@ -122,6 +122,19 @@ public class TrayPanelModelTests
     }
 
     [Fact]
+    public void SignedOutHereIsGreyAndOffersToSignIn()
+    {
+        var m = Build(StatusSnapshot.SignedOut);
+
+        Assert.Equal(TrayTone.Paused, m.Tone);
+        Assert.Equal("Signed out", m.Headline);
+        Assert.Equal("Sign in to keep this folder in sync.", m.Detail);
+        Assert.Equal("signed out", m.NestSub);
+        Assert.False(m.This.HasCross);
+        Assert.Equal("Sign in…", m.FixLabel);
+    }
+
+    [Fact]
     public void ABlockedSyncKeepsItsFixButtonAndAnAmberCircle()
     {
         var m = Build(Six(RunnerStatus.Blocked) with { BlockReason = BlockReason.MassDelete, PendingDeletes = 37 });

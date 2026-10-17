@@ -458,17 +458,17 @@ public sealed class DesktopController : ITrayActions, IDisposable
         if (!_dirty)
             return;
         _dirty = false;
-        var status = _session?.Status ?? StatusSnapshot.Initial with { Text = "Not set up yet: open Settings" };
+        var status = _session?.Status ?? StatusSnapshot.WithoutSession(_settings);
         if (_trayMenu is not null)
         {
             // What it is doing in one line: "Checking files · 12,000 of 38,206", "Uploading · 37 of 120 files · 4.90 MB/s · …".
             var line = status.StatusLine;
             if (_tray is not null)
             {
-                if (_shownStatus != status.Status)
+                if (_shownStatus != status.IconStatus)
                 {
-                    _tray.Icon = IconFor(status.Status);
-                    _shownStatus = status.Status;
+                    _tray.Icon = IconFor(status.IconStatus);
+                    _shownStatus = status.IconStatus;
                 }
                 _tray.ToolTipText = $"Pairnets: {line} ({status.LastSyncText.ToLowerInvariant()})";
             }
@@ -630,7 +630,12 @@ public sealed class DesktopController : ITrayActions, IDisposable
     public async void FixBlocked()
     {
         if (_session is null)
+        {
+            // Signed out here: the Overview's and the tray menu's "Sign in…" open the sign-in window.
+            if (StatusSnapshot.WithoutSession(_settings).BlockReason == BlockReason.SignedOutByYou)
+                ShowSignIn();
             return;
+        }
         var status = _session.Status;
         switch (status.BlockReason)
         {

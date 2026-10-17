@@ -205,7 +205,12 @@ public sealed record SidePanelModel(
         var state = StateOf(s);
         var others = OthersOf(s, thisDevice, state, now);
         var online = others.Count(o => o.Reachable);
-        var groupNote = state == Side.Offline ? "can’t check now" : $"{online} of {others.Count} online";
+        var groupNote = state switch
+        {
+            Side.Offline => "can’t check now",
+            Side.SignedOutByYou => "signed out",
+            _ => $"{online} of {others.Count} online",
+        };
         var devicesNote = s.Devices is null || s.DevicesUnsupported ? string.Empty
             : state == Side.Offline ? "offline"
             : $"{online + 1} on";
@@ -225,6 +230,7 @@ public sealed record SidePanelModel(
         Stopped,
         SignIn,
         SignedOut,
+        SignedOutByYou,
         Offline,
         Paused,
         Missing,
@@ -242,6 +248,7 @@ public sealed record SidePanelModel(
             return s.BlockReason switch
             {
                 BlockReason.SignedOut => Side.SignedOut,
+                BlockReason.SignedOutByYou => Side.SignedOutByYou,
                 BlockReason.SignInRequired => Side.SignIn,
                 BlockReason.FolderMissing or BlockReason.MarkerMissing or BlockReason.MarkerMismatch => Side.Missing,
                 _ => Side.Stopped,
@@ -261,7 +268,7 @@ public sealed record SidePanelModel(
         Side.Waiting => "Wait",
         Side.Stopped or Side.Missing or Side.Problem => "Stop",
         Side.SignIn => "Sign in",
-        Side.SignedOut or Side.Offline => "Off",
+        Side.SignedOut or Side.SignedOutByYou or Side.Offline => "Off",
         _ => "Paused",
     };
 
@@ -285,6 +292,8 @@ public sealed record SidePanelModel(
                 return Make("needs to sign in", SideDot.Warn, SideTone.Warn);
             case Side.SignedOut:
                 return Make("signed out", SideDot.Bad, SideTone.Bad);
+            case Side.SignedOutByYou:
+                return Make("signed out", SideDot.Off, SideTone.Neutral);
             case Side.Offline:
                 return Make("offline", SideDot.Off, SideTone.Neutral);
             case Side.Paused:
@@ -327,6 +336,8 @@ public sealed record SidePanelModel(
                 return new SideNest("Waiting for you to sign in", SideDot.Warn, SideTone.Warn);
             case Side.SignedOut:
                 return new SideNest("This computer was removed", SideDot.Bad, SideTone.Bad);
+            case Side.SignedOutByYou:
+                return new SideNest("Signed out", SideDot.Off, SideTone.Neutral);
             case Side.Offline:
                 return new SideNest("Can’t reach it · trying again", SideDot.Bad, SideTone.Bad);
         }

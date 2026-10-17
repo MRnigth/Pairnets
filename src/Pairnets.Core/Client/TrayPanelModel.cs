@@ -135,7 +135,7 @@ public sealed record TrayPanelModel(
         {
             NestMapState.Syncing or NestMapState.Waiting => TrayTone.Syncing,
             NestMapState.UpToDate => TrayTone.Ok,
-            NestMapState.Paused => TrayTone.Paused,
+            NestMapState.Paused or NestMapState.SignedOutByYou => TrayTone.Paused,
             NestMapState.SignedOut or NestMapState.Offline => TrayTone.Bad,
             _ => TrayTone.Warn,
         };
@@ -156,6 +156,10 @@ public sealed record TrayPanelModel(
                 headline = "Syncing is paused";
                 detail = SyncedText(s.LastSyncAt, now);
                 note = "New changes wait here until you resume.";
+                break;
+            case NestMapState.SignedOutByYou:
+                headline = "Signed out";
+                detail = "Sign in to keep this folder in sync.";
                 break;
             case NestMapState.Syncing when s.IsTransferring:
                 headline = "Syncing…";

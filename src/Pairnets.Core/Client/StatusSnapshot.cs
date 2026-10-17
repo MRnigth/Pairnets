@@ -1,3 +1,4 @@
+using Pairnets.Core.Settings;
 using Pairnets.Core.Sync;
 
 namespace Pairnets.Core.Client;
@@ -76,6 +77,22 @@ public sealed record StatusSnapshot(
 {
     public static StatusSnapshot Initial { get; } =
         new(RunnerStatus.Offline, "Starting…", null, null, null, 0, 0, 0, 0, BlockReason.None, 0, 0, false);
+
+    /// <summary>What the apps draw after this computer's own Sign out: grey "Signed out", not a red "can't reach".</summary>
+    public static StatusSnapshot SignedOut { get; } =
+        new(RunnerStatus.Blocked, "Signed out", null, null, null, 0, 0, 0, 0, BlockReason.SignedOutByYou, 0, 0, false);
+
+    /// <summary>
+    /// What the apps draw while no sync runs: <see cref="SignedOut"/> once this computer was set up and then signed out
+    /// (its nest address stays, its key is gone), otherwise "Not set up yet".
+    /// </summary>
+    public static StatusSnapshot WithoutSession(ClientSettings settings) =>
+        !string.IsNullOrWhiteSpace(settings.ServerUrl) && string.IsNullOrWhiteSpace(settings.ProtectedToken)
+            ? SignedOut
+            : Initial with { Text = "Not set up yet: open Settings" };
+
+    /// <summary>The status the tray icon shows: grey like offline after a sign-out, since nothing is wrong.</summary>
+    public RunnerStatus IconStatus => BlockReason == BlockReason.SignedOutByYou ? RunnerStatus.Offline : Status;
 
     // ---- transfers: several files at once, speed and time left
 
@@ -494,6 +511,7 @@ public sealed record StatusSnapshot(
             RunnerStatus.Syncing => "Syncing…",
             RunnerStatus.Offline => "Offline",
             RunnerStatus.Blocked when BlockReason == BlockReason.SignedOut => "Signed out of your nest",
+            RunnerStatus.Blocked when BlockReason == BlockReason.SignedOutByYou => "Signed out",
             RunnerStatus.Blocked when BlockReason == BlockReason.SignInRequired => "Sign in to your nest",
             RunnerStatus.Blocked => "Needs your decision",
             _ => "Problem",
@@ -570,6 +588,7 @@ public sealed record StatusSnapshot(
         BlockReason.ServerChanged or BlockReason.ServerRolledBack => "Re-link to this server…",
         BlockReason.SignedOut => "Sign in again…",
         BlockReason.SignInRequired => "Sign in with your browser…",
+        BlockReason.SignedOutByYou => "Sign in…",
         _ => null,
     };
 }
