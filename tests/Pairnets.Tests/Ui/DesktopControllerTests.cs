@@ -245,7 +245,8 @@ public sealed class DesktopControllerTests
         Person.Click(Screen.Find<Button>(main, "Restore"));
 
         await Wait.Until(() => main.RestoreText.StartsWith("Restored.", StringComparison.Ordinal), "the page to say it was restored");
-        await Wait.Until(() => File.ReadAllText(file) == "first version", "the old version to be back in the folder");
+        // (The app may still be writing the restored file: a read that finds it busy just means "not yet".)
+        await Wait.Until(() => ReadIfFree(file) == "first version", "the old version to be back in the folder");
         await app.WaitForNestAsync(f => f["notes.txt"] == 13, "the old version to be the current one on the nest");
     }
 
@@ -674,5 +675,18 @@ public sealed class DesktopControllerTests
         var never = app.App.TrayMenu!.Items.OfType<NativeMenuItem>().Where(i => i is not NativeMenuItemSeparator && !pressed.Contains(i))
             .Select(i => "\"" + i.Header + "\"").ToList();
         Assert.True(never.Count == 0, "Never pressed in the tray menu: " + string.Join(", ", never));
+    }
+
+    /// <summary>The file's text, or null while another process (the app writing it) holds it open.</summary>
+    private static string? ReadIfFree(string path)
+    {
+        try
+        {
+            return File.ReadAllText(path);
+        }
+        catch (IOException)
+        {
+            return null;
+        }
     }
 }
