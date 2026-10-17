@@ -955,3 +955,23 @@ fixed here, the fourth (who runs the service, by legal name and address) is the 
   what is true today; Google, GitHub and Ko-fi are listed as independent controllers; muted text and links meet
   contrast. `/get.sh` now points at the copy in the latest release, so it answers 404 until the next release
   includes it: release before deploying the site.
+
+## Small fixes from the 1.0.55 test (2026-10-17)
+
+* **Narrow windows fit by changing the layout, not by opening wider.** The Mac/Linux window opens at 980 px and the
+  Windows one can be made 940 px wide; both left the page about 600 px, where texts were cut off or drawn over each
+  other. The window sizes stay; the pages adapt, the same way in both apps (`PageLayout` in Core): the computer cards
+  go 3, 2 or 1 across, the Activity search box moves under the filter buttons when they would not fit beside it, the
+  Overview's fact links ("Check for update", "Open") sit under their value, and the side's "Other computers" heading
+  is never cut (its note is, with "…").
+* **The nest picture shrinks only as a last resort.** It is a drawing with fixed parts. This computer's line always
+  fits its speed pill or word; the others' side gives up its spare room next, down to what their names need; only
+  then is the whole picture shrunk evenly (about 88 % at 980 px). Wide windows draw it exactly as before.
+* **Signed out on purpose is grey, not red.** After this computer's own Sign out the apps used to draw "no session"
+  as offline: a red "Can't reach it · trying again". Now a separate state (`BlockReason.SignedOutByYou`) says
+  "Signed out" in grey with one "Sign in…" button. A computer removed elsewhere still gets the red "This computer was
+  removed" wording, since that one may not have been the person's doing.
+* **Screen-reader names come from the button's own text.** WPF names a button only when its content is plain text,
+  so 33 buttons with an icon and a text had none. Rather than naming each by hand, `ScreenReaderNames` names every
+  button that has no name of its own after its first text (kept in step: Pause → Resume), or its tooltip. A sweep test
+  checks every button of the main window and the tray panel in both apps.

@@ -15,11 +15,18 @@ public partial class DevicesPageView : UserControl
     public DevicesPageView()
     {
         InitializeComponent();
+        // As many computer cards side by side as fit (3 cut them off in a narrow window).
+        CardGrid.SizeChanged += (_, e) =>
+        {
+            if (e.WidthChanged)
+                CardGrid.Columns = PageLayout.CardColumns(e.NewSize.Width);
+        };
         Show(StatusSnapshot.Initial, null, null);
     }
 
     /// <summary>What the page asks of the main window.</summary>
     public IPageHost? Host { get; set; }
+
 
     /// <summary>The computer cards, in order.</summary>
     public IReadOnlyList<DeviceCardView> Cards => CardGrid.Children.OfType<DeviceCardView>().ToList();

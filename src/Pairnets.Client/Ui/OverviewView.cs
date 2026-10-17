@@ -905,10 +905,11 @@ public sealed class OverviewView : UserControl
 
     private FrameworkElement BuildFact(OverviewFact fact, bool divider)
     {
+        // The link sits under the value, not beside it: beside it, a narrow window left the label and the value about
+        // 40 px ("Nes… 1.…").
         var row = new Grid { Margin = new Thickness(18, 0, 18, 0) };
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         var isFolder = fact.Icon is OverviewIcon.FolderFill;
         var icon = Square(fact.Icon, 34, 16, 11, "T.Chip", isFolder ? "T.Folder" : "T.Muted", isFolder ? 1.4 : 1.9);
         icon.Margin = new Thickness(0, 0, 12, 0);
@@ -921,12 +922,11 @@ public sealed class OverviewView : UserControl
         row.Children.Add(texts);
         if (fact.LinkText is { } link)
         {
-            var button = new Button { Content = link, Style = (Style)Application.Current.FindResource("LinkButton"), VerticalAlignment = VerticalAlignment.Center, FontWeight = FontWeights.Bold, Margin = new Thickness(8, 0, -6, 0) };
+            var button = new Button { Content = link, Style = (Style)Application.Current.FindResource("LinkButton"), HorizontalAlignment = HorizontalAlignment.Left, FontWeight = FontWeights.Bold, Margin = new Thickness(-6, 1, 0, -3) };
             button.SetResourceReference(Control.ForegroundProperty, "T.AccentInk");
             var action = fact.LinkAction;
             button.Click += (_, _) => Act?.Invoke(action);
-            Grid.SetColumn(button, 2);
-            row.Children.Add(button);
+            texts.Children.Add(button);
         }
         if (!divider)
             return row;

@@ -22,6 +22,9 @@ public sealed class HubView : UserControl
     private const double Height168 = 168;
     private const int Slots = 5;
 
+    /// <summary>The fixed columns: this computer, the nest, and the others' side at its widest.</summary>
+    private const double ThisWidth = 138, NestWidth = 52, RightWidth = 96 + 334;
+
     private readonly Grid _root = new() { Height = Height168 };
     private readonly Border _thisIcon = new();
     private readonly LineIcon _thisGlyph = Icon(19, 1.8);
@@ -38,8 +41,10 @@ public sealed class HubView : UserControl
     private readonly LineIcon _nestGlyph = Icon(24, 1.7);
     private readonly Ellipse _nestDot = Dot(12);
     private readonly TextBlock _nestSub = new();
-    private readonly Canvas _right = new() { Width = 96 + 334, Height = Height168 };
+    private readonly Canvas _right = new() { Width = RightWidth, Height = Height168 };
+    private readonly LayoutTransformControl _scaler = new();
     private readonly Slot[] _slots = new Slot[Slots];
+    private double _rightNeed = RightWidth;
     private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromMilliseconds(33) };
     private double _phase;
     private DateTime _last;
@@ -49,10 +54,10 @@ public sealed class HubView : UserControl
 
     public HubView()
     {
-        _root.ColumnDefinitions.Add(new ColumnDefinition(138, GridUnitType.Pixel));
+        _root.ColumnDefinitions.Add(new ColumnDefinition(ThisWidth, GridUnitType.Pixel));
         _root.ColumnDefinitions.Add(new ColumnDefinition(1, GridUnitType.Star) { MinWidth = 60 });
-        _root.ColumnDefinitions.Add(new ColumnDefinition(52, GridUnitType.Pixel));
-        _root.ColumnDefinitions.Add(new ColumnDefinition(430, GridUnitType.Pixel));
+        _root.ColumnDefinitions.Add(new ColumnDefinition(NestWidth, GridUnitType.Pixel));
+        _root.ColumnDefinitions.Add(new ColumnDefinition(RightWidth, GridUnitType.Pixel));
 
         BuildThis();
         BuildLine();
@@ -65,7 +70,8 @@ public sealed class HubView : UserControl
         }
         Grid.SetColumn(_right, 3);
         _root.Children.Add(_right);
-        Content = _root;
+        _scaler.Child = _root;
+        Content = _scaler;
 
         _timer.Tick += (_, _) => Tick();
     }
@@ -292,7 +298,50 @@ public sealed class HubView : UserControl
             else
                 _slots[i].Hide();
         }
+        _rightNeed = Math.Min(RightWidth, 96 + _slots.Max(s => s.Need()));
+        InvalidateMeasure();
         UpdateTimer();
+    }
+
+    /// <summary>The nest's square, and the pill or word on this computer's line, for the checks.</summary>
+    internal Control NestBox => _nestBox;
+
+    internal Control ThisPill => _thisPill;
+
+    internal TextBlock ThisLabel => _thisLabel;
+
+    /// <summary>How much the picture is shrunk to fit (1 when it fits as it is), for the checks.</summary>
+    internal double Scale => _scaler.LayoutTransform is ScaleTransform t ? t.ScaleX : 1;
+
+    /// <summary>
+    /// Fits the picture to the width it has. This computer's line always fits its speed pill or word (it used to be
+    /// squeezed to 60 px in a 980 px window, and the pill ran under the nest). When that leaves too little, the others'
+    /// side gives up its spare room first, down to what their names and words need; only then is the whole picture
+    /// shrunk, evenly, so nothing is cut off or drawn over anything else.
+    /// </summary>
+    protected override Size MeasureOverride(Size availableSize)
+    {
+        if (availableSize.Width is > 0 and < double.PositiveInfinity)
+            Fit(availableSize.Width);
+        return base.MeasureOverride(availableSize);
+    }
+
+    private void Fit(double width)
+    {
+        Control middle = _thisPill.IsVisible ? _thisPill : _thisLabel.IsVisible ? _thisLabel : _thisCross;
+        middle.Measure(Size.Infinity);
+        var line = Math.Max(60, middle.DesiredSize.Width + _thisLine.Margin.Left + 24);
+        var right = Math.Clamp(width - ThisWidth - NestWidth - line, _rightNeed, RightWidth);
+        _root.ColumnDefinitions[1].MinWidth = line;
+        _root.ColumnDefinitions[3].Width = new GridLength(right, GridUnitType.Pixel);
+        _right.Width = right;
+        foreach (var slot in _slots)
+            slot.RowWidth = right - 96;
+        var natural = ThisWidth + line + NestWidth + right;
+        var scale = Math.Min(1, width / natural);
+        if (Math.Abs(scale - Scale) > 0.001)
+            _scaler.LayoutTransform = scale < 1 ? new ScaleTransform(scale, scale) : null;
+        _root.Width = scale < 1 ? natural : double.NaN;
     }
 
     // ------------------------------------------------------------------ motion
@@ -537,6 +586,27 @@ public sealed class HubView : UserControl
         public Geometry? IconData => _glyph.Data;
 
         public string Text => _name.IsVisible ? $"{_name.Text}: {_status.Text}" : string.Empty;
+
+        public double RowWidth
+        {
+            set => _row.Width = Math.Max(0, value);
+        }
+
+        /// <summary>The width its row needs to show the name and the status in full (0 when it shows nothing).</summary>
+        public double Need()
+        {
+            if (!_row.IsVisible)
+                return 0;
+            var fixedPart = _row.ColumnDefinitions[0].Width.Value + _row.ColumnDefinitions[1].Width.Value;
+            if (_moreButton.IsVisible)
+            {
+                _moreButton.Measure(Size.Infinity);
+                return fixedPart + _moreButton.DesiredSize.Width;
+            }
+            _name.Measure(Size.Infinity);
+            _status.Measure(Size.Infinity);
+            return fixedPart + _name.DesiredSize.Width + _status.DesiredSize.Width;
+        }
 
         public void AddTo(Canvas canvas)
         {

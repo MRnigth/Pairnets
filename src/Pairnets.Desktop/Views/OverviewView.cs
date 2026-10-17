@@ -916,7 +916,9 @@ public sealed class OverviewView : UserControl
 
     private Control BuildFact(OverviewFact fact, bool divider)
     {
-        var row = Columns(Auto, Star, Auto);
+        // The link sits under the value, not beside it: beside it, a narrow window (980 px) left the label and the value
+        // about 40 px ("Nes… 1.…").
+        var row = Columns(Auto, Star);
         row.Margin = new Thickness(18, 0, 18, 0);
         var isFolder = fact.Icon is OverviewIcon.FolderFill;
         var icon = Square(fact.Icon, 34, 16, 11, "T.Chip", isFolder ? "T.Folder" : "T.Muted", isFolder ? 1.4 : 1.9);
@@ -930,14 +932,13 @@ public sealed class OverviewView : UserControl
         row.Children.Add(texts);
         if (fact.LinkText is { } link)
         {
-            var button = new Button { Content = link, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, -6, 0) };
+            var button = new Button { Content = link, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(-6, 1, 0, -3) };
             button.Classes.Add("link");
             var action = fact.LinkAction;
             button.Click += HandlerFor(action);
             if (action == OverviewAction.CheckNestUpdate)
                 button.Name = "VersionButton";
-            Grid.SetColumn(button, 2);
-            row.Children.Add(button);
+            texts.Children.Add(button);
         }
         if (!divider)
             return row;

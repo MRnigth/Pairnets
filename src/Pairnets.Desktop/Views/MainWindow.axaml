@@ -166,9 +166,10 @@
               <!-- Other computers, as one group -->
               <Border Background="{DynamicResource T.Tile}" BorderBrush="{DynamicResource T.Border}" BorderThickness="1" CornerRadius="16" Padding="12,10" Margin="0,6,0,0">
                 <StackPanel>
-                  <Grid ColumnDefinitions="*,Auto,Auto">
-                    <TextBlock Text="Other computers" FontWeight="ExtraBold" VerticalAlignment="Center" />
-                    <TextBlock x:Name="GroupNote" Grid.Column="1" Classes="SoftText" VerticalAlignment="Center" Margin="0,0,8,0" />
+                  <!-- The heading is never cut; the note gets what is left (it was drawn over the heading). -->
+                  <Grid ColumnDefinitions="Auto,*,Auto">
+                    <TextBlock x:Name="GroupTitle" Text="Other computers" FontWeight="ExtraBold" VerticalAlignment="Center" Margin="0,0,8,0" />
+                    <TextBlock x:Name="GroupNote" Grid.Column="1" Classes="SoftText" VerticalAlignment="Center" HorizontalAlignment="Right" TextTrimming="CharacterEllipsis" Margin="0,0,8,0" />
                     <Button x:Name="GroupFold" Grid.Column="2" Classes="RoundIconButton" Width="24" Height="24" Background="Transparent"
                             ToolTip.Tip="Fold the group" AutomationProperties.Name="Fold the group" Click="OnFoldGroup">
                       <v:LineIcon x:Name="GroupFoldIcon" Classes="icon" Width="14" Height="14" StrokeThickness="2.4" Stroke="{DynamicResource T.Muted}" Data="{StaticResource I.ChevronUp}" />
@@ -333,7 +334,7 @@
             </Button>
           </Grid>
 
-          <Grid x:Name="ActivityTools" Grid.Row="1" ColumnDefinitions="*,Auto" Margin="0,16,0,0">
+          <Grid x:Name="ActivityTools" Grid.Row="1" ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto" Margin="0,16,0,0">
             <WrapPanel x:Name="ActivityFilters" VerticalAlignment="Top" />
             <TextBox x:Name="ActivitySearch" Grid.Column="1" Classes="search" Width="250" VerticalAlignment="Top" Watermark="Search files and folders">
               <TextBox.InnerLeftContent>

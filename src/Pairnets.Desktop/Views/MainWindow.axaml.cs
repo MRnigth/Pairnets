@@ -1,6 +1,8 @@
 using Pairnets.Core.Api;
 using System.Collections.ObjectModel;
+using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Interactivity;
 using Avalonia.Media;
 using Pairnets.Core;
@@ -121,6 +123,13 @@ public partial class MainWindow : Window
         FileList.ItemsSource = _shownFiles;
         VersionList.ItemsSource = _versions;
         DevicesList.ItemsSource = _devices;
+        // As many computer cards side by side as fit (3 cut them off in a 980 px window). Each card's 6 px margins are
+        // part of its cell, as on Windows.
+        DevicesList.SizeChanged += (_, e) =>
+        {
+            if (DevicesList.ItemsPanelRoot is UniformGrid grid)
+                grid.Columns = PageLayout.CardColumns(e.NewSize.Width + 12);
+        };
         DeletedList.ItemsSource = _shownFiles;
         AccountPage.Attach(actions);
         WirePages();
@@ -493,6 +502,7 @@ public partial class MainWindow : Window
             ActivityFilters.Children.Add(button);
         }
         ActivitySearch.TextChanged += OnActivitySearch;
+        ActivityTools.SizeChanged += (_, _) => FitActivityTools();
         ShowInFolderButton.Click += OnShowInFolder;
         AddHandler(DeviceCardView.MoreRequestedEvent, OnDeviceMore);
         DrawPills();
@@ -527,6 +537,30 @@ public partial class MainWindow : Window
             button.Classes.Set("sel", filter == _activityFilter);
             count.Text = Format.Count(counts.Of(filter));
         }
+        FitActivityTools();
+    }
+
+    /// <summary>
+    /// The search box beside the filter buttons when both fit, else on its own line under them (in a 980 px window it
+    /// pushed the buttons onto two lines).
+    /// </summary>
+    private void FitActivityTools()
+    {
+        var width = ActivityTools.Bounds.Width;
+        if (width <= 0)
+            return;
+        var filters = 0.0;
+        foreach (var pill in ActivityFilters.Children)
+        {
+            pill.Measure(Size.Infinity);
+            filters += pill.DesiredSize.Width;
+        }
+        var below = PageLayout.SearchGoesBelow(filters, width);
+        Grid.SetRow(ActivitySearch, below ? 1 : 0);
+        Grid.SetColumn(ActivitySearch, below ? 0 : 1);
+        Grid.SetColumnSpan(ActivitySearch, below ? 2 : 1);
+        ActivitySearch.Width = below ? double.NaN : PageLayout.SearchWidth;
+        ActivitySearch.Margin = below ? new Thickness(0, 4, 0, 0) : new Thickness(PageLayout.SearchGap, 0, 0, 0);
     }
 
     /// <summary>Draws the Activity list for the chosen filter and search (the same Core rows as the Windows app).</summary>

@@ -141,6 +141,11 @@ public class OverviewScreenshotTests
         window.ShowStatus(basis with { Status = RunnerStatus.Blocked, BlockReason = BlockReason.SignedOut, Text = "Signed out" }, Folder, "MacBook");
         Assert.Equal("Signed out of your nest", window.HeadlineText);
         Save(window, outDir, $"avalonia-overview-signed-out-{suffix}.png");
+        window.ShowAttention([]);
+        window.ShowStatus(StatusSnapshot.SignedOut, Folder, "MacBook");
+        Assert.Equal("You’re signed out", window.HeadlineText);
+        Save(window, outDir, $"avalonia-overview-signed-out-here-{suffix}.png");
+        window.ShowAttention(attention);
         window.ShowStatus(basis with { Status = RunnerStatus.Offline, Text = "Offline: timeout", PendingChanges = 12 }, Folder, "MacBook");
         Assert.Equal("Can’t reach your nest", window.HeadlineText);
         Save(window, outDir, $"avalonia-overview-offline-{suffix}.png");

@@ -113,6 +113,10 @@ public static partial class Program
         Save(window, outDir, $"windows-overview-sign-in-{suffix}.png", print);
         window.ShowStatus(basis with { Status = RunnerStatus.Blocked, BlockReason = BlockReason.SignedOut, Text = "Signed out" }, folder, "DESKTOP");
         Save(window, outDir, $"windows-overview-signed-out-{suffix}.png", print);
+        window.ShowAttention([]);
+        window.ShowStatus(StatusSnapshot.SignedOut, folder, "DESKTOP");
+        Save(window, outDir, $"windows-overview-signed-out-here-{suffix}.png", print);
+        window.ShowAttention(attention);
         window.ShowStatus(basis with { Status = RunnerStatus.Offline, Text = "Offline: timeout", PendingChanges = 12 }, folder, "DESKTOP");
         Save(window, outDir, $"windows-overview-offline-{suffix}.png", print);
         window.ShowStatus(basis with { Status = RunnerStatus.Paused, Text = "Paused", Paused = true, PendingChanges = 5 }, folder, "DESKTOP");

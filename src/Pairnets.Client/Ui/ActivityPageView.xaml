@@ -33,7 +33,11 @@
         <ColumnDefinition Width="*" />
         <ColumnDefinition Width="Auto" />
       </Grid.ColumnDefinitions>
-      <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+      <Grid.RowDefinitions>
+        <RowDefinition Height="Auto" />
+        <RowDefinition Height="Auto" />
+      </Grid.RowDefinitions>
+      <WrapPanel x:Name="Filters" Orientation="Horizontal" VerticalAlignment="Center">
         <RadioButton x:Name="FilterAll" Style="{StaticResource PgPill}" GroupName="activityfilter" IsChecked="True" Checked="OnFilter">
           <StackPanel Orientation="Horizontal"><TextBlock Text="All" /><TextBlock x:Name="CountAll" Margin="6,0,0,0" FontWeight="SemiBold" Opacity="0.65" /></StackPanel>
         </RadioButton>
@@ -49,7 +53,7 @@
         <RadioButton x:Name="FilterConflicts" Style="{StaticResource PgPill}" GroupName="activityfilter" Checked="OnFilter">
           <StackPanel Orientation="Horizontal"><TextBlock Text="Conflicts" /><TextBlock x:Name="CountConflicts" Margin="6,0,0,0" FontWeight="SemiBold" Opacity="0.65" /></StackPanel>
         </RadioButton>
-      </StackPanel>
+      </WrapPanel>
       <ui:SearchBox x:Name="Search" Grid.Column="1" Width="250" Height="38" Margin="12,0,0,0" Placeholder="Search files and folders" />
     </Grid>
 

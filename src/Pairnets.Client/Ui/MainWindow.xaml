@@ -178,14 +178,15 @@
               <!-- Other computers, as one group -->
               <Border Background="{DynamicResource T.Tile}" BorderBrush="{DynamicResource T.Border}" BorderThickness="1" CornerRadius="16" Padding="12,10" Margin="0,6,0,0">
                 <StackPanel>
+                  <!-- The heading is never cut; the note gets what is left. -->
                   <Grid>
                     <Grid.ColumnDefinitions>
+                      <ColumnDefinition Width="Auto" />
                       <ColumnDefinition Width="*" />
                       <ColumnDefinition Width="Auto" />
-                      <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
-                    <TextBlock Text="Other computers" FontWeight="ExtraBold" VerticalAlignment="Center" />
-                    <TextBlock x:Name="GroupNote" Grid.Column="1" Style="{StaticResource SoftText}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                    <TextBlock x:Name="GroupTitle" Text="Other computers" FontWeight="ExtraBold" VerticalAlignment="Center" Margin="0,0,8,0" />
+                    <TextBlock x:Name="GroupNote" Grid.Column="1" Style="{StaticResource SoftText}" VerticalAlignment="Center" HorizontalAlignment="Right" TextTrimming="CharacterEllipsis" Margin="0,0,8,0" />
                     <Button x:Name="GroupFold" Grid.Column="2" Style="{StaticResource RoundIconButton}" Width="24" Height="24" MinWidth="24" MinHeight="24"
                             Background="Transparent" ToolTip="Fold the group" AutomationProperties.Name="Fold the group" Click="OnFoldGroup">
                       <ui:LineIcon x:Name="GroupFoldIcon" Width="14" Height="14" StrokeThickness="2.4" Stroke="{DynamicResource T.Muted}" Data="{StaticResource I.ChevronUp}" />

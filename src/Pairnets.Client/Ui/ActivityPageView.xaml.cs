@@ -23,6 +23,11 @@ public partial class ActivityPageView : UserControl
     {
         InitializeComponent();
         Search.TextChanged += Rebuild;
+        FilterBar.SizeChanged += (_, e) =>
+        {
+            if (e.WidthChanged)
+                FitFilterBar();
+        };
         _ready = true;
         EmptyText.Text = "Put a file in your folder and it shows up here as soon as it is safe on your nest.";
         Rebuild();
@@ -125,6 +130,29 @@ public partial class ActivityPageView : UserControl
 
     // ------------------------------------------------------------------ drawing
 
+    /// <summary>
+    /// The search box beside the filter buttons when both fit, else on its own line under them (in a narrow window the
+    /// buttons were pushed out of sight).
+    /// </summary>
+    private void FitFilterBar()
+    {
+        var width = FilterBar.ActualWidth;
+        if (width <= 0)
+            return;
+        var filters = 0.0;
+        foreach (UIElement pill in Filters.Children)
+        {
+            pill.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            filters += pill.DesiredSize.Width;
+        }
+        var below = PageLayout.SearchGoesBelow(filters, width);
+        Grid.SetRow(Search, below ? 1 : 0);
+        Grid.SetColumn(Search, below ? 0 : 1);
+        Grid.SetColumnSpan(Search, below ? 2 : 1);
+        Search.Width = below ? double.NaN : PageLayout.SearchWidth;
+        Search.Margin = below ? new Thickness(0, 10, 0, 0) : new Thickness(PageLayout.SearchGap, 0, 0, 0);
+    }
+
     private void Rebuild()
     {
         if (!_ready)
@@ -136,6 +164,7 @@ public partial class ActivityPageView : UserControl
         CountDownloaded.Text = Format.Count(counts.Downloaded);
         CountDeleted.Text = Format.Count(counts.Deleted);
         CountConflicts.Text = Format.Count(counts.Conflicts);
+        FitFilterBar();
 
         var none = _items.Count == 0;
         FilterBar.Visibility = none ? Visibility.Collapsed : Visibility.Visible;
