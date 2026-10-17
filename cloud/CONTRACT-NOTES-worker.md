@@ -39,9 +39,9 @@ integrator can fold the useful ones into `CONTRACT.md`.
 - Every successful sign-in (not only a re-auth) deletes the session row this browser had before.
 - `GET /login` while signed in (no `reauth`, no `error`) → `302` to `next`.
 - Google: a callback failure goes to `/login?error=…` without `next`. `error=access_denied` → `google_denied`, any
-  other `error` → `google_failed`; both only after the flow cookie and `state` are checked. For a re-auth,
-  `auth_time >= flow start` is strict (no skew). `aud` must be a string. An unknown `kid` refetches the JWKS at most
-  once a minute.
+  other `error` → `google_failed`; both only after the flow cookie and `state` are checked. A re-auth does
+  not check `auth_time` (Google answers with the old login time; see DECISIONS.md). `aud` must be a string. An
+  unknown `kid` refetches the JWKS at most once a minute.
 
 ### Claim and nest-signed requests
 - `POST /v1/claim`: `serverVersion` is required (string, ≤ 32 characters after trimming); it is kept only in the

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { b64urlEncode } from "../src/b64";
 import { randomBytes } from "../src/crypto";
+import { FakeGoogle } from "./fake-google";
 import { addServer, appSignIn, Harness, linkNest } from "./helpers";
 
 async function setup() {
@@ -354,6 +355,38 @@ describe("allowing a computer is a security step", () => {
     expect(ok.json).toEqual({ status: "approved" });
     h.advance(3);
     expect((await app.call("POST", "/v1/app/poll", { body: { deviceCode } })).json.status).toBe("approved");
+  });
+
+  it("signed in with Google long ago: signing in again with Google allows, though Google sends its old login time", async () => {
+    // The live bug of 2026-10-16: Google answered the re-check with the person's earlier login time, and the site said
+    // "Google sign-in did not work".
+    const h = await Harness.create();
+    const g = await FakeGoogle.install(h);
+    const b = h.browser();
+    const googleLogin = h.clock.now;
+    await g.signIn(b);
+    const nest = await addServer(h, b, { label: "soro" });
+    h.advance(16 * 60);
+    const app = h.client("198.51.100.80");
+    const start = await app.call("POST", "/v1/app/start", { body: { name: "PC-2", system: "Linux", appVersion: "1.0.56" } });
+    const { userCode, deviceCode } = start.json as { userCode: string; deviceCode: string };
+
+    const next = `/app?code=${userCode}`;
+    const page = await b.call("GET", next);
+    expect(page.location).toBe(`/login?reauth=1&next=${encodeURIComponent(next)}`);
+    const login = await b.call("GET", page.location!);
+    expect(login.text).toContain(`href="/login/google?next=${encodeURIComponent(next)}&amp;reauth=1"`);
+
+    g.claims = { auth_time: googleLogin };
+    const { auth, callback } = await g.signIn(b, `?next=${encodeURIComponent(next)}&reauth=1`);
+    expect(auth.searchParams.get("max_age")).toBe("0");
+    expect(callback.location).toBe(next);
+    expect((await b.call("GET", next)).status).toBe(200);
+    const ok = await b.call("POST", "/v1/app/approve", { body: { userCode, approve: true, nestId: nest.nestId } });
+    expect(ok.json).toEqual({ status: "approved" });
+    h.advance(3);
+    expect((await app.call("POST", "/v1/app/poll", { body: { deviceCode } })).json.status).toBe("approved");
+    expect(h.mailer.to("you@gmail.com").filter((m) => m.subject.includes("A computer was allowed"))).toHaveLength(1);
   });
 
   it("the page script sends a reauth_required answer to the sign-in page with reauth=1", async () => {

@@ -746,12 +746,15 @@ anything else becomes `/account`. Version 2 adds `/add` and `/add?code=` (same c
 
 - `GET /login/google?next=&reauth=1` → sets `__Host-pn_g`, **302** to Google's authorization URL with `client_id`,
   `redirect_uri=https://id.pairnets.app/login/google/callback`, `response_type=code`, `scope=openid email`, `state`,
-  `nonce`, `code_challenge` (S256), `prompt=select_account` (and `max_age=0` when `reauth=1`). Per-IP limit.
+  `nonce`, `code_challenge` (S256), `prompt=select_account` (and `max_age=0` when `reauth=1`, as a hint only). Per-IP limit.
 - `GET /login/google/callback?state=&code=` → cookie and state match and not expired; exchange the code (with the PKCE
   verifier) at Google's token endpoint; verify the `id_token` **signature** (RS256) against Google's JWKS (cached ≤ 1 h),
   `iss` ∈ {`https://accounts.google.com`, `accounts.google.com`}, `aud == GOOGLE_CLIENT_ID`, `exp > now - 60`,
-  `nonce` matches, `email_verified == true`, `sub` present (and `auth_time >= flow start` when `reauth`). Then the
+  `nonce` matches, `email_verified == true`, `sub` present. Then the
   account (§6.6), a new session, **302** `next`. Failure → **302** `/login?error=google_failed|google_denied|google_expired`.
+- A re-auth is the fresh round trip itself (new state, nonce and PKCE, the account picker, a newly signed `id_token`);
+  `auth_time` is not checked. Google cannot be made to ask for the password again and answers someone already
+  signed in to Google with the old login time, or none.
 - Test seams (internal): `GOOGLE_AUTH_URL`, `GOOGLE_TOKEN_URL`, `GOOGLE_JWKS_URL` variables; tests mock `fetch`.
 
 **Email**

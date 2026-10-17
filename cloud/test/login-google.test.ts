@@ -102,18 +102,48 @@ describe("login-google", () => {
     expect(g.lastTokenRequest).toBeNull();
   });
 
-  it("re-auth asks Google for a fresh sign-in and checks auth_time", async () => {
+  it("re-auth asks Google for a fresh sign-in, and accepts Google's old login time", async () => {
+    // Google does not ask an already signed-in person for the password again: it answers with the old login time,
+    // or none. The fresh round trip is the re-check, so either answer is a recent sign-in here.
     const h = await Harness.create();
     const g = await FakeGoogle.install(h);
     const b = h.browser();
-    g.claims = { auth_time: 1791504000 - 1 };
+    await g.signIn(b);
+    h.advance(1000);
+    expect((await b.call("GET", "/v1/me")).json.session.recentAuth).toBe(false);
+    g.claims = { auth_time: 1791504000 - 86400 };
     const first = await g.signIn(b, "?reauth=1");
     expect(first.auth.searchParams.get("max_age")).toBe("0");
-    expect(first.callback.location).toBe("/login?error=google_failed");
+    expect(first.auth.searchParams.get("prompt")).toBe("select_account");
+    expect(first.callback.location).toBe("/account");
+    expect((await b.call("GET", "/v1/me")).json.session.recentAuth).toBe(true);
+
+    h.advance(1000);
     g.claims = { auth_time: undefined };
-    expect((await g.signIn(b, "?reauth=1")).callback.location).toBe("/login?error=google_failed");
-    g.claims = {};
     expect((await g.signIn(b, "?reauth=1")).callback.location).toBe("/account");
+    expect((await b.call("GET", "/v1/me")).json.session.recentAuth).toBe(true);
+  });
+
+  it("a re-auth still checks everything else in Google's answer", async () => {
+    const cases: [string, (g: FakeGoogle) => void][] = [
+      ["wrong nonce", (g) => (g.claims = { nonce: "someone-elses-nonce" })],
+      ["wrong audience", (g) => (g.claims = { aud: "other-client" })],
+      ["signature by another key", (g) => (g.forgeSignature = true)],
+      ["email not verified", (g) => (g.claims = { email_verified: false })],
+    ];
+    for (const [name, change] of cases) {
+      const h = await Harness.create();
+      const g = await FakeGoogle.install(h);
+      change(g);
+      const { callback } = await g.signIn(h.browser(), "?reauth=1");
+      expect(callback.location, name).toBe("/login?error=google_failed");
+    }
+    // A state from another flow is refused too.
+    const h = await Harness.create();
+    await FakeGoogle.install(h);
+    const b = h.browser();
+    await b.call("GET", "/login/google?reauth=1");
+    expect((await b.call("GET", "/login/google/callback?state=wrong&code=x")).location).toBe("/login?error=google_failed");
   });
 
   it("a re-auth replaces the old session", async () => {
