@@ -53,14 +53,14 @@
             </Border>
           </Grid>
           <Border Style="{StaticResource PgHair}" Margin="0,18" />
-          <UniformGrid Columns="4" Margin="-5,0">
-            <Border Background="{DynamicResource T.Chip}" CornerRadius="14" Padding="14,12" Margin="5,0">
+          <UniformGrid x:Name="NestChips" Columns="4" Margin="-5">
+            <Border Background="{DynamicResource T.Chip}" CornerRadius="14" Padding="14,12" Margin="5">
               <StackPanel>
                 <TextBlock Style="{StaticResource PgSub}" Margin="0" FontSize="12" Text="Address" />
                 <TextBlock x:Name="NestAddress" FontSize="15" FontWeight="Bold" Margin="0,2,0,0" TextTrimming="CharacterEllipsis" />
               </StackPanel>
             </Border>
-            <Border Background="{DynamicResource T.Chip}" CornerRadius="14" Padding="14,12" Margin="5,0">
+            <Border Background="{DynamicResource T.Chip}" CornerRadius="14" Padding="14,12" Margin="5">
               <StackPanel>
                 <TextBlock Style="{StaticResource PgSub}" Margin="0" FontSize="12" Text="Version" />
                 <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
@@ -69,13 +69,13 @@
                 </StackPanel>
               </StackPanel>
             </Border>
-            <Border Background="{DynamicResource T.Chip}" CornerRadius="14" Padding="14,12" Margin="5,0">
+            <Border Background="{DynamicResource T.Chip}" CornerRadius="14" Padding="14,12" Margin="5">
               <StackPanel>
                 <TextBlock Style="{StaticResource PgSub}" Margin="0" FontSize="12" Text="Free space" />
                 <TextBlock x:Name="NestSpace" FontSize="15" FontWeight="Bold" Margin="0,2,0,0" />
               </StackPanel>
             </Border>
-            <Border Background="{DynamicResource T.Chip}" CornerRadius="14" Padding="14,12" Margin="5,0">
+            <Border Background="{DynamicResource T.Chip}" CornerRadius="14" Padding="14,12" Margin="5">
               <StackPanel>
                 <TextBlock Style="{StaticResource PgSub}" Margin="0" FontSize="12" Text="Keeps deleted files" />
                 <TextBlock x:Name="NestKeeps" FontSize="15" FontWeight="Bold" Margin="0,2,0,0" />
@@ -115,11 +115,15 @@
       </StackPanel>
 
       <!-- Removing and renaming happens on the nest's website -->
-      <StackPanel Orientation="Horizontal" Margin="4,16,0,0">
-        <ui:LineIcon Width="16" Height="16" Margin="0,0,8,0" StrokeThickness="1.9" Stroke="{DynamicResource T.Muted}" Data="{StaticResource I.InfoCircle}" />
-        <TextBlock Style="{StaticResource PgSub}" Margin="0" FontSize="13"
+      <Grid Margin="4,16,0,0">
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="Auto" />
+          <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+        <ui:LineIcon Width="16" Height="16" Margin="0,1,8,0" VerticalAlignment="Top" StrokeThickness="1.9" Stroke="{DynamicResource T.Muted}" Data="{StaticResource I.InfoCircle}" />
+        <TextBlock Grid.Column="1" Style="{StaticResource PgSub}" Margin="0" FontSize="13" TextWrapping="Wrap"
                    Text="To remove a computer or turn off its access, use Manage devices on your nest. Its files stay where they are." />
-      </StackPanel>
+      </Grid>
     </StackPanel>
   </ScrollViewer>
 </UserControl>

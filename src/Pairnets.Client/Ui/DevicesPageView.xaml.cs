@@ -15,7 +15,12 @@ public partial class DevicesPageView : UserControl
     public DevicesPageView()
     {
         InitializeComponent();
-        // As many computer cards side by side as fit (3 cut them off in a narrow window).
+        // The nest's four facts 2 by 2, and as many computer cards side by side, as fit (more cut them off).
+        NestChips.SizeChanged += (_, e) =>
+        {
+            if (e.WidthChanged)
+                NestChips.Columns = PageLayout.ChipColumns(e.NewSize.Width);
+        };
         CardGrid.SizeChanged += (_, e) =>
         {
             if (e.WidthChanged)

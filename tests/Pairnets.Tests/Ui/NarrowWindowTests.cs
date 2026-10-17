@@ -63,6 +63,14 @@ public class NarrowWindowTests
 
     private static bool Trimmed(TextBlock t) => t.TextLayout.TextLines.Any(l => l.HasCollapsed);
 
+    /// <summary>True when a one-line text block has less room than its whole text needs (cut off, or running over).</summary>
+    private static bool Cut(TextBlock t)
+    {
+        var whole = new TextBlock { Text = t.Text, FontFamily = t.FontFamily, FontSize = t.FontSize, FontWeight = t.FontWeight };
+        whole.Measure(Size.Infinity);
+        return Trimmed(t) || whole.DesiredSize.Width > t.Bounds.Width + 0.5;
+    }
+
     private static TextBlock Shown(Visual root, string text) =>
         Screen.All<TextBlock>(root).Single(t => t.Text == text && t.IsEffectivelyVisible && t.IsAttachedToVisualTree());
 
@@ -132,6 +140,10 @@ public class NarrowWindowTests
         var lines = Screen.All<TextBlock>(window).Where(t => t.Name == "SystemText" && t.IsEffectivelyVisible).ToList();
         Assert.Equal(2, lines.Count);
         Assert.All(lines, t => Assert.False(Trimmed(t), $"'{t.Text}' is cut off"));
+        foreach (var label in new[] { "Address", "Version", "Free space", "Keeps deleted files" })
+            Assert.False(Cut(Shown(window, label)), $"the nest's '{label}' is cut off");
+        var note = Shown(window, "To remove a computer or turn off its access, use Manage devices on your nest. Its files stay where they are.");
+        Assert.True(Where(note, window).Right <= window.Bounds.Width, "the note under the cards runs out of the window");
         Close(window);
     }
 

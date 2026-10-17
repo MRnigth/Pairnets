@@ -125,6 +125,7 @@ public partial class MainWindow : Window
         DevicesList.ItemsSource = _devices;
         // As many computer cards side by side as fit (3 cut them off in a 980 px window). Each card's 6 px margins are
         // part of its cell, as on Windows.
+        NestChips.SizeChanged += (_, e) => NestChips.Columns = PageLayout.ChipColumns(e.NewSize.Width);
         DevicesList.SizeChanged += (_, e) =>
         {
             if (DevicesList.ItemsPanelRoot is UniformGrid grid)

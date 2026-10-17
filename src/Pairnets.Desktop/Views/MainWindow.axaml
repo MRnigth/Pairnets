@@ -731,14 +731,14 @@
                     </Border>
                   </Grid>
                   <Border Classes="hair" />
-                  <UniformGrid Columns="4">
-                    <Border Classes="infochip" Margin="0,0,5,0">
+                  <UniformGrid x:Name="NestChips" Columns="4" Margin="-5">
+                    <Border Classes="infochip" Margin="5">
                       <StackPanel>
                         <TextBlock Classes="t3" Foreground="{DynamicResource T.Muted}" Text="Address" />
                         <TextBlock x:Name="NestAddress" FontSize="15" FontWeight="Bold" TextTrimming="CharacterEllipsis" />
                       </StackPanel>
                     </Border>
-                    <Border Classes="infochip" Margin="5,0">
+                    <Border Classes="infochip" Margin="5">
                       <StackPanel>
                         <TextBlock Classes="t3" Foreground="{DynamicResource T.Muted}" Text="Version" />
                         <StackPanel Orientation="Horizontal" Spacing="8">
@@ -747,13 +747,13 @@
                         </StackPanel>
                       </StackPanel>
                     </Border>
-                    <Border Classes="infochip" Margin="5,0">
+                    <Border Classes="infochip" Margin="5">
                       <StackPanel>
                         <TextBlock Classes="t3" Foreground="{DynamicResource T.Muted}" Text="Free space" />
                         <TextBlock x:Name="NestSpace" FontSize="15" FontWeight="Bold" />
                       </StackPanel>
                     </Border>
-                    <Border Classes="infochip" Margin="5,0,0,0">
+                    <Border Classes="infochip" Margin="5">
                       <StackPanel>
                         <TextBlock Classes="t3" Foreground="{DynamicResource T.Muted}" Text="Keeps deleted files" />
                         <TextBlock x:Name="NestKeeps" FontSize="15" FontWeight="Bold" />
@@ -796,11 +796,11 @@
                 <TextBlock x:Name="DevicesEmptyText" Classes="t2" TextWrapping="Wrap" TextAlignment="Center" MaxWidth="340"
                            Text="Loading the computers that use your nest…" />
               </StackPanel>
-              <StackPanel Orientation="Horizontal" Spacing="8" Margin="4,0,0,0">
-                <v:LineIcon Classes="icon ink-soft" Width="16" Height="16" StrokeThickness="2" Data="{StaticResource I.InfoCircle}" VerticalAlignment="Center" />
-                <TextBlock Classes="t2" FontSize="13" VerticalAlignment="Center" TextWrapping="Wrap"
+              <Grid ColumnDefinitions="Auto,*" Margin="4,0,0,0">
+                <v:LineIcon Classes="icon ink-soft" Width="16" Height="16" StrokeThickness="2" Data="{StaticResource I.InfoCircle}" VerticalAlignment="Top" Margin="0,1,8,0" />
+                <TextBlock Grid.Column="1" Classes="t2" FontSize="13" VerticalAlignment="Center" TextWrapping="Wrap"
                            Text="To remove a computer or turn off its access, use Manage devices on your nest. Its files stay where they are." />
-              </StackPanel>
+              </Grid>
             </StackPanel>
           </ScrollViewer>
         </Grid>

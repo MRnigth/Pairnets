@@ -93,6 +93,11 @@ public sealed class NarrowWindowTests
             var lines = Shown(window).Where(t => t.Name == "SystemText").ToList();
             Assert.Equal(2, lines.Count);
             Assert.All(lines, t => Assert.False(Cut(t), $"'{t.Text}' is cut off"));
+            var texts = Shown(window);
+            foreach (var label in new[] { "Address", "Version", "Free space", "Keeps deleted files" })
+                Assert.False(Cut(texts.Single(t => t.Text == label)), $"the nest's '{label}' is cut off");
+            var note = texts.Single(t => t.Text.StartsWith("To remove a computer", StringComparison.Ordinal));
+            Assert.True(Where(note, window).Right <= window.ActualWidth, "the note under the cards runs out of the window");
         });
         await Done();
     }

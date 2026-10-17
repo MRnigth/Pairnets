@@ -15,6 +15,12 @@ public static class PageLayout
     /// <summary>A computer card on the Devices page is never narrower than this (narrower cut off "Linux · 1.0…").</summary>
     public const double MinCardWidth = 250;
 
+    /// <summary>A fact about the nest on the Devices page ("Keeps deleted files") is never narrower than this.</summary>
+    public const double MinChipWidth = 170;
+
+    /// <summary>The nest's four facts on the Devices page: 4 across, or 2 by 2 when 4 would cut them off.</summary>
+    public static int ChipColumns(double width) => width / 4 >= MinChipWidth ? 4 : 2;
+
     /// <summary>How many computer cards fit side by side in <paramref name="width"/> (1 to 3).</summary>
     public static int CardColumns(double width) => Math.Clamp((int)(width / MinCardWidth), 1, 3);
 
