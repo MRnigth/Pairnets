@@ -334,6 +334,11 @@ public static partial class Program
         window.ShowAttentionTab(true);
         Save(window, outDir, $"windows-main-attention-{suffix}.png", print);
 
+        // A release Pairnets did not sign: the card says so and only offers to hide it.
+        window.ShowAttentionTab(false);
+        window.ShowUpdate("Pairnets 1.0.58 could not be installed", ReleaseSigning.NotSignedMessage, "Hide");
+        Save(window, outDir, $"windows-update-not-signed-{suffix}.png", print);
+
         window.ShowUpdate(null, string.Empty, string.Empty);
         window.ShowAttention([]);
         window.ShowAttentionTab(false);
