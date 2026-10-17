@@ -193,6 +193,28 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
     public async Task TheQuestions_EveryButtonDoesWhatItSays() => Pass(await RunAsync("questions"));
 
     /// <summary>Every handler an AXAML file names ran at least once in the runs above.</summary>
+    /// <summary>
+    /// Every button in the main window and the tray panel, in every state, has a name screen readers read out. A button
+    /// whose content is an icon and a text (Pause, Sync now) has none unless it is given one.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task EveryButtonHasANameForScreenReaders()
+    {
+        var nameless = new SortedSet<string>();
+        foreach (var scene in Groups["main window"].Concat(Groups["tray panel"]))
+        {
+            await using var stage = new Stage(scene.Where);
+            await scene.Arrange(stage);
+            Dispatcher.UIThread.RunJobs();
+            foreach (var button in Screen.All<Button>(stage.Window).Where(b => b.IsAttachedToVisualTree() && b.IsEffectivelyVisible))
+            {
+                if (string.IsNullOrWhiteSpace(Avalonia.Automation.Peers.ControlAutomationPeer.CreatePeerForElement(button).GetName()))
+                    nameless.Add($"'{Screen.Describe(button)}' on {scene.Where}");
+            }
+        }
+        Assert.True(nameless.Count == 0, "Screen readers read no name for: " + string.Join(", ", nameless));
+    }
+
     [AvaloniaFact]
     public async Task EveryHandlerInTheAxamlIsPressedByATest()
     {

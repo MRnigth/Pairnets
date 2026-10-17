@@ -91,7 +91,7 @@
               <TextBlock FontWeight="SemiBold" Text="When something needs you" />
               <TextBlock Classes="t3" Text="A file to compare, or deletions waiting for your OK." TextWrapping="Wrap" />
             </StackPanel>
-            <ToggleSwitch x:Name="AttentionSwitch" IsCheckedChanged="OnNotifyChanged" Grid.Column="2" Classes="bare" OnContent="When something needs you" OffContent="When something needs you" VerticalAlignment="Center" />
+            <ToggleSwitch x:Name="AttentionSwitch" IsCheckedChanged="OnNotifyChanged" Grid.Column="2" Classes="bare" AutomationProperties.Name="When something needs you" OnContent="When something needs you" OffContent="When something needs you" VerticalAlignment="Center" />
           </Grid>
           <Border Classes="hair" />
           <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,12">
@@ -100,7 +100,7 @@
               <TextBlock FontWeight="SemiBold" Text="When a computer asks to join" />
               <TextBlock Classes="t3" Text="So you can let it in, or say no." TextWrapping="Wrap" />
             </StackPanel>
-            <ToggleSwitch x:Name="JoinSwitch" IsCheckedChanged="OnNotifyChanged" Grid.Column="2" Classes="bare" OnContent="When a computer asks to join" OffContent="When a computer asks to join" VerticalAlignment="Center" />
+            <ToggleSwitch x:Name="JoinSwitch" IsCheckedChanged="OnNotifyChanged" Grid.Column="2" Classes="bare" AutomationProperties.Name="When a computer asks to join" OnContent="When a computer asks to join" OffContent="When a computer asks to join" VerticalAlignment="Center" />
           </Grid>
           <Border Classes="hair" />
           <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,12">
@@ -109,7 +109,7 @@
               <TextBlock FontWeight="SemiBold" Text="When an app update is ready" />
               <TextBlock Classes="t3" Text="You still choose when to install it." TextWrapping="Wrap" />
             </StackPanel>
-            <ToggleSwitch x:Name="UpdateSwitch" IsCheckedChanged="OnNotifyChanged" Grid.Column="2" Classes="bare" OnContent="When an app update is ready" OffContent="When an app update is ready" VerticalAlignment="Center" />
+            <ToggleSwitch x:Name="UpdateSwitch" IsCheckedChanged="OnNotifyChanged" Grid.Column="2" Classes="bare" AutomationProperties.Name="When an app update is ready" OnContent="When an app update is ready" OffContent="When an app update is ready" VerticalAlignment="Center" />
           </Grid>
         </StackPanel>
       </Border>

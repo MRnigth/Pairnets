@@ -1,5 +1,6 @@
 using System.Text.RegularExpressions;
 using System.Windows;
+using System.Windows.Automation.Peers;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using Microsoft.Extensions.DependencyInjection;
@@ -279,6 +280,25 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
                 missing.Add($"A {click} on the tray icon is never tested.");
         }
         Assert.True(missing.Count == 0, string.Join(Environment.NewLine, missing));
+    }
+
+    /// <summary>
+    /// Every button in the main window and the tray panel, in every state, has a name screen readers read out. A button
+    /// whose content is an icon and a text (Pause, Sync now) has none unless it is given one.
+    /// </summary>
+    [Fact]
+    public async Task EveryButtonHasANameForScreenReaders()
+    {
+        var nameless = new SortedSet<string>();
+        foreach (var screen in MainWindowScreens().Concat(TrayPanelScreens()))
+        {
+            nameless.UnionWith(await Open(screen, (_, window) => Wpf.Ui(() => Presser.Find(window)
+                .Where(t => t.Kind == PressKind.Button && t.Element is ButtonBase)
+                .Where(t => string.IsNullOrWhiteSpace(UIElementAutomationPeer.CreatePeerForElement(t.Element)?.GetName()))
+                .Select(t => $"'{t.Label}' in the {screen.Window}")
+                .ToList())));
+        }
+        Assert.True(nameless.Count == 0, "Screen readers read no name for: " + string.Join(", ", nameless));
     }
 
     private static async Task Expect(Task<IReadOnlyList<string>> run)

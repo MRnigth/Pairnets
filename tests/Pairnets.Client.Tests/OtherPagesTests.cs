@@ -94,6 +94,28 @@ public sealed class OtherPagesTests
         await Done(window);
     }
 
+    // ------------------------------------------------------------------ screen readers
+
+    [Fact]
+    public async Task ThePauseButtonIsReadOutAsPauseThenResume()
+    {
+        var (window, _, _) = await OpenAsync();
+        var idle = StatusSnapshot.Initial with { Status = RunnerStatus.Idle, Text = "Up to date" };
+        await Wpf.Ui(() => window.ShowStatus(idle, @"D:\Sync\Work", "DESKTOP"));
+        await Wpf.Settle();
+        Assert.Equal("Pause", await Wpf.Ui(() => SpokenName(window, "Pause")));
+
+        await Wpf.Ui(() => window.ShowStatus(idle with { Status = RunnerStatus.Paused, Paused = true }, @"D:\Sync\Work", "DESKTOP"));
+        await Wpf.Settle();
+        Assert.Equal("Resume", await Wpf.Ui(() => SpokenName(window, "Resume")));
+        await Done(window);
+    }
+
+    /// <summary>What a screen reader reads out for the button that shows <paramref name="label"/>.</summary>
+    private static string SpokenName(Window window, string label) =>
+        System.Windows.Automation.Peers.UIElementAutomationPeer.CreatePeerForElement(
+            Presser.Find(window).First(t => t.Label == label && t.Element is Button).Element).GetName();
+
     // ------------------------------------------------------------------ Activity
 
     [Fact]

@@ -20,6 +20,7 @@ public static class ThemeManager
     /// <summary>Applies the theme to <paramref name="app"/>. <paramref name="dark"/> null follows Windows.</summary>
     public static void Apply(Application app, bool? dark = null)
     {
+        Ui.ScreenReaderNames.Register();
         var resources = app.Resources.MergedDictionaries;
         if (_palette is null)
         {
