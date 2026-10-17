@@ -3,6 +3,7 @@
 
 import { audit } from "../audit";
 import type { Ctx } from "../context";
+import { type Env, intVar } from "../env";
 import { B32_UPPER, randomBase32, sha256 } from "../crypto";
 import { cleanLabel, cleanText, emailName, iso, MAX_USERNAME, NEST_ID_RE, SESSION_ID_RE } from "../formats";
 import { HttpError, htmlResponse, json, noContent, redirect } from "../http";
@@ -23,8 +24,18 @@ import {
 } from "../sessions";
 import { serversOf } from "./servers";
 
-/** Nests per account, both kinds together (pending ones count). */
+/** Nests per account, both kinds together (pending ones count), unless wrangler.toml's MAX_NESTS_PER_ACCOUNT says otherwise. */
 export const MAX_NESTS_PER_ACCOUNT = 3;
+
+/** How many nests one account may have (MAX_NESTS_PER_ACCOUNT in wrangler.toml, default 3). Ones it has already stay. */
+export function maxNestsPerAccount(env: Env): number {
+  return intVar(env.MAX_NESTS_PER_ACCOUNT, MAX_NESTS_PER_ACCOUNT);
+}
+
+/** 409 nest_limit, naming the limit in force. */
+export function nestLimitError(env: Env): HttpError {
+  return new HttpError(409, "nest_limit", `This account already has ${maxNestsPerAccount(env)} servers. Remove one first.`);
+}
 export const MAX_UNUSED_CODES = 5;
 export const MAX_CODES_PER_DAY = 20;
 export const CLAIM_CODE_LIFETIME = 600;
@@ -236,7 +247,7 @@ export async function createClaimCodeRoute(ctx: Ctx): Promise<Response> {
   if (label === "invalid") throw new HttpError(400, "bad_request");
 
   const nests = await ctx.env.DB.prepare("SELECT COUNT(*) AS n FROM nests WHERE account_id = ?1").bind(s.accountId).first<{ n: number }>();
-  if ((nests?.n ?? 0) >= MAX_NESTS_PER_ACCOUNT) throw new HttpError(409, "nest_limit");
+  if ((nests?.n ?? 0) >= maxNestsPerAccount(ctx.env)) throw nestLimitError(ctx.env);
   const unused = await ctx.env.DB.prepare("SELECT COUNT(*) AS n FROM claim_codes WHERE account_id = ?1 AND used_at IS NULL AND expires_at > ?2")
     .bind(s.accountId, ctx.now)
     .first<{ n: number }>();

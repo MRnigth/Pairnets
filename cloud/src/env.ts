@@ -9,11 +9,13 @@ export interface Env {
   /**
    * Workers Rate Limiting bindings (wrangler.toml `[[ratelimits]]`, relay.ts): the flood ceiling per address
    * (RELAY_PER_MINUTE), each computer's own budget (RELAY_DEVICE_PER_MINUTE) and the budget for keyless and failing
-   * requests per address (RELAY_IP_PER_MINUTE). Missing (a local run without them): the relay does not limit and warns once.
+   * requests per address (RELAY_IP_PER_MINUTE) and each server's own budget (RELAY_NEST_PER_MINUTE). Missing (a local
+   * run without them): the relay does not limit and warns once.
    */
   RELAY_LIMIT?: RateLimit;
   RELAY_DEVICE_LIMIT?: RateLimit;
   RELAY_FAIL_LIMIT?: RateLimit;
+  RELAY_NEST_LIMIT?: RateLimit;
 
   // Secrets (dashboard / `wrangler secret put`; tests generate them).
   SIGNING_KEY: string;
@@ -41,6 +43,8 @@ export interface Env {
   EMAIL_DAILY_LIMIT: string;
   /** Relay nests in all (default 900, under Cloudflare's 1,000 tunnels per account). */
   MAX_NESTS?: string;
+  /** Nests one account may have, both kinds together (default 3); a removed one does not count. */
+  MAX_NESTS_PER_ACCOUNT?: string;
   HOSTED_LOGIN_DISABLED?: string;
   GOOGLE_AUTH_URL?: string;
   GOOGLE_TOKEN_URL?: string;

@@ -7,12 +7,15 @@ import { RELAY_CSP } from "../src/http";
 import { keyedHash } from "../src/ratelimit";
 import {
   deviceKeyOf,
+  NEST_BUSY_MESSAGE,
   NEST_CACHE_SECONDS,
   RELAY_DEVICE_PER_MINUTE,
   RELAY_IP_PER_MINUTE,
   RELAY_LIMIT_PERIOD,
+  RELAY_NEST_PER_MINUTE,
   RELAY_PER_MINUTE,
   relayAllowed,
+  SEEN_EVERY,
 } from "../src/relay";
 import { addServer, Harness, linkNest, ORIGIN } from "./helpers";
 
@@ -286,7 +289,7 @@ describe("relay", () => {
     expect(b).toBeTruthy();
   }, 120_000);
 
-  it("wrangler.toml's three rate limit bindings have the limits and period the code and docs name, each its own namespace", () => {
+  it("wrangler.toml's four rate limit bindings have the limits and period the code and docs name, each its own namespace", () => {
     const toml = wranglerToml.replace(/\r\n/g, "\n");
     // The lines between each `[[ratelimits]]` and the next table.
     const blocks = toml.split("\n[[ratelimits]]\n").slice(1).map((x) => x.split("\n[")[0] ?? "");
@@ -295,6 +298,7 @@ describe("relay", () => {
       ["RELAY_LIMIT", RELAY_PER_MINUTE],
       ["RELAY_DEVICE_LIMIT", RELAY_DEVICE_PER_MINUTE],
       ["RELAY_FAIL_LIMIT", RELAY_IP_PER_MINUTE],
+      ["RELAY_NEST_LIMIT", RELAY_NEST_PER_MINUTE],
     ] as const;
     for (const [name, limit] of bindings) {
       const block = blocks.find((x) => new RegExp(`^name = "${name}"$`, "m").test(x)) ?? "";
@@ -306,7 +310,7 @@ describe("relay", () => {
     }
     expect(blocks).toHaveLength(bindings.length);
     expect(ids.size).toBe(bindings.length);
-    expect([RELAY_PER_MINUTE, RELAY_DEVICE_PER_MINUTE, RELAY_IP_PER_MINUTE, RELAY_LIMIT_PERIOD]).toEqual([20000, 6000, 600, 60]);
+    expect([RELAY_PER_MINUTE, RELAY_DEVICE_PER_MINUTE, RELAY_IP_PER_MINUTE, RELAY_NEST_PER_MINUTE, RELAY_LIMIT_PERIOD]).toEqual([20000, 6000, 600, 30000, 60]);
   });
 
   it("a refusal from the binding is 429 rate_limited with Retry-After 60, keyed on the address, before any lookup", async () => {
@@ -335,7 +339,7 @@ describe("relay", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     try {
       const seen: string[] = [];
-      const { nest, app } = await setup({ RELAY_LIMIT: undefined, RELAY_DEVICE_LIMIT: undefined, RELAY_FAIL_LIMIT: undefined, DB: countingDb(seen) });
+      const { nest, app } = await setup({ RELAY_LIMIT: undefined, RELAY_DEVICE_LIMIT: undefined, RELAY_FAIL_LIMIT: undefined, RELAY_NEST_LIMIT: undefined, DB: countingDb(seen) });
       const key = "test-device-key-local";
       nest.deviceKeys.add(key);
       const before = seen.length;
@@ -343,7 +347,7 @@ describe("relay", () => {
         expect((await app.call("GET", `/n/${nest.nestId}/api/health`)).status).toBe(200);
         expect((await app.call("GET", `/n/${nest.nestId}/api/secret`, { headers: { "X-Sync-Token": key } })).status).toBe(200);
       }
-      for (const name of ["RELAY_LIMIT", "RELAY_DEVICE_LIMIT", "RELAY_FAIL_LIMIT"]) {
+      for (const name of ["RELAY_LIMIT", "RELAY_DEVICE_LIMIT", "RELAY_FAIL_LIMIT", "RELAY_NEST_LIMIT"]) {
         expect(warn.mock.calls.filter((c) => String(c[0]).includes(`no ${name} binding`)), name).toHaveLength(1);
       }
       expect(seen.slice(before).filter((q) => q.includes("rate_counters"))).toHaveLength(0);
@@ -473,6 +477,71 @@ describe("relay", () => {
     expect(rows.some((r) => r.bucket.includes(key) || r.bucket.includes(nest.nestId))).toBe(false);
   });
 
+  it("a server's own budget is 30,000 requests a minute from all its computers together, then 429 for that server only", async () => {
+    const { h, b, nest } = await setup();
+    expect(RELAY_NEST_PER_MINUTE).toBe(30000);
+    const pc1 = "test-device-key-nest-pc1";
+    const pc2 = "test-device-key-nest-pc2";
+    nest.deviceKeys.add(pc1);
+    nest.deviceKeys.add(pc2);
+    const other = await addServer(h, b, { label: "other", ip: "198.51.100.41" });
+    other.deviceKeys.add(pc1);
+    const home = h.client("198.51.100.82");
+    const office = h.client("198.51.100.83");
+    const call = (via: typeof home, n: typeof nest, k: string) => via.call("GET", `/n/${n.nestId}/api/secret`, { headers: { "X-Sync-Token": k } });
+    // 29,999 requests already this minute, under the key the Worker uses (a keyed hash of the server's id).
+    const key = await keyedHash(h.env, `nest
+${nest.nestId}`);
+    h.limits.nest.set(key, RELAY_NEST_PER_MINUTE - 1);
+
+    expect((await call(home, nest, pc1)).status).toBe(200); // the 30,000th
+    const seen = nest.requests.length;
+    // Over it: any computer, from any address, waits; the server sees nothing more.
+    for (const [via, k] of [[home, pc1], [office, pc2]] as const) {
+      const over = await call(via, nest, k);
+      expect(over.status).toBe(429);
+      expect(over.json).toEqual({ error: "rate_limited", message: NEST_BUSY_MESSAGE });
+      expect(over.headers.get("retry-after")).toBe(String(RELAY_LIMIT_PERIOD));
+    }
+    expect(nest.requests.length).toBe(seen);
+    // Another server of the same account goes on, and the refusals did not count against the addresses.
+    expect((await call(home, other, pc1)).status).toBe(200);
+    expect(h.limits.fail.keys.filter((k) => k === "198.51.100.82" || k === "198.51.100.83")).toEqual([]);
+    // A minute later the server is served again.
+    h.advance(RELAY_LIMIT_PERIOD);
+    expect((await call(office, nest, pc2)).status).toBe(200);
+    // The limiter never saw the server's id, and nothing was counted in D1.
+    expect(h.limits.nest.keys.some((k) => k.includes(nest.nestId))).toBe(false);
+    const rows = await h.query<{ bucket: string }>("SELECT bucket FROM rate_counters");
+    expect(rows.filter((r) => r.bucket.startsWith("relay"))).toEqual([]);
+  });
+
+  it("a server that answers is written down as seen at most once a day (it keeps its account in use)", async () => {
+    const seen: string[] = [];
+    const { h, nest, app } = await setup({ DB: countingDb(seen) });
+    const seenWrites = () => seen.filter((q) => q.startsWith("UPDATE nests SET last_seen_at = ?1 WHERE id = ?2 AND (last_seen_at IS NULL")).length;
+    const lastSeen = async () => (await h.query<{ last_seen_at: number | null }>("SELECT last_seen_at FROM nests WHERE id = ?1", nest.nestId))[0].last_seen_at;
+    const before = seenWrites();
+    const t1 = h.clock.now;
+    for (let i = 0; i < 3; i++) expect((await app.call("GET", `/n/${nest.nestId}/api/health`)).text).toBe("ok");
+    expect(seenWrites() - before).toBe(1);
+    expect(await lastSeen()).toBe(t1);
+    // Later the same day (the row read again from D1): no more writes.
+    h.advance(SEEN_EVERY - 60);
+    for (let i = 0; i < 3; i++) expect((await app.call("GET", `/n/${nest.nestId}/api/health`)).text).toBe("ok");
+    expect(seenWrites() - before).toBe(1);
+    // A day after the last one: written again.
+    h.advance(60);
+    expect((await app.call("GET", `/n/${nest.nestId}/api/health`)).text).toBe("ok");
+    expect(seenWrites() - before).toBe(2);
+    expect(await lastSeen()).toBe(h.clock.now);
+    // A server that does not answer is not seen.
+    h.advance(SEEN_EVERY + 1);
+    nest.running = false;
+    expect((await app.call("GET", `/n/${nest.nestId}/api/health`)).status).toBe(503);
+    expect(seenWrites() - before).toBe(2);
+  });
+
   it("made-up keys, unknown servers and refused paths count against the address: over 600 a minute, then nothing", async () => {
     const { h, nest } = await setup();
     const good = "test-device-key-good";
@@ -557,5 +626,5 @@ function countingDb(seen: string[]): D1Database {
 
 /** How many times the relay read a nest row. */
 function nestLookups(seen: string[]): number {
-  return seen.filter((q) => q.startsWith("SELECT id, account_id, status, routed_version FROM nests")).length;
+  return seen.filter((q) => q.startsWith("SELECT id, account_id, status, routed_version, last_seen_at FROM nests")).length;
 }

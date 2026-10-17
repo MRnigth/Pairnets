@@ -25,7 +25,7 @@ import { enforce, HOUR } from "../ratelimit";
 import { jsonBody } from "../request";
 import { runRouterLogged } from "../router";
 import { isRecent, loadBrowserSession, requireBrowser, requireRecent, secretHash } from "../sessions";
-import { MAX_NESTS_PER_ACCOUNT, type NestRow } from "./account";
+import { maxNestsPerAccount, nestLimitError, type NestRow } from "./account";
 
 export const SERVER_LINK_LIFETIME = 900;
 export const SERVER_POLL_INTERVAL = 3;
@@ -189,7 +189,7 @@ async function createNestRow(ctx: Ctx, accountId: string, link: ServerLinkRow, l
              AND (SELECT COUNT(*) FROM nests WHERE account_id = ?2) < ?6
              AND (SELECT COUNT(*) FROM nests WHERE mode = 'relay') < ?7`,
       )
-      .bind(nestId, accountId, label, ctx.now, link.id, MAX_NESTS_PER_ACCOUNT, max),
+      .bind(nestId, accountId, label, ctx.now, link.id, maxNestsPerAccount(ctx.env), max),
     db
       .prepare(
         `UPDATE server_links SET status = 'approving', account_id = ?2, decided_at = ?3, nest_id = ?1
@@ -204,7 +204,7 @@ async function createNestRow(ctx: Ctx, accountId: string, link: ServerLinkRow, l
   if (again.status !== "pending") throw new HttpError(409, "already_decided");
   if (again.expires_at <= ctx.now) throw new HttpError(400, "expired");
   const mine = await db.prepare("SELECT COUNT(*) AS n FROM nests WHERE account_id = ?1").bind(accountId).first<{ n: number }>();
-  if ((mine?.n ?? 0) >= MAX_NESTS_PER_ACCOUNT) throw new HttpError(409, "nest_limit");
+  if ((mine?.n ?? 0) >= maxNestsPerAccount(ctx.env)) throw nestLimitError(ctx.env);
   throw new HttpError(503, "full");
 }
 

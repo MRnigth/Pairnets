@@ -187,6 +187,20 @@ describe("adding a server", () => {
     expect((await b.call("GET", `/v1/servers/requests/${fourth.userCode}`)).json.status).toBe("pending");
   });
 
+  it("MAX_NESTS_PER_ACCOUNT sets the limit; servers an account already has stay", async () => {
+    const { h, b } = await setup();
+    await addServer(h, b, { ip: "198.51.100.44" });
+    await addServer(h, b, { ip: "198.51.100.45" });
+    h.env.MAX_NESTS_PER_ACCOUNT = "1"; // lowered below what the account has
+    const third = await startServer(h, "third", "198.51.100.46");
+    const r = await b.call("POST", "/v1/servers/approve", { body: { userCode: third.userCode, approve: true } });
+    expect(r.status).toBe(409);
+    expect(r.json).toEqual({ error: "nest_limit", message: "This account already has 1 servers. Remove one first." });
+    expect((await h.env.DB.prepare("SELECT COUNT(*) AS n FROM nests").first<{ n: number }>())?.n).toBe(2);
+    expect(h.cf.tunnels.size).toBe(2);
+    expect((await b.call("POST", "/v1/nests/claim-codes", { body: {} })).json.error).toBe("nest_limit");
+  });
+
   it("the service holds at most MAX_NESTS relayed servers (503 full)", async () => {
     const { h, b } = await setup({ MAX_NESTS: "1" });
     await addServer(h, b);

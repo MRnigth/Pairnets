@@ -13,7 +13,7 @@ import { hit, keyedHash, MINUTE } from "./ratelimit";
 import { linkFailed, ROUTER_ERROR_HEADER, runRouterLogged, SELF_HEAL_AFTER } from "./router";
 
 /**
- * Rate limits of the relay (RELAY.md 5.6). Three budgets, each one of Cloudflare's Rate Limiting bindings next to the
+ * Rate limits of the relay (RELAY.md 5.6). Four budgets, each one of Cloudflare's Rate Limiting bindings next to the
  * Worker (wrangler.toml `[[ratelimits]]`), so a relayed request costs no database round trip for counting:
  *
  * - RELAY_PER_MINUTE per address (RELAY_LIMIT): a ceiling for everything, only there to stop floods.
@@ -24,6 +24,9 @@ import { linkFailed, ROUTER_ERROR_HEADER, runRouterLogged, SELF_HEAL_AFTER } fro
  *   server that is offline). An address over it gets 429 for every relayed request for RELAY_LIMIT_PERIOD: the guard
  *   against abuse, so a caller without a working key never gets more than this. Only the server can tell whether a key
  *   is good; a made-up key gets 401 from it and is counted here.
+ * - RELAY_NEST_PER_MINUTE per server (RELAY_NEST_LIMIT): everything relayed to one server, from all its computers and
+ *   addresses together. Five computers each at their full budget fit under it, so normal use never meets it; it only
+ *   stops one server from taking the whole service's share of requests. The limiter sees only a keyed hash of the id.
  *
  * Each MUST match `simple.limit` of its binding in wrangler.toml (a test checks this): the binding enforces it, the
  * constant names it for the docs and the tests. The counts are kept per Cloudflare location and are approximate, which
@@ -32,12 +35,18 @@ import { linkFailed, ROUTER_ERROR_HEADER, runRouterLogged, SELF_HEAL_AFTER } fro
 export const RELAY_PER_MINUTE = 20000;
 export const RELAY_DEVICE_PER_MINUTE = 6000;
 export const RELAY_IP_PER_MINUTE = 600;
+export const RELAY_NEST_PER_MINUTE = 30000;
 /** The bindings' period, and so the Retry-After of a refused request (they give no exact time of their own). */
 export const RELAY_LIMIT_PERIOD = 60;
 /** How long a nest row read for the relay is reused before it is read again (seconds). */
 export const NEST_CACHE_SECONDS = 30;
 /** At most this many nest rows (or blocked addresses) are kept; the whole map is emptied when it is full. */
 export const NEST_CACHE_MAX = 1000;
+/** What a computer is told when its server used up the server's own budget (the apps wait and send again). */
+export const NEST_BUSY_MESSAGE =
+  "This server got more requests through Pairnets this minute than one server may have. Syncing waits a minute and then goes on by itself.";
+/** How often the relay writes down that a server answered (nests.last_seen_at): at most once a day for each server. */
+export const SEEN_EVERY = 86400;
 
 /** Where relayed requests are addressed; the router uses only the path and query. */
 const ROUTER_BASE = "https://pairnets-router";
@@ -83,6 +92,7 @@ interface RelayNest {
   account_id: string;
   status: "pending" | "active" | "broken";
   routed_version: number | null;
+  last_seen_at: number | null;
 }
 
 /**
@@ -109,7 +119,7 @@ export function resetRelayState(): void {
 async function lookupNest(ctx: Ctx, nestId: string, fresh = false): Promise<RelayNest | null> {
   const cached = fresh ? undefined : nestCache.get(nestId);
   if (cached && cached.until > ctx.now) return cached.nest;
-  const nest = await ctx.env.DB.prepare("SELECT id, account_id, status, routed_version FROM nests WHERE id = ?1 AND mode = 'relay'")
+  const nest = await ctx.env.DB.prepare("SELECT id, account_id, status, routed_version, last_seen_at FROM nests WHERE id = ?1 AND mode = 'relay'")
     .bind(nestId)
     .first<RelayNest>();
   if (nestCache.size >= NEST_CACHE_MAX && !nestCache.has(nestId)) nestCache.clear();
@@ -121,7 +131,7 @@ function usable(nest: RelayNest | null): nest is RelayNest {
   return nest !== null && (nest.status === "pending" || nest.status === "active");
 }
 
-type LimitBinding = "RELAY_LIMIT" | "RELAY_DEVICE_LIMIT" | "RELAY_FAIL_LIMIT";
+type LimitBinding = "RELAY_LIMIT" | "RELAY_DEVICE_LIMIT" | "RELAY_FAIL_LIMIT" | "RELAY_NEST_LIMIT";
 
 /** Counts one request under `key` and tells whether it is within the binding's limit. Without the binding (local runs): always true. */
 async function allowed(ctx: Ctx, binding: LimitBinding, key: string): Promise<boolean> {
@@ -142,8 +152,8 @@ async function allowed(ctx: Ctx, binding: LimitBinding, key: string): Promise<bo
   }
 }
 
-function tooMany(retryAfter: number): HttpError {
-  return new HttpError(429, "rate_limited", undefined, { "Retry-After": String(Math.max(1, retryAfter)) });
+function tooMany(retryAfter: number, message?: string): HttpError {
+  return new HttpError(429, "rate_limited", message, { "Retry-After": String(Math.max(1, retryAfter)) });
 }
 
 /** ANY /n/... : never throws; JSON errors, relayed answers made inert for browsers (http.ts finalizeRelay). */
@@ -214,6 +224,11 @@ async function forward(ctx: Ctx): Promise<Response> {
   } else if (!(await allowed(ctx, "RELAY_DEVICE_LIMIT", await keyedHash(ctx.env, `${nest.id}\n${key}`)))) {
     throw tooMany(RELAY_LIMIT_PERIOD);
   }
+  //    Then the server's own budget, for everything that would now go to it (the limiter sees only a keyed hash of its
+  //    id). Going over it is not the caller's doing, so it is not counted against the address.
+  if (!(await allowed(ctx, "RELAY_NEST_LIMIT", await keyedHash(ctx.env, `nest\n${nest.id}`)))) {
+    throw tooMany(RELAY_LIMIT_PERIOD, NEST_BUSY_MESSAGE);
+  }
 
   // 3. To the router: same method, streamed body, the caller's headers minus ours and Cloudflare's.
   const headers = new Headers(ctx.req.headers);
@@ -255,11 +270,24 @@ async function forward(ctx: Ctx): Promise<Response> {
   // The server turned the key away: from now on it counts against the address, like a request without a key.
   if (key !== null && (resp.status === 401 || resp.status === 403)) await countAgainstAddress(ctx);
 
-  // 5. The nest answered: a pending nest is now active. The cached row says so too, so this Worker instance does not
-  //    write again for every request of the next 30 s (the update only matches 'pending' rows anyway).
+  // 5. The nest answered: it is online, which keeps its account in use (cron.ts deletes accounts unused for a year).
+  //    That is written down at most once a day per server; the cached row says so at once, so this Worker instance
+  //    does not write again for every request of the next 30 s.
+  if (nest.last_seen_at === null || nest.last_seen_at <= ctx.now - SEEN_EVERY) {
+    const cached = nestCache.get(nest.id);
+    if (cached?.nest) cached.nest = { ...cached.nest, last_seen_at: ctx.now };
+    ctx.defer(
+      ctx.env.DB.prepare("UPDATE nests SET last_seen_at = ?1 WHERE id = ?2 AND (last_seen_at IS NULL OR last_seen_at <= ?3)")
+        .bind(ctx.now, nest.id, ctx.now - SEEN_EVERY)
+        .run()
+        .catch((e: unknown) => console.error("relay: noting the server as seen failed", e instanceof Error ? e.message : "unknown")),
+    );
+  }
+  //    A pending nest is now active. The cached row says so too, so this Worker instance does not write again for
+  //    every request of the next 30 s (the update only matches 'pending' rows anyway).
   if (nest.status === "pending") {
     const cached = nestCache.get(nest.id);
-    if (cached?.nest === nest) cached.nest = { ...nest, status: "active" };
+    if (cached?.nest) cached.nest = { ...cached.nest, status: "active" };
     ctx.defer(
       markReached(ctx.env, ctx.now, nest.id).then(
         (changed) => (changed ? audit(ctx, "server_active", nest.account_id, nest.id) : undefined),
