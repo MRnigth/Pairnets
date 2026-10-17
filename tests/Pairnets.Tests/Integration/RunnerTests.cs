@@ -1,3 +1,4 @@
+using Pairnets.Core;
 using Pairnets.Core.Sync;
 using Pairnets.Tests.Infrastructure;
 
@@ -204,6 +205,7 @@ public class RunnerTests : IAsyncLifetime
         BatchThreshold = 10,
         PeerQuietTimeout = TimeSpan.FromSeconds(2),
         HoldCheckInterval = TimeSpan.FromMilliseconds(200),
+        BatchReannounceInterval = TimeSpan.FromMilliseconds(500), // well under the quiet timeout, as in the app
     };
 
     private async Task<(SyncRunner Desktop, SyncRunner Laptop)> StartBothAsync()
@@ -241,6 +243,79 @@ public class RunnerTests : IAsyncLifetime
         lock (downloadsPerPass)
             Assert.Contains(30, downloadsPerPass); // in one go, not a few at a time
         Assert.Null(laptop.WaitingFor);
+    }
+
+    [Fact]
+    public async Task TheWaitHoldsWhileOneBigFileIsStillGoingUp()
+    {
+        // A file that takes about 3 s to go up, longer than the 2 s quiet timeout, with nothing finishing meanwhile. The
+        // laptop used to count only finished files as signs of life, stop waiting after 2 s and get the rest in pieces.
+        await _desktop.DisposeAsync();
+        _desktop = new Device("desktop", _server, parallel: 1, configureApi: api => api.UploadLimit.BytesPerSecond = 300 * 1024);
+        var (desktop, laptop) = await StartBothAsync();
+        var passes = new List<(int Downloaded, string Reasons)>();
+        laptop.PassCompleted += r => { lock (passes) passes.Add((r.Result.Downloaded, string.Join(",", r.Reasons))); };
+
+        var big = new byte[900 * 1024];
+        Random.Shared.NextBytes(big);
+        _desktop.WriteBytes("batch/00-big.bin", big);
+        for (var i = 1; i <= 10; i++)
+            _desktop.Write($"batch/f{i:00}.txt", "batch " + i);
+        desktop.RequestSync("test");
+
+        await WaitUntil(() => _laptop.Exists("batch/00-big.bin") && Enumerable.Range(1, 10).All(i => _laptop.Exists($"batch/f{i:00}.txt")),
+            TimeSpan.FromSeconds(30), "laptop to download the batch");
+        await WaitUntil(() => { lock (passes) return passes.Sum(p => p.Downloaded) >= 11; }, TimeSpan.FromSeconds(10), "laptop's pass report");
+        lock (passes)
+            Assert.True(passes.Any(p => p.Downloaded == 11), "in one go, not in pieces: " + string.Join(" | ", passes.Select(p => $"{p.Downloaded} ({p.Reasons})")));
+    }
+
+    [Fact]
+    public void BytesGoingUpKeepTheWaitAndAStuckComputerEndsIt()
+    {
+        var clock = new ManualClock();
+        var runner = new SyncRunner(_laptop.Engine, new RunnerOptions
+        {
+            ServerUrl = _laptop.Url, Token = _laptop.Token, DeviceId = "laptop", EnableHub = false, EnableWatcher = false,
+            PeerQuietTimeout = TimeSpan.FromMinutes(2), Clock = clock,
+        });
+        var moving = new TransferReport(4_000_000, 0, 3, 500, 1L << 30, 4L << 30, Uploading: true);
+
+        runner.OnPeerBatch("desktop", 500, true);
+        Assert.Equal(new PeerWait("desktop", 500, 0), runner.WaitingFor);
+
+        // Three minutes into one big file: no file finished, but its bytes keep going up.
+        foreach (var _ in Enumerable.Range(0, 3))
+        {
+            clock.Advance(TimeSpan.FromSeconds(60));
+            runner.NotePeerProgress("desktop", moving);
+            runner.CheckHolds();
+        }
+        Assert.NotNull(runner.WaitingFor);
+
+        // The announcement repeated (as a computer does while its bytes move) keeps the wait too, and starts nothing over.
+        clock.Advance(TimeSpan.FromSeconds(100));
+        runner.OnPeerBatch("desktop", 500, true);
+        clock.Advance(TimeSpan.FromSeconds(100));
+        runner.CheckHolds();
+        Assert.Equal(new PeerWait("desktop", 500, 0), runner.WaitingFor);
+
+        // Stuck: reports that say nothing moves (stalled, or no speed) do not count, so the wait ends.
+        runner.NotePeerProgress("desktop", moving with { Stalled = true });
+        runner.NotePeerProgress("desktop", moving with { UpBytesPerSecond = 0 });
+        clock.Advance(TimeSpan.FromSeconds(30));
+        runner.CheckHolds();
+        Assert.Null(runner.WaitingFor);
+    }
+
+    /// <summary>A clock that moves only when told to.</summary>
+    private sealed class ManualClock : TimeProvider
+    {
+        private DateTimeOffset _now = new(2026, 10, 17, 12, 0, 0, TimeSpan.Zero);
+
+        public override DateTimeOffset GetUtcNow() => _now;
+
+        public void Advance(TimeSpan by) => _now += by;
     }
 
     [Fact]

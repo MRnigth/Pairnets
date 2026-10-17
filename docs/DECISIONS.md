@@ -1020,3 +1020,13 @@ The owner's answers to the 2026-10-14 audit questions:
   so 33 buttons with an icon and a text had none. Rather than naming each by hand, `ScreenReaderNames` names every
   button that has no name of its own after its first text (kept in step: Pause → Resume), or its tooltip. A sweep test
   checks every button of the main window and the tray panel in both apps.
+
+## Waiting for another computer's batch sees bytes, not only files (2026-10-17)
+
+* **A computer waiting for another's big batch now counts bytes going up as a sign of life.** It used to count only
+  finished files, so one file that took longer than the quiet time (2 minutes; a big video on a slow upload) ended the
+  wait, and the rest of the batch came in pieces. Now the sender repeats its "uploading a batch" message every 15 s while
+  its bytes move, and live speed reports with bytes going up count too. A stuck sender moves nothing, repeats nothing,
+  and the others stop waiting as before; the 30-minute limit and "Download now anyway" stay.
+* **The repeat comes from the sync engine, not the app window**, so it works on every computer, with or without its
+  window open. Keep `BatchReannounceInterval` well under the others' `PeerQuietTimeout`.

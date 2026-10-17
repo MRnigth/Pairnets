@@ -85,6 +85,12 @@ public sealed class SyncEngine
     public event Action<int, int, long>? ExecutionStarting;
 
     /// <summary>
+    /// Awaited right after <see cref="ExecutionStarting"/>, before the first transfer, with the number of uploads: the
+    /// runner announces a big batch to the other computers here. Awaited, so a slow push channel holds no thread.
+    /// </summary>
+    internal Func<int, CancellationToken, Task>? BeforeExecution { get; set; }
+
+    /// <summary>
     /// Raised once per pass right after <see cref="ExecutionStarting"/>: the uploads and downloads of the pass in
     /// the order they run, each as its path and "upload" or "download". Deletions and conflicts are left out (a
     /// conflict's copy and download show up in <see cref="Progress"/> when they start).
@@ -402,10 +408,10 @@ public sealed class SyncEngine
         }
         if (ordered.Count > 0)
             StageChanged?.Invoke(SyncStage.Transferring, 0, ordered.Count);
-        ExecutionStarting?.Invoke(
-            ordered.Count(p => p.Action is SyncAction.Upload or SyncAction.Conflict),
-            ordered.Count(p => p.Action == SyncAction.Download),
-            plannedBytes);
+        var uploads = ordered.Count(p => p.Action is SyncAction.Upload or SyncAction.Conflict);
+        ExecutionStarting?.Invoke(uploads, ordered.Count(p => p.Action == SyncAction.Download), plannedBytes);
+        if (BeforeExecution is { } before)
+            await before(uploads, ct).ConfigureAwait(false);
         ExecutionPlanned?.Invoke(ordered
             .Where(p => p.Action is SyncAction.Upload or SyncAction.Download)
             .Select(p => (p.Path, p.Action == SyncAction.Upload ? "upload" : "download"))

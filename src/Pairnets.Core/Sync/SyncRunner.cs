@@ -50,6 +50,16 @@ public sealed class RunnerOptions
 
     /// <summary>How often the two timeouts above are checked.</summary>
     public TimeSpan HoldCheckInterval { get; init; } = TimeSpan.FromSeconds(5);
+
+    /// <summary>
+    /// While its big batch is going up, this computer repeats the announcement this often, so the others keep waiting
+    /// as long as bytes move and not only while files finish (one big file can take longer than their
+    /// <see cref="PeerQuietTimeout"/>). Keep it well under that timeout.
+    /// </summary>
+    public TimeSpan BatchReannounceInterval { get; init; } = TimeSpan.FromSeconds(15);
+
+    /// <summary>The clock the batch waits run on (tests hand in their own).</summary>
+    public TimeProvider Clock { get; init; } = TimeProvider.System;
 }
 
 /// <summary>Another computer is uploading a big batch; this one waits. <see cref="Seen"/> files of it reached the server so far.</summary>
@@ -85,6 +95,9 @@ public sealed class SyncRunner : IAsyncDisposable
     private readonly HashSet<string> _arrivedDuringPass = new(StringComparer.Ordinal);
     private readonly Dictionary<string, PeerBatchState> _peerBatches = new(StringComparer.Ordinal);
     private bool _announced;
+    private int _announcedCount;
+    private int _announcedFilesDone;
+    private DateTimeOffset _lastAnnounced;
     private Timer? _holdTimer;
 
     private sealed class PeerBatchState(int count, DateTimeOffset now)
@@ -108,7 +121,8 @@ public sealed class SyncRunner : IAsyncDisposable
         _engine = engine;
         _options = options;
         _log = log ?? Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance;
-        _engine.ExecutionStarting += OnExecutionStarting;
+        _engine.BeforeExecution = AnnounceBatchAsync;
+        _engine.Progress += OnEngineProgress;
     }
 
     public RunnerStatus Status { get; private set; } = RunnerStatus.Idle;
@@ -222,14 +236,23 @@ public sealed class SyncRunner : IAsyncDisposable
         RequestSync("download-now");
     }
 
-    private void OnPeerBatch(string device, int count, bool active)
+    internal void OnPeerBatch(string device, int count, bool active)
     {
         if (string.Equals(device, _options.DeviceId, StringComparison.Ordinal) || !_options.WaitForPeerBatches)
             return;
         if (active)
         {
             lock (_gate)
-                _peerBatches[device] = new PeerBatchState(count, DateTimeOffset.UtcNow);
+            {
+                var now = _options.Clock.GetUtcNow();
+                if (_peerBatches.TryGetValue(device, out var waiting))
+                {
+                    // Repeated while its bytes are still going up: it is busy, keep waiting (and keep what was counted).
+                    waiting.LastActivity = now;
+                    return;
+                }
+                _peerBatches[device] = new PeerBatchState(count, now);
+            }
             _log.LogInformation("{Device} is uploading {Count} files; waiting to download them in one go", device, count);
             PeerWaitChanged?.Invoke(WaitingFor);
         }
@@ -247,10 +270,25 @@ public sealed class SyncRunner : IAsyncDisposable
             if (!_peerBatches.TryGetValue(device, out var batch))
                 return false;
             batch.Seen++;
-            batch.LastActivity = DateTimeOffset.UtcNow;
+            batch.LastActivity = _options.Clock.GetUtcNow();
         }
         PeerWaitChanged?.Invoke(WaitingFor);
         return true;
+    }
+
+    /// <summary>
+    /// A live report from a computer whose batch we wait for: bytes still going up count as a sign that it is busy,
+    /// like a finished file. Only finished files used to count, so one big file ended the wait for the whole batch.
+    /// </summary>
+    internal void NotePeerProgress(string device, TransferReport report)
+    {
+        if (report.Stalled || report.UpBytesPerSecond < 1)
+            return;
+        lock (_gate)
+        {
+            if (_peerBatches.TryGetValue(device, out var batch))
+                batch.LastActivity = _options.Clock.GetUtcNow();
+        }
     }
 
     private void EndHold(string device, string reason)
@@ -268,9 +306,9 @@ public sealed class SyncRunner : IAsyncDisposable
             RequestSync(reason, full: true);
     }
 
-    private void CheckHolds()
+    internal void CheckHolds()
     {
-        var now = DateTimeOffset.UtcNow;
+        var now = _options.Clock.GetUtcNow();
         List<(string Device, string Reason)> expired;
         lock (_gate)
         {
@@ -295,16 +333,49 @@ public sealed class SyncRunner : IAsyncDisposable
     }
 
     /// <summary>Tells the other computers that this pass uploads a big batch (they wait for it).</summary>
-    private void OnExecutionStarting(int uploads, int downloads, long bytes)
+    private async Task AnnounceBatchAsync(int uploads, CancellationToken ct)
     {
         if (uploads < _options.BatchThreshold || _hub?.State != HubConnectionState.Connected)
             return;
         lock (_gate)
+        {
             _announced = true;
+            _announcedCount = uploads;
+            _announcedFilesDone = 0;
+            _lastAnnounced = _options.Clock.GetUtcNow();
+        }
         // Wait for the server to pass the announcement on before the first upload: otherwise the
         // first files can reach the other computer before it knows a batch is coming. Bounded,
-        // so a slow push channel never holds up syncing for long.
-        InvokeHubAsync("BatchStarted", uploads).Wait(TimeSpan.FromSeconds(3));
+        // so a slow push channel never holds up syncing for long (and awaited, so it holds no thread).
+        try
+        {
+            await InvokeHubAsync("BatchStarted", uploads).WaitAsync(TimeSpan.FromSeconds(3), ct).ConfigureAwait(false);
+        }
+        catch (TimeoutException)
+        {
+            // Go on uploading: the others still hear it, only a little later.
+        }
+    }
+
+    /// <summary>
+    /// While an announced batch moves bytes, repeats the announcement every <see cref="RunnerOptions.BatchReannounceInterval"/>,
+    /// so the others keep waiting through a big file. A stuck upload moves nothing and repeats nothing, so they stop.
+    /// </summary>
+    private void OnEngineProgress(SyncProgress p)
+    {
+        int count;
+        lock (_gate)
+        {
+            if (!_announced || p.CurrentPath is null || (p.BytesDone <= 0 && p.FilesDone <= _announcedFilesDone))
+                return;
+            _announcedFilesDone = Math.Max(_announcedFilesDone, p.FilesDone);
+            var now = _options.Clock.GetUtcNow();
+            if (now - _lastAnnounced < _options.BatchReannounceInterval)
+                return;
+            _lastAnnounced = now;
+            count = _announcedCount;
+        }
+        _ = InvokeHubAsync("BatchStarted", count);
     }
 
     /// <summary>
@@ -715,8 +786,11 @@ public sealed class SyncRunner : IAsyncDisposable
         _hub.On<string, bool>("PairDecided", (code, _) => JoinDecided?.Invoke(code));
         _hub.On<string, TransferReport>(PushNames.PeerTransfer, (device, report) =>
         {
-            if (!string.Equals(device, _options.DeviceId, StringComparison.OrdinalIgnoreCase) && report is not null)
-                PeerTransferReceived?.Invoke(device, report.Sanitized());
+            if (string.Equals(device, _options.DeviceId, StringComparison.OrdinalIgnoreCase) || report is null)
+                return;
+            var clean = report.Sanitized();
+            NotePeerProgress(device, clean);
+            PeerTransferReceived?.Invoke(device, clean);
         });
         _hub.Reconnecting += _ =>
         {
