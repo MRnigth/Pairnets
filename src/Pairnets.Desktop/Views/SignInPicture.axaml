@@ -60,7 +60,7 @@
           </Border>
         </Panel>
         <TextBlock Text="Other computers" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource T.TextSoft}" HorizontalAlignment="Center"
-                   TextAlignment="Center" TextWrapping="NoWrap" Margin="-28,8,-28,0" />
+                   TextAlignment="Center" TextWrapping="NoWrap" Width="120" Margin="0,8,0,0" />
       </StackPanel>
     </StackPanel>
 
