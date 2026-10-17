@@ -956,6 +956,51 @@ fixed here, the fourth (who runs the service, by legal name and address) is the 
   contrast. `/get.sh` now points at the copy in the latest release, so it answers 404 until the next release
   includes it: release before deploying the site.
 
+## Relay budget per nest, nest limit, unused accounts (2026-10-17)
+
+The owner's answers to the 2026-10-14 audit questions:
+
+* **A relay budget per nest of 30,000 requests a minute** (`RELAY_NEST_LIMIT`), about five computers syncing flat out.
+  Requests, not bytes: Cloudflare bills a Worker by requests, and bytes passing through cost nothing, so a request
+  budget is the one that protects the bill. The apps already wait out a 429 (`BackPressure`).
+* **3 nests per account**, as before, now `MAX_NESTS_PER_ACCOUNT` in wrangler.toml. Nests an account already has are
+  never removed; only a new one is refused.
+* **Accounts unused for a year are deleted, 30 days after a warning email** (`src/inactive.ts`). A nest that is online,
+  or a computer that uses the account, counts as use, so nobody whose setup is running loses it. No warning that went
+  out, no delete. The daily cap of 20 warnings keeps them from using up the emails sign-ins need.
+
+## Signed releases (2026-10-17)
+
+* **What is signed:** `SHA256SUMS.txt` only, with ECDSA P-256 / SHA-256, as the DER signature `openssl dgst -sign`
+  writes (`SHA256SUMS.txt.sig`). It lists every release file, `version.json` included, so one signature covers the
+  installers and the version number: an old signed release can't be passed off as a newer one.
+* **One public key, four places:** `deploy/release-signing.pub` (built into Pairnets.Core) and copies in
+  `deploy/update.sh` and `deploy/get.sh`, which must work without the repository. A test checks the copies match
+  and that the apps accept a signature openssl made with the real key.
+* **Fail closed.** No secret, or a secret that doesn't match the public key: `scripts/sign-release.sh` fails and
+  nothing is published. No or a bad signature: the apps show "isn't signed by Pairnets" and offer only Hide (never
+  the download page), update.sh changes nothing, get.sh stops.
+* **The switch-over needs nothing special.** Apps and servers up to 1.0.56 don't check, so they update to the first
+  signed release as before; from then on they check. `upgrade-check.sh` installs the published release with that
+  release's own `get.sh` (where pairnets.app/get.sh points), because main's copy checks a signature that a release
+  from before the switch doesn't have.
+* **Tests use throwaway keys** (`TestReleaseKey`, `make-feed.sh`'s `feed-signing.key`), handed to the scripts as
+  `PAIRNETS_RELEASE_KEY`. That override is an environment variable of a root service or of the person running
+  get.sh, the same trust as the existing `PAIRNETS_BASE_URL`.
+* **A lost or leaked key** means a new pair, a new secret and a release with the new public key, signed with the
+  old key, so installed apps still take it.
+
+## Signing in again with Google (2026-10-17)
+
+* **A fresh Google round trip is the re-check; Google's login time is not.** Allowing a computer, approving a
+  server, removing a nest and deleting the account need a sign-in from the last 15 minutes. The Google button then
+  sends `max_age=0`, but Google cannot be made to ask for the password again: someone already signed in to Google
+  gets the account picker and an `id_token` carrying the old `auth_time`, or none. The Worker used to refuse that
+  ("Google sign-in did not work. Try again."), so signing in again with Google never worked. Now the round trip
+  itself counts: new state, nonce and PKCE tied to this browser, the account picker, and a newly signed token.
+  A stolen site cookie alone still can't pass it, and every allowed computer still sends a notice email. `max_age=0`
+  stays as a hint. `prompt=login` was not used: Google doesn't support it.
+
 ## Small fixes from the 1.0.55 test (2026-10-17)
 
 * **Narrow windows fit by changing the layout, not by opening wider.** The Mac/Linux window opens at 980 px and the

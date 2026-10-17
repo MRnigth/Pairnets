@@ -19,9 +19,12 @@ The newest release is always the rolling **Latest build** on GitHub (rebuilt fro
 `main` branch), so these links never change:
 
 ```bash
-# Download the newest release and check its checksum
+# Download the newest release, check that Pairnets signed its checksums (HOWTO.md, "Signed releases"), then the checksum
 curl -LO https://github.com/MRnigth/Pairnets/releases/latest/download/pairnets-server-linux-x64.tar.gz
 curl -LO https://github.com/MRnigth/Pairnets/releases/latest/download/SHA256SUMS.txt
+curl -LO https://github.com/MRnigth/Pairnets/releases/latest/download/SHA256SUMS.txt.sig
+curl -LO https://raw.githubusercontent.com/MRnigth/Pairnets/main/deploy/release-signing.pub
+openssl dgst -sha256 -verify release-signing.pub -signature SHA256SUMS.txt.sig SHA256SUMS.txt
 sha256sum --check --ignore-missing SHA256SUMS.txt
 
 tar xzf pairnets-server-linux-x64.tar.gz
@@ -353,7 +356,8 @@ sudo -u pairnets /opt/pairnets/pairnets-server owner-link                 # one-
 3. The root-owned unit `pairnets-update.path` notices it and starts `pairnets-update.service`, which
    runs `/opt/pairnets/update.sh` once.
 4. `update.sh` downloads the newest release (the rolling **Latest build**) from the fixed address
-   `github.com/MRnigth/Pairnets/releases/latest/download`, checks it against `SHA256SUMS.txt`,
+   `github.com/MRnigth/Pairnets/releases/latest/download`, checks that `SHA256SUMS.txt` is signed by the
+   Pairnets release key (the key is inside update.sh), checks the download against it,
    refuses the same or an older version, allows one attempt per 10 minutes, and runs that release's
    `install.sh`. Your settings, the nest's name, sign-ins and computers are kept.
 5. Progress is written to `/var/lib/pairnets/update/status.json`; the app shows it and reconnects.

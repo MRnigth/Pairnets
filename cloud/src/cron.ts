@@ -2,9 +2,11 @@
 // server links, pending own-domain nests older than 1 hour, old rate counters and audit rows older than 90 days. Then
 // the relayed servers: one still pending after an hour (never reached) is given up like a removed one, and the router
 // is deployed when a server is missing from it or a removed one still has a tunnel; the deploy deletes those tunnels and
-// rows, and finally any tunnel of a nest that no longer exists at all.
+// rows, and finally any tunnel of a nest that no longer exists at all. Accounts nobody used for a year are deleted, 30
+// days after a warning email (inactive.ts); their relayed servers' tunnels go in the same router run.
 
-import type { Env } from "./env";
+import type { Ctx } from "./context";
+import { sweepInactive } from "./inactive";
 import { DAY, HOUR } from "./ratelimit";
 import { runRouter } from "./router";
 
@@ -12,7 +14,9 @@ export const AUDIT_DAYS = 90;
 /** The longest rate-limit window is one day; counters are kept two. */
 const COUNTER_KEEP = 2 * DAY;
 
-export async function sweep(env: Env, now: number, fetchFn: typeof fetch): Promise<Record<string, number | string | null>> {
+export async function sweep(ctx: Ctx): Promise<Record<string, number | string | null>> {
+  const { env, now } = ctx;
+  const fetchFn = ctx.deps.fetch;
   const db = env.DB;
   const results = await db.batch([
     db.prepare("DELETE FROM sessions WHERE expires_at <= ?1").bind(now),
@@ -29,13 +33,16 @@ export async function sweep(env: Env, now: number, fetchFn: typeof fetch): Promi
   const counts: Record<string, number | string | null> = {};
   results.forEach((r, i) => (counts[names[i]] = r.meta.changes ?? 0));
 
+  const { tunnels, ...inactive } = await sweepInactive(ctx);
+  Object.assign(counts, inactive);
+
   const need = await db
     .prepare(
       `SELECT (EXISTS (SELECT 1 FROM nests WHERE mode = 'relay' AND status IN ('pending', 'active') AND tunnel_id IS NOT NULL AND routed_version IS NULL)
             OR EXISTS (SELECT 1 FROM nests WHERE mode = 'relay' AND status = 'broken')) AS need`,
     )
     .first<{ need: number }>();
-  const run = await runRouter(env, now, fetchFn, { deploy: !!need?.need, reconcile: true });
+  const run = await runRouter(env, now, fetchFn, { deploy: !!need?.need || tunnels.length > 0, reconcile: true, alsoDelete: tunnels });
   counts.routerBusy = run.busy ? 1 : 0;
   counts.routerDeploys = run.deployed;
   counts.serversCleaned = run.cleaned;

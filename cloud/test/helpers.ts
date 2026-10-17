@@ -12,7 +12,7 @@ import { randomBytes } from "../src/crypto";
 import type { Env } from "../src/env";
 import type { MailMessage, Mailer } from "../src/mail";
 import { signRequest, type NestPurpose } from "../src/nestsig";
-import { RELAY_DEVICE_PER_MINUTE, RELAY_IP_PER_MINUTE, RELAY_LIMIT_PERIOD, RELAY_PER_MINUTE } from "../src/relay";
+import { RELAY_DEVICE_PER_MINUTE, RELAY_IP_PER_MINUTE, RELAY_LIMIT_PERIOD, RELAY_NEST_PER_MINUTE, RELAY_PER_MINUTE } from "../src/relay";
 import { TURNSTILE_VERIFY_URL } from "../src/turnstile";
 import { CF_ACCOUNT, CF_TOKEN, FakeCloudflare, type FakeNestServer, RelayWorld } from "./fake-relay";
 
@@ -168,6 +168,7 @@ export class Harness {
     address: new CountingLimit(RELAY_PER_MINUTE, this.clock),
     device: new CountingLimit(RELAY_DEVICE_PER_MINUTE, this.clock),
     fail: new CountingLimit(RELAY_IP_PER_MINUTE, this.clock),
+    nest: new CountingLimit(RELAY_NEST_PER_MINUTE, this.clock),
   };
   turnstileAnswer = true;
 
@@ -213,6 +214,7 @@ export class Harness {
     if (!("RELAY_LIMIT" in overrides)) h.env.RELAY_LIMIT = h.limits.address.binding();
     if (!("RELAY_DEVICE_LIMIT" in overrides)) h.env.RELAY_DEVICE_LIMIT = h.limits.device.binding();
     if (!("RELAY_FAIL_LIMIT" in overrides)) h.env.RELAY_FAIL_LIMIT = h.limits.fail.binding();
+    if (!("RELAY_NEST_LIMIT" in overrides)) h.env.RELAY_NEST_LIMIT = h.limits.nest.binding();
     return h;
   }
 

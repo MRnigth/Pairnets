@@ -127,7 +127,9 @@ public partial class SettingsView : UserControl
         CheckNowButton.IsEnabled = false;
         ShowVersion("checking…");
         var found = await _updates.CheckNowAsync(CancellationToken.None);
-        ShowVersion(found is null ? "up to date" : $"version {found.Version} is available");
+        ShowVersion(found is null ? "up to date"
+            : found.Signed ? $"version {found.Version} is available"
+            : $"version {found.Version} isn't signed by Pairnets, so it won't be installed");
         CheckNowButton.IsEnabled = true;
     }
 

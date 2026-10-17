@@ -160,6 +160,8 @@ public sealed class TrayController : ITrayActions, IDisposable
             _updateDismissed = false;
             _updateError = null;
             _dirty = true;
+            if (!u.Signed)
+                return; // (the banner says it was not installed; no "update available" toast for it)
             Toast("update:" + u.Version, "Pairnets update available", $"Version {u.Version} is ready. Open Pairnets to update.", Forms.ToolTipIcon.Info, ShowMainWindow);
         });
         _updates.SetEnabled(_settings.CheckForUpdates);
@@ -748,7 +750,9 @@ public sealed class TrayController : ITrayActions, IDisposable
             _window.ShowUpdate(null, string.Empty, string.Empty);
             return;
         }
-        if (_updateError is not null)
+        if (!update.Signed)
+            _window.ShowUpdate($"Pairnets {update.Version} could not be installed", ReleaseSigning.NotSignedMessage, "Hide");
+        else if (_updateError is not null)
             _window.ShowUpdate($"Pairnets {update.Version} could not be installed", _updateError, "Open download page");
         else if (_updateProgress is { } p)
             _window.ShowUpdate($"Downloading Pairnets {update.Version}…", "Syncing continues while it downloads.", "Update now", p, busy: true);
@@ -778,6 +782,11 @@ public sealed class TrayController : ITrayActions, IDisposable
     {
         if (_updates.Available is not { } update || _updateProgress is not null)
             return;
+        if (!update.Signed)
+        {
+            DismissUpdate(); // never point people at a release Pairnets did not sign
+            return;
+        }
         if (_updateError is not null || !IsInstalledCopy)
         {
             Shell(update.ReleasePage.ToString());
@@ -801,7 +810,9 @@ public sealed class TrayController : ITrayActions, IDisposable
         catch (Exception ex) when (ex is UpdateVerificationException or HttpRequestException or IOException or System.ComponentModel.Win32Exception)
         {
             _log.LogWarning("Update failed: {Error}", FriendlyErrors.Technical(ex));
-            _updateError = ex is UpdateVerificationException
+            _updateError = ex is UpdateVerificationException { NotSigned: true }
+                ? ReleaseSigning.NotSignedMessage
+                : ex is UpdateVerificationException
                 ? "The download didn't match its checksum, so Pairnets didn't install it and kept your current version."
                 : "The download failed. " + FriendlyErrors.Describe(ex);
             _updateProgress = null;

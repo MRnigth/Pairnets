@@ -445,6 +445,7 @@ public sealed class TrayControllerTests
         await using var app = await TrayHarness.CreateAsync(nest, environment: e => e with
         {
             UpdateDownloadBase = feed.DownloadBase,
+            UpdateSigningKey = FakeReleaseFeed.SigningKey,
             UpdateReleasePage = feed.ReleasePage,
         }); // not installed by the installer (a copy from the zip): it cannot update itself
         await app.StartAsync();
@@ -474,6 +475,7 @@ public sealed class TrayControllerTests
         await using var app = await TrayHarness.CreateAsync(nest, environment: e => e with
         {
             UpdateDownloadBase = feed.DownloadBase,
+            UpdateSigningKey = FakeReleaseFeed.SigningKey,
             UpdateReleasePage = feed.ReleasePage,
             InstallDir = AppContext.BaseDirectory, // put there by the installer
         });
@@ -491,10 +493,23 @@ public sealed class TrayControllerTests
         Assert.Empty(app.Platform.Installers.Items);
         Assert.Equal(0, app.Shutdowns);
 
-        // A good release: downloaded, checked, started, and Pairnets closes so the installer can replace it.
-        feed.Publish("99.0.1");
+        // A release Pairnets did not sign is never downloaded, and its card only offers to hide it.
+        feed.Publish("99.0.1", signed: false);
+        var downloadsBefore = feed.Requests.Items.Count(r => r == "/download/" + FakeReleaseFeed.AssetName);
         await app.Press(main, "Check now");
-        await app.WaitUntil(() => main.UpdateTitle.Text == "Pairnets 99.0.1 is ready", "the next release");
+        await app.WaitUntil(() => main.UpdateTitle.Text == "Pairnets 99.0.1 could not be installed", "the app to refuse the unsigned release");
+        Assert.Contains("isn't signed by Pairnets", await app.Wpf.Ui(() => main.UpdateDetailText));
+        Assert.Equal("Hide", await app.Wpf.Ui(() => main.UpdateButton.Content));
+        Assert.DoesNotContain(app.Notifications.Items, n => n.Title == "Pairnets update available" && n.Text.Contains("99.0.1"));
+        await app.Press(main, "Hide");
+        await app.WaitUntil(() => !main.UpdateCard.IsVisible, "the card to go away");
+        Assert.Equal(downloadsBefore, feed.Requests.Items.Count(r => r == "/download/" + FakeReleaseFeed.AssetName));
+        Assert.Empty(app.Platform.Installers.Items);
+
+        // A good release: downloaded, checked, started, and Pairnets closes so the installer can replace it.
+        feed.Publish("99.0.2");
+        await app.Press(main, "Check now");
+        await app.WaitUntil(() => main.UpdateTitle.Text == "Pairnets 99.0.2 is ready", "the next release");
         await app.Press(main, "Update now");
         await app.WaitUntil(() => app.Platform.Installers.Count == 1, "the installer to start");
         var (setup, arguments) = app.Platform.Installers.Items[0];

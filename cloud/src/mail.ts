@@ -281,6 +281,27 @@ export function noticeEmail(to: string, kind: NoticeKind, url?: string, detail?:
   return { to, subject, text: `${lines.join("\n\n")}\n${textFooter(REASON_ACCOUNT)}`, html: layout(REASON_ACCOUNT, subject, lines) };
 }
 
+/** The warning to an account nobody used for 11 months (inactive.ts); `deleteOn` is a date like "17 November 2026". */
+export function inactiveWarningEmail(to: string, deleteOn: string): MailMessage {
+  const subject = `Your Pairnets account will be deleted on ${deleteOn}`;
+  const lines = [
+    "Nobody has signed in to your Pairnets account for almost a year, and none of its computers or nests have used it.",
+    `To keep it, sign in once at ${ACCOUNT_URL} before ${deleteOn}. That is all it takes.`,
+    `Otherwise the account and everything stored about it are deleted on ${deleteOn}, as our privacy policy says. Your nests and computers keep their files.`,
+  ];
+  return { to, subject, text: `${lines.join("\n\n")}\n${textFooter(REASON_ACCOUNT)}`, html: layout(REASON_ACCOUNT, subject, lines) };
+}
+
+/** After an unused account was deleted (inactive.ts). */
+export function inactiveDeletedEmail(to: string): MailMessage {
+  const subject = "Your Pairnets account was deleted";
+  const lines = [
+    "Your Pairnets account wasn't used for a year, so it and everything stored about it were deleted, as we wrote to you 30 days ago. Your nests and computers keep their files.",
+    "You can make a new account any time at https://pairnets.app.",
+  ];
+  return { to, subject, text: `${lines.join("\n\n")}\n${textFooter(REASON_ACCOUNT)}`, html: layout(REASON_ACCOUNT, subject, lines) };
+}
+
 /** A notice email within the daily budget; when the budget is used up it is skipped and audited. */
 export async function sendNotice(ctx: Ctx, accountId: string | null, to: string, kind: NoticeKind, url?: string, detail?: AppAllowedDetail): Promise<void> {
   if (!(await reserveMail(ctx, "notice"))) {

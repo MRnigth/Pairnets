@@ -5,6 +5,7 @@ import migration from "../migrations/0001_init.sql?raw";
 import migration2 from "../migrations/0002_relay.sql?raw";
 import migration3 from "../migrations/0003_username.sql?raw";
 import migration4 from "../migrations/0004_request_place.sql?raw";
+import migration5 from "../migrations/0005_inactive.sql?raw";
 import { b64urlEncode } from "../src/b64";
 import { FakeGoogle } from "./fake-google";
 import { claim, Harness, lastEmailCode, startServer } from "./helpers";
@@ -89,6 +90,7 @@ describe("schema", () => {
     // The database is shared by the tests after this one: bring it back to the full schema.
     await runSql(db, migration3);
     await runSql(db, migration4);
+    await runSql(db, migration5);
   });
 
   it("migration 0004 adds the nullable place columns to device_logins and keeps its rows", async () => {
@@ -109,6 +111,15 @@ describe("schema", () => {
       request_country: null,
       request_city: null,
     });
+  });
+
+  it("migration 0005 adds the nullable inactive_warned_at to accounts and keeps its rows", async () => {
+    const db = env.DB;
+    for (const t of TABLES) await db.prepare(`DROP TABLE IF EXISTS ${t}`).run();
+    for (const m of [migration, migration2, migration3, migration4]) await runSql(db, m);
+    await db.prepare("INSERT INTO accounts (id, email, created_at, updated_at) VALUES ('acc_testacct000000000000000001', 'you@example.com', 1, 2)").run();
+    await runSql(db, migration5);
+    expect(await db.prepare("SELECT email, inactive_warned_at FROM accounts").first()).toEqual({ email: "you@example.com", inactive_warned_at: null });
   });
 
   it("no secret is stored in clear", async () => {

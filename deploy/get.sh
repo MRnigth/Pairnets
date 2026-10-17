@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# One-line installer for Pairnets. Downloads the latest release from GitHub, verifies its SHA-256
-# checksum, and installs it.
+# One-line installer for Pairnets. Downloads the latest release from GitHub, checks that its checksums
+# are signed by Pairnets (RELEASE_KEY below), verifies its SHA-256 checksum, and installs it. Needs openssl.
 #
 #   Ubuntu server:        curl -fsSL https://raw.githubusercontent.com/MRnigth/Pairnets/main/deploy/get.sh | sudo bash
 #     (a first install links the server to your Pairnets account: it prints a link to open on any device; run it again
@@ -10,8 +10,15 @@
 #   macOS app:            curl -fsSL https://raw.githubusercontent.com/MRnigth/Pairnets/main/deploy/get.sh | bash -s -- --mac
 #
 # Environment overrides: PAIRNETS_VERSION=v1.2.3 (default: latest), PAIRNETS_REPO=owner/name,
-# PAIRNETS_BASE_URL=<url or local folder with the release files> (for testing/mirrors).
+# PAIRNETS_BASE_URL=<url or local folder with the release files> (for testing/mirrors),
+# PAIRNETS_RELEASE_KEY=<public key file> (for testing: the key of a test feed, scripts/make-feed.sh).
 set -euo pipefail
+
+# The Pairnets release public key (deploy/release-signing.pub; a test checks the copies match).
+RELEASE_KEY='-----BEGIN PUBLIC KEY-----
+MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEtZRM91EOrqbsMUwpOpSY2w95wiay
+sYrj9VYxXFA1adeBmWwUhKl4BOHZhdhFbdNWz05lNDRi1Od1cK7Wx0zXfg==
+-----END PUBLIC KEY-----'
 
 REPO="${PAIRNETS_REPO:-MRnigth/Pairnets}"
 VERSION="${PAIRNETS_VERSION:-latest}"
@@ -43,6 +50,14 @@ fetch() { # fetch <asset> <dest-dir>
 
 verify() { # verify <asset> <dir>
   local line
+  # First: SHA256SUMS.txt counts only when Pairnets signed it (releases before 1.0.57 are not signed).
+  command -v openssl >/dev/null || die "openssl is needed to check the download is signed by Pairnets (sudo apt install openssl)"
+  if [[ -n "${PAIRNETS_RELEASE_KEY:-}" ]]; then cp "$PAIRNETS_RELEASE_KEY" "$2/release-signing.pub"
+  else printf '%s\n' "$RELEASE_KEY" > "$2/release-signing.pub"; fi
+  fetch SHA256SUMS.txt.sig "$2"
+  openssl dgst -sha256 -verify "$2/release-signing.pub" -signature "$2/SHA256SUMS.txt.sig" "$2/SHA256SUMS.txt" >/dev/null 2>&1 ||
+    die "SHA256SUMS.txt is not signed by Pairnets; nothing was installed"
+  info "signature OK"
   line="$(grep -E "[[:space:]]\*?$1\$" "$2/SHA256SUMS.txt" || true)"
   [[ -n "$line" ]] || die "$1 is not listed in SHA256SUMS.txt"
   if command -v sha256sum >/dev/null; then

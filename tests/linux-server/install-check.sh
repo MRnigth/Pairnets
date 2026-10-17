@@ -25,7 +25,7 @@ EXPECTED_VERSION="$(feed_version "$FEED")"
 step "install $EXPECTED_VERSION with get.sh (--bind 127.0.0.1 --port $E2E_HTTP_PORT)"
 mark="$(journal_mark)"
 set +e
-output="$(PAIRNETS_BASE_URL="$FEED" bash "$REPO_ROOT/deploy/get.sh" --bind 127.0.0.1 --port "$E2E_HTTP_PORT" 2>&1)"
+output="$(PAIRNETS_BASE_URL="$FEED" PAIRNETS_RELEASE_KEY="$FEED/test-signing.pub" bash "$REPO_ROOT/deploy/get.sh" --bind 127.0.0.1 --port "$E2E_HTTP_PORT" 2>&1)"
 rc=$?
 set -e
 printf '%s\n' "$output" | redact | sed 's/^/  | /'

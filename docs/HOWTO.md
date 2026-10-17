@@ -838,6 +838,25 @@ curl -fsSL https://raw.githubusercontent.com/MRnigth/Pairnets/main/deploy/get.sh
 Updates keep your settings, the link to your Pairnets account or your nest's name, the sign-ins and
 your files.
 
+### Signed releases
+
+Every release from 1.0.57 on carries `SHA256SUMS.txt.sig`: a signature of `SHA256SUMS.txt` by the Pairnets release
+key. The apps, the server's updater and `get.sh` install a release only when that signature is right, and only
+then trust the checksums in it. So a download swapped on the way, or a release put up by someone else, is
+refused: the app says *"This update isn't signed by Pairnets, so it wasn't installed"* and keeps the version
+you have. Releases before 1.0.57 aren't signed, so `get.sh` no longer installs those.
+
+Check a download yourself with the public key (`deploy/release-signing.pub` in the repository):
+
+```bash
+openssl dgst -sha256 -verify release-signing.pub -signature SHA256SUMS.txt.sig SHA256SUMS.txt
+sha256sum --check --ignore-missing SHA256SUMS.txt
+```
+
+The private key is only in GitHub's secret store (`RELEASE_SIGNING_KEY`, used by `scripts/sign-release.sh` in the
+release workflow) and in the owner's offline copy. This is separate from code signing by Microsoft or Apple, which
+Pairnets doesn't have yet.
+
 ### Moving from Tether to Pairnets
 
 Pairnets used to be called **Tether**. Installing Pairnets takes over everything Tether had: the

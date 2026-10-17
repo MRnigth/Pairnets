@@ -530,6 +530,31 @@ public sealed class DesktopControllerTests
         Assert.True(app.Feed.VersionChecks >= 1);
     }
 
+    [AvaloniaFact]
+    public async Task AppUpdate_NotSignedByPairnets_IsNeverOffered()
+    {
+        await using var app = await AppUnderTest.StartAsync(releaseVersion: "99.0.0");
+        app.Feed.Signed = false;
+        await app.WaitUntilIdleAsync();
+        if (app.Feed.Asset is null)
+            return; // no download for this kind of computer (e.g. ARM Linux): there is nothing to offer
+
+        var page = await app.SettingsPageAsync();
+        Person.Click(Screen.Find<Button>(page, "Check now"));
+        await Wait.Until(() => Screen.Named<TextBlock>(page, "VersionText").Text?.EndsWith("version 99.0.0 isn't signed by Pairnets, so it won't be installed", StringComparison.Ordinal) == true,
+            "Settings to say version 99.0.0 isn't signed");
+        Person.Click(Screen.Find<Button>(page, "Cancel"));
+
+        var main = app.MainWindow;
+        app.App.RefreshNow();
+        Assert.Equal("Pairnets 99.0.0 could not be installed", Screen.Named<TextBlock>(main, "UpdateTitle").Text);
+        Assert.DoesNotContain(app.Platform.Notices, n => n.Title == "Pairnets update available");
+        Person.Click(Screen.Find<Button>(main, "Hide")); // never the download page of a release Pairnets did not sign
+        app.App.RefreshNow();
+        Assert.False(Screen.Named<Border>(main, "UpdateCard").IsVisible);
+        Assert.DoesNotContain(app.Feed.ReleasePage.ToString(), app.Platform.Opened);
+    }
+
     // ------------------------------------------------------------------ the rest of the buttons
 
     [AvaloniaFact]

@@ -22,6 +22,8 @@ MAIL_FROM_CF = "Pairnets <signin@mail.pairnets.app>"
 EMAIL_DAILY_LIMIT = "80"
 # Relayed servers in all. Cloudflare allows 1,000 tunnels per account; stay well under it.
 MAX_NESTS = "900"
+# Nests one account may have, both kinds together (the owner's choice); a removed one frees its place at once.
+MAX_NESTS_PER_ACCOUNT = "3"
 # "1" = emergency switch: /nest-login refuses and heartbeats answer disableHostedLogin: true.
 HOSTED_LOGIN_DISABLED = "0"
 # Optional test seams (Google's real URLs are the defaults when these are not set):
@@ -47,7 +49,9 @@ service = "pairnets-router"
 # The relay's limits (src/relay.ts; a test checks each matches its constant), counted by Cloudflare next to the Worker,
 # so a relayed request costs no database write. RELAY_LIMIT: the flood ceiling per address (RELAY_PER_MINUTE).
 # RELAY_DEVICE_LIMIT: each computer's own budget at its server (RELAY_DEVICE_PER_MINUTE). RELAY_FAIL_LIMIT: keyless and
-# failing requests per address (RELAY_IP_PER_MINUTE). namespace_id is not an id of the account or a key: it is a number
+# failing requests per address (RELAY_IP_PER_MINUTE). RELAY_NEST_LIMIT: everything relayed to one server from all its
+# computers together (RELAY_NEST_PER_MINUTE); five computers at their full budget fit under it, so it only stops one
+# server from taking the whole plan. namespace_id is not an id of the account or a key: it is a number
 # chosen here, which only has to differ from other rate limiters on the account (limiters with the same number share
 # their counts). period may only be 10 or 60. Nothing to create by hand: the deploy sets them up.
 [[ratelimits]]
@@ -65,9 +69,14 @@ name = "RELAY_FAIL_LIMIT"
 namespace_id = "1003"
 simple = { limit = 600, period = 60 }
 
+[[ratelimits]]
+name = "RELAY_NEST_LIMIT"
+namespace_id = "1004"
+simple = { limit = 30000, period = 60 }
+
 [triggers]
-# Hourly: expired rows, the 90-day audit, servers that never connected, and the router deploy and tunnel cleanup
-# (src/cron.ts).
+# Hourly: expired rows, the 90-day audit, servers that never connected, accounts unused for a year (warned 30 days
+# before), and the router deploy and tunnel cleanup (src/cron.ts).
 crons = ["17 * * * *"]
 
 # Secrets: set them in the Cloudflare dashboard (Workers > pairnets-sync > Settings > Variables and Secrets) or with

@@ -3,6 +3,7 @@
 
 import { audit } from "../audit";
 import type { Ctx } from "../context";
+import { type Env, intVar } from "../env";
 import { B32_UPPER, randomBase32, sha256 } from "../crypto";
 import { cleanLabel, cleanText, emailName, iso, MAX_USERNAME, NEST_ID_RE, SESSION_ID_RE } from "../formats";
 import { HttpError, htmlResponse, json, noContent, redirect } from "../http";
@@ -21,10 +22,21 @@ import {
   requireRecent,
   type Session,
 } from "../sessions";
+import { deleteAccountRows } from "../accounts";
 import { serversOf } from "./servers";
 
-/** Nests per account, both kinds together (pending ones count). */
+/** Nests per account, both kinds together (pending ones count), unless wrangler.toml's MAX_NESTS_PER_ACCOUNT says otherwise. */
 export const MAX_NESTS_PER_ACCOUNT = 3;
+
+/** How many nests one account may have (MAX_NESTS_PER_ACCOUNT in wrangler.toml, default 3). Ones it has already stay. */
+export function maxNestsPerAccount(env: Env): number {
+  return intVar(env.MAX_NESTS_PER_ACCOUNT, MAX_NESTS_PER_ACCOUNT);
+}
+
+/** 409 nest_limit, naming the limit in force. */
+export function nestLimitError(env: Env): HttpError {
+  return new HttpError(409, "nest_limit", `This account already has ${maxNestsPerAccount(env)} servers. Remove one first.`);
+}
 export const MAX_UNUSED_CODES = 5;
 export const MAX_CODES_PER_DAY = 20;
 export const CLAIM_CODE_LIFETIME = 600;
@@ -194,25 +206,7 @@ export async function deleteMeRoute(ctx: Ctx): Promise<Response> {
   requireRecent(ctx, s);
   const account = await accountRow(ctx, s.accountId);
   if (account) await sendNotice(ctx, null, account.email, "account_deleted");
-  const db = ctx.env.DB;
-  const id = s.accountId;
-  // The account's relayed servers: their rows go with the account; the router deploy that follows drops their links
-  // and then deletes their tunnels (the hourly cron deletes any tunnel left over).
-  const tunnels = (
-    await db.prepare("SELECT tunnel_id FROM nests WHERE account_id = ?1 AND mode = 'relay' AND tunnel_id IS NOT NULL").bind(id).all<{ tunnel_id: string }>()
-  ).results.map((r) => r.tunnel_id);
-  // Foreign keys cascade from accounts; the explicit deletes make the result independent of that setting.
-  await db.batch([
-    db.prepare("DELETE FROM sessions WHERE account_id = ?1").bind(id),
-    db.prepare("DELETE FROM identities WHERE account_id = ?1").bind(id),
-    db.prepare("DELETE FROM nests WHERE account_id = ?1").bind(id),
-    db.prepare("DELETE FROM claim_codes WHERE account_id = ?1").bind(id),
-    db.prepare("DELETE FROM device_logins WHERE account_id = ?1").bind(id),
-    db.prepare("DELETE FROM server_links WHERE account_id = ?1").bind(id),
-    db.prepare("DELETE FROM audit WHERE account_id = ?1").bind(id),
-    db.prepare("DELETE FROM login_challenges WHERE email = ?1").bind(account?.email ?? ""),
-    db.prepare("DELETE FROM accounts WHERE id = ?1").bind(id),
-  ]);
+  const tunnels = await deleteAccountRows(ctx, s.accountId, account?.email ?? "");
   clearSessionCookie(ctx);
   if (tunnels.length) ctx.defer(runRouterLogged(ctx.env, ctx.now, ctx.deps.fetch, { alsoDelete: tunnels }));
   return noContent();
@@ -236,7 +230,7 @@ export async function createClaimCodeRoute(ctx: Ctx): Promise<Response> {
   if (label === "invalid") throw new HttpError(400, "bad_request");
 
   const nests = await ctx.env.DB.prepare("SELECT COUNT(*) AS n FROM nests WHERE account_id = ?1").bind(s.accountId).first<{ n: number }>();
-  if ((nests?.n ?? 0) >= MAX_NESTS_PER_ACCOUNT) throw new HttpError(409, "nest_limit");
+  if ((nests?.n ?? 0) >= maxNestsPerAccount(ctx.env)) throw nestLimitError(ctx.env);
   const unused = await ctx.env.DB.prepare("SELECT COUNT(*) AS n FROM claim_codes WHERE account_id = ?1 AND used_at IS NULL AND expires_at > ?2")
     .bind(s.accountId, ctx.now)
     .first<{ n: number }>();

@@ -13,6 +13,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- The public half of the release signing key (docs/HOWTO.md, "Signed releases"): the one copy the apps use. -->
+    <EmbeddedResource Include="..\..\deploy\release-signing.pub" LogicalName="Pairnets.release-signing.pub" />
+  </ItemGroup>
+
+  <ItemGroup>
     <InternalsVisibleTo Include="Pairnets.Tests" />
   </ItemGroup>
 

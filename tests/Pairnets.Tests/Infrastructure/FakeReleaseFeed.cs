@@ -13,8 +13,9 @@ namespace Pairnets.Tests.Infrastructure;
 
 /// <summary>
 /// The "latest release" download folder on a local port, as the apps read it from GitHub: version.json,
-/// SHA256SUMS.txt and the installer for this computer. Point a <see cref="ClientEnvironment"/> at
-/// <see cref="DownloadBase"/> and the app finds whatever <see cref="Version"/> says.
+/// SHA256SUMS.txt (signed with <see cref="TestReleaseKey"/>) and the installer for this computer. Point a
+/// <see cref="ClientEnvironment"/> at <see cref="DownloadBase"/> (with <see cref="SigningKey"/>) and the app finds
+/// whatever <see cref="Version"/> says.
 /// </summary>
 public sealed class FakeReleaseFeed : IAsyncDisposable
 {
@@ -33,6 +34,9 @@ public sealed class FakeReleaseFeed : IAsyncDisposable
     /// <summary>The version the feed announces (change it to make an update appear).</summary>
     public string Version { get; set; }
 
+    /// <summary>False: the release has no SHA256SUMS.txt.sig, as if someone other than Pairnets put it up.</summary>
+    public bool Signed { get; set; } = true;
+
     /// <summary>The installer listed for this computer (null where there is none, e.g. ARM Linux).</summary>
     public string? Asset { get; }
 
@@ -45,6 +49,9 @@ public sealed class FakeReleaseFeed : IAsyncDisposable
 
     /// <summary>The release page the apps open to download by hand.</summary>
     public Uri ReleasePage { get; private set; } = null!;
+
+    /// <summary>The key the feed signs with (TEST ONLY): the app's <c>ClientEnvironment.UpdateSigningKey</c>.</summary>
+    public static string SigningKey => TestReleaseKey.PublicKeyPem;
 
     /// <summary>How often version.json was read.</summary>
     public int VersionChecks => Volatile.Read(ref _versionChecks);
@@ -59,10 +66,11 @@ public sealed class FakeReleaseFeed : IAsyncDisposable
         app.MapGet("/releases/latest/download/version.json", () =>
         {
             Interlocked.Increment(ref feed._versionChecks);
-            return Results.Json(new { version = feed.Version, commit = "test" });
+            return Results.Bytes(feed.VersionJson(), "application/json");
         });
-        app.MapGet("/releases/latest/download/SHA256SUMS.txt", () =>
-            Results.Text(feed.Asset is null ? string.Empty : $"{feed.Sha256}  {feed.Asset}\n"));
+        app.MapGet("/releases/latest/download/SHA256SUMS.txt", () => Results.Bytes(feed.Sums(), "text/plain"));
+        app.MapGet("/releases/latest/download/SHA256SUMS.txt.sig", () =>
+            feed.Signed ? Results.Bytes(TestReleaseKey.Sign(feed.Sums()), "application/octet-stream") : Results.NotFound());
         app.MapGet("/releases/latest/download/{name}", (string name) =>
             name == feed.Asset ? Results.Bytes(feed.AssetBytes, "application/octet-stream") : Results.NotFound());
         app.MapGet("/releases/latest", () => Results.Text("<html><body>Pairnets release page</body></html>", "text/html"));
@@ -72,6 +80,15 @@ public sealed class FakeReleaseFeed : IAsyncDisposable
         feed.DownloadBase = new Uri(root, "releases/latest/download/");
         feed.ReleasePage = new Uri(root, "releases/latest");
         return feed;
+    }
+
+    private byte[] VersionJson() => Encoding.UTF8.GetBytes($"{{\"version\":\"{Version}\",\"commit\":\"test\"}}\n");
+
+    /// <summary>SHA256SUMS.txt as the release workflow writes it: the installer and version.json.</summary>
+    private byte[] Sums()
+    {
+        var version = $"{Convert.ToHexString(SHA256.HashData(VersionJson())).ToLowerInvariant()}  version.json\n";
+        return Encoding.UTF8.GetBytes(Asset is null ? version : $"{Sha256}  {Asset}\n" + version);
     }
 
     public async ValueTask DisposeAsync()

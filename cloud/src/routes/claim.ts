@@ -10,6 +10,7 @@ import { decodeMaster, deriveHeartbeatKey } from "../nestsig";
 import { HOUR, hit, limitedError, peek } from "../ratelimit";
 import { jsonBody } from "../request";
 import { blob } from "../sessions";
+import { maxNestsPerAccount, nestLimitError } from "./account";
 
 const CLAIMS_PER_HOUR = 20;
 const FAILURES_PER_HOUR = 10;
@@ -56,9 +57,9 @@ async function redeem(ctx: Ctx): Promise<Response> {
            SELECT ?1, account_id, COALESCE(?2, label, ?3), ?4, 'pending', 1, 1, ?5, 0
            FROM claim_codes
            WHERE code_hash = ?6 AND used_at IS NULL AND expires_at > ?5
-             AND (SELECT COUNT(*) FROM nests n WHERE n.account_id = claim_codes.account_id) < 3`,
+             AND (SELECT COUNT(*) FROM nests n WHERE n.account_id = claim_codes.account_id) < ?7`,
       )
-      .bind(nestId, label, url.host, url.url, ctx.now, codeHash),
+      .bind(nestId, label, url.host, url.url, ctx.now, codeHash, maxNestsPerAccount(ctx.env)),
     db
       .prepare(
         `UPDATE claim_codes SET used_at = ?5, nest_id = ?1
@@ -76,7 +77,7 @@ async function redeem(ctx: Ctx): Promise<Response> {
     if (!row) throw new HttpError(400, "invalid_code");
     if (row.used_at !== null) throw new HttpError(409, "used");
     if (row.expires_at <= ctx.now) throw new HttpError(400, "expired");
-    throw new HttpError(409, "nest_limit");
+    throw nestLimitError(ctx.env);
   }
 
   const nest = await db

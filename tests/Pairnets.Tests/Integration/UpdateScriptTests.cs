@@ -25,6 +25,7 @@ public class UpdateScriptTests : IDisposable
         Assert.Equal("Would install 1.0.99 (dry run).", message);
         var log = File.ReadAllText(_dir.Combine("update", "update.log"));
         Assert.Contains("=== update.sh started: installed version 1.0.29", log);
+        Assert.Contains("signature OK", log);
         Assert.Contains("checksum OK", log);
         Assert.Contains("installed version 1.0.29, newest release 1.0.99", log);
         Assert.Contains("=== update.sh finished", log);
@@ -59,6 +60,34 @@ public class UpdateScriptTests : IDisposable
         var (state, message) = Run();
         Assert.Equal("failed", state);
         Assert.Contains("did not match its checksum", message);
+    }
+
+    [Fact]
+    public void AReleaseNotSignedByPairnetsChangesNothing()
+    {
+        if (!OperatingSystem.IsLinux())
+            return;
+        MakeRelease("1.0.99", corrupt: false);
+        File.Delete(_dir.Combine("release", "SHA256SUMS.txt.sig"));
+        var (state, message) = Run();
+        Assert.Equal("failed", state);
+        Assert.Contains("isn't signed by Pairnets", message);
+
+        // Signed, but by another key: the same.
+        MakeRelease("1.0.99", corrupt: false);
+        Bash($"cd '{_dir.Path}' && openssl ecparam -name prime256v1 -genkey -noout -out other.key && " +
+             "openssl dgst -sha256 -sign other.key -out release/SHA256SUMS.txt.sig release/SHA256SUMS.txt");
+        File.Delete(_dir.Combine("update", "last-attempt"));
+        (state, message) = Run();
+        Assert.Equal("failed", state);
+        Assert.Contains("isn't signed by Pairnets", message);
+
+        // Without PAIRNETS_RELEASE_KEY only the real Pairnets key counts, and it never signed this test release.
+        MakeRelease("1.0.99", corrupt: false);
+        File.Delete(_dir.Combine("update", "last-attempt"));
+        (state, message) = Run(testKey: false);
+        Assert.Equal("failed", state);
+        Assert.Contains("isn't signed by Pairnets", message);
     }
 
     [Fact]
@@ -142,9 +171,13 @@ public class UpdateScriptTests : IDisposable
         else
             Bash($"tar -czf '{archive}' -C '{release}' pairnets-server-linux-x64");
         Bash($"cd '{release}' && sha256sum pairnets-server-linux-x64.tar.gz > SHA256SUMS.txt");
+        // Signed like a real release, with a throwaway key (TEST ONLY) that Run gives update.sh as PAIRNETS_RELEASE_KEY.
+        if (!File.Exists(_dir.Combine("test.key")))
+            Bash($"cd '{_dir.Path}' && openssl ecparam -name prime256v1 -genkey -noout -out test.key && openssl pkey -in test.key -pubout -out test.pub");
+        Bash($"cd '{_dir.Path}' && openssl dgst -sha256 -sign test.key -out release/SHA256SUMS.txt.sig release/SHA256SUMS.txt");
     }
 
-    private (string State, string Message) Run(bool dryRun = true)
+    private (string State, string Message) Run(bool dryRun = true, bool testKey = true)
     {
         var updateDir = _dir.Combine("update");
         Directory.CreateDirectory(updateDir);
@@ -154,6 +187,10 @@ public class UpdateScriptTests : IDisposable
         start.Environment["PAIRNETS_BASE_URL"] = _dir.Combine("release");
         start.Environment["PAIRNETS_UPDATE_DIR"] = updateDir;
         start.Environment["PAIRNETS_INSTALL_DIR"] = _dir.Combine("install");
+        if (testKey)
+            start.Environment["PAIRNETS_RELEASE_KEY"] = _dir.Combine("test.pub");
+        else
+            start.Environment.Remove("PAIRNETS_RELEASE_KEY");
         if (dryRun)
             start.Environment["PAIRNETS_UPDATE_DRY_RUN"] = "1";
         else
