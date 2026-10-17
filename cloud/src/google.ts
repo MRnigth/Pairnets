@@ -120,7 +120,7 @@ export interface GoogleIdentity {
 
 /**
  * Verifies an id_token: RS256 signature against Google's JWKS, iss, aud == GOOGLE_CLIENT_ID, exp > now - 60, nonce,
- * email_verified == true, sub present, and auth_time >= flow start for a re-auth. Returns null on any failure.
+ * email_verified == true and sub present. Returns null on any failure.
  */
 export async function verifyGoogleIdToken(ctx: Ctx, idToken: string, flow: GoogleFlow): Promise<GoogleIdentity | null> {
   if (typeof idToken !== "string" || idToken.length > 8192) return null;
@@ -154,9 +154,7 @@ export async function verifyGoogleIdToken(ctx: Ctx, idToken: string, flow: Googl
   if (typeof c.sub !== "string" || c.sub.length === 0 || c.sub.length > 255) return null;
   const email = normaliseEmail(c.email);
   if (!email) return null;
-  if (flow.ra === 1) {
-    const flowStart = flow.e - GOOGLE_FLOW_LIFETIME;
-    if (typeof c.auth_time !== "number" || c.auth_time < flowStart) return null;
-  }
+  // A re-auth is not held to auth_time: Google cannot be made to ask for the password again, and answers someone
+  // already signed in to Google with their old login time (or none). The fresh round trip above is the re-check.
   return { sub: c.sub, email };
 }

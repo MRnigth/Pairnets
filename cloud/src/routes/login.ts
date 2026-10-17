@@ -127,6 +127,7 @@ export async function googleStartRoute(ctx: Ctx): Promise<Response> {
   u.searchParams.set("code_challenge", challenge);
   u.searchParams.set("code_challenge_method", "S256");
   u.searchParams.set("prompt", "select_account");
+  // Only a hint: Google may still skip the password (so the answer's auth_time is not checked, see verifyGoogleIdToken).
   if (reauth) u.searchParams.set("max_age", "0");
   return redirect(u.toString());
 }

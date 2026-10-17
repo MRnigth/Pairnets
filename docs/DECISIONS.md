@@ -989,3 +989,14 @@ The owner's answers to the 2026-10-14 audit questions:
   get.sh, the same trust as the existing `PAIRNETS_BASE_URL`.
 * **A lost or leaked key** means a new pair, a new secret and a release with the new public key, signed with the
   old key, so installed apps still take it.
+
+## Signing in again with Google (2026-10-17)
+
+* **A fresh Google round trip is the re-check; Google's login time is not.** Allowing a computer, approving a
+  server, removing a nest and deleting the account need a sign-in from the last 15 minutes. The Google button then
+  sends `max_age=0`, but Google cannot be made to ask for the password again: someone already signed in to Google
+  gets the account picker and an `id_token` carrying the old `auth_time`, or none. The Worker used to refuse that
+  ("Google sign-in did not work. Try again."), so signing in again with Google never worked. Now the round trip
+  itself counts: new state, nonce and PKCE tied to this browser, the account picker, and a newly signed token.
+  A stolen site cookie alone still can't pass it, and every allowed computer still sends a notice email. `max_age=0`
+  stays as a hint. `prompt=login` was not used: Google doesn't support it.
