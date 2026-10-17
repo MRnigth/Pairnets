@@ -170,11 +170,17 @@ public sealed class ServerUpdater(ServerPaths paths, SyncOptions options, TimePr
         return (null, null);
     }
 
+    /// <summary>When the file was last written, or null when it is not there.</summary>
+    /// <remarks>
+    /// One read, not "exists, then its time": update.sh deletes its request file when it ends, and the time of a file
+    /// that is gone comes back as 1 January 1601, which read as an updater that never started.
+    /// </remarks>
     private static DateTimeOffset? FileTime(string path)
     {
         try
         {
-            return File.Exists(path) ? new DateTimeOffset(File.GetLastWriteTimeUtc(path), TimeSpan.Zero) : null;
+            var written = File.GetLastWriteTimeUtc(path);
+            return written.Year <= 1601 ? null : new DateTimeOffset(written, TimeSpan.Zero);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
