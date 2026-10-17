@@ -47,6 +47,44 @@ public sealed class ReviewFixTests
     }
 
     [Fact]
+    public async Task AComputerRemovedWhileItsPushConnectionIsBeingSetUpIsLockedOutOfHttpToo()
+    {
+        await using var server = await TestServer.StartAsync(config: FastChecks);
+        var laptop = server.MintKey("LAPTOP");
+        // The key is asked for twice: once to negotiate, once to open the connection. Removing the computer in between
+        // lets the connection in on the cached key and leaves only the check after it is registered to catch it (this
+        // timing is what made the test above fail now and then on a slow Mac runner).
+        var asked = 0;
+        var closed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        await using var hub = new HubConnectionBuilder()
+            .WithUrl(new Uri(server.Url, "hub"), o => o.AccessTokenProvider = () =>
+            {
+                if (Interlocked.Increment(ref asked) == 2)
+                    Assert.True(new AuthStore(server.Paths).RemoveDevice(laptop.Id));
+                return Task.FromResult<string?>(laptop.Key);
+            })
+            .Build();
+        hub.Closed += _ =>
+        {
+            closed.TrySetResult();
+            return Task.CompletedTask;
+        };
+        try
+        {
+            await hub.StartAsync();
+        }
+        catch (Exception) when (hub.State == HubConnectionState.Disconnected)
+        {
+            closed.TrySetResult(); // closed before StartAsync could report it open
+        }
+
+        Assert.True(asked >= 2, $"the key was asked for {asked} time(s)");
+        await closed.Task.WaitAsync(TimeSpan.FromSeconds(15));
+        using var own = server.Client("LAPTOP", laptop.Key);
+        await Assert.ThrowsAsync<PairnetsAuthException>(() => own.GetInfoAsync(CancellationToken.None));
+    }
+
+    [Fact]
     public async Task TurningOffTheSharedTokenClosesConnectionsThatUseIt()
     {
         await using var server = await TestServer.StartAsync(config: FastChecks);

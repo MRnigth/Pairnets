@@ -73,8 +73,9 @@ public sealed class SyncHub(BatchRegistry batches, SyncedRegistry synced, Servic
         {
             devices.Connected(Context.ConnectionId, identity.RegistryKey, Context.Abort, () => StillAllowed(identity));
             // Removed while this connection was being set up: the removal may have looked for connections just
-            // before this one was registered, so check again now that it is.
-            if (identity.Id is { } id && auth.GetDevice(id) is not { IsActive: true })
+            // before this one was registered, so check again now that it is. The same check as the background one, so
+            // the removed key also leaves the key cache (else HTTP with it would still work for up to 30 s).
+            if (!StillAllowed(identity))
             {
                 devices.Disconnected(Context.ConnectionId);
                 Context.Abort();
