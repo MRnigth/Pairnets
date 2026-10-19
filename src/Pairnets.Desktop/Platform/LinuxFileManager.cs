@@ -145,9 +145,9 @@ public sealed class LinuxFileManager(string home, Func<string[], int> runGio)
                     new XElement("metadata", new XAttribute("owner", "http://www.kde.org"),
                         new XElement("ID", KdePlaceId)))));
         }
-        using var text = new StringWriter();
-        doc.Save(text);
-        WriteWhole(KdePlaces, text.ToString());
+        using var bytes = new MemoryStream();
+        doc.Save(bytes); // UTF-8, as KDE writes it
+        WriteWhole(KdePlaces, bytes.ToArray());
     }
 
     /// <summary>Dolphin's right-click items, in a "Pairnets" submenu. KDE 6 only runs service menus that may be executed.</summary>
@@ -187,10 +187,12 @@ public sealed class LinuxFileManager(string home, Func<string[], int> runGio)
     }
 
     /// <summary>Writes a file of the person's in one go (a new file moved over the old), so a crash never leaves half of it.</summary>
-    private static void WriteWhole(string file, string text)
+    private static void WriteWhole(string file, string text) => WriteWhole(file, new System.Text.UTF8Encoding(false).GetBytes(text));
+
+    private static void WriteWhole(string file, byte[] content)
     {
         var temp = file + ".pairnets-new";
-        File.WriteAllText(temp, text);
+        File.WriteAllBytes(temp, content);
         File.Move(temp, file, overwrite: true);
     }
 
