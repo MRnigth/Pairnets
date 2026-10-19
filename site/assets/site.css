@@ -91,6 +91,8 @@ section { padding: 28px 0; }
 
 .callout { background: var(--banner); border: 1px solid var(--banner-border); border-radius: 14px; padding: 18px 22px; }
 .callout.warn { background: var(--warn-pill); border-color: transparent; color: var(--warn-text); }
+/* The plain link blue is 4.2:1 on the dark orange box; the hover blue clears 4.5:1 in both modes. */
+.callout.warn a { color: var(--accent-hover); }
 .callout p:last-child { margin-bottom: 0; }
 
 ol.steps { counter-reset: step; list-style: none; padding: 0; margin: 0; }
