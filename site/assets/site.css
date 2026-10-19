@@ -134,6 +134,8 @@ footer .copy { grid-column: 1 / -1; max-width: none; padding-top: 18px; border-t
 /* The first heading inside a box or a step list is an h2 for the outline, and looks like the h3 it replaced. */
 .callout h2, ol.steps h2 { font-size: 17px; letter-spacing: 0; margin: 0 0 6px; }
 .doc .callout h2, .doc ol.steps h2 { margin: 22px 0 6px; }
+/* ...except at the very top of a box or a step, where it lines up with the box edge or the step's number. */
+.doc .callout > h2:first-child, .doc ol.steps > li > h2:first-child { margin-top: 0; }
 .doc ul, .doc ol:not(.steps) { margin: 0 0 14px; padding-left: 22px; }
 .doc li { margin: 0 0 6px; }
 .doc .callout { margin: 0 0 14px; }
