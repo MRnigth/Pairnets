@@ -35,18 +35,18 @@ jobs:
         with:
           dotnet-version: 8.0.x
 
-      - name: Windows cloud folder tests (the spike)
-        continue-on-error: true # the pictures are taken either way
+      - name: Take the pictures
+        continue-on-error: true # the tests run either way
+        run: |
+          dotnet build tools/ExplorerShots/ExplorerShots.csproj -c Release
+          dotnet run --project tools/ExplorerShots/ExplorerShots.csproj -c Release --no-build -- explorer-pictures --i-am-ci
+
+      - name: Windows cloud folder tests
         env:
           PAIRNETS_CLOUD_TESTS: 1
         run: >
           dotnet test tests/Pairnets.Client.Tests/Pairnets.Client.Tests.csproj -c Release
           --filter "FullyQualifiedName~CloudFolderTests" --logger "console;verbosity=normal"
-
-      - name: Take the pictures
-        run: |
-          dotnet build tools/ExplorerShots/ExplorerShots.csproj -c Release
-          dotnet run --project tools/ExplorerShots/ExplorerShots.csproj -c Release --no-build -- explorer-pictures --i-am-ci
 
       - name: Upload the pictures
         if: always()

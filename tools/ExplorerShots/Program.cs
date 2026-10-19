@@ -100,17 +100,19 @@ public static class Program
                 Thread.Sleep(3000);
                 Report(folder);
                 Shot(folder, "step4-files-on-demand.png", details: true);
-                Shot(folder, "step4-right-click.png", select: "Beach", menu: true, moreOptions: true, details: true);
+                Shot(folder, "step4-right-click.png", select: "Beach", menu: true, details: true);
 
-                // Opening a file whose content is on the nest: Windows asks Pairnets for it and shows the download.
-                using (var open = Process.Start(new ProcessStartInfo("cmd.exe", $"/c copy /y \"{Path.Combine(folder, "Trip photos.zip")}\" NUL")
-                    { CreateNoWindow = true, UseShellExecute = false }))
+                // Opening a file whose content is on the nest: Windows asks Pairnets for it; Explorer shows it downloading.
+                Process? open = null;
+                Shot(folder, "step4-downloading.png", details: true, during: () =>
                 {
-                    Thread.Sleep(1500);
-                    ScreenShot("step4-downloading.png");
-                    var done = open?.WaitForExit(60_000) == true;
-                    Console.WriteLine($"Opened a file on the nest only: {(done ? "downloaded" : "still downloading after a minute")} (exit {(done ? open!.ExitCode : -1)})");
-                }
+                    open = Process.Start(new ProcessStartInfo("cmd.exe", $"/c copy /y \"{Path.Combine(folder, "Trip photos.zip")}\" NUL")
+                        { CreateNoWindow = true, UseShellExecute = false });
+                    Thread.Sleep(2000);
+                });
+                var done = open?.WaitForExit(60_000) == true;
+                Console.WriteLine($"Opened a file on the nest only: {(done ? "downloaded" : "still downloading after a minute")} (exit {(done ? open!.ExitCode : -1)})");
+                open?.Dispose();
                 Thread.Sleep(1500);
                 Report(folder);
                 Shot(folder, "step4-after-opening.png", details: true);
@@ -161,7 +163,8 @@ public static class Program
     }
 
     /// <summary>Opens Explorer on <paramref name="path"/>, optionally selects a file and opens its right-click menu, and saves a picture.</summary>
-    private static void Shot(string path, string png, string? select = null, bool menu = false, bool moreOptions = false, bool details = false)
+    private static void Shot(string path, string png, string? select = null, bool menu = false, bool moreOptions = false, bool details = false,
+        Action? during = null)
     {
         var before = ExplorerWindows();
         Process.Start(new ProcessStartInfo("explorer.exe", $"\"{path}\"") { UseShellExecute = false })?.Dispose();
@@ -199,6 +202,7 @@ public static class Program
                 Thread.Sleep(1500);
             }
         }
+        during?.Invoke();
         ScreenShot(png, menu ? new Rectangle(0, 0, 1400, 900) : new Rectangle(0, 0, 1100, 700));
         if (menu)
             SendKeys.SendWait("{ESC}{ESC}");

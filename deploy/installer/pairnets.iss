@@ -74,6 +74,17 @@ begin
   end;
 end;
 
+// With Files On-Demand some files may only be on the nest: Pairnets asks whether to go on (it explains what to do).
+function InitializeUninstall(): Boolean;
+var
+  ResultCode: Integer;
+begin
+  Result := True;
+  if FileExists(ExpandConstant('{app}\Pairnets.exe')) then
+    if Exec(ExpandConstant('{app}\Pairnets.exe'), '--check-before-uninstall', '', SW_SHOWNORMAL, ewWaitUntilTerminated, ResultCode) then
+      Result := ResultCode <> 1;
+end;
+
 procedure CurStepChanged(CurStep: TSetupStep);
 begin
   if CurStep = ssInstall then

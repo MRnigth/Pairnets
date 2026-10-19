@@ -47,7 +47,7 @@ public sealed class WindowsCloudFolder : ICloudFolder
 
     private WindowsCloudFolder(string root, CloudFolderMode mode, ILogger log)
     {
-        _root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(root));
+        _root = LongPath(root);
         Mode = mode;
         _log = log;
         // Kept in fields: Windows holds pointers to them for as long as the folder is connected.
@@ -81,7 +81,7 @@ public sealed class WindowsCloudFolder : ICloudFolder
             return "It needs Windows 10 (version 1809) or newer.";
         try
         {
-            var full = Path.TrimEndingDirectorySeparator(Path.GetFullPath(root));
+            var full = LongPath(root);
             if (full.StartsWith(@"\\", StringComparison.Ordinal))
                 return "Your Pairnets folder is on a network drive. Windows only does this on this PC's own drives.";
             var drive = new DriveInfo(Path.GetPathRoot(full)!);
@@ -93,7 +93,7 @@ public sealed class WindowsCloudFolder : ICloudFolder
             {
                 if (other.Id.StartsWith(ProviderName + "!", StringComparison.Ordinal))
                     continue;
-                var path = Path.TrimEndingDirectorySeparator(other.Path.Path);
+                var path = LongPath(other.Path.Path);
                 if (IsSameOrInside(full, path) || IsSameOrInside(path, full))
                     return $"Your Pairnets folder is inside (or around) another cloud folder ({other.DisplayNameResource}, {path}). Windows allows only one.";
             }
@@ -105,6 +105,21 @@ public sealed class WindowsCloudFolder : ICloudFolder
         }
     }
 
+    /// <summary>
+    /// A folder's full path with every part in its long form ("C:\PROGRA~1" becomes "C:\Program Files"), so two ways of
+    /// writing the same folder compare equal.
+    /// </summary>
+    public static string LongPath(string path)
+    {
+        var full = Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
+        var buffer = new StringBuilder(1024);
+        var length = GetLongPathNameW(full, buffer, buffer.Capacity);
+        return length > 0 && length < buffer.Capacity ? Path.TrimEndingDirectorySeparator(buffer.ToString()) : full;
+    }
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern int GetLongPathNameW(string shortPath, StringBuilder longPath, int bufferLength);
+
     private static bool IsSameOrInside(string path, string folder) =>
         string.Equals(path, folder, StringComparison.OrdinalIgnoreCase)
         || path.StartsWith(folder + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
@@ -113,7 +128,7 @@ public sealed class WindowsCloudFolder : ICloudFolder
     public static string SyncRootId(string root)
     {
         var sid = System.Security.Principal.WindowsIdentity.GetCurrent().User?.Value ?? "user";
-        var key = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(Path.GetFullPath(root).ToUpperInvariant())))[..16];
+        var key = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(LongPath(root).ToUpperInvariant())))[..16];
         return $"{ProviderName}!{sid}!{key}";
     }
 
@@ -125,7 +140,7 @@ public sealed class WindowsCloudFolder : ICloudFolder
             var prefix = $"{ProviderName}!{System.Security.Principal.WindowsIdentity.GetCurrent().User?.Value}!";
             return StorageProviderSyncRootManager.GetCurrentSyncRoots()
                 .Where(r => r.Id.StartsWith(prefix, StringComparison.Ordinal))
-                .Select(r => (r.Id, Path.TrimEndingDirectorySeparator(r.Path.Path)))
+                .Select(r => (r.Id, LongPath(r.Path.Path)))
                 .ToList();
         }
         catch (Exception ex) when (ex is COMException or UnauthorizedAccessException or IOException)

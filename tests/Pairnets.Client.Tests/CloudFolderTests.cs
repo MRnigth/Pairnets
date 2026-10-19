@@ -78,7 +78,7 @@ public sealed class CloudFolderTests : IDisposable
 
         using (var cloud = Start(root, CloudFolderMode.KeepAllHere))
         {
-            Assert.Contains(WindowsCloudFolder.Registered(), r => string.Equals(r.Path, root, StringComparison.OrdinalIgnoreCase));
+            Assert.Contains(WindowsCloudFolder.Registered(), r => string.Equals(r.Path, WindowsCloudFolder.LongPath(root), StringComparison.OrdinalIgnoreCase));
             cloud.MarkSynced(file, "hash-1");
             Assert.Equal((true, true, false), State(file));
             Assert.False(cloud.IsCloudOnly(file));
