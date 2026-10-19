@@ -411,7 +411,7 @@ public sealed class OverviewView : UserControl
         if (m.Pulses)
         {
             _pulse = circle;
-            circle.Classes.Add("pulse");
+            Motion.Set(circle, "pulse", true);
         }
 
         var texts = new StackPanel { VerticalAlignment = VerticalAlignment.Center };

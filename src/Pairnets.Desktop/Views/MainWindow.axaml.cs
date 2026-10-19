@@ -268,8 +268,7 @@ public partial class MainWindow : Window
         foreach (var shown in new Control[] { OverviewPage, ActivityPage, HistoryPage, DevicesPage, AttentionPage, SettingsPage, AccountPage })
         {
             shown.Classes.Remove("enter");
-            if (shown.IsVisible)
-                shown.Classes.Add("enter");
+            Motion.Set(shown, "enter", shown.IsVisible);
         }
         if (page == MainPage.Activity)
             RebuildActivity();
@@ -418,7 +417,7 @@ public partial class MainWindow : Window
     {
         _update = SideUpdate.From(title, detail, button, progress, busy);
         UpdateCard.IsVisible = _update.Visible;
-        UpdateIcon.Classes.Set("bob", _update.Visible && !busy);
+        Motion.Set(UpdateIcon, "bob", _update.Visible && !busy);
         if (!_update.Visible)
             return;
         UpdateTitle.Text = _update.Title;

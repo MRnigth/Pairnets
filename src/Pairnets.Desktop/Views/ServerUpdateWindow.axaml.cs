@@ -107,7 +107,7 @@ public partial class ServerUpdateWindow : Window
         BadgeIcon.Data = Visuals.Resource<Geometry>(icon);
         BadgeIcon.StrokeThickness = icon == "I.Check" ? 2.6 : 1.8;
         BadgeUp.IsVisible = up;
-        BadgeHost.Classes.Set("bob", bob);
+        Motion.Set(BadgeHost, "bob", bob);
         BadgeKey = key;
     }
 
@@ -340,8 +340,7 @@ public partial class ServerUpdateWindow : Window
             CloseButton.Classes.Set("SecondaryButton", true);
         }
         SetBadge(tone, icon, key, up: false, bob: false);
-        BadgeHost.Classes.Remove("pop");
-        Dispatcher.UIThread.Post(() => BadgeHost.Classes.Add("pop"), DispatcherPriority.Background);
+        Motion.Replay(BadgeHost, "pop");
         if (_debug && result.Details is { } details) // after the trace lines still queued for the window
             Dispatcher.UIThread.Post(() => AppendDetail("--- What the server reports ---" + Environment.NewLine + details), DispatcherPriority.Background);
     }

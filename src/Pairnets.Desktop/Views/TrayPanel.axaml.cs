@@ -128,7 +128,7 @@ public partial class TrayPanel : Window
         StatusGlyph.Data = Visuals.Resource<Geometry>(glyph);
         StatusGlyph.Width = StatusGlyph.Height = size;
         StatusGlyph.StrokeThickness = stroke;
-        StatusGlyph.Classes.Set("spin-slow", m.Tone == TrayTone.Syncing);
+        Motion.Set(StatusGlyph, "spin-slow", m.Tone == TrayTone.Syncing);
 
         Headline.Text = m.Headline;
         Detail.Text = m.Detail;
