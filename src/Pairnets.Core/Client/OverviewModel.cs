@@ -504,16 +504,25 @@ public sealed record OverviewModel
                 ? $"This sync would delete {Count(count, "file")}. Nothing was deleted, and nothing happens until you decide."
                 : "This sync would delete files. Nothing was deleted, and nothing happens until you decide.",
             DeleteBox = lines.Count == 0 ? null : new OverviewDeleteBox("Would be deleted from your nest", Count(count, "file"), lines, more),
+            // The calm choice first: keep the files (syncing stays stopped, and the folder opens to check it). Deleting is
+            // an outlined amber button, never the bright one.
             Buttons =
             [
-                new OverviewButton($"Allow these deletions ({Format.Count(count)})…", OverviewIcon.Check, OverviewAction.Fix, OverviewButtonKind.Warn),
+                new OverviewButton(KeepMyFiles, OverviewIcon.Folder, OverviewAction.OpenFolder, OverviewButtonKind.Primary),
                 new OverviewButton("See the full list", OverviewIcon.List, OverviewAction.SeeList, OverviewButtonKind.Secondary),
+                new OverviewButton($"Allow these deletions ({Format.Count(count)})…", OverviewIcon.Check, OverviewAction.Fix, OverviewButtonKind.WarnOutline),
             ],
-            ButtonNote = "If you allow it, the files stay in History for 30 days.",
+            ButtonNote = "Keep my files changes nothing and opens your folder. Allowed deletions stay in History for 30 days.",
             Lower = OverviewLower.Strip,
             Facts = details,
         };
     }
+
+    /// <summary>The stopped-to-keep-files-safe card's calm button: syncing stays stopped and the folder opens.</summary>
+    public const string KeepMyFiles = "Keep my files";
+
+    /// <summary>The confirmation's buttons for allowing <paramref name="count"/> deletions: "Delete 37 files", "Cancel".</summary>
+    public static (string Yes, string No) DeleteButtons(int count) => ("Delete " + Count(count, "file"), "Cancel");
 
     private static IReadOnlyList<OverviewFact> FactsOf(params OverviewFact?[] facts) => facts.Where(f => f is not null).Select(f => f!).ToList();
 

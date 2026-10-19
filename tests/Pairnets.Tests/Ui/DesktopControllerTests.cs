@@ -275,7 +275,7 @@ public sealed class DesktopControllerTests
         Person.Click(Screen.Find<Button>(main, "Allow these deletions (2)…"));
         var question = await app.DialogAsync("Pairnets – allow deletions?");
         Assert.Contains("file1.txt", AppUnderTest.TextOf(question));
-        await app.AnswerAsync("Pairnets – allow deletions?", "Yes");
+        await app.AnswerAsync("Pairnets – allow deletions?", "Delete 2 files"); // the buttons say what they do, not Yes/No
         await app.WaitForNestAsync(f => f.Count == 4 && !f.ContainsKey("file1.txt"), "the two deletions to reach the nest");
         await app.WaitUntilIdleAsync();
 
@@ -285,7 +285,7 @@ public sealed class DesktopControllerTests
         Person.Click(app.TrayItem("Sync now"));
         await Wait.Until(() => app.App.Session!.Status.BlockReason == BlockReason.MassDelete, "the second deletions to be blocked");
         Person.Click(app.TrayItem("Allow these deletions (2)…"));
-        await app.AnswerAsync("Pairnets – allow deletions?", "Yes");
+        await app.AnswerAsync("Pairnets – allow deletions?", "Delete 2 files"); // the buttons say what they do, not Yes/No
         await app.WaitForNestAsync(f => f.Count == 2, "the second deletions to reach the nest");
         Assert.Equal("No action needed", app.TrayItem("No action needed").Header);
     }

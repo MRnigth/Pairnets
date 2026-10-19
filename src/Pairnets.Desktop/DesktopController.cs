@@ -645,7 +645,9 @@ public sealed class DesktopController : ITrayActions, IDisposable
         {
             case BlockReason.MassDelete:
             case BlockReason.FolderEmpty:
-                if (_session.PendingDeletes().Count > 0 && await Dialogs.ConfirmAsync(_window, "Pairnets – allow deletions?", _session.DescribePendingDeletes()))
+                if (_session.PendingDeletes().Count is > 0 and var pending
+                    && await Dialogs.ConfirmAsync(_window, "Pairnets – allow deletions?", _session.DescribePendingDeletes(),
+                        OverviewModel.DeleteButtons(pending).Yes, OverviewModel.DeleteButtons(pending).No))
                     _session.ApproveDeletions();
                 break;
             case BlockReason.ForeignMarker:

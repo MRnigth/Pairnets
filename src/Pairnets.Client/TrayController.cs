@@ -619,8 +619,9 @@ public sealed class TrayController : ITrayActions, IDisposable
         {
             case BlockReason.MassDelete:
             case BlockReason.FolderEmpty:
-                if (_session.PendingDeletes().Count > 0
-                    && Dialogs.Ask(null, _session.DescribePendingDeletes(), "Pairnets – allow deletions?", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No) == MessageBoxResult.Yes)
+                if (_session.PendingDeletes().Count is > 0 and var pending
+                    && Dialogs.Confirm(_window is { IsVisible: true } ? _window : null, _session.DescribePendingDeletes(), "Pairnets – allow deletions?",
+                        OverviewModel.DeleteButtons(pending).Yes, OverviewModel.DeleteButtons(pending).No))
                     _session.ApproveDeletions();
                 break;
             case BlockReason.ForeignMarker:

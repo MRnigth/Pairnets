@@ -923,4 +923,22 @@
     <Setter Property="Foreground" Value="{DynamicResource T.NeedsActiveText}" />
     <Setter Property="Opacity" Value="0.9" />
   </Style>
+
+  <!-- Overview: an outlined amber button, for the choice that deletes ("Allow these deletions"); never the bright one -->
+  <Style Selector="Button.amberline">
+    <Setter Property="Background" Value="{DynamicResource T.Card}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource T.NeedsActive}" />
+    <Setter Property="BorderThickness" Value="1.5" />
+    <Setter Property="Foreground" Value="{DynamicResource T.WarnText}" />
+  </Style>
+  <Style Selector="Button.amberline /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource T.Card}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource T.NeedsActive}" />
+    <Setter Property="Foreground" Value="{DynamicResource T.WarnText}" />
+  </Style>
+  <Style Selector="Button.amberline:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource T.WarnPill}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource T.NeedsActive}" />
+    <Setter Property="Foreground" Value="{DynamicResource T.WarnText}" />
+  </Style>
 </Styles>

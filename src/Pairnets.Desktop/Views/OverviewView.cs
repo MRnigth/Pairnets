@@ -251,6 +251,11 @@ public sealed class OverviewView : UserControl
                 button.Classes.Add("amber");
                 ink = "T.NeedsActiveText";
                 break;
+            case OverviewButtonKind.WarnOutline:
+                // Outlined amber: the choice that deletes is never the bright one.
+                button.Classes.Add("amberline");
+                ink = "T.WarnText";
+                break;
             case OverviewButtonKind.Link:
                 button.Classes.Add("link");
                 ink = "T.AccentInk";
@@ -643,7 +648,19 @@ public sealed class OverviewView : UserControl
             text.TextAlignment = indent > 0 ? TextAlignment.Left : TextAlignment.Right;
             if (indent > 0)
                 text.Margin = new Thickness(4, 0, 0, 0);
-            Grid.SetColumn(text, 1);
+            if (m.Buttons.Count >= 3)
+            {
+                // Three buttons leave the note no room beside them: it goes under them.
+                row.RowDefinitions = new RowDefinitions("Auto,Auto");
+                text.HorizontalAlignment = HorizontalAlignment.Left;
+                text.TextAlignment = TextAlignment.Left;
+                text.TextWrapping = TextWrapping.Wrap;
+                text.Margin = new Thickness(2, 10, 0, 0);
+                Grid.SetRow(text, 1);
+                Grid.SetColumnSpan(text, 2);
+            }
+            else
+                Grid.SetColumn(text, 1);
             row.Children.Add(text);
         }
         return row;

@@ -737,6 +737,7 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
         On("View log", "open the log", Called("ViewLog")),
         On("Report a bug…", "open a bug report", Called("ReportBug")),
         new(t => t.Label.StartsWith("Allow these deletions", StringComparison.Ordinal), "ask about the blocked deletions", Called("FixBlocked")),
+        On("Keep my files", "keep syncing stopped and open the folder to check it", Called("OpenFolder")),
         On("Download now anyway", "stop waiting for the other computer", Called("DownloadNow")),
         On("Review", "show the Needs attention page", OnPage(MainPage.Attention)),
         On(["Update server…", "Check for update"], "open the server update window", Called("UpdateServer")),
