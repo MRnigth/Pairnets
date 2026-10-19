@@ -325,8 +325,10 @@ public sealed class WindowsCloudFolder : ICloudFolder
         }
         ct.ThrowIfCancellationRequested();
         Disconnect();
-        var stuck = RevertAll();
+        RevertAll();
+        // While Windows still has the folder it makes its folders cloud folders again: forget it, then finish.
         UnregisterAll();
+        var stuck = RevertAll();
         return stuck == 0 ? null : $"{stuck} file(s) could not be turned back into plain files (they were in use). They still open normally.";
     }, ct);
 
@@ -354,8 +356,8 @@ public sealed class WindowsCloudFolder : ICloudFolder
         var left = 0;
         foreach (var (id, path) in Registered())
         {
-            if (Directory.Exists(path))
-                left += new WindowsCloudFolder(path, CloudFolderMode.Off, Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance).RevertAll();
+            var folder = Directory.Exists(path) ? new WindowsCloudFolder(path, CloudFolderMode.Off, Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance) : null;
+            folder?.RevertAll();
             try
             {
                 StorageProviderSyncRootManager.Unregister(id);
@@ -364,6 +366,7 @@ public sealed class WindowsCloudFolder : ICloudFolder
             {
                 left++;
             }
+            left += folder?.RevertAll() ?? 0; // what Windows made a cloud folder again before it forgot the folder
         }
         return left;
     }
