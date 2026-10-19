@@ -273,8 +273,8 @@
           <StackPanel Orientation="Horizontal" Background="Transparent">
             <Grid Width="42" Height="24" VerticalAlignment="Center">
               <Border x:Name="ring" CornerRadius="15" BorderThickness="1.5" BorderBrush="Transparent" Margin="-3" IsHitTestVisible="False" />
-              <Border x:Name="track" CornerRadius="12" Background="{DynamicResource T.Off}" />
-              <Ellipse x:Name="knob" Width="20" Height="20" Fill="White" HorizontalAlignment="Left" Margin="2,0,0,0" />
+              <Border x:Name="track" CornerRadius="12" Background="{DynamicResource T.SwitchOff}" />
+              <Ellipse x:Name="knob" Width="20" Height="20" Fill="{DynamicResource T.KnobOff}" HorizontalAlignment="Left" Margin="2,0,0,0" />
             </Grid>
             <ContentPresenter Margin="10,0,0,0" VerticalAlignment="Center" />
           </StackPanel>
@@ -284,6 +284,7 @@
             </Trigger>
             <Trigger Property="IsChecked" Value="True">
               <Setter TargetName="track" Property="Background" Value="{DynamicResource T.AccentButton}" />
+              <Setter TargetName="knob" Property="Fill" Value="White" />
               <Setter TargetName="knob" Property="HorizontalAlignment" Value="Right" />
               <Setter TargetName="knob" Property="Margin" Value="0,0,2,0" />
             </Trigger>
