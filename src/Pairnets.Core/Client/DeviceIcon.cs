@@ -71,7 +71,7 @@ public static class DeviceIcon
         DeviceIconKind.Laptop => "Laptop",
         DeviceIconKind.Office => "Office",
         DeviceIconKind.Mini => "Mini PC",
-        DeviceIconKind.Tv => "TV / media",
+        DeviceIconKind.Tv => "TV",
         _ => "Desktop",
     };
 

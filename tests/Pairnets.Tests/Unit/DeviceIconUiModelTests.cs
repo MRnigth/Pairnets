@@ -16,7 +16,7 @@ public class DeviceIconUiModelTests
     [Fact]
     public void TheFiveChoicesAreInTheDesignsOrderAndEachHasADrawingAndAWireValue()
     {
-        Assert.Equal(["Desktop", "Laptop", "Office", "Mini PC", "TV / media"], DeviceIcon.Choices.Select(DeviceIcon.Label));
+        Assert.Equal(["Desktop", "Laptop", "Office", "Mini PC", "TV"], DeviceIcon.Choices.Select(DeviceIcon.Label));
         Assert.Equal(DeviceIcons.All, DeviceIcon.Choices.Select(DeviceIcon.ToWire));
         Assert.Equal(["I.Desktop", "I.Laptop", "I.Office", "I.MiniPc", "I.Tv"], DeviceIcon.Choices.Select(DeviceIcon.ResourceKey));
     }

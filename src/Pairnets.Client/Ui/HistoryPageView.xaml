@@ -215,11 +215,15 @@
                 </Grid>
               </StackPanel>
               <Border DockPanel.Dock="Bottom" CornerRadius="14" Padding="14,12" Margin="0,12,0,0" Background="{DynamicResource T.Chip}">
-                <StackPanel Orientation="Horizontal">
+                <Grid>
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                  </Grid.ColumnDefinitions>
                   <ui:LineIcon Width="16" Height="16" Margin="0,1,10,0" VerticalAlignment="Top" StrokeThickness="1.9" Stroke="{DynamicResource T.Muted}" Data="{StaticResource I.InfoCircle}" />
-                  <TextBlock Style="{StaticResource PgSub}" Margin="0" FontSize="13" MaxWidth="360"
+                  <TextBlock Grid.Column="1" Style="{StaticResource PgSub}" Margin="0" FontSize="13" TextWrapping="Wrap"
                              Text="Restore puts that version back in your folder. The one you have now stays here as a version, so nothing is lost." />
-                </StackPanel>
+                </Grid>
               </Border>
               <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                 <StackPanel x:Name="VersionList" />
