@@ -43,9 +43,11 @@
     <!-- ======================= Left side, open ======================= -->
     <Grid x:Name="SideOpen" Margin="12,12,0,12">
       <Border Classes="sidepanel">
-        <DockPanel Margin="14,16,14,14">
+        <!-- Top-aligned, so the page tiles sit right under the computers and the spare space goes to the bottom; the
+             computers' row is the one that shrinks (and scrolls) when the window is short. -->
+        <Grid Margin="14,16,14,14" RowDefinitions="Auto,*,Auto" VerticalAlignment="Top">
           <!-- Top: logo, fold, account -->
-          <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,*,Auto,Auto" Margin="4,0,0,0">
+          <Grid ColumnDefinitions="Auto,*,Auto,Auto" Margin="4,0,0,0">
             <Image x:Name="AppIcon" Source="avares://Pairnets/Assets/pairnets-icon-256.png" Width="30" Height="30" Margin="0,0,8,0" />
             <TextBlock Grid.Column="1" Text="Pairnets" FontSize="16" FontWeight="ExtraBold" VerticalAlignment="Center" />
             <Button x:Name="FoldButton" Grid.Column="2" Classes="RoundIconButton" Width="32" Height="32" Margin="0,0,8,0"
@@ -58,8 +60,66 @@
             </Button>
           </Grid>
 
-          <!-- Bottom: the app update, then the page tiles -->
-          <StackPanel DockPanel.Dock="Bottom">
+          <!-- Your computers (scrolls when the window is short) -->
+          <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <StackPanel>
+              <TextBlock Classes="SmallLabel" Text="YOUR COMPUTERS" Margin="4,16,0,8" />
+
+              <!-- This computer -->
+              <Button x:Name="ThisCard" Classes="siderow" Background="Transparent" Click="OnThisComputer">
+                <StackPanel>
+                  <Grid ColumnDefinitions="Auto,*">
+                    <Grid Margin="0,0,10,0" VerticalAlignment="Center">
+                      <Border x:Name="ThisIconSq" Classes="IconSquare" />
+                      <v:LineIcon x:Name="ThisIcon" Classes="icon" Width="17" Height="17" StrokeThickness="1.8" Data="{StaticResource I.Desktop}" />
+                      <Ellipse x:Name="ThisDot" Width="10" Height="10" StrokeThickness="2" Stroke="{DynamicResource T.Card}" Fill="{DynamicResource T.Ok}"
+                               HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,-2,-2" />
+                    </Grid>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                      <TextBlock x:Name="ThisName" FontWeight="ExtraBold" Text="DESKTOP" TextTrimming="CharacterEllipsis" />
+                      <TextBlock x:Name="ThisSub" FontSize="12" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                    </StackPanel>
+                  </Grid>
+                  <ProgressBar x:Name="ThisBar" Classes="thin" Minimum="0" Maximum="100" Margin="0,9,0,0" IsVisible="False" />
+                </StackPanel>
+              </Button>
+
+              <!-- The nest -->
+              <Button x:Name="NestRow" Classes="siderow" Background="Transparent" Margin="0,6,0,0" Click="OnNestRow">
+                <Grid ColumnDefinitions="Auto,*">
+                  <Grid Margin="0,0,10,0" VerticalAlignment="Center">
+                    <Border Classes="IconSquare" />
+                    <v:LineIcon Classes="icon" Width="17" Height="17" StrokeThickness="1.8" Data="{StaticResource I.Nest}" />
+                    <Ellipse x:Name="NestDot" Width="10" Height="10" StrokeThickness="2" Stroke="{DynamicResource T.Card}" Fill="{DynamicResource T.Ok}"
+                             HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,-2,-2" />
+                  </Grid>
+                  <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                    <TextBlock FontWeight="ExtraBold" Text="Your nest" />
+                    <TextBlock x:Name="NestSub" FontSize="12" FontWeight="Medium" TextTrimming="CharacterEllipsis" />
+                  </StackPanel>
+                </Grid>
+              </Button>
+
+              <!-- Other computers, as one group -->
+              <Border Background="{DynamicResource T.Tile}" BorderBrush="{DynamicResource T.Border}" BorderThickness="1" CornerRadius="16" Padding="12,10" Margin="0,6,0,0">
+                <StackPanel>
+                  <!-- The heading is never cut; the note gets what is left (it was drawn over the heading). -->
+                  <Grid ColumnDefinitions="Auto,*,Auto">
+                    <TextBlock x:Name="GroupTitle" Text="Other computers" FontWeight="ExtraBold" VerticalAlignment="Center" Margin="0,0,8,0" />
+                    <TextBlock x:Name="GroupNote" Grid.Column="1" Classes="SoftText" VerticalAlignment="Center" HorizontalAlignment="Right" TextTrimming="CharacterEllipsis" Margin="0,0,8,0" />
+                    <Button x:Name="GroupFold" Grid.Column="2" Classes="RoundIconButton" Width="24" Height="24" Background="Transparent"
+                            ToolTip.Tip="Fold the group" AutomationProperties.Name="Fold the group" Click="OnFoldGroup">
+                      <v:LineIcon x:Name="GroupFoldIcon" Classes="icon" Width="14" Height="14" StrokeThickness="2.4" Stroke="{DynamicResource T.Muted}" Data="{StaticResource I.ChevronUp}" />
+                    </Button>
+                  </Grid>
+                  <UniformGrid x:Name="GroupGrid" Columns="3" Margin="-2,6,-2,0" />
+                </StackPanel>
+              </Border>
+            </StackPanel>
+          </ScrollViewer>
+
+          <!-- Under the computers: the app update, then the page tiles -->
+          <StackPanel Grid.Row="2">
             <Border x:Name="UpdateCard" Background="{DynamicResource T.AccentSoft}" CornerRadius="14" Padding="12,8,8,8" Margin="0,10,0,0" IsVisible="False">
               <StackPanel>
                 <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto">
@@ -122,65 +182,7 @@
               </RadioButton>
             </UniformGrid>
           </StackPanel>
-
-          <!-- Your computers (scrolls when the window is short) -->
-          <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-            <StackPanel>
-              <TextBlock Classes="SmallLabel" Text="YOUR COMPUTERS" Margin="4,16,0,8" />
-
-              <!-- This computer -->
-              <Button x:Name="ThisCard" Classes="siderow" Background="Transparent" Click="OnThisComputer">
-                <StackPanel>
-                  <Grid ColumnDefinitions="Auto,*">
-                    <Grid Margin="0,0,10,0" VerticalAlignment="Center">
-                      <Border x:Name="ThisIconSq" Classes="IconSquare" />
-                      <v:LineIcon x:Name="ThisIcon" Classes="icon" Width="17" Height="17" StrokeThickness="1.8" Data="{StaticResource I.Desktop}" />
-                      <Ellipse x:Name="ThisDot" Width="10" Height="10" StrokeThickness="2" Stroke="{DynamicResource T.Card}" Fill="{DynamicResource T.Ok}"
-                               HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,-2,-2" />
-                    </Grid>
-                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                      <TextBlock x:Name="ThisName" FontWeight="ExtraBold" Text="DESKTOP" TextTrimming="CharacterEllipsis" />
-                      <TextBlock x:Name="ThisSub" FontSize="12" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
-                    </StackPanel>
-                  </Grid>
-                  <ProgressBar x:Name="ThisBar" Classes="thin" Minimum="0" Maximum="100" Margin="0,9,0,0" IsVisible="False" />
-                </StackPanel>
-              </Button>
-
-              <!-- The nest -->
-              <Button x:Name="NestRow" Classes="siderow" Background="Transparent" Margin="0,6,0,0" Click="OnNestRow">
-                <Grid ColumnDefinitions="Auto,*">
-                  <Grid Margin="0,0,10,0" VerticalAlignment="Center">
-                    <Border Classes="IconSquare" />
-                    <v:LineIcon Classes="icon" Width="17" Height="17" StrokeThickness="1.8" Data="{StaticResource I.Nest}" />
-                    <Ellipse x:Name="NestDot" Width="10" Height="10" StrokeThickness="2" Stroke="{DynamicResource T.Card}" Fill="{DynamicResource T.Ok}"
-                             HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,-2,-2" />
-                  </Grid>
-                  <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                    <TextBlock FontWeight="ExtraBold" Text="Your nest" />
-                    <TextBlock x:Name="NestSub" FontSize="12" FontWeight="Medium" TextTrimming="CharacterEllipsis" />
-                  </StackPanel>
-                </Grid>
-              </Button>
-
-              <!-- Other computers, as one group -->
-              <Border Background="{DynamicResource T.Tile}" BorderBrush="{DynamicResource T.Border}" BorderThickness="1" CornerRadius="16" Padding="12,10" Margin="0,6,0,0">
-                <StackPanel>
-                  <!-- The heading is never cut; the note gets what is left (it was drawn over the heading). -->
-                  <Grid ColumnDefinitions="Auto,*,Auto">
-                    <TextBlock x:Name="GroupTitle" Text="Other computers" FontWeight="ExtraBold" VerticalAlignment="Center" Margin="0,0,8,0" />
-                    <TextBlock x:Name="GroupNote" Grid.Column="1" Classes="SoftText" VerticalAlignment="Center" HorizontalAlignment="Right" TextTrimming="CharacterEllipsis" Margin="0,0,8,0" />
-                    <Button x:Name="GroupFold" Grid.Column="2" Classes="RoundIconButton" Width="24" Height="24" Background="Transparent"
-                            ToolTip.Tip="Fold the group" AutomationProperties.Name="Fold the group" Click="OnFoldGroup">
-                      <v:LineIcon x:Name="GroupFoldIcon" Classes="icon" Width="14" Height="14" StrokeThickness="2.4" Stroke="{DynamicResource T.Muted}" Data="{StaticResource I.ChevronUp}" />
-                    </Button>
-                  </Grid>
-                  <UniformGrid x:Name="GroupGrid" Columns="3" Margin="-2,6,-2,0" />
-                </StackPanel>
-              </Border>
-            </StackPanel>
-          </ScrollViewer>
-        </DockPanel>
+        </Grid>
       </Border>
     </Grid>
 
