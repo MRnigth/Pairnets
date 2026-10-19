@@ -2,13 +2,13 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Help · Pairnets</title>
 <meta name="description" content="What to check when your Pairnets nest can't be reached, or a computer was removed.">
 <meta name="referrer" content="no-referrer">
 <meta name="color-scheme" content="light dark">
 <meta name="theme-color" content="#FFFFFF" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#1D2026" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#171A20" media="(prefers-color-scheme: dark)">
 <link rel="icon" href="/assets/logo.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/assets/icon-256.png">
 <link rel="stylesheet" href="/assets/site.css">
@@ -29,64 +29,122 @@
   </div>
 </header>
 <main id="main" tabindex="-1">
-  <div class="wrap narrow">
-    <div class="hero tight">
+  <div class="wrap docs">
+    <aside class="toc" aria-label="Pages">
+      <div>
+        <p class="label">Help</p>
+        <nav aria-label="Help pages">
+          <a href="/help/" aria-current="page">Help</a>
+          <a href="/faq/">FAQ</a>
+          <a href="/docs">The full guide</a>
+          <a href="/add/">Add a computer</a>
+          <a href="/contact/">Contact</a>
+        </nav>
+      </div>
+      <div>
+        <p class="label">Trust and legal</p>
+        <nav aria-label="Legal pages">
+          <a href="/security/">Security</a>
+          <a href="/privacy/">Privacy</a>
+          <a href="/terms/">Terms</a>
+          <a href="/guidelines/">Guidelines</a>
+          <a href="/cookies/">Cookie settings</a>
+          <a href="/licenses/">Open-source licences</a>
+          <a href="/delete-account/">Delete my account</a>
+        </nav>
+      </div>
+      <div class="onpage">
+        <p class="label">On this page</p>
+        <nav aria-label="On this page">
+          <a href="#not-connected">My nest doesn’t show up</a>
+          <a href="#add-nest">Add a new nest to my account</a>
+          <a href="#cant-reach">“Can’t reach it” in the app</a>
+          <a href="#code-expired">The code expired, or it said no</a>
+          <a href="#signed-out">“Signed out” in the app</a>
+          <a href="#cant-sign-in">I can’t sign in to my account</a>
+          <a href="#lost">A computer was lost or stolen</a>
+          <a href="#own-domain">Lost passkey on my own domain</a>
+          <a href="#what-we-see">What pairnets.app sees</a>
+          <a href="#more">More</a>
+        </nav>
+      </div>
+    </aside>
+    <article class="doc">
+      <p class="crumbs"><a href="/">pairnets.app</a> / help</p>
       <h1>Help</h1>
       <p class="lead">Quick answers for signing in and reaching your nest. Start here. General questions? See the <a href="/faq/">FAQ</a>.</p>
-    </div>
-
-    <div class="callout warn spaced">
-      <h2>My nest doesn't show up, or the app says it isn't connected</h2>
-      <p>Your nest is your own server, so it only answers while that machine, and its link out to the internet, is running.</p>
-      <ol>
-        <li>Check that the computer your nest runs on is switched on and online.</li>
-        <li>Sign in at <a href="https://sync.pairnets.app/account">sync.pairnets.app/account</a> with the account your nest belongs to. It should be listed there, and say whether it is online.</li>
-        <li>On the server, run this. Both should say <strong>active (running)</strong>.
-          <pre class="gap"><code>sudo systemctl status pairnets-server pairnets-tunnel</code></pre></li>
-        <li>Not listed at all? Run the one-line installer again and open the link it shows:
-          <pre class="gap"><code>curl -fsSL https://pairnets.app/get.sh | sudo bash</code></pre></li>
-      </ol>
-      <p>Still stuck? <a href="/docs">The guide</a> has a "Check it from outside" section with more.</p>
-    </div>
-
-    <details>
-      <summary>I just installed the server: how do I add it to my account?</summary>
-      <p>At the end, the installer prints a link. Open it in your browser (on any device), sign in with the email address or Google account you want the nest to belong to, check that the page shows the same code as the server, and press <strong>Add this nest</strong>. The link works for 15 minutes; if it runs out, run the installer command again.</p>
-      <p>Your nest then appears at <a href="https://sync.pairnets.app/account">sync.pairnets.app/account</a>. Now add your computers: <a href="/add/">Add a computer</a>.</p>
-    </details>
-    <details>
-      <summary>"Can't reach it" in the app</summary>
-      <p>Your nest is switched off or offline, or it was removed from your account. Work through the checklist at the top of this page. If your nest runs on its own domain, check that the address is typed exactly, then press "Sign in with your browser" again; the line under the box checks the address as you type.</p>
-    </details>
-    <details>
-      <summary>The code expired, or the sign-in said no</summary>
-      <p>Codes last 10 minutes. Press <strong>Get a new code</strong> (or <strong>Start over</strong>) in the app and approve the new one. Always check that the code on the sign-in page matches the code in the app before pressing Allow.</p>
-    </details>
-    <details>
-      <summary>"Signed out" in the app</summary>
-      <p>This computer was removed from your account, or you pressed <em>Sign out of this computer</em>. Nothing is lost: your files are untouched. Press <strong>Sign in again…</strong> and allow the computer at sync.pairnets.app.</p>
-    </details>
-    <details>
-      <summary>I can't sign in to my account</summary>
-      <p>Your Pairnets account has no password. Sign in with the same method as before: <strong>Continue with email</strong> (a link sent to your address) or <strong>Continue with Google</strong>. Check your spam folder, and that you use the same address as last time. The link works for 15 minutes.</p>
-    </details>
-    <details>
-      <summary>A computer was lost or stolen</summary>
-      <p>Sign in at <a href="https://sync.pairnets.app/account">sync.pairnets.app/account</a> and remove it there. Its key stops working at once and nothing else changes. If you run your nest on your own domain, remove it under <strong>Devices</strong> on the nest's own website instead.</p>
-    </details>
-    <details>
-      <summary>My nest runs on its own domain and I lost my passkey or password</summary>
-      <p>This applies only to a nest with a website of its own. On the server, make a new one-time sign-in link and open it in your browser:</p>
-      <pre><code>sudo -u pairnets /opt/pairnets/pairnets-server owner-link</code></pre>
-    </details>
-    <details>
-      <summary>Which of my data does pairnets.app see?</summary>
-      <p>None of your files, and no account details. The pages here are static. The only thing they do is ask sync.pairnets.app, on every page, whether you are signed in, so the top bar can show your username instead of "Sign in". Your browser sends its sync.pairnets.app sign-in cookie with that question; pairnets.app never sees the cookie and keeps nothing. Cloudflare, which delivers the site, handles visitors' IP addresses. Details: <a href="/privacy/#website">Privacy</a>.</p>
-    </details>
-    <details>
-      <summary>More</summary>
-      <p>The <a href="/docs">full guide</a> covers installing the server, how syncing and conflicts work, restoring old versions, and updates. General questions, like what Pairnets costs or where your files go, are in the <a href="/faq/">FAQ</a>. Still stuck? <a href="/contact/">Get in touch</a>.</p>
-    </details>
+      <details class="toc-phone">
+        <summary>On this page</summary>
+        <nav aria-label="On this page">
+          <a href="#not-connected">My nest doesn’t show up</a>
+          <a href="#add-nest">Add a new nest to my account</a>
+          <a href="#cant-reach">“Can’t reach it” in the app</a>
+          <a href="#code-expired">The code expired, or it said no</a>
+          <a href="#signed-out">“Signed out” in the app</a>
+          <a href="#cant-sign-in">I can’t sign in to my account</a>
+          <a href="#lost">A computer was lost or stolen</a>
+          <a href="#own-domain">Lost passkey on my own domain</a>
+          <a href="#what-we-see">What pairnets.app sees</a>
+          <a href="#more">More</a>
+        </nav>
+      </details>
+      <section class="first" id="not-connected">
+        <p class="tag">Start here</p>
+        <h2>My nest doesn't show up, or the app says it isn't connected</h2>
+        <p>Your nest is your own server, so it only answers while that machine, and its link out to the internet, is running.</p>
+        <ol>
+          <li>Check that the computer your nest runs on is switched on and online.</li>
+          <li>Sign in at <a href="https://sync.pairnets.app/account">sync.pairnets.app/account</a> with the account your nest belongs to. It should be listed there, and say whether it is online.</li>
+          <li>On the server, run this. Both should say <strong>active (running)</strong>.
+            <pre class="gap"><code>sudo systemctl status pairnets-server pairnets-tunnel</code></pre></li>
+          <li>Not listed at all? Run the one-line installer again and open the link it shows:
+            <pre class="gap"><code>curl -fsSL https://pairnets.app/get.sh | sudo bash</code></pre></li>
+        </ol>
+        <p>Still stuck? <a href="/docs">The guide</a> has a "Check it from outside" section with more.</p>
+      </section>
+      <section id="add-nest">
+        <h2>I just installed the server: how do I add it to my account?<a class="anchor" href="#add-nest" aria-label="Link to this answer">#</a></h2>
+        <p>At the end, the installer prints a link. Open it in your browser (on any device), sign in with the email address or Google account you want the nest to belong to, check that the page shows the same code as the server, and press <strong>Add this nest</strong>. The link works for 15 minutes; if it runs out, run the installer command again.</p>
+        <p>Your nest then appears at <a href="https://sync.pairnets.app/account">sync.pairnets.app/account</a>. Now add your computers: <a href="/add/">Add a computer</a>.</p>
+      </section>
+      <section id="cant-reach">
+        <h2>"Can't reach it" in the app<a class="anchor" href="#cant-reach" aria-label="Link to this answer">#</a></h2>
+        <p>Your nest is switched off or offline, or it was removed from your account. Work through the checklist at the top of this page. If your nest runs on its own domain, check that the address is typed exactly, then press "Sign in with your browser" again; the line under the box checks the address as you type.</p>
+      </section>
+      <section id="code-expired">
+        <h2>The code expired, or the sign-in said no<a class="anchor" href="#code-expired" aria-label="Link to this answer">#</a></h2>
+        <p>Codes last 10 minutes. Press <strong>Get a new code</strong> (or <strong>Start over</strong>) in the app and approve the new one. Always check that the code on the sign-in page matches the code in the app before pressing Allow.</p>
+      </section>
+      <section id="signed-out">
+        <h2>"Signed out" in the app<a class="anchor" href="#signed-out" aria-label="Link to this answer">#</a></h2>
+        <p>This computer was removed from your account, or you pressed <em>Sign out of this computer</em>. Nothing is lost: your files are untouched. Press <strong>Sign in again…</strong> and allow the computer at sync.pairnets.app.</p>
+      </section>
+      <section id="cant-sign-in">
+        <h2>I can't sign in to my account<a class="anchor" href="#cant-sign-in" aria-label="Link to this answer">#</a></h2>
+        <p>Your Pairnets account has no password. Sign in with the same method as before: <strong>Continue with email</strong> (a link sent to your address) or <strong>Continue with Google</strong>. Check your spam folder, and that you use the same address as last time. The link works for 15 minutes.</p>
+      </section>
+      <section id="lost">
+        <h2>A computer was lost or stolen<a class="anchor" href="#lost" aria-label="Link to this answer">#</a></h2>
+        <p>Sign in at <a href="https://sync.pairnets.app/account">sync.pairnets.app/account</a> and remove it there. Its key stops working at once and nothing else changes. If you run your nest on your own domain, remove it under <strong>Devices</strong> on the nest's own website instead.</p>
+      </section>
+      <section id="own-domain">
+        <h2>My nest runs on its own domain and I lost my passkey or password<a class="anchor" href="#own-domain" aria-label="Link to this answer">#</a></h2>
+        <p>This applies only to a nest with a website of its own. On the server, make a new one-time sign-in link and open it in your browser:</p>
+        <pre><code>sudo -u pairnets /opt/pairnets/pairnets-server owner-link</code></pre>
+      </section>
+      <section id="what-we-see">
+        <h2>Which of my data does pairnets.app see?<a class="anchor" href="#what-we-see" aria-label="Link to this answer">#</a></h2>
+        <p>None of your files, and no account details. The pages here are static. The only thing they do is ask sync.pairnets.app, on every page, whether you are signed in, so the top bar can show your username instead of "Sign in". Your browser sends its sync.pairnets.app sign-in cookie with that question; pairnets.app never sees the cookie and keeps nothing. Cloudflare, which delivers the site, handles visitors' IP addresses. Details: <a href="/privacy/#website">Privacy</a>.</p>
+      </section>
+      <section id="more">
+        <h2>More<a class="anchor" href="#more" aria-label="Link to this answer">#</a></h2>
+        <p>The <a href="/docs">full guide</a> covers installing the server, how syncing and conflicts work, restoring old versions, and updates. General questions, like what Pairnets costs or where your files go, are in the <a href="/faq/">FAQ</a>. Still stuck? <a href="/contact/">Get in touch</a>.</p>
+      </section>
+      <div class="next">
+        <a href="/add/"><span>Next</span>Add a computer</a>
+        <a class="right" href="/faq/"><span>Also</span>Questions and answers</a>
+      </div>
+    </article>
   </div>
 </main>
 <footer>
