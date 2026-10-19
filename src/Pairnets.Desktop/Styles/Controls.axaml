@@ -6,11 +6,36 @@
     <Setter Property="Background" Value="{DynamicResource T.Bg}" />
     <Setter Property="Foreground" Value="{DynamicResource T.Text}" />
     <Setter Property="FontFamily" Value="{StaticResource F.Sans}" />
-    <Setter Property="FontSize" Value="13.5" />
+    <Setter Property="FontSize" Value="14" />
   </Style>
   <!-- Popups are separate roots and do not inherit the window font. -->
   <Style Selector="ContextMenu, MenuFlyoutPresenter, ToolTip, FlyoutPresenter">
     <Setter Property="FontFamily" Value="{StaticResource F.Sans}" />
+  </Style>
+
+  <!-- Keyboard focus (Tab and arrow keys only, never mouse clicks): a 2 px ring in the dark accent ink, 3 px outside
+       the control, instead of Fluent's black and white one. The Windows app draws the same ring (FocusRing in
+       Themes/Controls.xaml). Round buttons and page tiles get a ring of their own shape. -->
+  <Style Selector="AdornerLayer">
+    <Setter Property="DefaultFocusAdorner">
+      <FocusAdornerTemplate>
+        <Border Margin="-3" BorderThickness="2" CornerRadius="14" BorderBrush="{DynamicResource T.AccentInk}" />
+      </FocusAdornerTemplate>
+    </Setter>
+  </Style>
+  <Style Selector="Button.RoundIconButton, Button.dockbtn, RadioButton.dockpage, Button.fpill">
+    <Setter Property="FocusAdorner">
+      <FocusAdornerTemplate>
+        <Border Margin="-3" BorderThickness="2" CornerRadius="999" BorderBrush="{DynamicResource T.AccentInk}" />
+      </FocusAdornerTemplate>
+    </Setter>
+  </Style>
+  <Style Selector="RadioButton.sidetile">
+    <Setter Property="FocusAdorner">
+      <FocusAdornerTemplate>
+        <Border Margin="-3" BorderThickness="2" CornerRadius="21" BorderBrush="{DynamicResource T.AccentInk}" />
+      </FocusAdornerTemplate>
+    </Setter>
   </Style>
 
   <!-- Line icons -->
@@ -121,6 +146,20 @@
     <Setter Property="BorderThickness" Value="1" />
     <Setter Property="CornerRadius" Value="18" />
     <Setter Property="Padding" Value="14,12" />
+  </Style>
+  <!-- The tray panel's "needs you" strip (a flat button around this border) -->
+  <Style Selector="Button.strip > Border">
+    <Setter Property="Background" Value="{DynamicResource T.WarnPill}" />
+  </Style>
+  <Style Selector="Button.strip:pointerover > Border">
+    <Setter Property="Background" Value="{DynamicResource T.WarnPillHover}" />
+  </Style>
+  <Style Selector="Button.strip">
+    <Setter Property="FocusAdorner">
+      <FocusAdornerTemplate>
+        <Border Margin="-3" BorderThickness="2" CornerRadius="21" BorderBrush="{DynamicResource T.AccentInk}" />
+      </FocusAdornerTemplate>
+    </Setter>
   </Style>
   <!-- Attention strip -->
   <Style Selector="Border.attention">
@@ -253,18 +292,19 @@
     <Setter Property="Background" Value="#1F55C9" />
     <Setter Property="Foreground" Value="White" />
   </Style>
+  <!-- The tray's "Fix" button: a darker orange than the badge, so the white words read well. -->
   <Style Selector="Button.warn">
-    <Setter Property="Background" Value="{StaticResource S.Orange}" />
+    <Setter Property="Background" Value="{StaticResource S.OrangeButton}" />
     <Setter Property="BorderThickness" Value="0" />
     <Setter Property="Foreground" Value="White" />
     <Setter Property="FontWeight" Value="Bold" />
   </Style>
   <Style Selector="Button.warn /template/ ContentPresenter#PART_ContentPresenter">
-    <Setter Property="Background" Value="{StaticResource S.Orange}" />
+    <Setter Property="Background" Value="{StaticResource S.OrangeButton}" />
     <Setter Property="Foreground" Value="White" />
   </Style>
   <Style Selector="Button.warn:pointerover /template/ ContentPresenter#PART_ContentPresenter">
-    <Setter Property="Background" Value="#C95E0F" />
+    <Setter Property="Background" Value="{StaticResource S.OrangeButtonHover}" />
     <Setter Property="Foreground" Value="White" />
   </Style>
   <!-- For actions that cannot be undone (Reset this app). -->
@@ -279,7 +319,7 @@
     <Setter Property="Foreground" Value="White" />
   </Style>
   <Style Selector="Button.danger:pointerover /template/ ContentPresenter#PART_ContentPresenter">
-    <Setter Property="Background" Value="#A61B25" />
+    <Setter Property="Background" Value="{StaticResource S.RedHover}" />
     <Setter Property="Foreground" Value="White" />
   </Style>
 
@@ -300,14 +340,6 @@
         </Border>
       </ControlTemplate>
     </Setter>
-  </Style>
-  <!-- Keyboard focus (Tab / arrow keys) only, never on mouse clicks -->
-  <Style Selector="RadioButton.seg:focus-visible /template/ Border#bd, RadioButton.nav:focus-visible /template/ Border#bd">
-    <Setter Property="BorderBrush" Value="{DynamicResource T.Accent}" />
-  </Style>
-  <Style Selector="ListBox.rows ListBoxItem:focus-visible /template/ ContentPresenter#PART_ContentPresenter">
-    <Setter Property="BorderBrush" Value="{DynamicResource T.Accent}" />
-    <Setter Property="BorderThickness" Value="1.5" />
   </Style>
   <Style Selector="RadioButton.seg:checked">
     <Setter Property="FontWeight" Value="Bold" />
@@ -839,6 +871,9 @@
   <Style Selector="RadioButton.sidetile.amber /template/ Border#bd">
     <Setter Property="Background" Value="{DynamicResource T.WarnPill}" />
     <Setter Property="BorderBrush" Value="{DynamicResource T.WarnBorder}" />
+  </Style>
+  <Style Selector="RadioButton.sidetile.amber:pointerover /template/ Border#bd">
+    <Setter Property="Background" Value="{DynamicResource T.WarnPillHover}" />
   </Style>
   <Style Selector="RadioButton.sidetile.amber:checked">
     <Setter Property="Foreground" Value="{DynamicResource T.NeedsActiveText}" />

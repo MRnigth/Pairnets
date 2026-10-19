@@ -9,7 +9,11 @@ public partial class App : Application
 {
     private DesktopController? _controller;
 
-    public override void Initialize() => AvaloniaXamlLoader.Load(this);
+    public override void Initialize()
+    {
+        AvaloniaXamlLoader.Load(this);
+        Views.Motion.Apply(this); // still, when the system asks for less motion
+    }
 
     public override void OnFrameworkInitializationCompleted()
     {

@@ -56,6 +56,9 @@
   <SolidColorBrush x:Key="S.Grey" Color="#8A9099" />
   <SolidColorBrush x:Key="S.Orange" Color="#E66E14" />
   <SolidColorBrush x:Key="S.OrangeHover" Color="#C95E0F" />
+  <!-- The orange "Fix" button: darker than the badge orange, so white words on it are easy to read. -->
+  <SolidColorBrush x:Key="S.OrangeButton" Color="#B95309" />
+  <SolidColorBrush x:Key="S.OrangeButtonHover" Color="#9E4607" />
   <SolidColorBrush x:Key="S.Red" Color="#CF222E" />
   <SolidColorBrush x:Key="S.RedHover" Color="#A61B25" />
   <SolidColorBrush x:Key="S.Yellow" Color="#D6A021" />

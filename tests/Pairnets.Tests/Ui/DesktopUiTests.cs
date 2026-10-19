@@ -15,10 +15,13 @@ namespace Pairnets.Tests.Ui;
 
 public static class HeadlessApp
 {
-    public static AppBuilder BuildAvaloniaApp() =>
-        AppBuilder.Configure<Pairnets.Desktop.App>()
+    public static AppBuilder BuildAvaloniaApp()
+    {
+        Motion.Enabled = true; // the tests check which animations run, whatever this computer's motion setting is
+        return AppBuilder.Configure<Pairnets.Desktop.App>()
             .UseSkia()
             .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false });
+    }
 }
 
 /// <summary>Sample files and versions for the History page (screenshots and tests).</summary>

@@ -241,7 +241,7 @@ public partial class MainWindow
 
         var name = new TextBlock { Text = o.Name, FontSize = 11, FontWeight = FontWeight.ExtraBold, MaxWidth = 82, TextTrimming = TextTrimming.CharacterEllipsis, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 3, 0, 0) };
         Paint(name, TextBlock.ForegroundProperty, reachable ? "T.Text" : "T.Muted");
-        var sub = new TextBlock { Text = o.Text, FontSize = 10, FontWeight = FontWeight.Bold, MaxWidth = 82, TextTrimming = TextTrimming.CharacterEllipsis, HorizontalAlignment = HorizontalAlignment.Center };
+        var sub = new TextBlock { Text = o.Text, FontSize = 11, FontWeight = FontWeight.Bold, MaxWidth = 82, TextTrimming = TextTrimming.CharacterEllipsis, HorizontalAlignment = HorizontalAlignment.Center };
         Paint(sub, TextBlock.ForegroundProperty, o.Kind switch
         {
             OtherKind.Live => "T.AccentInk",

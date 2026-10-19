@@ -79,14 +79,13 @@ public partial class DeviceMapView : UserControl
     {
         var downloading = state == PeerState.Downloading;
         OtherHalo.IsVisible = downloading;
-        OtherHalo.Classes.Set("ripple", downloading);
+        Motion.Set(OtherHalo, "ripple", downloading);
         OtherRing.Classes.Set("downloading", downloading);
         var has = state == PeerState.HasChanges;
         if (has && !OtherTick.IsVisible)
         {
             OtherTick.IsVisible = true;
-            OtherTick.Classes.Remove("pop");
-            Avalonia.Threading.Dispatcher.UIThread.Post(() => OtherTick.Classes.Add("pop"), Avalonia.Threading.DispatcherPriority.Background);
+            Motion.Replay(OtherTick, "pop");
         }
         else if (!has)
         {

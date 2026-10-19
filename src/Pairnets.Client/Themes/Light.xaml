@@ -18,6 +18,7 @@
   <SolidColorBrush x:Key="T.BannerBorder" Color="#C9DAFB" />
   <SolidColorBrush x:Key="T.WarnPill" Color="#FFF3DC" />
   <SolidColorBrush x:Key="T.WarnText" Color="#6B4600" />
+  <SolidColorBrush x:Key="T.WarnPillHover" Color="#FFEBC4" />
   <SolidColorBrush x:Key="T.Sidebar" Color="#F4F5F8" />
   <SolidColorBrush x:Key="T.NavHover" Color="#F0F2F6" />
   <SolidColorBrush x:Key="T.NavSelected" Color="#E6EEFE" />
@@ -33,24 +34,24 @@
   <SolidColorBrush x:Key="T.Chip" Color="#F0F2F6" />
   <SolidColorBrush x:Key="T.ChipDim" Color="#F5F6F9" />
   <SolidColorBrush x:Key="T.Dash" Color="#C3C8D3" />
-  <SolidColorBrush x:Key="T.TextSoft" Color="#646C7C" />
+  <SolidColorBrush x:Key="T.TextSoft" Color="#5F6878" />
   <SolidColorBrush x:Key="T.AccentButton" Color="#2F6FEB" />
   <SolidColorBrush x:Key="T.AccentSoft" Color="#E6EEFE" />
   <SolidColorBrush x:Key="T.AccentInk" Color="#1F55C9" />
   <SolidColorBrush x:Key="T.Ok" Color="#12A150" />
   <SolidColorBrush x:Key="T.OkLine" Color="#7FCB9C" />
-  <SolidColorBrush x:Key="T.Warn" Color="#E89B12" />
+  <SolidColorBrush x:Key="T.Warn" Color="#B07500" />
   <SolidColorBrush x:Key="T.WarnBorder" Color="#F2D69C" />
   <SolidColorBrush x:Key="T.BadBorder" Color="#F3B9B9" />
   <SolidColorBrush x:Key="T.Bad" Color="#D93636" />
-  <SolidColorBrush x:Key="T.Off" Color="#9AA1AE" />
+  <SolidColorBrush x:Key="T.Off" Color="#7E8593" />
   <SolidColorBrush x:Key="T.Folder" Color="#D99A1E" />
   <SolidColorBrush x:Key="T.NeedsActive" Color="#FFB547" />
   <SolidColorBrush x:Key="T.NeedsActiveText" Color="#2B1A00" />
   <SolidColorBrush x:Key="T.AccentButtonHover" Color="#2560D6" />
   <!-- Stage 4 pages -->
   <SolidColorBrush x:Key="T.Field" Color="#F7F8FB" />
-  <SolidColorBrush x:Key="T.SwitchOff" Color="#C3C9D4" />
+  <SolidColorBrush x:Key="T.SwitchOff" Color="#878F9F" />
   <SolidColorBrush x:Key="T.KnobOff" Color="#FFFFFF" />
   <SolidColorBrush x:Key="T.DangerBtn" Color="#C62828" />
   <SolidColorBrush x:Key="T.AccentRing" Color="#BFD3FA" />

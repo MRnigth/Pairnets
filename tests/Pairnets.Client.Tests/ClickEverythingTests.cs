@@ -490,7 +490,7 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
         On("Open Pairnets", "hide the panel and open the main window", HidesAnd("OpenWindow(Overview)")),
         On("Folder", "hide the panel and open the synced folder", HidesAnd("OpenFolder")),
         On(["Pause", "Resume"], "ask the app to pause or resume syncing", Called("TogglePause")),
-        On("AttentionButton", "hide the panel and open \"Needs attention\" in the main window", HidesAnd("OpenWindow(Attention)")),
+        new(t => t.Element.Name == "AttentionButton", "hide the panel and open \"Needs attention\" in the main window", HidesAnd("OpenWindow(Attention)")),
     ];
 
     // ------------------------------------------------------------------ the main window

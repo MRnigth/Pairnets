@@ -35,7 +35,7 @@
               <ui:LineIcon Width="15" Height="15" Margin="0,0,7,0" StrokeThickness="2" Data="{StaticResource I.Trash}"
                            Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}" />
               <TextBlock Text="Deleted files" />
-              <TextBlock x:Name="DeletedCount" Margin="7,0,0,0" FontWeight="SemiBold" Opacity="0.65" />
+              <TextBlock x:Name="DeletedCount" Margin="7,0,0,0" FontWeight="SemiBold" />
             </StackPanel>
           </RadioButton>
           <RadioButton x:Name="FilesTab" Style="{StaticResource PgTab}" GroupName="history" Margin="0" Checked="OnHistoryModeChanged">

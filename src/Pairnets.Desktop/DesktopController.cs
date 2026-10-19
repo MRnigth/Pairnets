@@ -199,6 +199,9 @@ public sealed class DesktopController : ITrayActions, IDisposable
 
     public void OpenWindow(MainPage page) => ShowMainWindow(page);
 
+    /// <summary>White reads on every status colour but the yellow of "paused": that one gets a dark brown sign (7:1).</summary>
+    private static readonly IBrush PausedInk = new SolidColorBrush(Color.Parse("#2B1A00"));
+
     private WindowIcon IconFor(RunnerStatus status)
     {
         if (_icons.TryGetValue(status, out var icon))
@@ -216,7 +219,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
                 {
                     // 24-unit icon scaled into the middle 26 px of the circle.
                     using (ctx.PushTransform(Matrix.CreateScale(26 / 24.0, 26 / 24.0) * Matrix.CreateTranslation(9, 9)))
-                        ctx.DrawGeometry(null, new Pen(Brushes.White, 3.2, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round), glyph);
+                        ctx.DrawGeometry(null, new Pen(status == RunnerStatus.Paused ? PausedInk : Brushes.White, 3.2, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round), glyph);
                 }
             }
             using var ms = new MemoryStream();

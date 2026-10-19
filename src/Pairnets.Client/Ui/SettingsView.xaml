@@ -220,7 +220,7 @@
                 <ControlTemplate TargetType="Expander">
                   <Border Style="{StaticResource PgCard}">
                     <StackPanel>
-                      <ToggleButton IsChecked="{Binding IsExpanded, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}" Cursor="Hand" FocusVisualStyle="{x:Null}">
+                      <ToggleButton IsChecked="{Binding IsExpanded, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}" Cursor="Hand" FocusVisualStyle="{DynamicResource FocusRing}">
                         <ToggleButton.Template>
                           <ControlTemplate TargetType="ToggleButton">
                             <Border Background="Transparent" Padding="20,14">
