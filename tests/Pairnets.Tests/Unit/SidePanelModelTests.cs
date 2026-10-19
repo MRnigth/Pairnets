@@ -88,7 +88,7 @@ public class SidePanelModelTests
         Assert.False(m.This.Highlighted);
         Assert.False(m.This.ShowBar);
         Assert.Equal("Up to date", m.Tiles.OverviewNote);
-        Assert.Equal(["in sync", "in sync", "off since " + Presences.Since(Now.AddDays(-2), Now), "off since " + Presences.Since(Now.AddDays(-3), Now), "off since " + Presences.Since(Now.AddDays(-4), Now)],
+        Assert.Equal(["in sync", "in sync", "off " + Presences.Since(Now.AddDays(-2), Now), "off " + Presences.Since(Now.AddDays(-3), Now), "off " + Presences.Since(Now.AddDays(-4), Now)],
             m.Others.Select(o => o.Text));
         Assert.Equal(OtherKind.Ok, m.Others[0].Kind);
     }
@@ -238,7 +238,8 @@ public class SidePanelModelTests
         var media = m.Others.Single(o => o.Name == "MEDIA-PC");
         Assert.Equal((OtherKind.CantReach, "can’t reach", SideDot.Bad), (media.Kind, media.Text, media.Dot));
         var office = m.Others.Single(o => o.Name == "OFFICE-PC");
-        Assert.Equal((OtherKind.Off, "off since yesterday", SideDot.Off), (office.Kind, office.Text, office.Dot));
+        Assert.Equal((OtherKind.Off, "off yesterday", SideDot.Off), (office.Kind, office.Text, office.Dot));
+        Assert.Equal("OFFICE-PC, off since yesterday", office.Tooltip);
     }
 
     [Fact]

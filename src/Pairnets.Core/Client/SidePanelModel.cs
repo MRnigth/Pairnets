@@ -393,8 +393,8 @@ public sealed record SidePanelModel(
         {
             if (Presences.Of(s, d.Name, online, now) == Presence.Lost)
                 return new SideOther(d.Name, "can’t reach", "can’t be reached: it stopped while moving files", OtherKind.CantReach, icon);
-            var off = Presences.OffSince(d.LastSeen, now);
-            return new SideOther(d.Name, off, off, OtherKind.Off, icon);
+            // The cell is narrow: "off yesterday"; its tooltip says "off since yesterday" like everywhere else.
+            return new SideOther(d.Name, "off " + Presences.Since(d.LastSeen, now), Presences.OffSince(d.LastSeen, now), OtherKind.Off, icon);
         }
         if (live is not null)
         {
