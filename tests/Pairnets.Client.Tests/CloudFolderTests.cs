@@ -104,8 +104,13 @@ public sealed class CloudFolderTests : IDisposable
         }
         Assert.Empty(WindowsCloudFolder.Registered());
         Assert.False(State(file).Placeholder, Log());
-        CloudPlaceholders.TryGetAttributesAndTag(Path.GetDirectoryName(file)!, out var folderAttributes, out var folderTag);
-        Assert.False(State(Path.GetDirectoryName(file)!).Placeholder, $"{folderAttributes} tag=0x{folderTag:X8}\n" + Log()); // folders too
+        // Its folder may keep Windows' mark; it is an ordinary folder all the same, and Pairnets' scanner sees its files.
+        using (var state = new Pairnets.Core.State.StateDb(_dir.Combine("after.db")))
+        {
+            var scan = await new LocalScanner(root, new Pairnets.Core.Paths.IgnoreList(), state, TimeProvider.System, NullLogger.Instance) { StabilityWindow = TimeSpan.Zero }
+                .ScanAsync(CancellationToken.None);
+            Assert.True(scan.Files["Docs/report.txt"].Stable);
+        }
         Assert.Equal("my report, changed", File.ReadAllText(file));
     }
 
