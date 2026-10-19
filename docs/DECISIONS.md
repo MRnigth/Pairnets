@@ -1060,3 +1060,12 @@ The owner's answers to the 2026-10-14 audit questions:
   stay as placeholders that open again once Pairnets is set up.
 * **Tests never touch this PC's Explorer.** The registry tests write below a throwaway key; the cloud folder tests run
   only with `PAIRNETS_CLOUD_TESTS=1` (CI), and `tools/ExplorerShots` (pictures of real Explorer) refuses to run outside CI.
+* **Placeholders are always ordinary files and folders to the scanner**, also while the cloud folder is off (or after
+  leaving it): skipping them would make their files look deleted. A file whose content is only on the nest is never read;
+  unknown to the notes (new, or renamed/moved here) it is "not known yet", and the version it stands for is never
+  deleted on the nest (`ScanResult.HeldVersions`), so a renamed file left on the nest still opens, then syncs under its
+  new name. Each placeholder carries "hash\npath on the nest" as its identity for exactly that.
+* **Leaving turns files back first, then Windows forgets the folder.** Windows 11 may keep its cloud mark on folders
+  after that (seen on GitHub's runners); such folders are ordinary to everyone and every file in them is here.
+* **Windows' callbacks never let an error escape** (it would end the app), Explorer's keep/free choices go through one
+  worker, Pairnets' own files are never freed, and the whole-tree work (pinning, leaving) runs off the window's thread.
