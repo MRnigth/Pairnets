@@ -1033,3 +1033,19 @@ The owner's answers to the 2026-10-14 audit questions:
   and the others stop waiting as before; the 30-minute limit and "Download now anyway" stay.
 * **The repeat comes from the sync engine, not the app window**, so it works on every computer, with or without its
   window open. Keep `BatchReannounceInterval` well under the others' `PeerQuietTimeout`.
+
+## pairnets.app in the apps' new look, "Product first" (2026-10-19)
+
+* **"Product first" was picked out of three looks.** The home page opens on a dark stage (dark in light mode too)
+  that draws the app itself: the left side with the computers, the Overview, the nest with a line to each computer.
+  The drawing is plain HTML and inline SVG (no picture file, no script), uses made-up names (DESKTOP, LAPTOP, MINI-PC,
+  MEDIA-PC), and is one `role="img"` with a spoken description; its parts are hidden from screen readers. Update it
+  when the app's Overview changes a lot.
+* **Every other page is a docs page**: a side list of all pages (Help and Trust and legal) plus "On this page" built
+  from the page's own headings, which stays in view on computers and folds into one "On this page" row on phones. The
+  words on the pages did not change.
+* **The apps' font, served by pairnets.app itself.** Plus Jakarta Sans as Latin-only woff2 files (about 16 KB per
+  weight) in `site/assets/fonts`, so the strict CSP (`font-src 'self'`) stays and no font host sees visitors.
+* **The design-review fixes stay:** text sizes in rem, taller tap areas on phones, commands that wrap whole, blue only
+  for Sign in, the main download and the coffee, and the nest line joining the steps (now on Add a computer and
+  Delete my account too).
