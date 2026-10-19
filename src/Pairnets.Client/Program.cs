@@ -13,15 +13,12 @@ internal static class Program
         using var mutex = new Mutex(initiallyOwned: true, PairnetsInfo.WindowsMutex, out var createdNew);
         if (!createdNew)
         {
-            // Started for a pairnets:// link (the nest's website sending you back after approving
-            // this computer): poke the running Pairnets to the front and leave quietly.
-            if (args.Any(AppActivation.IsActivationUrl))
-            {
-                AppActivation.TrySignalRunning();
+            // Opened again (Start menu, a shortcut, the installer, a pairnets:// link from the nest's website):
+            // bring the running Pairnets to the front and leave quietly, like other apps do.
+            if (AppActivation.SecondStart(args) == AppActivation.SecondStartResult.Quiet)
                 return 0;
-            }
-            MessageBox.Show("Pairnets is already running. Look for its icon in the notification area.", "Pairnets",
-                MessageBoxButton.OK, MessageBoxImage.Information);
+            MessageBox.Show(AppActivation.NotAnsweringMessage + " If it stays stuck, end Pairnets in Task Manager and start it again.",
+                "Pairnets", MessageBoxButton.OK, MessageBoxImage.Information);
             return 1;
         }
 

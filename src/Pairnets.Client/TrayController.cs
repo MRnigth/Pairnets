@@ -151,10 +151,11 @@ public sealed class TrayController : ITrayActions, IDisposable
 
     public void Start()
     {
-        // A pairnets:// link (the nest's website after approving this computer) starts a second Pairnets,
-        // which pokes this one through the pipe and quits; come to the front for it. Listening starts before
-        // the sign-in window below opens (and waits), because that is when the link comes.
-        _activation = AppActivation.Listen(() => RunOnUi(ComeToFront), _env.ActivationPipeName);
+        // Opening Pairnets again (Start menu, a shortcut, a pairnets:// link from the nest's website) starts a second
+        // Pairnets, which pokes this one through the pipe and quits; come to the front for it. The poke is answered
+        // once the window is up, so a stuck app gets reported. Listening starts before the sign-in window below
+        // opens (and waits), because that is when the link comes.
+        _activation = AppActivation.Listen(() => _ui.InvokeAsync(ComeToFront).Task, _env.ActivationPipeName);
         _updates.UpdateAvailable += u => RunOnUi(() =>
         {
             _updateDismissed = false;
@@ -171,7 +172,7 @@ public sealed class TrayController : ITrayActions, IDisposable
             return;
         }
         StartSession(null);
-        if (!Environment.GetCommandLineArgs().Contains("--autostart"))
+        if (!Environment.GetCommandLineArgs().Contains(AppActivation.AutoStartArgument))
             ShowMainWindow();
     }
 

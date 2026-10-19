@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.DependencyInjection;
 using Pairnets.Core;
+using Pairnets.Core.Client;
 using Pairnets.Core.Settings;
 using Pairnets.Core.Sync;
 using Pairnets.Desktop.Views;
@@ -154,6 +155,32 @@ public sealed class DesktopControllerTests
     }
 
     // ------------------------------------------------------------------ syncing
+
+    [AvaloniaFact]
+    public async Task OpeningPairnetsAgain_BringsTheWindowBackFromTheTrayAndFromMinimised()
+    {
+        await using var app = await AppUnderTest.StartAsync();
+        var window = app.MainWindow;
+        var pipe = app.Env.ActivationPipeName;
+        // The second start waits for its answer while this (the app's UI thread) goes on running the app.
+        Task<AppActivation.SecondStartResult> OpenAgain(params string[] args) =>
+            Task.Run(() => AppActivation.SecondStart(args, pipe));
+
+        window.Hide(); // what closing the window does: it goes to the tray / menu bar
+        // Starting at login while Pairnets already runs: quiet, and the window stays put away.
+        Assert.Equal(AppActivation.SecondStartResult.Quiet, await OpenAgain(AppActivation.AutoStartArgument));
+        await Task.Delay(500);
+        Assert.False(window.IsVisible, "The start at login popped the window up.");
+
+        // Opened again from the app menu or a shortcut: the same window comes back, no message.
+        Assert.Equal(AppActivation.SecondStartResult.Quiet, await OpenAgain());
+        Assert.True(window.IsVisible, "Opening Pairnets again did not bring its window back.");
+        Assert.Same(window, app.App.Window);
+
+        window.WindowState = WindowState.Minimized;
+        Assert.Equal(AppActivation.SecondStartResult.Quiet, await OpenAgain());
+        Assert.Equal(WindowState.Normal, window.WindowState);
+    }
 
     [AvaloniaFact]
     public async Task SyncNow_UploadsAFile()

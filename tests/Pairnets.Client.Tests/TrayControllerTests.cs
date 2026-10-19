@@ -166,6 +166,32 @@ public sealed class TrayControllerTests
     }
 
     [Fact]
+    public async Task OpeningPairnetsAgain_BringsTheWindowBackFromTheTrayAndFromMinimised()
+    {
+        await using var nest = await TestServer.StartWithWebsiteAsync();
+        await using var app = await TrayHarness.CreateAsync(nest, watchFolder: false);
+        await app.StartAsync();
+        var window = app.Tray.Window!;
+        var pipe = app.Env.ActivationPipeName;
+
+        await app.Wpf.Ui(window.Close); // closing only puts it away in the tray
+        await app.WaitUntil(() => !window.IsVisible, "the main window to go to the tray");
+        // Starting with Windows while Pairnets already runs: quiet, and the window stays in the tray.
+        Assert.Equal(AppActivation.SecondStartResult.Quiet, AppActivation.SecondStart([AppActivation.AutoStartArgument], pipe));
+        await Task.Delay(500);
+        Assert.False(await app.Wpf.Ui(() => window.IsVisible), "The start with Windows popped the window up.");
+
+        // Opened again from the Start menu: the same window comes back, no message.
+        Assert.Equal(AppActivation.SecondStartResult.Quiet, AppActivation.SecondStart([], pipe));
+        Assert.True(await app.Wpf.Ui(() => window.IsVisible), "Opening Pairnets again did not bring its window back from the tray.");
+        Assert.Same(window, app.Tray.Window);
+
+        await app.Wpf.Ui(() => window.WindowState = WindowState.Minimized);
+        Assert.Equal(AppActivation.SecondStartResult.Quiet, AppActivation.SecondStart([], pipe));
+        Assert.Equal(WindowState.Normal, await app.Wpf.Ui(() => window.WindowState));
+    }
+
+    [Fact]
     public async Task SyncNow_UploadsAFile()
     {
         await using var nest = await TestServer.StartWithWebsiteAsync();

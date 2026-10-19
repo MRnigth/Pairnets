@@ -99,7 +99,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
         _log.LogInformation("Pairnets {Version} starting on {Platform}", typeof(DesktopController).Assembly.GetName().Version, _platform.Name);
         // A pairnets:// link (the nest's website after approving this computer) starts a second
         // Pairnets, which pokes this one through the pipe and quits; come to the front for it.
-        _activation = AppActivation.Listen(() => Dispatcher.UIThread.Post(ComeToFront), _env.ActivationPipeName);
+        _activation = AppActivation.Listen(() => Dispatcher.UIThread.InvokeAsync(ComeToFront).GetTask(), _env.ActivationPipeName);
         CreateTray();
         _refresh.Start();
         _updates.SetEnabled(_settings.CheckForUpdates);
@@ -121,7 +121,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
             return;
         }
         StartSession(null);
-        if (!args.Contains("--autostart"))
+        if (!args.Contains(AppActivation.AutoStartArgument))
             ShowMainWindow();
     }
 
