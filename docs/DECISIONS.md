@@ -1041,7 +1041,7 @@ The owner's answers to the 2026-10-14 audit questions:
   (`--unregister-explorer`) and Reset take it all away. Linux gets the GTK/KDE sidebar bookmark, a Dolphin service menu,
   GNOME Files/Nemo scripts and a gio folder icon; the Mac gets the folder icon (Finder's `Icon\r` file is never synced;
   Apple has no API to add a Finder sidebar entry).
-* **Ticks and Files On-Demand use Windows' own Cloud Files API, opt-in.** "Files in Explorer" in Settings: Plain folder
+* **Ticks and Files On-Demand use Windows' own Cloud Files API, opt-in, marked "Preview".** "Files in Explorer" in Settings: Plain folder
   (the default), Ticks all here, Files On-Demand. The folder is registered with `StorageProviderSyncRootManager` (the
   Windows 10 SDK projection, so the Windows app now targets `net8.0-windows10.0.19041.0`) and the rest is P/Invoke into
   cldapi.dll. It works from the normal per-user install (no package identity): checked on GitHub's Windows computers.

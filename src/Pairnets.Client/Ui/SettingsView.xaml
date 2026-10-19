@@ -195,9 +195,14 @@
                   <CheckBox x:Name="ExplorerBox" Grid.Column="1" Style="{StaticResource PgSwitch}" AutomationProperties.Name="Show Pairnets in File Explorer" />
                 </Grid>
                 <StackPanel Margin="0,14,0,0">
-                  <TextBlock Style="{StaticResource RowTitle}" Text="Files in Explorer (test)" />
+                  <StackPanel Orientation="Horizontal">
+                    <TextBlock Style="{StaticResource RowTitle}" VerticalAlignment="Center" Text="Files in Explorer" />
+                    <Border x:Name="CloudPreviewBadge" Style="{StaticResource Pill}" Margin="8,0,0,0" Padding="8,2" VerticalAlignment="Center">
+                      <TextBlock FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource T.Muted}" Text="Preview" />
+                    </Border>
+                  </StackPanel>
                   <TextBlock Style="{StaticResource PgSmall}" Margin="0,2,0,8" TextWrapping="Wrap"
-                             Text="Ticks show which files are synced, like OneDrive. With Files On-Demand, files from your other computers stay on your nest until you open them, and &quot;Free up space&quot; works. Your files are not moved or copied." />
+                             Text="New and off by default. Ticks show which files are synced, like OneDrive. With Files On-Demand, files from your other computers stay on your nest until you open them, and &quot;Free up space&quot; works. Your files are not moved or copied, and choosing Plain folder again brings every file back to this PC." />
                   <Border CornerRadius="11" Padding="2" BorderThickness="1" HorizontalAlignment="Left"
                           Background="{DynamicResource T.Chip}" BorderBrush="{DynamicResource T.Border}">
                     <StackPanel Orientation="Horizontal">
