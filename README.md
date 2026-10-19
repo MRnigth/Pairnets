@@ -177,6 +177,15 @@ rewrite:
 * end-to-end encryption at rest on the server
 * a phone app (it will use the same sign-in as the computers: code, approve on the nest)
 
+## Code signing policy
+
+Free code signing provided by [SignPath.io](https://signpath.io), certificate by [SignPath Foundation](https://signpath.org).
+Only programs built by this repository's GitHub Actions from its own source are signed, and every release is approved by
+hand. Committers, reviewers and approvers: [MRnigth](https://github.com/MRnigth). Privacy: see
+[pairnets.app/privacy](https://pairnets.app/privacy/); Pairnets sends nothing to other computers unless you ask it to,
+besides your files to your own nest and its check for new versions (which you can turn off). The same policy is at
+[pairnets.app/code-signing-policy](https://pairnets.app/code-signing-policy/).
+
 ## License
 
 MIT, see [LICENSE](LICENSE).

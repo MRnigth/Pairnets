@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Code signing policy · Pairnets</title>
+<meta name="description" content="How Pairnets' Windows programs are signed, who may sign them, and what Pairnets sends where.">
+<meta name="referrer" content="no-referrer">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#FFFFFF" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1D2026" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="/assets/logo.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/assets/icon-256.png">
+<link rel="stylesheet" href="/assets/site.css">
+<script src="/assets/site.js" defer></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="/"><img src="/assets/logo.svg" alt=""><span>Pairnets</span></a>
+    <nav class="main" aria-label="Main">
+      <a href="/#download">Download</a>
+      <a href="/add/">Add a computer</a>
+      <a href="/help/">Help</a>
+    </nav>
+    <span class="grow"></span>
+    <a class="button accent" id="account-button" href="https://sync.pairnets.app/account">Sign in →</a>
+  </div>
+</header>
+<main id="main" tabindex="-1">
+  <div class="wrap narrow">
+    <div class="hero tight">
+      <h1>Code signing policy</h1>
+      <p class="lead">How Pairnets' Windows programs are signed, and who decides what gets signed.</p>
+      <p class="updated">Last updated 19 October 2026</p>
+    </div>
+    <div class="doc">
+<h2 id="signing">Who signs Pairnets</h2>
+<p>Free code signing provided by <a href="https://signpath.io">SignPath.io</a>, certificate by <a href="https://signpath.org">SignPath Foundation</a>.</p>
+<p>Only programs built by Pairnets' own public build (GitHub Actions in <a href="https://github.com/MRnigth/Pairnets">github.com/MRnigth/Pairnets</a>) from Pairnets' own source code are signed. Each release is approved by hand before it is signed.</p>
+
+<h2 id="team">Team roles</h2>
+<ul>
+<li><strong>Committers and reviewers:</strong> <a href="https://github.com/MRnigth">MRnigth</a></li>
+<li><strong>Approvers:</strong> <a href="https://github.com/MRnigth">MRnigth</a></li>
+</ul>
+<p>Every member of the team uses two-step sign-in for GitHub and SignPath.</p>
+
+<h2 id="privacy">Privacy</h2>
+<p>Pairnets sends your files only to your own server (your nest), through the connection you choose when you sign in. Besides that, it looks for new Pairnets versions on GitHub, which you can turn off in Settings. It sends nothing else to other computers unless you ask it to. The details are in the <a href="/privacy/">privacy policy</a>.</p>
+    </div>
+  </div>
+</main>
+<footer>
+  <div class="wrap">
+    <p>pairnets.app only serves these pages. Your Pairnets account lives at sync.pairnets.app, which connects your computers to your nest. Your files are stored only on your nest: they pass through sync.pairnets.app on the way and are never kept there. Only computers you have allowed can get in.</p>
+    <nav class="foot" aria-label="More about Pairnets">
+      <div><span class="head">Help</span><a href="/help/">Help</a><a href="/faq/">FAQ</a><a href="/contact/">Contact</a><a href="/docs">Guide</a></div>
+      <div><span class="head">Legal</span><a href="/privacy/">Privacy</a><a href="/terms/">Terms</a><a href="/guidelines/">Guidelines</a><a href="/cookies/">Cookie settings</a></div>
+      <div><span class="head">More</span><a href="/security/">Security</a><a href="/code-signing-policy/" aria-current="page">Code signing policy</a><a href="/delete-account/">Delete my account</a><a href="/licenses/">Open-source licences</a><a href="/source">Source code</a><a href="/donate">Support Pairnets ♥</a></div>
+    </nav>
+    <p class="copy">© 2026 Pairnets · Made by MRnigth in Denmark · <a href="/licenses/">MIT licence</a></p>
+  </div>
+</footer>
+</body>
+</html>
