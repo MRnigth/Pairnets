@@ -423,6 +423,8 @@ public partial class MainWindow : Window
             return;
         UpdateTitle.Text = _update.Title;
         ToolTip.SetTip(UpdateTitle, detail.Length > 0 ? detail : null);
+        UpdateDetail.Text = _update.ShowDetail ? detail : string.Empty;
+        UpdateDetail.IsVisible = _update.ShowDetail;
         UpdateButton.Content = button;
         UpdateButton.IsVisible = !busy;
         UpdateLater.IsVisible = !busy;

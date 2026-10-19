@@ -157,6 +157,25 @@ public sealed class FakePlatform : IPlatformServices
             _revealed.Add(path);
     }
 
+    private readonly List<string> _updatedApps = [];
+
+    /// <summary>Writes down the new app an update started (nothing is started).</summary>
+    public void StartUpdatedApp(string path, string argument)
+    {
+        lock (_gate)
+            _updatedApps.Add(path + " " + argument);
+    }
+
+    /// <summary>"&lt;app file&gt; --after-update" for every new app an update started.</summary>
+    public IReadOnlyList<string> UpdatedApps
+    {
+        get
+        {
+            lock (_gate)
+                return _updatedApps.ToList();
+        }
+    }
+
     /// <summary>Files, folders and web pages the app opened, in order.</summary>
     public IReadOnlyList<string> Opened
     {

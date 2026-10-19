@@ -23,4 +23,7 @@ public sealed class WindowsPlatform : IWindowsPlatform
 
     public void RunInstaller(string path, string arguments) =>
         Process.Start(new ProcessStartInfo(path, arguments) { UseShellExecute = true })?.Dispose();
+
+    public void StartUpdatedApp(string path, string arguments) =>
+        Process.Start(new ProcessStartInfo(path, arguments) { UseShellExecute = false, WorkingDirectory = Path.GetDirectoryName(path) })?.Dispose();
 }

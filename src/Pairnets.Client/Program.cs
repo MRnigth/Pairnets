@@ -11,6 +11,9 @@ internal static class Program
     private static int Main(string[] args)
     {
         using var mutex = new Mutex(initiallyOwned: true, PairnetsInfo.WindowsMutex, out var createdNew);
+        // Started by the Pairnets this one just replaced (a copy from the zip updating itself): wait for it to quit.
+        if (!createdNew && args.Contains(SelfReplace.AfterUpdateArgument))
+            createdNew = WaitForOldApp(mutex);
         if (!createdNew)
         {
             // Started for a pairnets:// link (the nest's website sending you back after approving
@@ -25,11 +28,24 @@ internal static class Program
             return 1;
         }
 
+        SelfReplace.CleanUp(Environment.ProcessPath);
         if (!TakeOverTether())
             return 1;
 
         var app = new App();
         return app.Run();
+    }
+
+    private static bool WaitForOldApp(Mutex mutex)
+    {
+        try
+        {
+            return mutex.WaitOne(SelfReplace.WaitForOldApp);
+        }
+        catch (AbandonedMutexException)
+        {
+            return true; // the old Pairnets ended without letting go: the mutex is ours now
+        }
     }
 
     /// <summary>

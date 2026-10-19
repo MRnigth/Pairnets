@@ -355,6 +355,8 @@ public partial class MainWindow : Window, IPageHost
             return;
         UpdateTitle.Text = _update.Title;
         UpdateTitle.ToolTip = detail.Length > 0 ? detail : null;
+        UpdateDetail.Text = _update.ShowDetail ? detail : string.Empty;
+        UpdateDetail.Visibility = Show(_update.ShowDetail);
         UpdateButton.Content = button;
         UpdateButton.Visibility = Show(!busy);
         UpdateLater.Visibility = Show(!busy);

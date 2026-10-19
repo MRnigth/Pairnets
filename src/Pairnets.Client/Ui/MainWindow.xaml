@@ -78,6 +78,7 @@
                     <ui:LineIcon Width="12" Height="12" StrokeThickness="2.4" Stroke="{DynamicResource T.Muted}" Data="{StaticResource I.Close}" />
                   </Button>
                 </Grid>
+                <TextBlock x:Name="UpdateDetail" FontSize="12" TextWrapping="Wrap" Foreground="{DynamicResource T.TextSoft}" Margin="24,6,4,2" Visibility="Collapsed" />
                 <ProgressBar x:Name="UpdateProgress" Style="{StaticResource RoundProgress}" Height="5" Minimum="0" Maximum="100" Margin="0,8,4,2" Visibility="Collapsed" />
               </StackPanel>
             </Border>

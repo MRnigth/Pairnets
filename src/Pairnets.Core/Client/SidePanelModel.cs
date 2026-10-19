@@ -125,6 +125,13 @@ public sealed record SideUpdate(UpdateCardKind Kind, string Title, string Detail
 
     public bool ShowBar => Kind == UpdateCardKind.Downloading;
 
+    /// <summary>
+    /// The detail is written under the title (not only in its tooltip) when it says why nothing was installed, or why the
+    /// person has to download the update by hand: the app never opens the download page without saying why.
+    /// </summary>
+    public bool ShowDetail => Detail.Length > 0
+        && (Kind == UpdateCardKind.Failed || (Kind == UpdateCardKind.Available && Button == UpdateTexts.OpenDownloadPage));
+
     public string PercentText => Percent is { } p ? p.ToString(CultureInfo.InvariantCulture) + "%" : string.Empty;
 
     /// <summary>

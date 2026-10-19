@@ -1030,3 +1030,29 @@ The owner's answers to the 2026-10-14 audit questions:
   and the others stop waiting as before; the 30-minute limit and "Download now anyway" stay.
 * **The repeat comes from the sync engine, not the app window**, so it works on every computer, with or without its
   window open. Keep `BatchReannounceInterval` well under the others' `PeerQuietTimeout`.
+
+## Every app copy updates itself, and never sends you to the browser without saying why (2026-10-19)
+
+* **Found from a 1.0.52 that opened the release page instead of updating.** The release was fine (an installed 1.0.52
+  still updates itself to the signed releases: it reads `version.json` and `SHA256SUMS.txt` and ignores the `.sig`). The
+  copy was a `Pairnets.exe` run from its own folder, not the install folder, and the Windows app only updated itself when
+  `PairnetsSetup.exe` had put it there; the Mac/Linux app never updated itself. Both opened the download page silently.
+* **A copy no installer looks after now swaps its own file** (`SelfReplace`): Windows from `pairnets-client-win-x64.zip`,
+  Linux from `pairnets-desktop-linux-x64.tar.gz`. The package is checked against the signed `SHA256SUMS.txt` like the
+  installer; the running file is renamed to `.old` (both systems allow that), the new one takes its name, the app starts
+  it with `--after-update` and quits; the new app waits up to 30 s for the old one to let go of the single-instance lock
+  and removes `.old`. Any failure puts the old file back. Installed Windows copies keep using `PairnetsSetup.exe`.
+* **Mac stays by hand for now** (swapping an app bundle can't be tested here), but the card says so before its
+  **Open download page** button. Everywhere else a failure shows the reason on the card with **Try again**; nothing opens
+  the browser on its own.
+* **Old apps must keep updating.** The release keeps every file name and format an older app or server reads
+  (`version.json`, plain `SHA256SUMS.txt`, `PairnetsSetup.exe`, the zip, the Linux and server `.tar.gz`); `OldUpdaterCompatTests`
+  runs a frozen copy of the 1.0.52 updater against a release laid out like the workflow's and checks the workflow still
+  publishes those names. Copies on 1.0.59 or older that ran from the zip or on Linux need one update by hand.
+* **Shipped as a quick fix, 1.0.59.1 (tag `v1.0.59.1`).** A fourth number had never been used: `PairnetsInfo.FormatVersion`
+  dropped it, so a 1.0.59.1 app would have called itself 1.0.59, offered 1.0.59.1 again after every install and kept
+  calling its server out of date. It now keeps a fourth number when there is one. Every comparison (the apps,
+  1.0.52's frozen copy, update.sh's `sort -V`) puts 1.0.59 < 1.0.59.1 < 1.0.60, and the next main build (1.0.<run>,
+  60 or more) is newer. The tag's release job now passes `--latest`, because the apps and update.sh read GitHub's
+  latest release; the next push to main makes "Latest build" the latest again. The website's download links point at
+  the "Latest build" release, so new installs from pairnets.app get the fix only once it is on main.

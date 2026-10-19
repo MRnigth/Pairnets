@@ -58,7 +58,10 @@ public sealed class DesktopController : ITrayActions, IDisposable
     private volatile bool _dirty = true;
     private RunnerStatus? _shownStatus;
     private readonly UpdateService _updates;
+    private readonly UpdatePackage _package;
     private bool _updateDismissed;
+    private double? _updateProgress;
+    private string? _updateError;
     private string? _serverPromptShownFor;
     private bool _lowSpaceNoticed;
     private IDisposable? _activation;
@@ -83,14 +86,16 @@ public sealed class DesktopController : ITrayActions, IDisposable
         Dispatcher.UIThread.UnhandledException += OnUnhandledException;
         _fileLog.Minimum = _settings.DebugMode ? LogLevel.Debug : LogLevel.Information; // Debug mode: more detail in the log
         _refresh = new DispatcherTimer(TimeSpan.FromMilliseconds(250), DispatcherPriority.Background, (_, _) => RefreshIfDirty());
-        _updates = new UpdateService(_env.CreateUpdateChecker(), PairnetsInfo.ProductVersion, UpdateChecker.AssetForThisPlatform());
+        _package = UpdatePackage.ForThisComputer(installedCopy: false); // (no installer looks after the Mac and Linux app)
+        _updates = new UpdateService(_env.CreateUpdateChecker(), PairnetsInfo.ProductVersion, _package.Asset);
         _updates.UpdateAvailable += u =>
         {
             _updateDismissed = false;
+            _updateError = null;
             _dirty = true;
             if (!u.Signed)
                 return; // (the banner says it was not installed; no "update available" notice for it)
-            Notify("update:" + u.Version, "Pairnets update available", $"Version {u.Version} is ready. Open Pairnets to download it.");
+            Notify("update:" + u.Version, "Pairnets update available", $"Version {u.Version} is ready. Open Pairnets to update.");
         };
     }
 
@@ -389,7 +394,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
             _settings = new ClientSettings();
             _fileLog.Minimum = LogLevel.Information;
             _updates.SetEnabled(true);
-            (_updateDismissed, _serverPromptShownFor, _lowSpaceNoticed) = (false, null, false);
+            (_updateDismissed, _updateProgress, _updateError, _serverPromptShownFor, _lowSpaceNoticed) = (false, null, null, null, false);
             _lastNotice.Clear();
             if (_autoStartItem is not null)
                 _autoStartItem.IsChecked = SafeIsAutoStart();
@@ -481,13 +486,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
         }
         if (_window is { IsVisible: true })
         {
-            if (_updates.Available is { Signed: false } unsigned && !_updateDismissed)
-                _window.ShowUpdate($"Pairnets {unsigned.Version} could not be installed", ReleaseSigning.NotSignedMessage, "Hide");
-            else if (_updates.Available is { } update && !_updateDismissed)
-                _window.ShowUpdate($"Pairnets {update.Version} is available",
-                    $"You have {PairnetsInfo.ProductVersion}. Download it and replace the app (your settings are kept).", "Download");
-            else
-                _window.ShowUpdate(null, string.Empty, string.Empty);
+            DrawUpdateCard(_window);
             _window.ShowMapSpeed = _settings.ShowMapSpeed;
             _window.ShowStatus(status, _settings.Folder, _settings.DeviceName);
             _window.ShowActivity(_session?.Activity.Items ?? []);
@@ -725,12 +724,89 @@ public sealed class DesktopController : ITrayActions, IDisposable
     }
 
     /// <summary>The app is unsigned on Mac and Linux, so it does not replace itself: open the download page.</summary>
-    public void UpdateNow()
+    private void DrawUpdateCard(MainWindow window)
     {
-        if (_updates.Available is { Signed: false })
+        if (_updates.Available is not { } update || _updateDismissed)
+            window.ShowUpdate(null, string.Empty, string.Empty);
+        else if (!update.Signed)
+            window.ShowUpdate($"Pairnets {update.Version} could not be installed", ReleaseSigning.NotSignedMessage, "Hide");
+        else if (_updateError is not null)
+            window.ShowUpdate($"Pairnets {update.Version} could not be installed", _updateError, UpdateTexts.TryAgain);
+        else if (_updateProgress is { } p)
+            window.ShowUpdate($"Downloading Pairnets {update.Version}…", "Syncing continues while it downloads.", UpdateTexts.UpdateNow, p, busy: true);
+        else if (_package.Method == UpdateMethod.ByHand)
+            window.ShowUpdate($"Pairnets {update.Version} is available", UpdateTexts.ByHand(PairnetsInfo.ProductVersion), UpdateTexts.OpenDownloadPage);
+        else
+            window.ShowUpdate($"Pairnets {update.Version} is available", UpdateTexts.Ready(PairnetsInfo.ProductVersion), UpdateTexts.UpdateNow);
+    }
+
+    /// <summary>
+    /// The Linux app downloads pairnets-desktop-linux-x64.tar.gz, checks it against the signed SHA256SUMS.txt, swaps its
+    /// own file for the new one (<see cref="SelfReplace"/>), starts it and quits. On a Mac the card has already said why
+    /// Pairnets can't do that yet, and its button opens the download page. When anything fails, the card says why and
+    /// offers to try again; it never sends the person to the browser instead.
+    /// </summary>
+    public async void UpdateNow()
+    {
+        if (_updates.Available is not { } update || _updateProgress is not null)
+            return;
+        if (!update.Signed)
+        {
             DismissUpdate(); // never point people at a release Pairnets did not sign
-        else if (_updates.Available is { } update)
+            return;
+        }
+        if (_package.Method == UpdateMethod.ByHand)
+        {
             _platform.Open(update.ReleasePage.ToString());
+            return;
+        }
+        var download = Path.Combine(Path.GetTempPath(), $"Pairnets-{update.Version}-{update.AssetName}");
+        var app = _env.AppFile;
+        _updateError = null;
+        _updateProgress = 0;
+        _dirty = true;
+        try
+        {
+            var progress = new Progress<(long Done, long? Total)>(p =>
+            {
+                _updateProgress = p.Total is > 0 ? p.Done * 100.0 / p.Total.Value : 0;
+                _dirty = true;
+            });
+            await _env.CreateUpdateChecker().DownloadVerifiedAsync(update, download, progress, CancellationToken.None);
+            if (app is null)
+                throw new IOException("Pairnets could not find its own file.");
+            _log.LogInformation("Replacing {App} with Pairnets {Version}", app, update.Version);
+            try
+            {
+                await Task.Run(() => SelfReplace.Install(download, _package.AppFile!, app));
+            }
+            finally
+            {
+                File.Delete(download);
+            }
+        }
+        catch (Exception ex) when (ex is UpdateVerificationException or HttpRequestException or IOException or UnauthorizedAccessException
+            or InvalidDataException)
+        {
+            _log.LogWarning("Update failed: {Error}", FriendlyErrors.Technical(ex));
+            _updateError = UpdateTexts.Failed(ex, app);
+            _updateProgress = null;
+            _dirty = true;
+            return;
+        }
+        try
+        {
+            _platform.StartUpdatedApp(app, SelfReplace.AfterUpdateArgument);
+        }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
+        {
+            _log.LogWarning("Could not start the new Pairnets: {Error}", ex.Message);
+            _updateError = $"Pairnets {update.Version} is installed, but it couldn't be started. Quit Pairnets and start it again to use the new version.";
+            _updateProgress = null;
+            _dirty = true;
+            return;
+        }
+        Quit();
     }
 
     public void DismissUpdate()
@@ -955,6 +1031,9 @@ public sealed class DesktopController : ITrayActions, IDisposable
     internal void ClickTrayIcon() => OnTrayClicked(_tray, EventArgs.Empty);
 
     internal MainWindow? Window => _window;
+
+    /// <summary>"Check now" without the Settings page.</summary>
+    internal Task CheckForUpdateForTestsAsync() => _updates.CheckNowAsync(CancellationToken.None);
 
     internal TrayPanel? Panel => _panel;
 

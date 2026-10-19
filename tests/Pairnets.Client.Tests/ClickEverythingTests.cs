@@ -514,11 +514,11 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
                 Active = [new ActiveTransfer("Videos/talk.mp4", "upload", 60, 100), new ActiveTransfer("Photos/a.jpg", "upload", 20, 100)],
             }, FolderPath, "DESKTOP");
         }));
-        yield return new Screen(name, "deletions blocked and paused, with an update to download", NewMainWindow, (b, w) => Wpf.Ui(() =>
+        yield return new Screen(name, "deletions blocked and paused, with an update that could not be installed", NewMainWindow, (b, w) => Wpf.Ui(() =>
         {
             var main = (MainWindow)w;
             main.ShowActivity(Rows());
-            main.ShowUpdate("Pairnets 1.0.58 is available", "You have 1.0.52.", "Download");
+            main.ShowUpdate("Pairnets 1.0.58 could not be installed", "The download failed. Check your internet connection.", "Try again");
             main.ShowStatus(StatusSnapshot.Initial with
             {
                 Status = RunnerStatus.Blocked, BlockReason = BlockReason.MassDelete, PendingDeletes = 37, Paused = true, LastSyncAt = Now.AddMinutes(-3),
@@ -726,7 +726,7 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
         new(t => t.Element.Name is "NestRow" or "DockNest" or "DockOther1" or "DockOther2" or "DockMore" || t.Element.Tag as string == "SideCell",
             "show the Devices page", OnPage(MainPage.Devices)),
         new(t => t.Element.Tag as string == "SideAdd", "explain how to add a computer", Called("AddComputer")),
-        On(["Update now", "Download"], "start the app update", Called("UpdateNow")),
+        new(t => t.Element.Name == "UpdateButton", "start the app update", Called("UpdateNow")), // ("Update now", or "Try again" after a failure)
         On("Later", "put the app update away", Called("DismissUpdate")),
 
         // The header and the overview.

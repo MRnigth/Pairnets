@@ -92,6 +92,11 @@ public sealed class FakeWindowsPlatform : IWindowsPlatform
 
     public void RunInstaller(string path, string arguments) => Installers.Add((path, arguments));
 
+    /// <summary>The new Pairnets.exe a copy from the zip started after replacing itself (nothing is started).</summary>
+    public Log<(string Path, string Arguments)> UpdatedApps { get; } = new();
+
+    public void StartUpdatedApp(string path, string arguments) => UpdatedApps.Add((path, arguments));
+
     private sealed class RecordingTrash(FakeWindowsPlatform platform) : ILocalTrash
     {
         public void Delete(string fullPath)
