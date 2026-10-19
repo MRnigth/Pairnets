@@ -104,7 +104,8 @@ public sealed class CloudFolderTests : IDisposable
         }
         Assert.Empty(WindowsCloudFolder.Registered());
         Assert.False(State(file).Placeholder, Log());
-        Assert.False(State(Path.GetDirectoryName(file)!).Placeholder, Log()); // folders too: a leftover would hide their files
+        CloudPlaceholders.TryGetAttributesAndTag(Path.GetDirectoryName(file)!, out var folderAttributes, out var folderTag);
+        Assert.False(State(Path.GetDirectoryName(file)!).Placeholder, $"{folderAttributes} tag=0x{folderTag:X8}\n" + Log()); // folders too
         Assert.Equal("my report, changed", File.ReadAllText(file));
     }
 
@@ -279,7 +280,11 @@ public sealed class CloudFolderTests : IDisposable
         await Task.Delay(3000);
         Assert.Contains(nest.Store.ReadManifest(null).Entries, e => e.Path == "notes.txt" && !e.Deleted);
         Assert.Equal("notes, version two, longer", ReadElsewhere(renamed));
-        // Once it is here, it syncs under its new name.
+        // Once it is here, it syncs under its new name. (In a folder this small, taking the old name away on the nest
+        // is "1 of 3 files deleted", which Pairnets' safety stop asks about first, as it does for any rename here.)
+        session.SyncNow();
+        Assert.True(SpinWait.SpinUntil(() => session.PendingDeletes().Count > 0, TimeSpan.FromSeconds(30)), "the rename was not seen");
+        session.ApproveDeletions();
         session.SyncNow();
         Assert.True(SpinWait.SpinUntil(() => nest.Store.ReadManifest(null).Entries.Any(e => e.Path == "notes renamed.txt" && !e.Deleted), TimeSpan.FromSeconds(30)),
             "the renamed file was not uploaded under its new name. Status: " + session.Status.Text

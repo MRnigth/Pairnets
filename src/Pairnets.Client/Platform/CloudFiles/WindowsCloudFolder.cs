@@ -51,6 +51,7 @@ public sealed class WindowsCloudFolder : ICloudFolder
     private long _connection;
     private volatile bool _connected;
     private FileSystemWatcher? _pins;
+    private Task _applying = Task.CompletedTask;
     private bool _reconciling;
     private Func<string, string?>? _reconcileAgain;
 
@@ -202,7 +203,7 @@ public sealed class WindowsCloudFolder : ICloudFolder
             folder.Register(iconPath);
             folder.Connect();
             folder.WatchPins();
-            _ = Task.Run(folder.ApplyMode); // a whole folder tree: not on the window's thread
+            folder._applying = Task.Run(folder.ApplyMode); // a whole folder tree: not on the window's thread
             return folder;
         }
         catch (Exception ex) when (ex is COMException or IOException or UnauthorizedAccessException or ArgumentException or InvalidOperationException)
@@ -309,6 +310,7 @@ public sealed class WindowsCloudFolder : ICloudFolder
     /// </summary>
     public Task<string?> LeaveAsync(CancellationToken ct) => Task.Run(() =>
     {
+        _applying.Wait(ct); // the start's own work on the folder is finished first
         if (!_connected)
             return null;
         WithHandle(_root, h => Check(CfApi.CfSetPinState(h, CfApi.PinStatePinned, CfApi.SetPinFlagRecurse, IntPtr.Zero)));
