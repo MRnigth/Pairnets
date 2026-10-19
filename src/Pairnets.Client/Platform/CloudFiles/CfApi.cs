@@ -22,6 +22,7 @@ internal static class CfApi
 
     public const int ConnectFlagRequireProcessInfo = 0x2;
     public const int ConnectFlagRequireFullFilePath = 0x4;
+    public const int ConnectFlagBlockSelfImplicitHydration = 0x8;
 
     // ---- placeholders
 
@@ -42,6 +43,7 @@ internal static class CfApi
     public const int PinStateUnpinned = 2;
     public const int SetPinFlagRecurse = 0x1;
 
+    public const int OpenFlagNone = 0x0;
     public const int OpenFlagWriteAccess = 0x2;
 
     // ---- NTSTATUS answers in the cloud range (anything else counts as "unsuccessful")
@@ -219,6 +221,11 @@ internal static class CfApi
 
     [DllImport(Dll, ExactSpelling = true)]
     public static extern int CfUpdatePlaceholder(IntPtr fileHandle, ref FsMetadata fsMetadata, byte[]? fileIdentity, int fileIdentityLength,
+        IntPtr dehydrateRangeArray, int dehydrateRangeCount, int updateFlags, IntPtr updateUsn, IntPtr overlapped);
+
+    /// <summary>CfUpdatePlaceholder without new details (null metadata): only the version and the flags change.</summary>
+    [DllImport(Dll, ExactSpelling = true)]
+    public static extern int CfUpdatePlaceholder(IntPtr fileHandle, IntPtr fsMetadata, byte[]? fileIdentity, int fileIdentityLength,
         IntPtr dehydrateRangeArray, int dehydrateRangeCount, int updateFlags, IntPtr updateUsn, IntPtr overlapped);
 
     [DllImport(Dll, ExactSpelling = true)]

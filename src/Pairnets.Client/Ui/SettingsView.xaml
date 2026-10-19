@@ -194,6 +194,19 @@
                   </StackPanel>
                   <CheckBox x:Name="ExplorerBox" Grid.Column="1" Style="{StaticResource PgSwitch}" AutomationProperties.Name="Show Pairnets in File Explorer" />
                 </Grid>
+                <StackPanel Margin="0,14,0,0">
+                  <TextBlock Style="{StaticResource RowTitle}" Text="Files in Explorer (test)" />
+                  <TextBlock Style="{StaticResource PgSmall}" Margin="0,2,0,8" TextWrapping="Wrap"
+                             Text="Ticks show which files are synced, like OneDrive. With Files On-Demand, files from your other computers stay on your nest until you open them, and &quot;Free up space&quot; works. Your files are not moved or copied." />
+                  <Border CornerRadius="11" Padding="2" BorderThickness="1" HorizontalAlignment="Left"
+                          Background="{DynamicResource T.Chip}" BorderBrush="{DynamicResource T.Border}">
+                    <StackPanel Orientation="Horizontal">
+                      <RadioButton x:Name="CloudOff" Style="{StaticResource PgSeg}" GroupName="cloud" Content="Plain folder" AutomationProperties.Name="Files in Explorer: plain folder" />
+                      <RadioButton x:Name="CloudKeep" Style="{StaticResource PgSeg}" GroupName="cloud" Content="Ticks, all here" AutomationProperties.Name="Files in Explorer: ticks, every file on this PC" />
+                      <RadioButton x:Name="CloudOnDemand" Style="{StaticResource PgSeg}" GroupName="cloud" Content="Files On-Demand" AutomationProperties.Name="Files in Explorer: Files On-Demand" />
+                    </StackPanel>
+                  </Border>
+                </StackPanel>
               </StackPanel>
             </Border>
 

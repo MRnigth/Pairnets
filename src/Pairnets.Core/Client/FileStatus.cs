@@ -70,9 +70,10 @@ public static class FileStatusReader
         var comparison = OperatingSystem.IsLinux() ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase;
         if (string.Equals(full, top, comparison))
             return string.Empty;
-        if (!full.StartsWith(top + Path.DirectorySeparatorChar, comparison))
+        var inside = top.EndsWith(Path.DirectorySeparatorChar) ? top : top + Path.DirectorySeparatorChar; // a drive root ends in one already
+        if (!full.StartsWith(inside, comparison))
             return null;
-        return full[(top.Length + 1)..].Replace(Path.DirectorySeparatorChar, '/');
+        return full[inside.Length..].Replace(Path.DirectorySeparatorChar, '/');
     }
 
     private static FileSyncStatus ForFile(string rel, string fullPath, StateDb state, StatusSnapshot status)

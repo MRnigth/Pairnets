@@ -163,7 +163,13 @@ public static class PathRules
     /// True when any existing component of <paramref name="syncPath"/> below <paramref name="root"/>
     /// is a symlink, junction or other reparse point. Such paths are never followed.
     /// </summary>
-    public static bool HasReparsePoint(string root, string syncPath)
+    public static bool HasReparsePoint(string root, string syncPath) => HasReparsePoint(root, syncPath, cloudFolder: false);
+
+    /// <summary>
+    /// As <see cref="HasReparsePoint(string, string)"/>; in a Windows cloud folder (<paramref name="cloudFolder"/>) its
+    /// own placeholders, which are reparse points of the cloud kind, are ordinary files and folders.
+    /// </summary>
+    public static bool HasReparsePoint(string root, string syncPath, bool cloudFolder)
     {
         var current = Path.TrimEndingDirectorySeparator(Path.GetFullPath(root));
         foreach (var segment in syncPath.Split('/'))
@@ -181,7 +187,9 @@ public static class PathRules
                     return false;
                 }
             }
-            if ((info.Attributes & FileAttributes.ReparsePoint) != 0 || info.LinkTarget is not null)
+            if (info.LinkTarget is not null)
+                return true;
+            if ((info.Attributes & FileAttributes.ReparsePoint) != 0 && !(cloudFolder && Sync.CloudPlaceholders.IsCloudReparsePoint(current)))
                 return true;
         }
         return false;

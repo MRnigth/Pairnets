@@ -10,6 +10,7 @@ on:
       - src/Pairnets.Client/Platform/**
       - src/Pairnets.Core/Client/FileStatus.cs
       - src/Pairnets.Core/Sync/**
+      - tests/Pairnets.Client.Tests/CloudFolderTests.cs
       - .github/workflows/explorer-pictures.yml
 
 permissions:
@@ -33,6 +34,14 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 8.0.x
+
+      - name: Windows cloud folder tests (the spike)
+        continue-on-error: true # the pictures are taken either way
+        env:
+          PAIRNETS_CLOUD_TESTS: 1
+        run: >
+          dotnet test tests/Pairnets.Client.Tests/Pairnets.Client.Tests.csproj -c Release
+          --filter "FullyQualifiedName~CloudFolderTests" --logger "console;verbosity=normal"
 
       - name: Take the pictures
         run: |

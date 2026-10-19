@@ -305,6 +305,18 @@ public sealed class DesktopController : ITrayActions, IDisposable
     /// <summary>A right-click item in the file manager: "Open in Pairnets" or "Show sync status" for a file or folder.</summary>
     internal async void HandleFileCommand(FileManagerCommand command)
     {
+        try
+        {
+            await HandleFileCommandAsync(command);
+        }
+        catch (Exception ex)
+        {
+            _log.LogWarning(ex, "Could not answer the file manager about {Path}", command.Path);
+        }
+    }
+
+    private async Task HandleFileCommandAsync(FileManagerCommand command)
+    {
         if (_session is not { } session || _settings.Folder is not { } folder || FileStatusReader.ToSyncPath(folder, command.Path) is not { } rel)
         {
             ShowMainWindow();

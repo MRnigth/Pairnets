@@ -25,13 +25,34 @@ public sealed class WindowsPlatform : IWindowsPlatform
     public void RunInstaller(string path, string arguments) =>
         Process.Start(new ProcessStartInfo(path, arguments) { UseShellExecute = true })?.Dispose();
 
-    public bool SetExplorerEntry(string? folder) => SetExplorerEntry(folder, Environment.ProcessPath, PairnetsPaths.LocalDir);
+    public bool SetExplorerEntry(string? folder, bool leftSide = true) => SetExplorerEntry(folder, Environment.ProcessPath, PairnetsPaths.LocalDir, leftSide);
+
+    public CloudFiles.ICloudFolder? StartCloudFolder(string folder, CloudFolderMode mode, ILogger log, out string? problem)
+    {
+        string icon;
+        try
+        {
+            var icons = Path.Combine(PairnetsPaths.LocalDir, "Explorer");
+            Directory.CreateDirectory(icons);
+            icon = CopyIcon("Pairnets.AppIcon.ico", icons);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            problem = "Pairnets could not write its icon: " + ex.Message;
+            return null;
+        }
+        return CloudFiles.WindowsCloudFolder.Start(folder, mode, icon, log, out problem);
+    }
+
+    public bool HasCloudFolder() => CloudFiles.WindowsCloudFolder.Registered().Count > 0;
+
+    public int ForgetCloudFolders() => CloudFiles.WindowsCloudFolder.ForgetAll();
 
     /// <summary>
     /// <see cref="SetExplorerEntry(string?)"/> with the program and the folder for the icons given. The icons are copied
     /// out of Pairnets.exe, so Explorer keeps showing them while the program is being replaced by an update.
     /// </summary>
-    public static bool SetExplorerEntry(string? folder, string? exePath, string localDir)
+    public static bool SetExplorerEntry(string? folder, string? exePath, string localDir, bool leftSide = true)
     {
         try
         {
@@ -48,8 +69,9 @@ public sealed class WindowsPlatform : IWindowsPlatform
             var icons = Path.Combine(localDir, "Explorer");
             Directory.CreateDirectory(icons);
             var entry = new ExplorerEntry(folder, exePath, CopyIcon("Pairnets.AppIcon.ico", icons), CopyIcon("Pairnets.FolderIcon.ico", icons));
-            var ok = ExplorerShell.Apply(software, entry);
-            ExplorerShell.TellExplorer();
+            var ok = ExplorerShell.Apply(software, entry, leftSide);
+            if (before is null || !string.Equals(before, Path.TrimEndingDirectorySeparator(Path.GetFullPath(folder)), StringComparison.OrdinalIgnoreCase))
+                ExplorerShell.TellExplorer(); // only when something Explorer shows changed (it redraws every icon)
             return ok;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException or ArgumentException)

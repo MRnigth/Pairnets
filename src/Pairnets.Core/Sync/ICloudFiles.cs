@@ -22,8 +22,11 @@ public interface ICloudFiles
     /// </summary>
     bool IsCloudOnly(string fullPath);
 
-    /// <summary>Tells Windows the file or folder is the same here and on the nest (it gets its tick).</summary>
-    void MarkSynced(string fullPath);
+    /// <summary>
+    /// Tells Windows the file is the same here and on the nest (it gets its tick), as version <paramref name="hash"/>,
+    /// which is what gets downloaded if its content is later left on the nest ("Free up space").
+    /// </summary>
+    void MarkSynced(string fullPath, string hash);
 
     /// <summary>
     /// Files On-Demand: true when a file from the nest should arrive as a placeholder (listed, but downloaded only when
@@ -43,7 +46,7 @@ public interface ICloudFiles
 
         public bool IsCloudOnly(string fullPath) => false;
 
-        public void MarkSynced(string fullPath)
+        public void MarkSynced(string fullPath, string hash)
         {
         }
 
@@ -76,20 +79,33 @@ public static class CloudPlaceholders
     public static bool IsContentOnline(FileAttributes attributes) =>
         (attributes & (RecallOnDataAccess | RecallOnOpen | FileAttributes.Offline)) != 0;
 
-    /// <summary>
-    /// True when <paramref name="fullPath"/> is a reparse point of Windows' cloud files (IO_REPARSE_TAG_CLOUD_*), which
-    /// the scanner treats as an ordinary file or folder; every other reparse point (links, junctions) it skips.
-    /// </summary>
-    public static bool IsCloudReparsePoint(string fullPath)
+    /// <summary>A file's attributes and reparse tag as Windows lists them (false when it is not there or off Windows).</summary>
+    public static bool TryGetAttributesAndTag(string fullPath, out FileAttributes attributes, out uint reparseTag)
     {
+        attributes = 0;
+        reparseTag = 0;
         if (!OperatingSystem.IsWindows())
             return false;
         var handle = FindFirstFileExW(fullPath, 1 /* FindExInfoBasic */, out var data, 0, IntPtr.Zero, 0);
         if (handle == new IntPtr(-1))
             return false;
         FindClose(handle);
-        return (data.Attributes & (uint)FileAttributes.ReparsePoint) != 0 && (data.Reserved0 & 0xFFFF0FFF) == 0x9000001A;
+        attributes = (FileAttributes)data.Attributes;
+        reparseTag = (data.Attributes & (uint)FileAttributes.ReparsePoint) != 0 ? data.Reserved0 : 0;
+        return true;
     }
+
+    /// <summary>
+    /// True when <paramref name="fullPath"/> is a reparse point of Windows' cloud files (IO_REPARSE_TAG_CLOUD_*), which
+    /// the scanner treats as an ordinary file or folder; every other reparse point (links, junctions) it skips.
+    /// </summary>
+    public static bool IsCloudReparsePoint(string fullPath)
+    {
+        return TryGetAttributesAndTag(fullPath, out _, out var tag) && IsCloudTag(tag);
+    }
+
+    /// <summary>IO_REPARSE_TAG_CLOUD and its sixteen numbered kinds (IO_REPARSE_TAG_CLOUD_1 to _F).</summary>
+    public static bool IsCloudTag(uint reparseTag) => (reparseTag & 0xFFFF0FFF) == 0x9000001A;
 
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
     private struct FindData

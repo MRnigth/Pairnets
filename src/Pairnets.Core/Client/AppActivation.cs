@@ -136,8 +136,9 @@ public static class AppActivation
     {
         try
         {
+            // Only this user's programs may poke it (the pokes now carry file paths).
             return new NamedPipeServerStream(name, PipeDirection.In, maxNumberOfServerInstances: 2,
-                PipeTransmissionMode.Byte, PipeOptions.Asynchronous);
+                PipeTransmissionMode.Byte, PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -187,10 +188,12 @@ public static class AppActivation
         AllowTakingTheForeground();
         try
         {
-            using var client = new NamedPipeClientStream(".", pipeName ?? DefaultPipeName, PipeDirection.Out);
+            using var client = new NamedPipeClientStream(".", pipeName ?? DefaultPipeName, PipeDirection.Out, PipeOptions.CurrentUserOnly);
             client.Connect(timeoutMs);
             client.Write(bytes);
             client.Flush();
+            if (OperatingSystem.IsWindows())
+                client.WaitForPipeDrain(); // closing before the running Pairnets read it would lose the message
             return true;
         }
         catch (Exception ex) when (ex is TimeoutException or IOException or UnauthorizedAccessException or ArgumentOutOfRangeException)

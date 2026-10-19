@@ -271,7 +271,7 @@ public sealed class FileManagerTests : IDisposable
 
     [Theory]
     [InlineData("/opt/Pairnets", "\"/opt/Pairnets\"", "'/opt/Pairnets'")]
-    [InlineData("/data/example/100% \"odd\" $dir`/it's", "\"/data/example/100%% \\\"odd\\\" \\$dir\\`/it's\"", "'/data/example/100% \"odd\" $dir`/it'\\''s'")]
+    [InlineData("/data/example/100% \"odd\" $dir`/it's", "\"/data/example/100%% \\\\\"odd\\\\\" \\\\$dir\\\\`/it's\"", "'/data/example/100% \"odd\" $dir`/it'\\''s'")]
     public void Linux_ProgramPathsAreQuoted(string path, string desktop, string shell)
     {
         Assert.Equal(desktop, LinuxFileManager.DesktopQuote(path));

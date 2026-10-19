@@ -545,7 +545,8 @@ public sealed class SyncEngine
         {
             case SyncAction.RecordBase:
                 _state.SetBase(item.Path, item.Local);
-                _cloud.MarkSynced(ResolveLocal(item.Path));
+                if (_cloud.IsActive && item.Local is { } recorded)
+                    _cloud.MarkSynced(ResolveLocal(item.Path), recorded);
                 lock (ctx.Gate)
                     ctx.Result.Recorded++;
                 return Task.CompletedTask;
@@ -623,7 +624,7 @@ public sealed class SyncEngine
                     _state.SetSynced(path, entry.Hash!, unchanged ? sentBytes : -1, unchanged ? mtimeTicks : 0,
                         unchanged ? sentHash : null, _clock.GetUtcNow().UtcTicks);
                     if (unchanged)
-                        _cloud.MarkSynced(full);
+                        _cloud.MarkSynced(full, entry.Hash!);
                     _state.UpsertRemote(entry);
                     _state.ClearWarning(path);
                     lock (ctx.Gate)
@@ -843,7 +844,7 @@ public sealed class SyncEngine
 
             var info = new FileInfo(full);
             _state.SetSynced(path, dl.Hash, info.Length, info.LastWriteTimeUtc.Ticks, dl.Hash, _clock.GetUtcNow().UtcTicks);
-            _cloud.MarkSynced(full);
+            _cloud.MarkSynced(full, dl.Hash);
             lock (ctx.Gate)
                 ctx.Result.Downloaded++;
             FileSynced?.Invoke(SyncAction.Download, path);
@@ -1083,7 +1084,7 @@ public sealed class SyncEngine
     private string ResolveLocal(string path)
     {
         var full = PathRules.ResolveUnder(Root, path) ?? throw new IOException($"Refusing unsafe path '{path}'.");
-        if (PathRules.HasReparsePoint(Root, path))
+        if (PathRules.HasReparsePoint(Root, path, _cloud.IsActive))
             throw new IOException($"Refusing '{path}': it goes through a symlink or junction.");
         return full;
     }

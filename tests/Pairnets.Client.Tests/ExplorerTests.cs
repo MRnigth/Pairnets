@@ -69,7 +69,8 @@ public sealed class ExplorerTests : IDisposable
         ExplorerShell.Apply(_software, Entry(folder));
 
         Assert.Equal(text, Value(key, "MUIVerb"));
-        Assert.Equal($"System.ItemPathDisplay:~<\"{folder}\\\"", Value(key, "AppliesTo"));
+        Assert.Equal($"System.ItemPathDisplay:~<\"{folder}\\\" OR System.ItemPathDisplay:=\"{folder}\"", Value(key, "AppliesTo"));
+        Assert.Equal("Single", Value(key, "MultiSelectModel")); // one Pairnets for a whole selection
         Assert.Equal($"\"C:\\Program Files\\Pairnets\\Pairnets.exe\" {argument} \"%1\"", Value(key + @"\command"));
         Assert.Equal(FileManagerCommand.FromArguments([argument, folder + @"\a.txt"])!.Path, folder + @"\a.txt");
     }

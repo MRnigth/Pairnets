@@ -105,15 +105,18 @@ public sealed class LinuxFileManager(string home, Func<string[], int> runGio)
     private void SetGtkBookmark(string? folder)
     {
         var lines = File.Exists(GtkBookmarks) ? File.ReadAllLines(GtkBookmarks).ToList() : [];
-        var kept = lines.Where(l => !l.EndsWith(" " + BookmarkName, StringComparison.Ordinal)).ToList();
+        // Pairnets' line is the one labelled exactly "Pairnets" (the label is everything after the first space).
+        static bool Ours(string line) => line.IndexOf(' ') is var space and > 0 && line[(space + 1)..] == BookmarkName;
+        var at = lines.FindIndex(Ours);
+        var kept = lines.Where(l => !Ours(l)).ToList();
         if (folder is not null)
-            kept.Add(FileUri(folder) + " " + BookmarkName);
+            kept.Insert(at >= 0 ? Math.Min(at, kept.Count) : kept.Count, FileUri(folder) + " " + BookmarkName); // where the person put it
         if (kept.SequenceEqual(lines))
             return;
         if (folder is null && !File.Exists(GtkBookmarks))
             return;
         Directory.CreateDirectory(Path.GetDirectoryName(GtkBookmarks)!);
-        File.WriteAllLines(GtkBookmarks, kept);
+        WriteWhole(GtkBookmarks, string.Join("\n", kept) + "\n");
     }
 
     /// <summary>KDE's places (Dolphin's sidebar): a bookmark marked with <see cref="KdePlaceId"/>. Only where KDE keeps the file.</summary>
@@ -142,7 +145,9 @@ public sealed class LinuxFileManager(string home, Func<string[], int> runGio)
                     new XElement("metadata", new XAttribute("owner", "http://www.kde.org"),
                         new XElement("ID", KdePlaceId)))));
         }
-        doc.Save(KdePlaces);
+        using var text = new StringWriter();
+        doc.Save(text);
+        WriteWhole(KdePlaces, text.ToString());
     }
 
     /// <summary>Dolphin's right-click items, in a "Pairnets" submenu. KDE 6 only runs service menus that may be executed.</summary>
@@ -151,6 +156,7 @@ public sealed class LinuxFileManager(string home, Func<string[], int> runGio)
         var text = $"""
             [Desktop Entry]
             Type=Service
+            ServiceTypes=KonqPopupMenu/Plugin
             MimeType=all/all;
             X-KDE-Protocols=file
             X-KDE-RequiredNumberOfUrls=1
@@ -180,6 +186,14 @@ public sealed class LinuxFileManager(string home, Func<string[], int> runGio)
                 WriteExecutable(Path.Combine(dir, name), $"#!/bin/sh\n# Added by Pairnets; removed again when Pairnets leaves the file manager.\nexec {ShellQuote(exePath)} {argument} \"$1\"\n");
     }
 
+    /// <summary>Writes a file of the person's in one go (a new file moved over the old), so a crash never leaves half of it.</summary>
+    private static void WriteWhole(string file, string text)
+    {
+        var temp = file + ".pairnets-new";
+        File.WriteAllText(temp, text);
+        File.Move(temp, file, overwrite: true);
+    }
+
     private static void WriteExecutable(string file, string text)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(file)!);
@@ -196,7 +210,8 @@ public sealed class LinuxFileManager(string home, Func<string[], int> runGio)
 
     /// <summary>A program path for a .desktop file's Exec line (quoted, with its own escapes).</summary>
     public static string DesktopQuote(string path) =>
-        "\"" + path.Replace("\\", "\\\\").Replace("\"", "\\\"").Replace("`", "\\`").Replace("$", "\\$").Replace("%", "%%") + "\"";
+        // Inside quotes " ` $ \ take a backslash, and the file's own string rules double every backslash once more.
+        "\"" + path.Replace("\\", "\\\\\\\\").Replace("\"", "\\\\\"").Replace("`", "\\\\`").Replace("$", "\\\\$").Replace("%", "%%") + "\"";
 
     /// <summary>A program path for /bin/sh, in single quotes.</summary>
     public static string ShellQuote(string path) => "'" + path.Replace("'", "'\\''") + "'";

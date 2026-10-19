@@ -46,9 +46,30 @@ public static class ExplorerShell
     /// Adds (or brings up to date) everything, below <paramref name="software"/> (HKEY_CURRENT_USER\Software in the app;
     /// a throwaway key in tests). False when the folder icon could not be set; the rest is in place either way.
     /// </summary>
-    public static bool Apply(RegistryKey software, ExplorerEntry entry)
+    /// <param name="leftSide">
+    /// False while the folder is a Windows cloud folder: Windows then shows it in the left side by itself, and a second
+    /// "Pairnets" there would be one too many.
+    /// </param>
+    public static bool Apply(RegistryKey software, ExplorerEntry entry, bool leftSide = true)
     {
         var folder = Path.TrimEndingDirectorySeparator(Path.GetFullPath(entry.Folder));
+        if (leftSide)
+            AddLeftSide(software, entry, folder);
+        else
+            RemoveLeftSide(software);
+
+        foreach (var parent in VerbParents)
+        {
+            AddVerb(software, parent + BS + OpenVerb, "Open in Pairnets", entry, folder, FileManagerCommand.OpenArgument);
+            AddVerb(software, parent + BS + StatusVerb, "Show sync status", entry, folder, FileManagerCommand.StatusArgument);
+        }
+        return SetFolderIcon(folder, entry.FolderIcon);
+    }
+
+    private const string BS = @"\";
+
+    private static void AddLeftSide(RegistryKey software, ExplorerEntry entry, string folder)
+    {
         using (var clsid = software.CreateSubKey(ClsidKey))
         {
             clsid.SetValue(string.Empty, "Pairnets");
@@ -77,13 +98,14 @@ public static class ExplorerShell
             nameSpace.SetValue(string.Empty, "Pairnets");
         using (var hide = software.CreateSubKey(HideOnDesktopKey))
             hide.SetValue(FolderClsid, 1, RegistryValueKind.DWord); // in Explorer's left side only, not as a desktop icon
+    }
 
-        foreach (var parent in VerbParents)
-        {
-            AddVerb(software, parent + @"\" + OpenVerb, "Open in Pairnets", entry, folder, FileManagerCommand.OpenArgument);
-            AddVerb(software, parent + @"\" + StatusVerb, "Show sync status", entry, folder, FileManagerCommand.StatusArgument);
-        }
-        return SetFolderIcon(folder, entry.FolderIcon);
+    private static void RemoveLeftSide(RegistryKey software)
+    {
+        software.DeleteSubKeyTree(ClsidKey, throwOnMissingSubKey: false);
+        software.DeleteSubKeyTree(NameSpaceKey, throwOnMissingSubKey: false);
+        using (var hide = software.OpenSubKey(HideOnDesktopKey, writable: true))
+            hide?.DeleteValue(FolderClsid, throwOnMissingValue: false);
     }
 
     /// <summary>
@@ -94,7 +116,10 @@ public static class ExplorerShell
         using var verb = software.CreateSubKey(key);
         verb.SetValue("MUIVerb", text);
         verb.SetValue("Icon", entry.AppIcon);
-        verb.SetValue("AppliesTo", $"System.ItemPathDisplay:~<\"{folder}\\\"");
+        var inside = folder.EndsWith(BS, StringComparison.Ordinal) ? folder : folder + BS; // a drive root ("D:\\") ends in one already
+        verb.SetValue("AppliesTo", $"System.ItemPathDisplay:~<\"{inside}\" OR System.ItemPathDisplay:=\"{folder}\"");
+        verb.SetValue("MultiSelectModel", "Single");
+        verb.SetValue(FolderValue, folder);
         using var command = verb.CreateSubKey("command");
         command.SetValue(string.Empty, $"\"{entry.ExePath}\" {argument} \"%1\"");
     }
@@ -105,10 +130,7 @@ public static class ExplorerShell
     /// </summary>
     public static void Remove(RegistryKey software, string? folder)
     {
-        software.DeleteSubKeyTree(ClsidKey, throwOnMissingSubKey: false);
-        software.DeleteSubKeyTree(NameSpaceKey, throwOnMissingSubKey: false);
-        using (var hide = software.OpenSubKey(HideOnDesktopKey, writable: true))
-            hide?.DeleteValue(FolderClsid, throwOnMissingValue: false);
+        RemoveLeftSide(software);
         foreach (var parent in VerbParents)
         {
             software.DeleteSubKeyTree(parent + @"\" + OpenVerb, throwOnMissingSubKey: false);
@@ -118,12 +140,15 @@ public static class ExplorerShell
             RemoveFolderIcon(folder);
     }
 
-    /// <summary>The folder Pairnets' left-side entry points at, or null when Pairnets is not in Explorer.</summary>
+    /// <summary>The folder Pairnets is in Explorer for (its right-click items), or null when Pairnets is not in Explorer.</summary>
     public static string? RegisteredFolder(RegistryKey software)
     {
-        using var bag = software.OpenSubKey(ClsidKey + @"\Instance\InitPropertyBag");
-        return bag?.GetValue("TargetFolderPath") as string;
+        using var verb = software.OpenSubKey(VerbParents[0] + BS + OpenVerb);
+        return verb?.GetValue(FolderValue) as string;
     }
+
+    /// <summary>The folder the right-click items are for, kept next to them (AppliesTo is a search and hard to read back).</summary>
+    private const string FolderValue = "PairnetsFolder";
 
     /// <summary>
     /// The blue folder icon: a hidden desktop.ini in the folder (Pairnets never syncs desktop.ini) and the folder's

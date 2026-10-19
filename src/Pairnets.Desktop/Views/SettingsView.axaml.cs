@@ -344,6 +344,7 @@ public partial class SettingsView : UserControl
                 ExtraIgnore = Patterns(),
                 StartWithWindows = AutoStartBox.IsChecked == true,
                 ShowInFileManager = FileManagerBox.IsChecked == true,
+                CloudFolder = _original.CloudFolder, // Windows only
                 FirstRunCompleted = true,
                 Paused = _original.Paused,
                 SideFolded = _original.SideFolded,

@@ -34,6 +34,8 @@ public sealed class TrayController : ITrayActions, IDisposable
     private readonly DispatcherTimer _refresh;
     private ClientSettings _settings;
     private ClientSession? _session;
+    private Platform.CloudFiles.ICloudFolder? _cloud;
+    private CancellationTokenSource? _leaving;
     private MainWindow? _window;
     private TrayPanel? _panel;
     private Action? _balloonClick;
@@ -199,8 +201,27 @@ public sealed class TrayController : ITrayActions, IDisposable
             return;
         }
 
-        var session = ClientSession.Start(_settings, plainToken, _platform.CreateTrash(_loggers.CreateLogger("Pairnets.Trash")), _loggers,
-            stateBaseDir: _env.LocalDir, runnerOptions: RunnerOptionsForTests);
+        var cloud = StartCloudFolder();
+        ClientSession session;
+        try
+        {
+            session = ClientSession.Start(_settings, plainToken, _platform.CreateTrash(_loggers.CreateLogger("Pairnets.Trash")), _loggers,
+                stateBaseDir: _env.LocalDir, runnerOptions: RunnerOptionsForTests, cloudFiles: cloud);
+        }
+        catch
+        {
+            cloud?.Dispose();
+            throw;
+        }
+        if (cloud is not null)
+        {
+            _cloud = cloud;
+            cloud.Fetch = session.FetchVersionAsync;
+            session.PassCompleted += _ => cloud.Reconcile(session.SyncedHash);
+            cloud.Reconcile(session.SyncedHash);
+            if (_settings.CloudFolder == CloudFolderMode.Off)
+                LeaveCloudFolder(cloud);
+        }
         session.StatusChanged += _ => _dirty = true;
         session.Activity.Added += _ => _dirty = true;
         session.ConflictCreated += c => RunOnUi(() => Toast("conflict:" + c.Path, "Conflict: both computers changed a file",
@@ -231,13 +252,93 @@ public sealed class TrayController : ITrayActions, IDisposable
         var folder = _settings.ShowInFileManager && _settings.IsComplete && Directory.Exists(_settings.Folder) ? _settings.Folder : null;
         try
         {
-            if (!_platform.SetExplorerEntry(folder))
+            // A Windows cloud folder is in the left side by itself (with Pairnets' icon), so only one "Pairnets" shows.
+            if (!_platform.SetExplorerEntry(folder, leftSide: _cloud is not { IsActive: true }))
                 _log.LogInformation("Pairnets could not be fully added to File Explorer; it tries again at the next start");
         }
         catch (Exception ex)
         {
             _log.LogWarning(ex, "Could not update Pairnets in File Explorer");
         }
+    }
+
+    /// <summary>
+    /// The Pairnets folder as a Windows cloud folder when chosen in Settings (ticks in Explorer; Files On-Demand), or
+    /// null for a plain folder. When it was turned off but Windows still has the cloud folder, it is started once more
+    /// (keeping every file here) so that <see cref="LeaveCloudFolder"/> can bring everything home and end it.
+    /// </summary>
+    private Platform.CloudFiles.ICloudFolder? StartCloudFolder()
+    {
+        var wanted = _settings.CloudFolder;
+        if (wanted == CloudFolderMode.Off && !SafeHasCloudFolder())
+            return null;
+        var mode = wanted == CloudFolderMode.Off ? CloudFolderMode.KeepAllHere : wanted;
+        Platform.CloudFiles.ICloudFolder? cloud;
+        string? problem;
+        try
+        {
+            cloud = _platform.StartCloudFolder(_settings.Folder!, mode, _loggers.CreateLogger("Pairnets.CloudFolder"), out problem);
+        }
+        catch (Exception ex)
+        {
+            (cloud, problem) = (null, ex.Message);
+        }
+        if (cloud is null && wanted != CloudFolderMode.Off)
+        {
+            _log.LogWarning("The Pairnets folder stays a plain folder: {Problem}", problem);
+            Toast("cloudfolder", "No ticks in Explorer for now", (problem ?? "Windows did not allow it.") + " Pairnets keeps syncing as before.",
+                Forms.ToolTipIcon.Warning, () => ShowMainWindow(MainPage.Settings));
+        }
+        return cloud;
+    }
+
+    private bool SafeHasCloudFolder()
+    {
+        try
+        {
+            return _platform.HasCloudFolder();
+        }
+        catch (Exception ex)
+        {
+            _log.LogDebug("Could not ask Windows about cloud folders: {Error}", ex.Message);
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// The switch was turned off: download whatever is only on the nest, then make the folder a plain folder again. If
+    /// that cannot finish (no connection), the folder stays a cloud folder, keeping everything here, and it is tried again
+    /// at the next start.
+    /// </summary>
+    private async void LeaveCloudFolder(Platform.CloudFiles.ICloudFolder cloud)
+    {
+        _leaving?.Cancel();
+        var stop = _leaving = new CancellationTokenSource();
+        string? problem;
+        try
+        {
+            problem = await cloud.LeaveAsync(stop.Token);
+        }
+        catch (Exception ex)
+        {
+            problem = ex is OperationCanceledException ? null : FriendlyErrors.Describe(ex);
+            if (ex is OperationCanceledException)
+                return;
+        }
+        RunOnUi(() =>
+        {
+            if (problem is null)
+            {
+                _log.LogInformation("The Pairnets folder is a plain folder again");
+                UpdateExplorerEntry();
+                Toast("cloudfolder", "Your Pairnets folder is a plain folder again", "Every file is on this PC.", Forms.ToolTipIcon.Info, OpenFolder);
+            }
+            else
+            {
+                _log.LogWarning("The Pairnets folder could not become a plain folder yet: {Problem}", problem);
+                Toast("cloudfolder", "Still a cloud folder for now", problem + " Pairnets tries again at the next start.", Forms.ToolTipIcon.Warning, ShowMainWindow);
+            }
+        });
     }
 
     /// <summary>A right-click item in Explorer: "Open in Pairnets" or "Show sync status" for a file or folder.</summary>
@@ -379,8 +480,10 @@ public sealed class TrayController : ITrayActions, IDisposable
             }
             StopSession(); // the sync notes are only free to delete once the session is gone
             var leftExplorer = false;
+            var stayedOnNest = 0;
             try
             {
+                stayedOnNest = _platform.ForgetCloudFolders();
                 leftExplorer = _platform.SetExplorerEntry(null);
             }
             catch (Exception ex)
@@ -389,6 +492,8 @@ public sealed class TrayController : ITrayActions, IDisposable
             }
             var result = LocalReset.Run(_settings, _platform.Secrets, _env.SettingsPath, _env.LocalDir);
             var notes = new List<string>(result.Problems);
+            if (stayedOnNest > 0)
+                notes.Add($"{stayedOnNest} file(s) were only on your nest; they stay in the folder as shortcuts that open once Pairnets is set up again.");
             if (!leftExplorer)
                 notes.Add("Pairnets could not be taken out of File Explorer completely.");
             try
@@ -444,7 +549,10 @@ public sealed class TrayController : ITrayActions, IDisposable
             return;
         var s = _session;
         _session = null;
+        _leaving?.Cancel();
         Task.Run(async () => await s.DisposeAsync()).Wait(TimeSpan.FromSeconds(30));
+        _cloud?.Dispose(); // after the session: nothing asks it any more
+        _cloud = null;
         _dirty = true;
     }
 

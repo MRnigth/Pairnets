@@ -95,11 +95,25 @@ public sealed class FakeWindowsPlatform : IWindowsPlatform
     /// <summary>Every change to Pairnets' place in File Explorer, in order (null: taken away).</summary>
     public Log<string?> ExplorerEntries { get; } = new();
 
-    public bool SetExplorerEntry(string? folder)
+    public bool SetExplorerEntry(string? folder, bool leftSide = true)
     {
         ExplorerEntries.Add(folder);
         return true;
     }
+
+    /// <summary>What "make it a cloud folder" was asked for, in order; the stand-in never touches Windows' cloud files.</summary>
+    public Log<CloudFolderMode> CloudFolderStarts { get; } = new();
+
+    public Client.Platform.CloudFiles.ICloudFolder? StartCloudFolder(string folder, CloudFolderMode mode, ILogger log, out string? problem)
+    {
+        CloudFolderStarts.Add(mode);
+        problem = "Tests leave Windows' cloud files alone.";
+        return null;
+    }
+
+    public bool HasCloudFolder() => false;
+
+    public int ForgetCloudFolders() => 0;
 
     private sealed class RecordingTrash(FakeWindowsPlatform platform) : ILocalTrash
     {
