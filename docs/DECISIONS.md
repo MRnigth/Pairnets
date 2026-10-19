@@ -1030,3 +1030,37 @@ The owner's answers to the 2026-10-14 audit questions:
   and the others stop waiting as before; the 30-minute limit and "Download now anyway" stay.
 * **The repeat comes from the sync engine, not the app window**, so it works on every computer, with or without its
   window open. Keep `BatchReannounceInterval` well under the others' `PeerQuietTimeout`.
+
+## End-to-end encryption plan (2026-10-19)
+
+The owner wants to be able to say "we can't see your files". The plan is in [ENCRYPTION.md](ENCRYPTION.md); nothing
+is built yet, and steps 1, 2, 6 and 8 there wait for the owner's yes or no.
+
+* **Encrypt on the computer; the nest keeps only encrypted data.** The service can create a computer key on any linked
+  nest (`HB_MASTER` → `/api/relay/devices`), so an encrypted channel to a nest that still keeps plain files would
+  not stop it reading them. With the nest as an opaque store, neither the relay, the service, Cloudflare nor root on
+  the nest can read files, names or folders.
+* **.NET's own crypto only:** `AesGcm`, `HKDF`, `HMACSHA256`, `ECDiffieHellman` (P-256) and `RandomNumberGenerator`,
+  plus the DPAPI / Keychain / keyring storage the apps already use. No new packages.
+* **Flat ids, not encrypted folder names.** Each file is stored under an HMAC of its full path, so the nest sees no
+  tree, depth or names, Linux name-length limits never bite, and the nest's per-path base check, history and
+  `since` manifest work unchanged. The real path lives in an encrypted `meta` column. Name rules (case, Windows names)
+  move into the app.
+* **The three-hash logic keeps working on keyed tags.** L, S and B become `HMAC(tag key, id ‖ content)`, so
+  `SyncDecision.Decide` is untouched and the nest never sees a plain-content hash. The nest checks transport
+  integrity with a SHA-256 of the encrypted bytes.
+* **1 MiB AES-GCM segments with a per-upload data key.** Resumable pieces and ranged downloads map to segment
+  boundaries, and the app keeps the wrapped data key with the upload so a resumed piece is byte-identical.
+* **A new computer is unlocked by another computer (6-digit code compare with a commitment) or by the recovery key**,
+  never by anything the service holds. Signing in still only lets a computer talk to the nest.
+* **Recovery key with no copy at Pairnets.** Losing every computer and the recovery key loses the files; the app and
+  the site say so before encryption is turned on. Any copy at Pairnets would break the promise.
+* **A removed computer leads to a new ring generation**, and computers refuse an older generation than the newest
+  they have seen, so a replayed ring cannot re-admit it. Files it already had cannot be taken back, and the docs say
+  so.
+* **Existing nests move over in a separate `sealed/` area and switch in one step**; plain files and their history are
+  deleted when every computer has switched or after 7 days. Old apps get `426 update_required` from an encrypted
+  nest; `ApiVersion` stays 1 and the capability is an optional field, as before.
+* **Claims stay narrow.** The pages may say Pairnets can't see files, names or folders. They must also say what it
+  still sees: the account, computer names, when computers are online, and file counts, sizes and change times. They
+  must not say "zero-knowledge", "unbreakable", "audited" or "we can recover your files".
