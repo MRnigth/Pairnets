@@ -50,6 +50,8 @@ Filename: "{app}\Pairnets.exe"; Description: "Start Pairnets now"; Flags: nowait
 Filename: "{app}\Pairnets.exe"; Flags: nowait; Check: WizardSilent
 
 [UninstallRun]
+; First take Pairnets out of File Explorer (left side, right-click items, the folder's icon); the files stay.
+Filename: "{app}\Pairnets.exe"; Parameters: "--unregister-explorer"; Flags: runhidden waituntilterminated; RunOnceId: "LeaveExplorer"
 Filename: "{cmd}"; Parameters: "/C taskkill /IM Pairnets.exe /F"; Flags: runhidden; RunOnceId: "StopPairnets"
 
 [Code]

@@ -24,6 +24,9 @@
   <ItemGroup>
     <!-- The window and header icon (AppIcons): read from here, not from the exe, so an update shows the new logo at once. -->
     <Resource Include="..\..\assets\pairnets.ico" Link="pairnets.ico" />
+    <!-- Explorer's icons for Pairnets (left side, right-click items, the blue folder): copied out by WindowsPlatform.SetExplorerEntry. -->
+    <EmbeddedResource Include="..\..\assets\pairnets.ico" LogicalName="Pairnets.AppIcon.ico" />
+    <EmbeddedResource Include="..\..\assets\pairnets-folder.ico" LogicalName="Pairnets.FolderIcon.ico" />
     <!-- Plus Jakarta Sans (OFL): the app font, read as WPF resources so nothing has to be installed. -->
     <Resource Include="..\..\assets\fonts\PlusJakartaSans-Regular.ttf" Link="Fonts\PlusJakartaSans-Regular.ttf" />
     <Resource Include="..\..\assets\fonts\PlusJakartaSans-Medium.ttf" Link="Fonts\PlusJakartaSans-Medium.ttf" />

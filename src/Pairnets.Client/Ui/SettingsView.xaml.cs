@@ -70,6 +70,7 @@ public partial class SettingsView : UserControl
         DeviceBox.Text = current.DeviceName ?? Environment.MachineName;
         IgnoreBox.Text = string.Join(Environment.NewLine, current.ExtraIgnore);
         AutoStartBox.IsChecked = current.StartWithWindows;
+        ExplorerBox.IsChecked = current.ShowInFileManager;
         UpdateBox.IsChecked = current.CheckForUpdates;
         WaitBox.IsChecked = current.WaitForPeerBatches;
         MapSpeedBox.IsChecked = current.ShowMapSpeed;
@@ -281,6 +282,7 @@ public partial class SettingsView : UserControl
                 AccountEmail = OwnKey.AccountEmailAfterSave(_original, url, deviceId),
                 ExtraIgnore = SplitPatterns(),
                 StartWithWindows = AutoStartBox.IsChecked == true,
+                ShowInFileManager = ExplorerBox.IsChecked == true,
                 FirstRunCompleted = true,
                 Paused = _original.Paused,
                 SideFolded = _original.SideFolded,

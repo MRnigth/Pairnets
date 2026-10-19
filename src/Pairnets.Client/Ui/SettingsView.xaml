@@ -182,6 +182,18 @@
                   <TextBlock x:Name="AutoStartLabel" Style="{StaticResource RowTitle}" VerticalAlignment="Center" Text="Start Pairnets with Windows" />
                   <CheckBox x:Name="AutoStartBox" Grid.Column="1" Style="{StaticResource PgSwitch}" AutomationProperties.Name="Start Pairnets with Windows" />
                 </Grid>
+                <Grid Margin="0,14,0,0">
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                  </Grid.ColumnDefinitions>
+                  <StackPanel VerticalAlignment="Center">
+                    <TextBlock Style="{StaticResource RowTitle}" Text="Show Pairnets in File Explorer" />
+                    <TextBlock Style="{StaticResource PgSmall}" Margin="0,2,0,0" TextWrapping="Wrap"
+                               Text="In Explorer's left side, with right-click items and a Pairnets folder icon. Your files are not changed." />
+                  </StackPanel>
+                  <CheckBox x:Name="ExplorerBox" Grid.Column="1" Style="{StaticResource PgSwitch}" AutomationProperties.Name="Show Pairnets in File Explorer" />
+                </Grid>
               </StackPanel>
             </Border>
 

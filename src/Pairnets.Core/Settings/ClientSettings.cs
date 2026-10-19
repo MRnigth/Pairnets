@@ -51,6 +51,18 @@ public sealed class ClientSettings
     /// <summary>While another computer uploads a big batch, download it in one go when it's done.</summary>
     public bool WaitForPeerBatches { get; set; } = true;
 
+    /// <summary>
+    /// Pairnets in the file manager: Explorer's left side, the right-click items and the folder icon on Windows; the
+    /// sidebar bookmark, right-click items and folder icon on Linux; the folder icon on a Mac.
+    /// </summary>
+    public bool ShowInFileManager { get; set; } = true;
+
+    /// <summary>
+    /// Windows only, opt-in: the Pairnets folder as a Windows cloud folder (like OneDrive), with a tick, sync arrows or a
+    /// cloud on every file, and with <see cref="CloudFolderMode.OnDemand"/> files that stay on the nest until opened.
+    /// </summary>
+    public CloudFolderMode CloudFolder { get; set; } = CloudFolderMode.Off;
+
     /// <summary>Show the speed (MB/s) on the lines of the overview's picture while files move.</summary>
     public bool ShowMapSpeed { get; set; } = true;
 
@@ -115,6 +127,19 @@ public sealed class ClientSettings
         copy.ExtraIgnore = [.. ExtraIgnore];
         return copy;
     }
+}
+
+/// <summary>How the Pairnets folder works with Windows' cloud files (see <see cref="ClientSettings.CloudFolder"/>).</summary>
+public enum CloudFolderMode
+{
+    /// <summary>A plain folder, as always.</summary>
+    Off,
+
+    /// <summary>A cloud folder with every file kept on this PC: ticks and sync arrows in Explorer.</summary>
+    KeepAllHere,
+
+    /// <summary>Files On-Demand: files from other computers stay on the nest until opened ("Free up space" works).</summary>
+    OnDemand,
 }
 
 /// <summary>Encrypts secrets at rest. The Windows client implements this with DPAPI (current user).</summary>

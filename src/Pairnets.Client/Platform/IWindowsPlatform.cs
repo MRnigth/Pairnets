@@ -29,4 +29,10 @@ public interface IWindowsPlatform
 
     /// <summary>Starts a downloaded installer (PairnetsSetup.exe) with these arguments.</summary>
     void RunInstaller(string path, string arguments);
+
+    /// <summary>
+    /// Puts Pairnets in File Explorer for <paramref name="folder"/> (left side, right-click items, folder icon), or takes
+    /// it away for null. False when part of it could not be done (it is tried again at the next start).
+    /// </summary>
+    bool SetExplorerEntry(string? folder);
 }

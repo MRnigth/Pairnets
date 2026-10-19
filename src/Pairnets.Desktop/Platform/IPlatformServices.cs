@@ -29,6 +29,12 @@ public interface IPlatformServices
     /// <summary>Shows a file selected in the file manager (or opens its folder).</summary>
     void Reveal(string path);
 
+    /// <summary>
+    /// Puts Pairnets in the file manager for <paramref name="folder"/>, or takes it away for null: on Linux the sidebar
+    /// bookmark, the right-click items and the folder icon; on a Mac the folder icon. False when part of it failed.
+    /// </summary>
+    bool SetFileManagerEntry(string? folder);
+
     public static IPlatformServices Current { get; } =
         OperatingSystem.IsMacOS() ? new MacPlatform() : new LinuxPlatform();
 }

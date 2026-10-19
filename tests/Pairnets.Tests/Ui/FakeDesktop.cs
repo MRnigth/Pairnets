@@ -145,6 +145,25 @@ public sealed class FakePlatform : IPlatformServices
 
     public bool RemoveLegacyAutoStart() => false;
 
+    private readonly List<string?> _fileManagerEntries = [];
+
+    /// <summary>Every change to Pairnets' place in the file manager, in order (null: taken away).</summary>
+    public IReadOnlyList<string?> FileManagerEntries
+    {
+        get
+        {
+            lock (_gate)
+                return [.. _fileManagerEntries];
+        }
+    }
+
+    public bool SetFileManagerEntry(string? folder)
+    {
+        lock (_gate)
+            _fileManagerEntries.Add(folder);
+        return true;
+    }
+
     public void Open(string path)
     {
         lock (_gate)

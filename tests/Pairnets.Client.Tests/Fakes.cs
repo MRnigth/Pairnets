@@ -92,6 +92,15 @@ public sealed class FakeWindowsPlatform : IWindowsPlatform
 
     public void RunInstaller(string path, string arguments) => Installers.Add((path, arguments));
 
+    /// <summary>Every change to Pairnets' place in File Explorer, in order (null: taken away).</summary>
+    public Log<string?> ExplorerEntries { get; } = new();
+
+    public bool SetExplorerEntry(string? folder)
+    {
+        ExplorerEntries.Add(folder);
+        return true;
+    }
+
     private sealed class RecordingTrash(FakeWindowsPlatform platform) : ILocalTrash
     {
         public void Delete(string fullPath)

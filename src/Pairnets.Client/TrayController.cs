@@ -154,7 +154,13 @@ public sealed class TrayController : ITrayActions, IDisposable
         // A pairnets:// link (the nest's website after approving this computer) starts a second Pairnets,
         // which pokes this one through the pipe and quits; come to the front for it. Listening starts before
         // the sign-in window below opens (and waits), because that is when the link comes.
-        _activation = AppActivation.Listen(() => RunOnUi(ComeToFront), _env.ActivationPipeName);
+        _activation = AppActivation.Listen(message => RunOnUi(() =>
+        {
+            if (FileManagerCommand.FromMessage(message) is { } command)
+                HandleFileCommand(command);
+            else
+                ComeToFront();
+        }), _env.ActivationPipeName);
         _updates.UpdateAvailable += u => RunOnUi(() =>
         {
             _updateDismissed = false;
@@ -171,7 +177,9 @@ public sealed class TrayController : ITrayActions, IDisposable
             return;
         }
         StartSession(null);
-        if (!Environment.GetCommandLineArgs().Contains("--autostart"))
+        if (FileManagerCommand.FromArguments(Environment.GetCommandLineArgs()) is { } command)
+            HandleFileCommand(command); // started by a right-click item in Explorer while Pairnets was not running
+        else if (!Environment.GetCommandLineArgs().Contains("--autostart"))
             ShowMainWindow();
     }
 
@@ -209,6 +217,63 @@ public sealed class TrayController : ITrayActions, IDisposable
         _session = session;
         _dirty = true;
         _log.LogInformation("Syncing {Folder} with {Server} as {Device}", _settings.Folder, _settings.ServerUrl, _settings.DeviceName);
+        UpdateExplorerEntry();
+    }
+
+    // ------------------------------------------------------------------ File Explorer
+
+    /// <summary>
+    /// Puts Pairnets in File Explorer for the current folder (left side, right-click items, folder icon), or takes it
+    /// away when switched off in Settings. Runs at every start, so a moved program or folder is followed.
+    /// </summary>
+    private void UpdateExplorerEntry()
+    {
+        var folder = _settings.ShowInFileManager && _settings.IsComplete && Directory.Exists(_settings.Folder) ? _settings.Folder : null;
+        try
+        {
+            if (!_platform.SetExplorerEntry(folder))
+                _log.LogInformation("Pairnets could not be fully added to File Explorer; it tries again at the next start");
+        }
+        catch (Exception ex)
+        {
+            _log.LogWarning(ex, "Could not update Pairnets in File Explorer");
+        }
+    }
+
+    /// <summary>A right-click item in Explorer: "Open in Pairnets" or "Show sync status" for a file or folder.</summary>
+    internal void HandleFileCommand(FileManagerCommand command)
+    {
+        if (_session is not { } session || _settings.Folder is not { } folder || FileStatusReader.ToSyncPath(folder, command.Path) is not { } rel)
+        {
+            ShowMainWindow();
+            return;
+        }
+        if (command.Action == FileManagerAction.Open)
+        {
+            if (rel.Length == 0 || Directory.Exists(command.Path))
+            {
+                ShowMainWindow(MainPage.History);
+                if (_window is { } w)
+                    w.HistoryPane.SearchText = rel;
+            }
+            else
+            {
+                ShowMainWindow();
+                _window?.ShowVersionsFor(rel);
+            }
+            return;
+        }
+        var status = session.GetFileStatus(command.Path);
+        var name = rel.Length == 0 ? "Your Pairnets folder" : PathRules.FileName(rel);
+        if (status.State == FileSyncState.Problem)
+        {
+            if (Dialogs.Ask(null, $"{name}\n\n{status.Text}\n\nOpen Pairnets to see what needs you?", "Pairnets – sync status",
+                    MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.Yes)
+                ShowMainWindow(MainPage.Attention);
+            return;
+        }
+        Dialogs.Ask(null, $"{name}\n\n{status.Text}", "Pairnets – sync status", MessageBoxButton.OK,
+            status.State == FileSyncState.Synced ? MessageBoxImage.Information : MessageBoxImage.None);
     }
 
     /// <summary>Opens the nest's page where a computer asking to join is allowed or turned away.</summary>
@@ -313,8 +378,19 @@ public sealed class TrayController : ITrayActions, IDisposable
                 _log.LogWarning("Could not remove this computer on the nest: {Error}", ex.Message);
             }
             StopSession(); // the sync notes are only free to delete once the session is gone
+            var leftExplorer = false;
+            try
+            {
+                leftExplorer = _platform.SetExplorerEntry(null);
+            }
+            catch (Exception ex)
+            {
+                _log.LogWarning(ex, "Could not take Pairnets out of File Explorer");
+            }
             var result = LocalReset.Run(_settings, _platform.Secrets, _env.SettingsPath, _env.LocalDir);
             var notes = new List<string>(result.Problems);
+            if (!leftExplorer)
+                notes.Add("Pairnets could not be taken out of File Explorer completely.");
             try
             {
                 _platform.SetAutoStart(false);

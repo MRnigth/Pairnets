@@ -22,6 +22,7 @@ public sealed class SyncEngine
     private readonly TimeProvider _clock;
     private readonly EngineHooks _hooks;
     private readonly LocalScanner _scanner;
+    private readonly ICloudFiles _cloud;
     private readonly ConcurrentDictionary<string, long> _recentlyTouched = new(StringComparer.Ordinal);
 
     public SyncEngine(EngineOptions options, IPairnetsApi api, StateDb state, ILocalTrash? trash = null,
@@ -36,11 +37,13 @@ public sealed class SyncEngine
         _hooks = hooks ?? new EngineHooks();
         Root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(options.Folder));
         Ignore = new IgnoreList(options.ExtraIgnore);
+        _cloud = options.CloudFiles;
         _scanner = new LocalScanner(Root, Ignore, state, _clock, _log)
         {
             StabilityWindow = options.StabilityWindow,
             RacyWindow = options.RacyWindow,
             Progress = p => ScanProgressed?.Invoke(p),
+            CloudFiles = options.CloudFiles,
         };
     }
 
@@ -542,6 +545,7 @@ public sealed class SyncEngine
         {
             case SyncAction.RecordBase:
                 _state.SetBase(item.Path, item.Local);
+                _cloud.MarkSynced(ResolveLocal(item.Path));
                 lock (ctx.Gate)
                     ctx.Result.Recorded++;
                 return Task.CompletedTask;
@@ -618,6 +622,8 @@ public sealed class SyncEngine
                     var unchanged = info.Exists && info.Length == sentBytes && info.LastWriteTimeUtc.Ticks == mtimeTicks;
                     _state.SetSynced(path, entry.Hash!, unchanged ? sentBytes : -1, unchanged ? mtimeTicks : 0,
                         unchanged ? sentHash : null, _clock.GetUtcNow().UtcTicks);
+                    if (unchanged)
+                        _cloud.MarkSynced(full);
                     _state.UpsertRemote(entry);
                     _state.ClearWarning(path);
                     lock (ctx.Gate)
@@ -702,6 +708,8 @@ public sealed class SyncEngine
 
     private async Task DownloadAsync(string path, string? expectedLocalHash, string? serverHash, PassContext ctx, CancellationToken ct)
     {
+        if (TryPlaceOnline(path, serverHash, ctx))
+            return;
         var size = ctx.Sizes.GetValueOrDefault(path);
         // Big files keep what arrived when the connection breaks, and later ask only for the rest of the same version.
         if (serverHash is null || size < _options.ResumeDownloadsFrom || _hooks.WrapDownloadStream is not null)
@@ -719,6 +727,46 @@ public sealed class SyncEngine
             _log.LogWarning("{Message} Downloading all of {Path} again", ex.Message, path);
             await DownloadOnceAsync(path, expectedLocalHash, PartialFor(path, serverHash, size), ctx, ct).ConfigureAwait(false);
         }
+    }
+
+    /// <summary>
+    /// Files On-Demand: a file from the nest that is not here yet (or only as a placeholder) arrives as a placeholder of
+    /// the nest's version, downloaded only when it is opened. False when it must be downloaded now (switched off,
+    /// "Always keep on this device", a file with local content, or Windows could not make the placeholder).
+    /// </summary>
+    private bool TryPlaceOnline(string path, string? serverHash, PassContext ctx)
+    {
+        if (!_cloud.IsActive || serverHash is null)
+            return false;
+        var full = ResolveLocal(path);
+        if ((File.Exists(full) && !_cloud.IsCloudOnly(full)) || Directory.Exists(full) || !_cloud.KeepOnNest(full))
+            return false;
+        if (_state.GetRemote(path) is not { Deleted: false } remote || remote.Hash != serverHash)
+            return false;
+        EnsureParentDirectory(path, full);
+        var modified = remote.ModifiedMs > 0 ? DateTimeOffset.FromUnixTimeMilliseconds(remote.ModifiedMs).UtcDateTime : _clock.GetUtcNow().UtcDateTime;
+        if (!_cloud.PlaceOnline(full, serverHash, remote.Size, modified))
+            return false;
+        MarkTouched(path);
+        var info = new FileInfo(full);
+        _state.SetSynced(path, serverHash, info.Length, info.LastWriteTimeUtc.Ticks, serverHash, _clock.GetUtcNow().UtcTicks);
+        lock (ctx.Gate)
+            ctx.Result.Downloaded++;
+        FileSynced?.Invoke(SyncAction.Download, path);
+        _log.LogInformation("Placed {Path} from the nest ({Bytes} bytes, downloaded when opened)", path, remote.Size);
+        return true;
+    }
+
+    /// <summary>
+    /// The content hash of a local file. A file whose content is still on the nest is the version Pairnets last synced
+    /// (its notes say which): reading it would only download it again.
+    /// </summary>
+    private async Task<string> LocalHashAsync(string path, string full, CancellationToken ct)
+    {
+        if (_cloud.IsCloudOnly(full) && _state.GetFile(path) is { Hash: { } cached })
+            return cached;
+        var (hash, _) = await ContentHash.OfFileAsync(full, ct).ConfigureAwait(false);
+        return hash;
     }
 
     /// <summary>
@@ -795,6 +843,7 @@ public sealed class SyncEngine
 
             var info = new FileInfo(full);
             _state.SetSynced(path, dl.Hash, info.Length, info.LastWriteTimeUtc.Ticks, dl.Hash, _clock.GetUtcNow().UtcTicks);
+            _cloud.MarkSynced(full);
             lock (ctx.Gate)
                 ctx.Result.Downloaded++;
             FileSynced?.Invoke(SyncAction.Download, path);
@@ -859,7 +908,7 @@ public sealed class SyncEngine
             throw new IOException($"A folder named like the file '{path}' exists locally.");
         if (!File.Exists(full))
             return;
-        var (current, _) = await ContentHash.OfFileAsync(full, ct).ConfigureAwait(false);
+        var current = await LocalHashAsync(path, full, ct).ConfigureAwait(false);
         if (string.Equals(current, expectedHash, StringComparison.Ordinal))
             return;
 
@@ -903,7 +952,7 @@ public sealed class SyncEngine
         }
 
         // Safety guard (d): only delete exactly the content that was agreed and deleted elsewhere.
-        var (current, _) = await ContentHash.OfFileAsync(full, ct).ConfigureAwait(false);
+        var current = await LocalHashAsync(item.Path, full, ct).ConfigureAwait(false);
         if (!string.Equals(current, item.Local, StringComparison.Ordinal))
         {
             lock (ctx.Gate)

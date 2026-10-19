@@ -802,6 +802,10 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
         return sb.ToString();
     }
 
+    /// <summary>Where one file or folder in (or outside) the Pairnets folder stands, for the file manager's "Show sync status".</summary>
+    public FileSyncStatus GetFileStatus(string fullPath) =>
+        FileStatusReader.For(Settings.Folder ?? string.Empty, fullPath, State, Engine.Ignore, Status);
+
     /// <summary>Directory holding this session's state.db.</summary>
     public string StateDirectory => Path.GetDirectoryName(State.DatabasePath)!;
 

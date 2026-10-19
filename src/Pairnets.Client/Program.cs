@@ -7,9 +7,16 @@ namespace Pairnets.Client;
 
 internal static class Program
 {
+    /// <summary>Takes Pairnets out of File Explorer and quits (the uninstaller runs it).</summary>
+    public const string UnregisterExplorerArgument = "--unregister-explorer";
+
     [STAThread]
     private static int Main(string[] args)
     {
+        // The uninstaller takes Pairnets out of File Explorer first (left side, right-click items, folder icon).
+        if (args.Contains(UnregisterExplorerArgument))
+            return Platform.WindowsPlatform.SetExplorerEntry(null, null, Pairnets.Core.Settings.PairnetsPaths.LocalDir) ? 0 : 1;
+
         using var mutex = new Mutex(initiallyOwned: true, PairnetsInfo.WindowsMutex, out var createdNew);
         if (!createdNew)
         {
@@ -20,6 +27,9 @@ internal static class Program
                 AppActivation.TrySignalRunning();
                 return 0;
             }
+            // A right-click item in Explorer ("Open in Pairnets", "Show sync status"): the running Pairnets does it.
+            if (FileManagerCommand.FromArguments(args) is { } command)
+                return AppActivation.TrySendToRunning(command.ToMessage()) ? 0 : 1;
             MessageBox.Show("Pairnets is already running. Look for its icon in the notification area.", "Pairnets",
                 MessageBoxButton.OK, MessageBoxImage.Information);
             return 1;

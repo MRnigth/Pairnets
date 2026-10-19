@@ -66,6 +66,17 @@ public sealed class MacPlatform : IPlatformServices
             Open(path);
     }
 
+    /// <summary>
+    /// The blue Pairnets folder icon on the folder. Finder keeps it in a hidden "Icon\r" file inside the folder, which
+    /// Pairnets never syncs. Apple offers no way for an app to add a Finder sidebar entry, so that stays a drag.
+    /// </summary>
+    public bool SetFileManagerEntry(string? folder) => FolderIcon.Follow(folder, (before, now) =>
+    {
+        if (before is not null && before != now && Directory.Exists(before))
+            MacFolderIcon.Set(before, null);
+        return now is null || MacFolderIcon.Set(now, FolderIcon.Png);
+    });
+
     // ------------------------------------------------------------------ Keychain
 
     /// <summary>Generic password in the login keychain, through the Security framework (no secrets on command lines).</summary>

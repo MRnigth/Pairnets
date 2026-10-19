@@ -77,6 +77,12 @@ public sealed class LocalScanner
     /// <summary>How often progress is told at most (tests: every step).</summary>
     public TimeSpan ReportEvery { get; init; } = TimeSpan.FromMilliseconds(250);
 
+    /// <summary>
+    /// The folder as a Windows cloud folder: its placeholders (reparse points of the cloud kind) are ordinary files
+    /// here, and one whose content is still on the nest is never read.
+    /// </summary>
+    public ICloudFiles CloudFiles { get; init; } = ICloudFiles.None;
+
     /// <summary>Told how far the scan is (at the start, after the listing, then at most every <see cref="ReportEvery"/>).</summary>
     public Action<ScanProgress>? Progress { get; set; }
 
@@ -238,7 +244,9 @@ public sealed class LocalScanner
                     continue;
                 }
 
-                if ((attributes & FileAttributes.ReparsePoint) != 0 || entry.LinkTarget is not null)
+                var isLink = entry.LinkTarget is not null
+                    || ((attributes & FileAttributes.ReparsePoint) != 0 && !(CloudFiles.IsActive && CloudPlaceholders.IsCloudReparsePoint(entry.FullName)));
+                if (isLink)
                 {
                     _log.LogDebug("Skipping reparse point/symlink {Path}", rel);
                     continue;
@@ -294,6 +302,11 @@ public sealed class LocalScanner
 
         if (known.TryGetValue(rel, out var cached) && cached.CacheValidFor(size, mtime, RacyWindow))
             return new LocalFile(rel, size, mtime, cached.Hash, true, null);
+
+        // A placeholder whose content is on the nest, unknown to the notes: reading it would download it. It is not
+        // deleted or uploaded; the next pass that knows it (or a download) settles it.
+        if (CloudFiles.IsActive && CloudFiles.IsCloudOnly(info.FullName))
+            return new LocalFile(rel, size, mtime, null, false, "on the nest only, not read");
 
         string hash;
         tally.Read++;

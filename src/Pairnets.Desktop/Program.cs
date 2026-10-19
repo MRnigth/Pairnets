@@ -29,6 +29,9 @@ internal static class Program
                 AppActivation.TrySignalRunning();
                 return 0;
             }
+            // A right-click item in the file manager ("Open in Pairnets", "Show sync status"): the running Pairnets does it.
+            if (FileManagerCommand.FromArguments(args) is { } command)
+                return AppActivation.TrySendToRunning(command.ToMessage()) ? 0 : 1;
             Console.Error.WriteLine("Pairnets is already running (look for its icon in the menu bar / system tray).");
             return 1;
         }
