@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using System.Windows;
+using System.Windows.Controls;
 using Microsoft.Win32;
 
 namespace Pairnets.Client.Ui;
@@ -37,6 +38,54 @@ public static class Dialogs
         return owner is not null
             ? MessageBox.Show(owner, text, title, buttons, image, defaultResult)
             : MessageBox.Show(text, title, buttons, image, defaultResult);
+    }
+
+    /// <summary>
+    /// Asks a question whose buttons say what they do ("Delete 37 files" / "Cancel"), not Yes/No. True for
+    /// <paramref name="yes"/>. Cancel is the default button (Enter and Esc), so a hurried key press changes nothing.
+    /// </summary>
+    public static bool Confirm(Window? owner, string text, string title, string yes, string no = "Cancel")
+    {
+        if (Responder is { } responder)
+            return responder.Answer(new Question(text, title, MessageBoxButton.YesNo, MessageBoxImage.Warning)) == MessageBoxResult.Yes;
+        var window = new Window
+        {
+            Title = title,
+            Width = 520,
+            SizeToContent = SizeToContent.Height,
+            ResizeMode = ResizeMode.NoResize,
+            ShowInTaskbar = owner is null,
+            WindowStartupLocation = owner is null ? WindowStartupLocation.CenterScreen : WindowStartupLocation.CenterOwner,
+        };
+        if (owner is { IsVisible: true })
+            window.Owner = owner;
+        Themes.ThemeManager.Attach(window);
+        var yesButton = new Button { Content = yes, MinWidth = 110, Padding = new Thickness(16, 0, 16, 0), Margin = new Thickness(0, 0, 8, 0) };
+        yesButton.SetResourceReference(FrameworkElement.StyleProperty, "SubtleButton");
+        yesButton.SetResourceReference(Control.ForegroundProperty, "T.BadText");
+        yesButton.Click += (_, _) => window.DialogResult = true;
+        var noButton = new Button { Content = no, MinWidth = 90, Padding = new Thickness(16, 0, 16, 0), IsDefault = true, IsCancel = true };
+        noButton.SetResourceReference(FrameworkElement.StyleProperty, "SubtleButton");
+        var buttons = new System.Windows.Controls.StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 18, 0, 0) };
+        buttons.Children.Add(yesButton);
+        buttons.Children.Add(noButton);
+        var body = new TextBox
+        {
+            Text = text,
+            IsReadOnly = true,
+            BorderThickness = new Thickness(0),
+            Background = System.Windows.Media.Brushes.Transparent,
+            TextWrapping = TextWrapping.Wrap,
+            MaxHeight = 420,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+        };
+        body.SetResourceReference(Control.ForegroundProperty, "T.Text");
+        var content = new System.Windows.Controls.StackPanel { Margin = new Thickness(22, 20, 22, 18) };
+        content.Children.Add(body);
+        content.Children.Add(buttons);
+        window.Content = content;
+        window.Loaded += (_, _) => noButton.Focus();
+        return window.ShowDialog() == true;
     }
 
     /// <summary>Lets the person choose a folder; null when they cancel.</summary>

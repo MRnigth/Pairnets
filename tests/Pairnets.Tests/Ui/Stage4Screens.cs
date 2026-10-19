@@ -87,7 +87,7 @@ internal static class Stage4Screens
         {
             ServerUrl = "https://nest.example.com/", Folder = Folder, DeviceName = "DESKTOP", DeviceId = "id", AccountEmail = "alex@example.com",
             ExtraIgnore = ["*.bak", "node_modules/", "build/"],
-        }, null, autoStart: true, serverVersionText: "Server 1.0.48");
+        }, null, autoStart: true, serverVersionText: "Nest 1.0.48");
         window.ShowSettingsPage(settings);
         Save(window, outDir, "settings", suffix);
         settings.ScrollToEnd();

@@ -248,7 +248,7 @@ public static partial class Program
         };
         using var updates = new UpdateService(new UpdateChecker(new HttpClient(), new Uri("https://downloads.example.com/"), new Uri("https://releases.example.com/")),
             PairnetsInfo.ProductVersion, null);
-        var page = new SettingsView(settings, new NoProtector(), updates, "Server " + PairnetsInfo.ProductVersion);
+        var page = new SettingsView(settings, new NoProtector(), updates, "Nest " + PairnetsInfo.ProductVersion);
         window.ShowSettingsPage(page);
         Save(window, outDir, $"stage4-settings-{suffix}.png", print);
         page.ScrollToEnd();
@@ -342,7 +342,7 @@ public static partial class Program
 
         // A release Pairnets did not sign: the card says so and only offers to hide it.
         window.ShowAttentionTab(false);
-        window.ShowUpdate("Pairnets 1.0.58 could not be installed", ReleaseSigning.NotSignedMessage, "Hide");
+        window.ShowUpdate("Pairnets 1.0.58 could not be installed", UpdateProblem.NotSigned.Reason, UpdateProblem.NotSigned.ButtonText);
         Save(window, outDir, $"windows-update-not-signed-{suffix}.png", print);
 
         window.ShowUpdate(null, string.Empty, string.Empty);
@@ -392,7 +392,7 @@ public static partial class Program
         Save(window, outDir, $"windows-main-history-{suffix}.png", print);
 
         var settingsPage = new SettingsView(new ClientSettings { ServerUrl = "https://sync.example.com/", Folder = folder, DeviceName = "DESKTOP" },
-            new NoProtector(), serverVersionText: "Server 1.0.58");
+            new NoProtector(), serverVersionText: "Nest 1.0.58");
         window.ShowSettingsPage(settingsPage);
         Save(window, outDir, $"windows-main-settings-{suffix}.png", print);
         settingsPage.ScrollToEnd();

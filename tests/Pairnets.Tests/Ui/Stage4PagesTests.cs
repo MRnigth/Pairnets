@@ -356,7 +356,7 @@ public class Stage4PagesTests
         var view = new SettingsView(new ClientSettings
         {
             ServerUrl = "https://nest.example.com/", Folder = "/home/me/Work", DeviceName = "DESKTOP", DeviceId = "id", AccountEmail = "alex@example.com", ExtraIgnore = ["*.bak", "tmp/"],
-        }, null, autoStart: true, serverVersionText: "Server 1.0.48");
+        }, null, autoStart: true, serverVersionText: "Nest 1.0.48");
         var window = new Window { Content = view, Width = 1000, Height = 800 };
         window.Show();
         var texts = Screen.All<TextBlock>(view).Where(t => t.IsEffectivelyVisible).Select(t => t.Text).ToList();

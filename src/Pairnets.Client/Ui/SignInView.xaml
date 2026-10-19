@@ -398,11 +398,14 @@
               <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
               </Grid.ColumnDefinitions>
               <Border Style="{StaticResource IconSquare}" Width="40" Height="40" CornerRadius="12" Margin="0,0,12,0">
                 <ui:LineIcon Width="18" Height="18" StrokeThickness="2" Stroke="{DynamicResource T.Muted}" Data="M12,3 L12,11 M7,6.3 A8,8 0 1 0 17,6.3" />
               </Border>
-              <CheckBox x:Name="AutoStartBox" Grid.Column="1" Style="{StaticResource Switch}" Content="Start Pairnets when I sign in to Windows" FontWeight="SemiBold" VerticalAlignment="Center" />
+              <TextBlock Grid.Column="1" Text="Start Pairnets when I sign in to Windows" FontWeight="SemiBold" VerticalAlignment="Center" TextWrapping="Wrap" />
+              <CheckBox x:Name="AutoStartBox" Grid.Column="2" Style="{StaticResource Switch}" Margin="12,0,0,0" VerticalAlignment="Center"
+                        AutomationProperties.Name="Start Pairnets when I sign in to Windows" />
             </Grid>
           </Border>
           <Button x:Name="StartButton" Style="{StaticResource BigAccent}" Margin="0,18,0,0" Click="OnStart">

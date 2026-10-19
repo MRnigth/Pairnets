@@ -1071,3 +1071,31 @@ The owner's answers to the 2026-10-14 audit questions:
   shows the "Restore puts that version back…" note, and Restore has an undo arrow in both apps.
 * **Up and down are named the same everywhere:** "uploading"/"downloading" on the picture, the side and the tray (the
   tray's live row shows a down arrow while a file comes from the nest).
+
+## Design review, first batch: one blue button, shortcuts, Settings at once (2026-10-19)
+
+* **"Sync now" is blue only when it is the useful thing to do (A1).** `OverviewSyncNow.For(state)` in Core decides it for
+  both apps: blue while up to date or waiting for another computer, resting (greyed, "Pairnets is syncing now") while a
+  sync runs, plain when signed out, offline, paused or stopped, so the card's own button is the only blue one. The
+  motion between the looks is for a later design round.
+* **Stopped to keep files safe: the calm choice is the bright one (A2).** "Keep my files" changes nothing (syncing stays
+  stopped) and opens the folder to check it; there is no "reject" command, and opening the folder is what someone would
+  do next. "Allow these deletions (N)…" became an outlined amber button. The question's buttons say "Delete N files" and
+  "Cancel" (Cancel is the default) in both apps; WPF's message box could not relabel its buttons, so `Dialogs.Confirm`
+  draws a small window of its own.
+* **Keyboard shortcuts in the main window (A4):** Ctrl+F search (Activity, History), Ctrl+R and F5 sync now, Ctrl+,
+  Settings, Ctrl+1…6 the six pages (`Shortcuts` in Core; ⌘ on a Mac). The Mac app gets a menu bar (Pairnets: About,
+  Settings…; File, Sync, View, Window, Help), built only on macOS. Tooltips that exist name the shortcut.
+* **Settings switches apply at once (A11).** Switches, the files-at-a-time choice and the speed limits apply when
+  changed (a limit's number when its box is left); only the text boxes (folder, name, ignore rules, nest address and
+  key) wait for Save, so Save and Cancel stay. Two settings the sync engine reads at its start (wait for big batches,
+  files at a time) start the session again; the limits change on the running connection (`SettingsSwitches`).
+  Signing in again or out now lives only on the Account page, managing computers only on their page (Settings links
+  there). Every switch sits on the right with its words on the left, sign-in step 4 too.
+* **Page tiles under the computers (A12).** The open side panel is top-aligned: the tiles follow the computers and the
+  spare space goes to the bottom; the computers' list still scrolls when the window is short. The dock is unchanged.
+* **A failed update says why (A13).** One reason line under the title (`UpdateProblem`); the button is the next step:
+  "Try again" after a broken download, "Open download page" after a checksum mismatch or an installer that would not
+  start, and none for a release Pairnets did not sign (it is never pointed to). The X alone puts the card away. Moving
+  these into a notification center is for a later design round.
+* **Words (A14):** the nest's version reads "Nest 1.0.58", the advanced link "nest address and key".

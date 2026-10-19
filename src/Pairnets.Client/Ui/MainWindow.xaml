@@ -35,9 +35,16 @@
     <!-- ======================= Left side, open ======================= -->
     <Grid x:Name="SideOpen" Margin="12,12,0,12">
       <Border Style="{StaticResource SidePanel}">
-        <DockPanel Margin="14,16,14,14">
+        <!-- Top-aligned, so the page tiles sit right under the computers and the spare space goes to the bottom; the
+             computers' row is the one that shrinks (and scrolls) when the window is short. -->
+        <Grid Margin="14,16,14,14" VerticalAlignment="Top">
+          <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+          </Grid.RowDefinitions>
           <!-- Top: logo, fold, account -->
-          <Grid DockPanel.Dock="Top" Margin="4,0,0,0">
+          <Grid Margin="4,0,0,0">
             <Grid.ColumnDefinitions>
               <ColumnDefinition Width="Auto" />
               <ColumnDefinition Width="*" />
@@ -57,78 +64,8 @@
             </Button>
           </Grid>
 
-          <!-- Bottom: the app update, then the page tiles -->
-          <StackPanel DockPanel.Dock="Bottom">
-            <Border x:Name="UpdateCard" Background="{DynamicResource T.AccentSoft}" CornerRadius="14" Padding="12,8,8,8" Margin="0,10,0,0" Visibility="Collapsed">
-              <StackPanel>
-                <Grid>
-                  <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="Auto" />
-                  </Grid.ColumnDefinitions>
-                  <ui:LineIcon x:Name="UpdateIcon" Width="16" Height="16" StrokeThickness="2.2" Margin="0,0,8,0" Stroke="{DynamicResource T.AccentInk}" Data="{StaticResource I.Download}" VerticalAlignment="Center" />
-                  <TextBlock x:Name="UpdateTitle" Grid.Column="1" FontWeight="ExtraBold" FontSize="13" TextWrapping="Wrap" VerticalAlignment="Center" />
-                  <TextBlock x:Name="UpdatePercent" Grid.Column="2" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource T.AccentInk}" VerticalAlignment="Center" Margin="8,0,4,0" Visibility="Collapsed" />
-                  <Button x:Name="UpdateButton" Grid.Column="3" Style="{StaticResource AccentButton}" Height="30" MinHeight="30" Padding="12,0" FontSize="12" Margin="8,0,0,0" Content="Update" Click="OnUpdateNow" />
-                  <Button x:Name="UpdateLater" Grid.Column="4" Style="{StaticResource RoundIconButton}" Width="28" Height="28" MinWidth="28" MinHeight="28" Margin="8,0,0,0"
-                          Background="Transparent" ToolTip="Later" AutomationProperties.Name="Later" Click="OnUpdateLater">
-                    <ui:LineIcon Width="12" Height="12" StrokeThickness="2.4" Stroke="{DynamicResource T.Muted}" Data="{StaticResource I.Close}" />
-                  </Button>
-                </Grid>
-                <ProgressBar x:Name="UpdateProgress" Style="{StaticResource RoundProgress}" Height="5" Minimum="0" Maximum="100" Margin="0,8,4,2" Visibility="Collapsed" />
-              </StackPanel>
-            </Border>
-
-            <TextBlock Style="{StaticResource SmallLabel}" Foreground="{DynamicResource T.TextSoft}" Text="PAGES" Margin="4,16,0,4" />
-            <UniformGrid Columns="2" Margin="-4,0,-4,0">
-              <RadioButton x:Name="NavOverview" Style="{StaticResource SideTile}" GroupName="page" IsChecked="True" Checked="OnNav">
-                <Grid>
-                  <TextBlock Text="Overview" VerticalAlignment="Bottom" FontSize="14" />
-                  <ui:LineIcon Data="{StaticResource I.Home}" />
-                  <TextBlock x:Name="OverviewNote" HorizontalAlignment="Right" VerticalAlignment="Top" FontSize="14" />
-                </Grid>
-              </RadioButton>
-              <RadioButton x:Name="NavActivity" Style="{StaticResource SideTile}" GroupName="page" Checked="OnNav">
-                <Grid>
-                  <TextBlock Text="Activity" VerticalAlignment="Bottom" FontSize="14" />
-                  <ui:LineIcon Data="{StaticResource I.Activity}" />
-                  <TextBlock x:Name="ActivityNote" HorizontalAlignment="Right" VerticalAlignment="Top" FontSize="14" />
-                </Grid>
-              </RadioButton>
-              <RadioButton x:Name="NavAttention" Style="{StaticResource SideTile}" GroupName="page" Checked="OnNav">
-                <Grid>
-                  <TextBlock Text="Needs you" VerticalAlignment="Bottom" FontSize="14" />
-                  <ui:LineIcon Data="{StaticResource I.Warning}" />
-                  <TextBlock x:Name="AttentionCount" HorizontalAlignment="Right" VerticalAlignment="Top" FontSize="20" />
-                </Grid>
-              </RadioButton>
-              <RadioButton x:Name="NavHistory" Style="{StaticResource SideTile}" GroupName="page" Checked="OnNav">
-                <Grid>
-                  <TextBlock Text="History" VerticalAlignment="Bottom" FontSize="14" />
-                  <ui:LineIcon Data="{StaticResource I.History}" />
-                </Grid>
-              </RadioButton>
-              <RadioButton x:Name="NavDevices" Style="{StaticResource SideTile}" GroupName="page" Checked="OnNav">
-                <Grid>
-                  <TextBlock Text="Computers" VerticalAlignment="Bottom" FontSize="14" />
-                  <ui:LineIcon Data="{StaticResource I.Desktop}" />
-                  <TextBlock x:Name="DevicesNote" HorizontalAlignment="Right" VerticalAlignment="Top" FontSize="13" />
-                </Grid>
-              </RadioButton>
-              <RadioButton x:Name="NavSettings" Style="{StaticResource SideTile}" GroupName="page" Checked="OnNav">
-                <Grid>
-                  <TextBlock Text="Settings" VerticalAlignment="Bottom" FontSize="14" />
-                  <ui:LineIcon Data="{StaticResource I.Gear}" StrokeThickness="1.8" />
-                </Grid>
-              </RadioButton>
-            </UniformGrid>
-          </StackPanel>
-
           <!-- Your computers (scrolls when the window is short) -->
-          <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False">
+          <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False">
             <StackPanel>
               <TextBlock Style="{StaticResource SmallLabel}" Foreground="{DynamicResource T.TextSoft}" Text="YOUR COMPUTERS" Margin="4,16,0,8" />
 
@@ -197,7 +134,81 @@
               </Border>
             </StackPanel>
           </ScrollViewer>
-        </DockPanel>
+
+          <!-- Under the computers: the app update, then the page tiles -->
+          <StackPanel Grid.Row="2">
+            <Border x:Name="UpdateCard" Background="{DynamicResource T.AccentSoft}" CornerRadius="14" Padding="12,8,8,8" Margin="0,10,0,0" Visibility="Collapsed">
+              <StackPanel>
+                <Grid>
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                  </Grid.ColumnDefinitions>
+                  <ui:LineIcon x:Name="UpdateIcon" Width="16" Height="16" StrokeThickness="2.2" Margin="0,0,8,0" Stroke="{DynamicResource T.AccentInk}" Data="{StaticResource I.Download}" VerticalAlignment="Center" />
+                  <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                    <TextBlock x:Name="UpdateTitle" FontWeight="ExtraBold" FontSize="13" TextWrapping="Wrap" />
+                    <!-- Why a failed update was not installed (one line) -->
+                    <TextBlock x:Name="UpdateReason" FontSize="12" Foreground="{DynamicResource T.Muted}" TextWrapping="Wrap" Margin="0,2,0,0" Visibility="Collapsed" />
+                  </StackPanel>
+                  <TextBlock x:Name="UpdatePercent" Grid.Column="2" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource T.AccentInk}" VerticalAlignment="Center" Margin="8,0,4,0" Visibility="Collapsed" />
+                  <Button x:Name="UpdateButton" Grid.Column="3" Style="{StaticResource AccentButton}" Height="30" MinHeight="30" Padding="12,0" FontSize="12" Margin="8,0,0,0" Content="Update" Click="OnUpdateNow" />
+                  <Button x:Name="UpdateLater" Grid.Column="4" Style="{StaticResource RoundIconButton}" Width="28" Height="28" MinWidth="28" MinHeight="28" Margin="8,0,0,0"
+                          Background="Transparent" ToolTip="Later" AutomationProperties.Name="Later" Click="OnUpdateLater">
+                    <ui:LineIcon Width="12" Height="12" StrokeThickness="2.4" Stroke="{DynamicResource T.Muted}" Data="{StaticResource I.Close}" />
+                  </Button>
+                </Grid>
+                <ProgressBar x:Name="UpdateProgress" Style="{StaticResource RoundProgress}" Height="5" Minimum="0" Maximum="100" Margin="0,8,4,2" Visibility="Collapsed" />
+              </StackPanel>
+            </Border>
+
+            <TextBlock Style="{StaticResource SmallLabel}" Foreground="{DynamicResource T.TextSoft}" Text="PAGES" Margin="4,16,0,4" />
+            <UniformGrid Columns="2" Margin="-4,0,-4,0">
+              <RadioButton x:Name="NavOverview" Style="{StaticResource SideTile}" GroupName="page" IsChecked="True" Checked="OnNav">
+                <Grid>
+                  <TextBlock Text="Overview" VerticalAlignment="Bottom" FontSize="14" />
+                  <ui:LineIcon Data="{StaticResource I.Home}" />
+                  <TextBlock x:Name="OverviewNote" HorizontalAlignment="Right" VerticalAlignment="Top" FontSize="14" />
+                </Grid>
+              </RadioButton>
+              <RadioButton x:Name="NavActivity" Style="{StaticResource SideTile}" GroupName="page" Checked="OnNav">
+                <Grid>
+                  <TextBlock Text="Activity" VerticalAlignment="Bottom" FontSize="14" />
+                  <ui:LineIcon Data="{StaticResource I.Activity}" />
+                  <TextBlock x:Name="ActivityNote" HorizontalAlignment="Right" VerticalAlignment="Top" FontSize="14" />
+                </Grid>
+              </RadioButton>
+              <RadioButton x:Name="NavAttention" Style="{StaticResource SideTile}" GroupName="page" Checked="OnNav">
+                <Grid>
+                  <TextBlock Text="Needs you" VerticalAlignment="Bottom" FontSize="14" />
+                  <ui:LineIcon Data="{StaticResource I.Warning}" />
+                  <TextBlock x:Name="AttentionCount" HorizontalAlignment="Right" VerticalAlignment="Top" FontSize="20" />
+                </Grid>
+              </RadioButton>
+              <RadioButton x:Name="NavHistory" Style="{StaticResource SideTile}" GroupName="page" Checked="OnNav">
+                <Grid>
+                  <TextBlock Text="History" VerticalAlignment="Bottom" FontSize="14" />
+                  <ui:LineIcon Data="{StaticResource I.History}" />
+                </Grid>
+              </RadioButton>
+              <RadioButton x:Name="NavDevices" Style="{StaticResource SideTile}" GroupName="page" Checked="OnNav">
+                <Grid>
+                  <TextBlock Text="Computers" VerticalAlignment="Bottom" FontSize="14" />
+                  <ui:LineIcon Data="{StaticResource I.Desktop}" />
+                  <TextBlock x:Name="DevicesNote" HorizontalAlignment="Right" VerticalAlignment="Top" FontSize="13" />
+                </Grid>
+              </RadioButton>
+              <RadioButton x:Name="NavSettings" Style="{StaticResource SideTile}" GroupName="page" Checked="OnNav">
+                <Grid>
+                  <TextBlock Text="Settings" VerticalAlignment="Bottom" FontSize="14" />
+                  <ui:LineIcon Data="{StaticResource I.Gear}" StrokeThickness="1.8" />
+                </Grid>
+              </RadioButton>
+            </UniformGrid>
+          </StackPanel>
+        </Grid>
       </Border>
     </Grid>
 
@@ -330,9 +341,9 @@
               <TextBlock x:Name="PauseText" Text="Pause" />
             </StackPanel>
           </Button>
-          <Button Style="{StaticResource AccentButton}" Margin="0,0,8,0" Click="OnSyncNow">
+          <Button x:Name="SyncNowButton" Style="{StaticResource AccentButton}" Margin="0,0,8,0" Click="OnSyncNow" ToolTipService.ShowOnDisabled="True">
             <StackPanel Orientation="Horizontal">
-              <ui:LineIcon Style="{StaticResource ToolIcon}" Stroke="White" Data="{StaticResource I.Sync}" />
+              <ui:LineIcon x:Name="SyncNowIcon" Style="{StaticResource ToolIcon}" Stroke="White" Data="{StaticResource I.Sync}" />
               <TextBlock Text="Sync now" />
             </StackPanel>
           </Button>

@@ -78,7 +78,7 @@ public partial class SettingsView : UserControl
         ServerVersionText.Text = serverVersionText ?? "Your nest: not connected yet";
         AppVersionText.Text = "Pairnets " + PairnetsInfo.ProductVersion;
         FooterText.Text = $"Pairnets {PairnetsInfo.ProductVersion} for Windows"
-            + (serverVersionText?.Replace("Server ", string.Empty, StringComparison.Ordinal) is { Length: > 0 } nestVersion && connected ? " · your nest runs " + nestVersion : string.Empty);
+            + (serverVersionText?.Replace("Nest ", string.Empty, StringComparison.Ordinal) is { Length: > 0 } nestVersion && connected ? " · your nest runs " + nestVersion : string.Empty);
         StayText.Text = $"Your files in {(string.IsNullOrWhiteSpace(current.Folder) ? "your folder" : current.Folder)} stay where they are.";
         FolderBox.TextChanged += (_, _) => StayText.Text = $"Your files in {(string.IsNullOrWhiteSpace(FolderBox.Text) ? "your folder" : FolderBox.Text.Trim())} stay where they are.";
         IgnoreBox.TextChanged += (_, _) => ShowIgnoreCount();
@@ -90,7 +90,80 @@ public partial class SettingsView : UserControl
         DownLimitBox.IsChecked = current.DownloadLimitMBps is > 0;
         DownLimitValue.Text = Number(current.DownloadLimitMBps is > 0 ? current.DownloadLimitMBps.Value : 10);
         ShowVersion(null);
+        _applied = current.Clone();
+        WireSwitches();
     }
+
+    // ------------------------------------------------------------------ switches apply at once
+
+    /// <summary>The settings as the switches last applied them (the text boxes wait for Save).</summary>
+    private ClientSettings? _applied;
+
+    /// <summary>
+    /// A switch (or the files-at-a-time choice, or a speed limit) changed: the settings with it, to apply at once. Only the
+    /// switch-like values differ from the saved settings (<see cref="SettingsSwitches.WithSwitchesFrom"/>).
+    /// </summary>
+    public event Action<ClientSettings>? SwitchesChanged;
+
+    private void WireSwitches()
+    {
+        foreach (var box in new[] { AutoStartBox, UpdateBox, WaitBox, MapSpeedBox, AutoServerBox, DebugBox, UpLimitBox, DownLimitBox })
+        {
+            box.Checked += OnSwitchChanged;
+            box.Unchecked += OnSwitchChanged;
+        }
+        foreach (var par in new[] { Par1, Par2, Par4, Par8 })
+            par.Checked += OnSwitchChanged;
+        // A speed limit's number applies when it is left (or Enter): a number it cannot read waits for Save, which says why.
+        foreach (var value in new[] { UpLimitValue, DownLimitValue })
+        {
+            value.LostKeyboardFocus += OnLimitLeft;
+            value.KeyDown += OnLimitKey;
+        }
+    }
+
+    private void OnSwitchChanged(object sender, RoutedEventArgs e) => ApplySwitches();
+
+    private void OnLimitLeft(object sender, System.Windows.Input.KeyboardFocusChangedEventArgs e) => ApplySwitches();
+
+    private void OnLimitKey(object sender, System.Windows.Input.KeyEventArgs e)
+    {
+        if (e.Key == System.Windows.Input.Key.Enter)
+            ApplySwitches();
+    }
+
+    /// <summary>True when what the switches show has been applied (the checks).</summary>
+    internal bool SwitchesApplied => _applied is { } a && a.StartWithWindows == (AutoStartBox.IsChecked == true) && a.CheckForUpdates == (UpdateBox.IsChecked == true)
+        && a.WaitForPeerBatches == (WaitBox.IsChecked == true) && a.ShowMapSpeed == (MapSpeedBox.IsChecked == true) && a.AutoUpdateServer == (AutoServerBox.IsChecked == true)
+        && a.DebugMode == (DebugBox.IsChecked == true) && a.EffectiveParallelTransfers == ParallelChoice()
+        && (a.UploadLimitMBps is not null) == (UpLimitBox.IsChecked == true) && (a.DownloadLimitMBps is not null) == (DownLimitBox.IsChecked == true);
+
+    private void ApplySwitches()
+    {
+        if (!IsInitialized || _applied is null)
+            return;
+        if (!TryLimit(UpLimitBox, UpLimitValue, out var upLimit) || !TryLimit(DownLimitBox, DownLimitValue, out var downLimit))
+            return;
+        var next = _applied.Clone();
+        next.StartWithWindows = AutoStartBox.IsChecked == true;
+        next.CheckForUpdates = UpdateBox.IsChecked == true;
+        next.WaitForPeerBatches = WaitBox.IsChecked == true;
+        next.ShowMapSpeed = MapSpeedBox.IsChecked == true;
+        next.AutoUpdateServer = AutoServerBox.IsChecked == true;
+        next.DebugMode = DebugBox.IsChecked == true;
+        next.ParallelTransfers = ParallelChoice();
+        next.UploadLimitMBps = upLimit;
+        next.DownloadLimitMBps = downLimit;
+        if (Same(next, _applied))
+            return;
+        _applied = next;
+        SwitchesChanged?.Invoke(next);
+    }
+
+    private static bool Same(ClientSettings a, ClientSettings b) =>
+        a.StartWithWindows == b.StartWithWindows && a.CheckForUpdates == b.CheckForUpdates && a.WaitForPeerBatches == b.WaitForPeerBatches
+        && a.ShowMapSpeed == b.ShowMapSpeed && a.AutoUpdateServer == b.AutoUpdateServer && a.DebugMode == b.DebugMode
+        && a.EffectiveParallelTransfers == b.EffectiveParallelTransfers && !SettingsSwitches.LimitsChanged(a, b);
 
     private static string FirstLetter(string text)
     {
@@ -320,11 +393,8 @@ public partial class SettingsView : UserControl
 
     private void OnCancel(object sender, RoutedEventArgs e) => Cancelled?.Invoke();
 
-    /// <summary>"Sign out of this computer" (the controller asks first).</summary>
-    public event Action? SignOutRequested;
-
-    /// <summary>"Manage devices on the web".</summary>
-    public event Action? ManageDevicesRequested;
+    /// <summary>"Manage on the Computers page": the main window's page of computers (managing them lives there only).</summary>
+    public event Action? ShowDevicesRequested;
 
     /// <summary>Scrolls to the bottom of the page (screenshot tool).</summary>
     public void ScrollToEnd() => Scroller.ScrollToEnd();
@@ -339,9 +409,7 @@ public partial class SettingsView : UserControl
 
     private void OnReportBug(object sender, RoutedEventArgs e) => ReportBugRequested?.Invoke();
 
-    private void OnSignOut(object sender, RoutedEventArgs e) => SignOutRequested?.Invoke();
-
-    private void OnManageDevices(object sender, RoutedEventArgs e) => ManageDevicesRequested?.Invoke();
+    private void OnShowDevices(object sender, RoutedEventArgs e) => ShowDevicesRequested?.Invoke();
 
     /// <summary>A link under "About Pairnets": the address of one of the website's pages (<see cref="PairnetsLinks"/>).</summary>
     public event Action<string>? OpenLinkRequested;

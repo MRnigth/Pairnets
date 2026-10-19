@@ -422,12 +422,12 @@ public sealed record StatusSnapshot(
         : null;
 
     /// <summary>
-    /// "Server 1.0.58"; "Server: old version" for a server too old to say which version it runs;
-    /// null before the server has answered.
+    /// "Nest 1.0.58"; "Nest: old version" for a nest too old to say which version it runs;
+    /// null before the nest has answered.
     /// </summary>
     public string? ServerVersionText => Server is null ? null
-        : Server.ServerVersion is { Length: > 0 } v ? "Server " + v
-        : "Server: old version";
+        : Server.ServerVersion is { Length: > 0 } v ? "Nest " + v
+        : "Nest: old version";
 
     /// <summary>True when the server runs an older release than this app (or is too old to say).</summary>
     public bool ServerIsOlder => Server is not null

@@ -39,12 +39,21 @@
                   <ui:LineIcon Width="16" Height="16" Margin="8,0,0,0" StrokeThickness="2.2" Stroke="White" Data="{StaticResource I.External}" />
                 </StackPanel>
               </Button>
-              <Button x:Name="SignOutButton" Style="{StaticResource PgChipButton}" HorizontalAlignment="Right" Margin="0,8,0,0" Padding="14,0" Foreground="{DynamicResource T.BadText}" Click="OnSignOut">
-                <StackPanel Orientation="Horizontal">
-                  <ui:LineIcon Width="16" Height="16" Margin="0,0,8,0" StrokeThickness="2" Stroke="{DynamicResource T.BadText}" Data="{StaticResource I.SignOut}" />
-                  <TextBlock Text="Sign out" VerticalAlignment="Center" />
-                </StackPanel>
-              </Button>
+              <!-- Signing in again and out live here only (Settings no longer repeats them) -->
+              <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0">
+                <Button x:Name="SignInAgainButton" Style="{StaticResource PgChipButton}" Padding="14,0" Margin="0,0,8,0" Click="OnSignInAgain">
+                  <StackPanel Orientation="Horizontal">
+                    <ui:LineIcon Width="16" Height="16" Margin="0,0,8,0" StrokeThickness="2" Stroke="{DynamicResource T.Text}" Data="{StaticResource I.SignIn}" />
+                    <TextBlock Text="Sign in again" VerticalAlignment="Center" />
+                  </StackPanel>
+                </Button>
+                <Button x:Name="SignOutButton" Style="{StaticResource PgChipButton}" Padding="14,0" Foreground="{DynamicResource T.BadText}" Click="OnSignOut">
+                  <StackPanel Orientation="Horizontal">
+                    <ui:LineIcon Width="16" Height="16" Margin="0,0,8,0" StrokeThickness="2" Stroke="{DynamicResource T.BadText}" Data="{StaticResource I.SignOut}" />
+                    <TextBlock Text="Sign out" VerticalAlignment="Center" />
+                  </StackPanel>
+                </Button>
+              </StackPanel>
             </StackPanel>
           </Grid>
           <Border Style="{StaticResource PgHair}" Margin="0,20" />

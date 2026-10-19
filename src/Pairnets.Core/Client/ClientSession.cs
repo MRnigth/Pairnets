@@ -795,10 +795,10 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
         if (pending.Count > max)
             sb.AppendLine($"  … and {pending.Count - max} more");
         sb.AppendLine();
-        sb.AppendLine("If this is unexpected (wrong folder, unplugged drive), say No and check the folder.");
+        sb.AppendLine("If this is unexpected (wrong folder, unplugged drive), choose Cancel and check the folder.");
         sb.AppendLine("Deleted files stay recoverable from the server history for 30 days.");
         sb.AppendLine();
-        sb.Append("Allow these deletions once?");
+        sb.Append("Delete these files once?");
         return sb.ToString();
     }
 
