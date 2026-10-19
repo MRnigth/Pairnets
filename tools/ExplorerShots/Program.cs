@@ -55,6 +55,16 @@ public static class Program
         var cloud = WindowsCloudFolder.Start(folder, CloudFolderMode.KeepAllHere, icon, log.CreateLogger("cloud"), out problem);
         Console.WriteLine("SPIKE: Windows accepted the Pairnets folder as a cloud folder from a normal (unpackaged) program: "
             + (cloud is not null ? "YES" : "NO - " + problem));
+        try
+        {
+            foreach (var root in Windows.Storage.Provider.StorageProviderSyncRootManager.GetCurrentSyncRoots())
+                Console.WriteLine($"  sync root with Windows: id={root.Id} path={root.Path?.Path} name={root.DisplayNameResource}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine("  listing sync roots failed: " + ex);
+        }
+        Console.WriteLine($"  expected id: {WindowsCloudFolder.SyncRootId(folder)}; Pairnets roots found: {WindowsCloudFolder.Registered().Count}");
         if (cloud is null)
             failures++;
         else
