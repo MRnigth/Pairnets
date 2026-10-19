@@ -57,7 +57,7 @@ public class ActivityAndStatusTests
         Assert.False(StatusSnapshot.Initial.ServerIsOlder);
 
         var older = StatusSnapshot.Initial with { Server = new ServerInfo("id", 1, 1, "0.0.1") };
-        Assert.Equal("Server 0.0.1", older.ServerVersionText);
+        Assert.Equal("Nest 0.0.1", older.ServerVersionText);
         Assert.True(older.ServerIsOlder);
         Assert.Equal("Update nest…", older.ServerUpdateButtonText);
 
