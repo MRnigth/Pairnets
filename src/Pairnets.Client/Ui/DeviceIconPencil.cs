@@ -49,7 +49,7 @@ public sealed class DeviceIconPencil : Button
         VerticalAlignment = VerticalAlignment.Top;
         Margin = new Thickness(-6, -6, 0, 0);
         Cursor = Cursors.Hand;
-        FocusVisualStyle = null;
+        SetResourceReference(FocusVisualStyleProperty, "FocusRingRound");
         Template = new ControlTemplate(typeof(Button)) { VisualTree = new FrameworkElementFactory(typeof(ContentPresenter)) };
         var pencil = new LineIcon { Width = 10, Height = 10, StrokeThickness = 2.6, Data = Geometry.Parse("M4,20 L8,20 L19,9 L15,5 L4,16 Z") };
         pencil.SetResourceReference(LineIcon.StrokeProperty, "T.Muted");

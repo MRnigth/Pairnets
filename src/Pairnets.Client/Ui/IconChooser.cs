@@ -67,7 +67,8 @@ public sealed class IconChooser : Border
             layers.Children.Add(check);
             var tile = new Border { Height = 66, CornerRadius = new CornerRadius(12), Child = layers };
             var cell = new Border { Padding = new Thickness(4, 0, 4, 0), Child = tile };
-            var button = new Button { Content = cell, Template = BareTemplate(), Cursor = Cursors.Hand, Tag = kind, FocusVisualStyle = null };
+            var button = new Button { Content = cell, Template = BareTemplate(), Cursor = Cursors.Hand, Tag = kind };
+            button.SetResourceReference(FocusVisualStyleProperty, "FocusRing");
             System.Windows.Automation.AutomationProperties.SetName(button, DeviceIcon.Label(kind));
             var captured = kind;
             button.Click += (_, _) => Picked?.Invoke(captured);

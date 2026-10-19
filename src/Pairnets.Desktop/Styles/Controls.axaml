@@ -13,6 +13,31 @@
     <Setter Property="FontFamily" Value="{StaticResource F.Sans}" />
   </Style>
 
+  <!-- Keyboard focus (Tab and arrow keys only, never mouse clicks): a 2 px ring in the dark accent ink, 3 px outside
+       the control, instead of Fluent's black and white one. The Windows app draws the same ring (FocusRing in
+       Themes/Controls.xaml). Round buttons and page tiles get a ring of their own shape. -->
+  <Style Selector="AdornerLayer">
+    <Setter Property="DefaultFocusAdorner">
+      <FocusAdornerTemplate>
+        <Border Margin="-3" BorderThickness="2" CornerRadius="14" BorderBrush="{DynamicResource T.AccentInk}" />
+      </FocusAdornerTemplate>
+    </Setter>
+  </Style>
+  <Style Selector="Button.RoundIconButton, Button.dockbtn, RadioButton.dockpage, Button.fpill">
+    <Setter Property="FocusAdorner">
+      <FocusAdornerTemplate>
+        <Border Margin="-3" BorderThickness="2" CornerRadius="999" BorderBrush="{DynamicResource T.AccentInk}" />
+      </FocusAdornerTemplate>
+    </Setter>
+  </Style>
+  <Style Selector="RadioButton.sidetile">
+    <Setter Property="FocusAdorner">
+      <FocusAdornerTemplate>
+        <Border Margin="-3" BorderThickness="2" CornerRadius="21" BorderBrush="{DynamicResource T.AccentInk}" />
+      </FocusAdornerTemplate>
+    </Setter>
+  </Style>
+
   <!-- Line icons -->
   <Style Selector="v|LineIcon.icon">
     <Setter Property="Stroke" Value="{DynamicResource T.Text}" />
@@ -301,14 +326,6 @@
         </Border>
       </ControlTemplate>
     </Setter>
-  </Style>
-  <!-- Keyboard focus (Tab / arrow keys) only, never on mouse clicks -->
-  <Style Selector="RadioButton.seg:focus-visible /template/ Border#bd, RadioButton.nav:focus-visible /template/ Border#bd">
-    <Setter Property="BorderBrush" Value="{DynamicResource T.Accent}" />
-  </Style>
-  <Style Selector="ListBox.rows ListBoxItem:focus-visible /template/ ContentPresenter#PART_ContentPresenter">
-    <Setter Property="BorderBrush" Value="{DynamicResource T.Accent}" />
-    <Setter Property="BorderThickness" Value="1.5" />
   </Style>
   <Style Selector="RadioButton.seg:checked">
     <Setter Property="FontWeight" Value="Bold" />
