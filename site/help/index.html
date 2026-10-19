@@ -41,8 +41,10 @@
       <ol>
         <li>Check that the computer your nest runs on is switched on and online.</li>
         <li>Sign in at <a href="https://sync.pairnets.app/account">sync.pairnets.app/account</a> with the account your nest belongs to. It should be listed there, and say whether it is online.</li>
-        <li>On the server: <code>sudo systemctl status pairnets-server pairnets-tunnel</code>. Both should say <strong>active (running)</strong>.</li>
-        <li>Not listed at all? Run the one-line installer again and open the link it shows: <code>curl -fsSL https://pairnets.app/get.sh | sudo bash</code></li>
+        <li>On the server, run this. Both should say <strong>active (running)</strong>.
+          <pre class="gap"><code>sudo systemctl status pairnets-server pairnets-tunnel</code></pre></li>
+        <li>Not listed at all? Run the one-line installer again and open the link it shows:
+          <pre class="gap"><code>curl -fsSL https://pairnets.app/get.sh | sudo bash</code></pre></li>
       </ol>
       <p>Still stuck? <a href="/docs">The guide</a> has a "Check it from outside" section with more.</p>
     </div>

@@ -582,6 +582,9 @@ yet"), the same in both apps.
   with an OK button and a Cookie settings link. OK is remembered in the browser's local storage
   (`pn-cookie-notice`), never in a cookie. The Cookie settings page shows the three kinds with their
   switches: Necessary is always on; Analytics and Advertising are not used.
+  * Since 19 October 2026 pairnets.app has no notice: it sets no cookies at all, and the notice covered about
+    a sixth of a phone screen on the first visit. The footer's Cookie settings link stays. sync.pairnets.app,
+    which does set the sign-in cookies, keeps its notice.
 * **In the apps** (both, page for page):
   * The sign-in screen's first step has the same small print, with Terms and Privacy Policy links.
   * Settings ends with an "About Pairnets" card: version, licence, who makes it, and links to the
