@@ -226,7 +226,7 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
 .path li { position: relative; padding: 26px 26px 28px; min-width: 0; }
 .path li + li { border-left: 1px solid var(--border); }
 .path .n { position: relative; display: flex; align-items: center; gap: 0; margin-bottom: 16px; font-family: var(--mono); font-size: .8125rem; color: var(--text3); }
-.path .n b { display: grid; place-items: center; flex: none; width: 30px; height: 30px; border-radius: 9px; background: var(--accent-soft); color: var(--accent-ink); font-family: var(--font); font-size: .875rem; font-weight: 800; box-shadow: 0 0 0 5px var(--card); }
+.path .n b { position: relative; z-index: 1; display: grid; place-items: center; flex: none; width: 30px; height: 30px; border-radius: 9px; background: linear-gradient(var(--accent-soft), var(--accent-soft)), var(--card); color: var(--accent-ink); font-family: var(--font); font-size: .875rem; font-weight: 800; box-shadow: 0 0 0 5px var(--card); }
 .path .n span { background: var(--card); padding: 0 10px; }
 .path h3 { margin: 0 0 8px; font-size: 1.125rem; }
 .path p { margin: 0; color: var(--text2); font-size: .9375rem; }
@@ -382,13 +382,16 @@ footer .copy a { color: var(--text2); }
   .window-body { grid-template-columns: minmax(0, 1fr); }
   .app-side { display: none; }
   .downloads { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .downloads .dl:nth-child(2) { grid-row: span 2; } /* Mac, the tallest, beside Windows and Linux: no card alone in a row */
   .dl.nest { grid-template-columns: minmax(0, 1fr); }
   .docs { grid-template-columns: 210px minmax(0, 1fr); gap: 36px; }
 }
 /* Three steps side by side get too narrow on tablets: one under the other from here down. */
 @media (max-width: 900px) {
   .path { grid-template-columns: minmax(0, 1fr); }
-  .path::before { left: 41px; right: auto; top: 41px; bottom: 41px; width: 2px; height: auto; }
+  /* One under the other: each step draws the piece from its number down to the next one. */
+  .path::before { content: none; }
+  .path li:not(:last-child)::after { content: ""; position: absolute; left: 40px; top: 41px; bottom: -41px; width: 2px; border-radius: 1px; background: var(--accent-line); }
   .path li { padding-left: 76px; }
   .path li + li { border-left: 0; }
   .path .n b { position: absolute; left: -50px; }
