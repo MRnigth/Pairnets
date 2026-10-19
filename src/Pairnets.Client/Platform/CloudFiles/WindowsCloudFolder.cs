@@ -89,13 +89,12 @@ public sealed class WindowsCloudFolder : ICloudFolder
                 return "Your Pairnets folder is on a removable or network drive. Windows only does this on this PC's own drives.";
             if (!string.Equals(drive.DriveFormat, "NTFS", StringComparison.OrdinalIgnoreCase))
                 return $"Your Pairnets folder's drive uses {drive.DriveFormat}. Windows only does this on NTFS drives.";
-            foreach (var other in StorageProviderSyncRootManager.GetCurrentSyncRoots())
+            foreach (var (id, path, name) in AllSyncRoots())
             {
-                if (other.Id.StartsWith(ProviderName + "!", StringComparison.Ordinal))
+                if (id.StartsWith(ProviderName + "!", StringComparison.Ordinal))
                     continue;
-                var path = LongPath(other.Path.Path);
                 if (IsSameOrInside(full, path) || IsSameOrInside(path, full))
-                    return $"Your Pairnets folder is inside (or around) another cloud folder ({other.DisplayNameResource}, {path}). Windows allows only one.";
+                    return $"Your Pairnets folder is inside (or around) another cloud folder ({name}, {path}). Windows allows only one.";
             }
             return null;
         }
@@ -135,17 +134,47 @@ public sealed class WindowsCloudFolder : ICloudFolder
     /// <summary>The Pairnets cloud folders this Windows user has with Windows (normally none or one).</summary>
     public static IReadOnlyList<(string Id, string Path)> Registered()
     {
+        var prefix = $"{ProviderName}!{UserSid}!";
+        return AllSyncRoots().Where(r => r.Id.StartsWith(prefix, StringComparison.Ordinal)).Select(r => (r.Id, r.Path)).ToList();
+    }
+
+    private static string UserSid => System.Security.Principal.WindowsIdentity.GetCurrent().User?.Value ?? "user";
+
+    private const string SyncRootManagerKey = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\SyncRootManager";
+
+    /// <summary>
+    /// Every cloud folder this Windows user has (OneDrive, Pairnets, ...), read from Windows' own list in the registry, which
+    /// any program may read; Windows' API for it (GetCurrentSyncRoots) answers empty in some programs, such as test hosts.
+    /// </summary>
+    private static List<(string Id, string Path, string Name)> AllSyncRoots()
+    {
+        var found = new List<(string, string, string)>();
         try
         {
-            var prefix = $"{ProviderName}!{System.Security.Principal.WindowsIdentity.GetCurrent().User?.Value}!";
+            using var manager = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(SyncRootManagerKey);
+            foreach (var id in manager?.GetSubKeyNames() ?? [])
+            {
+                using var root = manager!.OpenSubKey(id);
+                using var users = root?.OpenSubKey("UserSyncRoots");
+                if (users?.GetValue(UserSid) is string path && path.Length > 0)
+                    found.Add((id, LongPath(path), root!.GetValue("DisplayNameResource") as string ?? id));
+            }
+        }
+        catch (Exception ex) when (ex is System.Security.SecurityException or UnauthorizedAccessException or IOException)
+        {
+            // Windows' API below is the second way.
+        }
+        if (found.Count > 0)
+            return found;
+        try
+        {
             return StorageProviderSyncRootManager.GetCurrentSyncRoots()
-                .Where(r => r.Id.StartsWith(prefix, StringComparison.Ordinal))
-                .Select(r => (r.Id, LongPath(r.Path.Path)))
+                .Select(r => (r.Id, LongPath(r.Path.Path), r.DisplayNameResource))
                 .ToList();
         }
-        catch (Exception ex) when (ex is COMException or UnauthorizedAccessException or IOException)
+        catch (Exception ex) when (ex is COMException or UnauthorizedAccessException or IOException or InvalidCastException)
         {
-            return [];
+            return found;
         }
     }
 

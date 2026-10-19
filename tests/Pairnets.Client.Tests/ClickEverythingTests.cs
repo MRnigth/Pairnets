@@ -812,6 +812,7 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
         new(t => t.Element is Expander, "open the files-to-ignore section", c => ((Expander)c.Target.Element).IsExpanded != c.WasChecked),
         On("Check now", "look for an app update and say what it found", c => View(c).VersionText.Text.Contains("is available", StringComparison.Ordinal), seconds: 20),
         new(t => t.Element is RadioButton { GroupName: "par" }, "choose that many files at the same time", c => ((RadioButton)c.Target.Element).IsChecked == true),
+        new(t => t.Element is RadioButton { GroupName: "cloud" }, "choose how the folder works in Explorer (saved with Save)", c => ((RadioButton)c.Target.Element).IsChecked == true),
         On("Reset this app…", "ask the app to reset everything", c => c.Bench.Events.Items.Contains("ResetRequested")),
         new(t => t.Handlers.Contains("SettingsView.OnAboutLink"),"ask the app to open that page of pairnets.app in the browser",
             c => c.Target.Element is Button { CommandParameter: string url } && url.StartsWith(PairnetsLinks.Website, StringComparison.Ordinal)
