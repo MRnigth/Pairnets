@@ -98,9 +98,25 @@ public class OtherPagesModelTests
         Assert.True(cards[1].CanChooseIcon);
         Assert.Equal("Windows · 1.0.48", cards[1].SystemLine);
         Assert.Equal(DeviceCardTone.Offline, cards[2].Tone);
-        Assert.Equal("Last seen yesterday", cards[2].StatusText);
-        Assert.Equal("Last seen 3 days ago", cards[3].StatusText);
-        Assert.Equal("4 use this nest · 2 online now", DevicesSummary.Line(cards));
+        Assert.False(cards[2].Problem);
+        Assert.Equal("Off since yesterday", cards[2].StatusText);
+        Assert.Equal("Off since " + Presences.Since(Now.AddDays(-3), Now), cards[3].StatusText);
+        Assert.Equal("2 of 4 online", DevicesSummary.Line(cards));
+    }
+
+    [Fact]
+    public void ADeviceCardIsRedOnlyWhenTheComputerVanishedWhileMovingFiles()
+    {
+        var s = StatusSnapshot.Initial with
+        {
+            Status = RunnerStatus.Idle, Text = "x", LastSyncAt = Now,
+            Devices = [Device("DESKTOP", true), Device("LAPTOP", false, TimeSpan.FromMinutes(5))],
+            Peers = new Dictionary<string, PeerActivity> { ["LAPTOP"] = new(new TransferReport(2_000_000, 0, 1, 9, 0, 0, Uploading: true), Now.AddMinutes(-5), 0, null) },
+        };
+        var lost = DeviceCard.From(s, "DESKTOP", Now)[1];
+        Assert.Equal((DeviceCardTone.Unreachable, "Can’t reach"), (lost.Tone, lost.StatusText));
+        Assert.True(lost.Problem);
+        Assert.False(lost.Online);
     }
 
     [Fact]

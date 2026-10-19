@@ -32,6 +32,10 @@
           <Setter TargetName="Right" Property="Foreground" Value="{DynamicResource T.Muted}" />
           <Setter TargetName="Right" Property="FontWeight" Value="Bold" />
         </DataTrigger>
+        <!-- The live row of a file coming from the nest: a down arrow (still blue, it is moving now). -->
+        <DataTrigger Binding="{Binding LiveDown}" Value="True">
+          <Setter TargetName="Glyph" Property="Data" Value="{StaticResource I.Down}" />
+        </DataTrigger>
         <DataTrigger Binding="{Binding Kind}" Value="Down">
           <Setter TargetName="Glyph" Property="Data" Value="{StaticResource I.Down}" />
           <Setter TargetName="Glyph" Property="Stroke" Value="{DynamicResource T.OkText}" />
@@ -100,7 +104,7 @@
             </Grid>
             <StackPanel Grid.Column="1" VerticalAlignment="Center">
               <TextBlock x:Name="Headline" FontSize="17" FontWeight="ExtraBold" TextTrimming="CharacterEllipsis" Text="Starting…" />
-              <TextBlock x:Name="Detail" FontSize="12" Foreground="{DynamicResource T.Muted}" TextTrimming="CharacterEllipsis" />
+              <TextBlock x:Name="Detail" FontSize="12" Foreground="{DynamicResource T.Muted}" TextWrapping="Wrap" TextTrimming="CharacterEllipsis" MaxHeight="34" />
             </StackPanel>
             <TextBlock x:Name="PercentText" Grid.Column="2" FontSize="24" FontWeight="ExtraBold" VerticalAlignment="Center" Margin="10,0,0,0" Visibility="Collapsed" />
           </Grid>

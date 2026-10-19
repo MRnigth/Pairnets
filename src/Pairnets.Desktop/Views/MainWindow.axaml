@@ -8,6 +8,9 @@
   <Window.Resources>
     <v:ActivityBrushConverter x:Key="KindBrush" />
     <v:ActivityIconConverter x:Key="KindIcon" />
+    <!-- The same pictures as the Windows app: a computer with a plus (asking to join), an undo arrow (Restore). -->
+    <StreamGeometry x:Key="I.JoinPc">M4,5 L15,5 A2,2 0 0 1 17,7 L17,14 A2,2 0 0 1 15,16 L4,16 A2,2 0 0 1 2,14 L2,7 A2,2 0 0 1 4,5 Z M6 20h7M9.5 16v4 M20 3v6M17 6h6</StreamGeometry>
+    <StreamGeometry x:Key="I.Undo">M9 14 4 9l5-5 M4 9h10.5a5.5 5.5 0 0 1 0 11H11</StreamGeometry>
   </Window.Resources>
 
   <Window.DataTemplates>
@@ -109,7 +112,7 @@
               </RadioButton>
               <RadioButton x:Name="NavDevices" Classes="sidetile" GroupName="page" IsCheckedChanged="OnNav">
                 <Grid>
-                  <TextBlock Text="Devices" VerticalAlignment="Bottom" FontSize="14" />
+                  <TextBlock Text="Computers" VerticalAlignment="Bottom" FontSize="14" />
                   <v:LineIcon Data="{StaticResource I.Desktop}" />
                   <TextBlock x:Name="DevicesNote" HorizontalAlignment="Right" VerticalAlignment="Top" FontSize="13" />
                 </Grid>
@@ -217,7 +220,7 @@
               <RadioButton x:Name="DockHistory" Classes="dockpage" GroupName="dock" ToolTip.Tip="History" AutomationProperties.Name="History" IsCheckedChanged="OnNav">
                 <v:LineIcon Data="{StaticResource I.History}" />
               </RadioButton>
-              <RadioButton x:Name="DockDevices" Classes="dockpage" GroupName="dock" ToolTip.Tip="Devices" AutomationProperties.Name="Devices" IsCheckedChanged="OnNav">
+              <RadioButton x:Name="DockDevices" Classes="dockpage" GroupName="dock" ToolTip.Tip="Computers" AutomationProperties.Name="Computers" IsCheckedChanged="OnNav">
                 <v:LineIcon Data="{StaticResource I.Desktop}" />
               </RadioButton>
               <Border Classes="divider" Width="24" Margin="0,4" />
@@ -563,7 +566,7 @@
                               </StackPanel>
                               <Button Grid.Column="3" Classes="small" HorizontalAlignment="Right" VerticalAlignment="Center" FontWeight="Bold" Click="OnRestoreFile" Tag="{Binding}">
                                 <StackPanel Orientation="Horizontal" Spacing="6">
-                                  <v:LineIcon Classes="icon" Width="14" Height="14" Data="{StaticResource I.Restore}" />
+                                  <v:LineIcon Classes="icon" Width="14" Height="14" Data="{StaticResource I.Undo}" />
                                   <TextBlock Text="Restore" />
                                 </StackPanel>
                               </Button>
@@ -609,7 +612,7 @@
                     <TextBlock Classes="t2" TextWrapping="Wrap" TextAlignment="Center" MaxWidth="260"
                                Text="Choose a file to see the versions your nest keeps, and get one back." />
                   </StackPanel>
-                  <Grid x:Name="DetailPanel" RowDefinitions="Auto,Auto,Auto,Auto,*" IsVisible="False">
+                  <Grid x:Name="DetailPanel" RowDefinitions="Auto,Auto,Auto,Auto,*,Auto" IsVisible="False">
                     <Grid ColumnDefinitions="Auto,*,Auto">
                       <Border Width="48" Height="48" CornerRadius="14" Classes="tint-ok" Margin="0,0,14,0">
                         <v:LineIcon Classes="icon ink-ok" Width="22" Height="22" StrokeThickness="1.9" Data="{StaticResource I.File}" />
@@ -661,7 +664,7 @@
                                   </StackPanel>
                                   <Button Grid.Column="2" Classes="small" FontWeight="Bold" VerticalAlignment="Center" Margin="10,0,0,0" Click="OnRestore" Tag="{Binding}">
                                     <StackPanel Orientation="Horizontal" Spacing="6">
-                                      <v:LineIcon Classes="icon" Width="14" Height="14" Data="{StaticResource I.Restore}" />
+                                      <v:LineIcon Classes="icon" Width="14" Height="14" Data="{StaticResource I.Undo}" />
                                       <TextBlock Text="Restore" />
                                     </StackPanel>
                                   </Button>
@@ -673,6 +676,13 @@
                         </StackPanel>
                       </Grid>
                     </ScrollViewer>
+                    <Border x:Name="RestoreNote" Grid.Row="5" CornerRadius="14" Padding="14,12" Margin="0,12,0,0" Background="{DynamicResource T.Chip}">
+                      <Grid ColumnDefinitions="Auto,*">
+                        <v:LineIcon Classes="icon ink-soft" Width="16" Height="16" StrokeThickness="1.9" Margin="0,1,10,0" VerticalAlignment="Top" Data="{StaticResource I.InfoCircle}" />
+                        <TextBlock Grid.Column="1" Classes="t2" FontSize="13" TextWrapping="Wrap"
+                                   Text="Restore puts that version back in your folder. The one you have now stays here as a version, so nothing is lost." />
+                      </Grid>
+                    </Border>
                   </Grid>
                 </Grid>
               </Border>
@@ -693,13 +703,13 @@
         <Grid x:Name="DevicesPage" RowDefinitions="Auto,*" Margin="28,40,28,24" IsVisible="False">
           <Grid ColumnDefinitions="*,Auto,Auto">
             <StackPanel VerticalAlignment="Center">
-              <TextBlock Classes="PageTitle" Text="Devices" />
+              <TextBlock Classes="PageTitle" Text="Computers" />
               <TextBlock Classes="t2" Margin="0,2,0,0" TextWrapping="Wrap" Text="Every computer on your nest, and the nest itself." />
             </StackPanel>
             <Button Grid.Column="1" Classes="SecondaryButton" Height="38" Padding="14,0" Margin="8,0" VerticalAlignment="Center" Click="OnManageDevices">
               <StackPanel Orientation="Horizontal" Spacing="8">
                 <v:LineIcon Classes="icon" Width="16" Height="16" Data="{StaticResource I.External}" />
-                <TextBlock Text="Manage devices on your nest" VerticalAlignment="Center" />
+                <TextBlock Text="Manage computers on your nest" VerticalAlignment="Center" />
               </StackPanel>
             </Button>
             <Button Grid.Column="2" Classes="accent" Height="38" Padding="16,0" VerticalAlignment="Center" Click="OnAddComputer">
@@ -799,7 +809,7 @@
               <Grid ColumnDefinitions="Auto,*" Margin="4,0,0,0">
                 <v:LineIcon Classes="icon ink-soft" Width="16" Height="16" StrokeThickness="2" Data="{StaticResource I.InfoCircle}" VerticalAlignment="Top" Margin="0,1,8,0" />
                 <TextBlock Grid.Column="1" Classes="t2" FontSize="13" VerticalAlignment="Center" TextWrapping="Wrap"
-                           Text="To remove a computer or turn off its access, use Manage devices on your nest. Its files stay where they are." />
+                           Text="To remove a computer or turn off its access, use Manage computers on your nest. Its files stay where they are." />
               </Grid>
             </StackPanel>
           </ScrollViewer>
@@ -827,10 +837,12 @@
                                 Classes.tint-accent="{Binding Kind, Converter={x:Static v:KindIs.Instance}, ConverterParameter='Join'}"
                                 Classes.tint-warn="{Binding Kind, Converter={x:Static v:KindIs.Instance}, ConverterParameter='Conflict,Warning'}">
                           <Panel>
-                            <v:LineIcon Classes="icon ink-accent" Width="22" Height="22" StrokeThickness="1.9" Data="{StaticResource I.UserPlus}"
+                            <v:LineIcon Classes="icon ink-accent" Width="22" Height="22" StrokeThickness="1.9" Data="{StaticResource I.JoinPc}"
                                         IsVisible="{Binding Kind, Converter={x:Static v:KindIs.Instance}, ConverterParameter='Join'}" />
+                            <v:LineIcon Classes="icon ink-warn" Width="22" Height="22" StrokeThickness="1.9" Data="{StaticResource I.Copy}"
+                                        IsVisible="{Binding Kind, Converter={x:Static v:KindIs.Instance}, ConverterParameter='Conflict'}" />
                             <v:LineIcon Classes="icon ink-warn" Width="22" Height="22" StrokeThickness="1.9" Data="{StaticResource I.Warning}"
-                                        IsVisible="{Binding Kind, Converter={x:Static v:KindIs.Instance}, ConverterParameter='Conflict,Warning'}" />
+                                        IsVisible="{Binding Kind, Converter={x:Static v:KindIs.Instance}, ConverterParameter='Warning'}" />
                             <TextBlock Text="Aa" FontSize="16" FontWeight="ExtraBold" HorizontalAlignment="Center" VerticalAlignment="Center"
                                        IsVisible="{Binding Kind, Converter={x:Static v:KindIs.Instance}, ConverterParameter='NameClash'}" />
                           </Panel>
@@ -841,10 +853,7 @@
                               <TextBlock Text="{Binding Title}" FontSize="16" FontWeight="ExtraBold" TextWrapping="Wrap" />
                               <TextBlock Grid.Column="1" Classes="t3" VerticalAlignment="Top" Margin="12,3,0,0" Text="{Binding At, Converter={x:Static v:MomentText.Instance}}" />
                             </Grid>
-                            <TextBlock Classes="t2" TextWrapping="Wrap" Text="{Binding Detail}"
-                                       IsVisible="{Binding Kind, Converter={x:Static v:KindIs.Instance}, ConverterParameter='Conflict,Warning,NameClash'}" />
-                            <TextBlock Classes="t2" TextWrapping="Wrap" Text="Allow it only if you are setting that computer up right now. Its screen should show this same code. You allow or deny it on your nest."
-                                       IsVisible="{Binding Kind, Converter={x:Static v:KindIs.Instance}, ConverterParameter='Join'}" />
+                            <TextBlock Classes="t2" TextWrapping="Wrap" Text="{Binding Detail}" />
                           </StackPanel>
                           <Grid ColumnDefinitions="Auto,*,Auto">
                             <Border Classes="codechip" IsVisible="{Binding Code, Converter={x:Static v:HasText.Instance}}">

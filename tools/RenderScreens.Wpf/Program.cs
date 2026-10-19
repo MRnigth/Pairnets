@@ -172,7 +172,8 @@ public static partial class Program
             new("MINI-PC", utc.AddDays(-30), utc.AddSeconds(-3), true, "1.0.48", "Linux") { LastChange = utc.AddMinutes(-30) },
             new("MEDIA-PC", utc.AddDays(-30), utc.AddDays(-1), false, "1.0.48", "Linux") { LastChange = utc.AddDays(-1) },
             new("OFFICE-PC", utc.AddDays(-30), utc.AddDays(-2), false, "1.0.48", "Windows") { LastChange = utc.AddDays(-2) },
-            new("KITCHEN-PC", utc.AddDays(-30), utc.AddDays(-3), false, "1.0.48", "Windows") { LastChange = utc.AddDays(-3) },
+            // Went away 20 minutes ago in the middle of a download: the one red "can't reach" (the others are just off).
+            new("KITCHEN-PC", utc.AddDays(-30), utc.AddMinutes(-20), false, "1.0.48", "Windows") { LastChange = utc.AddDays(-3) },
         ];
         var status = StatusSnapshot.Initial with
         {
@@ -180,7 +181,11 @@ public static partial class Program
             NestUrl = "https://nest.example.com", DeviceIconsSupported = true,
             Account = new AccountInfo("alex@example.com", "google", utc.AddDays(-14)),
             JoinRequests = [new JoinRequest("RX4K-92TB", "PC-1", "Windows", utc.AddMinutes(-9))],
-            Peers = new Dictionary<string, PeerActivity> { ["LAPTOP"] = new(new TransferReport(0, 4.1 * (1 << 20), 30, 120, 0, 0, Downloading: true), DateTimeOffset.UtcNow, 0, null) },
+            Peers = new Dictionary<string, PeerActivity>
+            {
+                ["LAPTOP"] = new(new TransferReport(0, 4.1 * (1 << 20), 30, 120, 0, 0, Downloading: true), DateTimeOffset.UtcNow, 0, null),
+                ["KITCHEN-PC"] = new(new TransferReport(0, 2.0 * (1 << 20), 4, 12, 0, 0, Downloading: true), utc.AddMinutes(-20), 0, null),
+            },
         };
 
         // The activity: a folder of 37 photos, single files, a conflict, a deletion; yesterday's too.
@@ -203,9 +208,10 @@ public static partial class Program
         window.ShowActivity(feed.Items);
         window.ShowAttention(
         [
-            new("PC-1 (Windows) wants to join", "Code RX4K-92TB.", "Review on your nest", () => { }, AttentionKind.Join, "RX4K-92TB", now.AddMinutes(-9)),
-            new("Conflict copy: budget (conflict LAPTOP 2026-10-02 141509).xlsx", "Both computers changed this file. Both copies were kept, so nothing is lost.", "Show in folder", () => { }, AttentionKind.Conflict, null, now.AddHours(-1)),
-            new("Docs/Report.TXT", "Another file with the same name in different letter case exists on your nest: report.txt can't share a folder with it.", "Show in folder", () => { }, AttentionKind.NameClash),
+            // The same words the real app shows (TrayController.BuildAttention and the nest's message for a name clash).
+            new("PC-1 (Windows) wants to join", new JoinRequest("RX4K-92TB", "PC-1", "Windows", now.AddMinutes(-9)).Advice, "Review in browser", () => { }, AttentionKind.Join, "RX4K-92TB", now.AddMinutes(-9)),
+            new("Conflict copy: budget (conflict LAPTOP 2026-10-02 141509).xlsx", "Both computers changed this file. Compare the two, keep what you want, delete the other.", "Show in folder", () => { }, AttentionKind.Conflict, null, now.AddHours(-1)),
+            new("Docs/Report.TXT", "'Docs/Report.TXT' differs only in letter case from the existing file 'Docs/report.txt'.", "Show in folder", () => { }, AttentionKind.NameClash),
         ]);
 
         window.Navigate(MainPage.Activity);
@@ -296,7 +302,7 @@ public static partial class Program
             new("MINI-PC", utc.AddDays(-30), utc.AddSeconds(-3), true, "1.0.58", "Linux"),
             new("MEDIA-PC", utc.AddDays(-30), utc.AddDays(-2), false, "1.0.58", "Linux"),
             new("OFFICE-PC", utc.AddDays(-30), utc.AddDays(-3), false, "1.0.58", "Windows"),
-            new("KITCHEN-PC", utc.AddDays(-30), utc.AddDays(-4), false, "1.0.58", "Windows"),
+            new("KITCHEN-PC", utc.AddDays(-30), utc.AddMinutes(-20), false, "1.0.58", "Windows"),
         ];
         window.ShowUpdate("Pairnets 1.0.58 is available", "You have 1.0.52. It takes about 10 seconds and Pairnets restarts by itself.", "Update now");
         window.ShowStatus(StatusSnapshot.Initial with
@@ -408,7 +414,12 @@ public static partial class Program
             CurrentPath = "Photos/summer/holiday-0412.jpg", Operation = "download", FilesDone = 12, FilesTotal = 30,
             PassBytesDone = 96L << 20, PassBytesTotal = 240L << 20, BytesPerSecond = 8.2 * (1 << 20),
             Active = [new ActiveTransfer("Photos/summer/holiday-0412.jpg", "download", 50, 100)],
-            Peers = new Dictionary<string, PeerActivity> { ["LAPTOP"] = new(new TransferReport(2.4 * (1 << 20), 0, 4, 30, 0, 0), DateTimeOffset.UtcNow, 0, null) },
+            Peers = new Dictionary<string, PeerActivity>
+            {
+                ["LAPTOP"] = new(new TransferReport(2.4 * (1 << 20), 0, 4, 30, 0, 0), DateTimeOffset.UtcNow, 0, null),
+                // Went away 20 minutes ago in the middle of a download: the red row (the others are the grey "off" row).
+                ["KITCHEN-PC"] = new(new TransferReport(0, 2.0 * (1 << 20), 4, 12, 0, 0, Downloading: true), utc.AddMinutes(-20), 0, null),
+            },
         }, "DESKTOP");
         Save(panel, outDir, $"windows-tray-panel-{suffix}.png", print);
         foreach (var (name, state) in SyncFeedbackStates(server, utc, now))

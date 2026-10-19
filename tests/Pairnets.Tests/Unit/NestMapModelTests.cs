@@ -45,10 +45,11 @@ public class NestMapModelTests
         Assert.Equal(NestDot.Ok, m.NestDot);
         Assert.Equal("412 GB free", m.NestSub);
         Assert.Equal(["LAPTOP", "MINI-PC", "OFFICE-PC"], m.Others.Select(o => o.Name));
-        Assert.Equal((NestLineKind.Active, "↓ 4.10 MB/s", "getting them"), (m.Others[0].Kind, m.Others[0].Speed, m.Others[0].Status));
-        Assert.Equal((NestLineKind.Active, "↓ 2.60 MB/s", "getting them"), (m.Others[1].Kind, m.Others[1].Speed, m.Others[1].Status));
-        Assert.Equal((NestLineKind.Unreachable, "can’t reach", NestDot.Bad), (m.Others[2].Kind, m.Others[2].Status, m.Others[2].Dot));
-        Assert.True(m.Others[2].HasCross);
+        Assert.Equal((NestLineKind.Active, "↓ 4.10 MB/s", "downloading"), (m.Others[0].Kind, m.Others[0].Speed, m.Others[0].Status));
+        Assert.Equal((NestLineKind.Active, "↓ 2.60 MB/s", "downloading"), (m.Others[1].Kind, m.Others[1].Speed, m.Others[1].Status));
+        // Switched off: grey and dashed with words, no red cross.
+        Assert.Equal((NestLineKind.Next, "off since " + Now.AddMinutes(-90).ToLocalTime().ToString("HH:mm"), NestDot.Off), (m.Others[2].Kind, m.Others[2].Status, m.Others[2].Dot));
+        Assert.False(m.Others[2].HasCross);
     }
 
     [Fact]
@@ -70,7 +71,7 @@ public class NestMapModelTests
         Assert.Equal(NestMapState.UpToDate, m.State);
         Assert.Equal((NestLineKind.Ok, "in sync", NestDot.Ok), (m.This.Kind, m.This.Label, m.This.Dot));
         Assert.All(m.Others.Where(o => o.Online), o => Assert.Equal((NestLineKind.Ok, "in sync"), (o.Kind, o.Status)));
-        Assert.Equal(NestLineKind.Unreachable, m.Others.Single(o => o.Name == "OFFICE-PC").Kind);
+        Assert.Equal(NestLineKind.Next, m.Others.Single(o => o.Name == "OFFICE-PC").Kind);
     }
 
     [Fact]
@@ -83,7 +84,7 @@ public class NestMapModelTests
         Assert.Equal(NestMapState.Waiting, m.State);
         Assert.Equal((NestLineKind.Next, "next"), (m.This.Kind, m.This.Label));
         var sender = m.Others.Single(o => o.Name == "LAPTOP");
-        Assert.Equal((NestLineKind.Active, "↑ 3.80 MB/s", "sending 86 files"), (sender.Kind, sender.Speed, sender.Status));
+        Assert.Equal((NestLineKind.Active, "↑ 3.80 MB/s", "uploading 86 files"), (sender.Kind, sender.Speed, sender.Status));
         var other = m.Others.Single(o => o.Name == "MINI-PC");
         Assert.Equal((NestLineKind.Next, "next"), (other.Kind, other.Status));
     }
@@ -143,8 +144,8 @@ public class NestMapModelTests
             Assert.False(o.Online);
             Assert.Equal(NestDot.Off, o.Dot);
         });
-        Assert.Equal("seen " + Now.AddMinutes(-15).ToLocalTime().ToString("HH:mm"), m.Others[0].Status);
-        Assert.Equal("seen " + Now.AddMinutes(-20).ToLocalTime().ToString("HH:mm"), m.Others[1].Status);
+        Assert.Equal("last seen " + Now.AddMinutes(-15).ToLocalTime().ToString("HH:mm"), m.Others[0].Status);
+        Assert.Equal("last seen " + Now.AddMinutes(-20).ToLocalTime().ToString("HH:mm"), m.Others[1].Status);
     }
 
     [Fact]
@@ -190,15 +191,46 @@ public class NestMapModelTests
     }
 
     [Fact]
-    public void ADeviceThatIsNotOnlineIsUnreachable_UnlessItIsMovingFiles()
+    public void ADeviceThatIsNotOnlineIsOff_UnlessItIsMovingFiles()
     {
         var s = Base(RunnerStatus.Idle, Dev(Me), Dev("LAPTOP", online: false, seenMinutesAgo: 5));
         var m = Map(s);
-        Assert.Equal((NestLineKind.Unreachable, "can’t reach"), (m.Others[0].Kind, m.Others[0].Status));
+        Assert.Equal((NestLineKind.Next, "off since " + Now.AddMinutes(-5).ToLocalTime().ToString("HH:mm"), NestDot.Off), (m.Others[0].Kind, m.Others[0].Status, m.Others[0].Dot));
 
         var m2 = Map(WithPeer(s, "LAPTOP", Getting(1_000_000)));
         Assert.Equal(NestLineKind.Active, m2.Others[0].Kind);
         Assert.True(m2.Others[0].Online);
+    }
+
+    [Fact]
+    public void OnlyAComputerThatVanishedWhileMovingFilesIsRed()
+    {
+        var s = Base(RunnerStatus.Idle, Dev(Me), Dev("LAPTOP", online: false, seenMinutesAgo: 5));
+
+        // Its last report said it was busy and it never said it stopped: a real problem.
+        var lost = Map(WithPeer(s, "LAPTOP", Getting(1_000_000), ageSeconds: 5 * 60)).Others[0];
+        Assert.Equal((NestLineKind.Unreachable, "can’t reach", NestDot.Bad, false), (lost.Kind, lost.Status, lost.Dot, lost.Online));
+        Assert.True(lost.HasCross);
+
+        // It said it stopped (the last, empty report): just switched off.
+        var stopped = Map(WithPeer(s, "LAPTOP", TransferReport.Idle, ageSeconds: 5 * 60)).Others[0];
+        Assert.Equal((NestLineKind.Next, NestDot.Off), (stopped.Kind, stopped.Dot));
+        Assert.StartsWith("off since ", stopped.Status, StringComparison.Ordinal);
+
+        // Long ago: no longer a problem, just off.
+        var old = Map(WithPeer(s, "LAPTOP", Getting(1_000_000), ageSeconds: 2 * 3600)).Others[0];
+        Assert.Equal(NestLineKind.Next, old.Kind);
+    }
+
+    [Fact]
+    public void OffSince_SaysTheClockToday_YesterdayOrTheDate()
+    {
+        var now = new DateTimeOffset(2026, 10, 11, 12, 0, 0, TimeSpan.Zero).ToLocalTime();
+        var today = new DateTimeOffset(now.Date.AddHours(9), now.Offset);
+        Assert.Equal("off since 09:00", Presences.OffSince(today, now));
+        Assert.Equal("off since yesterday", Presences.OffSince(today.AddDays(-1), now));
+        Assert.Equal("off since " + today.AddDays(-5).ToString("d MMM", System.Globalization.CultureInfo.InvariantCulture), Presences.OffSince(today.AddDays(-5), now));
+        Assert.Equal("3 of 6 online", Presences.OnlineCount(3, 6));
     }
 
     [Fact]

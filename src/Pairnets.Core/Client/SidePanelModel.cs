@@ -44,11 +44,14 @@ public enum OtherKind
     /// <summary>"online".</summary>
     Online,
 
-    /// <summary>"can't reach": red dashed ring.</summary>
+    /// <summary>"can't reach": red dashed ring. Only for a real problem (<see cref="Presence.Lost"/>).</summary>
     CantReach,
 
     /// <summary>"seen 10:45": grey dashed ring, shown when this computer can't reach the nest itself.</summary>
     LastSeen,
+
+    /// <summary>"off since 10:45": grey dashed ring, switched off or away (<see cref="Presence.Off"/>). Nothing is wrong.</summary>
+    Off,
 }
 
 /// <summary>This computer's card at the top of the left side.</summary>
@@ -74,8 +77,8 @@ public sealed record SideNest(string Text, SideDot Dot, SideTone Tone)
 }
 
 /// <summary>One of the other computers.</summary>
-/// <param name="Text">"↓ 4.10 MB/s", "in sync", "next", "online", "can't reach" or "seen 10:45".</param>
-/// <param name="Detail">Words for a tooltip: "online, getting files at 4.10 MB/s".</param>
+/// <param name="Text">"↓ 4.10 MB/s", "in sync", "next", "online", "off since 10:45", "can't reach" or "seen 10:45".</param>
+/// <param name="Detail">Words for a tooltip: "online, downloading at 4.10 MB/s".</param>
 public sealed record SideOther(string Name, string Text, string Detail, OtherKind Kind, DeviceIconKind Icon)
 {
     /// <summary>It can be reached (the icon is drawn full, with a green dot).</summary>
@@ -86,7 +89,7 @@ public sealed record SideOther(string Name, string Text, string Detail, OtherKin
     public SideDot Dot => Kind switch
     {
         OtherKind.CantReach => SideDot.Bad,
-        OtherKind.LastSeen => SideDot.Off,
+        OtherKind.LastSeen or OtherKind.Off => SideDot.Off,
         _ => SideDot.Ok,
     };
 }
@@ -204,16 +207,18 @@ public sealed record SidePanelModel(
         var name = string.IsNullOrWhiteSpace(thisDevice) ? "This computer" : thisDevice.Trim();
         var state = StateOf(s);
         var others = OthersOf(s, thisDevice, state, now);
-        var online = others.Count(o => o.Reachable);
+        // Every place counts the computers the same way, this one included: "3 of 6 online".
+        var count = Presences.OnlineCount(others.Count(o => o.Reachable) + 1, others.Count + 1);
         var groupNote = state switch
         {
             Side.Offline => "can’t check now",
             Side.SignedOutByYou => "signed out",
-            _ => $"{online} of {others.Count} online",
+            _ when s.Devices is null || s.DevicesUnsupported => string.Empty, // the list has not come yet
+            _ => count,
         };
         var devicesNote = s.Devices is null || s.DevicesUnsupported ? string.Empty
-            : state == Side.Offline ? "offline"
-            : $"{online + 1} on";
+            : state == Side.Offline ? "Offline"
+            : count;
         var tiles = new SideTiles(OverviewNote(s, state), activityCount.ToString(CultureInfo.InvariantCulture), Math.Max(0, attentionCount), devicesNote);
         var initial = (s.AccountEmail ?? name).Trim() is { Length: > 0 } source ? char.ToUpperInvariant(source[0]).ToString() : "A";
         var label = s.AccountEmail is { Length: > 0 } email ? "Account: " + email : "Account";
@@ -263,12 +268,14 @@ public sealed record SidePanelModel(
 
     private static string OverviewNote(StatusSnapshot s, Side state) => state switch
     {
-        Side.Syncing => s.OverallPercent is { } p && s.IsTransferring ? p.ToString(CultureInfo.InvariantCulture) + "%" : "Sync",
-        Side.Synced => "Done",
-        Side.Waiting => "Wait",
-        Side.Stopped or Side.Missing or Side.Problem => "Stop",
-        Side.SignIn => "Sign in",
-        Side.SignedOut or Side.SignedOutByYou or Side.Offline => "Off",
+        // Status words, not commands: what the overview says right now.
+        Side.Syncing => s.OverallPercent is { } p && s.IsTransferring ? p.ToString(CultureInfo.InvariantCulture) + "%" : "Syncing",
+        Side.Synced => "Up to date",
+        Side.Waiting => "Waiting",
+        Side.Stopped or Side.Missing or Side.Problem => "Stopped",
+        Side.SignIn => "Not signed in",
+        Side.SignedOut or Side.SignedOutByYou => "Signed out",
+        Side.Offline => "Offline",
         _ => "Paused",
     };
 
@@ -307,7 +314,7 @@ public sealed record SidePanelModel(
         SideThisComputer Make(string detail, SideDot dot, SideTone tone) => new(name, "This one · " + detail, detail, dot, tone, null, icon);
     }
 
-    /// <summary>What this computer does while syncing: "sending 4.90 MB/s", "getting 2.00 MB/s", "checking files".</summary>
+    /// <summary>What this computer does while syncing: "uploading 4.90 MB/s", "downloading 2.00 MB/s", "checking files".</summary>
     private static string Doing(StatusSnapshot s, DateTimeOffset now)
     {
         if (s.IsSlowedDown)
@@ -322,8 +329,8 @@ public sealed record SidePanelModel(
         return (up >= 1, down >= 1) switch
         {
             (true, true) => "syncing " + Format.Speed(up + down),
-            (true, false) => "sending " + Format.Speed(up),
-            (false, true) => "getting " + Format.Speed(down),
+            (true, false) => "uploading " + Format.Speed(up),
+            (false, true) => "downloading " + Format.Speed(down),
             _ => "syncing",
         };
     }
@@ -370,19 +377,25 @@ public sealed record SidePanelModel(
             .ThenByDescending(x => x.Device.LastSeen)
             .ThenBy(x => x.Device.Name, StringComparer.OrdinalIgnoreCase)
             .ToList();
-        return rows.Select(x => OtherOf(s, x.Device, x.Live, x.Online, cantCheck, waited, state)).ToList();
+        return rows.Select(x => OtherOf(s, x.Device, x.Live, x.Online, cantCheck, waited, state, now)).ToList();
     }
 
-    private static SideOther OtherOf(StatusSnapshot s, DeviceInfo d, TransferReport? live, bool online, bool cantCheck, string? waited, Side state)
+    private static SideOther OtherOf(StatusSnapshot s, DeviceInfo d, TransferReport? live, bool online, bool cantCheck, string? waited, Side state, DateTimeOffset now)
     {
         var icon = DeviceIcon.For(d, s.DeviceIconsSupported);
         if (cantCheck)
         {
-            var seen = "seen " + d.LastSeen.ToLocalTime().ToString("HH:mm", CultureInfo.InvariantCulture);
+            var seen = "seen " + Presences.Since(d.LastSeen, now);
             return new SideOther(d.Name, seen, "last " + seen, OtherKind.LastSeen, icon);
         }
+        // Red only for a real problem (it vanished while moving files); switched off is grey and dashed.
         if (!online)
-            return new SideOther(d.Name, "can’t reach", "can’t be reached", OtherKind.CantReach, icon);
+        {
+            if (Presences.Of(s, d.Name, online, now) == Presence.Lost)
+                return new SideOther(d.Name, "can’t reach", "can’t be reached: it stopped while moving files", OtherKind.CantReach, icon);
+            // The cell is narrow: "off yesterday"; its tooltip says "off since yesterday" like everywhere else.
+            return new SideOther(d.Name, "off " + Presences.Since(d.LastSeen, now), Presences.OffSince(d.LastSeen, now), OtherKind.Off, icon);
+        }
         if (live is not null)
         {
             // Its own report: ↓ while it gets files, ↑ while it sends them (the bigger one when it does both).
@@ -391,7 +404,7 @@ public sealed record SidePanelModel(
             {
                 var getting = down >= up;
                 var speed = Format.Speed(getting ? down : up);
-                return new SideOther(d.Name, (getting ? "↓ " : "↑ ") + speed, $"online, {(getting ? "getting" : "sending")} files at {speed}", OtherKind.Live, icon);
+                return new SideOther(d.Name, (getting ? "↓ " : "↑ ") + speed, $"online, {(getting ? "downloading" : "uploading")} at {speed}", OtherKind.Live, icon);
             }
             return new SideOther(d.Name, "syncing", "online, syncing", OtherKind.Live, icon);
         }

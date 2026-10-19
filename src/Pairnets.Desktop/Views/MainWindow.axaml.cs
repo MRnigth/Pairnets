@@ -249,10 +249,10 @@ public partial class MainWindow : Window
         (PageTitle.Text, PageSubtitle.Text) = page switch
         {
             MainPage.Activity => ("Activity", "What synced recently, newest first. Right-click a file for more."),
-            MainPage.History => ("History", "Get back deleted files and older versions. The server keeps them for 30 days."),
-            MainPage.Devices => ("Devices", "Every computer that uses your server: online now, or when it was last seen."),
-            MainPage.Attention => ("Needs attention", "Things Pairnets can't decide for you."),
-            MainPage.Settings => ("Settings", "Your server, the folder, and how Pairnets behaves."),
+            MainPage.History => ("History", "Get back deleted files and older versions. Your nest keeps them for 30 days."),
+            MainPage.Devices => ("Computers", "Every computer on your nest, and the nest itself."),
+            MainPage.Attention => ("Needs you", "Things only you can decide."),
+            MainPage.Settings => ("Settings", "Your nest, the folder, and how Pairnets behaves on this computer."),
             MainPage.Account => ("Account", "Who is signed in on this computer, and when Pairnets should tell you things."),
             _ => ("Overview", string.Empty),
         };
@@ -742,8 +742,7 @@ public partial class MainWindow : Window
                 return;
             foreach (var row in VersionRow.For(file, versions, DateTimeOffset.UtcNow))
                 _versions.Add(row);
-            var total = _versions.Count + (file.Deleted ? 0 : 1);
-            VersionCount.Text = total == 1 ? "1 version" : total + " versions";
+            VersionCount.Text = VersionRow.CountText(_versions.Count);
             VersionsMessage.IsVisible = _versions.Count == 0;
             VersionsMessage.Text = file.Deleted
                 ? "Your nest no longer has a copy: it was deleted more than 30 days ago."

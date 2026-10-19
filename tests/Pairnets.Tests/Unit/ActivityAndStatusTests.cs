@@ -59,7 +59,7 @@ public class ActivityAndStatusTests
         var older = StatusSnapshot.Initial with { Server = new ServerInfo("id", 1, 1, "0.0.1") };
         Assert.Equal("Server 0.0.1", older.ServerVersionText);
         Assert.True(older.ServerIsOlder);
-        Assert.Equal("Update server…", older.ServerUpdateButtonText);
+        Assert.Equal("Update nest…", older.ServerUpdateButtonText);
 
         var current = StatusSnapshot.Initial with { Server = new ServerInfo("id", 1, 1, PairnetsInfo.ProductVersion) };
         Assert.Equal("Server " + PairnetsInfo.ProductVersion, current.ServerVersionText);
@@ -69,7 +69,7 @@ public class ActivityAndStatusTests
         var unknown = StatusSnapshot.Initial with { Server = new ServerInfo("id", 1, 1) }; // a server too old to say
         Assert.Equal("Server: old version", unknown.ServerVersionText);
         Assert.True(unknown.ServerIsOlder);
-        Assert.Equal("Update server…", unknown.ServerUpdateButtonText);
+        Assert.Equal("Update nest…", unknown.ServerUpdateButtonText);
     }
 
     [Fact]

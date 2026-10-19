@@ -142,7 +142,7 @@ public class NarrowWindowTests
         Assert.All(lines, t => Assert.False(Trimmed(t), $"'{t.Text}' is cut off"));
         foreach (var label in new[] { "Address", "Version", "Free space", "Keeps deleted files" })
             Assert.False(Cut(Shown(window, label)), $"the nest's '{label}' is cut off");
-        var note = Shown(window, "To remove a computer or turn off its access, use Manage devices on your nest. Its files stay where they are.");
+        var note = Shown(window, "To remove a computer or turn off its access, use Manage computers on your nest. Its files stay where they are.");
         Assert.True(Where(note, window).Right <= window.Bounds.Width, "the note under the cards runs out of the window");
         Close(window);
     }

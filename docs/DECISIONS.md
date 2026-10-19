@@ -1053,3 +1053,21 @@ The owner's answers to the 2026-10-14 audit questions:
   spacing, so its caps labels stay without the 0.8 tracking.
 * **Windows scroll bars** are thin and rounded with no arrows (thumb `T.Dash`, `T.Off` under the mouse), drawn from
   existing keys so the palettes stay identical.
+
+## Design review: same words and states in both apps (2026-10-19)
+
+* **Red only for a real problem; switched off is grey.** A computer that is not online is "off since 10:45" (grey,
+  dashed line or ring, no cross) on the nest picture, the left side, the tray and the Computers page. It is red "can’t
+  reach" with a cross only when it vanished in the middle of moving files: its last live report said it was busy and it
+  never sent the closing, empty report, less than an hour ago (`Presences.Of`). A stopped sync always ends with that
+  empty report, so a computer that is shut down normally never turns red. The state is told by the line style and the
+  words too, never by colour alone.
+* **One count, one name.** "3 of 6 online" (this computer included) in the side group, on the page tile and on the
+  page itself; the page is "Computers" (the nest's own web page keeps its name "Devices"). Tile notes are status words
+  ("Up to date", "Stopped", "Offline", "Waiting", a percentage), not commands.
+* **Needs you and History look the same in both apps.** Every Needs-you card: title with its time, the words, then
+  the code (for a computer asking to join) and the button at the bottom right; only the join card's button is blue.
+  The join words live in Core (`JoinRequest.Advice`). History counts "older versions" (the current one not counted),
+  shows the "Restore puts that version back…" note, and Restore has an undo arrow in both apps.
+* **Up and down are named the same everywhere:** "uploading"/"downloading" on the picture, the side and the tray (the
+  tray's live row shows a down arrow while a file comes from the nest).

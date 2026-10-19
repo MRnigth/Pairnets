@@ -85,85 +85,57 @@ public partial class NeedsPageView : UserControl
         tile.VerticalAlignment = VerticalAlignment.Top;
         tile.Margin = new Thickness(0, 0, 16, 0);
 
+        // One layout for every card, the same as the Mac/Linux app: the title with its time beside it, the words, then a
+        // row with the join code (when there is one) on the left and the button on the right.
         var body = new StackPanel();
-        var join = item.Kind == AttentionKind.Join;
-
-        // Title and words; a computer asking to join has its time beside the title, the others a button beside it.
         var heading = Parts.Text(item.Title, 16, "T.Text", FontWeights.ExtraBold);
         heading.TextWrapping = TextWrapping.Wrap;
         heading.TextTrimming = TextTrimming.None;
         heading.VerticalAlignment = VerticalAlignment.Top;
-        var detail = join
-            ? $"Allow it only if you are setting up {ComputerOf(item.Title)} right now. Its screen should show this same code."
-            : item.Detail;
-        var text = Parts.Text(detail, 14, "T.Muted");
+        var title = new Grid();
+        title.ColumnDefinitions.Add(new ColumnDefinition());
+        title.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        title.Children.Add(heading);
+        if (item.At is { } at)
+        {
+            var time = Parts.Text(Format.Moment(at, DateTimeOffset.Now), 12, "T.TextSoft");
+            time.Margin = new Thickness(12, 4, 0, 0);
+            time.VerticalAlignment = VerticalAlignment.Top;
+            Grid.SetColumn(time, 1);
+            title.Children.Add(time);
+        }
+        body.Children.Add(title);
+
+        var text = Parts.Text(item.Detail, 14, "T.Muted");
         text.TextWrapping = TextWrapping.Wrap;
         text.TextTrimming = TextTrimming.None;
         text.Margin = new Thickness(0, 4, 0, 0);
-        text.VerticalAlignment = VerticalAlignment.Top;
+        body.Children.Add(text);
 
-        var head = new Grid();
-        head.ColumnDefinitions.Add(new ColumnDefinition());
-        head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        var words = new StackPanel();
-        if (join)
+        var row = new Grid { Margin = new Thickness(0, 12, 0, 0) };
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        row.ColumnDefinitions.Add(new ColumnDefinition());
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        if (item.Kind == AttentionKind.Join && item.Code is { Length: > 0 } code)
         {
-            var title = new Grid();
-            title.ColumnDefinitions.Add(new ColumnDefinition());
-            title.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            title.Children.Add(heading);
-            if (item.At is { } at)
-            {
-                var time = Parts.Text(Format.Moment(at, DateTimeOffset.Now), 12, "T.TextSoft");
-                time.Margin = new Thickness(12, 4, 0, 0);
-                time.VerticalAlignment = VerticalAlignment.Top;
-                Grid.SetColumn(time, 1);
-                title.Children.Add(time);
-            }
-            words.Children.Add(title);
+            var chip = new Border { Height = 44, Padding = new Thickness(16, 0, 16, 0), CornerRadius = new CornerRadius(14) };
+            chip.SetResourceReference(Border.BackgroundProperty, "T.Chip");
+            var line = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+            line.Children.Add(Parts.Text("Code on " + ComputerOf(item.Title), 12, "T.Muted", FontWeights.SemiBold));
+            var big = Parts.Text(string.Join(' ', code.Select(c => c.ToString())), 20, "T.Text", FontWeights.ExtraBold);
+            big.Margin = new Thickness(14, 0, 0, 0);
+            big.ToolTip = code;
+            System.Windows.Automation.AutomationProperties.SetName(big, "Code " + code);
+            line.Children.Add(big);
+            chip.Child = line;
+            row.Children.Add(chip);
         }
-        else
-        {
-            words.Children.Add(heading);
-            var button = ActionButton(item, primary: false);
-            button.Height = 34;
-            button.FontSize = 13;
-            button.Margin = new Thickness(16, 0, 0, 0);
-            Pg.SetRadius(button, new CornerRadius(11));
-            button.VerticalAlignment = VerticalAlignment.Top;
-            Grid.SetColumn(button, 1);
-            head.Children.Add(button);
-        }
-        words.Children.Add(text);
-        head.Children.Add(words);
-        Grid.SetColumnSpan(words, join ? 2 : 1);
-        body.Children.Add(head);
-
-        if (join)
-        {
-            var row = new Grid { Margin = new Thickness(0, 12, 0, 0) };
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            row.ColumnDefinitions.Add(new ColumnDefinition());
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            if (item.Code is { Length: > 0 } code)
-            {
-                var chip = new Border { Height = 44, Padding = new Thickness(16, 0, 16, 0), CornerRadius = new CornerRadius(14) };
-                chip.SetResourceReference(Border.BackgroundProperty, "T.Chip");
-                var line = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
-                line.Children.Add(Parts.Text("Code on " + ComputerOf(item.Title), 12, "T.Muted", FontWeights.SemiBold));
-                var big = Parts.Text(string.Join(' ', code.Select(c => c.ToString())), 20, "T.Text", FontWeights.ExtraBold);
-                big.Margin = new Thickness(14, 0, 0, 0);
-                big.ToolTip = code;
-                System.Windows.Automation.AutomationProperties.SetName(big, "Code " + code);
-                line.Children.Add(big);
-                chip.Child = line;
-                row.Children.Add(chip);
-            }
-            var action = ActionButton(item, primary: false);
-            Grid.SetColumn(action, 2);
-            row.Children.Add(action);
-            body.Children.Add(row);
-        }
+        // A computer asking to join is the one decision with a main (blue) button; the others open the folder.
+        var action = ActionButton(item, primary: item.Kind == AttentionKind.Join);
+        action.Height = 38;
+        Grid.SetColumn(action, 2);
+        row.Children.Add(action);
+        body.Children.Add(row);
 
         var grid = new Grid();
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });

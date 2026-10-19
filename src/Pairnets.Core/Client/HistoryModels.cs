@@ -77,6 +77,9 @@ public sealed record VersionRow(string Path, HistoryVersion Version, string Titl
         }
         return rows;
     }
+
+    /// <summary>"4 older versions" above the list (the current version is not counted).</summary>
+    public static string CountText(int older) => older == 1 ? "1 older version" : $"{older} older versions";
 }
 
 /// <summary>Where the History page gets its data: the running session (or sample data in tests).</summary>

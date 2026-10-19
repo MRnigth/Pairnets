@@ -424,7 +424,7 @@ public sealed class TrayController : ITrayActions, IDisposable
             return items;
         foreach (var join in status.JoinRequests)
         {
-            items.Add(new AttentionItem(join.Title, $"Code {join.Code}. Check that it matches the code on that computer, then allow or deny it on your nest.",
+            items.Add(new AttentionItem(join.Title, join.Advice,
                 "Review in browser", () => ReviewJoin(join), AttentionKind.Join, join.Code, join.At));
         }
         if (status.FixLabel is not null)
@@ -842,7 +842,7 @@ public sealed class TrayController : ITrayActions, IDisposable
         if (session.Status.ServerSpaceLow && !_lowSpaceNoticed)
         {
             _lowSpaceNoticed = true;
-            Toast("disk", "The server is running out of space", $"{session.Status.ServerFreeText}. Free up space on the server or delete old history.", Forms.ToolTipIcon.Warning, ShowMainWindow);
+            Toast("disk", "Your nest is running out of space", $"{session.Status.ServerFreeText}. Free up space on your nest or delete old history.", Forms.ToolTipIcon.Warning, ShowMainWindow);
         }
         if (!session.ServerNeedsUpdate(info) || _serverPromptShownFor == info.ServerVersion)
             return;

@@ -19,7 +19,7 @@
         </Grid>
         <TextBlock Text="Nothing needs you" FontSize="22" FontWeight="ExtraBold" HorizontalAlignment="Center" Margin="0,14,0,0" />
         <TextBlock Style="{StaticResource PgSub}" HorizontalAlignment="Center" TextAlignment="Center" MaxWidth="420" Margin="0,8,0,0"
-                   Text="Conflicts, new computers and files Pairnets can't sync show up here. Everything is syncing fine." />
+                   Text="Conflicts, computers asking to join and files Pairnets can't sync show up here. Everything is in order." />
       </StackPanel>
     </StackPanel>
   </ScrollViewer>
