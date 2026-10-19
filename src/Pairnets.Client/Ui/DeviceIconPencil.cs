@@ -43,17 +43,17 @@ public sealed class DeviceIconPencil : Button
 
     public DeviceIconPencil()
     {
-        Width = 20;
-        Height = 20;
+        Width = 24;
+        Height = 24;
         HorizontalAlignment = HorizontalAlignment.Left;
         VerticalAlignment = VerticalAlignment.Top;
-        Margin = new Thickness(-6, -6, 0, 0);
+        Margin = new Thickness(-8, -8, 0, 0); // the same middle as the old 20 px disc
         Cursor = Cursors.Hand;
         SetResourceReference(FocusVisualStyleProperty, "FocusRingRound");
         Template = new ControlTemplate(typeof(Button)) { VisualTree = new FrameworkElementFactory(typeof(ContentPresenter)) };
         var pencil = new LineIcon { Width = 10, Height = 10, StrokeThickness = 2.6, Data = Geometry.Parse("M4,20 L8,20 L19,9 L15,5 L4,16 Z") };
         pencil.SetResourceReference(LineIcon.StrokeProperty, "T.Muted");
-        var disc = new Border { CornerRadius = new CornerRadius(10), BorderThickness = new Thickness(1), Child = pencil };
+        var disc = new Border { CornerRadius = new CornerRadius(12), BorderThickness = new Thickness(1), Child = pencil };
         disc.SetResourceReference(Border.BackgroundProperty, "T.Card");
         disc.SetResourceReference(Border.BorderBrushProperty, "T.Border");
         pencil.HorizontalAlignment = HorizontalAlignment.Center;

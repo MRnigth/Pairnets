@@ -73,7 +73,7 @@
                   <TextBlock x:Name="UpdateTitle" Grid.Column="1" FontWeight="ExtraBold" FontSize="13" TextWrapping="Wrap" VerticalAlignment="Center" />
                   <TextBlock x:Name="UpdatePercent" Grid.Column="2" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource T.AccentInk}" VerticalAlignment="Center" Margin="8,0,4,0" Visibility="Collapsed" />
                   <Button x:Name="UpdateButton" Grid.Column="3" Style="{StaticResource AccentButton}" Height="30" MinHeight="30" Padding="12,0" FontSize="12" Margin="8,0,0,0" Content="Update" Click="OnUpdateNow" />
-                  <Button x:Name="UpdateLater" Grid.Column="4" Style="{StaticResource RoundIconButton}" Width="26" Height="26" MinWidth="26" MinHeight="26" Margin="4,0,0,0"
+                  <Button x:Name="UpdateLater" Grid.Column="4" Style="{StaticResource RoundIconButton}" Width="28" Height="28" MinWidth="28" MinHeight="28" Margin="8,0,0,0"
                           Background="Transparent" ToolTip="Later" AutomationProperties.Name="Later" Click="OnUpdateLater">
                     <ui:LineIcon Width="12" Height="12" StrokeThickness="2.4" Stroke="{DynamicResource T.Muted}" Data="{StaticResource I.Close}" />
                   </Button>
@@ -187,7 +187,7 @@
                     </Grid.ColumnDefinitions>
                     <TextBlock x:Name="GroupTitle" Text="Other computers" FontWeight="ExtraBold" VerticalAlignment="Center" Margin="0,0,8,0" />
                     <TextBlock x:Name="GroupNote" Grid.Column="1" Style="{StaticResource SoftText}" VerticalAlignment="Center" HorizontalAlignment="Right" TextTrimming="CharacterEllipsis" Margin="0,0,8,0" />
-                    <Button x:Name="GroupFold" Grid.Column="2" Style="{StaticResource RoundIconButton}" Width="24" Height="24" MinWidth="24" MinHeight="24"
+                    <Button x:Name="GroupFold" Grid.Column="2" Style="{StaticResource RoundIconButton}" Width="28" Height="28" MinWidth="28" MinHeight="28"
                             Background="Transparent" ToolTip="Fold the group" AutomationProperties.Name="Fold the group" Click="OnFoldGroup">
                       <ui:LineIcon x:Name="GroupFoldIcon" Width="14" Height="14" StrokeThickness="2.4" Stroke="{DynamicResource T.Muted}" Data="{StaticResource I.ChevronUp}" />
                     </Button>
@@ -233,7 +233,7 @@
                 </RadioButton>
                 <Border x:Name="DockBadge" Width="20" Height="20" CornerRadius="10" BorderThickness="2" BorderBrush="{DynamicResource T.Card}" Background="{DynamicResource T.NeedsActive}"
                         HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-2,-2,0" IsHitTestVisible="False" Visibility="Collapsed">
-                  <TextBlock x:Name="DockBadgeText" Foreground="{DynamicResource T.NeedsActiveText}" FontSize="10" FontWeight="ExtraBold" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                  <TextBlock x:Name="DockBadgeText" Foreground="{DynamicResource T.NeedsActiveText}" FontSize="11" FontWeight="ExtraBold" HorizontalAlignment="Center" VerticalAlignment="Center" />
                 </Border>
               </Grid>
               <RadioButton x:Name="DockHistory" Style="{StaticResource DockPage}" GroupName="dock" ToolTip="History" AutomationProperties.Name="History" Checked="OnNav">

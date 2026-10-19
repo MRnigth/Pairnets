@@ -237,7 +237,7 @@ public partial class MainWindow
 
         var name = new TextBlock { Text = o.Name, FontSize = 11, FontWeight = FontWeights.ExtraBold, MaxWidth = 82, TextTrimming = TextTrimming.CharacterEllipsis, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 3, 0, 0) };
         name.SetResourceReference(TextBlock.ForegroundProperty, reachable ? "T.Text" : "T.Muted");
-        var sub = new TextBlock { Text = o.Text, FontSize = 10, FontWeight = FontWeights.Bold, MaxWidth = 82, TextTrimming = TextTrimming.CharacterEllipsis, HorizontalAlignment = HorizontalAlignment.Center };
+        var sub = new TextBlock { Text = o.Text, FontSize = 11, FontWeight = FontWeights.Bold, MaxWidth = 82, TextTrimming = TextTrimming.CharacterEllipsis, HorizontalAlignment = HorizontalAlignment.Center };
         sub.SetResourceReference(TextBlock.ForegroundProperty, o.Kind switch
         {
             OtherKind.Live => "T.AccentInk",
