@@ -235,7 +235,7 @@ public partial class MainWindow : Window, IPageHost
         {
             MainPage.Activity => ("Activity", "What synced recently, newest first. Right-click a file for more."),
             MainPage.History => ("History", "Get back deleted files and older versions. Your nest keeps them for 30 days."),
-            MainPage.Devices => ("Devices", "Every computer on your nest, and the nest itself."),
+            MainPage.Devices => ("Computers", "Every computer on your nest, and the nest itself."),
             MainPage.Attention => ("Needs you", "Things only you can decide."),
             MainPage.Settings => ("Settings", "Your nest, the folder, and how Pairnets behaves on this computer."),
             MainPage.Account => ("Account", "Who is signed in on this computer, and when Pairnets should tell you things."),

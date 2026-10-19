@@ -713,7 +713,7 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
         On("Activity", "show the Activity page", OnPage(MainPage.Activity)),
         On("History", "show the History page and read the server's files",
             c => OnPage(MainPage.History)(c) && (c.WasChecked == true || c.Bench.History.Reads.Items.Contains("files"))),
-        On("Devices", "show the Devices page and ask the server for its computers",
+        On("Computers", "show the Computers page and ask the server for its computers",
             c => OnPage(MainPage.Devices)(c) && (c.WasChecked == true || Called("RefreshDevices")(c))),
         new(t => t.Label.StartsWith("Needs you", StringComparison.Ordinal), "show the Needs attention page", OnPage(MainPage.Attention)),
         On("Settings", "ask the app for the Settings page", Called("ShowSettings")),
@@ -739,7 +739,7 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
         new(t => t.Label.StartsWith("Allow these deletions", StringComparison.Ordinal), "ask about the blocked deletions", Called("FixBlocked")),
         On("Download now anyway", "stop waiting for the other computer", Called("DownloadNow")),
         On("Review", "show the Needs attention page", OnPage(MainPage.Attention)),
-        On(["Update server…", "Check for update"], "open the server update window", Called("UpdateServer")),
+        On(["Update nest…", "Check for update"], "open the server update window", Called("UpdateServer")),
         On(["See all", "See all in Activity"], "show the Activity page", OnPage(MainPage.Activity)),
         On("See the full list", "show the Needs attention page", OnPage(MainPage.Attention)),
         new(t => t.Label.StartsWith("+", StringComparison.Ordinal) && t.Label.EndsWith(" more", StringComparison.Ordinal), "show the Devices page", OnPage(MainPage.Devices)),
@@ -759,7 +759,7 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
 
         // Devices.
         On("Add a computer…", "explain how to add a computer", Called("AddComputer")),
-        On("Manage devices on your nest", "open the nest's Devices page", Called("ManageDevices")),
+        On("Manage computers on your nest", "open the nest's Devices page", Called("ManageDevices")),
     ];
 
     // ------------------------------------------------------------------ Settings

@@ -113,7 +113,7 @@
               </RadioButton>
               <RadioButton x:Name="NavDevices" Style="{StaticResource SideTile}" GroupName="page" Checked="OnNav">
                 <Grid>
-                  <TextBlock Text="Devices" VerticalAlignment="Bottom" FontSize="14" />
+                  <TextBlock Text="Computers" VerticalAlignment="Bottom" FontSize="14" />
                   <ui:LineIcon Data="{StaticResource I.Desktop}" />
                   <TextBlock x:Name="DevicesNote" HorizontalAlignment="Right" VerticalAlignment="Top" FontSize="13" />
                 </Grid>
@@ -239,7 +239,7 @@
               <RadioButton x:Name="DockHistory" Style="{StaticResource DockPage}" GroupName="dock" ToolTip="History" AutomationProperties.Name="History" Checked="OnNav">
                 <ui:LineIcon Data="{StaticResource I.History}" />
               </RadioButton>
-              <RadioButton x:Name="DockDevices" Style="{StaticResource DockPage}" GroupName="dock" ToolTip="Devices" AutomationProperties.Name="Devices" Checked="OnNav">
+              <RadioButton x:Name="DockDevices" Style="{StaticResource DockPage}" GroupName="dock" ToolTip="Computers" AutomationProperties.Name="Computers" Checked="OnNav">
                 <ui:LineIcon Data="{StaticResource I.Desktop}" />
               </RadioButton>
               <Border Style="{StaticResource Divider}" Width="24" Margin="0,4" />

@@ -414,9 +414,9 @@ public sealed class TrayControllerTests
         Assert.False(await app.Wpf.Ui(() => ask.IsVisible));
         Assert.Equal((null, false), (app.SavedSettings.SkippedServerVersion, app.SavedSettings.AutoUpdateServer));
 
-        // "Update server…" on the overview asks again; this test nest has no updater, so it needs the one-time setup.
+        // "Update nest…" on the overview asks again; this test nest has no updater, so it needs the one-time setup.
         var main = app.Tray.Window!;
-        await app.Press(main, "Update server…");
+        await app.Press(main, "Update nest…");
         var update = await app.Showing<ServerUpdateWindow>("the server update window");
         await app.Press(update, "Update the nest");
         await app.WaitUntil(() => update.CommandPanel.IsVisible, "the one-time setup the nest needs");
@@ -425,12 +425,12 @@ public sealed class TrayControllerTests
         Assert.Contains("get.sh | sudo bash", Assert.Single(app.Dialogs.Copied.Items));
         await app.Press(update, "Close");
 
-        await app.Press(main, "Update server…");
+        await app.Press(main, "Update nest…");
         var skip = await app.Showing<ServerUpdateWindow>("the server update window");
         await app.Press(skip, "Don’t ask for this version");
         await app.WaitUntil(() => app.SavedSettings.SkippedServerVersion == "0.9.0", "the skipped version to be saved");
 
-        await app.Press(main, "Update server…");
+        await app.Press(main, "Update nest…");
         var always = await app.Showing<ServerUpdateWindow>("the server update window");
         await app.Press(always, "From now on, update the nest by itself");
         await app.Press(always, "Not now");
@@ -536,12 +536,12 @@ public sealed class TrayControllerTests
         await app.WaitUntil(() => app.Tray.Session!.Status.NestUrl == "https://localhost", "the app to learn the nest's own name");
         var main = app.Tray.Window!;
 
-        await app.Press(main, "Devices");
+        await app.Press(main, "Computers");
         await app.WaitUntil(() => main.DevicesPane.Cards.Any(c => c.NameLabel.Contains("DESKTOP", StringComparison.Ordinal)), "this computer in the Devices grid");
         await app.Press(main, "Add a computer…");
         var steps = Assert.Single(app.Dialogs.Asked.Items);
         Assert.Contains("type localhost and press \"Sign in with your browser\"", steps.Text);
-        await app.Press(main, "Manage devices on your nest");
+        await app.Press(main, "Manage computers on your nest");
         Assert.Equal("https://localhost/devices", app.Platform.Opened.Items[^1]);
 
         await app.Press(main, "Overview"); // the "…" menu belongs to the Overview's header

@@ -573,7 +573,7 @@ public sealed class DesktopControllerTests
         Assert.Contains("type localhost and press \"Sign in with your browser\"", AppUnderTest.TextOf(steps));
         await app.AnswerAsync("Pairnets – add a computer", "OK");
 
-        Person.Click(Screen.Find<Button>(main, "Manage devices on your nest"));
+        Person.Click(Screen.Find<Button>(main, "Manage computers on your nest"));
         Assert.Equal("https://localhost/devices", app.Platform.Opened[^1]);
 
         app.Open("Overview"); // the "More" menu is in the Overview's header (every other page draws its own)

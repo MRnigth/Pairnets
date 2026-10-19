@@ -51,7 +51,7 @@ public class SidePanelModelTests
     public void SyncingShowsTheBarTheSpeedAndTheLiveComputers()
     {
         var m = Build(SyncingNow());
-        Assert.Equal("This one · sending 4.90 MB/s", m.This.Text);
+        Assert.Equal("This one · uploading 4.90 MB/s", m.This.Text);
         Assert.Equal(SideTone.Accent, m.This.Tone);
         Assert.True(m.This.Highlighted);
         Assert.Equal(SideDot.Ok, m.This.Dot);
@@ -65,9 +65,9 @@ public class SidePanelModelTests
         var laptop = m.Others.Single(o => o.Name == "LAPTOP");
         Assert.Equal("↓ 4.10 MB/s", laptop.Text);
         Assert.Equal(OtherKind.Live, laptop.Kind);
-        Assert.Equal("LAPTOP, online, getting files at 4.10 MB/s", laptop.Tooltip);
+        Assert.Equal("LAPTOP, online, downloading at 4.10 MB/s", laptop.Tooltip);
         Assert.Equal("↓ 2.60 MB/s", m.Others.Single(o => o.Name == "MINI-PC").Text);
-        Assert.Equal("DESKTOP, this computer, sending 4.90 MB/s", m.This.Tooltip);
+        Assert.Equal("DESKTOP, this computer, uploading 4.90 MB/s", m.This.Tooltip);
     }
 
     [Fact]
@@ -87,8 +87,9 @@ public class SidePanelModelTests
         Assert.Equal(SideTone.Neutral, m.This.Tone);
         Assert.False(m.This.Highlighted);
         Assert.False(m.This.ShowBar);
-        Assert.Equal("Done", m.Tiles.OverviewNote);
-        Assert.Equal(["in sync", "in sync", "can’t reach", "can’t reach", "can’t reach"], m.Others.Select(o => o.Text));
+        Assert.Equal("Up to date", m.Tiles.OverviewNote);
+        Assert.Equal(["in sync", "in sync", "off since " + Presences.Since(Now.AddDays(-2), Now), "off since " + Presences.Since(Now.AddDays(-3), Now), "off since " + Presences.Since(Now.AddDays(-4), Now)],
+            m.Others.Select(o => o.Text));
         Assert.Equal(OtherKind.Ok, m.Others[0].Kind);
     }
 
@@ -104,7 +105,7 @@ public class SidePanelModelTests
         Assert.Equal("This one · waits for LAPTOP", m.This.Text);
         Assert.Equal(SideDot.Ok, m.This.Dot);
         Assert.False(m.This.Highlighted);
-        Assert.Equal("Wait", m.Tiles.OverviewNote);
+        Assert.Equal("Waiting", m.Tiles.OverviewNote);
         Assert.Equal("↑ 3.80 MB/s", m.Others[0].Text);
         Assert.Equal("LAPTOP", m.Others[0].Name);
         Assert.Equal("next", m.Others[1].Text);
@@ -119,7 +120,7 @@ public class SidePanelModelTests
         Assert.Equal("This one · stopped to be safe", m.This.Text);
         Assert.Equal(SideDot.Warn, m.This.Dot);
         Assert.Equal(SideTone.Warn, m.This.Tone);
-        Assert.Equal("Stop", m.Tiles.OverviewNote);
+        Assert.Equal("Stopped", m.Tiles.OverviewNote);
         Assert.Equal("online", m.Others[0].Text);
         Assert.Equal(OtherKind.Online, m.Others[0].Kind);
         Assert.Equal(SideTone.Neutral, m.Nest.Tone);
@@ -131,7 +132,7 @@ public class SidePanelModelTests
         var m = Build(Base(RunnerStatus.Blocked) with { BlockReason = BlockReason.SignInRequired });
         Assert.Equal("This one · needs to sign in", m.This.Text);
         Assert.Equal(SideDot.Warn, m.This.Dot);
-        Assert.Equal("Sign in", m.Tiles.OverviewNote);
+        Assert.Equal("Not signed in", m.Tiles.OverviewNote);
         Assert.Equal("Waiting for you to sign in", m.Nest.Text);
         Assert.Equal(SideDot.Warn, m.Nest.Dot);
         Assert.Equal(SideTone.Warn, m.Nest.Tone);
@@ -144,7 +145,7 @@ public class SidePanelModelTests
         Assert.Equal("This one · signed out", m.This.Text);
         Assert.Equal(SideDot.Bad, m.This.Dot);
         Assert.Equal(SideTone.Bad, m.This.Tone);
-        Assert.Equal("Off", m.Tiles.OverviewNote);
+        Assert.Equal("Signed out", m.Tiles.OverviewNote);
         Assert.Equal("This computer was removed", m.Nest.Text);
         Assert.Equal(SideDot.Bad, m.Nest.Dot);
         Assert.Equal(SideTone.Bad, m.Nest.Tone);
@@ -159,7 +160,7 @@ public class SidePanelModelTests
         Assert.Equal("Signed out", m.Nest.Text);
         Assert.Equal((SideDot.Off, SideTone.Neutral), (m.Nest.Dot, m.Nest.Tone));
         Assert.Equal("signed out", m.GroupNote);
-        Assert.Equal("Off", m.Tiles.OverviewNote);
+        Assert.Equal("Signed out", m.Tiles.OverviewNote);
     }
 
     [Fact]
@@ -171,11 +172,11 @@ public class SidePanelModelTests
         Assert.Equal("This one · offline", m.This.Text);
         Assert.Equal(SideDot.Off, m.This.Dot);
         Assert.False(m.This.Highlighted);
-        Assert.Equal("Off", m.Tiles.OverviewNote);
+        Assert.Equal("Offline", m.Tiles.OverviewNote);
         Assert.Equal("Can’t reach it · trying again", m.Nest.Text);
         Assert.Equal(SideDot.Bad, m.Nest.Dot);
         Assert.Equal("can’t check now", m.GroupNote);
-        Assert.Equal("offline", m.Tiles.DevicesNote);
+        Assert.Equal("Offline", m.Tiles.DevicesNote);
         Assert.All(m.Others, o => Assert.Equal(OtherKind.LastSeen, o.Kind));
         Assert.Equal("seen " + Now.AddMinutes(-75).ToLocalTime().ToString("HH:mm"), m.Others[0].Text);
         Assert.False(m.Others[0].Reachable);
@@ -203,7 +204,7 @@ public class SidePanelModelTests
         Assert.Equal("This one · folder is missing", m.This.Text);
         Assert.Equal(SideDot.Warn, m.This.Dot);
         Assert.Equal(SideTone.Warn, m.This.Tone);
-        Assert.Equal("Stop", m.Tiles.OverviewNote);
+        Assert.Equal("Stopped", m.Tiles.OverviewNote);
     }
 
     // ------------------------------------------------------------------ the group of other computers
@@ -212,14 +213,32 @@ public class SidePanelModelTests
     public void TheGroupSaysHowManyAreOnlineAndPutsThemFirst()
     {
         var m = Build(Base());
-        Assert.Equal("2 of 5 online", m.GroupNote);
+        // One phrase, this computer included, in the group and on the tile (and on the Computers page).
+        Assert.Equal("3 of 6 online", m.GroupNote);
         Assert.Equal(["LAPTOP", "MINI-PC", "MEDIA-PC", "OFFICE-PC", "KITCHEN-PC"], m.Others.Select(o => o.Name));
         Assert.Equal(0, m.MoreCount);
         Assert.False(m.ShowsMore);
-        Assert.Equal("3 on", m.Tiles.DevicesNote);
-        Assert.Equal(OtherKind.CantReach, m.Others[2].Kind);
-        Assert.Equal(SideDot.Bad, m.Others[2].Dot);
-        Assert.Equal("MEDIA-PC, can’t be reached", m.Others[2].Tooltip);
+        Assert.Equal("3 of 6 online", m.Tiles.DevicesNote);
+        // Switched off is grey and dashed, with words.
+        Assert.Equal(OtherKind.Off, m.Others[2].Kind);
+        Assert.Equal(SideDot.Off, m.Others[2].Dot);
+        Assert.False(m.Others[2].Reachable);
+        Assert.StartsWith("MEDIA-PC, off since ", m.Others[2].Tooltip, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void OnlyAComputerThatVanishedWhileMovingFilesCantBeReached()
+    {
+        var s = Base() with
+        {
+            Peers = new Dictionary<string, PeerActivity> { ["MEDIA-PC"] = new(new TransferReport(0, 2 * MB, 3, 30, 0, 0), Now.AddMinutes(-10), 0, null) },
+            Devices = [Device("DESKTOP", true), Device("MEDIA-PC", false, TimeSpan.FromMinutes(10)), Device("OFFICE-PC", false, TimeSpan.FromDays(1))],
+        };
+        var m = Build(s);
+        var media = m.Others.Single(o => o.Name == "MEDIA-PC");
+        Assert.Equal((OtherKind.CantReach, "can’t reach", SideDot.Bad), (media.Kind, media.Text, media.Dot));
+        var office = m.Others.Single(o => o.Name == "OFFICE-PC");
+        Assert.Equal((OtherKind.Off, "off since yesterday", SideDot.Off), (office.Kind, office.Text, office.Dot));
     }
 
     [Fact]
@@ -234,7 +253,7 @@ public class SidePanelModelTests
         Assert.Equal(3, m.MoreCount);
         Assert.Equal("+3", m.MoreText);
         Assert.True(m.ShowsMore);
-        Assert.Equal("2 of 8 online", m.GroupNote);
+        Assert.Equal("3 of 9 online", m.GroupNote);
         Assert.Equal(["PC-1", "PC-2"], m.Others.Take(2).Select(o => o.Name)); // online first
         // The dock shows 2, then "+6" with the rest in its tooltip.
         Assert.Equal(2, m.DockOthers.Count);
@@ -266,7 +285,7 @@ public class SidePanelModelTests
         var m = Build(Base() with { Devices = null });
         Assert.Empty(m.AllOthers);
         Assert.Equal(string.Empty, m.Tiles.DevicesNote);
-        Assert.Equal("0 of 0 online", m.GroupNote);
+        Assert.Equal(string.Empty, m.GroupNote);
     }
 
     [Fact]

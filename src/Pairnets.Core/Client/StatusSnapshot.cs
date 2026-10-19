@@ -57,6 +57,9 @@ public sealed record JoinRequest(string Code, string Name, string System, DateTi
     /// </summary>
     public string Title => (System.Length > 0 ? $"{Name} ({System}) wants to join" : $"{Name} wants to join")
         + (Address is { Length: > 0 } ? $" from {Address}" : string.Empty);
+
+    /// <summary>The words on its card in Needs you, the same in both apps.</summary>
+    public string Advice => $"Allow it only if you are setting up {Name} right now. Its screen should show this same code. You allow or deny it on your nest.";
 }
 
 /// <summary>Everything a UI needs to draw the current state, as one immutable value.</summary>
@@ -409,7 +412,7 @@ public sealed record StatusSnapshot(
     /// <summary>Last known server info (version, free space, updater), or null before the first answer.</summary>
     public ServerInfo? Server { get; init; }
 
-    /// <summary>"412 GB free on server" or null when the server does not say.</summary>
+    /// <summary>"412 GB free on your nest" or null when the nest does not say.</summary>
     /// <summary>True once the server has answered and the connection is not currently down.</summary>
     public bool IsConnected => Status != RunnerStatus.Offline && (Server is not null || LastSyncAt is not null);
 
@@ -431,9 +434,9 @@ public sealed record StatusSnapshot(
         && (Server.ServerVersion is not { Length: > 0 } v || UpdateChecker.ServerIsOlder(v, PairnetsInfo.ProductVersion));
 
     /// <summary>The label of the button next to the server version.</summary>
-    public string ServerUpdateButtonText => ServerIsOlder ? "Update server…" : "Check for update";
+    public string ServerUpdateButtonText => ServerIsOlder ? "Update nest…" : "Check for update";
 
-    public string? ServerFreeText => Server?.DiskFreeBytes is { } free ? Format.Bytes(free) + " free on server" : null;
+    public string? ServerFreeText => Server?.DiskFreeBytes is { } free ? Format.Bytes(free) + " free on your nest" : null;
 
     /// <summary>Less than 5 GB or 5 % left on the server's disk.</summary>
     public bool ServerSpaceLow => Server is { DiskFreeBytes: { } free, DiskTotalBytes: { } total }

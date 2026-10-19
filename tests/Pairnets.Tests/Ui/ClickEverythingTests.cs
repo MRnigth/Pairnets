@@ -462,7 +462,7 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
         s.Expect["OnNav:Overview*"] = OnPage(w, MainPage.Overview);
         s.Expect["OnNav:Activity*"] = OnPage(w, MainPage.Activity);
         s.Expect["OnNav:History"] = All(OnPage(w, MainPage.History), That(() => w.HistoryRows == 4, "the deleted files show"));
-        s.Expect["OnNav:Devices*"] = All(OnPage(w, MainPage.Devices), Calls(a, "devices"));
+        s.Expect["OnNav:Computers*"] = All(OnPage(w, MainPage.Devices), Calls(a, "devices"));
         s.Expect["OnNav:Needs you*"] = OnPage(w, MainPage.Attention);
         s.Expect["OnFoldSide"] = That(() => w.SideFolded, "the left side fold into the dock");
         s.Expect["OnUnfoldSide"] = That(() => !w.SideFolded, "the left side open again");
