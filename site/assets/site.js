@@ -5,8 +5,11 @@
   const ua = navigator.userAgent || "";
   const platform = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || "";
   const text = `${platform} ${ua}`;
+  // iPads report "Macintosh" like a Mac; only the touch screen tells them apart.
+  const isPhone = /iPhone|iPad|Android/i.test(text) || (/Mac/i.test(text) && navigator.maxTouchPoints > 1);
   let target = null;
-  if (/iPhone|iPad|Android/i.test(text)) target = null; // computers only for now: phone app later
+  // Computers only for now (phone app later): phones and tablets go to the list of downloads to get it elsewhere.
+  if (isPhone) target = { href: "/#download", label: "Get it for your computer" };
   else if (/Win/i.test(text)) target = { href: "/download/windows", label: "Download for Windows" };
   else if (/Mac/i.test(text)) target = { href: "/download/mac-apple-silicon", label: "Download for Mac" };
   else if (/Linux|X11/i.test(text)) target = { href: "/download/linux", label: "Download for Linux" };
@@ -16,7 +19,7 @@
     button.textContent = target.label;
   }
   const note = document.getElementById("phone-note");
-  if (note && /iPhone|iPad|Android/i.test(text)) note.hidden = false;
+  if (note && isPhone) note.hidden = false;
 })();
 
 // Cookie notice: tells visitors Pairnets only uses the cookies needed to sign in. It is a notice, not a consent wall:
