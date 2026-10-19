@@ -147,6 +147,20 @@
     <Setter Property="CornerRadius" Value="18" />
     <Setter Property="Padding" Value="14,12" />
   </Style>
+  <!-- The tray panel's "needs you" strip (a flat button around this border) -->
+  <Style Selector="Button.strip > Border">
+    <Setter Property="Background" Value="{DynamicResource T.WarnPill}" />
+  </Style>
+  <Style Selector="Button.strip:pointerover > Border">
+    <Setter Property="Background" Value="{DynamicResource T.WarnPillHover}" />
+  </Style>
+  <Style Selector="Button.strip">
+    <Setter Property="FocusAdorner">
+      <FocusAdornerTemplate>
+        <Border Margin="-3" BorderThickness="2" CornerRadius="21" BorderBrush="{DynamicResource T.AccentInk}" />
+      </FocusAdornerTemplate>
+    </Setter>
+  </Style>
   <!-- Attention strip -->
   <Style Selector="Border.attention">
     <Setter Property="Background" Value="{DynamicResource T.WarnPill}" />
@@ -857,6 +871,9 @@
   <Style Selector="RadioButton.sidetile.amber /template/ Border#bd">
     <Setter Property="Background" Value="{DynamicResource T.WarnPill}" />
     <Setter Property="BorderBrush" Value="{DynamicResource T.WarnBorder}" />
+  </Style>
+  <Style Selector="RadioButton.sidetile.amber:pointerover /template/ Border#bd">
+    <Setter Property="Background" Value="{DynamicResource T.WarnPillHover}" />
   </Style>
   <Style Selector="RadioButton.sidetile.amber:checked">
     <Setter Property="Foreground" Value="{DynamicResource T.NeedsActiveText}" />

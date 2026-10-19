@@ -626,14 +626,36 @@
     <Setter Property="Background" Value="{DynamicResource T.WarnPill}" />
     <Setter Property="BorderBrush" Value="{DynamicResource T.WarnBorder}" />
     <Setter Property="BorderThickness" Value="1" />
-    <Setter Property="CornerRadius" Value="16" />
-    <Setter Property="Padding" Value="16,12" />
+    <Setter Property="CornerRadius" Value="14" />
+    <Setter Property="Padding" Value="14,10" />
   </Style>
 
-  <!-- The soft square behind an icon (34 px, radius 11). -->
+  <!-- The tray panel's "needs you" strip: a warm button the keyboard can reach too -->
+  <Style x:Key="AttentionStrip" TargetType="Button">
+    <Setter Property="Height" Value="44" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+    <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRingTile}" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="Button">
+          <Border x:Name="bd" CornerRadius="16" Background="{DynamicResource T.WarnPill}" BorderBrush="{DynamicResource T.WarnBorder}" BorderThickness="1">
+            <ContentPresenter VerticalAlignment="Center" />
+          </Border>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+              <Setter TargetName="bd" Property="Background" Value="{DynamicResource T.WarnPillHover}" />
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <!-- The soft square behind an icon (36 px, radius 11). -->
   <Style x:Key="IconSquare" TargetType="Border">
-    <Setter Property="Width" Value="34" />
-    <Setter Property="Height" Value="34" />
+    <Setter Property="Width" Value="36" />
+    <Setter Property="Height" Value="36" />
     <Setter Property="CornerRadius" Value="11" />
     <Setter Property="Background" Value="{DynamicResource T.Chip}" />
   </Style>
@@ -746,6 +768,9 @@
             <ContentPresenter />
           </Border>
           <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+              <Setter TargetName="bd" Property="Background" Value="{DynamicResource T.WarnPillHover}" />
+            </Trigger>
             <Trigger Property="IsChecked" Value="True">
               <Setter TargetName="bd" Property="Background" Value="{DynamicResource T.NeedsActive}" />
               <Setter TargetName="bd" Property="BorderBrush" Value="{DynamicResource T.NeedsActive}" />
