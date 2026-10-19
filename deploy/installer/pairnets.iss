@@ -50,9 +50,10 @@ Filename: "{app}\Pairnets.exe"; Description: "Start Pairnets now"; Flags: nowait
 Filename: "{app}\Pairnets.exe"; Flags: nowait; Check: WizardSilent
 
 [UninstallRun]
-; First take Pairnets out of File Explorer (left side, right-click items, the folder's icon); the files stay.
+; Stop Pairnets, then take it out of File Explorer (left side, right-click items, the folder's icon, the cloud folder);
+; the files stay.
+Filename: "{cmd}"; Parameters: "/C taskkill /IM Pairnets.exe /F"; Flags: runhidden waituntilterminated; RunOnceId: "StopPairnets"
 Filename: "{app}\Pairnets.exe"; Parameters: "--unregister-explorer"; Flags: runhidden waituntilterminated; RunOnceId: "LeaveExplorer"
-Filename: "{cmd}"; Parameters: "/C taskkill /IM Pairnets.exe /F"; Flags: runhidden; RunOnceId: "StopPairnets"
 
 [Code]
 const
@@ -80,7 +81,7 @@ var
   ResultCode: Integer;
 begin
   Result := True;
-  if FileExists(ExpandConstant('{app}\Pairnets.exe')) then
+  if (not UninstallSilent()) and FileExists(ExpandConstant('{app}\Pairnets.exe')) then
     if Exec(ExpandConstant('{app}\Pairnets.exe'), '--check-before-uninstall', '', SW_SHOWNORMAL, ewWaitUntilTerminated, ResultCode) then
       Result := ResultCode <> 1;
 end;

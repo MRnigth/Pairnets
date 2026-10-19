@@ -804,13 +804,12 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
     }
 
     /// <summary>
-    /// The version of a file that is the same here and on the nest, from the notes alone, or null when it is not synced
-    /// (what Explorer's tick stands for).
+    /// The version of a file (by sync path) that is the same here and on the nest, from the notes alone, or null when it
+    /// is not synced (what Explorer's tick stands for).
     /// </summary>
-    public string? SyncedHash(string fullPath) =>
-        FileStatusReader.IsSynced(Settings.Folder ?? string.Empty, fullPath, State)
-        && FileStatusReader.ToSyncPath(Settings.Folder ?? string.Empty, fullPath) is { Length: > 0 } rel
-            ? State.GetFile(rel)?.BaseHash
+    public string? SyncedHash(string syncPath) =>
+        syncPath.Length > 0 && FileStatusReader.IsSynced(Settings.Folder ?? string.Empty, Path.Combine(Settings.Folder ?? string.Empty, PathRules.ToOsRelative(syncPath)), State)
+            ? State.GetFile(syncPath)?.BaseHash
             : null;
 
     /// <summary>

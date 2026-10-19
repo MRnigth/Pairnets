@@ -32,6 +32,7 @@ internal static class CfApi
     public const int CreateFlagMarkInSync = 0x2;
     public const int CreateFlagSupersede = 0x4;
 
+    public const int UpdateFlagVerifyInSync = 0x1;
     public const int UpdateFlagMarkInSync = 0x2;
     public const int UpdateFlagDehydrate = 0x4;
 
@@ -44,6 +45,7 @@ internal static class CfApi
     public const int SetPinFlagRecurse = 0x1;
 
     public const int OpenFlagNone = 0x0;
+    public const int OpenFlagExclusive = 0x1;
     public const int OpenFlagWriteAccess = 0x2;
 
     // ---- NTSTATUS answers in the cloud range (anything else counts as "unsuccessful")
@@ -53,6 +55,7 @@ internal static class CfApi
     public const int StatusCloudFileUnsuccessful = unchecked((int)0xC000CF12);
     public const int StatusCloudFileNotSupported = unchecked((int)0xC000CF09);
     public const int StatusCloudFileRequestCanceled = unchecked((int)0xC000CF1B);
+    public const int StatusCloudFileDehydrationDisallowed = unchecked((int)0xC000CF20);
 
     /// <summary>The length that means "to the end of the file".</summary>
     public const long Eof = -1;
@@ -233,6 +236,14 @@ internal static class CfApi
 
     [DllImport(Dll, ExactSpelling = true)]
     public static extern int CfDehydratePlaceholder(IntPtr fileHandle, long startingOffset, long length, int dehydrateFlags, IntPtr overlapped);
+
+    /// <summary>CF_PLACEHOLDER_INFO_BASIC, and where CF_PLACEHOLDER_BASIC_INFO keeps the identity's length and bytes.</summary>
+    public const int PlaceholderInfoBasic = 0;
+    public const int BasicInfoIdentityLengthOffset = 24;
+    public const int BasicInfoIdentityOffset = 28;
+
+    [DllImport(Dll, ExactSpelling = true)]
+    public static extern int CfGetPlaceholderInfo(IntPtr fileHandle, int infoClass, byte[] infoBuffer, int infoBufferLength, out int returnedLength);
 
     /// <summary>The placeholder state flags (CF_PLACEHOLDER_STATE) from a file's attributes and reparse tag.</summary>
     [DllImport(Dll, ExactSpelling = true)]

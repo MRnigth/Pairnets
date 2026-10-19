@@ -23,6 +23,10 @@ namespace Pairnets.Client.Platform.CloudFiles;
 /// <see cref="LeaveAsync"/> they become plain files again. Windows calls back here when someone opens a file whose
 /// content is on the nest (<see cref="Fetch"/> downloads it), and when it wants to free space on the drive.
 /// </para>
+/// <para>
+/// Each placeholder carries the version it stands for and the path it had on the nest then ("hash\npath"), so a file
+/// still on the nest can always be fetched, even after it was renamed or moved here.
+/// </para>
 /// </summary>
 public sealed class WindowsCloudFolder : ICloudFolder
 {
@@ -34,8 +38,13 @@ public sealed class WindowsCloudFolder : ICloudFolder
     private readonly string _root;
     private readonly ILogger _log;
     private readonly ConcurrentDictionary<long, CancellationTokenSource> _fetches = new();
-    private readonly ConcurrentDictionary<string, byte> _pinWork = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, byte> _pinQueue = new(StringComparer.OrdinalIgnoreCase);
+    private readonly SemaphoreSlim _pinSignal = new(0);
+    private readonly CancellationTokenSource _stop = new();
     private readonly object _reconcileGate = new();
+
+    /// <summary>The version each file was last marked with here, so a check does not open every file to read it back.</summary>
+    private readonly ConcurrentDictionary<string, string> _marked = new(StringComparer.OrdinalIgnoreCase);
     private readonly CfApi.Callback _onFetch;
     private readonly CfApi.Callback _onCancel;
     private readonly CfApi.Callback _onDehydrate;
@@ -43,7 +52,7 @@ public sealed class WindowsCloudFolder : ICloudFolder
     private volatile bool _connected;
     private FileSystemWatcher? _pins;
     private bool _reconciling;
-    private bool _reconcileAgain;
+    private Func<string, string?>? _reconcileAgain;
 
     private WindowsCloudFolder(string root, CloudFolderMode mode, ILogger log)
     {
@@ -62,8 +71,8 @@ public sealed class WindowsCloudFolder : ICloudFolder
 
     /// <summary>
     /// Downloads one version of a file from the nest into a stream, when Windows asks for a file's content (someone
-    /// opened it, or "Always keep on this device"): (sync path, version hash, where to, bytes so far, stop).
-    /// Set by the sync session once it runs; until then opening such a file waits and then fails.
+    /// opened it, or "Always keep on this device"): (sync path on the nest, version hash, where to, bytes so far, stop).
+    /// Set by the sync session once it runs; until then opening such a file fails (the opener can try again).
     /// </summary>
     public Func<string, string, Stream, Action<long>, CancellationToken, Task>? Fetch { get; set; }
 
@@ -126,9 +135,8 @@ public sealed class WindowsCloudFolder : ICloudFolder
     /// <summary>This Windows user's id for the folder with Windows (one Pairnets folder per user, keyed by its path).</summary>
     public static string SyncRootId(string root)
     {
-        var sid = System.Security.Principal.WindowsIdentity.GetCurrent().User?.Value ?? "user";
         var key = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(LongPath(root).ToUpperInvariant())))[..16];
-        return $"{ProviderName}!{sid}!{key}";
+        return $"{ProviderName}!{UserSid}!{key}";
     }
 
     /// <summary>The Pairnets cloud folders this Windows user has with Windows (normally none or one).</summary>
@@ -181,7 +189,7 @@ public sealed class WindowsCloudFolder : ICloudFolder
     /// <summary>
     /// Makes <paramref name="root"/> a Windows cloud folder (or connects to it again after a restart) and returns it, or
     /// null with <paramref name="problem"/> saying why it stays a plain folder. Files already there are marked where
-    /// they are, in the background (<see cref="Reconcile"/>).
+    /// they are, in the background (<see cref="Reconcile"/>); so is the mode's keep-here choice on every file.
     /// </summary>
     public static WindowsCloudFolder? Start(string root, CloudFolderMode mode, string iconPath, ILogger log, out string? problem)
     {
@@ -193,8 +201,8 @@ public sealed class WindowsCloudFolder : ICloudFolder
         {
             folder.Register(iconPath);
             folder.Connect();
-            folder.ApplyMode();
             folder.WatchPins();
+            _ = Task.Run(folder.ApplyMode); // a whole folder tree: not on the window's thread
             return folder;
         }
         catch (Exception ex) when (ex is COMException or IOException or UnauthorizedAccessException or ArgumentException or InvalidOperationException)
@@ -219,7 +227,8 @@ public sealed class WindowsCloudFolder : ICloudFolder
         }
         if (Registered().Any(r => r.Id == id))
             return;
-        var folder = StorageFolder.GetFolderFromPathAsync(_root).AsTask().GetAwaiter().GetResult();
+        // The WinRT call finishes on a pool thread, so waiting here (also on the window's thread) cannot deadlock.
+        var folder = Task.Run(() => StorageFolder.GetFolderFromPathAsync(_root).AsTask()).GetAwaiter().GetResult();
         var info = new StorageProviderSyncRootInfo
         {
             Id = id,
@@ -258,40 +267,66 @@ public sealed class WindowsCloudFolder : ICloudFolder
     }
 
     /// <summary>
-    /// Keep everything here: the folder is "Always keep on this device", so Windows never frees space in it (and
-    /// fetches anything still on the nest). Files On-Demand: the folder's own choice is cleared, so files can be freed.
+    /// Keep everything here: the folder is "Always keep on this device", so Windows never frees space in it, and anything
+    /// still on the nest is fetched. Files On-Demand: the folder's own choice is cleared, so files can be freed.
+    /// Pairnets' own files are always kept here.
     /// </summary>
     private void ApplyMode()
     {
-        var pinned = File.GetAttributes(_root).HasFlag(CloudPlaceholders.Pinned);
-        if (Mode == CloudFolderMode.KeepAllHere && !pinned)
-            WithHandle(_root, h => Check(CfApi.CfSetPinState(h, CfApi.PinStatePinned, CfApi.SetPinFlagRecurse, IntPtr.Zero)));
-        else if (Mode == CloudFolderMode.OnDemand && pinned)
-            WithHandle(_root, h => Check(CfApi.CfSetPinState(h, CfApi.PinStateUnspecified, CfApi.SetPinFlagRecurse, IntPtr.Zero)));
+        try
+        {
+            var pinned = File.GetAttributes(_root).HasFlag(CloudPlaceholders.Pinned);
+            if (Mode == CloudFolderMode.KeepAllHere && !pinned)
+                WithHandle(_root, h => Check(CfApi.CfSetPinState(h, CfApi.PinStatePinned, CfApi.SetPinFlagRecurse, IntPtr.Zero)));
+            else if (Mode == CloudFolderMode.OnDemand && pinned)
+                WithHandle(_root, h => Check(CfApi.CfSetPinState(h, CfApi.PinStateUnspecified, CfApi.SetPinFlagRecurse, IntPtr.Zero)));
+            if (Mode == CloudFolderMode.KeepAllHere)
+                FetchEverything();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _log.LogDebug("Could not apply the keep-here choice to {Folder}: {Error}", _root, ex.Message);
+        }
+    }
+
+    /// <summary>Fetches every file still only on the nest (keeping everything here, or leaving); false when one could not.</summary>
+    private bool FetchEverything()
+    {
+        var ok = true;
+        foreach (var file in AllFiles().Where(IsCloudOnly).ToList())
+        {
+            if (!_connected || _stop.IsCancellationRequested)
+                return false;
+            ok &= Hydrate(file);
+        }
+        return ok;
     }
 
     /// <summary>
     /// Turns the folder back into a plain folder: every file still on the nest is downloaded first (it fails, and the
-    /// folder stays a cloud folder, when that is not possible), then every placeholder becomes a plain file again and
-    /// Windows forgets the folder. Returns null when done, or what stopped it.
+    /// folder stays a cloud folder, when that is not possible), then every placeholder file and folder becomes a plain
+    /// one again and Windows forgets the folder. Returns null when done, or what stopped it.
     /// </summary>
-    public async Task<string?> LeaveAsync(CancellationToken ct)
+    public Task<string?> LeaveAsync(CancellationToken ct) => Task.Run(() =>
     {
         if (!_connected)
             return null;
         WithHandle(_root, h => Check(CfApi.CfSetPinState(h, CfApi.PinStatePinned, CfApi.SetPinFlagRecurse, IntPtr.Zero)));
-        var online = AllFiles().Where(IsCloudOnly).ToList();
-        foreach (var file in online)
+        foreach (var file in AllFiles().Where(IsCloudOnly).ToList())
         {
             ct.ThrowIfCancellationRequested();
-            if (!await Task.Run(() => Hydrate(file), ct).ConfigureAwait(false))
-                return $"{online.Count(IsCloudOnly)} file(s) are still only on your nest (for example {Path.GetFileName(file)}). Pairnets needs to reach your nest to download them first.";
+            if (!Hydrate(file))
+            {
+                var left = AllFiles().Count(IsCloudOnly);
+                return $"{left} file(s) are still only on your nest (for example {Path.GetFileName(file)}). Pairnets needs to reach your nest to download them first.";
+            }
         }
+        ct.ThrowIfCancellationRequested();
         Disconnect();
         var stuck = RevertAll();
         UnregisterAll();
         return stuck == 0 ? null : $"{stuck} file(s) could not be turned back into plain files (they were in use). They still open normally.";
-    }
+    }, ct);
 
     /// <summary>
     /// For the uninstaller: how many files in Pairnets cloud folders are only on the nest (they could not open
@@ -337,16 +372,25 @@ public sealed class WindowsCloudFolder : ICloudFolder
             StorageProviderSyncRootManager.Unregister(id);
     }
 
-    /// <summary>Every placeholder whose content is here becomes a plain file again; returns how many could not.</summary>
+    /// <summary>
+    /// Every placeholder file and folder whose content is here becomes a plain one again, deepest first; returns how many
+    /// files could not (in use, or still only on the nest).
+    /// </summary>
     private int RevertAll()
     {
         var stuck = 0;
-        foreach (var path in AllFiles().Reverse().Append(_root))
+        var options = new EnumerationOptions { RecurseSubdirectories = true, AttributesToSkip = 0, IgnoreInaccessible = true };
+        var entries = Directory.EnumerateFileSystemEntries(_root, "*", options)
+            .OrderByDescending(p => p.Count(c => c == Path.DirectorySeparatorChar))
+            .Append(_root)
+            .ToList();
+        foreach (var path in entries)
         {
             if (!CloudPlaceholders.TryGetAttributesAndTag(path, out var attributes, out var tag) || !CloudPlaceholders.IsCloudTag(tag))
                 continue;
-            if (CloudPlaceholders.IsContentOnline(attributes) || !WithHandle(path, h => Check(CfApi.CfRevertPlaceholder(h, 0, IntPtr.Zero))))
-                stuck++;
+            var isFolder = (attributes & FileAttributes.Directory) != 0;
+            if ((!isFolder && CloudPlaceholders.IsContentOnline(attributes)) || !WithHandle(path, h => Check(CfApi.CfRevertPlaceholder(h, 0, IntPtr.Zero))))
+                stuck += isFolder ? 0 : 1;
         }
         return stuck;
     }
@@ -358,8 +402,9 @@ public sealed class WindowsCloudFolder : ICloudFolder
         if (!_connected)
             return;
         _connected = false;
+        _stop.Cancel();
         foreach (var fetch in _fetches.Values)
-            fetch.Cancel();
+            TryCancel(fetch);
         CfApi.CfDisconnectSyncRoot(_connection);
     }
 
@@ -371,26 +416,60 @@ public sealed class WindowsCloudFolder : ICloudFolder
         CloudPlaceholders.TryGetAttributesAndTag(fullPath, out var attributes, out _) && (attributes & FileAttributes.Directory) == 0
         && CloudPlaceholders.IsContentOnline(attributes);
 
+    public string? CloudOnlyVersion(string fullPath) => IsCloudOnly(fullPath) ? ReadIdentity(fullPath)?.Hash : null;
+
+    /// <summary>"hash\npath": the version and where it was on the nest.</summary>
+    private byte[] IdentityFor(string fullPath, string hash) =>
+        Encoding.UTF8.GetBytes(hash + "\n" + (FileStatusReader.ToSyncPath(_root, LongPath(fullPath)) ?? string.Empty));
+
+    private static (string Hash, string? Path)? ParseIdentity(string? identity)
+    {
+        if (string.IsNullOrEmpty(identity))
+            return null;
+        var split = identity.IndexOf('\n');
+        return split < 0 ? (identity, null) : (identity[..split], identity[(split + 1)..] is { Length: > 0 } p ? p : null);
+    }
+
+    private static (string Hash, string? Path)? ReadIdentity(string fullPath)
+    {
+        string? identity = null;
+        WithHandle(fullPath, h =>
+        {
+            var buffer = new byte[4096];
+            if (!CfApi.Ok(CfApi.CfGetPlaceholderInfo(h, CfApi.PlaceholderInfoBasic, buffer, buffer.Length, out _)))
+                return false;
+            var length = BitConverter.ToInt32(buffer, CfApi.BasicInfoIdentityLengthOffset);
+            if (length > 0 && length <= buffer.Length - CfApi.BasicInfoIdentityOffset)
+                identity = Encoding.UTF8.GetString(buffer, CfApi.BasicInfoIdentityOffset, length);
+            return true;
+        }, CfApi.OpenFlagNone);
+        return ParseIdentity(identity);
+    }
+
     public void MarkSynced(string fullPath, string hash)
     {
         if (!_connected)
             return;
-        var identity = Encoding.UTF8.GetBytes(hash);
+        var identity = IdentityFor(fullPath, hash);
         var ok = WithHandle(fullPath, h =>
         {
             var state = PlaceholderState(fullPath);
             if ((state & CfApi.PlaceholderStatePlaceholder) == 0)
                 return Check(CfApi.CfConvertToPlaceholder(h, identity, identity.Length, CfApi.ConvertFlagMarkInSync, IntPtr.Zero, IntPtr.Zero));
             return Check(CfApi.CfUpdatePlaceholder(h, IntPtr.Zero, identity, identity.Length, IntPtr.Zero, 0, CfApi.UpdateFlagMarkInSync, IntPtr.Zero, IntPtr.Zero));
-        });
-        if (!ok)
+        }, CfApi.OpenFlagExclusive | CfApi.OpenFlagWriteAccess); // nobody writes to it meanwhile
+        if (ok)
+            _marked[fullPath] = hash;
+        else
             _log.LogDebug("Could not mark {Path} as synced for Explorer yet (in use?); the next check does", fullPath);
+        if (IsOwnFile(fullPath))
+            WithHandle(fullPath, h => Check(CfApi.CfSetPinState(h, CfApi.PinStatePinned, 0, IntPtr.Zero))); // never freed
         MarkFoldersAbove(fullPath);
     }
 
     public bool KeepOnNest(string fullPath)
     {
-        if (!_connected || Mode != CloudFolderMode.OnDemand)
+        if (!_connected || Mode != CloudFolderMode.OnDemand || IsOwnFile(fullPath))
             return false;
         // The nearest file or folder that says "Always keep on this device" or "Free up space" decides; none: on the nest.
         for (var path = fullPath; path.Length >= _root.Length; path = Path.GetDirectoryName(path) ?? string.Empty)
@@ -412,7 +491,7 @@ public sealed class WindowsCloudFolder : ICloudFolder
     {
         if (!_connected)
             return false;
-        var identity = Encoding.UTF8.GetBytes(hash);
+        var identity = IdentityFor(fullPath, hash);
         var time = modifiedUtc.ToFileTimeUtc();
         var metadata = new CfApi.FsMetadata
         {
@@ -426,9 +505,11 @@ public sealed class WindowsCloudFolder : ICloudFolder
         bool ok;
         if (File.Exists(fullPath))
         {
-            // A placeholder of an older version: the new version's details, content left on the nest.
-            ok = IsCloudOnly(fullPath) && WithHandle(fullPath, h => Check(CfApi.CfUpdatePlaceholder(h, ref metadata, identity, identity.Length,
-                IntPtr.Zero, 0, CfApi.UpdateFlagMarkInSync | CfApi.UpdateFlagDehydrate, IntPtr.Zero, IntPtr.Zero)));
+            // A placeholder of an older version: the new version's details, content left on the nest. Only while nobody
+            // has it open and it is still the untouched placeholder (a change made here meanwhile is never thrown away).
+            ok = WithHandle(fullPath, h => IsCloudOnly(fullPath) && Check(CfApi.CfUpdatePlaceholder(h, ref metadata, identity, identity.Length,
+                IntPtr.Zero, 0, CfApi.UpdateFlagVerifyInSync | CfApi.UpdateFlagMarkInSync | CfApi.UpdateFlagDehydrate, IntPtr.Zero, IntPtr.Zero)),
+                CfApi.OpenFlagExclusive | CfApi.OpenFlagWriteAccess);
         }
         else
         {
@@ -484,9 +565,10 @@ public sealed class WindowsCloudFolder : ICloudFolder
     }
 
     /// <summary>
-    /// Brings every file's mark in line with Pairnets' notes: <paramref name="syncedHash"/> gives a synced file's version,
-    /// or null when the file is not synced (new, changed, or a problem), which then shows sync arrows. Pairnets' own
-    /// bookkeeping files count as synced. Runs in the background; a call while one runs makes it run once more after.
+    /// Brings every file's mark in line with Pairnets' notes: <paramref name="syncedHash"/> gives a synced file's version
+    /// from its sync path, or null when it is not synced (new, changed, or a problem), which then shows sync arrows.
+    /// Pairnets' own files count as synced. With everything kept here, a file still on the nest is fetched. Runs in the
+    /// background; a call while one runs makes it run once more after.
     /// </summary>
     public void Reconcile(Func<string, string?> syncedHash)
     {
@@ -496,18 +578,19 @@ public sealed class WindowsCloudFolder : ICloudFolder
         {
             if (_reconciling)
             {
-                _reconcileAgain = true;
+                _reconcileAgain = syncedHash;
                 return;
             }
             _reconciling = true;
         }
         _ = Task.Run(() =>
         {
+            var next = syncedHash;
             while (true)
             {
                 try
                 {
-                    ReconcileOnce(syncedHash);
+                    ReconcileOnce(next);
                 }
                 catch (Exception ex)
                 {
@@ -515,12 +598,13 @@ public sealed class WindowsCloudFolder : ICloudFolder
                 }
                 lock (_reconcileGate)
                 {
-                    if (!_reconcileAgain || !_connected)
+                    if (_reconcileAgain is null || !_connected)
                     {
                         _reconciling = false;
                         return;
                     }
-                    _reconcileAgain = false;
+                    next = _reconcileAgain;
+                    _reconcileAgain = null;
                 }
             }
         });
@@ -544,26 +628,38 @@ public sealed class WindowsCloudFolder : ICloudFolder
                     MarkFolder(path);
                 continue;
             }
-            var hash = IsOwnFile(path) ? "pairnets" : syncedHash(path);
-            if (hash is not null && !inSync)
-                MarkSynced(path, hash);
-            else if (hash is null && inSync && !CloudPlaceholders.IsContentOnline(attributes))
+            var online = CloudPlaceholders.IsContentOnline(attributes);
+            if (online)
+            {
+                if (Mode == CloudFolderMode.KeepAllHere)
+                    Hydrate(path); // everything stays here: a file left on the nest (switched modes while offline) comes home
+                continue; // its mark and version are kept as they were placed
+            }
+            var rel = FileStatusReader.ToSyncPath(_root, path);
+            var hash = IsOwnFile(path) ? "pairnets" : rel is { Length: > 0 } ? syncedHash(rel) : null;
+            if (hash is not null && (!inSync || (_marked.TryGetValue(path, out var marked) ? marked : ReadIdentity(path)?.Hash) != hash))
+                MarkSynced(path, hash); // (also a version that changed since it was marked)
+            else if (hash is null && inSync)
                 WithHandle(path, h => Check(CfApi.CfSetInSyncState(h, CfApi.InSyncStateNotInSync, 0, IntPtr.Zero)));
         }
     }
 
-    /// <summary>Pairnets' own files in the folder (its marker and the folder icon): never synced, never shown as waiting.</summary>
+    /// <summary>Pairnets' own files in the folder (its marker and the folder icon): never synced, never freed.</summary>
     private bool IsOwnFile(string path)
     {
         var name = Path.GetFileName(path);
-        return string.Equals(Path.GetDirectoryName(path), _root, StringComparison.OrdinalIgnoreCase)
+        return string.Equals(Path.GetDirectoryName(LongPath(path)), _root, StringComparison.OrdinalIgnoreCase)
             && (string.Equals(name, PathRules.MarkerFileName, StringComparison.OrdinalIgnoreCase)
                 || string.Equals(name, "desktop.ini", StringComparison.OrdinalIgnoreCase));
     }
 
     // ------------------------------------------------------------------ "Always keep on this device" and "Free up space"
 
-    /// <summary>Explorer's two choices change a file's or folder's pinned flags; Pairnets then fetches or frees the files.</summary>
+    /// <summary>
+    /// Explorer's two choices change a file's or folder's pinned flags; Pairnets then fetches or frees the files. One
+    /// worker takes the changes in turn (a whole folder changes at once), and a lost batch (too many at once) is made
+    /// up for by looking at the whole folder.
+    /// </summary>
     private void WatchPins()
     {
         _pins = new FileSystemWatcher(_root)
@@ -572,75 +668,104 @@ public sealed class WindowsCloudFolder : ICloudFolder
             NotifyFilter = NotifyFilters.Attributes,
             InternalBufferSize = 64 * 1024,
         };
-        _pins.Changed += (_, e) => OnPinChanged(e.FullPath);
+        _pins.Changed += (_, e) => QueuePin(e.FullPath);
+        _pins.Error += (_, _) => QueuePin(_root);
         _pins.EnableRaisingEvents = true;
+        _ = Task.Run(PinWorkerAsync);
     }
 
-    private void OnPinChanged(string path)
+    private void QueuePin(string path)
     {
-        if (!_pinWork.TryAdd(path, 0))
-            return; // already being looked at
-        _ = Task.Run(() =>
+        if (_pinQueue.TryAdd(path, 0))
+            _pinSignal.Release();
+    }
+
+    private async Task PinWorkerAsync()
+    {
+        try
         {
-            try
+            while (!_stop.IsCancellationRequested)
             {
-                Thread.Sleep(300); // Explorer changes a whole folder at once: let it finish
-                var files = Directory.Exists(path) ? EnumerateFiles(path).ToList() : [path];
-                foreach (var file in files)
+                await _pinSignal.WaitAsync(_stop.Token).ConfigureAwait(false);
+                await Task.Delay(300, _stop.Token).ConfigureAwait(false); // Explorer changes a whole folder at once: let it finish
+                foreach (var path in _pinQueue.Keys.ToList())
                 {
-                    if (!_connected)
-                        return;
-                    if (!CloudPlaceholders.TryGetAttributesAndTag(file, out var attributes, out _))
-                        continue;
-                    var online = CloudPlaceholders.IsContentOnline(attributes);
-                    if (online && !KeepOnNest(file))
-                        Hydrate(file);
-                    else if (!online && Mode == CloudFolderMode.OnDemand && attributes.HasFlag(CloudPlaceholders.Unpinned)
-                        && (PlaceholderState(file) & CfApi.PlaceholderStateInSync) != 0)
-                        WithHandle(file, h => Check(CfApi.CfDehydratePlaceholder(h, 0, CfApi.Eof, 0, IntPtr.Zero)));
+                    _pinQueue.TryRemove(path, out _);
+                    FollowPin(path);
                 }
             }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        }
+        catch (OperationCanceledException)
+        {
+        }
+    }
+
+    private void FollowPin(string path)
+    {
+        try
+        {
+            var files = Directory.Exists(path) ? EnumerateFiles(path).ToList() : [path];
+            foreach (var file in files)
             {
-                _log.LogDebug("Could not follow the keep/free choice on {Path}: {Error}", path, ex.Message);
+                if (!_connected)
+                    return;
+                if (!CloudPlaceholders.TryGetAttributesAndTag(file, out var attributes, out _))
+                    continue;
+                var online = CloudPlaceholders.IsContentOnline(attributes);
+                if (online && !KeepOnNest(file))
+                    Hydrate(file);
+                else if (!online && Mode == CloudFolderMode.OnDemand && attributes.HasFlag(CloudPlaceholders.Unpinned) && !IsOwnFile(file)
+                    && (PlaceholderState(file) & CfApi.PlaceholderStateInSync) != 0)
+                    WithHandle(file, h => Check(CfApi.CfDehydratePlaceholder(h, 0, CfApi.Eof, 0, IntPtr.Zero)), CfApi.OpenFlagExclusive | CfApi.OpenFlagWriteAccess);
             }
-            finally
-            {
-                _pinWork.TryRemove(path, out _);
-            }
-        });
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _log.LogDebug("Could not follow the keep/free choice on {Path}: {Error}", path, ex.Message);
+        }
     }
 
     /// <summary>Downloads a file whose content is on the nest (Windows calls <see cref="OnFetchData"/> for it). False when it could not.</summary>
     private bool Hydrate(string file) =>
         WithHandle(file, h => Check(CfApi.CfHydratePlaceholder(h, 0, CfApi.Eof, 0, IntPtr.Zero)), CfApi.OpenFlagNone);
 
-    // ------------------------------------------------------------------ Windows calling back
+    // ------------------------------------------------------------------ Windows calling back (never let an error escape: it would end the app)
 
     private void OnFetchData(IntPtr callbackInfo, IntPtr callbackParameters)
     {
-        var info = Marshal.PtrToStructure<CfApi.CallbackInfo>(callbackInfo);
-        var stop = new CancellationTokenSource();
-        _fetches[info.TransferKey] = stop;
-        var full = FullPathOf(info);
-        var hash = info.FileIdentityLength > 0 ? Marshal.PtrToStringUTF8(info.FileIdentity, info.FileIdentityLength) : null;
-        _ = Task.Run(() => HydrateAsync(info, full, hash, stop));
+        try
+        {
+            var info = Marshal.PtrToStructure<CfApi.CallbackInfo>(callbackInfo);
+            var full = FullPathOf(info);
+            var identity = ParseIdentity(info.FileIdentityLength > 0 ? Marshal.PtrToStringUTF8(info.FileIdentity, info.FileIdentityLength) : null);
+            var stop = CancellationTokenSource.CreateLinkedTokenSource(_stop.Token);
+            _fetches[info.TransferKey] = stop;
+            _ = Task.Run(() => HydrateAsync(info, full, identity, stop));
+        }
+        catch (Exception ex)
+        {
+            _log.LogWarning(ex, "Could not start a download Windows asked for");
+        }
     }
 
-    private async Task HydrateAsync(CfApi.CallbackInfo info, string full, string? hash, CancellationTokenSource stop)
+    private async Task HydrateAsync(CfApi.CallbackInfo info, string full, (string Hash, string? Path)? identity, CancellationTokenSource stop)
     {
         using var transfer = new TransferStream(info.ConnectionKey, info.TransferKey, info.RequestKey, info.FileSize);
         try
         {
-            if (Fetch is not { } fetch || hash is null || FileStatusReader.ToSyncPath(_root, full) is not { Length: > 0 } rel)
+            var rel = identity?.Path ?? FileStatusReader.ToSyncPath(_root, LongPath(full));
+            if (Fetch is not { } fetch || identity is not { } version || string.IsNullOrEmpty(rel))
             {
                 transfer.Fail(CfApi.StatusCloudFileNetworkUnavailable);
                 return;
             }
             _log.LogInformation("Downloading {Path} because it was opened", rel);
-            await fetch(rel, hash, transfer, done => CfApi.CfReportProviderProgress(info.ConnectionKey, info.TransferKey, info.FileSize, done), stop.Token)
+            await fetch(rel, version.Hash, transfer, done => CfApi.CfReportProviderProgress(info.ConnectionKey, info.TransferKey, info.FileSize, done), stop.Token)
                 .ConfigureAwait(false);
             transfer.Finish();
+            // Opened after "Free up space": it stays here now, as OneDrive does, until it is freed again.
+            if (File.GetAttributes(full).HasFlag(CloudPlaceholders.Unpinned))
+                WithHandle(full, h => Check(CfApi.CfSetPinState(h, CfApi.PinStateUnspecified, 0, IntPtr.Zero)));
         }
         catch (Exception ex)
         {
@@ -656,31 +781,58 @@ public sealed class WindowsCloudFolder : ICloudFolder
 
     private void OnCancelFetchData(IntPtr callbackInfo, IntPtr callbackParameters)
     {
-        var info = Marshal.PtrToStructure<CfApi.CallbackInfo>(callbackInfo);
-        if (_fetches.TryGetValue(info.TransferKey, out var stop))
+        try
+        {
+            var info = Marshal.PtrToStructure<CfApi.CallbackInfo>(callbackInfo);
+            if (_fetches.TryGetValue(info.TransferKey, out var stop))
+                TryCancel(stop);
+        }
+        catch (Exception ex)
+        {
+            _log.LogDebug("Could not stop a download: {Error}", ex.Message);
+        }
+    }
+
+    private static void TryCancel(CancellationTokenSource stop)
+    {
+        try
+        {
             stop.Cancel();
+        }
+        catch (ObjectDisposedException)
+        {
+            // It just finished.
+        }
     }
 
     /// <summary>Windows wants to free a file's space: allowed with Files On-Demand, refused when everything stays here.</summary>
     private void OnNotifyDehydrate(IntPtr callbackInfo, IntPtr callbackParameters)
     {
-        var info = Marshal.PtrToStructure<CfApi.CallbackInfo>(callbackInfo);
-        var op = new CfApi.OperationInfo
+        try
         {
-            StructSize = Marshal.SizeOf<CfApi.OperationInfo>(),
-            Type = CfApi.OperationAckDehydrate,
-            ConnectionKey = info.ConnectionKey,
-            TransferKey = info.TransferKey,
-            RequestKey = info.RequestKey,
-        };
-        var parameters = new CfApi.AckDehydrateParameters
+            var info = Marshal.PtrToStructure<CfApi.CallbackInfo>(callbackInfo);
+            var allowed = Mode == CloudFolderMode.OnDemand && !IsOwnFile(FullPathOf(info));
+            var op = new CfApi.OperationInfo
+            {
+                StructSize = Marshal.SizeOf<CfApi.OperationInfo>(),
+                Type = CfApi.OperationAckDehydrate,
+                ConnectionKey = info.ConnectionKey,
+                TransferKey = info.TransferKey,
+                RequestKey = info.RequestKey,
+            };
+            var parameters = new CfApi.AckDehydrateParameters
+            {
+                ParamSize = CfApi.AckDehydrateParameters.Size,
+                CompletionStatus = allowed ? CfApi.StatusSuccess : CfApi.StatusCloudFileDehydrationDisallowed,
+                FileIdentity = info.FileIdentity,
+                FileIdentityLength = info.FileIdentityLength,
+            };
+            CfApi.CfExecuteAckDehydrate(ref op, ref parameters);
+        }
+        catch (Exception ex)
         {
-            ParamSize = CfApi.AckDehydrateParameters.Size,
-            CompletionStatus = Mode == CloudFolderMode.OnDemand ? CfApi.StatusSuccess : CfApi.StatusCloudFileNotSupported,
-            FileIdentity = info.FileIdentity,
-            FileIdentityLength = info.FileIdentityLength,
-        };
-        CfApi.CfExecuteAckDehydrate(ref op, ref parameters);
+            _log.LogWarning(ex, "Could not answer Windows about freeing a file's space");
+        }
     }
 
     /// <summary>The file a callback is about: its volume and its path on that volume.</summary>

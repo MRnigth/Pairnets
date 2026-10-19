@@ -22,6 +22,9 @@ public interface ICloudFiles
     /// </summary>
     bool IsCloudOnly(string fullPath);
 
+    /// <summary>The version a file left on the nest stands for (its placeholder says), or null when not known.</summary>
+    string? CloudOnlyVersion(string fullPath);
+
     /// <summary>
     /// Tells Windows the file is the same here and on the nest (it gets its tick), as version <paramref name="hash"/>,
     /// which is what gets downloaded if its content is later left on the nest ("Free up space").
@@ -45,6 +48,8 @@ public interface ICloudFiles
         public bool IsActive => false;
 
         public bool IsCloudOnly(string fullPath) => false;
+
+        public string? CloudOnlyVersion(string fullPath) => null;
 
         public void MarkSynced(string fullPath, string hash)
         {

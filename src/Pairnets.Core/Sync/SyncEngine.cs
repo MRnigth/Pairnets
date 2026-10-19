@@ -339,6 +339,11 @@ public sealed class SyncEngine
             var action = SyncDecision.Decide(l, s, b);
             if (action == SyncAction.None)
                 continue;
+            if (action == SyncAction.DeleteRemote && b is not null && scan.HeldVersions.Contains(b))
+            {
+                result.Deferred++;
+                continue; // a file left on the nest was renamed or moved here: its only copy stays until it is opened
+            }
             if (action is SyncAction.Upload or SyncAction.Conflict
                 && warnings.TryGetValue(path, out var w)
                 && w.LocalHash == l && w.ServerCursor == cursor)
@@ -764,7 +769,7 @@ public sealed class SyncEngine
     /// </summary>
     private async Task<string> LocalHashAsync(string path, string full, CancellationToken ct)
     {
-        if (_cloud.IsCloudOnly(full) && _state.GetFile(path) is { Hash: { } cached })
+        if (CloudPlaceholders.IsContentOnline(File.GetAttributes(full)) && _state.GetFile(path) is { Hash: { } cached })
             return cached;
         var (hash, _) = await ContentHash.OfFileAsync(full, ct).ConfigureAwait(false);
         return hash;
@@ -1084,7 +1089,7 @@ public sealed class SyncEngine
     private string ResolveLocal(string path)
     {
         var full = PathRules.ResolveUnder(Root, path) ?? throw new IOException($"Refusing unsafe path '{path}'.");
-        if (PathRules.HasReparsePoint(Root, path, _cloud.IsActive))
+        if (PathRules.HasReparsePoint(Root, path, cloudFolder: true))
             throw new IOException($"Refusing '{path}': it goes through a symlink or junction.");
         return full;
     }

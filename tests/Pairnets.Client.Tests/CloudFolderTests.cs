@@ -91,6 +91,7 @@ public sealed class CloudFolderTests : IDisposable
         }
         Assert.Empty(WindowsCloudFolder.Registered());
         Assert.False(State(file).Placeholder);
+        Assert.False(State(Path.GetDirectoryName(file)!).Placeholder); // folders too: a leftover would hide their files
         Assert.Equal("my report, changed", File.ReadAllText(file));
     }
 
@@ -181,9 +182,13 @@ public sealed class CloudFolderTests : IDisposable
         Assert.False(scan.Files["there.txt"].Stable); // unknown to the notes and only on the nest: not read, not deleted
         Assert.True(cloud.IsCloudOnly(Path.Combine(root, "there.txt")));
 
-        // A plain folder's scanner keeps skipping cloud placeholders (as before), so nothing changes when the switch is off.
+        Assert.Contains("t", scan.HeldVersions); // never deleted on the nest while only the placeholder has it
+
+        // With the cloud folder off (or after leaving it), placeholders are still files: never "deleted", never read.
         var plain = new LocalScanner(root, new Pairnets.Core.Paths.IgnoreList(), state, TimeProvider.System, NullLogger.Instance) { StabilityWindow = TimeSpan.Zero };
-        Assert.DoesNotContain("there.txt", (await plain.ScanAsync(CancellationToken.None)).Files.Keys);
+        var plainScan = await plain.ScanAsync(CancellationToken.None);
+        Assert.True(plainScan.Files["here.txt"].Stable);
+        Assert.False(plainScan.Files["there.txt"].Stable);
     }
 
     /// <summary>
@@ -249,8 +254,22 @@ public sealed class CloudFolderTests : IDisposable
         session.SyncNow();
         Assert.True(SpinWait.SpinUntil(() => new FileInfo(notesPath).Length == notes2.Length, TimeSpan.FromSeconds(30)), "the placeholder kept the old details");
         Assert.True(cloud.IsCloudOnly(notesPath));
-        Assert.Equal("notes, version two, longer", ReadElsewhere(notesPath));
         Assert.True(nest.Store.ReadManifest(null).Entries.Single(e => e.Path == "Docs/report.txt").Hash is not null); // nothing was deleted
+
+        // Renamed while only on the nest: the nest keeps the only copy, and opening it still works.
+        var renamed = Path.Combine(root, "notes renamed.txt");
+        File.Move(notesPath, renamed);
+        Assert.True(cloud.IsCloudOnly(renamed));
+        session.SyncNow();
+        await Task.Delay(3000);
+        session.SyncNow();
+        await Task.Delay(3000);
+        Assert.Contains(nest.Store.ReadManifest(null).Entries, e => e.Path == "notes.txt" && !e.Deleted);
+        Assert.Equal("notes, version two, longer", ReadElsewhere(renamed));
+        // Once it is here, it syncs under its new name.
+        session.SyncNow();
+        Assert.True(SpinWait.SpinUntil(() => nest.Store.ReadManifest(null).Entries.Any(e => e.Path == "notes renamed.txt" && !e.Deleted), TimeSpan.FromSeconds(30)),
+            "the renamed file was not uploaded under its new name");
     }
 
     [CloudFact]

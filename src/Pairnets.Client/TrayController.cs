@@ -36,6 +36,7 @@ public sealed class TrayController : ITrayActions, IDisposable
     private ClientSession? _session;
     private Platform.CloudFiles.ICloudFolder? _cloud;
     private CancellationTokenSource? _leaving;
+    private Task? _leaveTask;
     private MainWindow? _window;
     private TrayPanel? _panel;
     private Action? _balloonClick;
@@ -220,7 +221,7 @@ public sealed class TrayController : ITrayActions, IDisposable
             session.PassCompleted += _ => cloud.Reconcile(session.SyncedHash);
             cloud.Reconcile(session.SyncedHash);
             if (_settings.CloudFolder == CloudFolderMode.Off)
-                LeaveCloudFolder(cloud);
+                _leaveTask = LeaveCloudFolderAsync(cloud);
         }
         session.StatusChanged += _ => _dirty = true;
         session.Activity.Added += _ => _dirty = true;
@@ -265,7 +266,7 @@ public sealed class TrayController : ITrayActions, IDisposable
     /// <summary>
     /// The Pairnets folder as a Windows cloud folder when chosen in Settings (ticks in Explorer; Files On-Demand), or
     /// null for a plain folder. When it was turned off but Windows still has the cloud folder, it is started once more
-    /// (keeping every file here) so that <see cref="LeaveCloudFolder"/> can bring everything home and end it.
+    /// (keeping every file here) so that <see cref="LeaveCloudFolderAsync"/> can bring everything home and end it.
     /// </summary>
     private Platform.CloudFiles.ICloudFolder? StartCloudFolder()
     {
@@ -310,14 +311,14 @@ public sealed class TrayController : ITrayActions, IDisposable
     /// that cannot finish (no connection), the folder stays a cloud folder, keeping everything here, and it is tried again
     /// at the next start.
     /// </summary>
-    private async void LeaveCloudFolder(Platform.CloudFiles.ICloudFolder cloud)
+    private async Task LeaveCloudFolderAsync(Platform.CloudFiles.ICloudFolder cloud)
     {
         _leaving?.Cancel();
         var stop = _leaving = new CancellationTokenSource();
         string? problem;
         try
         {
-            problem = await cloud.LeaveAsync(stop.Token);
+            problem = await cloud.LeaveAsync(stop.Token).ConfigureAwait(false); // (StopSession may wait for this on the window's thread)
         }
         catch (Exception ex)
         {
@@ -550,6 +551,16 @@ public sealed class TrayController : ITrayActions, IDisposable
         var s = _session;
         _session = null;
         _leaving?.Cancel();
+        try
+        {
+            // A folder being turned back into a plain one finishes first, so a new start never meets it half way.
+            _leaveTask?.Wait(TimeSpan.FromSeconds(30));
+        }
+        catch (AggregateException)
+        {
+            // (it says what happened itself)
+        }
+        _leaveTask = null;
         Task.Run(async () => await s.DisposeAsync()).Wait(TimeSpan.FromSeconds(30));
         _cloud?.Dispose(); // after the session: nothing asks it any more
         _cloud = null;

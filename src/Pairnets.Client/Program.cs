@@ -44,7 +44,14 @@ internal static class Program
             return CheckBeforeUninstall();
         if (args.Contains(UnregisterExplorerArgument))
         {
-            Platform.CloudFiles.WindowsCloudFolder.ForgetAll();
+            try
+            {
+                Platform.CloudFiles.WindowsCloudFolder.ForgetAll();
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Runtime.InteropServices.COMException)
+            {
+                // The rest still goes.
+            }
             return Platform.WindowsPlatform.SetExplorerEntry(null, null, Pairnets.Core.Settings.PairnetsPaths.LocalDir) ? 0 : 1;
         }
 

@@ -14,7 +14,7 @@ public interface ICloudFolder : ICloudFiles, IDisposable
     /// <summary>Downloads one version of a file when it is opened: (sync path, version, where to, bytes so far, stop).</summary>
     Func<string, string, Stream, Action<long>, CancellationToken, Task>? Fetch { get; set; }
 
-    /// <summary>Brings every file's mark in Explorer in line with the notes (a file's synced version, or null).</summary>
+    /// <summary>Brings every file's mark in Explorer in line with the notes (a file's synced version by sync path, or null).</summary>
     void Reconcile(Func<string, string?> syncedHash);
 
     /// <summary>Downloads what is still on the nest, then makes the folder a plain folder again; null when done, else why not.</summary>
