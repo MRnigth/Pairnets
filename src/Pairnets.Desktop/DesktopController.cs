@@ -482,7 +482,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
         if (_window is { IsVisible: true })
         {
             if (_updates.Available is { Signed: false } unsigned && !_updateDismissed)
-                _window.ShowUpdate($"Pairnets {unsigned.Version} could not be installed", ReleaseSigning.NotSignedMessage, "Hide");
+                _window.ShowUpdate($"Pairnets {unsigned.Version} could not be installed", UpdateProblem.NotSigned.Reason, UpdateProblem.NotSigned.ButtonText);
             else if (_updates.Available is { } update && !_updateDismissed)
                 _window.ShowUpdate($"Pairnets {update.Version} is available",
                     $"You have {PairnetsInfo.ProductVersion}. Download it and replace the app (your settings are kept).", "Download");

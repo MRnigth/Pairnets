@@ -564,7 +564,9 @@ public sealed class DesktopControllerTests
         app.App.RefreshNow();
         Assert.Equal("Pairnets 99.0.0 could not be installed", Screen.Named<TextBlock>(main, "UpdateTitle").Text);
         Assert.DoesNotContain(app.Platform.Notices, n => n.Title == "Pairnets update available");
-        Person.Click(Screen.Find<Button>(main, "Hide")); // never the download page of a release Pairnets did not sign
+        Assert.False(Screen.Named<Button>(main, "UpdateButton").IsVisible); // never the download page of a release Pairnets did not sign
+        Assert.Equal(Pairnets.Core.Client.ReleaseSigning.NotSignedMessage, Screen.Named<TextBlock>(main, "UpdateReason").Text); // it says why
+        Person.Click(Screen.Named<Button>(main, "UpdateLater")); // the X puts it away
         app.App.RefreshNow();
         Assert.False(Screen.Named<Border>(main, "UpdateCard").IsVisible);
         Assert.DoesNotContain(app.Feed.ReleasePage.ToString(), app.Platform.Opened);

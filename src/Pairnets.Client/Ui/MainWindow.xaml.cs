@@ -384,8 +384,10 @@ public partial class MainWindow : Window, IPageHost
             return;
         UpdateTitle.Text = _update.Title;
         UpdateTitle.ToolTip = detail.Length > 0 ? detail : null;
+        UpdateReason.Text = _update.ShowsReason ? detail : string.Empty;
+        UpdateReason.Visibility = Show(_update.ShowsReason);
         UpdateButton.Content = button;
-        UpdateButton.Visibility = Show(!busy);
+        UpdateButton.Visibility = Show(_update.HasButton);
         UpdateLater.Visibility = Show(!busy);
         UpdatePercent.Visibility = Show(busy);
         UpdatePercent.Text = _update.PercentText;

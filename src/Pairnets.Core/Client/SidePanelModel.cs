@@ -125,6 +125,12 @@ public sealed record SideUpdate(UpdateCardKind Kind, string Title, string Detail
 
     public bool ShowBar => Kind == UpdateCardKind.Downloading;
 
+    /// <summary>A failed update shows its reason under the title (one line, <see cref="UpdateProblem.Reason"/>).</summary>
+    public bool ShowsReason => Kind == UpdateCardKind.Failed && Detail.Length > 0;
+
+    /// <summary>False when there is no next step: only the X, which puts the card away.</summary>
+    public bool HasButton => Kind != UpdateCardKind.Downloading && Button.Length > 0;
+
     public string PercentText => Percent is { } p ? p.ToString(CultureInfo.InvariantCulture) + "%" : string.Empty;
 
     /// <summary>

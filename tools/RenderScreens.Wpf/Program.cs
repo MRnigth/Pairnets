@@ -336,7 +336,7 @@ public static partial class Program
 
         // A release Pairnets did not sign: the card says so and only offers to hide it.
         window.ShowAttentionTab(false);
-        window.ShowUpdate("Pairnets 1.0.58 could not be installed", ReleaseSigning.NotSignedMessage, "Hide");
+        window.ShowUpdate("Pairnets 1.0.58 could not be installed", UpdateProblem.NotSigned.Reason, UpdateProblem.NotSigned.ButtonText);
         Save(window, outDir, $"windows-update-not-signed-{suffix}.png", print);
 
         window.ShowUpdate(null, string.Empty, string.Empty);

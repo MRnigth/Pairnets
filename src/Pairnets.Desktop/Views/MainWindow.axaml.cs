@@ -449,8 +449,10 @@ public partial class MainWindow : Window
             return;
         UpdateTitle.Text = _update.Title;
         ToolTip.SetTip(UpdateTitle, detail.Length > 0 ? detail : null);
+        UpdateReason.Text = _update.ShowsReason ? detail : string.Empty;
+        UpdateReason.IsVisible = _update.ShowsReason;
         UpdateButton.Content = button;
-        UpdateButton.IsVisible = !busy;
+        UpdateButton.IsVisible = _update.HasButton;
         UpdateLater.IsVisible = !busy;
         UpdatePercent.IsVisible = busy;
         UpdatePercent.Text = _update.PercentText;

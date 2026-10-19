@@ -125,7 +125,11 @@
                 <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto">
                   <v:LineIcon x:Name="UpdateIcon" Classes="icon bob" Width="16" Height="16" StrokeThickness="2.2" Margin="0,0,8,0" VerticalAlignment="Center"
                               Stroke="{DynamicResource T.AccentInk}" Data="{StaticResource I.Download}" />
-                  <TextBlock x:Name="UpdateTitle" Grid.Column="1" FontWeight="ExtraBold" FontSize="13" TextWrapping="Wrap" VerticalAlignment="Center" />
+                  <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                    <TextBlock x:Name="UpdateTitle" FontWeight="ExtraBold" FontSize="13" TextWrapping="Wrap" />
+                    <!-- Why a failed update was not installed (one line) -->
+                    <TextBlock x:Name="UpdateReason" FontSize="12" Foreground="{DynamicResource T.Muted}" TextWrapping="Wrap" Margin="0,2,0,0" IsVisible="False" />
+                  </StackPanel>
                   <TextBlock x:Name="UpdatePercent" Grid.Column="2" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource T.AccentInk}"
                              VerticalAlignment="Center" Margin="8,0,4,0" IsVisible="False" />
                   <Button x:Name="UpdateButton" Grid.Column="3" Classes="accent small" Content="Update" Margin="8,0,0,0" Click="OnUpdateNow" />

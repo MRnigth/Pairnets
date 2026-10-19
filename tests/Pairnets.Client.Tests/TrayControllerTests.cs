@@ -491,6 +491,7 @@ public sealed class TrayControllerTests
         await app.WaitUntil(() => main.UpdateTitle.Text == "Pairnets 99.0.0 could not be installed", "the app to refuse the tampered download");
         Assert.Contains("didn't match its checksum", await app.Wpf.Ui(() => main.UpdateDetailText));
         Assert.Equal("Open download page", await app.Wpf.Ui(() => main.UpdateButton.Content));
+        Assert.Contains("didn't match its checksum", await app.Wpf.Ui(() => main.UpdateReason.Text)); // the reason shows on the card
         Assert.Empty(app.Platform.Installers.Items);
         Assert.Equal(0, app.Shutdowns);
 
@@ -500,7 +501,8 @@ public sealed class TrayControllerTests
         await app.Press(main, "Check now");
         await app.WaitUntil(() => main.UpdateTitle.Text == "Pairnets 99.0.1 could not be installed", "the app to refuse the unsigned release");
         Assert.Contains("isn't signed by Pairnets", await app.Wpf.Ui(() => main.UpdateDetailText));
-        Assert.Equal("Hide", await app.Wpf.Ui(() => main.UpdateButton.Content));
+        Assert.Contains("isn't signed by Pairnets", await app.Wpf.Ui(() => main.UpdateReason.Text));
+        Assert.False(await app.Wpf.Ui(() => main.UpdateButton.IsVisible));
         Assert.DoesNotContain(app.Notifications.Items, n => n.Title == "Pairnets update available" && n.Text.Contains("99.0.1"));
         await app.Press(main, "Later");
         await app.WaitUntil(() => !main.UpdateCard.IsVisible, "the card to go away");
