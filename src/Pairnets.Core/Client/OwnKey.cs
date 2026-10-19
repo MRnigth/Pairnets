@@ -31,6 +31,16 @@ public static class OwnKey
     }
 
     /// <summary>
+    /// What to tell the person when a changed name did not reach the nest (<see cref="CarryOverAsync"/> kept the old
+    /// one), or null when it did or nothing changed.
+    /// </summary>
+    public static string? NameNotSaved(ClientSettings original, string? deviceId, string typed, string saved) =>
+        deviceId is not null && original.HasOwnKey && !string.Equals(typed, original.DeviceName, StringComparison.Ordinal)
+            && string.Equals(saved, original.DeviceName, StringComparison.Ordinal)
+            ? $"Your nest could not be reached, so this computer is still called {saved}. Your other settings were saved. Try the new name again when this computer is online."
+            : null;
+
+    /// <summary>
     /// The account email to keep when the Settings form is saved: the one this computer signed in with, as long as it
     /// keeps its own key (<paramref name="deviceId"/>) on the same server. A typed token or another address drops it.
     /// </summary>

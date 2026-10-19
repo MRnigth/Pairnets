@@ -116,7 +116,7 @@ public static class Nest
             return new(NestCheckStatus.Invalid, null, null, "That is not an address. Type your nest's name, such as nest.example.com.");
         if (Relay.IsServiceAddress(url, service))
             return new(NestCheckStatus.NoSignIn, url, null, AccountAddressMessage); // nothing here to approve on: the account is the way in
-        using var client = new PairnetsApiClient(url, string.Empty, Environment.MachineName, handler, serviceUrl: service);
+        using var client = new PairnetsApiClient(url, string.Empty, ComputerName.Default(), handler, serviceUrl: service);
         try
         {
             var hello = await client.GetHelloAsync(ct).ConfigureAwait(false);
@@ -223,7 +223,7 @@ public sealed class PairingFlow
         TimeProvider? clock = null, HttpMessageHandler? handler = null, TimeSpan? interval = null)
     {
         _server = server;
-        _name = name;
+        _name = ComputerName.Clean(name) is { Length: > 0 } clean ? clean : ComputerName.Default();
         _method = method;
         _email = email;
         _clock = clock ?? TimeProvider.System;

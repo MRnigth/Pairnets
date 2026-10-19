@@ -170,8 +170,8 @@
                 </StackPanel>
                 <StackPanel Margin="0,14,0,0">
                   <TextBlock FontSize="13" FontWeight="Bold" Margin="0,0,0,6" Text="This computer's name" />
-                  <TextBox x:Name="DeviceBox" Style="{StaticResource PgInput}" FontSize="14" />
-                  <TextBlock Style="{StaticResource PgSmall}" Margin="0,6,0,0" TextWrapping="Wrap" Text="Shown in conflict file names. Use a different name on each computer." />
+                  <TextBox x:Name="DeviceBox" Style="{StaticResource PgInput}" FontSize="14" MaxLength="64" />
+                  <TextBlock Style="{StaticResource PgSmall}" Margin="0,6,0,0" TextWrapping="Wrap" Text="Shown on your other computers, in conflict file names and on your account page at pairnets.app, where you can change it too." />
                 </StackPanel>
                 <Border Style="{StaticResource PgHair}" Margin="0,14" />
                 <Grid>

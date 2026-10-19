@@ -409,6 +409,9 @@ public sealed record StatusSnapshot(
     /// <summary>Last known server info (version, free space, updater), or null before the first answer.</summary>
     public ServerInfo? Server { get; init; }
 
+    /// <summary>What the apps call the nest: the name its owner gave it on their account page ("soro"), else "Your nest".</summary>
+    public string NestTitle => Server?.NestName is { } name && ComputerName.Clean(name) is { Length: > 0 } clean ? clean : "Your nest";
+
     /// <summary>"412 GB free on server" or null when the server does not say.</summary>
     /// <summary>True once the server has answered and the connection is not currently down.</summary>
     public bool IsConnected => Status != RunnerStatus.Offline && (Server is not null || LastSyncAt is not null);

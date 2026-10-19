@@ -53,6 +53,7 @@ public partial class DevicesPageView : UserControl
     public void Show(StatusSnapshot s, string? thisDevice, string? serverUrl)
     {
         var nest = NestCard.From(s, serverUrl);
+        NestHeading.Text = nest.Title;
         NestAddress.Text = nest.Address;
         NestVersion.Text = nest.Version;
         NestVersionNote.Text = nest.VersionNote;

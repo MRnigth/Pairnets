@@ -95,7 +95,8 @@ public sealed record TrayPanelModel(
     TrayUnreachable? Unreachable,
     string? MoreText,
     string? FixLabel,
-    bool Paused)
+    bool Paused,
+    string NestTitle = "Your nest")
 {
     /// <summary>The computers in the small pile on the red row.</summary>
     public const int MaxUnreachableIcons = 3;
@@ -202,7 +203,7 @@ public sealed record TrayPanelModel(
 
         var more = map.MoreCount > 0 ? "+" + map.MoreCount.ToString(CultureInfo.InvariantCulture) + " more" : null;
         return new TrayPanelModel(state, tone, headline, detail, percent, files, left, note, map.NestSub, map.NestDot,
-            thisBranch, branches, unreachable, more, s.FixLabel, s.Paused || paused);
+            thisBranch, branches, unreachable, more, s.FixLabel, s.Paused || paused, map.NestTitle);
     }
 
     /// <summary>

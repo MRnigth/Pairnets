@@ -72,11 +72,11 @@ public static class Endpoints
                 : Error(StatusCodes.Status404NotFound, ErrorCodes.NotFound, "No such computer.");
         });
 
-        app.MapGet("/api/info", (SyncStore store, ServerUpdater updater) =>
+        app.MapGet("/api/info", (SyncStore store, ServerUpdater updater, AuthStore auth) =>
         {
             var (free, total) = ServerUpdater.DiskSpace(store.Paths.DataDir);
             return Json(new ServerInfo(store.ServerId, store.CurrentVersion, PairnetsInfo.ApiVersion,
-                PairnetsInfo.ProductVersion, free, total, updater.GetStatus(), UploadSessions.PiecesInFlight));
+                PairnetsInfo.ProductVersion, free, total, updater.GetStatus(), UploadSessions.PiecesInFlight, auth.NestName));
         });
 
         // "Update server" in the apps: asks the root-owned updater to install the newest release.

@@ -521,7 +521,9 @@ public sealed partial class ApiTour
                      (HttpMethod.Get, "api/relay/status", null),
                      (HttpMethod.Get, "api/relay/devices", null),
                      (HttpMethod.Post, "api/relay/devices", new { name = "LAPTOP", system = "Windows" }),
+                     (HttpMethod.Patch, "api/relay/devices/dev-1", new { name = "Desk" }),
                      (HttpMethod.Delete, "api/relay/devices/dev-1", null),
+                     (HttpMethod.Put, "api/relay/name", new { name = "soro" }),
                  })
         {
             foreach (var who in new[] { anon, shared })
@@ -531,7 +533,7 @@ public sealed partial class ApiTour
             }
         }
 
-        Step("A nest linked to a Pairnets account: the service's signed calls add, list and remove a computer");
+        Step("A nest linked to a Pairnets account: the service's signed calls add, list, rename and remove a computer, and name the nest");
         await using var linked = await TestServer.StartAsync(config: RelayFixtures.Config(), configureBuilder: builder =>
             builder.Services.AddSingleton<IStartupFilter>(new AnsweredRoutesFilter(Record.ServerSaw)));
         using var service = new HttpClient(new RecordingHandler(Record, new SocketsHttpHandler { UseProxy = false })) { BaseAddress = linked.Url };
@@ -552,6 +554,14 @@ public sealed partial class ApiTour
         Assert.Equal(1, (await Signed(HttpMethod.Get, "/api/relay/status")).GetProperty("devices").GetInt32());
         var listed = (await Signed(HttpMethod.Get, "/api/relay/devices")).GetProperty("devices").EnumerateArray().Single();
         Assert.Equal((id, "LAPTOP", "Windows 11"), (listed.GetProperty("id").GetString(), listed.GetProperty("name").GetString(), listed.GetProperty("system").GetString()));
+        Assert.Equal("Laptop", (await Signed(HttpMethod.Patch, $"/api/relay/devices/{Uri.EscapeDataString(id)}", """{"name":"Laptop"}""")).GetProperty("name").GetString());
+        await using (var laptop = await HubProbe.ConnectAsync("the linked nest's LAPTOP", linked.Url, added.GetProperty("key").GetString()!, "Laptop", Record,
+                         HttpTransportType.WebSockets))
+        {
+            Assert.Equal("soro", (await Signed(HttpMethod.Put, "/api/relay/name", """{"name":"soro"}""")).GetProperty("name").GetString());
+            await laptop.WaitForAsync(SyncHub.NestRenamedMethod, args => (string?)args[0] == "soro");
+        }
+        Assert.Equal("soro", (await Signed(HttpMethod.Get, "/api/relay/status")).GetProperty("name").GetString());
         Assert.True((await Signed(HttpMethod.Delete, $"/api/relay/devices/{Uri.EscapeDataString(id)}")).GetProperty("removed").GetBoolean());
         Assert.Equal(0, (await Signed(HttpMethod.Get, "/api/relay/status")).GetProperty("devices").GetInt32());
     }

@@ -137,6 +137,7 @@ public partial class MainWindow
         else
             Paint(NestRow, BackgroundProperty, PillKey(n.Tone));
         Paint(NestDot, Shape.FillProperty, DotKey(n.Dot));
+        NestTitle.Text = n.Title;
         NestSub.Text = n.Text;
         Paint(NestSub, TextBlock.ForegroundProperty, InkKey(n.Tone));
         ToolTip.SetTip(NestRow, n.Tooltip);

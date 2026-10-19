@@ -38,6 +38,8 @@ export type ErrorCode =
   | "not_confirmed"
   | "nest_unknown"
   | "nest_offline"
+  | "nest_too_old"
+  | "bad_name"
   | "full"
   | "cloudflare_failed"
   | "server_error";
@@ -66,6 +68,8 @@ export const MESSAGES: Record<ErrorCode, string> = {
   not_confirmed: "This nest has not finished linking.",
   nest_unknown: "This server is not linked to Pairnets any more.",
   nest_offline: "Your server is not connected right now. Check that it is on.",
+  nest_too_old: "Update your nest to rename computers here.",
+  bad_name: "Type a name.",
   full: "Pairnets cannot take more servers right now. Try again later.",
   cloudflare_failed: "Cloudflare did not finish setting up the server, so nothing was kept. Try again in a few minutes.",
   server_error: "Something went wrong on our side.",

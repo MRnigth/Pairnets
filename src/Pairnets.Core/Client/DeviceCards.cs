@@ -105,7 +105,9 @@ public sealed record DeviceCard(
 /// <param name="Address">"nest.example.com", or "Not connected".</param>
 /// <param name="Version">"1.0.48", or a dash.</param>
 /// <param name="VersionNote">"up to date", "update available" or empty.</param>
-public sealed record NestCard(bool Online, string OnlineText, string Address, string Version, string VersionNote, bool VersionOlder, string FreeSpace, bool SpaceLow, string Keeps)
+/// <param name="Title">The nest's name ("soro") once its owner gave it one on their account page, else "Your nest".</param>
+public sealed record NestCard(bool Online, string OnlineText, string Address, string Version, string VersionNote, bool VersionOlder, string FreeSpace, bool SpaceLow, string Keeps,
+    string Title = "Your nest")
 {
     public static NestCard From(StatusSnapshot s, string? serverUrl)
     {
@@ -121,7 +123,8 @@ public sealed record NestCard(bool Online, string OnlineText, string Address, st
             s.ServerIsOlder,
             s.Server?.DiskFreeBytes is { } free ? Format.Bytes(free) : "–",
             s.ServerSpaceLow,
-            HistoryQuery.Retention.Days.ToString(CultureInfo.InvariantCulture) + " days");
+            HistoryQuery.Retention.Days.ToString(CultureInfo.InvariantCulture) + " days",
+            s.NestTitle);
     }
 
     private static string? Host(string? url) =>

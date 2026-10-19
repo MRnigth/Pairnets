@@ -597,6 +597,14 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
             ]);
             main.Navigate(MainPage.Attention);
         }));
+        yield return new Screen(name, "the Needs you page offering this computer's own name", NewMainWindow, (b, w) => Wpf.Ui(() =>
+        {
+            var main = (MainWindow)w;
+            var offer = new NameOffer("PC-1", "StudyPC");
+            main.ShowAttention([new(offer.Title, offer.Detail, offer.UseLabel, () => b.Actions.Calls.Add("attention:" + offer.Title), AttentionKind.Rename,
+                SecondLabel: offer.KeepLabel, Second: () => b.Actions.Calls.Add("attention second:" + offer.Title))]);
+            main.Navigate(MainPage.Attention);
+        }));
         yield return new Screen(name, "the Activity page, with a folder of photos and a conflict", NewMainWindow, (b, w) => Wpf.Ui(() =>
         {
             var main = (MainWindow)w;
@@ -675,6 +683,8 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
         // Rows of lists: what each row's own button does.
         new(t => t.Element is Button { CommandParameter: AttentionItem }, "run that item's action",
             c => c.Bench.Actions.Calls.Items.Contains("attention:" + ((AttentionItem)((Button)c.Target.Element).CommandParameter).Title)),
+        new(t => t.Element is Button { Tag: AttentionItem }, "run that item's second choice",
+            c => c.Bench.Actions.Calls.Items.Contains("attention second:" + ((AttentionItem)((Button)c.Target.Element).Tag).Title)),
         new(t => t.Element is Button { CommandParameter: VersionRow }, "restore that version and say so",
             c => c.Bench.History.Restored.Items.Contains((((VersionRow)((Button)c.Target.Element).CommandParameter).Path, ((VersionRow)((Button)c.Target.Element).CommandParameter).Version.Id))
                 && ((MainWindow)c.Window).HistoryPane.RestoreMessage.IsVisible),

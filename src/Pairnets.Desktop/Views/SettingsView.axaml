@@ -109,8 +109,8 @@
                 </StackPanel>
                 <StackPanel Spacing="6">
                   <TextBlock FontSize="13" FontWeight="Bold" Text="This computer's name" />
-                  <TextBox x:Name="DeviceBox" Classes="field" Height="38" MinHeight="38" CornerRadius="11" FontWeight="SemiBold" />
-                  <TextBlock Classes="t3" TextWrapping="Wrap" Text="Use a different name on each computer. It shows in conflict file names." />
+                  <TextBox x:Name="DeviceBox" Classes="field" Height="38" MinHeight="38" CornerRadius="11" FontWeight="SemiBold" MaxLength="64" />
+                  <TextBlock Classes="t3" TextWrapping="Wrap" Text="Shown on your other computers, in conflict file names and on your account page at pairnets.app, where you can change it too." />
                 </StackPanel>
                 <Border Classes="hair" />
                 <Grid ColumnDefinitions="*,Auto">

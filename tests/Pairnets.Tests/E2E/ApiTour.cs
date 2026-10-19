@@ -60,7 +60,9 @@ public sealed partial class ApiTour : IAsyncDisposable
         new("GET", "/api/relay/status"),
         new("GET", "/api/relay/devices"),
         new("POST", "/api/relay/devices"),
+        new("PATCH", "/api/relay/devices/{id}"),
         new("DELETE", "/api/relay/devices/{id}"),
+        new("PUT", "/api/relay/name"),
 
         // The website's pages (Web/WebUi.cs).
         new("GET", "/"),
@@ -121,6 +123,7 @@ public sealed partial class ApiTour : IAsyncDisposable
         SyncHub.DeviceRenamedMethod,
         SyncHub.PeerTransferMethod,
         SyncHub.PeerSyncedMethod,
+        SyncHub.NestRenamedMethod,
         PairingEndpoints.PairRequestedMethod,
         PairingEndpoints.PairRequestedFromMethod,
         PairingEndpoints.PairDecidedMethod,

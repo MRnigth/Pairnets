@@ -169,7 +169,7 @@
                              HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,-2,-2" />
                   </Grid>
                   <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                    <TextBlock FontWeight="ExtraBold" Text="Your nest" />
+                    <TextBlock x:Name="NestTitle" FontWeight="ExtraBold" Text="Your nest" TextTrimming="CharacterEllipsis" />
                     <TextBlock x:Name="NestSub" FontSize="12" FontWeight="Medium" TextTrimming="CharacterEllipsis" />
                   </StackPanel>
                 </Grid>

@@ -277,6 +277,7 @@ export async function patchNestRoute(ctx: Ctx, nestId: string): Promise<Response
   await ctx.env.DB.prepare("UPDATE nests SET label = ?1, hosted_login = ?2 WHERE id = ?3 AND account_id = ?4")
     .bind(newLabel, newHosted, n.id, s.accountId)
     .run();
+  if (newLabel !== n.label) await audit(ctx, "nest_renamed", s.accountId, n.id, { from: n.label, to: newLabel });
   if (newHosted !== n.hosted_login) await audit(ctx, newHosted ? "nest_login_on" : "nest_login_off", s.accountId, n.id);
   return json(200, nestJson({ ...n, label: newLabel, hosted_login: newHosted }, ctx.now));
 }

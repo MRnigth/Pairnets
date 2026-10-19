@@ -42,7 +42,7 @@
               <ui:LineIcon Width="26" Height="26" StrokeThickness="1.8" Stroke="{DynamicResource T.AccentInk}" Data="{StaticResource I.Nest}" />
             </Border>
             <StackPanel Grid.Column="1" VerticalAlignment="Center">
-              <TextBlock Text="Your nest" FontSize="20" FontWeight="ExtraBold" />
+              <TextBlock x:Name="NestHeading" Text="Your nest" FontSize="20" FontWeight="ExtraBold" TextTrimming="CharacterEllipsis" />
               <TextBlock Style="{StaticResource PgSub}" Margin="0" Text="The home server that keeps your files and their history." />
             </StackPanel>
             <Border x:Name="NestPill" Grid.Column="2" Height="28" CornerRadius="14" Padding="12,0" VerticalAlignment="Center" Background="{DynamicResource T.OkPill}">

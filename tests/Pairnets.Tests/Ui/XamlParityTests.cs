@@ -43,6 +43,7 @@ public class XamlParityTests
         ("MainWindow", "OnReviewConflict", MacLinuxApp, "the Review button of a conflict row in Activity"),
         ("MainWindow", "OnRestore", MacLinuxApp, "the Restore button of a version row in History"),
         ("MainWindow", "OnAttentionAction", MacLinuxApp, "the button of a Needs you card"),
+        ("MainWindow", "OnAttentionSecond", MacLinuxApp, "the second button of a Needs you card (Keep PC-1)"),
         // The Windows pages wire these from code.
         ("MainWindow", "OnFilter", WindowsApp, "the Activity filter pills are built in code on the Mac/Linux page"),
         ("MainWindow", "OnShowInFolder", WindowsApp, "the Show in folder button of a History row is built in code on the Mac/Linux page"),

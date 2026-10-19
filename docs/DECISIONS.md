@@ -1030,3 +1030,22 @@ The owner's answers to the 2026-10-14 audit questions:
   and the others stop waiting as before; the 30-minute limit and "Download now anyway" stay.
 * **The repeat comes from the sync engine, not the app window**, so it works on every computer, with or without its
   window open. Keep `BatchReannounceInterval` well under the others' `PeerQuietTimeout`.
+
+## Computer and nest names (2026-10-19)
+
+* **A new computer's own name.** Windows: its host name as typed when it was set up ("StudyPC"), not the old
+  all-capitals 15-letter name `Environment.MachineName` gives ("STUDYPC"). A Mac: its Computer Name from Sharing
+  settings ("Family MacBook Pro"). Linux: its pretty host name when set, otherwise the host name without its domain.
+  A server linking to an account sends `hostnamectl --pretty` (or its short host name) as the nest's first name. All
+  names are cleaned like the nest cleans them and kept to 64 characters, which also fixes a long accented name being
+  refused at sign-in (the app counted letters, the service code points).
+* **No PC-1 default.** "PC-1" was never a default in the code: it came from the old one-PC test setup. Names that
+  look like a placeholder ("PC-1", "pc 2") or the old all-capitals name get a one-time card on Needs you: "Use
+  StudyPC" or "Keep PC-1". Either answer is final (`NameOfferAnswered`). Only computers with their own key get it.
+* **Renaming on the account page.** The page asks the nest (signed relay call `PATCH /api/relay/devices/{id}`); the
+  nest stays the one place a computer's name lives and pushes `DeviceRenamed` as when an app renames itself. The same
+  name twice gets " (2)", and the page says why. An older nest answers 405 and the page asks to update it.
+* **Nest names in the apps.** The owner's name for a nest lives in D1 (`nests.label`) and is sent to the nest
+  (`PUT /api/relay/name`) on a rename and whenever the account page finds the nest out of date. The nest keeps it,
+  shows it in `/api/info` and pushes `NestRenamed`; the apps then show it where they said "Your nest" (side panel,
+  map, tray panel, Devices page, overview). Until a nest has a name they keep saying "Your nest".

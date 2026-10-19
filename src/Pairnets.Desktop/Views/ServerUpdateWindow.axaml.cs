@@ -118,7 +118,7 @@ public partial class ServerUpdateWindow : Window
         return _session()?.Settings.ServerUrl is { } url && Uri.TryCreate(url, UriKind.Absolute, out var uri) ? uri.Host : string.Empty;
     }
 
-    private string ThisComputer() => _computerName ?? _session()?.Settings.DeviceName ?? Environment.MachineName;
+    private string ThisComputer() => _computerName ?? _session()?.Settings.DeviceName ?? ComputerName.Default();
 
     private void OnSkip(object? sender, RoutedEventArgs e)
     {

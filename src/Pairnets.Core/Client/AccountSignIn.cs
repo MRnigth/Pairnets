@@ -292,15 +292,8 @@ public sealed class AccountSignIn
         _ => $"Pairnets could not start a sign-in ({asked.Error ?? ((int)asked.Status).ToString(CultureInfo.InvariantCulture)}). Update Pairnets, then try again.",
     };
 
-    /// <summary>The service takes names of at most 64 characters, without control characters.</summary>
-    private static string CleanName(string? name)
-    {
-        var clean = new string((name ?? string.Empty).Where(c => !char.IsControl(c)).ToArray()).Trim();
-        if (clean.Length == 0)
-            clean = Environment.MachineName;
-        var info = new StringInfo(clean);
-        return info.LengthInTextElements > 64 ? info.SubstringByTextElements(0, 64).Trim() : clean;
-    }
+    /// <summary>The service takes names of at most 64 characters, without control characters (this computer's own name when empty).</summary>
+    private static string CleanName(string? name) => ComputerName.Clean(name) is { Length: > 0 } clean ? clean : ComputerName.Default();
 
     private AccountSignInState Set(AccountSignInState state)
     {

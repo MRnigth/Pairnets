@@ -7,7 +7,9 @@
 //   POST /v1/servers/approve             session + Origin            -> nest row, tunnel, router deploy
 //   POST /v1/servers/poll                installer, no auth          -> once: tunnel token + nest key
 //   GET  /v1/servers                     session                     -> servers with status, version, computers
+//   PATCH  /v1/servers/{id}/devices/{d}  session + Origin            -> the nest renames that computer
 //   DELETE /v1/servers/{id}/devices/{d}  session + Origin            -> the nest revokes that computer
+//   PATCH  /v1/servers/{id}              session + Origin            -> new label, passed on to the nest
 //   DELETE /v1/servers/{id}              session + Origin, recent    -> router binding, tunnel and row go
 
 import { b64urlEncode } from "../b64";
@@ -16,10 +18,10 @@ import { CloudflareApi, CloudflareError, teardown } from "../cloudflare";
 import type { Ctx } from "../context";
 import { B32_UPPER, newId, randomBase32, randomToken } from "../crypto";
 import { intVar } from "../env";
-import { cleanLabel, cleanText, DEVICE_ID_RE, displayUserCode, iso, NEST_ID_RE, normaliseUserCode, SERVER_DEVICE_CODE_RE } from "../formats";
+import { cleanLabel, cleanText, DEVICE_ID_RE, stripHidden, displayUserCode, iso, NEST_ID_RE, normaliseUserCode, SERVER_DEVICE_CODE_RE } from "../formats";
 import { HttpError, htmlResponse, json, noContent, redirect } from "../http";
 import { sendNotice } from "../mail";
-import { adminCall, markReached, nestKey, NestOffline } from "../nestadmin";
+import { type AdminAnswer, type AdminTarget, adminCall, markReached, nestKey, NestOffline } from "../nestadmin";
 import { addPage } from "../pages";
 import { enforce, HOUR } from "../ratelimit";
 import { jsonBody } from "../request";
@@ -30,6 +32,8 @@ import { maxNestsPerAccount, nestLimitError, type NestRow } from "./account";
 export const SERVER_LINK_LIFETIME = 900;
 export const SERVER_POLL_INTERVAL = 3;
 export const DEFAULT_MAX_NESTS = 900;
+/** A computer's or a nest's name, as the nest keeps it (AuthStore.MaxNameLength). */
+export const MAX_NAME = 64;
 const STARTS_PER_HOUR = 10;
 const APPROVALS_PER_HOUR = 20;
 
@@ -335,6 +339,9 @@ async function serverJson(ctx: Ctx, n: NestRow): Promise<Record<string, unknown>
     if (n.status === "pending") await markReached(ctx.env, ctx.now, n.id);
     await ctx.env.DB.prepare("UPDATE nests SET last_seen_at = ?1, last_version = COALESCE(?2, last_version) WHERE id = ?3").bind(ctx.now, version, n.id).run();
   }
+  // A nest that missed a rename while it was offline (or was set up before nests had names) is told its name now. An
+  // older nest has no "name" in its status and no way to keep one.
+  if (st && "name" in st && st.name !== n.label) ctx.defer(tellName(ctx, n, n.label));
   const list = devices && devices.status === 200 ? obj(devices.json)?.devices : null;
   return {
     id: n.id,
@@ -353,6 +360,63 @@ export async function listServersRoute(ctx: Ctx): Promise<Response> {
   const s = await requireBrowser(ctx);
   const servers = await serversOf(ctx, s.accountId);
   return json(200, await Promise.all(servers.map((n) => serverJson(ctx, n))));
+}
+
+/** A new name from the account page: control and invisible characters dropped, trimmed, 1-64 characters, or 400 bad_name. */
+function newName(v: unknown): string {
+  if (v !== undefined && v !== null && typeof v !== "string") throw new HttpError(400, "bad_request");
+  const name = typeof v === "string" ? stripHidden(v).trim() : "";
+  if (name.length === 0) throw new HttpError(400, "bad_name", "Type a name.");
+  if ([...name].length > MAX_NAME) throw new HttpError(400, "bad_name", `A name is at most ${MAX_NAME} letters.`);
+  return name;
+}
+
+/** An older nest has no rename route: 405 for the path it knows for DELETE only, or a 404 that is not its own JSON error. */
+function tooOld(r: AdminAnswer): boolean {
+  return r.status === 405 || (r.status === 404 && typeof obj(r.json)?.error !== "string");
+}
+
+/** Tells the nest the name its owner gave it, best effort: an offline nest is told on a later GET /v1/servers. */
+async function tellName(ctx: Ctx, n: AdminTarget, name: string): Promise<void> {
+  try {
+    await adminCall(ctx.env, ctx.now, n, "PUT", "/api/relay/name", { name });
+  } catch (e) {
+    if (!(e instanceof NestOffline)) console.error("servers: telling the nest its name failed", e instanceof Error ? e.message : "unknown");
+  }
+}
+
+// PATCH /v1/servers/{id}/devices/{deviceId} {name}
+export async function renameDeviceRoute(ctx: Ctx, nestId: string, deviceId: string): Promise<Response> {
+  const s = await requireBrowser(ctx);
+  const n = await ownServer(ctx, s.accountId, nestId);
+  if (!DEVICE_ID_RE.test(deviceId)) throw new HttpError(404, "not_found");
+  const name = newName(jsonBody(ctx).name);
+  let r;
+  try {
+    r = await adminCall(ctx.env, ctx.now, n, "PATCH", `/api/relay/devices/${encodeURIComponent(deviceId)}`, { name });
+  } catch (e) {
+    if (e instanceof NestOffline) throw new HttpError(503, "nest_offline");
+    throw e;
+  }
+  if (tooOld(r)) throw new HttpError(409, "nest_too_old");
+  if (r.status === 404) throw new HttpError(404, "not_found", "That computer is not on this nest any more.");
+  if (r.status === 400) throw new HttpError(400, "bad_name", "The nest did not take that name. Try another one.");
+  // The name the nest settled on: "Laptop (2)" when another computer is already called "Laptop".
+  const stored = r.status === 200 ? str(obj(r.json)?.name, MAX_NAME * 2) : null;
+  if (!stored) throw new HttpError(503, "nest_offline");
+  await audit(ctx, "device_renamed", s.accountId, n.id, { to: stored });
+  return json(200, { id: deviceId, name: stored, requested: name });
+}
+
+// PATCH /v1/servers/{id} {label}
+export async function renameServerRoute(ctx: Ctx, nestId: string): Promise<Response> {
+  const s = await requireBrowser(ctx);
+  const n = await ownServer(ctx, s.accountId, nestId);
+  const label = newName(jsonBody(ctx).label);
+  await ctx.env.DB.prepare("UPDATE nests SET label = ?1 WHERE id = ?2 AND account_id = ?3").bind(label, n.id, s.accountId).run();
+  await audit(ctx, "nest_renamed", s.accountId, n.id, { from: n.label, to: label });
+  ctx.defer(tellName(ctx, n, label));
+  return json(200, { id: n.id, label });
 }
 
 // DELETE /v1/servers/{id}/devices/{deviceId}

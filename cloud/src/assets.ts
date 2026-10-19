@@ -11,6 +11,7 @@ const STYLE = String.raw`
     --accent-text: #0b0d10; --danger: #ef6b6b; --ok: #66bb6a; --warn: #f0a640; }
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 body { margin: 0; font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); }
 header.top { display: flex; align-items: center; gap: 6px; padding: 14px 20px; border-bottom: 1px solid var(--line); }
 .brand { font-weight: 700; color: var(--text); text-decoration: none; }
@@ -26,6 +27,8 @@ a { color: var(--accent); }
 button:disabled { opacity: 0.5; cursor: default; }
 button.link { background: none; border: none; color: var(--accent); padding: 0; text-decoration: underline; }
 button.danger { background: transparent; color: var(--danger); border-color: var(--danger); }
+button.secondary { background: transparent; color: var(--accent); }
+button.small { padding: 2px 10px; font-size: 0.85rem; vertical-align: middle; }
 .button.home { margin-left: auto; padding: 5px 12px; font-size: 0.9rem; background: transparent; color: var(--accent); }
 .wide { width: 100%; }
 label { display: block; margin: 8px 0 4px; }
@@ -60,6 +63,9 @@ label.choice input { width: auto; }
 details.card > summary { font-size: 1.1rem; font-weight: 600; cursor: pointer; }
 details.card[open] > summary { margin-bottom: 12px; }
 .devices > li { padding: 8px 0; }
+form.rename label { margin-top: 0; font-size: 0.9rem; }
+form.rename p, .rename-done { margin: 6px 0 0; font-size: 0.9rem; }
+.saved { color: var(--ok); }
 .cookie-notice { position: fixed; left: 24px; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); z-index: 20;
   width: 400px; max-width: calc(100% - 48px); background: var(--card); color: var(--text); border: 1px solid var(--line);
   border-radius: 10px; padding: 16px 18px; font-size: 15px; line-height: 1.5;
@@ -201,23 +207,142 @@ const ACCOUNT_JS = String.raw`(function () {
     details.textContent = parts.join(" \u00b7 ");
     var list = li.querySelector("[data-field=devices]");
     while (list.firstChild) list.removeChild(list.firstChild);
+    // A nest that never connected has no computers to rename yet.
+    li.querySelector("[data-field=rename-offline]").hidden = s.online || s.status === "pending";
     if (!s.online) { list.appendChild(el("li", "muted", "Shown when the nest is connected.")); return; }
     if (!s.devices.length) { list.appendChild(el("li", "muted", "None yet.")); return; }
     s.devices.forEach(function (d) {
       var item = el("li");
       item.setAttribute("data-device", d.id);
       var line = el("div");
-      line.appendChild(el("strong", "", d.name || "Computer"));
+      var name = el("strong", "", d.name || "Computer");
+      name.setAttribute("data-field", "name");
+      line.appendChild(name);
       if (d.system) line.appendChild(el("span", "muted", " " + d.system));
       item.appendChild(line);
       item.appendChild(el("div", "muted", d.lastSeen ? "Last synced " + new Date(d.lastSeen).toLocaleString() : "Not synced yet"));
       var actions = el("div", "actions");
+      var r = el("button", "secondary", "Rename");
+      r.type = "button";
+      r.setAttribute("data-action", "rename-device");
+      actions.appendChild(r);
       var b = el("button", "danger", "Remove");
       b.type = "button";
       b.setAttribute("data-action", "remove-device");
       actions.appendChild(b);
       item.appendChild(actions);
       list.appendChild(item);
+    });
+  }
+  var MAX_NAME = 64;
+  var renames = 0;
+  function clearDone(row) {
+    var old = row.querySelector(":scope > .rename-done");
+    if (old) old.parentNode.removeChild(old);
+  }
+  function done(row, after, cls, text) {
+    clearDone(row);
+    var p = el("p", "rename-done " + cls, text);
+    p.setAttribute("role", "status");
+    row.insertBefore(p, after.nextSibling);
+  }
+  // Rename in place: the row's own parts are hidden and a small form stands where they were until Save or Cancel.
+  // send(name) answers an error to show in the form, or nothing when the new name was saved.
+  function renameBox(row, parts, what, current, hint, opener, send) {
+    if (row.querySelector(":scope > form.rename")) return;
+    clearDone(row);
+    var form = el("form", "rename");
+    var id = "rename-" + (++renames);
+    var label = el("label", "", "New name for this " + what);
+    label.htmlFor = id;
+    var input = el("input");
+    input.id = id;
+    input.maxLength = MAX_NAME;
+    input.value = current;
+    input.autocomplete = "off";
+    var save = el("button", "", "Save");
+    save.type = "submit";
+    var cancel = el("button", "secondary", "Cancel");
+    cancel.type = "button";
+    var line = el("div", "input-row");
+    line.appendChild(input);
+    line.appendChild(save);
+    line.appendChild(cancel);
+    var error = el("p", "error");
+    error.setAttribute("role", "alert");
+    error.hidden = true;
+    form.appendChild(label);
+    form.appendChild(line);
+    form.appendChild(el("p", "muted", "Was: " + current + " \u00b7 up to " + MAX_NAME + " letters" + hint));
+    form.appendChild(error);
+    row.insertBefore(form, parts[parts.length - 1].nextSibling);
+    parts.forEach(function (p) { p.hidden = true; });
+    function close() {
+      form.parentNode.removeChild(form);
+      parts.forEach(function (p) { p.hidden = false; });
+      if (opener && !opener.disabled) opener.focus();
+    }
+    cancel.addEventListener("click", close);
+    form.addEventListener("keydown", function (ev) {
+      if (ev.key === "Escape") { ev.preventDefault(); close(); }
+    });
+    form.addEventListener("submit", function (ev) {
+      ev.preventDefault();
+      var name = input.value.trim();
+      if (!name) { error.textContent = "Type a name."; error.hidden = false; input.focus(); return; }
+      save.disabled = true;
+      error.hidden = true;
+      send(name).then(function (problem) {
+        save.disabled = false;
+        if (problem === undefined) { close(); return; }
+        if (problem) { error.textContent = problem; error.hidden = false; }
+      });
+    });
+    input.focus();
+    input.select();
+  }
+  // The error to show in a rename form ("" when the page goes to the sign-in page instead).
+  function renameFailed(res) {
+    if (res.body && (res.body.error === "reauth_required" || res.body.error === "unauthorized")) { ok(res); return ""; }
+    return res.body.message || "That did not work. Try again.";
+  }
+  function renameOffline(li) {
+    li.querySelector("[data-field=rename-offline]").hidden = false;
+    Array.prototype.forEach.call(li.querySelectorAll("button[data-action=rename-device]"), function (x) { x.disabled = true; });
+  }
+  var SAVED = "Saved. Your other computers show the new name within a few seconds.";
+  var SOON = " \u00b7 your other computers show it within a few seconds.";
+  function renameDevice(li, id, dev, opener) {
+    var name = dev.querySelector("[data-field=name]");
+    var parts = Array.prototype.filter.call(dev.children, function (c) { return !c.classList.contains("rename-done"); });
+    renameBox(dev, parts, "computer", name.textContent, SOON, opener, function (typed) {
+      var path = "/v1/servers/" + id + "/devices/" + encodeURIComponent(dev.getAttribute("data-device"));
+      return pnApi("PATCH", path, { name: typed }).then(function (res) {
+        if (!res.ok) {
+          if (res.body.error === "nest_offline") renameOffline(li);
+          return renameFailed(res);
+        }
+        name.textContent = res.body.name;
+        var last = parts[parts.length - 1];
+        if (res.body.name !== res.body.requested) {
+          done(dev, last, "notice", "Another computer in this nest is already called " + res.body.requested + ", so this one was saved as " +
+            res.body.name + ". Rename it again to pick a different name.");
+        } else {
+          done(dev, last, "saved", SAVED);
+        }
+      });
+    });
+  }
+  // A nest's name, saved with PATCH to path ({label}); hint ends the form's small print, saved is said afterwards.
+  function renameNest(li, path, hint, saved, opener) {
+    var row = li.querySelector(".row");
+    var name = row.querySelector("[data-field=label]");
+    renameBox(li, [row], "nest", name.textContent, hint, opener, function (typed) {
+      return pnApi("PATCH", path, { label: typed }).then(function (res) {
+        if (!res.ok) return renameFailed(res);
+        name.textContent = res.body.label;
+        done(li, row, "saved", saved);
+      });
     });
   }
   function loadServers() {
@@ -236,7 +361,12 @@ const ACCOUNT_JS = String.raw`(function () {
     var li = b.closest("[data-server]");
     var id = li && li.getAttribute("data-server");
     if (!id) return;
-    if (b.getAttribute("data-action") === "remove-device") {
+    if (b.getAttribute("data-action") === "rename-device") {
+      var renamed = b.closest("[data-device]");
+      if (renamed) renameDevice(li, id, renamed, b);
+    } else if (b.getAttribute("data-action") === "rename-server") {
+      renameNest(li, "/v1/servers/" + id, SOON, SAVED, b);
+    } else if (b.getAttribute("data-action") === "remove-device") {
       var dev = b.closest("[data-device]");
       if (!dev || !confirm("Remove this computer? It stops syncing until it signs in again.")) return;
       b.disabled = true;
@@ -257,7 +387,9 @@ const ACCOUNT_JS = String.raw`(function () {
     var li = b.closest("[data-nest]");
     var id = li && li.getAttribute("data-nest");
     if (!id) return;
-    if (b.getAttribute("data-action") === "toggle") {
+    if (b.getAttribute("data-action") === "rename") {
+      renameNest(li, "/v1/nests/" + id, ".", "Saved.", b);
+    } else if (b.getAttribute("data-action") === "toggle") {
       pnApi("PATCH", "/v1/nests/" + id, { hostedLogin: b.getAttribute("data-on") !== "1" }).then(function (res) { if (ok(res)) location.reload(); });
     } else if (b.getAttribute("data-action") === "remove") {
       if (!confirm("Remove this nest from your account? Signing in to it with this account stops working.")) return;

@@ -170,6 +170,32 @@ public class Stage4PagesTests
     }
 
     [AvaloniaFact]
+    public void NeedsYouOffersThisComputersOwnNameWithBothChoices()
+    {
+        var window = Open();
+        window.Navigate(MainPage.Attention);
+        var ran = new List<string>();
+        var offer = new NameOffer("PC-1", "StudyPC");
+        window.ShowAttention([new AttentionItem(offer.Title, offer.Detail, offer.UseLabel, () => ran.Add("use"), AttentionKind.Rename,
+            SecondLabel: offer.KeepLabel, Second: () => ran.Add("keep"))]);
+        Layout(window);
+        Assert.Equal(1, window.AttentionCards);
+        var texts = Screen.All<TextBlock>(window).Where(t => t.IsEffectivelyVisible).Select(t => t.Text).ToList();
+        Assert.Contains("Use this computer's own name?", texts);
+        Assert.Contains(texts, t => t?.Contains("called PC-1", StringComparison.Ordinal) == true);
+        var buttons = Screen.All<Button>(window).Where(b => b.IsEffectivelyVisible).ToList();
+        Person.Click(buttons.Single(b => Screen.Describe(b) == "Keep PC-1"));
+        Person.Click(buttons.Single(b => Screen.Describe(b) == "Use StudyPC"));
+        Assert.Equal(["keep", "use"], ran);
+
+        // Other cards have no second button.
+        window.ShowAttention([new AttentionItem("x", "y", "Show in folder", () => { })]);
+        Layout(window);
+        Assert.DoesNotContain(Screen.All<Button>(window).Where(b => b.IsEffectivelyVisible), b => Screen.Describe(b) == "Keep PC-1");
+        Close(window);
+    }
+
+    [AvaloniaFact]
     public async Task RestoreOnTheDeletedTabBringsTheNewestVersionBack()
     {
         var actions = new SampleActions();

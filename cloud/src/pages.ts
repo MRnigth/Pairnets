@@ -143,10 +143,11 @@ export function accountPage(v: AccountView): string {
     ? v.servers
         .map(
           (n) => `<li class="server" data-server="${e(n.id)}">
-<div class="row"><strong>${e(n.label)}</strong> <span class="pill" data-field="online">checking</span></div>
+<div class="row"><strong data-field="label">${e(n.label)}</strong> <span class="pill" data-field="online">checking</span> <button type="button" class="secondary small" data-action="rename-server">Rename nest</button></div>
 <div class="muted" data-field="details">${n.status === "pending" ? "Waiting for the nest to connect for the first time." : ""}</div>
 <p class="muted">Computers using this nest:</p>
 <ul class="list devices" data-field="devices"><li class="muted">Loading...</li></ul>
+<p class="muted" data-field="rename-offline" hidden>Your computers can be renamed when your nest is connected again. The nest's own name can be changed any time.</p>
 <div class="actions"><button type="button" class="danger" data-action="remove-server">Remove this nest from my account</button></div>
 </li>`,
         )
@@ -157,7 +158,7 @@ export function accountPage(v: AccountView): string {
     ? v.nests
         .map(
           (n) => `<li class="nest" data-nest="${e(n.nestId)}">
-<div class="row"><strong>${e(n.label)}</strong> <span class="pill ${e(n.status === "pending" ? "pending" : n.online)}">${e(n.status === "pending" ? "linking" : n.online)}</span></div>
+<div class="row"><strong data-field="label">${e(n.label)}</strong> <span class="pill ${e(n.status === "pending" ? "pending" : n.online)}">${e(n.status === "pending" ? "linking" : n.online)}</span> <button type="button" class="secondary small" data-action="rename">Rename nest</button></div>
 <div><a href="${e(n.publicUrl)}" rel="noreferrer">${e(n.publicUrl)}</a></div>
 <div class="muted">Version ${e(n.serverVersion ?? "unknown")} · last seen ${when(n.lastSeenAt)}</div>
 ${n.addressWarning ? `<p class="error">${e(n.addressWarning)}</p>` : ""}
