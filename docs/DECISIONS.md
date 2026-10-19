@@ -1030,3 +1030,23 @@ The owner's answers to the 2026-10-14 audit questions:
   and the others stop waiting as before; the 30-minute limit and "Download now anyway" stay.
 * **The repeat comes from the sync engine, not the app window**, so it works on every computer, with or without its
   window open. Keep `BatchReannounceInterval` well under the others' `PeerQuietTimeout`.
+
+## Design review fixes: colours, focus, motion, sizes (2026-10-19)
+
+* **The keyboard focus ring is the dark accent ink, not the accent.** `T.AccentInk` (#1F55C9 light, 6.6:1 on a
+  card; #9CC2FF dark) as a 2 px ring 3 px outside the control, the same in both apps (WPF `FocusRing` styles, Avalonia
+  `AdornerLayer.DefaultFocusAdorner`). It shows only after Tab or the arrow keys, never after a click; the old faint
+  in-template rings are gone so there is one ring, not two.
+* **Reduce motion is read once at start** (macOS NSWorkspace, GNOME `enable-animations`, Windows' animation switch
+  when the Mac/Linux app runs there for tests). With it on, `Motion.Apply` takes the animations out of the app's
+  styles, so classes written in XAML (a row's "enter") do nothing too, and bars jump instead of gliding.
+* **Contrast values come from the measured review** (`findings-apps-numbers.md`): switch off track 3:1+, Fix button
+  #B95309, dark hover blue #2560D6, amber/grey dots, soft text. Both palettes keep one hex per key; `PaletteParityTests`
+  holds them together and keeps the fixed pairs above their minimum.
+* **Where the apps differed, the Mac/Linux values won** (bold button words, accent-ink bold links, soft caps and day
+  headings, bold fact values, 1 px field focus, radius 14 strips, 36 px icon squares, pressed colours instead of
+  85 % opacity, sign-in field 50, base text 14), except two: the danger hover is the darker red #A61B25 in both (not
+  88 % opacity, which made white text fainter), and the pop keeps Avalonia's overshoot. WPF still has no letter
+  spacing, so its caps labels stay without the 0.8 tracking.
+* **Windows scroll bars** are thin and rounded with no arrows (thumb `T.Dash`, `T.Off` under the mouse), drawn from
+  existing keys so the palettes stay identical.

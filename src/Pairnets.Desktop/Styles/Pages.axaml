@@ -234,8 +234,7 @@
     <Setter Property="Foreground" Value="White" />
   </Style>
   <Style Selector="Button.reset:pointerover /template/ ContentPresenter#PART_ContentPresenter">
-    <Setter Property="Background" Value="{DynamicResource T.DangerButton}" />
-    <Setter Property="Opacity" Value="0.88" />
+    <Setter Property="Background" Value="{StaticResource S.RedHover}" />
   </Style>
   <!-- A plain row that is a button (Help, "Report a bug…"), and the "Advanced" header -->
   <Style Selector="Button.rowbtn">

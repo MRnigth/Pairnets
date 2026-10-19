@@ -6,7 +6,7 @@
     <Setter Property="Background" Value="{DynamicResource T.Bg}" />
     <Setter Property="Foreground" Value="{DynamicResource T.Text}" />
     <Setter Property="FontFamily" Value="{StaticResource F.Sans}" />
-    <Setter Property="FontSize" Value="13.5" />
+    <Setter Property="FontSize" Value="14" />
   </Style>
   <!-- Popups are separate roots and do not inherit the window font. -->
   <Style Selector="ContextMenu, MenuFlyoutPresenter, ToolTip, FlyoutPresenter">
@@ -319,7 +319,7 @@
     <Setter Property="Foreground" Value="White" />
   </Style>
   <Style Selector="Button.danger:pointerover /template/ ContentPresenter#PART_ContentPresenter">
-    <Setter Property="Background" Value="#A61B25" />
+    <Setter Property="Background" Value="{StaticResource S.RedHover}" />
     <Setter Property="Foreground" Value="White" />
   </Style>
 

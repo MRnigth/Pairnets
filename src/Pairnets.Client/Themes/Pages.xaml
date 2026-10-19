@@ -91,6 +91,7 @@
     <Setter Property="BorderThickness" Value="1" />
     <Setter Property="Foreground" Value="{DynamicResource T.Text}" />
     <Setter Property="Tag" Value="{DynamicResource T.Hover}" />
+    <Setter Property="ui:Pg.Pressed" Value="{DynamicResource T.SubtleHover}" />
     <Setter Property="Height" Value="38" />
     <Setter Property="Padding" Value="14,0" />
     <Setter Property="FontSize" Value="13" />
@@ -110,7 +111,7 @@
               <Setter TargetName="bd" Property="Background" Value="{Binding Tag, RelativeSource={RelativeSource TemplatedParent}}" />
             </Trigger>
             <Trigger Property="IsPressed" Value="True">
-              <Setter TargetName="bd" Property="Opacity" Value="0.85" />
+              <Setter TargetName="bd" Property="Background" Value="{Binding (ui:Pg.Pressed), RelativeSource={RelativeSource TemplatedParent}}" />
             </Trigger>
             <Trigger Property="IsEnabled" Value="False">
               <Setter TargetName="bd" Property="Opacity" Value="0.5" />
@@ -126,13 +127,15 @@
     <Setter Property="Foreground" Value="White" />
     <Setter Property="FontWeight" Value="Bold" />
     <Setter Property="Tag" Value="{DynamicResource T.AccentButtonHover}" />
+    <Setter Property="ui:Pg.Pressed" Value="#1F55C9" />
   </Style>
   <Style x:Key="PgDanger" TargetType="Button" BasedOn="{StaticResource PgButton}">
     <Setter Property="Background" Value="{DynamicResource T.DangerBtn}" />
     <Setter Property="BorderThickness" Value="0" />
     <Setter Property="Foreground" Value="White" />
     <Setter Property="FontWeight" Value="Bold" />
-    <Setter Property="Tag" Value="#A61B25" />
+    <Setter Property="Tag" Value="{StaticResource S.RedHover}" />
+    <Setter Property="ui:Pg.Pressed" Value="{StaticResource S.RedHover}" />
   </Style>
   <!-- Grey chip fill, round 11 (Sign in again, Sign out, Change...) -->
   <Style x:Key="PgChipButton" TargetType="Button" BasedOn="{StaticResource PgButton}">

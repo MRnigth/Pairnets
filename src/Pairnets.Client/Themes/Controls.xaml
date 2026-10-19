@@ -110,7 +110,7 @@
     <Setter Property="Background" Value="{DynamicResource T.Banner}" />
     <Setter Property="BorderBrush" Value="{DynamicResource T.BannerBorder}" />
     <Setter Property="BorderThickness" Value="1" />
-    <Setter Property="CornerRadius" Value="16" />
+    <Setter Property="CornerRadius" Value="14" />
     <Setter Property="Padding" Value="14,10,10,10" />
   </Style>
   <Style x:Key="Divider" TargetType="Border">
@@ -131,6 +131,7 @@
     <Setter Property="FontWeight" Value="SemiBold" />
     <Setter Property="Cursor" Value="Hand" />
     <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="ui:Pg.Pressed" Value="{DynamicResource T.SubtleHover}" />
     <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRing}" />
     <Setter Property="Template">
       <Setter.Value>
@@ -143,7 +144,7 @@
               <Setter TargetName="bd" Property="Background" Value="{Binding Tag, RelativeSource={RelativeSource TemplatedParent}}" />
             </Trigger>
             <Trigger Property="IsPressed" Value="True">
-              <Setter TargetName="bd" Property="Opacity" Value="0.85" />
+              <Setter TargetName="bd" Property="Background" Value="{Binding (ui:Pg.Pressed), RelativeSource={RelativeSource TemplatedParent}}" />
             </Trigger>
             <Trigger Property="IsEnabled" Value="False">
               <Setter TargetName="bd" Property="Opacity" Value="0.5" />
@@ -164,13 +165,15 @@
   <Style x:Key="AccentButton" TargetType="Button" BasedOn="{StaticResource ButtonBase}">
     <Setter Property="Background" Value="{DynamicResource T.AccentButton}" />
     <Setter Property="Tag" Value="{DynamicResource T.AccentButtonHover}" />
+    <Setter Property="ui:Pg.Pressed" Value="#1F55C9" />
     <Setter Property="Foreground" Value="White" />
-    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="FontWeight" Value="Bold" />
   </Style>
   <!-- The tray's "Fix" button: a darker orange than the badge, so the white words read well. -->
   <Style x:Key="WarnButton" TargetType="Button" BasedOn="{StaticResource ButtonBase}">
     <Setter Property="Background" Value="{StaticResource S.OrangeButton}" />
     <Setter Property="Tag" Value="{StaticResource S.OrangeButtonHover}" />
+    <Setter Property="ui:Pg.Pressed" Value="{StaticResource S.OrangeButtonHover}" />
     <Setter Property="Foreground" Value="White" />
     <Setter Property="FontWeight" Value="Bold" />
   </Style>
@@ -179,13 +182,15 @@
   <Style x:Key="DangerButton" TargetType="Button" BasedOn="{StaticResource ButtonBase}">
     <Setter Property="Background" Value="{StaticResource S.Red}" />
     <Setter Property="Tag" Value="{StaticResource S.RedHover}" />
+    <Setter Property="ui:Pg.Pressed" Value="{StaticResource S.RedHover}" />
     <Setter Property="Foreground" Value="White" />
-    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="FontWeight" Value="Bold" />
   </Style>
 
   <Style x:Key="FlatButton" TargetType="Button" BasedOn="{StaticResource ButtonBase}">
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="Tag" Value="{DynamicResource T.Hover}" />
+    <Setter Property="ui:Pg.Pressed" Value="{DynamicResource T.Hover}" />
     <Setter Property="Foreground" Value="{DynamicResource T.Text}" />
   </Style>
 
@@ -259,7 +264,6 @@
           <ControlTemplate.Triggers>
             <Trigger Property="IsKeyboardFocused" Value="True">
               <Setter TargetName="bd" Property="BorderBrush" Value="{DynamicResource T.Accent}" />
-              <Setter TargetName="bd" Property="BorderThickness" Value="1.5" />
             </Trigger>
           </ControlTemplate.Triggers>
         </ControlTemplate>
@@ -278,7 +282,6 @@
           <ControlTemplate.Triggers>
             <Trigger Property="IsKeyboardFocused" Value="True">
               <Setter TargetName="bd" Property="BorderBrush" Value="{DynamicResource T.Accent}" />
-              <Setter TargetName="bd" Property="BorderThickness" Value="1.5" />
             </Trigger>
           </ControlTemplate.Triggers>
         </ControlTemplate>
@@ -380,17 +383,17 @@
   <Style x:Key="Caps" TargetType="TextBlock">
     <Setter Property="FontSize" Value="11" />
     <Setter Property="FontWeight" Value="Bold" />
-    <Setter Property="Foreground" Value="{DynamicResource T.Muted}" />
+    <Setter Property="Foreground" Value="{DynamicResource T.TextSoft}" />
   </Style>
   <Style x:Key="Value" TargetType="TextBlock">
     <Setter Property="FontSize" Value="14.5" />
-    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="FontWeight" Value="Bold" />
     <Setter Property="TextTrimming" Value="CharacterEllipsis" />
   </Style>
   <Style x:Key="Day" TargetType="TextBlock">
     <Setter Property="FontSize" Value="11.5" />
-    <Setter Property="FontWeight" Value="SemiBold" />
-    <Setter Property="Foreground" Value="{DynamicResource T.Muted}" />
+    <Setter Property="FontWeight" Value="Bold" />
+    <Setter Property="Foreground" Value="{DynamicResource T.TextSoft}" />
     <Setter Property="Margin" Value="8,12,0,4" />
   </Style>
 
@@ -456,7 +459,7 @@
     <Setter Property="Background" Value="{DynamicResource T.Tile}" />
     <Setter Property="BorderBrush" Value="{DynamicResource T.Border}" />
     <Setter Property="BorderThickness" Value="1" />
-    <Setter Property="CornerRadius" Value="16" />
+    <Setter Property="CornerRadius" Value="18" />
     <Setter Property="Padding" Value="14,12" />
     <Setter Property="Margin" Value="5,0" />
   </Style>
@@ -464,7 +467,7 @@
     <Setter Property="Background" Value="{DynamicResource T.WarnPill}" />
     <Setter Property="BorderBrush" Value="{DynamicResource T.WarnBorder}" />
     <Setter Property="BorderThickness" Value="1" />
-    <Setter Property="CornerRadius" Value="16" />
+    <Setter Property="CornerRadius" Value="14" />
     <Setter Property="Padding" Value="14,10,10,10" />
   </Style>
   <Style x:Key="OkChip" TargetType="Border">
@@ -486,10 +489,17 @@
   <Style x:Key="LinkButton" TargetType="Button" BasedOn="{StaticResource ButtonBase}">
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="Tag" Value="{DynamicResource T.Hover}" />
-    <Setter Property="Foreground" Value="{DynamicResource T.Accent}" />
+    <Setter Property="ui:Pg.Pressed" Value="{DynamicResource T.Hover}" />
+    <Setter Property="Foreground" Value="{DynamicResource T.AccentInk}" />
     <Setter Property="Padding" Value="6,3" />
     <Setter Property="MinHeight" Value="0" />
     <Setter Property="FontSize" Value="12.5" />
+    <Setter Property="FontWeight" Value="Bold" />
+    <Style.Triggers>
+      <Trigger Property="IsMouseOver" Value="True">
+        <Setter Property="Foreground" Value="{DynamicResource T.AccentHover}" />
+      </Trigger>
+    </Style.Triggers>
   </Style>
   <Style x:Key="IconButton" TargetType="Button" BasedOn="{StaticResource SubtleButton}">
     <Setter Property="Padding" Value="0" />
@@ -610,7 +620,7 @@
               <Setter TargetName="bd" Property="Background" Value="{Binding Tag, RelativeSource={RelativeSource TemplatedParent}}" />
             </Trigger>
             <Trigger Property="IsPressed" Value="True">
-              <Setter TargetName="bd" Property="Opacity" Value="0.85" />
+              <Setter TargetName="bd" Property="Background" Value="{Binding (ui:Pg.Pressed), RelativeSource={RelativeSource TemplatedParent}}" />
             </Trigger>
             <Trigger Property="IsEnabled" Value="False">
               <Setter TargetName="bd" Property="Opacity" Value="0.5" />
