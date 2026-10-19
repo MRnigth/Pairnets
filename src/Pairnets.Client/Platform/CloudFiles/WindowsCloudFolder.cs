@@ -389,11 +389,47 @@ public sealed class WindowsCloudFolder : ICloudFolder
             if (!CloudPlaceholders.TryGetAttributesAndTag(path, out var attributes, out var tag) || !CloudPlaceholders.IsCloudTag(tag))
                 continue;
             var isFolder = (attributes & FileAttributes.Directory) != 0;
-            if ((!isFolder && CloudPlaceholders.IsContentOnline(attributes)) || !WithHandle(path, h => Check(CfApi.CfRevertPlaceholder(h, 0, IntPtr.Zero))))
+            if (!isFolder && CloudPlaceholders.IsContentOnline(attributes))
+            {
+                stuck++;
+                continue;
+            }
+            if (!Revert(path, isFolder))
                 stuck += isFolder ? 0 : 1;
         }
         return stuck;
     }
+
+    /// <summary>
+    /// Makes one placeholder a plain file or folder again, and checks that it is: through the cloud files API's own
+    /// handle first, then through a plain one (an attribute and write handle, which is all Windows asks for).
+    /// </summary>
+    private bool Revert(string path, bool isFolder)
+    {
+        var hr = 0;
+        WithHandle(path, h => Check(hr = CfApi.CfRevertPlaceholder(h, 0, IntPtr.Zero)));
+        if (StillCloud(path))
+        {
+            using var handle = CreateFileW(path, 0x0002 /* FILE_WRITE_DATA */ | 0x0100 /* FILE_WRITE_ATTRIBUTES */ | 0x0080 /* FILE_READ_ATTRIBUTES */,
+                FileShare.ReadWrite | FileShare.Delete, IntPtr.Zero, FileMode.Open,
+                isFolder ? 0x02000000 /* FILE_FLAG_BACKUP_SEMANTICS */ : 0, IntPtr.Zero);
+            if (!handle.IsInvalid)
+                hr = CfApi.CfRevertPlaceholder(handle.DangerousGetHandle(), 0, IntPtr.Zero);
+            else
+                hr = Marshal.GetHRForLastWin32Error();
+        }
+        if (!StillCloud(path))
+            return true;
+        _log.LogWarning("{Path} could not be made a plain {Kind} again (0x{Result:X8})", path, isFolder ? "folder" : "file", hr);
+        return false;
+    }
+
+    private static bool StillCloud(string path) =>
+        CloudPlaceholders.TryGetAttributesAndTag(path, out _, out var tag) && CloudPlaceholders.IsCloudTag(tag);
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern Microsoft.Win32.SafeHandles.SafeFileHandle CreateFileW(string name, int access, FileShare share, IntPtr security,
+        FileMode mode, int flags, IntPtr template);
 
     private void Disconnect()
     {

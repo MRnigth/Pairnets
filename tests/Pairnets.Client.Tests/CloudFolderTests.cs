@@ -43,9 +43,22 @@ public sealed class CloudFolderTests : IDisposable
         return root;
     }
 
+    /// <summary>What the cloud folder logged, shown when a check fails.</summary>
+    private static readonly System.Collections.Concurrent.ConcurrentQueue<string> Logged = new();
+
+    private static string Log() => string.Join("\n", Logged);
+
+    private sealed class ListLogger : Microsoft.Extensions.Logging.ILogger
+    {
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+        public bool IsEnabled(Microsoft.Extensions.Logging.LogLevel logLevel) => true;
+        public void Log<TState>(Microsoft.Extensions.Logging.LogLevel logLevel, Microsoft.Extensions.Logging.EventId eventId, TState state, Exception? exception,
+            Func<TState, Exception?, string> formatter) => Logged.Enqueue($"[{logLevel}] {formatter(state, exception)} {exception?.Message}");
+    }
+
     private static WindowsCloudFolder Start(string root, CloudFolderMode mode)
     {
-        var cloud = WindowsCloudFolder.Start(root, mode, Path.Combine(Environment.SystemDirectory, "imageres.dll"), NullLogger.Instance, out var problem);
+        var cloud = WindowsCloudFolder.Start(root, mode, Path.Combine(Environment.SystemDirectory, "imageres.dll"), new ListLogger(), out var problem);
         Assert.True(cloud is not null, "Windows did not take the folder: " + problem);
         return cloud!;
     }
@@ -90,8 +103,8 @@ public sealed class CloudFolderTests : IDisposable
             Assert.Null(await cloud.LeaveAsync(CancellationToken.None));
         }
         Assert.Empty(WindowsCloudFolder.Registered());
-        Assert.False(State(file).Placeholder);
-        Assert.False(State(Path.GetDirectoryName(file)!).Placeholder); // folders too: a leftover would hide their files
+        Assert.False(State(file).Placeholder, Log());
+        Assert.False(State(Path.GetDirectoryName(file)!).Placeholder, Log()); // folders too: a leftover would hide their files
         Assert.Equal("my report, changed", File.ReadAllText(file));
     }
 
@@ -269,7 +282,12 @@ public sealed class CloudFolderTests : IDisposable
         // Once it is here, it syncs under its new name.
         session.SyncNow();
         Assert.True(SpinWait.SpinUntil(() => nest.Store.ReadManifest(null).Entries.Any(e => e.Path == "notes renamed.txt" && !e.Deleted), TimeSpan.FromSeconds(30)),
-            "the renamed file was not uploaded under its new name");
+            "the renamed file was not uploaded under its new name. Status: " + session.Status.Text
+            + "\nWarnings: " + string.Join("; ", session.Warnings().Select(w => w.Path + ": " + w.Message))
+            + "\nActivity: " + string.Join("; ", session.Activity.Items.Take(12).Select(i => i.Kind + " " + i.Path))
+            + "\nState: " + State(renamed) + " online=" + cloud.IsCloudOnly(renamed)
+            + "\nNest: " + string.Join("; ", nest.Store.ReadManifest(null).Entries.Select(e => e.Path + (e.Deleted ? " (deleted)" : "")))
+            + "\nLog: " + Log());
     }
 
     [CloudFact]
