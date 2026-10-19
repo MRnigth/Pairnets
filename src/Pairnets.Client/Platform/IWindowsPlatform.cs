@@ -29,4 +29,7 @@ public interface IWindowsPlatform
 
     /// <summary>Starts a downloaded installer (PairnetsSetup.exe) with these arguments.</summary>
     void RunInstaller(string path, string arguments);
+
+    /// <summary>Starts the Pairnets.exe that just replaced this one (a copy from the zip updating itself).</summary>
+    void StartUpdatedApp(string path, string arguments);
 }

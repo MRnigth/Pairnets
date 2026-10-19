@@ -506,12 +506,15 @@ public sealed class DesktopControllerTests
     }
 
     [AvaloniaFact]
-    public async Task AppUpdate_Download_OpensReleasePage()
+    public async Task AppUpdate_ReplacesItself_OrOnAMacSaysWhyItOpensTheDownloadPage()
     {
         await using var app = await AppUnderTest.StartAsync(releaseVersion: "99.0.0");
         await app.WaitUntilIdleAsync();
         if (app.Feed.Asset is null)
             return; // no download for this kind of computer (e.g. ARM Linux): there is nothing to offer
+        var exe = app.Env.AppFile!; // a stand-in for the app's own file in the test's folder, never the test runner
+        Directory.CreateDirectory(Path.GetDirectoryName(exe)!);
+        await File.WriteAllTextAsync(exe, "the old Pairnets");
 
         var page = await app.SettingsPageAsync();
         Person.Click(Screen.Find<Button>(page, "Check now"));
@@ -523,12 +526,60 @@ public sealed class DesktopControllerTests
         var main = app.MainWindow;
         app.App.RefreshNow();
         Assert.Equal("Pairnets 99.0.0 is ready", Screen.Named<TextBlock>(main, "UpdateTitle").Text);
-        Person.Click(Screen.Find<Button>(main, "Download"));
-        Assert.Equal(app.Feed.ReleasePage.ToString(), app.Platform.Opened[^1]); // the app is unsigned: download by hand
-        Person.Click(Screen.Find<Button>(main, "Later"));
-        app.App.RefreshNow();
-        Assert.False(Screen.Named<Border>(main, "UpdateCard").IsVisible);
+        if (OperatingSystem.IsMacOS())
+        {
+            // A Mac app bundle is not swapped yet: the card says so before its button opens the download page.
+            Assert.True(Screen.Named<TextBlock>(main, "UpdateDetail").IsVisible);
+            Assert.Contains("can't update itself on a Mac", Screen.Named<TextBlock>(main, "UpdateDetail").Text);
+            Person.Click(Screen.Find<Button>(main, "Open download page"));
+            Assert.Equal(app.Feed.ReleasePage.ToString(), app.Platform.Opened[^1]);
+            Person.Click(Screen.Find<Button>(main, "Later"));
+            app.App.RefreshNow();
+            Assert.False(Screen.Named<Border>(main, "UpdateCard").IsVisible);
+            return;
+        }
+
+        // Linux (and the app under test on Windows): download, check, swap the app's own file, start the new one, quit.
+        Assert.False(Screen.Named<TextBlock>(main, "UpdateDetail").IsVisible);
+        Person.Click(Screen.Find<Button>(main, "Update now"));
+        await Wait.Until(() => app.Platform.UpdatedApps.Count == 1, "the new app to start");
+        Assert.Equal(exe + " --after-update", app.Platform.UpdatedApps[0]);
+        Assert.Equal(app.Feed.AppBytes, await File.ReadAllBytesAsync(exe));
+        Assert.Equal("the old Pairnets", await File.ReadAllTextAsync(exe + ".old")); // (the new app removes it when it starts)
+        await Wait.Until(() => app.Desktop.ShutdownCount == 1, "the old app to quit");
+        Assert.DoesNotContain(app.Feed.ReleasePage.ToString(), app.Platform.Opened);
         Assert.True(app.Feed.VersionChecks >= 1);
+    }
+
+    [AvaloniaFact]
+    public async Task AppUpdate_ThatFails_SaysWhyAndOffersToTryAgain_NeverTheBrowser()
+    {
+        await using var app = await AppUnderTest.StartAsync(releaseVersion: "99.0.0");
+        await app.WaitUntilIdleAsync();
+        if (app.Feed.Asset is null || OperatingSystem.IsMacOS())
+            return; // (no download here / the Mac card opens the download page on purpose, see the test above)
+        // The app's own file is missing (as if moved away while Pairnets ran): nothing can be replaced.
+        Assert.False(File.Exists(app.Env.AppFile));
+
+        await app.App.CheckForUpdateForTestsAsync();
+        var main = app.MainWindow;
+        app.App.RefreshNow();
+        Person.Click(Screen.Find<Button>(main, "Update now"));
+        await Wait.Until(() => { app.App.RefreshNow(); return Screen.Named<TextBlock>(main, "UpdateTitle").Text == "Pairnets 99.0.0 could not be installed"; },
+            "the card to say the update could not be installed");
+        Assert.True(Screen.Named<TextBlock>(main, "UpdateDetail").IsVisible);
+        Assert.Contains("couldn't replace its own file", Screen.Named<TextBlock>(main, "UpdateDetail").Text);
+        Assert.NotNull(Screen.Find<Button>(main, "Try again"));
+        Assert.Empty(app.Platform.UpdatedApps);
+        Assert.Equal(0, app.Desktop.ShutdownCount);
+        Assert.DoesNotContain(app.Feed.ReleasePage.ToString(), app.Platform.Opened);
+
+        // With the file back, "Try again" does the update.
+        Directory.CreateDirectory(Path.GetDirectoryName(app.Env.AppFile)!);
+        await File.WriteAllTextAsync(app.Env.AppFile!, "the old Pairnets");
+        Person.Click(Screen.Find<Button>(main, "Try again"));
+        await Wait.Until(() => app.Platform.UpdatedApps.Count == 1, "the new app to start");
+        Assert.Equal(app.Feed.AppBytes, await File.ReadAllBytesAsync(app.Env.AppFile!));
     }
 
     [AvaloniaFact]

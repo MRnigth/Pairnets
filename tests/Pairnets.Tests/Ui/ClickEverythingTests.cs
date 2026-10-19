@@ -270,7 +270,7 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
         [
             new("the main window (overview)", s => MainStage(s, w =>
             {
-                w.ShowUpdate("Pairnets 1.0.58 is available", "You have 1.0.52. Your settings are kept.", "Download");
+                w.ShowUpdate("Pairnets 1.0.58 is available", UpdateTexts.ByHand("1.0.52"), UpdateTexts.OpenDownloadPage);
                 w.ShowStatus(Idle, "/Users/me/Work", "MacBook");
                 w.ShowActivity(SampleFeed().Items);
                 w.ShowAttention([Attention(s)]);

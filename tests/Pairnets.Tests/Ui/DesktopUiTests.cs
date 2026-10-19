@@ -428,7 +428,7 @@ public class DesktopUiTests
             new("MEDIA-PC", utc.AddDays(-30), utc.AddDays(-2), false, "1.0.58", "Linux"),
             new("OFFICE-PC", utc.AddDays(-30), utc.AddDays(-3), false, "1.0.58", "Windows"),
         ];
-        window.ShowUpdate("Pairnets 1.0.58 is available", "You have 1.0.52. Your settings are kept.", "Download");
+        window.ShowUpdate("Pairnets 1.0.58 is available", "You have 1.0.52. The update takes about 10 seconds and Pairnets restarts by itself.", "Update now");
         window.ShowStatus(StatusSnapshot.Initial with
         {
             Status = RunnerStatus.Syncing, Text = "Syncing", LastSyncAt = now.AddMinutes(-1),

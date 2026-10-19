@@ -40,6 +40,7 @@ public sealed class TrayController : ITrayActions, IDisposable
     private volatile bool _dirty = true;
     private RunnerStatus? _shownStatus;
     private readonly UpdateService _updates;
+    private readonly UpdatePackage _package;
     private IDisposable? _activation;
     private bool _updateDismissed;
     private double? _updateProgress;
@@ -74,7 +75,8 @@ public sealed class TrayController : ITrayActions, IDisposable
         _shutdown = shutdown;
         _log = loggers.CreateLogger("Pairnets.Tray");
         _settings = SettingsStore.Load(env.SettingsPath);
-        _updates = new UpdateService(env.CreateUpdateChecker(), PairnetsInfo.ProductVersion, UpdateChecker.AssetForThisPlatform());
+        _package = UpdatePackage.ForThisComputer(IsInstalledCopy);
+        _updates = new UpdateService(env.CreateUpdateChecker(), PairnetsInfo.ProductVersion, _package.Asset);
         _fileLog.Minimum = _settings.DebugMode ? LogLevel.Debug : LogLevel.Information; // Debug mode: more detail in the log
 
         var menu = new Forms.ContextMenuStrip();
@@ -753,13 +755,11 @@ public sealed class TrayController : ITrayActions, IDisposable
         if (!update.Signed)
             _window.ShowUpdate($"Pairnets {update.Version} could not be installed", ReleaseSigning.NotSignedMessage, "Hide");
         else if (_updateError is not null)
-            _window.ShowUpdate($"Pairnets {update.Version} could not be installed", _updateError, "Open download page");
+            _window.ShowUpdate($"Pairnets {update.Version} could not be installed", _updateError, UpdateTexts.TryAgain);
         else if (_updateProgress is { } p)
-            _window.ShowUpdate($"Downloading Pairnets {update.Version}…", "Syncing continues while it downloads.", "Update now", p, busy: true);
+            _window.ShowUpdate($"Downloading Pairnets {update.Version}…", "Syncing continues while it downloads.", UpdateTexts.UpdateNow, p, busy: true);
         else
-            _window.ShowUpdate($"Pairnets {update.Version} is available",
-                $"You have {PairnetsInfo.ProductVersion}. The update takes about 10 seconds and Pairnets restarts by itself.",
-                IsInstalledCopy ? "Update now" : "Download");
+            _window.ShowUpdate($"Pairnets {update.Version} is available", UpdateTexts.Ready(PairnetsInfo.ProductVersion), UpdateTexts.UpdateNow);
     }
 
     /// <summary>True when this Pairnets.exe was put there by PairnetsSetup.exe (so the installer can replace it).</summary>
@@ -774,9 +774,10 @@ public sealed class TrayController : ITrayActions, IDisposable
     }
 
     /// <summary>
-    /// Downloads PairnetsSetup.exe, checks it against SHA256SUMS.txt and runs it silently; the
-    /// installer closes this Pairnets, replaces it and starts the new one. A copy started from the
-    /// zip (not installed) opens the download page instead.
+    /// Downloads the update and checks it against the signed SHA256SUMS.txt. An installed copy runs PairnetsSetup.exe
+    /// silently (it closes this Pairnets, replaces it and starts the new one). A copy started from the zip swaps its own
+    /// Pairnets.exe for the one in pairnets-client-win-x64.zip and starts it (<see cref="SelfReplace"/>). When anything
+    /// fails, the card says why and offers to try again; it never sends the person to the browser instead.
     /// </summary>
     public async void UpdateNow()
     {
@@ -787,12 +788,10 @@ public sealed class TrayController : ITrayActions, IDisposable
             DismissUpdate(); // never point people at a release Pairnets did not sign
             return;
         }
-        if (_updateError is not null || !IsInstalledCopy)
-        {
-            Shell(update.ReleasePage.ToString());
-            return;
-        }
-        var setup = Path.Combine(Path.GetTempPath(), $"PairnetsSetup-{update.Version}.exe");
+        var download = Path.Combine(Path.GetTempPath(), _package.Method == UpdateMethod.Installer
+            ? $"PairnetsSetup-{update.Version}.exe"
+            : $"Pairnets-{update.Version}-{update.AssetName}");
+        _updateError = null;
         _updateProgress = 0;
         _dirty = true;
         try
@@ -802,21 +801,54 @@ public sealed class TrayController : ITrayActions, IDisposable
                 _updateProgress = p.Total is > 0 ? p.Done * 100.0 / p.Total.Value : 0;
                 _dirty = true;
             });
-            await _env.CreateUpdateChecker().DownloadVerifiedAsync(update, setup, progress, CancellationToken.None);
-            _log.LogInformation("Installing Pairnets {Version}", update.Version);
-            _platform.RunInstaller(setup, "/SILENT /SUPPRESSMSGBOXES /NORESTART /CLOSEAPPLICATIONS");
+            await _env.CreateUpdateChecker().DownloadVerifiedAsync(update, download, progress, CancellationToken.None);
+            if (_package.Method == UpdateMethod.Installer)
+            {
+                _log.LogInformation("Installing Pairnets {Version}", update.Version);
+                _platform.RunInstaller(download, "/SILENT /SUPPRESSMSGBOXES /NORESTART /CLOSEAPPLICATIONS");
+            }
+            else
+            {
+                var app = _env.AppFile ?? throw new IOException("Pairnets could not find its own file.");
+                _log.LogInformation("Replacing {App} with Pairnets {Version}", app, update.Version);
+                try
+                {
+                    await Task.Run(() => SelfReplace.Install(download, _package.AppFile!, app));
+                }
+                finally
+                {
+                    File.Delete(download);
+                }
+                if (!StartUpdatedApp(app, update.Version))
+                    return;
+            }
             Exit();
         }
-        catch (Exception ex) when (ex is UpdateVerificationException or HttpRequestException or IOException or System.ComponentModel.Win32Exception)
+        catch (Exception ex) when (ex is UpdateVerificationException or HttpRequestException or IOException or UnauthorizedAccessException
+            or InvalidDataException or System.ComponentModel.Win32Exception)
         {
             _log.LogWarning("Update failed: {Error}", FriendlyErrors.Technical(ex));
-            _updateError = ex is UpdateVerificationException { NotSigned: true }
-                ? ReleaseSigning.NotSignedMessage
-                : ex is UpdateVerificationException
-                ? "The download didn't match its checksum, so Pairnets didn't install it and kept your current version."
-                : "The download failed. " + FriendlyErrors.Describe(ex);
+            _updateError = UpdateTexts.Failed(ex, _env.AppFile);
             _updateProgress = null;
             _dirty = true;
+        }
+    }
+
+    /// <summary>Starts the new Pairnets.exe that just replaced this one; false (and the card says so) when Windows would not.</summary>
+    private bool StartUpdatedApp(string app, string version)
+    {
+        try
+        {
+            _platform.StartUpdatedApp(app, SelfReplace.AfterUpdateArgument);
+            return true;
+        }
+        catch (System.ComponentModel.Win32Exception ex)
+        {
+            _log.LogWarning("Could not start the new Pairnets: {Error}", ex.Message);
+            _updateError = $"Pairnets {version} is installed, but it couldn't be started. Exit Pairnets and start it again to use the new version.";
+            _updateProgress = null;
+            _dirty = true;
+            return false;
         }
     }
 

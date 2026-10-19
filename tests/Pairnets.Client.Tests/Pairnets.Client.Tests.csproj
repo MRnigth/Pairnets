@@ -44,6 +44,7 @@
     <Compile Include="..\Pairnets.Tests\Infrastructure\RepoPaths.cs" Link="Infrastructure\RepoPaths.cs" />
     <Compile Include="..\Pairnets.Tests\Infrastructure\FakeSyncService.cs" Link="Infrastructure\FakeSyncService.cs" />
     <Compile Include="..\Pairnets.Tests\Infrastructure\TestReleaseKey.cs" Link="Infrastructure\TestReleaseKey.cs" />
+    <Compile Include="..\Pairnets.Tests\Infrastructure\TestUpdatePackages.cs" Link="Infrastructure\TestUpdatePackages.cs" />
   </ItemGroup>
 
 </Project>

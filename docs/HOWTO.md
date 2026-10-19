@@ -477,7 +477,7 @@ the server address and token under **Advanced**), the folder, this computer's na
 **Updates and speed** and **Start over**. **Save** applies it at once.
 
 **When an update is out**, a small card at the bottom of the left side says so, with **Update now**
-(Windows) or **Download** (Mac and Linux). See [Updates](#updates) below.
+(Windows and Linux) or **Open download page** (Mac). See [Updates](#updates) below.
 
 **Waiting for the other computer.** When your other computer uploads a big batch (more than 100
 files), this one waits and then downloads everything in one go instead of a few files at a time, so
@@ -781,11 +781,21 @@ repository to be public.
 and you get a notification.
 
 * **Windows** (installed with `PairnetsSetup.exe`): click **Update now**. Pairnets downloads the new
-  installer, checks it against `SHA256SUMS.txt`, installs it and starts again by itself, in about
-  10 seconds. If the check fails, nothing is installed and you keep your current version. A copy
-  run from the zip opens the download page instead.
-* **Mac and Linux**: click **Download**; the download page opens. Replace the app (Mac) or run the
-  one-line `--desktop` command again (Linux). The app is not signed, so it does not replace itself.
+  installer, checks it against the signed `SHA256SUMS.txt`, installs it and starts again by itself, in about
+  10 seconds. A copy run from the zip does the same with `pairnets-client-win-x64.zip`: it swaps its own
+  `Pairnets.exe` for the new one and starts it.
+* **Linux**: click **Update now**. Pairnets downloads `pairnets-desktop-linux-x64.tar.gz`, checks it, swaps
+  its own file for the new one and starts again by itself.
+* **Mac**: the card says Pairnets can't update itself on a Mac yet; click **Open download page**, get the
+  new `.dmg` and drag Pairnets to Applications (your settings are kept).
+
+If anything goes wrong (no internet, the check fails, Pairnets may not change its own folder), nothing is
+installed, you keep your current version, and the card says why, with **Try again**.
+
+**Pairnets 1.0.59 and older** opened the download page instead of updating when it ran from the zip
+(Windows) or on Linux. Update those once by hand: replace `Pairnets.exe` with the one in
+`pairnets-client-win-x64.zip`, or run the one-line `--desktop` command again (Linux). From then on they
+update themselves. Windows copies installed with `PairnetsSetup.exe` always updated themselves.
 
 **Update the server.** When the server runs an older version than your app, Pairnets asks:
 

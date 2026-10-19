@@ -438,7 +438,7 @@ public sealed class TrayControllerTests
     }
 
     [Fact]
-    public async Task AppUpdate_Download_OpensReleasePage()
+    public async Task AppUpdate_CopyFromTheZip_ReplacesItselfAndStartsTheNewOne()
     {
         await using var nest = await TestServer.StartWithWebsiteAsync();
         await using var feed = await FakeReleaseFeed.StartAsync("99.0.0");
@@ -447,7 +447,10 @@ public sealed class TrayControllerTests
             UpdateDownloadBase = feed.DownloadBase,
             UpdateSigningKey = FakeReleaseFeed.SigningKey,
             UpdateReleasePage = feed.ReleasePage,
-        }); // not installed by the installer (a copy from the zip): it cannot update itself
+        }); // not installed by the installer (a copy from the zip): it replaces its own Pairnets.exe
+        var exe = app.Env.AppFile!; // a stand-in for this Pairnets.exe in the test's own folder, never the test runner
+        Directory.CreateDirectory(Path.GetDirectoryName(exe)!);
+        await File.WriteAllTextAsync(exe, "the old Pairnets.exe");
         await app.StartAsync();
 
         await app.Menu("Settings…");
@@ -455,15 +458,34 @@ public sealed class TrayControllerTests
         await app.Press(main, "Check now");
         await app.WaitUntil(() => main.UpdateCard.IsVisible, "the update card");
         Assert.Equal("Pairnets 99.0.0 is ready", await app.Wpf.Ui(() => main.UpdateTitle.Text));
+        Assert.Equal("Update now", await app.Wpf.Ui(() => main.UpdateButton.Content));
         Assert.Contains(app.Notifications.Items, n => n.Title == "Pairnets update available");
 
-        await app.Press(main, "Download");
-        Assert.Equal(feed.ReleasePage.ToString(), Assert.Single(app.Platform.Opened.Items));
-        Assert.Empty(app.Platform.Installers.Items);
-        Assert.DoesNotContain("/download/" + FakeReleaseFeed.AssetName, feed.Requests.Items);
+        // Pairnets.exe can't be moved (another program holds it): nothing changes, and the card says why and offers to
+        // try again. It never sends the person to the browser instead.
+        using (File.Open(exe, FileMode.Open, FileAccess.Read, FileShare.None))
+        {
+            await app.Press(main, "Update now");
+            await app.WaitUntil(() => main.UpdateTitle.Text == "Pairnets 99.0.0 could not be installed", "the app to say it could not replace itself");
+        }
+        Assert.Contains("couldn't replace its own file", await app.Wpf.Ui(() => main.UpdateDetailText));
+        Assert.True(await app.Wpf.Ui(() => main.UpdateDetail.Visibility == System.Windows.Visibility.Visible), "The reason is written on the card, not only in a tooltip.");
+        Assert.Equal("Try again", await app.Wpf.Ui(() => main.UpdateButton.Content));
+        Assert.Equal("the old Pairnets.exe", await File.ReadAllTextAsync(exe));
+        Assert.False(File.Exists(exe + ".new"), "The unpacked update was left behind.");
+        Assert.Empty(app.Platform.Opened.Items);
+        Assert.Equal(0, app.Shutdowns);
 
-        await app.Press(main, "Later");
-        await app.WaitUntil(() => !main.UpdateCard.IsVisible, "the update card to go away");
+        await app.Press(main, "Try again");
+        await app.WaitUntil(() => app.Platform.UpdatedApps.Count == 1, "the new Pairnets.exe to start");
+        Assert.Equal((exe, "--after-update"), app.Platform.UpdatedApps.Items[0]);
+        Assert.Equal(feed.App, await File.ReadAllBytesAsync(exe));
+        Assert.Equal("the old Pairnets.exe", await File.ReadAllTextAsync(exe + ".old")); // (the new one removes it when it starts)
+        Assert.Equal(1, app.Shutdowns);
+        Assert.Empty(app.Platform.Installers.Items);
+        Assert.Empty(app.Platform.Opened.Items);
+        Assert.Contains("/download/" + FakeReleaseFeed.ZipName, feed.Requests.Items);
+        Assert.DoesNotContain("/download/" + FakeReleaseFeed.AssetName, feed.Requests.Items);
     }
 
     [Fact]
@@ -489,9 +511,14 @@ public sealed class TrayControllerTests
         await app.Press(main, "Update now");
         await app.WaitUntil(() => main.UpdateTitle.Text == "Pairnets 99.0.0 could not be installed", "the app to refuse the tampered download");
         Assert.Contains("didn't match its checksum", await app.Wpf.Ui(() => main.UpdateDetailText));
-        Assert.Equal("Open download page", await app.Wpf.Ui(() => main.UpdateButton.Content));
+        Assert.Equal("Try again", await app.Wpf.Ui(() => main.UpdateButton.Content));
         Assert.Empty(app.Platform.Installers.Items);
         Assert.Equal(0, app.Shutdowns);
+        await app.Press(main, "Try again"); // still the same tampered file: refused again, and never the browser instead
+        await app.WaitUntil(() => main.UpdateTitle.Text == "Pairnets 99.0.0 could not be installed"
+            && feed.Requests.Items.Count(r => r == "/download/" + FakeReleaseFeed.AssetName) == 2, "the second try to be refused");
+        Assert.Empty(app.Platform.Opened.Items);
+        Assert.Empty(app.Platform.Installers.Items);
 
         // A release Pairnets did not sign is never downloaded, and its card only offers to hide it.
         feed.Publish("99.0.1", signed: false);

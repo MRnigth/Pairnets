@@ -20,7 +20,10 @@ public static class PairnetsInfo
     /// <summary>The DPAPI entropy the Windows app saves its key with (the old app's is in the Legacy names).</summary>
     public const string DpapiEntropy = "Pairnets.Client.Token.v1";
 
-    /// <summary>This build's release version, e.g. "1.0.58" (main builds are numbered 1.0.&lt;run&gt;).</summary>
+    /// <summary>
+    /// This build's release version, e.g. "1.0.58" (main builds are numbered 1.0.&lt;run&gt;), or "1.0.59.1" for a quick fix
+    /// released from a v1.0.59.1 tag.
+    /// </summary>
     public static string ProductVersion { get; } = FormatVersion(typeof(PairnetsInfo).Assembly.GetName().Version);
 
     /// <summary>"1.0.38; Windows": sent to the server so its Devices list shows each computer's app and system.</summary>
@@ -29,6 +32,10 @@ public static class PairnetsInfo
     private static string SystemName() =>
         OperatingSystem.IsWindows() ? "Windows" : OperatingSystem.IsMacOS() ? "macOS" : OperatingSystem.IsLinux() ? "Linux" : "other";
 
+    /// <summary>
+    /// "1.0.58"; a fourth number only when there is one ("1.0.59.1"). It must not be dropped: a 1.0.59.1 that called itself
+    /// 1.0.59 would offer the 1.0.59.1 release again and again, and its server would always look out of date.
+    /// </summary>
     public static string FormatVersion(Version? v) =>
-        v is null ? "0.0.0" : $"{v.Major}.{v.Minor}.{Math.Max(v.Build, 0)}";
+        v is null ? "0.0.0" : v.Revision > 0 ? $"{v.Major}.{v.Minor}.{Math.Max(v.Build, 0)}.{v.Revision}" : $"{v.Major}.{v.Minor}.{Math.Max(v.Build, 0)}";
 }

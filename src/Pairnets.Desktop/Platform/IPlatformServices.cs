@@ -29,6 +29,14 @@ public interface IPlatformServices
     /// <summary>Shows a file selected in the file manager (or opens its folder).</summary>
     void Reveal(string path);
 
+    /// <summary>Starts the app file that just replaced this one (the Linux app updating itself); throws when it cannot.</summary>
+    void StartUpdatedApp(string path, string argument)
+    {
+        var psi = new System.Diagnostics.ProcessStartInfo(path) { UseShellExecute = false, WorkingDirectory = Path.GetDirectoryName(path) };
+        psi.ArgumentList.Add(argument);
+        System.Diagnostics.Process.Start(psi)?.Dispose();
+    }
+
     public static IPlatformServices Current { get; } =
         OperatingSystem.IsMacOS() ? new MacPlatform() : new LinuxPlatform();
 }

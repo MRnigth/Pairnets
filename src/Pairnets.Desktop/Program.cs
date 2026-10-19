@@ -18,7 +18,8 @@ internal static class Program
         FileStream instanceLock;
         try
         {
-            instanceLock = new FileStream(Path.Combine(PairnetsPaths.LocalDir, "app.lock"), FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
+            instanceLock = TakeInstanceLock(Path.Combine(PairnetsPaths.LocalDir, "app.lock"),
+                args.Contains(SelfReplace.AfterUpdateArgument) ? SelfReplace.WaitForOldApp : TimeSpan.Zero);
         }
         catch (IOException)
         {
@@ -33,8 +34,29 @@ internal static class Program
             return 1;
         }
 
+        SelfReplace.CleanUp(Environment.ProcessPath);
         using (instanceLock)
             return BuildAvaloniaApp().StartWithClassicDesktopLifetime(args, Avalonia.Controls.ShutdownMode.OnExplicitShutdown);
+    }
+
+    /// <summary>
+    /// The exclusive lock on app.lock. <paramref name="wait"/>: how long to keep trying (started by the Pairnets this one
+    /// just replaced, which is still quitting).
+    /// </summary>
+    private static FileStream TakeInstanceLock(string path, TimeSpan wait)
+    {
+        var until = DateTime.UtcNow + wait;
+        while (true)
+        {
+            try
+            {
+                return new FileStream(path, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
+            }
+            catch (IOException) when (DateTime.UtcNow < until)
+            {
+                Thread.Sleep(250);
+            }
+        }
     }
 
     /// <summary>
