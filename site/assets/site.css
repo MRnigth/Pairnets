@@ -89,6 +89,17 @@ section { padding: 28px 0; }
 .card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 22px; box-shadow: var(--shadow); }
 .card .num { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: var(--banner); color: var(--accent); font-weight: 700; margin-bottom: 12px; }
 .card p:last-child { margin-bottom: 0; }
+/* Home page "Three steps": the apps' nest line joins the three numbers. Each card after the first draws the piece
+   from the number before it to its own, over the cards and under the numbers. Cards side by side: a level line
+   (19px - 100% is the previous card's number centre, from 1px borders, 22px padding and the 16px gap). One under the
+   other: a short upright piece from the card above into the number, so it never runs through the text. */
+.cards.path > .card { position: relative; }
+.cards.path .num { position: relative; z-index: 2; }
+.cards.path > .card + .card::before {
+  content: ""; position: absolute; z-index: 1; pointer-events: none;
+  left: calc(19px - 100%); top: 36px; width: calc(100% + 18px); height: 2px;
+  border-radius: 1px; background: var(--accent); opacity: .45;
+}
 
 .downloads { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
 .downloads .card h3 { display: flex; align-items: center; gap: 8px; }
@@ -179,6 +190,7 @@ td code { white-space: nowrap; }
 /* Three cards side by side get too narrow on tablets: one under the other from here down. */
 @media (max-width: 900px) {
   .cards { grid-template-columns: minmax(0, 1fr); }
+  .cards.path > .card + .card::before { left: 36px; top: -17px; width: 2px; height: 54px; }
 }
 
 @media (max-width: 760px) {
