@@ -76,6 +76,11 @@ public interface IMainActions
     {
     }
 
+    /// <summary>"Sign in again" on the Account page (the sign-in window opens).</summary>
+    void SignInAgain()
+    {
+    }
+
     /// <summary>"Manage your account on sync.pairnets.app": opens the website.</summary>
     void OpenAccountSite()
     {

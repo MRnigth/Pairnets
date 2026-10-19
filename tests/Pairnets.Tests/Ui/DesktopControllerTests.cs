@@ -330,8 +330,10 @@ public sealed class DesktopControllerTests
         await app.WaitUntilIdleAsync();
         File.WriteAllText(Path.Combine(app.Folder, "mine.txt"), "stays here");
 
-        var page = await app.SettingsPageAsync();
-        Person.Click(Screen.Find<Button>(page, "Sign out"));
+        // Signing out lives on the Account page (Settings no longer repeats it).
+        await app.SettingsPageAsync();
+        Person.Click(Screen.Named<Button>(app.MainWindow, "AccountButton"));
+        Person.Click(Screen.Find<Button>(app.MainWindow, "Sign out"));
         await app.AnswerAsync("Pairnets – sign out", "Sign out");
 
         await app.WindowAsync("Pairnets – sign in");

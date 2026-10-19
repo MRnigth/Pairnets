@@ -83,4 +83,6 @@ public partial class AccountPageView : UserControl
     private void OnManageAccount(object sender, RoutedEventArgs e) => Host?.Actions?.OpenAccountSite();
 
     private void OnSignOut(object sender, RoutedEventArgs e) => Host?.Actions?.SignOut();
+
+    private void OnSignInAgain(object sender, RoutedEventArgs e) => Host?.Actions?.SignInAgain();
 }

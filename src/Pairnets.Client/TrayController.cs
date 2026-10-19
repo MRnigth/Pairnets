@@ -721,13 +721,41 @@ public sealed class TrayController : ITrayActions, IDisposable
             ApplySettings(v.Result!, v.PlainToken);
             _window?.Navigate(MainPage.Overview);
         };
-        view.SignOutRequested += SignOut;
+        view.SwitchesChanged += ApplySwitches;
         view.ResetRequested += ResetEverything;
-        view.ManageDevicesRequested += ManageDevices;
+        view.ShowDevicesRequested += () => _window?.Navigate(MainPage.Devices);
         view.ReportBugRequested += () => ReportBug();
         view.OpenLinkRequested += Shell;
         view.Cancelled += () => _window?.Navigate(MainPage.Overview);
         _window.ShowSettingsPage(view);
+    }
+
+    /// <summary>
+    /// A switch on the Settings page changed: it applies at once (no Save). Most only need saving; the speed limits change
+    /// on the running connection, and two engine settings start the session again (<see cref="SettingsSwitches"/>).
+    /// </summary>
+    private void ApplySwitches(ClientSettings fromPage)
+    {
+        var before = _settings;
+        var next = SettingsSwitches.WithSwitchesFrom(_settings, fromPage);
+        _settings = next;
+        _fileLog.Minimum = _settings.DebugMode ? LogLevel.Debug : LogLevel.Information;
+        SettingsStore.Save(_env.SettingsPath, _settings);
+        if (before.StartWithWindows != next.StartWithWindows)
+            SetAutoStart(next.StartWithWindows);
+        if (before.CheckForUpdates != next.CheckForUpdates)
+            _updates.SetEnabled(next.CheckForUpdates);
+        if (_session is { } session)
+        {
+            if (SettingsSwitches.NeedsNewSession(before, next))
+                StartSession(null);
+            else if (SettingsSwitches.LimitsChanged(before, next))
+            {
+                session.Api.UploadLimit.SetMegabytesPerSecond(next.UploadLimitMBps);
+                session.Api.DownloadLimit.SetMegabytesPerSecond(next.DownloadLimitMBps);
+            }
+        }
+        _dirty = true;
     }
 
     private void ApplySettings(ClientSettings settings, string? plainToken)
@@ -751,6 +779,8 @@ public sealed class TrayController : ITrayActions, IDisposable
             _window.ShowUpdate(null, string.Empty, string.Empty);
             return;
         }
+        // A failed update says why in one line; its button is the next step (none for a release Pairnets did not sign),
+        // and the X puts the card away.
         if (!update.Signed)
             _window.ShowUpdate($"Pairnets {update.Version} could not be installed", ReleaseSigning.NotSignedMessage, "Hide");
         else if (_updateError is not null)
@@ -897,6 +927,9 @@ public sealed class TrayController : ITrayActions, IDisposable
         if (_settings.Folder is { } f && Directory.Exists(f))
             Shell(f);
     }
+
+    /// <summary>"Sign in again" on the Account page: the sign-in window.</summary>
+    void IMainActions.SignInAgain() => ShowSettings(firstRun: true);
 
     void IMainActions.ShowSettings()
     {

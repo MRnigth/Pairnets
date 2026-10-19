@@ -101,6 +101,8 @@ public sealed class SampleActions : ITrayActions
 
     public void SignOut() => Calls.Add("sign-out");
 
+    public void SignInAgain() => Calls.Add("sign-in-again");
+
     public void OpenAccountSite() => Calls.Add("account-site");
 
     public void OpenWindow(MainPage page) => Calls.Add("open:" + page);
@@ -509,7 +511,7 @@ public class DesktopUiTests
         Save(window, outDir, $"main-window-history-{suffix}.png");
 
         var settingsPage = new SettingsView(new ClientSettings { ServerUrl = "https://sync.example.com/", Folder = "/Users/me/Work", DeviceName = "MacBook", DeviceId = "id" },
-            null, autoStart: true, serverVersionText: "Server 1.0.58");
+            null, autoStart: true, serverVersionText: "Nest 1.0.58");
         window.ShowSettingsPage(settingsPage);
         Save(window, outDir, $"main-window-settings-{suffix}.png");
         settingsPage.ScrollToEnd();

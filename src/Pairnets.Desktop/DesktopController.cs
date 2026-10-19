@@ -716,15 +716,17 @@ public sealed class DesktopController : ITrayActions, IDisposable
             ApplySettings(v.Result!, v.PlainToken);
             _window?.Navigate(MainPage.Overview);
         };
-        view.SignOutRequested += SignOut;
-        view.SignInAgainRequested += ShowSignIn;
+        view.SwitchesChanged += ApplySwitches;
         view.ReportBugRequested += ReportBug;
         view.ResetRequested += ResetEverything;
-        view.ManageDevicesRequested += ManageDevices;
+        view.ShowDevicesRequested += () => _window?.Navigate(MainPage.Devices);
         view.OpenLinkRequested += url => _platform.Open(url);
         view.Cancelled += () => _window?.Navigate(MainPage.Overview);
         _window!.ShowSettingsPage(view);
     }
+
+    /// <summary>"Sign in again" on the Account page: the sign-in window.</summary>
+    public void SignInAgain() => ShowSignIn();
 
     /// <summary>The app is unsigned on Mac and Linux, so it does not replace itself: open the download page.</summary>
     public void UpdateNow()
@@ -831,6 +833,34 @@ public sealed class DesktopController : ITrayActions, IDisposable
         };
         window.Show();
         window.Activate();
+    }
+
+    /// <summary>
+    /// A switch on the Settings page changed: it applies at once (no Save). Most only need saving; the speed limits change
+    /// on the running connection, and two engine settings start the session again (<see cref="SettingsSwitches"/>).
+    /// </summary>
+    private void ApplySwitches(ClientSettings fromPage)
+    {
+        var before = _settings;
+        var next = SettingsSwitches.WithSwitchesFrom(_settings, fromPage);
+        _settings = next;
+        _fileLog.Minimum = _settings.DebugMode ? LogLevel.Debug : LogLevel.Information;
+        SaveSettings();
+        if (before.StartWithWindows != next.StartWithWindows)
+            SetAutoStart(next.StartWithWindows);
+        if (before.CheckForUpdates != next.CheckForUpdates)
+            _updates.SetEnabled(next.CheckForUpdates);
+        if (_session is { } session)
+        {
+            if (SettingsSwitches.NeedsNewSession(before, next))
+                StartSession(null);
+            else if (SettingsSwitches.LimitsChanged(before, next))
+            {
+                session.Api.UploadLimit.SetMegabytesPerSecond(next.UploadLimitMBps);
+                session.Api.DownloadLimit.SetMegabytesPerSecond(next.DownloadLimitMBps);
+            }
+        }
+        _dirty = true;
     }
 
     private void ApplySettings(ClientSettings settings, string? plainToken)

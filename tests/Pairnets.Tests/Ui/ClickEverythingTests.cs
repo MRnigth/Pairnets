@@ -235,7 +235,7 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
         await using var stage = new Stage("the Settings page");
         var view = await SettingsStage(stage, ownKey: true);
         foreach (var label in new[] { "Start Pairnets when I log in", "Check for updates by itself", "Update the nest by itself", "Debug mode",
-                     "Wait when another computer sends a lot", "Limit upload to", "Limit download from", "2" })
+                     "Wait when another computer sends a lot", "Limit upload to", "Limit download to", "2" })
             Person.Click(Screen.Find<ToggleButton>(view, label));
         Person.Click(Screen.Find<Button>(view, "Advanced: files to ignore Add your own rules on top of the usual ones. 0 rules"));
         Person.Type(Screen.Named<TextBox>(view, "IgnoreBox"), "*.bak");
@@ -461,7 +461,7 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
         s.Expect["OnSeeAllActivity"] = OnPage(w, MainPage.Activity);
         s.Expect["OnNav:Overview*"] = OnPage(w, MainPage.Overview);
         s.Expect["OnNav:Activity*"] = OnPage(w, MainPage.Activity);
-        s.Expect["OnNav:History"] = All(OnPage(w, MainPage.History), That(() => w.HistoryRows == 4, "the deleted files show"));
+        s.Expect["OnNav:History*"] = All(OnPage(w, MainPage.History), That(() => w.HistoryRows == 4, "the deleted files show"));
         s.Expect["OnNav:Devices*"] = All(OnPage(w, MainPage.Devices), Calls(a, "devices"));
         s.Expect["OnNav:Needs you*"] = OnPage(w, MainPage.Attention);
         s.Expect["OnFoldSide"] = That(() => w.SideFolded, "the left side fold into the dock");
@@ -471,7 +471,7 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
         s.Expect["OnThisComputer"] = OnPage(w, MainPage.Overview);
         s.Expect["OnNestRow"] = OnPage(w, MainPage.Devices);
         s.Expect["OnDevices"] = OnPage(w, MainPage.Devices);
-        s.Expect["OnNav:Settings"] = Calls(a, "settings"); // the controller hands over a fresh form
+        s.Expect["OnNav:Settings*"] = Calls(a, "settings"); // the controller hands over a fresh form
         s.Expect["OnRevealActivity"] = That(() => a.Calls.Count == 1 && a.Calls[0].StartsWith("reveal:", StringComparison.Ordinal), "the app show the file in its folder");
         s.Expect["OnActivityVersions"] = That(() => w.Page == MainPage.History && w.HistoryRows == 1 && w.VersionRows == 3, "History open on that file with its versions");
         s.Expect["OnHistoryModeChanged:All files"] = That(() => w.HistoryRows == 3 && w.FilesPaneShown, "the current files show");
@@ -491,6 +491,7 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
         s.Expect["OnActivitySearch"] = That(() => w.ActivityNoMatchValue.Contains("test", StringComparison.Ordinal), "the list say nothing matches the search");
         s.Expect["OnManageAccount"] = Calls(a, "account-site");
         s.Expect["OnSignOut"] = Calls(a, "sign-out");
+        s.Expect["OnSignInAgain"] = Calls(a, "sign-in-again");
         s.Expect["OnNotifyChanged:When something needs you"] = Calls(a, "notify:Attention:False");
         s.Expect["OnNotifyChanged:When a computer asks to join"] = Calls(a, "notify:JoinRequest:False");
         s.Expect["OnNotifyChanged:When an app update is ready"] = Calls(a, "notify:Update:False");
@@ -569,29 +570,29 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
             updates.Dispose();
             return Task.CompletedTask;
         });
-        var view = new SettingsView(settings, secrets, autoStart: false, updates, "Server 1.0.0");
+        var view = new SettingsView(settings, secrets, autoStart: false, updates, "Nest 1.0.0");
         view.Saved += _ => s.Events.Add("saved");
         view.Cancelled += () => s.Events.Add("cancelled");
-        view.SignOutRequested += () => s.Events.Add("sign-out");
         view.ResetRequested += () => s.Events.Add("reset");
-        view.ManageDevicesRequested += () => s.Events.Add("manage-devices");
+        view.ShowDevicesRequested += () => s.Events.Add("show-devices");
         view.OpenLinkRequested += s.Opened.Add;
-        view.SignInAgainRequested += () => s.Events.Add("sign-in-again");
         view.ReportBugRequested += () => s.Events.Add("report-bug");
+        view.SwitchesChanged += _ => s.Events.Add("switches");
         s.Show(new Window { Content = view, Width = 900, Height = 780 });
 
         var expected = fixture.Feed.Asset is null ? "up to date" : "version 99.0.0 is available";
-        s.Expect["OnManageDevices"] = Raised(s, "manage-devices");
-        s.Expect["OnSignOut"] = Raised(s, "sign-out");
+        s.Expect["OnShowDevices"] = Raised(s, "show-devices");
+        // Switches apply at once, without Save (A11); a choice that was already made changes nothing.
+        s.Expect["OnSwitchChanged"] = All(Raised(s, "switches"), That(() => view.SwitchesApplied, "the switch apply at once"));
+        s.Expect["OnParChanged"] = That(() => view.SwitchesApplied, "the choice apply at once");
         s.Expect["OnReset"] = Raised(s, "reset");
         s.Expect["OnCancel"] = Raised(s, "cancelled");
-        s.Expect["OnSignInAgain"] = Raised(s, "sign-in-again");
         s.Expect["OnReportBug"] = Raised(s, "report-bug");
         s.Expect["OnToggleIgnore"] = That(() => Screen.Named<TextBox>(view, "IgnoreBox").IsEffectivelyVisible, "the rules box show");
         s.Expect["OnIgnoreChanged"] = That(() => Screen.Named<TextBlock>(view, "IgnoreCount").Text == "1 rule", "the rule count change to 1 rule");
         s.Expect["OnSave"] = All(Raised(s, "saved"), That(() => view.Result is { } r && r.Folder == fixture.Folder && r.DeviceId == key?.Id && r.FirstRunCompleted,
             "the saved settings keep this computer's folder and key"));
-        s.Expect["OnShowAddress"] = That(() => Screen.Named<TextBox>(view, "ServerUrlBox").IsEffectivelyVisible, "the server address and token show");
+        s.Expect["OnShowAddress"] = That(() => Screen.Named<TextBox>(view, "ServerUrlBox").IsEffectivelyVisible, "the nest address and key show");
         s.Expect["OnBrowse"] = That(() => Screen.Named<TextBox>(view, "FolderBox").Text == fixture.PickedFolder, "the picked folder fill the field");
         s.Expect["OnCheckNow"] = That(() => Screen.Named<TextBlock>(view, "VersionText").Text?.EndsWith(expected, StringComparison.Ordinal) == true, $"\"{expected}\" show");
         s.Expect["OnTest"] = That(() => Screen.Named<TextBlock>(view, "TestResult").Text?.StartsWith("✓", StringComparison.Ordinal) == true, "the test say the connection works");
