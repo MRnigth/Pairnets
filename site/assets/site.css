@@ -188,12 +188,18 @@ td code { white-space: nowrap; }
   .wrap { padding: 0 16px; }
   .hero { padding: 44px 0 28px; }
   .downloads { grid-template-columns: minmax(0, 1fr); }
-  html { scroll-padding-top: 128px; } /* the top bar is two rows tall here */
+  /* The top bar is two rows tall here, too much of a phone screen to keep on top: it scrolls away with the page. */
+  html { scroll-padding-top: 0; }
+  header.top { position: static; }
   header.top .wrap { flex-wrap: wrap; gap: 8px 12px; }
   nav.main { margin-left: 0; order: 3; width: 100%; }
   ol.steps > li { padding-left: 46px; }
   footer .wrap { grid-template-columns: minmax(0, 1fr); }
   nav.foot { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 24px; }
+  /* Small links get taller tap areas on touch screens (about 40 px), with no dead gap between them. */
+  nav.foot div { gap: 0; }
+  nav.foot a { padding: 8px 0; }
+  .hero .others a { display: inline-block; padding: 8px 2px; }
   .toc ol { columns: 1; }
   pre { white-space: pre-wrap; overflow-wrap: anywhere; } /* commands wrap whole, never cut off at the edge */
   .setting { flex-direction: column; gap: 10px; }
