@@ -188,6 +188,7 @@ td code { white-space: nowrap; }
   footer .wrap { grid-template-columns: minmax(0, 1fr); }
   nav.foot { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 24px; }
   .toc ol { columns: 1; }
+  pre { white-space: pre-wrap; overflow-wrap: anywhere; } /* commands wrap whole, never cut off at the edge */
   .setting { flex-direction: column; gap: 10px; }
   .support { flex-direction: column; align-items: flex-start; gap: 14px; padding: 20px; }
   .cookie-notice { left: 16px; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); width: auto; max-width: none; }
