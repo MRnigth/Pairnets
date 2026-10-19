@@ -106,7 +106,17 @@ ol.steps > li > :last-child { margin-bottom: 0; }
 
 details { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 4px 18px; margin: 0 0 12px; }
 details[open] { padding-bottom: 8px; }
-summary { cursor: pointer; font-weight: 650; padding: 12px 0; }
+/* Question rows: a blue "›" beside the text (long questions wrap beside it, not under it), turned down when open. */
+summary { display: flex; align-items: flex-start; gap: 10px; list-style: none; cursor: pointer; font-weight: 650; padding: 12px 0; border-radius: 6px; }
+summary::-webkit-details-marker { display: none; }
+summary::before {
+  content: "›"; flex: none; width: .7em; text-align: center; color: var(--accent);
+  font-size: 1.25em; line-height: 1.28; font-weight: 700; transition: transform .15s ease-out;
+}
+details[open] > summary::before { transform: rotate(90deg); }
+summary:hover { color: var(--accent); }
+summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { summary::before { transition: none; } }
 
 /* Home page: "Like Pairnets? Buy me a coffee". The button goes to /donate, which _redirects sends to Ko-fi. */
 .support { display: flex; align-items: center; gap: 22px; background: var(--banner); border: 1px solid var(--banner-border); border-radius: 14px; padding: 22px 26px; }
