@@ -135,8 +135,9 @@ what cannot lose or silently overwrite data.
 * **Opening Pairnets again brings the running one forward, like other apps.** Every second start
   (Start menu, a shortcut, the installer's "Start now", a `pairnets://` link) uses the same poke
   instead of showing "already running". The running app answers with one byte once its window is
-  really up (within 3 s), so a stuck app gets a clear "isn't responding" message instead of silence;
-  the second start keeps trying to connect for 10 s, covering a Pairnets that is still starting up.
+  really up (within 10 s: a first window on a slow computer can take seconds), so a stuck app gets a
+  clear "isn't responding" message instead of silence; the second start keeps trying to connect for
+  10 s, covering a Pairnets that is still starting up.
   A start at login (`--autostart`) never pokes, so it never pops a window up. The pipe is
   `CurrentUserOnly`: another user on the same computer can neither poke nor answer it. On macOS
   opening the running app again starts no second process; the app's Reopen event does the same.

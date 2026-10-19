@@ -85,9 +85,9 @@ public sealed class AppActivationTests
         using var listener = AppActivation.Listen(() => stuck.Task, name);
 
         var timer = System.Diagnostics.Stopwatch.StartNew();
-        Assert.Equal(AppActivation.PokeResult.NotAnswering, AppActivation.Poke(name, answerTimeoutMs: 10_000));
+        Assert.Equal(AppActivation.PokeResult.NotAnswering, AppActivation.Poke(name, answerTimeoutMs: 60_000));
         // The running app gives up on its own window after AnswerWithin, so the second start is not left waiting.
-        Assert.True(timer.Elapsed < TimeSpan.FromSeconds(8), timer.Elapsed.ToString());
+        Assert.True(timer.Elapsed < AppActivation.AnswerWithin + TimeSpan.FromSeconds(10), timer.Elapsed.ToString());
         stuck.SetResult();
     }
 

@@ -35,7 +35,7 @@ public static class AppActivation
         "pairnets-" + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(Environment.UserName)))[..8].ToLowerInvariant();
 
     /// <summary>How long the running app's window may take to come forward before a poke goes unanswered.</summary>
-    public static TimeSpan AnswerWithin { get; } = TimeSpan.FromSeconds(3);
+    public static TimeSpan AnswerWithin { get; } = TimeSpan.FromSeconds(10); // a first window on a slow computer can take seconds
 
     private static readonly byte[] ShownAnswer = [1];
 
@@ -189,7 +189,7 @@ public static class AppActivation
     /// Pokes the running Pairnets and waits for its answer. Connecting keeps retrying for
     /// <paramref name="connectTimeoutMs"/>, which covers a Pairnets still starting up that has not opened its pipe yet.
     /// </summary>
-    public static PokeResult Poke(string? pipeName = null, int connectTimeoutMs = 10_000, int answerTimeoutMs = 5_000)
+    public static PokeResult Poke(string? pipeName = null, int connectTimeoutMs = 10_000, int answerTimeoutMs = 15_000)
     {
         AllowTakingTheForeground();
         try
@@ -221,7 +221,7 @@ public static class AppActivation
     /// forward, so tell the user.
     /// </summary>
     public static SecondStartResult SecondStart(IEnumerable<string> args, string? pipeName = null,
-        int connectTimeoutMs = 10_000, int answerTimeoutMs = 5_000)
+        int connectTimeoutMs = 10_000, int answerTimeoutMs = 15_000)
     {
         if (args.Contains(AutoStartArgument))
             return SecondStartResult.Quiet;
