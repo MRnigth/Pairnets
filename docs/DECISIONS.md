@@ -1030,3 +1030,33 @@ The owner's answers to the 2026-10-14 audit questions:
   and the others stop waiting as before; the 30-minute limit and "Download now anyway" stay.
 * **The repeat comes from the sync engine, not the app window**, so it works on every computer, with or without its
   window open. Keep `BatchReannounceInterval` well under the others' `PeerQuietTimeout`.
+
+## Pairnets in File Explorer, like OneDrive (2026-10-19)
+
+* **Left side, right-click items and folder icon: registry only, on by default.** Explorer's left side gets "Pairnets"
+  through Microsoft's per-user recipe for cloud storage apps (a shell folder under HKCU that points at the Pairnets
+  folder); the right-click items ("Open in Pairnets", "Show sync status") are HKCU verbs limited to the folder with
+  `AppliesTo`, so Windows 11 lists them under "Show more options" (its short menu needs a signed package). The folder
+  gets its blue icon from a hidden desktop.ini, which was already never synced. Settings has a switch; the uninstaller
+  (`--unregister-explorer`) and Reset take it all away. Linux gets the GTK/KDE sidebar bookmark, a Dolphin service menu,
+  GNOME Files/Nemo scripts and a gio folder icon; the Mac gets the folder icon (Finder's `Icon\r` file is never synced;
+  Apple has no API to add a Finder sidebar entry).
+* **Ticks and Files On-Demand use Windows' own Cloud Files API, opt-in.** "Files in Explorer" in Settings: Plain folder
+  (the default), Ticks all here, Files On-Demand. The folder is registered with `StorageProviderSyncRootManager` (the
+  Windows 10 SDK projection, so the Windows app now targets `net8.0-windows10.0.19041.0`) and the rest is P/Invoke into
+  cldapi.dll. It works from the normal per-user install (no package identity): checked on GitHub's Windows computers.
+  Files are marked where they are, never copied or moved. Not possible (stays a plain folder, says why): network or
+  removable drives, non-NTFS drives, a folder inside or around another cloud folder such as OneDrive.
+* **The engine never reads a file whose content is on the nest.** Its content is the version last synced (the notes
+  say which), so scanning, the "did it change?" checks before replacing or deleting, and conflicts use that. The folder
+  is connected with `BLOCK_SELF_IMPLICIT_HYDRATION`, so a mistake fails instead of downloading everything. Cloud
+  placeholders are reparse points: they count as files only while the cloud folder is on (plain folders behave as before).
+* **Opening a file on the nest downloads exactly that version.** The placeholder carries the version's hash; the nest's
+  answer is checked before the first byte is handed to Windows and the whole file is checked at the end. "Always keep on
+  this device" fetches, "Free up space" leaves the content on the nest again (only for files in sync).
+* **Turning it off brings every file home first.** The folder stays a cloud folder (keeping everything here) until
+  every file is downloaded, then the placeholders become plain files and Windows forgets the folder. The uninstaller
+  asks first when files are only on the nest. Reset makes the folder plain without the nest; files only on the nest
+  stay as placeholders that open again once Pairnets is set up.
+* **Tests never touch this PC's Explorer.** The registry tests write below a throwaway key; the cloud folder tests run
+  only with `PAIRNETS_CLOUD_TESTS=1` (CI), and `tools/ExplorerShots` (pictures of real Explorer) refuses to run outside CI.
