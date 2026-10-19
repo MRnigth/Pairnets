@@ -330,9 +330,9 @@
               <TextBlock x:Name="PauseText" Text="Pause" />
             </StackPanel>
           </Button>
-          <Button Style="{StaticResource AccentButton}" Margin="0,0,8,0" Click="OnSyncNow">
+          <Button x:Name="SyncNowButton" Style="{StaticResource AccentButton}" Margin="0,0,8,0" Click="OnSyncNow" ToolTipService.ShowOnDisabled="True">
             <StackPanel Orientation="Horizontal">
-              <ui:LineIcon Style="{StaticResource ToolIcon}" Stroke="White" Data="{StaticResource I.Sync}" />
+              <ui:LineIcon x:Name="SyncNowIcon" Style="{StaticResource ToolIcon}" Stroke="White" Data="{StaticResource I.Sync}" />
               <TextBlock Text="Sync now" />
             </StackPanel>
           </Button>

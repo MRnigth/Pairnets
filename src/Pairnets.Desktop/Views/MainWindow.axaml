@@ -295,9 +295,9 @@
               <TextBlock x:Name="PauseText" Text="Pause" />
             </StackPanel>
           </Button>
-          <Button Classes="accent" Click="OnSyncNow">
+          <Button x:Name="SyncNowButton" Classes="accent" Click="OnSyncNow">
             <StackPanel Orientation="Horizontal" Spacing="7">
-              <v:LineIcon Classes="icon white" Width="17" Height="17" Data="{StaticResource I.Sync}" />
+              <v:LineIcon x:Name="SyncNowIcon" Classes="icon white" Width="17" Height="17" Data="{StaticResource I.Sync}" />
               <TextBlock Text="Sync now" />
             </StackPanel>
           </Button>

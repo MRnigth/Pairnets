@@ -71,6 +71,48 @@ public enum OverviewButtonKind
     Warn,
     Secondary,
     Link,
+
+    /// <summary>An outlined amber button: a choice that deletes or overwrites, never the bright one.</summary>
+    WarnOutline,
+}
+
+/// <summary>How the header's "Sync now" button looks in a state.</summary>
+public enum SyncNowLook
+{
+    /// <summary>The main (blue) button: syncing now is the useful thing to do.</summary>
+    Primary,
+
+    /// <summary>A plain button: the card has its own action (sign in, resume, try now, a stop to decide).</summary>
+    Plain,
+
+    /// <summary>A plain button that cannot be pressed: a sync is already running.</summary>
+    Busy,
+}
+
+/// <summary>The header's "Sync now" button, the same in both apps.</summary>
+public sealed record OverviewSyncNow(SyncNowLook Look)
+{
+    public string Label => "Sync now";
+
+    public bool IsPrimary => Look == SyncNowLook.Primary;
+
+    public bool IsEnabled => Look != SyncNowLook.Busy;
+
+    /// <summary>The tooltip, with the keyboard shortcut (<paramref name="mac"/>: ⌘R, else Ctrl+R).</summary>
+    public string ToolTip(bool mac) => Look == SyncNowLook.Busy
+        ? "Pairnets is syncing now"
+        : Shortcuts.WithHint("Sync now", ShortcutAction.SyncNow, mac);
+
+    /// <summary>
+    /// Only up to date (or waiting for another computer) makes "Sync now" the main button. While syncing it rests; signed
+    /// out, offline, paused and stopped have their own button on the card, so the header's one turns plain.
+    /// </summary>
+    public static OverviewSyncNow For(NestMapState state) => new(state switch
+    {
+        NestMapState.UpToDate or NestMapState.Waiting => SyncNowLook.Primary,
+        NestMapState.Syncing => SyncNowLook.Busy,
+        _ => SyncNowLook.Plain,
+    });
 }
 
 /// <summary>Which way the files move, for the picture's motion and the checks.</summary>
@@ -136,6 +178,9 @@ public enum OverviewLower
 public sealed record OverviewModel
 {
     public NestMapState State { get; init; }
+
+    /// <summary>How the header's "Sync now" button looks (<see cref="OverviewSyncNow.For"/>).</summary>
+    public OverviewSyncNow SyncNow { get; init; } = new(SyncNowLook.Primary);
 
     /// <summary>The heading card's outline: amber for a stop, red for signed out.</summary>
     public OverviewTone Border { get; init; }
@@ -223,7 +268,7 @@ public sealed record OverviewModel
         var lastSynced = s.LastSyncAt is { } at ? At(Format.Moment(at, now)) : null;
         var flow = FlowOf(s);
 
-        var model = new OverviewModel { State = state, NeedsTitle = needsTitle, NeedsDetail = needsDetail, Flow = flow };
+        var model = new OverviewModel { State = state, SyncNow = OverviewSyncNow.For(state), NeedsTitle = needsTitle, NeedsDetail = needsDetail, Flow = flow };
         var open = new OverviewFact(OverviewIcon.FolderFill, "Your folder", folderText, LinkText: "Open", LinkAction: OverviewAction.OpenFolder);
         var version = VersionFact(s);
         var space = s.Server?.DiskFreeBytes is { } free

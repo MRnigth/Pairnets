@@ -308,7 +308,30 @@ public partial class MainWindow : Window, IPageHost
         Overview.ShowSpeed = ShowMapSpeed;
         _overview = OverviewModel.Build(_status, ThisDevice, _folder, _attentionCount, _activityItems, now);
         Overview.Show(_overview, NestMapModel.Build(_status, ThisDevice, now), ThisDevice);
+        DrawSyncNow(_overview.SyncNow);
     }
+
+    /// <summary>
+    /// The header's "Sync now": the blue main button only when syncing is the useful thing to do; plain when the card has its
+    /// own action (so that one is the only blue button), and resting while a sync runs.
+    /// </summary>
+    private void DrawSyncNow(OverviewSyncNow look)
+    {
+        if (_syncNowPrimary != look.IsPrimary)
+        {
+            _syncNowPrimary = look.IsPrimary;
+            SyncNowButton.Style = (Style)FindResource(look.IsPrimary ? "AccentButton" : "SubtleButton");
+        }
+        // Set on every redraw (every few seconds), so a theme change reaches the plain button's icon too.
+        SyncNowIcon.Stroke = look.IsPrimary ? Brushes.White : (Brush)FindResource("T.Text");
+        SyncNowButton.IsEnabled = look.IsEnabled;
+        SyncNowButton.ToolTip = look.ToolTip(mac: false);
+    }
+
+    private bool _syncNowPrimary = true;
+
+    /// <summary>Whether the header's "Sync now" is the blue main button right now (the checks).</summary>
+    public bool SyncNowIsPrimary => _syncNowPrimary;
 
     private void OnOverviewAction(OverviewAction action)
     {

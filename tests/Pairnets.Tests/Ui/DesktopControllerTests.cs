@@ -72,7 +72,7 @@ public sealed class DesktopControllerTests
         Assert.Equal([false], app.Platform.AutoStartChanges); // "Start Pairnets when I log in" was left off
         await app.WaitUntilIdleAsync();
         File.WriteAllText(Path.Combine(app.Folder, "first.txt"), "synced after signing in");
-        Person.Click(Screen.Find<Button>(app.MainWindow, "Sync now"));
+        PressSyncNow(app, app.MainWindow);
         await app.WaitForNestAsync(f => f.ContainsKey("first.txt"), "the first file to reach the nest");
     }
 
@@ -173,7 +173,7 @@ public sealed class DesktopControllerTests
         }
 
         File.WriteAllText(Path.Combine(app.Folder, "hello.txt"), "hello from the Mac");
-        Person.Click(Screen.Find<Button>(app.MainWindow, "Sync now"));
+        PressSyncNow(app, app.MainWindow);
         await Wait.Until(() => ManualPasses(1), "a sync pass started by \"Sync now\"");
         await app.WaitForNestAsync(f => f.TryGetValue("hello.txt", out var size) && size == 18, "hello.txt to reach the nest");
 
@@ -230,10 +230,10 @@ public sealed class DesktopControllerTests
         var main = app.MainWindow;
         var file = Path.Combine(app.Folder, "notes.txt");
         File.WriteAllText(file, "first version");
-        Person.Click(Screen.Find<Button>(main, "Sync now"));
+        PressSyncNow(app, main);
         await app.WaitForNestAsync(f => f.TryGetValue("notes.txt", out var size) && size == 13, "the first version to reach the nest");
         File.WriteAllText(file, "the second version");
-        Person.Click(Screen.Find<Button>(main, "Sync now"));
+        PressSyncNow(app, main);
         await app.WaitForNestAsync(f => f.TryGetValue("notes.txt", out var size) && size == 18, "the second version to reach the nest");
 
         app.Open("History");
@@ -258,14 +258,14 @@ public sealed class DesktopControllerTests
         var main = app.MainWindow;
         for (var i = 1; i <= 6; i++)
             File.WriteAllText(Path.Combine(app.Folder, $"file{i}.txt"), $"file {i}");
-        Person.Click(Screen.Find<Button>(main, "Sync now"));
+        PressSyncNow(app, main);
         await app.WaitForNestAsync(f => f.Count == 6, "the six files to reach the nest");
         await app.WaitUntilIdleAsync();
 
         // Deleting two of six (more than a fifth) blocks the pass until someone decides.
         File.Delete(Path.Combine(app.Folder, "file1.txt"));
         File.Delete(Path.Combine(app.Folder, "file2.txt"));
-        Person.Click(Screen.Find<Button>(main, "Sync now"));
+        PressSyncNow(app, main);
         await Wait.Until(() => app.App.Session!.Status is { Status: RunnerStatus.Blocked, BlockReason: BlockReason.MassDelete }, "the deletions to be blocked");
         await Wait.Until(() => app.Platform.Notices.Any(n => n.Title == "Deletions blocked"), "a \"Deletions blocked\" notification");
         Assert.Equal(6, (await app.NestFilesAsync()).Count); // nothing was deleted on the nest
@@ -365,6 +365,18 @@ public sealed class DesktopControllerTests
         Assert.DoesNotContain(app.Desktop.Windows, w => w.IsVisible && w.Title == "Pairnets – sign out");
     }
 
+    /// <summary>
+    /// Presses the main window's "Sync now". It rests (greyed out) while a sync already runs, which a file just written
+    /// starts by itself: then that sync takes the file and there is nothing to press.
+    /// </summary>
+    private static void PressSyncNow(AppUnderTest app, Avalonia.Controls.Window window)
+    {
+        app.App.RefreshNow();
+        var button = Screen.Find<Button>(window, "Sync now");
+        if (button.IsEnabled)
+            Person.Click(button);
+    }
+
     [AvaloniaFact]
     public async Task Reset_ForgetsEverythingAndShowsSignIn()
     {
@@ -372,7 +384,7 @@ public sealed class DesktopControllerTests
         await app.WaitUntilIdleAsync();
         var key = SettingsStore.Load(app.Env.SettingsPath).ProtectedToken!;
         File.WriteAllText(Path.Combine(app.Folder, "keep-me.txt"), "mine");
-        Person.Click(Screen.Find<Button>(app.MainWindow, "Sync now"));
+        PressSyncNow(app, app.MainWindow);
         await app.WaitForNestAsync(f => f.ContainsKey("keep-me.txt"), "keep-me.txt to reach the nest");
         var notes = app.App.Session!.StateDirectory;
         Assert.StartsWith(app.Env.LocalDir, notes); // the sync notes live in the app's own folder
