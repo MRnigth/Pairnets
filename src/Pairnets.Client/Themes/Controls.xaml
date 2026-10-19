@@ -7,7 +7,7 @@
   </ResourceDictionary.MergedDictionaries>
 
   <!-- The bundled font (Plus Jakarta Sans, 5 static faces linked as Resources). Segoe UI is the fallback. -->
-  <FontFamily x:Key="F.Sans">pack://application:,,,/Fonts/#Plus Jakarta Sans, Segoe UI Variable Text, Segoe UI</FontFamily>
+  <FontFamily x:Key="F.Sans">pack://application:,,,/Pairnets;component/Fonts/#Plus Jakarta Sans, Segoe UI Variable Text, Segoe UI</FontFamily>
 
   <!-- Window -->
   <Style x:Key="PairnetsWindow" TargetType="Window">
