@@ -232,6 +232,16 @@
     </Setter>
   </Style>
 
+  <!-- The count in a filter pill: soft, and accent ink in the chosen pill (no see-through text) -->
+  <Style x:Key="PgCount" TargetType="TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource T.TextSoft}" />
+    <Style.Triggers>
+      <DataTrigger Binding="{Binding IsChecked, RelativeSource={RelativeSource AncestorType=RadioButton}}" Value="True">
+        <Setter Property="Foreground" Value="{DynamicResource T.AccentInk}" />
+      </DataTrigger>
+    </Style.Triggers>
+  </Style>
+
   <!-- History's two tabs -->
   <Style x:Key="PgTabs" TargetType="Border" BasedOn="{StaticResource PgCard}">
     <Setter Property="CornerRadius" Value="14" />
