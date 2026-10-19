@@ -171,24 +171,6 @@ td code { white-space: nowrap; }
 .switch input:checked { background: var(--accent); }
 .switch input:checked::before { left: 21px; }
 
-/* Cookie notice (built by site.js): a small card at the bottom, no overlay, the page stays usable. */
-.cookie-notice {
-  position: fixed; left: 24px; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); z-index: 20;
-  width: 400px; max-width: calc(100% - 48px);
-  background: var(--card); color: var(--text); border: 1px solid var(--border); border-radius: 14px;
-  padding: 16px 18px; box-shadow: var(--shadow), 0 12px 32px rgba(16, 24, 40, .12);
-  font-size: 15px; line-height: 1.5;
-  animation: cookie-notice-in .24s ease-out both;
-}
-.cookie-notice p { margin: 0 0 12px; }
-.cookie-notice-actions { display: flex; align-items: center; gap: 6px 14px; flex-wrap: wrap; }
-.cookie-notice-actions .button { padding: 8px 22px; }
-.cookie-notice-actions a:not(.button) { padding: 8px 4px; font-weight: 600; border-radius: 6px; }
-@keyframes cookie-notice-in { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
-@media (prefers-reduced-motion: reduce) { .cookie-notice { animation: none; } }
-@media print { .cookie-notice { display: none; } }
-@media (prefers-color-scheme: dark) { .cookie-notice { box-shadow: var(--shadow), 0 12px 32px rgba(0, 0, 0, .35); } }
-
 /* Three cards side by side get too narrow on tablets: one under the other from here down. */
 @media (max-width: 900px) {
   .cards { grid-template-columns: minmax(0, 1fr); }
@@ -214,7 +196,6 @@ td code { white-space: nowrap; }
   pre { white-space: pre-wrap; overflow-wrap: anywhere; } /* commands wrap whole, never cut off at the edge */
   .setting { flex-direction: column; gap: 10px; }
   .support { flex-direction: column; align-items: flex-start; gap: 14px; padding: 20px; }
-  .cookie-notice { left: 16px; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); width: auto; max-width: none; }
 }
 
 /* Signed in (site.js): a round letter and the username before the Account button. */

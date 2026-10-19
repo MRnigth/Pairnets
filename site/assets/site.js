@@ -1,5 +1,4 @@
-// Picks the download button for the visitor's system, and shows the cookie notice. Everything works without it
-// (the links are plain).
+// Picks the download button for the visitor's system. Everything works without it (the links are plain).
 "use strict";
 (() => {
   const ua = navigator.userAgent || "";
@@ -24,47 +23,6 @@
   }
   const note = document.getElementById("phone-note");
   if (note && isPhone) note.hidden = false;
-})();
-
-// Cookie notice: tells visitors Pairnets only uses the cookies needed to sign in. It is a notice, not a consent wall:
-// closing it is remembered in local storage ("pn-cookie-notice" = "ok"), which is never sent anywhere.
-(() => {
-  const KEY = "pn-cookie-notice";
-  if (/^\/cookies(\/(index\.html)?)?$/.test(location.pathname)) return; // the cookie page says it all already
-  try {
-    if (window.localStorage.getItem(KEY) === "ok") return;
-  } catch (e) { /* storage blocked: show the notice, closing it lasts for this page view */ }
-
-  const box = document.createElement("div");
-  box.className = "cookie-notice";
-  box.setAttribute("role", "region");
-  box.setAttribute("aria-label", "Cookie notice");
-  const text = document.createElement("p");
-  text.textContent = "Pairnets only uses cookies that are needed to sign you in. No tracking, no ads.";
-  const actions = document.createElement("div");
-  actions.className = "cookie-notice-actions";
-  const ok = document.createElement("button");
-  ok.type = "button";
-  ok.className = "button accent";
-  ok.textContent = "OK";
-  const more = document.createElement("a");
-  more.href = "/cookies/";
-  more.textContent = "Cookie settings";
-  actions.append(ok, more);
-  box.append(text, actions);
-
-  const close = () => {
-    try { window.localStorage.setItem(KEY, "ok"); } catch (e) { /* storage blocked: hidden for this page view only */ }
-    box.remove();
-  };
-  // Escape closes the notice only while focus is inside it, never from elsewhere on the page.
-  box.addEventListener("keydown", (ev) => {
-    if (ev.key === "Escape" && !ev.defaultPrevented) close();
-  });
-  ok.addEventListener("click", close);
-  // Right after the "Skip to content" link, so that stays the first stop for keyboard users and the notice the second.
-  const skip = document.querySelector("a.skip");
-  if (skip) skip.after(box); else document.body.prepend(box);
 })();
 
 // Signed in at sync.pairnets.app? Then the top bar shows your username (a round letter and the name) and an
