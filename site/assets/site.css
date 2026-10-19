@@ -179,10 +179,15 @@ td code { white-space: nowrap; }
 @media print { .cookie-notice { display: none; } }
 @media (prefers-color-scheme: dark) { .cookie-notice { box-shadow: var(--shadow), 0 12px 32px rgba(0, 0, 0, .35); } }
 
+/* Three cards side by side get too narrow on tablets: one under the other from here down. */
+@media (max-width: 900px) {
+  .cards { grid-template-columns: minmax(0, 1fr); }
+}
+
 @media (max-width: 760px) {
   .wrap { padding: 0 16px; }
   .hero { padding: 44px 0 28px; }
-  .cards, .downloads { grid-template-columns: minmax(0, 1fr); }
+  .downloads { grid-template-columns: minmax(0, 1fr); }
   html { scroll-padding-top: 128px; } /* the top bar is two rows tall here */
   header.top .wrap { flex-wrap: wrap; gap: 8px 12px; }
   nav.main { margin-left: 0; order: 3; width: 100%; }
