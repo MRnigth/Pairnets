@@ -111,6 +111,7 @@ public partial class MainWindow : Window, IPageHost
         AppIcon.Source = AppIcons.Large;
         DockIcon.Source = AppIcons.Large;
         RefreshSide();
+        HintShortcuts();
         IsVisibleChanged += (_, _) =>
         {
             if (!IsVisible)

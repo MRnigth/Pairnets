@@ -134,6 +134,7 @@ public partial class MainWindow : Window
         DeletedList.ItemsSource = _shownFiles;
         AccountPage.Attach(actions);
         WirePages();
+        WireShortcuts();
         AttentionSubtitle.Text = AttentionSubtitleText(0);
         RefreshSide();
         UpdatePanels();
@@ -308,6 +309,7 @@ public partial class MainWindow : Window
         ActivityEmptyText.Text = EmptyFolderText();
         PauseText.Text = s.Paused ? "Resume" : "Pause";
         PauseGlyph.Data = Visuals.Resource<Geometry>(s.Paused ? "I.Play" : "I.Pause");
+        RefreshMacMenu();
         RefreshOverview();
     }
 
