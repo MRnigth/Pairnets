@@ -1030,3 +1030,20 @@ The owner's answers to the 2026-10-14 audit questions:
   and the others stop waiting as before; the 30-minute limit and "Download now anyway" stay.
 * **The repeat comes from the sync engine, not the app window**, so it works on every computer, with or without its
   window open. Keep `BatchReannounceInterval` well under the others' `PeerQuietTimeout`.
+
+## Crash cards: every crash caught and kept, cleaned, on the computer (2026-10-19)
+
+* **Both apps now catch every error nothing else caught**, in one place (`CrashCatcher` in Core): on the screen side
+  (the app keeps running and offers a bug report, as before), behind the scenes (the app closes) and in background
+  tasks nobody waited for. The Mac/Linux app used to catch only the screen side. Each is logged as before and kept as
+  a crash card in `%LocalAppData%\Pairnets\crashes` (`~/.local/share/Pairnets/crashes`, …).
+* **A card holds no personal data.** It has the app, version, system, the error kind and the Pairnets code it went
+  through, with the message and details passed through `PrivacyCleaner`: quoted text, paths, file names, web
+  addresses, emails, IP addresses, tokens, long ids and the names this computer is known by (user, computer, sync
+  folder, device name, nest address, account email) are replaced. No log lines. Stack frames keep only the source
+  file's name and line. The cleaner removes too much rather than too little.
+* **One card per kind of crash.** The id is the error kind plus the first five Pairnets places in its stack (no line
+  numbers or versions), so the same crash again only counts up. The newest 20 cards are kept.
+* **After a crash that closed the app, the next start says so once** ("Pairnets closed unexpectedly", an Attention
+  notice) and "Report a bug" shows the cards near the top. **Nothing is sent anywhere**: sending crash reports
+  (with the user's yes, and a privacy page change first) is a separate, undecided step.

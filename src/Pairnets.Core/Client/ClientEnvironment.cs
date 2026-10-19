@@ -17,6 +17,9 @@ public sealed record ClientEnvironment
 
     public string LogsDir => Path.Combine(LocalDir, "logs");
 
+    /// <summary>The cleaned crash cards (<see cref="CrashCards"/>).</summary>
+    public string CrashesDir => Path.Combine(LocalDir, "crashes");
+
     /// <summary>The "come to the front" pipe; null is the normal one for this user.</summary>
     public string? ActivationPipeName { get; init; }
 

@@ -438,6 +438,34 @@ public sealed class TrayControllerTests
     }
 
     [Fact]
+    public async Task ClosedAfterACrash_SaysSoOnce_ReportABugShowsTheCleanedCard()
+    {
+        await using var nest = await TestServer.StartWithWebsiteAsync();
+        var card = CrashCard.From(new IOException(@"Could not read 'D:\Home\me\Work\taxes.pdf'"), CrashPlace.Background, "Windows app");
+        await using var app = await TrayHarness.CreateAsync(nest, environment: e =>
+        {
+            CrashCards.Add(e.CrashesDir, card);
+            return e;
+        });
+        await app.StartAsync();
+
+        await app.WaitUntil(() => app.Notifications.Items.Any(n => n.Title == CrashNotice.Title), "the notice that Pairnets closed unexpectedly");
+        Assert.Empty(CrashCards.TakeNewCloses(app.Env.CrashesDir)); // said once, not at every start
+
+        await app.Menu("Settings…");
+        var main = app.Tray.Window!;
+        await app.Press(main, "Overview");
+        await app.Press(main, "More");
+        await app.Press(main, "Report a bug…");
+        var report = await app.Showing<BugReportWindow>("the bug report window");
+        await app.WaitUntil(() => report.OpenButton.IsEnabled, "the bug report to be built");
+        var copied = Assert.Single(app.Dialogs.Copied.Items);
+        Assert.Contains($"Crash {card.Id}: System.IO.IOException (Pairnets had to close)", copied);
+        Assert.DoesNotContain("taxes.pdf", copied);
+        await app.Press(report, "Close");
+    }
+
+    [Fact]
     public async Task AppUpdate_Download_OpensReleasePage()
     {
         await using var nest = await TestServer.StartWithWebsiteAsync();

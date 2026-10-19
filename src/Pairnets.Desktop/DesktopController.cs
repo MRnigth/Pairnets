@@ -40,6 +40,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
     private readonly ClientEnvironment _env;
     private readonly RollingFileLoggerProvider _fileLog;
     private bool _reportingError;
+    private readonly CrashCatcher _crashes;
     private readonly ILoggerFactory _loggers;
     private readonly ILogger _log;
     private readonly Dictionary<RunnerStatus, WindowIcon> _icons = [];
@@ -80,6 +81,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
         _loggers = LoggerFactory.Create(b => b.AddProvider(_fileLog).SetMinimumLevel(LogLevel.Debug));
         _log = _loggers.CreateLogger("Pairnets.Desktop");
         _settings = SettingsStore.Load(_env.SettingsPath);
+        _crashes = new CrashCatcher(_env.CrashesDir, AppName, _log, () => PrivacyCleaner.ThisComputer(_settings));
         Dispatcher.UIThread.UnhandledException += OnUnhandledException;
         _fileLog.Minimum = _settings.DebugMode ? LogLevel.Debug : LogLevel.Information; // Debug mode: more detail in the log
         _refresh = new DispatcherTimer(TimeSpan.FromMilliseconds(250), DispatcherPriority.Background, (_, _) => RefreshIfDirty());
@@ -94,6 +96,12 @@ public sealed class DesktopController : ITrayActions, IDisposable
         };
     }
 
+    /// <summary>How reports and crash cards name this app.</summary>
+    public static string AppName => OperatingSystem.IsMacOS() ? "Mac app" : "Linux app";
+
+    /// <summary>Also catches errors behind the scenes and in background tasks, for the whole app (the app does this; tests do not).</summary>
+    public void WatchForCrashes() => _crashes.Watch();
+
     public void Start(string[] args)
     {
         _log.LogInformation("Pairnets {Version} starting on {Platform}", typeof(DesktopController).Assembly.GetName().Version, _platform.Name);
@@ -103,6 +111,9 @@ public sealed class DesktopController : ITrayActions, IDisposable
         CreateTray();
         _refresh.Start();
         _updates.SetEnabled(_settings.CheckForUpdates);
+        // Pairnets had to close after an error since it last ran: say so once (the card is in "Report a bug").
+        if (CrashCards.TakeNewCloses(_env.CrashesDir).Count > 0)
+            Notify("crash", CrashNotice.Title, CrashNotice.Text);
         // Rewrite the login item so it follows the app (Tether.app became Pairnets.app; the app may have moved).
         if (SafeIsAutoStart())
         {
@@ -858,8 +869,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
     {
         var settings = _settings;
         var session = _session;
-        var app = OperatingSystem.IsMacOS() ? "Mac app" : "Linux app";
-        var window = new BugReportWindow(() => BugReport.BuildAsync(settings, session, _fileLog.CurrentFile, error, app), _platform.Open,
+        var window = new BugReportWindow(() => BugReport.BuildAsync(settings, session, _fileLog.CurrentFile, error, AppName, _env.CrashesDir), _platform.Open,
             afterError: error is not null, saveDirectory: _env.LogsDir);
         window.Show();
         window.Activate();
@@ -868,7 +878,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
     /// <summary>An error nothing else caught: log it, keep running, and offer a bug report with it.</summary>
     private void OnUnhandledException(object? sender, DispatcherUnhandledExceptionEventArgs e)
     {
-        _log.LogError(e.Exception, "Unhandled UI exception");
+        _crashes.Record(e.Exception, CrashPlace.Screen);
         e.Handled = true;
         if (_reportingError)
             return; // the report window itself failed; do not loop
@@ -929,6 +939,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
     public void Dispose()
     {
         Dispatcher.UIThread.UnhandledException -= OnUnhandledException;
+        _crashes.Dispose();
         _activation?.Dispose();
         _updates.Dispose();
         _refresh.Stop();
