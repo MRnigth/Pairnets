@@ -42,7 +42,7 @@
             </Grid>
             <StackPanel Grid.Column="1" VerticalAlignment="Center">
               <TextBlock x:Name="Headline" FontSize="17" FontWeight="ExtraBold" TextTrimming="CharacterEllipsis" Text="Starting…" />
-              <TextBlock x:Name="Detail" FontSize="12" Foreground="{DynamicResource T.Muted}" TextTrimming="CharacterEllipsis" />
+              <TextBlock x:Name="Detail" FontSize="12" Foreground="{DynamicResource T.Muted}" TextWrapping="Wrap" TextTrimming="CharacterEllipsis" MaxLines="2" />
             </StackPanel>
             <TextBlock x:Name="PercentText" Grid.Column="2" FontSize="24" FontWeight="ExtraBold" VerticalAlignment="Center" Margin="10,0,0,0" IsVisible="False" />
           </Grid>

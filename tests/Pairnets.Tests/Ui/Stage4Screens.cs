@@ -28,7 +28,8 @@ internal static class Stage4Screens
             new("MINI-PC", utc.AddDays(-18), utc, true, "1.0.48", "Linux") { LastChange = utc.AddHours(-3) },
             new("MEDIA-PC", utc.AddDays(-15), utc.AddDays(-1), false, "1.0.47", "Linux") { LastChange = utc.AddDays(-1) },
             new("OFFICE-PC", utc.AddDays(-12), utc.AddDays(-2), false, "1.0.47", "Windows") { LastChange = utc.AddDays(-2) },
-            new("KITCHEN-PC", utc.AddDays(-10), utc.AddDays(-3), false, "1.0.47", "Windows") { LastChange = utc.AddDays(-3) },
+            // Went away 20 minutes ago in the middle of a download: the one red "can't reach" (the others are just off).
+            new("KITCHEN-PC", utc.AddDays(-10), utc.AddMinutes(-20), false, "1.0.47", "Windows") { LastChange = utc.AddDays(-3) },
         ];
         var status = StatusSnapshot.Initial with
         {
@@ -39,6 +40,7 @@ internal static class Stage4Screens
             Peers = new Dictionary<string, PeerActivity>
             {
                 ["LAPTOP"] = new(new TransferReport(0, 4.1 * (1 << 20), 0, 0, 0, 0, Downloading: true), utc, 80, utc.AddMinutes(-2)),
+                ["KITCHEN-PC"] = new(new TransferReport(0, 2.0 * (1 << 20), 4, 12, 0, 0, Downloading: true), utc.AddMinutes(-20), 0, null),
             },
         };
         var feed = Activity(now);
@@ -130,11 +132,11 @@ internal static class Stage4Screens
 
     private static List<AttentionItem> NeedsItems(DateTimeOffset utc) =>
     [
-        new("PC-1 (Windows) wants to join", "Code RX4K-92TB. Check that it matches the code on that computer, then allow or deny it on your nest.",
+        new("PC-1 (Windows) wants to join", new JoinRequest("RX4K-92TB", "PC-1", "Windows", utc.AddMinutes(-4)).Advice,
             "Review in browser", () => { }, AttentionKind.Join, "RX4K-92TB", utc.AddMinutes(-4)),
         new("Conflict copy: budget (conflict LAPTOP 2026-10-02 141509).xlsx", "Both computers changed this file. Compare the two, keep what you want, delete the other.",
             "Show in folder", () => { }, AttentionKind.Conflict, null, utc.AddMinutes(-150)),
-        new("Report.pdf and report.pdf can't share a folder", "The names differ only in capital letters, which Windows sees as the same name. report.pdf waits on your nest until one of them has a new name.",
+        new("Docs/Report.TXT", "'Docs/Report.TXT' differs only in letter case from the existing file 'Docs/report.txt'.",
             "Show in folder", () => { }, AttentionKind.NameClash),
     ];
 

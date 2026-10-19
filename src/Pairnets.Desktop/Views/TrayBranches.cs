@@ -10,8 +10,8 @@ namespace Pairnets.Desktop.Views;
 
 /// <summary>
 /// Draws the small branches of the tray panel: from the nest down to each online computer (a line, the speed on it, the
-/// computer's icon, name and status), the one red row for the computers that can't be reached, and the rows of "Latest
-/// changes". It only draws a <see cref="TrayPanelModel"/>; the Windows app draws the same.
+/// computer's icon, name and status), the grey dashed row for the ones that are switched off, the one red row for the
+/// computers that can't be reached because of a real problem, and the rows of "Latest changes". It only draws a <see cref="TrayPanelModel"/>; the Windows app draws the same.
 /// </summary>
 internal static class TrayBranches
 {
@@ -21,11 +21,12 @@ internal static class TrayBranches
     {
         host.Children.Clear();
         var rows = m.Branches.ToList();
-        var last = m.Unreachable is null ? rows.Count - 1 : -1;
+        var folded = m.Folded.ToList();
+        var last = folded.Count == 0 ? rows.Count - 1 : -1;
         for (var i = 0; i < rows.Count; i++)
             host.Children.Add(Row(rows[i], elbow: i == last));
-        if (m.Unreachable is { } gone)
-            host.Children.Add(Unreachable(gone));
+        for (var i = 0; i < folded.Count; i++)
+            host.Children.Add(Folded(folded[i], elbow: i == folded.Count - 1));
     }
 
     public static void FillChanges(StackPanel host, IReadOnlyList<TrayChange> changes)
@@ -171,15 +172,20 @@ internal static class TrayBranches
         return row;
     }
 
-    private static Grid Unreachable(TrayUnreachable gone)
+    /// <summary>
+    /// A folded row: red and dashed with a cross for the computers that can't be reached (a real problem), grey and dashed
+    /// for the ones that are switched off. The words say which, so it is never told by colour alone.
+    /// </summary>
+    private static Grid Folded(TrayUnreachable gone, bool elbow)
     {
         var row = BranchRow(gone.Tooltip);
+        var line = gone.Problem ? "T.Bad" : "T.Line";
 
-        // A dashed red line with a red cross on it; the vertical stub stops at the line
-        var cell = Stub(elbow: true);
-        var inner = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto,14") };
-        var first = Dash("T.Bad", dashed: true);
-        first.Margin = new Thickness(0, 0, 3, 0);
+        // A dashed line (red with a red cross on it, or grey); the vertical stub stops at the line on the last row
+        var cell = Stub(elbow);
+        var inner = new Grid { ColumnDefinitions = new ColumnDefinitions(gone.Problem ? "*,Auto,14" : "*"), Margin = new Thickness(gone.Problem ? 0 : 2, 0, 0, 0) };
+        var first = Dash(line, dashed: true);
+        first.Margin = new Thickness(0, 0, gone.Problem ? 3 : 0, 0);
         inner.Children.Add(first);
         var cross = new Border { Width = 18, Height = 18, CornerRadius = new CornerRadius(9), BorderThickness = new Thickness(1.5), VerticalAlignment = VerticalAlignment.Center };
         Paint(cross, Border.BackgroundProperty, "T.BadPill");
@@ -189,11 +195,14 @@ internal static class TrayBranches
         cross.Child = x;
         AutomationProperties.SetName(cross, "Can't reach them");
         Grid.SetColumn(cross, 1);
-        inner.Children.Add(cross);
         var tail = Dash("T.Bad", dashed: true);
         tail.Margin = new Thickness(3, 0, 0, 0);
         Grid.SetColumn(tail, 2);
-        inner.Children.Add(tail);
+        if (gone.Problem)
+        {
+            inner.Children.Add(cross);
+            inner.Children.Add(tail);
+        }
         cell.Children.Add(inner);
         row.Children.Add(cell);
 
@@ -203,7 +212,7 @@ internal static class TrayBranches
         {
             var dash = new Border { Width = 20, Height = 20, CornerRadius = new CornerRadius(10), BorderThickness = new Thickness(1), Margin = new Thickness(i == 0 ? 0 : -5, 0, 0, 0) };
             Paint(dash, Border.BackgroundProperty, "T.ChipDim");
-            Paint(dash, Border.BorderBrushProperty, "T.Bad");
+            Paint(dash, Border.BorderBrushProperty, gone.Problem ? "T.Bad" : "T.Dash");
             var glyph = new LineIcon { Width = 10, Height = 10, StrokeThickness = 2.2, Data = DeviceIconArt.For(gone.Icons[i]), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
             Paint(glyph, LineIcon.StrokeProperty, "T.TextSoft");
             dash.Child = glyph;
@@ -212,7 +221,7 @@ internal static class TrayBranches
         Grid.SetColumn(pile, 1);
         row.Children.Add(pile);
 
-        var text = Text(gone.Text, 12.5, FontWeight.Bold, "T.BadText");
+        var text = Text(gone.Text, 12.5, gone.Problem ? FontWeight.Bold : FontWeight.SemiBold, gone.Problem ? "T.BadText" : "T.Muted");
         Grid.SetColumn(text, 2);
         Grid.SetColumnSpan(text, 2);
         row.Children.Add(text);
@@ -225,6 +234,7 @@ internal static class TrayBranches
     {
         var (glyph, ink) = c.Kind switch
         {
+            TrayChangeKind.Live when c.Down => ("I.Down", "T.AccentInk"),
             TrayChangeKind.Down => ("I.Down", "T.OkText"),
             TrayChangeKind.Warn => ("I.Warning", "T.WarnText"),
             TrayChangeKind.Bad => ("I.X", "T.BadText"),

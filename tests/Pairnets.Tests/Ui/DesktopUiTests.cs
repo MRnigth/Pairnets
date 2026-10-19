@@ -409,7 +409,7 @@ public class DesktopUiTests
         window.ShowActivity(feed.Items);
         var attention = new List<AttentionItem>
         {
-            new("LAPTOP-2 (Windows) wants to join", "Code KQ7M-4PXD. Check that it matches the code on that computer, then allow or deny it on your nest.",
+            new("LAPTOP-2 (Windows) wants to join", new JoinRequest("KQ7M-4PXD", "LAPTOP-2", "Windows", DateTimeOffset.UtcNow).Advice,
                 "Review in browser", () => { }),
             new("Conflict copy: report (conflict LAPTOP 2026-10-02 141509).docx",
                 "Both computers changed this file. Compare the two, keep what you want, delete the other.", "Show in folder", () => { }),
@@ -551,7 +551,7 @@ public class DesktopUiTests
             new("MINI-PC", utc.AddDays(-30), utc.AddSeconds(-3), true, "1.0.58", "Linux"),
             new("MEDIA-PC", utc.AddDays(-30), utc.AddDays(-2), false, "1.0.58", "Linux"),
             new("OFFICE-PC", utc.AddDays(-30), utc.AddDays(-3), false, "1.0.58", "Windows"),
-            new("KITCHEN-PC", utc.AddDays(-30), utc.AddDays(-4), false, "1.0.58", "Windows"),
+            new("KITCHEN-PC", utc.AddDays(-30), utc.AddMinutes(-20), false, "1.0.58", "Windows"),
         ];
         var trayFeed = new ActivityFeed();
         trayFeed.Add(new ActivityItem(now.AddMinutes(-12), ActivityKind.Downloaded, "Photos/holiday-0412.jpg", "Downloaded"));
@@ -571,6 +571,8 @@ public class DesktopUiTests
             {
                 ["LAPTOP"] = new(new Pairnets.Core.TransferReport(0, 4.1 * (1 << 20), 30, 120, 0, 0, Downloading: true), DateTimeOffset.UtcNow, 0, null),
                 ["MINI-PC"] = new(new Pairnets.Core.TransferReport(0, 2.6 * (1 << 20), 12, 120, 0, 0, Downloading: true), DateTimeOffset.UtcNow, 0, null),
+                // Went away 20 minutes ago in the middle of a download: the red row (the others are the grey "off" row).
+                ["KITCHEN-PC"] = new(new Pairnets.Core.TransferReport(0, 2.0 * (1 << 20), 4, 12, 0, 0, Downloading: true), utc.AddMinutes(-20), 0, null),
             },
         }, "DESKTOP");
         Save(panel, outDir, $"tray-syncing-{suffix}.png");

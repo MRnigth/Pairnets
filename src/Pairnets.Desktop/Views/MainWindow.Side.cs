@@ -222,7 +222,7 @@ public partial class MainWindow
             case OtherKind.CantReach:
                 Paint(circle, Shape.StrokeProperty, "T.Bad");
                 break;
-            case OtherKind.LastSeen:
+            case OtherKind.LastSeen or OtherKind.Off:
                 Paint(circle, Shape.StrokeProperty, "T.Dash");
                 break;
             default:

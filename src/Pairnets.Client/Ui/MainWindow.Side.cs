@@ -218,7 +218,7 @@ public partial class MainWindow
             case OtherKind.CantReach:
                 circle.SetResourceReference(Shape.StrokeProperty, "T.Bad");
                 break;
-            case OtherKind.LastSeen:
+            case OtherKind.LastSeen or OtherKind.Off:
                 circle.SetResourceReference(Shape.StrokeProperty, "T.Dash");
                 break;
             default:

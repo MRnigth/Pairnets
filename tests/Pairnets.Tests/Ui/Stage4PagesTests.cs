@@ -236,7 +236,7 @@ public class Stage4PagesTests
         window.Navigate(MainPage.Devices);
         Layout(window);
         Assert.Equal(6, window.DeviceRows);
-        Assert.Equal("6 use this nest · 3 online now", window.DevicesSummaryValue);
+        Assert.Equal("3 of 6 online", window.DevicesSummaryValue);
         Assert.True(window.JoinChipShown);
         Assert.Equal("PC-1 is asking to join", window.JoinChipValue);
         var cards = Screen.All<DeviceCardView>(window).ToList();
