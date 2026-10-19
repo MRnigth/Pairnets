@@ -10,13 +10,17 @@
   let target = null;
   // Computers only for now (phone app later): phones and tablets go to the list of downloads to get it elsewhere.
   if (isPhone) target = { href: "/#download", label: "Get it for your computer" };
-  else if (/Win/i.test(text)) target = { href: "/download/windows", label: "Download for Windows" };
-  else if (/Mac/i.test(text)) target = { href: "/download/mac-apple-silicon", label: "Download for Mac" };
-  else if (/Linux|X11/i.test(text)) target = { href: "/download/linux", label: "Download for Linux" };
+  else if (/Win/i.test(text)) target = { system: "windows", href: "/download/windows", label: "Download for Windows" };
+  else if (/Mac/i.test(text)) target = { system: "mac", href: "/download/mac-apple-silicon", label: "Download for Mac" };
+  else if (/Linux|X11/i.test(text)) target = { system: "linux", href: "/download/linux", label: "Download for Linux" };
   const button = document.getElementById("download-main");
   if (button && target) {
     button.href = target.href;
     button.textContent = target.label;
+  }
+  // "Add a computer" shows all three systems as plain buttons; only this computer's one is blue.
+  if (target && target.system) {
+    for (const b of document.querySelectorAll(`[data-system="${target.system}"]`)) b.classList.add("accent");
   }
   const note = document.getElementById("phone-note");
   if (note && isPhone) note.hidden = false;
