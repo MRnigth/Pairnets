@@ -253,18 +253,19 @@
     <Setter Property="Background" Value="#1F55C9" />
     <Setter Property="Foreground" Value="White" />
   </Style>
+  <!-- The tray's "Fix" button: a darker orange than the badge, so the white words read well. -->
   <Style Selector="Button.warn">
-    <Setter Property="Background" Value="{StaticResource S.Orange}" />
+    <Setter Property="Background" Value="{StaticResource S.OrangeButton}" />
     <Setter Property="BorderThickness" Value="0" />
     <Setter Property="Foreground" Value="White" />
     <Setter Property="FontWeight" Value="Bold" />
   </Style>
   <Style Selector="Button.warn /template/ ContentPresenter#PART_ContentPresenter">
-    <Setter Property="Background" Value="{StaticResource S.Orange}" />
+    <Setter Property="Background" Value="{StaticResource S.OrangeButton}" />
     <Setter Property="Foreground" Value="White" />
   </Style>
   <Style Selector="Button.warn:pointerover /template/ ContentPresenter#PART_ContentPresenter">
-    <Setter Property="Background" Value="#C95E0F" />
+    <Setter Property="Background" Value="{StaticResource S.OrangeButtonHover}" />
     <Setter Property="Foreground" Value="White" />
   </Style>
   <!-- For actions that cannot be undone (Reset this app). -->

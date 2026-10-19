@@ -138,11 +138,12 @@
     <Setter Property="Foreground" Value="White" />
     <Setter Property="FontWeight" Value="SemiBold" />
   </Style>
+  <!-- The tray's "Fix" button: a darker orange than the badge, so the white words read well. -->
   <Style x:Key="WarnButton" TargetType="Button" BasedOn="{StaticResource ButtonBase}">
-    <Setter Property="Background" Value="{StaticResource S.Orange}" />
-    <Setter Property="Tag" Value="{StaticResource S.OrangeHover}" />
+    <Setter Property="Background" Value="{StaticResource S.OrangeButton}" />
+    <Setter Property="Tag" Value="{StaticResource S.OrangeButtonHover}" />
     <Setter Property="Foreground" Value="White" />
-    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="FontWeight" Value="Bold" />
   </Style>
 
   <!-- For actions that cannot be undone (Reset this app). -->
