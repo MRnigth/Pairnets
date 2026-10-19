@@ -186,6 +186,73 @@ public sealed class CloudFolderTests : IDisposable
         Assert.DoesNotContain("there.txt", (await plain.ScanAsync(CancellationToken.None)).Files.Keys);
     }
 
+    /// <summary>
+    /// The whole way, with a real nest and a real sync session: a file another computer put on the nest arrives as a
+    /// placeholder (nothing downloaded), opening it downloads exactly that version from the nest, a file made here gets
+    /// uploaded and its tick, and a change on the other computer replaces the placeholder's details.
+    /// </summary>
+    [CloudFact]
+    public async Task OnDemand_WithARealNest_FilesArriveAsPlaceholders_AndOpeningDownloadsThem()
+    {
+        await using var nest = await TestServer.StartAsync();
+        var root = Root();
+        using var other = nest.Client("LAPTOP");
+        var report = Encoding.UTF8.GetBytes("the laptop's report, version 1");
+        Assert.Equal(Pairnets.Core.Api.ApiOutcome.Ok, (await other.UploadAsync("Docs/report.txt", Pairnets.Core.Hashing.ContentHash.NoneBase,
+            1_760_000_000_000, new MemoryStream(report), null, CancellationToken.None)).Result.Outcome);
+
+        using var cloud = Start(root, CloudFolderMode.OnDemand);
+        await using var session = Pairnets.Core.Client.ClientSession.Start(new ClientSettings
+        {
+            ServerUrl = nest.Url.ToString(),
+            ProtectedToken = "unused-by-session",
+            Folder = root,
+            DeviceName = "DESKTOP",
+            FirstRunCompleted = true,
+            CloudFolder = CloudFolderMode.OnDemand,
+        }, nest.Token, new PermanentDeleteTrash(), stateBaseDir: _dir.Combine("state"), runnerOptions: o => new RunnerOptions
+        {
+            ServerUrl = o.ServerUrl,
+            Token = o.Token,
+            DeviceId = o.DeviceId,
+            WatcherDebounce = TimeSpan.FromMilliseconds(200),
+            PeriodicInterval = TimeSpan.FromHours(1),
+            UnstableRetry = TimeSpan.FromMilliseconds(300),
+            ErrorRetry = TimeSpan.FromMilliseconds(500),
+            OfflineBackoff = [TimeSpan.FromMilliseconds(200)],
+        }, cloudFiles: cloud);
+        cloud.Fetch = session.FetchVersionAsync;
+        session.PassCompleted += _ => cloud.Reconcile(session.SyncedHash);
+
+        var placed = Path.Combine(root, "Docs", "report.txt");
+        Assert.True(SpinWait.SpinUntil(() => File.Exists(placed), TimeSpan.FromSeconds(30)), "the nest's file did not arrive");
+        Assert.True(cloud.IsCloudOnly(placed), "it was downloaded instead of left on the nest");
+        Assert.Equal(report.Length, new FileInfo(placed).Length);
+        Assert.Equal((true, true, true), State(placed));
+
+        Assert.Equal("the laptop's report, version 1", ReadElsewhere(placed)); // opening it brings exactly that version
+        Assert.False(cloud.IsCloudOnly(placed));
+
+        File.WriteAllText(Path.Combine(root, "mine.txt"), "made on this computer");
+        Assert.True(SpinWait.SpinUntil(() => nest.Store.ReadManifest(null).Entries.Any(e => e.Path == "mine.txt" && !e.Deleted), TimeSpan.FromSeconds(30)),
+            "the new file was not uploaded");
+        Assert.True(SpinWait.SpinUntil(() => State(Path.Combine(root, "mine.txt")).InSync, TimeSpan.FromSeconds(30)), "the uploaded file got no tick");
+
+        // The laptop changes another file, never opened here: the placeholder takes the new details, nothing is downloaded.
+        var notes = Encoding.UTF8.GetBytes("notes v1");
+        await other.UploadAsync("notes.txt", Pairnets.Core.Hashing.ContentHash.NoneBase, 1_760_000_000_000, new MemoryStream(notes), null, CancellationToken.None);
+        var notesPath = Path.Combine(root, "notes.txt");
+        Assert.True(SpinWait.SpinUntil(() => File.Exists(notesPath), TimeSpan.FromSeconds(30)), "notes.txt did not arrive");
+        var v1 = nest.Store.ReadManifest(null).Entries.Single(e => e.Path == "notes.txt").Hash!;
+        var notes2 = Encoding.UTF8.GetBytes("notes, version two, longer");
+        await other.UploadAsync("notes.txt", v1, 1_760_000_100_000, new MemoryStream(notes2), null, CancellationToken.None);
+        session.SyncNow();
+        Assert.True(SpinWait.SpinUntil(() => new FileInfo(notesPath).Length == notes2.Length, TimeSpan.FromSeconds(30)), "the placeholder kept the old details");
+        Assert.True(cloud.IsCloudOnly(notesPath));
+        Assert.Equal("notes, version two, longer", ReadElsewhere(notesPath));
+        Assert.True(nest.Store.ReadManifest(null).Entries.Single(e => e.Path == "Docs/report.txt").Hash is not null); // nothing was deleted
+    }
+
     [CloudFact]
     public void AFolderInsideAnotherCloudFolder_StaysPlain()
     {
