@@ -1095,3 +1095,33 @@ The owner's answers to the 2026-10-14 audit questions:
   after that (seen on GitHub's runners); such folders are ordinary to everyone and every file in them is here.
 * **Windows' callbacks never let an error escape** (it would end the app), Explorer's keep/free choices go through one
   worker, Pairnets' own files are never freed, and the whole-tree work (pinning, leaving) runs off the window's thread.
+
+## Where your files live: folders on this PC, On-Demand, or only on the nest (2026-10-20)
+
+* **Asked for by the owner for 1.0.60** ("all the files stay on the server and not on the device, you can change it in
+  settings"). His answers: three choices, **per folder and per computer**, the default unchanged; chosen in Settings, on
+  the new Files page and by right-clicking a folder; Mac and Linux get "On this PC" and "Only on the nest" (a Finder
+  On-Demand needs the paid Apple account); shipped as a finished feature, so the "Files in Explorer" Preview choice goes.
+* **Kept in this computer's settings only** (`ClientSettings.Placement`, folder → placement). A path takes the choice of
+  the nearest folder above it with one (`PlacementMap`); letter case does not matter, as on the nest. On-Demand counts as
+  "on this PC" where Windows can't make a cloud folder.
+* **Nest only, in the engine:** nothing is downloaded; a file here still syncs up first and is then freed (`Evict`) once
+  local, nest and last agreed are the same, or when it is an untouched older version. A file that was here and is gone was
+  deleted by the person, so that deletion still reaches the nest through the usual guards. Freeing is never a deletion:
+  the mass-delete and empty-folder guards don't count it.
+* **Freeing is the risky part, so:** only after this pass's list from the nest says the nest has that version; the file is
+  held (no one else may read or write it), hashed again, its notes forgotten first and then it is deleted for good. The
+  Recycle Bin would keep its space; the copy is on the nest. A stop half-way leaves an untracked file equal to the nest's,
+  which the next pass records and frees again. Nothing is freed while the nest is (nearly) full (`ServerSpaceLow`).
+* **On-Demand per folder** writes the choice onto the folders as Explorer's own keep choices, only when it changed since it
+  was last written (so choices made in Explorer stay): folders on this PC "Always keep on this device", On-Demand folders
+  no keep choice; their files are freed once (at once when in sync, else when they are), and a file opened later stays.
+  `KeepOnNest` asks the nearest folder with its own choice, so it also works for a folder that isn't here yet.
+* **Files page:** lists the nest from this computer's copy of the nest's list (it shows while the nest is offline). A file
+  only on the nest opens as a copy in the app's own folder (user-only), saved back with the opened version as base; a
+  save that meets a newer version on the nest becomes a conflict copy beside it, as the sync does. Copies go a day after
+  their last change reached the nest, never before. While the nest is nearly full only opening works (a pop-up says so).
+* **Moving and renaming happen on the nest** (`POST /api/move`): the new name gets the file, the old one is deleted into
+  history; other computers see a new file and a deleted one, so nothing in the sync changes. One file per request, so a
+  folder moves file by file. The copy is made before the nest answers even if the app stops waiting (big files). A
+  letter-case-only rename goes through a passing name. An older nest answers a bare 404: "update your nest".

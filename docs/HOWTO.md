@@ -565,6 +565,28 @@ You do not have to do anything. Just work in the folder on whichever PC you are 
 > Good habit: before shutting down a PC, glance at the icon. Green means everything reached the
 > server. Blue means wait a moment.
 
+### Keep files on your nest (free space on this PC)
+
+Each folder can live in one of three ways on this PC. Your other computers choose for themselves.
+
+| Choice | What it means |
+|---|---|
+| **On this PC** (the default) | every file is here and on your nest; works without internet |
+| **On-Demand** (Windows) | files show in File Explorer with a cloud; each downloads when you open it and stays. Right-click › *Free up space* sends one back, *Always keep on this device* keeps one here |
+| **Only on the nest** | nothing is kept on this PC and nothing shows in Explorer; open the files in Pairnets › **Files** |
+
+Choose in **Settings › Where your files live**, next to a folder on the **Files** page, or by right-clicking the folder in
+Explorer › *Show more options* › **Where this folder lives…** (on Linux: the Pairnets item of your file manager).
+
+* **Switching a folder away from this PC** removes a file here only once Pairnets has checked it is safely on your nest.
+  A file still being uploaded stays until the nest has it. Switching back downloads everything again.
+* **Opening a file that is only on the nest** gives a copy in Pairnets' own app folder. When you save it, the change goes
+  to your nest (the old version stays in History). If someone changed it meanwhile, both versions are kept. The copy is
+  removed a day after your last change reached the nest.
+* **Nest offline?** The Files page still shows the last list, but files only on the nest can't be opened until it's back.
+* **Nest full?** You can still open files, but adding, changing, moving and deleting stop with a message, and no space
+  is freed on this PC (new files stay here) until the nest has room.
+
 ### The icon menu (right-click on Windows, click on Mac)
 
 | Item | What it does |
