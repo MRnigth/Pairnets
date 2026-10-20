@@ -20,6 +20,16 @@ public enum FileWhere
     NestOnly,
 }
 
+/// <summary>The kinds of file "Help me clean up" sorts by.</summary>
+public enum FileKind
+{
+    Video,
+    Photo,
+    Archive,
+    Document,
+    Other,
+}
+
 /// <summary>One row of the Files page: a file on the nest, or a folder of them.</summary>
 public sealed record NestEntry(string Path, bool IsFolder, long Size, DateTimeOffset Changed, string? Hash, FileWhere Where, FilePlacement Placement, int Files = 0)
 {
@@ -447,6 +457,96 @@ public sealed class NestFiles
             _session.Runner.RequestSync("deleted on the Files page");
         }
         _session.Activity.Add(ActivityKind.DeletedOnServer, path, $"Deleted on the nest: {path} (it can be restored from History)", _clock);
+        return NestResult.Done;
+    }
+
+    // ------------------------------------------------------------------ "Help me clean up"
+
+    /// <summary>The word typed to delete a file for good: nothing goes without it.</summary>
+    public const string DeleteWord = "DELETE";
+
+    /// <summary>What kind of file a name is, for "Help me clean up" (by its extension).</summary>
+    public static FileKind KindOf(string path) => System.IO.Path.GetExtension(path).ToLowerInvariant() switch
+    {
+        ".mp4" or ".mov" or ".mkv" or ".avi" or ".wmv" or ".m4v" or ".webm" or ".mts" or ".m2ts" or ".3gp" => FileKind.Video,
+        ".jpg" or ".jpeg" or ".png" or ".heic" or ".heif" or ".gif" or ".webp" or ".tif" or ".tiff" or ".bmp" or ".raw"
+            or ".cr2" or ".cr3" or ".nef" or ".arw" or ".dng" or ".psd" => FileKind.Photo,
+        ".zip" or ".7z" or ".rar" or ".tar" or ".gz" or ".tgz" or ".xz" or ".bz2" or ".iso" or ".img" or ".dmg" or ".vhd" or ".vhdx" => FileKind.Archive,
+        ".pdf" or ".doc" or ".docx" or ".xls" or ".xlsx" or ".ppt" or ".pptx" or ".odt" or ".ods" or ".odp" or ".txt" or ".md"
+            or ".rtf" or ".csv" or ".pages" or ".numbers" or ".key" => FileKind.Document,
+        _ => FileKind.Other,
+    };
+
+    /// <summary>"Videos", "Photos", "Archives", "Documents", "Other".</summary>
+    public static string KindText(FileKind kind) => kind switch
+    {
+        FileKind.Video => "Videos",
+        FileKind.Photo => "Photos",
+        FileKind.Archive => "Archives",
+        FileKind.Document => "Documents",
+        _ => "Other",
+    };
+
+    /// <summary>The space each kind of file takes on the nest, biggest first (kinds with no files left out).</summary>
+    public IReadOnlyList<(FileKind Kind, long Bytes)> KindTotals() => _session.State.LoadRemote().Values
+        .Where(e => !e.Deleted)
+        .GroupBy(e => KindOf(e.Path))
+        .Select(g => (g.Key, g.Sum(e => e.Size)))
+        .OrderByDescending(t => t.Item2)
+        .ToList();
+
+    /// <summary>The biggest files on the nest (of one kind, or all), biggest first.</summary>
+    public IReadOnlyList<NestEntry> Biggest(FileKind? kind = null, int max = 50) => _session.State.LoadRemote().Values
+        .Where(e => !e.Deleted && e.Hash is not null && (kind is null || KindOf(e.Path) == kind))
+        .OrderByDescending(e => e.Size)
+        .ThenBy(e => e.Path, StringComparer.Ordinal)
+        .Take(max)
+        .Select(e => new NestEntry(e.Path, false, e.Size, Moment(e.ModifiedMs), e.Hash, WhereNow(e.Path), PlacementOf(e.Path)))
+        .ToList();
+
+    /// <summary>The space all files on the nest take now (older versions and deleted files not counted).</summary>
+    public long BytesOnNest() => _session.State.LoadRemote().Values.Where(e => !e.Deleted).Sum(e => e.Size);
+
+    /// <summary>The space older versions and deleted files take on the nest (null when the nest doesn't say).</summary>
+    public long? HistoryBytes => _session.Status.Server?.HistoryBytes;
+
+    /// <summary>
+    /// Deletes a file for good, with its older versions, freeing their space on the nest at once ("Help me clean up").
+    /// Only with <see cref="DeleteWord"/> typed: Pairnets recommends never doing it. Works also while the nest is full,
+    /// which is what it is for. The copy here, if any, goes to the trash.
+    /// </summary>
+    public async Task<NestResult> DeleteForGoodAsync(string path, string typed, CancellationToken ct = default)
+    {
+        if (!string.Equals(typed.Trim(), DeleteWord, StringComparison.Ordinal))
+            return NestResult.Fail($"Type {DeleteWord} to delete it for good.");
+        if (_session.State.GetRemote(path) is not { Deleted: false, Hash: { } hash })
+            return NestResult.Fail("This file is no longer on your nest.");
+        try
+        {
+            var result = await _session.Api.PurgeAsync(path, hash, ct).ConfigureAwait(false);
+            switch (result.Outcome)
+            {
+                case ApiOutcome.Ok:
+                    break;
+                case ApiOutcome.Conflict:
+                    return NestResult.Fail("It changed on your nest meanwhile; it was not deleted.");
+                default:
+                    return NestResult.Fail(result.Message ?? "Your nest did not delete it.");
+            }
+            _session.State.UpsertRemote(result.Entry!);
+            if (Local(path) is { } here && File.Exists(here))
+            {
+                _session.State.RemoveFile(path);
+                _session.Trash.Delete(here);
+            }
+        }
+        catch (Exception ex) when (ex is PairnetsNetworkException or PairnetsAuthException or PairnetsProtocolException or IOException or UnauthorizedAccessException)
+        {
+            return NestResult.Fail(ex is PairnetsNetworkException ? OfflineMessage : FriendlyErrors.Describe(ex));
+        }
+        _session.Activity.Add(ActivityKind.DeletedOnServer, path, $"Deleted for good: {path}", _clock);
+        _session.Runner.RequestSync("deleted for good on the Clean up page");
+        _ = _session.RefreshServerInfoAsync(); // the free space changed
         return NestResult.Done;
     }
 

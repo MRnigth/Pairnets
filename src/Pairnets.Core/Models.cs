@@ -29,7 +29,8 @@ public sealed record ServerInfo(
     long? DiskFreeBytes = null,
     long? DiskTotalBytes = null,
     UpdaterStatus? Updater = null,
-    int? PiecesInFlight = null);
+    int? PiecesInFlight = null,
+    long? HistoryBytes = null);
 
 /// <summary>The server's self-updater. <see cref="State"/>: missing, idle, requested, running, succeeded or failed.</summary>
 public sealed record UpdaterStatus(bool Installed, string State, string? Message = null, DateTimeOffset? At = null);

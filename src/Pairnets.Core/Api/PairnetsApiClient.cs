@@ -967,6 +967,34 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
         return await ReadChangeResultAsync(resp, timeout, ct).ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// Deletes one file for good with its older versions (POST /api/purge): "Clean up", after the person said they are
+    /// completely sure. <see cref="ApiOutcome.NotSupported"/> when the nest is too old for it.
+    /// </summary>
+    public async Task<ApiResult> PurgeAsync(string path, string baseHash, CancellationToken ct)
+    {
+        using var timeout = Linked(ct, _metadataTimeout);
+        var uri = $"api/purge?path={Uri.EscapeDataString(path)}&base={Uri.EscapeDataString(baseHash)}";
+        using var resp = await SendAsync(() => new HttpRequestMessage(HttpMethod.Post, uri), HttpCompletionOption.ResponseContentRead, timeout, ct).ConfigureAwait(false);
+        if (resp.StatusCode is HttpStatusCode.NotFound or HttpStatusCode.MethodNotAllowed
+            && await IsBareAsync(resp, ct).ConfigureAwait(false))
+            return new ApiResult(ApiOutcome.NotSupported, null, "Your nest is too old to delete files for good. Update it first.");
+        return await ReadChangeResultAsync(resp, timeout, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>True for an answer without Pairnets' error body: the nest has no such address (an older nest).</summary>
+    private static async Task<bool> IsBareAsync(HttpResponseMessage resp, CancellationToken ct)
+    {
+        try
+        {
+            return JsonSerializer.Deserialize<ErrorBody>(await resp.Content.ReadAsByteArrayAsync(ct).ConfigureAwait(false), PairnetsJson.Options) is null;
+        }
+        catch (JsonException)
+        {
+            return true;
+        }
+    }
+
     // ------------------------------------------------------------------ history
 
     public async Task<IReadOnlyList<HistoryVersion>> GetHistoryAsync(string path, CancellationToken ct)

@@ -360,6 +360,87 @@ public sealed class SyncStore : IDisposable
         }
     }
 
+    /// <summary>
+    /// Deletes a file for good ("Clean up" in the apps, only after the person said they are completely sure): the current
+    /// version when it is still <paramref name="baseValue"/> (or "none" for a file already deleted) and every older
+    /// version in history, which frees their space at once. Computers see an ordinary deletion. Cannot be undone.
+    /// </summary>
+    public async Task<ChangeResult> PurgeAsync(string path, string baseValue)
+    {
+        if (!PathRules.IsValid(path))
+            return new ChangeResult(ChangeStatus.InvalidName, null, "Invalid path.");
+        if (!TryParseBase(baseValue, out var expectedBase))
+            return new ChangeResult(ChangeStatus.BadRequest, null, "base must be 'none' or a SHA-256 hash.");
+
+        await _lock.WaitAsync(CancellationToken.None).ConfigureAwait(false);
+        try
+        {
+            var current = Manifest.Get(path);
+            if (current is null)
+                return new ChangeResult(ChangeStatus.NotFound, null, "No such file.");
+            if (!string.Equals(LiveHash(current), expectedBase, StringComparison.Ordinal))
+                return new ChangeResult(ChangeStatus.Conflict, null, "The file changed on the server since your last sync.");
+
+            var entry = current;
+            if (!current.Deleted)
+            {
+                var full = ResolveFilesPath(path) ?? throw new IOException($"Unsafe path {path}.");
+                var now = _clock.GetUtcNow().ToUnixTimeMilliseconds();
+                var journalId = Manifest.AddJournal("delete", path, null, null, null, 0, now);
+                if (File.Exists(full))
+                    File.Delete(full);
+                entry = Manifest.Commit(path, null, 0, now, deleted: true, journalId);
+                _caseIndex.Remove(path);
+                PruneEmptyFolders(Paths.Files, Path.GetDirectoryName(full)!);
+            }
+            long freed = 0;
+            if (HistoryDirectory(path) is { } dir && Directory.Exists(dir))
+            {
+                // Only this file's versions: the folder can also hold the history of files below a folder of the same name.
+                foreach (var version in new DirectoryInfo(dir).EnumerateFiles())
+                {
+                    if ((version.Attributes & FileAttributes.ReparsePoint) != 0 || !HistoryNames.TryParse(version.Name, out _, out _))
+                        continue;
+                    freed += version.Length;
+                    version.Delete();
+                }
+                PruneEmptyFolders(Paths.History, dir);
+            }
+            _log.LogWarning("Deleted {Path} for good, with its older versions ({Bytes} bytes of history)", path, freed);
+            InvalidateHistorySize();
+            return new ChangeResult(current.Deleted ? ChangeStatus.Unchanged : ChangeStatus.Ok, entry);
+        }
+        finally
+        {
+            _lock.Release();
+        }
+    }
+
+    private long? _historyBytes;
+    private DateTimeOffset _historyBytesAt;
+
+    /// <summary>The bytes older versions and deleted files take in history/ (counted at most every ten minutes).</summary>
+    public long HistoryBytes()
+    {
+        var now = _clock.GetUtcNow();
+        if (_historyBytes is { } known && now - _historyBytesAt < TimeSpan.FromMinutes(10))
+            return known;
+        long bytes = 0;
+        try
+        {
+            foreach (var f in new DirectoryInfo(Paths.History).EnumerateFiles("*", new EnumerationOptions { RecurseSubdirectories = true, IgnoreInaccessible = true }))
+                bytes += f.Length;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return _historyBytes ?? 0;
+        }
+        (_historyBytes, _historyBytesAt) = (bytes, now);
+        return bytes;
+    }
+
+    private void InvalidateHistorySize() => _historyBytes = null;
+
     /// <summary>Adds or updates a file that already sits in files/ (rescan). Caller holds no lock.</summary>
     internal async Task<ChangeResult> AdoptExistingFileAsync(string path, string hash, long size, long modifiedMs)
     {

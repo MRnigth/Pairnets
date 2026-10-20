@@ -362,6 +362,15 @@ public sealed partial class ApiTour
         Assert.Equal(notes, (await Read<ManifestEntry>(Post(_laptopApi,
             $"api/move?from={Uri.EscapeDataString(moved)}&to={Uri.EscapeDataString(notes)}&base={restored.Hash}"))).Path); // and back, for what follows
 
+        Step("Deleting a file for good (Clean up)");
+        var forGood = $"tour-{_tag}/delete-for-good.txt";
+        var put = await Read<ManifestEntry>(Call(_laptopApi, HttpMethod.Put, $"api/file?path={Uri.EscapeDataString(forGood)}&base=none&mtime=1700000000000",
+            tweak: r => r.Content = new ByteArrayContent("gone"u8.ToArray())));
+        var purge = $"api/purge?path={Uri.EscapeDataString(forGood)}&base={put.Hash}";
+        await Refused(HttpMethod.Post, purge);
+        Assert.True((await Read<ManifestEntry>(Post(_laptopApi, purge))).Deleted);
+        Assert.Empty(await Read<List<HistoryVersion>>(Get(_laptopApi, $"api/history?path={Uri.EscapeDataString(forGood)}")));
+
         Step("A big file in pieces, and an upload given up half-way");
         var big = $"tour-{_tag}/big.bin";
         var data = new byte[300 * 1024];

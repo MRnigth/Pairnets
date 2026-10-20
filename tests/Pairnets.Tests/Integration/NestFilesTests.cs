@@ -262,6 +262,30 @@ public class NestFilesTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task CleanUpListsTheBiggestFilesByKind_AndDeletesForGoodOnlyWithTheWord()
+    {
+        await OnTheNestAsync(("Videos/trip.mp4", new string('v', 5000)), ("Photos/a.jpg", new string('p', 3000)),
+            ("Photos/b.png", new string('p', 100)), ("notes.txt", "n"));
+        await using var session = Start(("Videos", FilePlacement.NestOnly));
+        await WaitIdle(session);
+
+        Assert.Equal(["Videos/trip.mp4", "Photos/a.jpg", "Photos/b.png", "notes.txt"], session.Files.Biggest().Select(e => e.Path));
+        Assert.Equal(["Photos/a.jpg", "Photos/b.png"], session.Files.Biggest(FileKind.Photo).Select(e => e.Path));
+        Assert.Equal((FileKind.Video, 5000L), session.Files.KindTotals()[0]);
+        Assert.Equal(FileKind.Document, NestFiles.KindOf("x/Report.PDF"));
+
+        Assert.False((await session.Files.DeleteForGoodAsync("Videos/trip.mp4", "delete")).Ok); // not the word
+        Assert.NotNull(OnNest("Videos/trip.mp4"));
+
+        // Also while the nest is full: it is how room is made.
+        session.UpdateStatusForTests(s => s with { Server = new ServerInfo("id", 1, 1, DiskFreeBytes: 1024, DiskTotalBytes: 1L << 40) });
+        Assert.True((await session.Files.DeleteForGoodAsync("Videos/trip.mp4", "DELETE")).Ok);
+        Assert.Null(OnNest("Videos/trip.mp4"));
+        Assert.Empty(_server.Store.ListHistory("Videos/trip.mp4"));
+        Assert.DoesNotContain(session.Files.Biggest(), e => e.Path == "Videos/trip.mp4");
+    }
+
+    [Fact]
     public async Task ChoosingWhereAFolderLivesAsksTheAppToSaveAndRestart()
     {
         await using var session = Start(("Photos", FilePlacement.NestOnly));

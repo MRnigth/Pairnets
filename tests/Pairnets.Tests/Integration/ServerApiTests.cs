@@ -286,6 +286,25 @@ public class ServerApiTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task PurgeDeletesTheFileAndItsOlderVersionsForGood()
+    {
+        await Put("Videos/big.mp4", "none", "v1");
+        await Put("Videos/big.mp4", H("v1"), "v2");
+        using var api = _server.Client();
+        Assert.Single(await api.GetHistoryAsync("Videos/big.mp4", default));
+        Assert.True((await api.GetInfoAsync(default)).HistoryBytes > 0);
+
+        Assert.Equal(ApiOutcome.Conflict, (await api.PurgeAsync("Videos/big.mp4", H("v1"), default)).Outcome);
+        var purged = await api.PurgeAsync("Videos/big.mp4", H("v2"), default);
+        Assert.Equal(ApiOutcome.Ok, purged.Outcome);
+        Assert.True(purged.Entry!.Deleted);
+        Assert.Empty(await api.GetHistoryAsync("Videos/big.mp4", default));
+        Assert.False(File.Exists(Path.Combine(_server.Paths.Files, "Videos", "big.mp4")));
+        Assert.Empty(Directory.EnumerateFiles(_server.Paths.History, "*", SearchOption.AllDirectories));
+        Assert.Equal(ApiOutcome.NotFound, (await api.PurgeAsync("never.txt", H("x"), default)).Outcome);
+    }
+
+    [Fact]
     public async Task ARestoreThatTakesLongAnswersWithinTheProxyLimitAndIsAskedAgain()
     {
         // A big version: copying and hashing it takes a while, longer than the server waits here (not at all).

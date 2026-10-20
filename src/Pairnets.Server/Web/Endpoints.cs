@@ -76,7 +76,7 @@ public static class Endpoints
         {
             var (free, total) = ServerUpdater.DiskSpace(store.Paths.DataDir);
             return Json(new ServerInfo(store.ServerId, store.CurrentVersion, PairnetsInfo.ApiVersion,
-                PairnetsInfo.ProductVersion, free, total, updater.GetStatus(), UploadSessions.PiecesInFlight));
+                PairnetsInfo.ProductVersion, free, total, updater.GetStatus(), UploadSessions.PiecesInFlight, store.HistoryBytes()));
         });
 
         // "Update server" in the apps: asks the root-owned updater to install the newest release.
@@ -250,6 +250,14 @@ public static class Endpoints
             if (result.Status == ChangeStatus.Ok)
                 await BroadcastAsync(ctx, hub, from);
             return await ToResultAsync(result, ctx, to, hub);
+        });
+
+        // Delete one file for good, with its older versions ("Clean up" in the apps, behind a "completely sure" step).
+        app.MapPost("/api/purge", async (HttpContext ctx, SyncStore store, IHubContext<SyncHub> hub) =>
+        {
+            var path = ctx.Request.Query["path"].ToString();
+            var result = await store.PurgeAsync(path, ctx.Request.Query["base"].ToString());
+            return await ToResultAsync(result, ctx, path, hub);
         });
 
         app.MapGet("/api/history", (HttpContext ctx, SyncStore store) =>
