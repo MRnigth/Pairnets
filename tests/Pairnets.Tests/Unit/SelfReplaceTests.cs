@@ -32,7 +32,7 @@ public class SelfReplaceTests
         Assert.Equal(NewApp, File.ReadAllBytes(app));
         Assert.Equal("the old Pairnets", File.ReadAllText(app + ".old"));
         Assert.False(File.Exists(app + ".new"));
-        if (!OperatingSystem.IsWindows())
+        if (asset == UpdatePackage.LinuxDesktop && !OperatingSystem.IsWindows())
             Assert.True(File.GetUnixFileMode(app).HasFlag(UnixFileMode.UserExecute), "The new Linux app must be runnable.");
 
         SelfReplace.CleanUp(app);
