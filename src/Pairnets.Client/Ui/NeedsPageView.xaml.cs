@@ -7,7 +7,8 @@ namespace Pairnets.Client.Ui;
 
 /// <summary>
 /// The Needs you page: one card for each thing only the person can decide (a computer asking to join, a conflict,
-/// a name clash, anything else). The card's button runs the item's action.
+/// a name clash, the offer of this computer's own name, anything else). The card's button runs the item's action; a card
+/// with a second choice ("Keep PC-1") has both buttons in a row under its words.
 /// </summary>
 public partial class NeedsPageView : UserControl
 {
@@ -70,6 +71,7 @@ public partial class NeedsPageView : UserControl
             AttentionKind.Join => ("T.AccentSoft", "T.AccentInk", "I.JoinPc"),
             AttentionKind.Conflict => ("T.WarnPill", "T.WarnText", "I.Copy"),
             AttentionKind.NameClash => ("T.Chip", "T.Text", string.Empty),
+            AttentionKind.Rename => ("T.AccentSoft", "T.AccentInk", "I.Rename"),
             _ => ("T.WarnPill", "T.WarnText", "I.Warning"),
         };
 
@@ -87,6 +89,7 @@ public partial class NeedsPageView : UserControl
 
         var body = new StackPanel();
         var join = item.Kind == AttentionKind.Join;
+        var choice = !join && item.Second is not null;
 
         // Title and words; a computer asking to join has its time beside the title, the others a button beside it.
         var heading = Parts.Text(item.Title, 16, "T.Text", FontWeights.ExtraBold);
@@ -122,6 +125,10 @@ public partial class NeedsPageView : UserControl
             }
             words.Children.Add(title);
         }
+        else if (choice)
+        {
+            words.Children.Add(heading);
+        }
         else
         {
             words.Children.Add(heading);
@@ -136,7 +143,7 @@ public partial class NeedsPageView : UserControl
         }
         words.Children.Add(text);
         head.Children.Add(words);
-        Grid.SetColumnSpan(words, join ? 2 : 1);
+        Grid.SetColumnSpan(words, join || choice ? 2 : 1);
         body.Children.Add(head);
 
         if (join)
@@ -162,6 +169,24 @@ public partial class NeedsPageView : UserControl
             var action = ActionButton(item, primary: false);
             Grid.SetColumn(action, 2);
             row.Children.Add(action);
+            body.Children.Add(row);
+        }
+
+        if (choice)
+        {
+            var row = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 12, 0, 0) };
+            var second = new Button
+            {
+                Style = (Style)FindResource("PgButton"),
+                Content = item.SecondLabel,
+                Tag = item,
+                VerticalAlignment = VerticalAlignment.Center,
+                Padding = new Thickness(16, 0, 16, 0),
+                Margin = new Thickness(0, 0, 8, 0),
+            };
+            second.Click += (_, _) => item.Second?.Invoke();
+            row.Children.Add(second);
+            row.Children.Add(ActionButton(item, primary: true));
             body.Children.Add(row);
         }
 

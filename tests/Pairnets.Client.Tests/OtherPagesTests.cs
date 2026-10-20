@@ -257,6 +257,31 @@ public sealed class OtherPagesTests
         await Done(window);
     }
 
+    [Fact]
+    public async Task NeedsYou_TheOfferOfThisComputersOwnName_HasBothChoices()
+    {
+        var (window, actions, _) = await OpenAsync();
+        var offer = new NameOffer("PC-1", "StudyPC");
+        await Wpf.Ui(() =>
+        {
+            window.ShowAttention([new(offer.Title, offer.Detail, offer.UseLabel, () => actions.Calls.Add("use"), AttentionKind.Rename,
+                SecondLabel: offer.KeepLabel, Second: () => actions.Calls.Add("keep"))]);
+            window.Navigate(MainPage.Attention);
+        });
+        var page = window.NeedsPane;
+        Assert.Equal(1, await Wpf.Ui(() => page.CardCount));
+        await Wpf.Settle(); // layout of the page just opened
+        var texts = await Wpf.Ui(() => Presser.Elements(page).OfType<TextBlock>().Select(t => t.Text).ToList());
+        Assert.Contains("Use this computer's own name?", texts);
+        Assert.Contains(texts, t => t.Contains("called PC-1", StringComparison.Ordinal));
+        await Wpf.Ui(() => Presser.Press(Presser.Find(window).Single(t => t.Label == "Keep PC-1")));
+        await Wpf.Settle();
+        await Wpf.Ui(() => Presser.Press(Presser.Find(window).Single(t => t.Label == "Use StudyPC")));
+        await Wpf.Settle();
+        Assert.Equal(["keep", "use"], actions.Calls.Items.Where(c => c is "keep" or "use"));
+        await Done(window);
+    }
+
     // ------------------------------------------------------------------ History
 
     [Fact]

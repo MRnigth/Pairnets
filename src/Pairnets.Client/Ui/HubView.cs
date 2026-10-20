@@ -37,6 +37,7 @@ public sealed class HubView : UserControl
     private readonly Border _nestBox = new();
     private readonly LineIcon _nestGlyph = Icon(24, 1.7);
     private readonly Ellipse _nestDot = Dot(12);
+    private readonly TextBlock _nestTitle = new() { Text = "Your nest" };
     private readonly TextBlock _nestSub = new();
     private readonly Canvas _right = new() { Width = RightWidth, Height = Height168 };
     private readonly Slot[] _slots = new Slot[Slots];
@@ -194,7 +195,10 @@ public sealed class HubView : UserControl
         host.Children.Add(_nestBox);
 
         var label = new StackPanel { Width = 150 };
-        var title = new TextBlock { Text = "Your nest", FontWeight = FontWeights.Bold, HorizontalAlignment = HorizontalAlignment.Center };
+        var title = _nestTitle;
+        title.FontWeight = FontWeights.Bold;
+        title.HorizontalAlignment = HorizontalAlignment.Center;
+        title.TextTrimming = TextTrimming.CharacterEllipsis;
         title.SetResourceReference(TextBlock.ForegroundProperty, "T.Text");
         _nestSub.FontSize = 12;
         _nestSub.HorizontalAlignment = HorizontalAlignment.Center;
@@ -269,6 +273,7 @@ public sealed class HubView : UserControl
         _nestBox.SetResourceReference(Border.BackgroundProperty, bg);
         _nestGlyph.SetResourceReference(LineIcon.StrokeProperty, ink);
         _nestDot.SetResourceReference(Shape.FillProperty, DotKey(m.NestDot));
+        _nestTitle.Text = m.NestTitle;
         _nestSub.Text = m.NestSub;
         _nestSub.SetResourceReference(TextBlock.ForegroundProperty, m.NestDot switch { NestDot.Bad => "T.BadText", NestDot.Warn => "T.WarnText", _ => "T.TextSoft" });
 

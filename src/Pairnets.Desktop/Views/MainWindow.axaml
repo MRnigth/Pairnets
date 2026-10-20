@@ -158,7 +158,7 @@
                              HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,-2,-2" />
                   </Grid>
                   <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                    <TextBlock FontWeight="ExtraBold" Text="Your nest" />
+                    <TextBlock x:Name="NestTitle" FontWeight="ExtraBold" Text="Your nest" TextTrimming="CharacterEllipsis" />
                     <TextBlock x:Name="NestSub" FontSize="12" FontWeight="Medium" TextTrimming="CharacterEllipsis" />
                   </StackPanel>
                 </Grid>
@@ -721,7 +721,7 @@
                       <v:LineIcon Classes="icon ink-accent" Width="24" Height="24" StrokeThickness="1.8" Data="{StaticResource I.Nest}" />
                     </Border>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                      <TextBlock Text="Your nest" FontSize="20" FontWeight="ExtraBold" />
+                      <TextBlock x:Name="NestHeading" Text="Your nest" FontSize="20" FontWeight="ExtraBold" TextTrimming="CharacterEllipsis" />
                       <TextBlock Classes="t2" Text="The home server that keeps your files and their history." TextTrimming="CharacterEllipsis" />
                     </StackPanel>
                     <Border x:Name="NestOnlinePill" Grid.Column="2" Classes="pillok" Height="28" VerticalAlignment="Center" Margin="12,0,0,0">
@@ -825,11 +825,13 @@
                     <Border Classes="pcard enter" Padding="22,18">
                       <Grid ColumnDefinitions="Auto,*">
                         <Border Classes="sq44" Margin="0,0,16,0" VerticalAlignment="Top"
-                                Classes.tint-accent="{Binding Kind, Converter={x:Static v:KindIs.Instance}, ConverterParameter='Join'}"
+                                Classes.tint-accent="{Binding Kind, Converter={x:Static v:KindIs.Instance}, ConverterParameter='Join,Rename'}"
                                 Classes.tint-warn="{Binding Kind, Converter={x:Static v:KindIs.Instance}, ConverterParameter='Conflict,Warning'}">
                           <Panel>
                             <v:LineIcon Classes="icon ink-accent" Width="22" Height="22" StrokeThickness="1.9" Data="{StaticResource I.UserPlus}"
                                         IsVisible="{Binding Kind, Converter={x:Static v:KindIs.Instance}, ConverterParameter='Join'}" />
+                            <v:LineIcon Classes="icon ink-accent" Width="22" Height="22" StrokeThickness="1.9" Data="{StaticResource I.Pencil}"
+                                        IsVisible="{Binding Kind, Converter={x:Static v:KindIs.Instance}, ConverterParameter='Rename'}" />
                             <v:LineIcon Classes="icon ink-warn" Width="22" Height="22" StrokeThickness="1.9" Data="{StaticResource I.Warning}"
                                         IsVisible="{Binding Kind, Converter={x:Static v:KindIs.Instance}, ConverterParameter='Conflict,Warning'}" />
                             <TextBlock Text="Aa" FontSize="16" FontWeight="ExtraBold" HorizontalAlignment="Center" VerticalAlignment="Center"
@@ -843,19 +845,21 @@
                               <TextBlock Grid.Column="1" Classes="t3" VerticalAlignment="Top" Margin="12,3,0,0" Text="{Binding At, Converter={x:Static v:MomentText.Instance}}" />
                             </Grid>
                             <TextBlock Classes="t2" TextWrapping="Wrap" Text="{Binding Detail}"
-                                       IsVisible="{Binding Kind, Converter={x:Static v:KindIs.Instance}, ConverterParameter='Conflict,Warning,NameClash'}" />
+                                       IsVisible="{Binding Kind, Converter={x:Static v:KindIs.Instance}, ConverterParameter='Conflict,Warning,NameClash,Rename'}" />
                             <TextBlock Classes="t2" TextWrapping="Wrap" Text="Allow it only if you are setting that computer up right now. Its screen should show this same code. You allow or deny it on your nest."
                                        IsVisible="{Binding Kind, Converter={x:Static v:KindIs.Instance}, ConverterParameter='Join'}" />
                           </StackPanel>
-                          <Grid ColumnDefinitions="Auto,*,Auto">
+                          <Grid ColumnDefinitions="Auto,*,Auto,Auto">
                             <Border Classes="codechip" IsVisible="{Binding Code, Converter={x:Static v:HasText.Instance}}">
                               <StackPanel Orientation="Horizontal" Spacing="14">
                                 <TextBlock Text="{Binding Title, Converter={x:Static v:JoinComputer.Instance}}" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource T.Muted}" VerticalAlignment="Center" />
                                 <TextBlock Text="{Binding Code}" FontSize="20" FontWeight="ExtraBold" LetterSpacing="2.4" VerticalAlignment="Center" />
                               </StackPanel>
                             </Border>
-                            <Button Grid.Column="2" Content="{Binding ActionLabel}" Height="38" Padding="16,0" FontWeight="Bold" VerticalAlignment="Center" HorizontalAlignment="Right"
-                                    Classes.accent="{Binding Kind, Converter={x:Static v:KindIs.Instance}, ConverterParameter='Join'}"
+                            <Button Grid.Column="2" Content="{Binding SecondLabel}" Height="38" Padding="16,0" Margin="0,0,8,0" FontWeight="Bold" VerticalAlignment="Center"
+                                    IsVisible="{Binding SecondLabel, Converter={x:Static v:HasText.Instance}}" Click="OnAttentionSecond" Tag="{Binding}" />
+                            <Button Grid.Column="3" Content="{Binding ActionLabel}" Height="38" Padding="16,0" FontWeight="Bold" VerticalAlignment="Center" HorizontalAlignment="Right"
+                                    Classes.accent="{Binding Kind, Converter={x:Static v:KindIs.Instance}, ConverterParameter='Join,Rename'}"
                                     Click="OnAttentionAction" Tag="{Binding}" />
                           </Grid>
                         </StackPanel>

@@ -66,11 +66,11 @@ public sealed record SideThisComputer(string Name, string Text, string Detail, S
     public string Tooltip => $"{Name}, this computer, {Detail}";
 }
 
-/// <summary>The nest's row.</summary>
-public sealed record SideNest(string Text, SideDot Dot, SideTone Tone)
+/// <summary>The nest's row; <paramref name="Title"/> is its name ("soro") once its owner gave it one, else "Your nest".</summary>
+public sealed record SideNest(string Text, SideDot Dot, SideTone Tone, string Title = "Your nest")
 {
     /// <summary>"Your nest, 412 GB free · v1.0.48".</summary>
-    public string Tooltip => "Your nest, " + Text;
+    public string Tooltip => Title + ", " + Text;
 }
 
 /// <summary>One of the other computers.</summary>
@@ -224,7 +224,7 @@ public sealed record SidePanelModel(
         var tiles = new SideTiles(OverviewNote(s, state), activityCount.ToString(CultureInfo.InvariantCulture), Math.Max(0, attentionCount), devicesNote);
         var initial = (s.AccountEmail ?? name).Trim() is { Length: > 0 } source ? char.ToUpperInvariant(source[0]).ToString() : "A";
         var label = s.AccountEmail is { Length: > 0 } email ? "Account: " + email : "Account";
-        return new SidePanelModel(ThisOf(s, name, state, now), NestOf(s, state), others, groupNote, tiles, update ?? SideUpdate.None, initial, label);
+        return new SidePanelModel(ThisOf(s, name, state, now), NestOf(s, state) with { Title = s.NestTitle }, others, groupNote, tiles, update ?? SideUpdate.None, initial, label);
     }
 
     // ---- the states the design draws (Sidebar.dc.html: syncing, synced, waiting, stopped, signin, signedout, offline, paused, missing)

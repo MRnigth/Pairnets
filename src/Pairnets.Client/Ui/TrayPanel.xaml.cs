@@ -169,6 +169,7 @@ public partial class TrayPanel : Window
         PausedNoteText.Text = m.PausedNote ?? string.Empty;
 
         // The nest and its branches
+        NestTitle.Text = m.NestTitle;
         NestSub.Text = m.NestSub;
         NestDotShape.SetResourceReference(Shape.FillProperty, m.NestDot switch
         {

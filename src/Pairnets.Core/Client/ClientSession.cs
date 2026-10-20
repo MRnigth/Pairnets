@@ -224,6 +224,17 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
     /// a relay address (signed in with a Pairnets account, the service's address is the only way to the server).</item>
     /// </list>
     /// </summary>
+    /// <summary>
+    /// Renames this computer on its nest (made unique there: "LAPTOP (2)"). The nest tells the other computers at once;
+    /// this one saves the name the nest settled on through <see cref="AccountChanged"/>, like any rename.
+    /// </summary>
+    public async Task RenameAsync(string name, CancellationToken ct = default)
+    {
+        await Api.RenameThisDeviceAsync(name, ct).ConfigureAwait(false);
+        if (Status.Server is { } info)
+            await CheckAccountAsync(info, ct).ConfigureAwait(false);
+    }
+
     public async Task CheckAccountAsync(ServerInfo info, CancellationToken ct = default)
     {
         if (Interlocked.Exchange(ref _accountCheckRunning, 1) == 1)
@@ -570,6 +581,7 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
                 _ = CheckAccountAsync(info);
             _ = RefreshDevicesAsync();
         };
+        Runner.NestRenamed += name => _ = RefreshServerInfoAsync(); // the name comes back in /api/info
         Runner.RemoteChangeReceived += (device, _) =>
         {
             if (string.Equals(device, Settings.DeviceName, StringComparison.OrdinalIgnoreCase))

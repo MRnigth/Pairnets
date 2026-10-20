@@ -58,7 +58,7 @@ export interface AdminTarget {
 }
 
 /** One signed admin call. Throws NestOffline when the nest cannot be reached; any answer of the nest is returned. */
-export async function adminCall(env: Env, now: number, nest: AdminTarget, method: "GET" | "POST" | "DELETE", pathAndQuery: string, body?: unknown): Promise<AdminAnswer> {
+export async function adminCall(env: Env, now: number, nest: AdminTarget, method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE", pathAndQuery: string, body?: unknown): Promise<AdminAnswer> {
   const bytes = body === undefined ? new Uint8Array(0) : utf8(JSON.stringify(body));
   const ts = String(now);
   const nonce = randomToken(16);

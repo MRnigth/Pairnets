@@ -72,7 +72,7 @@ public class LinkScriptTests : IDisposable
         // The calls: start (no secret in it), then a poll per interval with the device code in the body.
         var requests = service.Requests;
         Assert.Equal(["/v1/servers/start", "/v1/servers/poll", "/v1/servers/poll"], requests.Select(r => r.Path));
-        Assert.Matches("""^\{"hostname":"[A-Za-z0-9_-]+","serverVersion":"1\.0\.48"\}$""", requests[0].Body);
+        Assert.Matches("""^\{"hostname":"[A-Za-z0-9 _.'-]+","serverVersion":"1\.0\.48"\}$""", requests[0].Body);
         Assert.All(requests, r => Assert.Equal(("POST", "application/json", false), (r.Method, r.ContentType, r.HasOrigin)));
         Assert.All(requests.Skip(1), r => Assert.Equal($"{{\"deviceCode\":\"{FakeRelayService.DeviceCode}\"}}", r.Body));
         var polls = service.Polls();

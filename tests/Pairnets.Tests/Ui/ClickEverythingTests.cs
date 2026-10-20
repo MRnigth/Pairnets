@@ -322,7 +322,7 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
             })),
             new("the main window (Needs attention page)", s => MainStage(s, w =>
             {
-                w.ShowAttention([Attention(s), Attention(s)]);
+                w.ShowAttention([Attention(s), Attention(s), NameOfferAttention(s)]);
                 w.Navigate(MainPage.Attention);
             })),
         ],
@@ -430,6 +430,14 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
     private static AttentionItem Attention(Stage s) =>
         new("Conflict copy: report (conflict LAPTOP).docx", "Both computers changed this file.", "Show in folder", () => s.Events.Add("attention"));
 
+    /// <summary>The one-time offer of this computer's own name: a card with a second choice.</summary>
+    private static AttentionItem NameOfferAttention(Stage s)
+    {
+        var offer = new NameOffer("PC-1", "StudyPC");
+        return new(offer.Title, offer.Detail, offer.UseLabel, () => s.Events.Add("attention"), AttentionKind.Rename,
+            SecondLabel: offer.KeepLabel, Second: () => s.Events.Add("attention second"));
+    }
+
     private static async Task MainStage(Stage s, Action<MainWindow> arrange, Func<MainWindow, Task>? settle = null)
     {
         var a = s.Actions;
@@ -500,6 +508,7 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
         s.Expect["OnRestore"] = That(() => a.Samples.Restored.Count == 1 && w.RestoreText.StartsWith("Restored.", StringComparison.Ordinal), "that version come back",
             () => $"{a.Samples.Restored.Count} restored, it says \"{w.RestoreText}\"");
         s.Expect["OnAttentionAction"] = That(() => s.Events.SequenceEqual(["attention"]), "the item's action run");
+        s.Expect["OnAttentionSecond"] = That(() => s.Events.SequenceEqual(["attention second"]), "the item's second choice run");
     }
 
     /// <summary>Counts how often the file list is read; with no <paramref name="inner"/> source the server cannot be reached.</summary>

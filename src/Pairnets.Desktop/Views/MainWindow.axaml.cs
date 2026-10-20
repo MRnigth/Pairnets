@@ -10,9 +10,10 @@ using Pairnets.Core.Client;
 
 namespace Pairnets.Desktop.Views;
 
-/// <summary>An item in the "Needs attention" list with one action button.</summary>
+/// <summary>An item in the "Needs attention" list with one action button (and sometimes a second, quieter one).</summary>
 public sealed record AttentionItem(string Title, string Detail, string ActionLabel, Action Action,
-    AttentionKind Kind = AttentionKind.Warning, string? Code = null, DateTimeOffset? At = null);
+    AttentionKind Kind = AttentionKind.Warning, string? Code = null, DateTimeOffset? At = null,
+    string? SecondLabel = null, Action? Second = null);
 
 /// <summary>The pages in the main window's sidebar.</summary>
 public enum MainPage
@@ -361,6 +362,7 @@ public partial class MainWindow : Window
     private void ShowDevices(StatusSnapshot s)
     {
         var nest = NestCard.From(s, null);
+        NestHeading.Text = nest.Title;
         NestAddress.Text = nest.Address;
         NestVersion.Text = nest.Version;
         NestVersionNote.Text = nest.VersionNote;
@@ -920,5 +922,11 @@ public partial class MainWindow : Window
     {
         if (sender is Control { Tag: AttentionItem item })
             item.Action();
+    }
+
+    private void OnAttentionSecond(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Control { Tag: AttentionItem item })
+            item.Second?.Invoke();
     }
 }

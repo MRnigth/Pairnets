@@ -79,7 +79,8 @@ public sealed record NestMapModel(
     NestDot NestDot,
     string NestSub,
     IReadOnlyList<NestMapOther> Others,
-    int MoreCount)
+    int MoreCount,
+    string NestTitle = "Your nest")
 {
     /// <summary>At most this many other computers are drawn; the rest are "+N more".</summary>
     public const int MaxOthers = 5;
@@ -152,7 +153,7 @@ public sealed record NestMapModel(
             .ToList();
 
         var others = candidates.Take(MaxOthers).Select(x => Other(state, x.Device, x.Report, supportsIcons)).ToList();
-        return new NestMapModel(state, new NestMapThis(kind, label, thisDot, ownIcon), nestDot, sub, others, Math.Max(0, candidates.Count - MaxOthers));
+        return new NestMapModel(state, new NestMapThis(kind, label, thisDot, ownIcon), nestDot, sub, others, Math.Max(0, candidates.Count - MaxOthers), s.NestTitle);
     }
 
     /// <summary>"↑ 4.90 MB/s" from this computer's own speed, or "syncing" / "checking" while nothing moves yet.</summary>

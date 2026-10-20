@@ -52,7 +52,7 @@ public partial class SettingsView : UserControl
         NestHost.Text = string.IsNullOrWhiteSpace(host) ? "Not connected" : host;
         // Who is signed in: the account's email, or the computer's own name on an older nest that did not send one.
         var email = string.IsNullOrWhiteSpace(current.AccountEmail) ? null : current.AccountEmail.Trim();
-        SignedInText.Text = email is not null ? "Signed in as " + email : current.DeviceName ?? Environment.MachineName;
+        SignedInText.Text = email is not null ? "Signed in as " + email : current.DeviceName ?? ComputerName.Default();
         NestInitial.Text = FirstLetter(email ?? current.DeviceName ?? host ?? "?");
         var connected = serverVersionText is not null;
         ConnectedText.Text = connected ? "Connected" : "Not connected";
@@ -67,7 +67,7 @@ public partial class SettingsView : UserControl
         }
         ServerUrlBox.Text = current.ServerUrl ?? string.Empty;
         FolderBox.Text = current.Folder ?? string.Empty;
-        DeviceBox.Text = current.DeviceName ?? Environment.MachineName;
+        DeviceBox.Text = current.DeviceName ?? ComputerName.Default();
         IgnoreBox.Text = string.Join(Environment.NewLine, current.ExtraIgnore);
         AutoStartBox.IsChecked = current.StartWithWindows;
         ExplorerBox.IsChecked = current.ShowInFileManager;
@@ -222,7 +222,7 @@ public partial class SettingsView : UserControl
     }
 
 
-    private string DeviceName() => string.IsNullOrWhiteSpace(DeviceBox.Text) ? Environment.MachineName : DeviceBox.Text.Trim();
+    private string DeviceName() => string.IsNullOrWhiteSpace(DeviceBox.Text) ? ComputerName.Default() : DeviceBox.Text.Trim();
 
     private async void OnSave(object sender, RoutedEventArgs e)
     {
@@ -303,7 +303,10 @@ public partial class SettingsView : UserControl
                 NotifyJoinRequests = _original.NotifyJoinRequests,
                 NotifyAttention = _original.NotifyAttention,
                 NotifyUpdates = _original.NotifyUpdates,
+                NameOfferAnswered = _original.NameOfferAnswered,
             };
+            if (OwnKey.NameNotSaved(_original, deviceId, DeviceName(), deviceName) is { } note)
+                Fail(note);
             PlainToken = token;
             Saved?.Invoke(this);
         }

@@ -29,6 +29,12 @@ public sealed class ClientSettings
     public string? DeviceName { get; set; }
 
     /// <summary>
+    /// The person answered the one-time offer to use this computer's own name instead of a placeholder ("PC-1"), either
+    /// way (<see cref="Client.ComputerName.WorthOffering"/>); it is not offered again.
+    /// </summary>
+    public bool NameOfferAnswered { get; set; }
+
+    /// <summary>
     /// The Pairnets account this computer signed in with ("you@example.com"), for showing; null when it signed in on its
     /// nest's own website, or uses the shared token. The account's token itself is never kept.
     /// </summary>

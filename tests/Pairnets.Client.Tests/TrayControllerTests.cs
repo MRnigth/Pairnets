@@ -148,7 +148,7 @@ public sealed class TrayControllerTests
         await app.Press(signIn, "Continue with Google");
         var google = await app.Opened(l => l.Contains("method=google", StringComparison.Ordinal), "the nest's Google sign-in in the browser");
         Assert.Equal($"https://localhost/link?code={TrayHarness.CodeIn(google)}&method=google", google);
-        Assert.Equal(Environment.MachineName, Auth(nest).FindPairRequestByCode(TrayHarness.CodeIn(google))!.Name);
+        Assert.Equal(ComputerName.Default(), Auth(nest).FindPairRequestByCode(TrayHarness.CodeIn(google))!.Name);
         Assert.Equal(HttpStatusCode.OK, (await site.GetAsync(new Uri(google).PathAndQuery.TrimStart('/'))).StatusCode); // the nest has that page
 
         await app.Press(signIn, "Cancel");

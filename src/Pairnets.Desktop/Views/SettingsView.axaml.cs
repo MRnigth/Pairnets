@@ -69,7 +69,7 @@ public partial class SettingsView : UserControl
         ServerUrlBox.Text = current.ServerUrl ?? string.Empty;
         TokenBox.Watermark = current.ProtectedToken is null ? "printed by install.sh" : "(saved – leave empty to keep)";
         FolderBox.Text = current.Folder ?? string.Empty;
-        DeviceBox.Text = current.DeviceName ?? Environment.MachineName;
+        DeviceBox.Text = current.DeviceName ?? ComputerName.Default();
         IgnoreBox.Text = string.Join(Environment.NewLine, current.ExtraIgnore);
         AutoStartBox.IsChecked = autoStart;
         FileManagerBox.IsChecked = current.ShowInFileManager;
@@ -206,7 +206,7 @@ public partial class SettingsView : UserControl
         }
     }
 
-    private string DeviceName() => string.IsNullOrWhiteSpace(DeviceBox.Text) ? Environment.MachineName : DeviceBox.Text.Trim();
+    private string DeviceName() => string.IsNullOrWhiteSpace(DeviceBox.Text) ? ComputerName.Default() : DeviceBox.Text.Trim();
 
     private List<string> Patterns() =>
         (IgnoreBox.Text ?? string.Empty).Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
@@ -360,7 +360,10 @@ public partial class SettingsView : UserControl
                 NotifyJoinRequests = _original.NotifyJoinRequests,
                 NotifyAttention = _original.NotifyAttention,
                 NotifyUpdates = _original.NotifyUpdates,
+                NameOfferAnswered = _original.NameOfferAnswered,
             };
+            if (OwnKey.NameNotSaved(_original, deviceId, DeviceName(), deviceName) is { } note)
+                await Dialogs.InfoAsync(Owner, "Pairnets", note);
             PlainToken = token;
             Saved?.Invoke(this);
         }

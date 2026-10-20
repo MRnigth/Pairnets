@@ -542,8 +542,33 @@ public sealed class TrayController : ITrayActions, IDisposable
             _log.LogWarning("Could not protect this computer's new key: {Error}", ex.Message);
             return;
         }
+        next.NameOfferAnswered |= _settings.NameOfferAnswered; // answered after this session started
         _log.LogInformation("Saving this computer's sign-in: {Server} as {Device} ({Kind})", next.ServerUrl, next.DeviceName, next.HasOwnKey ? "own key" : "shared token");
         ApplySettings(next, token);
+    }
+
+    /// <summary>"Use StudyPC" on the name offer: renames this computer on its nest; the session then saves the new name.</summary>
+    private async void UseOwnName(NameOffer offer)
+    {
+        if (_session is not { } session)
+            return;
+        try
+        {
+            await session.RenameAsync(offer.Own);
+            AnswerNameOffer();
+        }
+        catch (Exception ex) when (ex is PairnetsNetworkException or PairnetsAuthException or PairnetsProtocolException)
+        {
+            Dialogs.Ask(null, "Pairnets could not rename this computer. " + FriendlyErrors.Describe(ex), "Pairnets", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+    }
+
+    /// <summary>Either answer to the name offer: it is not offered again.</summary>
+    private void AnswerNameOffer()
+    {
+        _settings.NameOfferAnswered = true;
+        SettingsStore.Save(_env.SettingsPath, _settings);
+        _dirty = true;
     }
 
     private void StopSession()
@@ -619,6 +644,9 @@ public sealed class TrayController : ITrayActions, IDisposable
         var items = new List<AttentionItem>();
         if (_session is null)
             return items;
+        if (NameOffer.For(_settings, ComputerName.Default()) is { } offer)
+            items.Add(new AttentionItem(offer.Title, offer.Detail, offer.UseLabel, () => UseOwnName(offer), AttentionKind.Rename,
+                SecondLabel: offer.KeepLabel, Second: AnswerNameOffer));
         foreach (var join in status.JoinRequests)
         {
             items.Add(new AttentionItem(join.Title, $"Code {join.Code}. Check that it matches the code on that computer, then allow or deny it on your nest.",

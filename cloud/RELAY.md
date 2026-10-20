@@ -146,9 +146,11 @@ Endpoints (JSON; bodies at most 4 KiB):
 
 | Endpoint | Body | 200 answer |
 |---|---|---|
-| `GET /api/relay/status` | | `{"serverVersion":"1.0.48","devices":2,"freeBytes":123,"dataBytes":456}` |
+| `GET /api/relay/status` | | `{"serverVersion":"1.0.48","devices":2,"freeBytes":123,"dataBytes":456,"name":"soro"|null}` |
+| `PUT /api/relay/name` | `{"name":"soro"}` | `{"name":"soro"}`; empty → 400 `{"error":"bad_name"}` |
 | `GET /api/relay/devices` | | `{"devices":[{"id":"…","name":"Laptop","system":"Windows 11","createdAt":"…","lastSeen":"…"|null}]}` |
 | `POST /api/relay/devices` | `{"name":"Laptop","system":"Windows 11","approvedBy":"m***@gmail.com"}` | `{"id":"…","name":"Laptop","key":"pn_…"}` |
+| `PATCH /api/relay/devices/{id}` | `{"name":"Work laptop"}` | `{"id":"…","name":"Work laptop"}` (the name stored, `"Work laptop (2)"` when taken); bad name → 400 `{"error":"bad_name"}`; unknown id → 404 `{"error":"not_found"}` |
 | `DELETE /api/relay/devices/{id}` | | `{"removed":true}`; unknown id → 404 `{"error":"not_found"}` |
 
 `POST` creates the device exactly like an approved pairing (`AuthStore.AddDevice`, `approvedBy = "approved by
@@ -256,7 +258,10 @@ timeout 5 s), version, free space, and per server its computers (`GET /api/relay
 /api/relay/devices/{id}`), plus **Remove this nest from my account** (deletes the router binding, the tunnel and the nest row; the
 nest itself keeps its files and stops being reachable). JSON for the page: `GET /v1/servers` (session) →
 `[{id,label,status,online,serverVersion,freeBytes,devices:[…]}]`, `DELETE /v1/servers/{id}/devices/{deviceId}`,
-`DELETE /v1/servers/{id}` (session + Origin).
+`DELETE /v1/servers/{id}` (session + Origin). **Rename** (session + Origin): `PATCH /v1/servers/{id}/devices/{deviceId}`
+`{name}` → `PATCH /api/relay/devices/{id}` → `{id,name,requested}` (`name` is what the nest stored); `PATCH
+/v1/servers/{id}` `{label}` → the label changes, then `PUT /api/relay/name` (best effort). A status call whose `name`
+differs from the label sends the label again; a nest without `name` in its status is never sent one.
 
 The hourly cron also: deletes expired server links; redeploys the router when needed (§5); for nests with
 `status='broken'` (or `pending` older than 1 hour and never reached): deletes the tunnel, redeploys, deletes the row.

@@ -108,12 +108,19 @@ write_private() { # write_private <file> <content>: replaces <file>, mode 600 (r
   mv "$1.tmp" "$1"
 }
 
-# What the approval page shows about this server: its short host name and the Pairnets version being installed.
+# What the approval page shows about this server: its name (the pretty one from hostnamectl when set, such as
+# "Home server", otherwise the short host name) and the Pairnets version being installed. Only plain letters,
+# digits, spaces and . _ ' - are kept, so the name can go into the JSON as it is; it becomes the nest's first name.
 server_facts() {
   local host version
-  host="$(uname -n 2>/dev/null || true)"
-  host="${host%%.*}"
-  host="$(printf '%s' "$host" | tr -cd 'A-Za-z0-9_-' | cut -c1-64)"
+  host="$(hostnamectl --pretty 2>/dev/null || true)"
+  if [[ -z "${host//[[:space:]]/}" ]]; then
+    host="$(uname -n 2>/dev/null || true)"
+    host="${host%%.*}"
+  fi
+  host="$(printf '%s' "$host" | LC_ALL=C tr -cd "A-Za-z0-9 _.'-" | tr -s ' ' | cut -c1-64)"
+  host="${host#"${host%%[! ]*}"}"
+  host="${host%"${host##*[! ]}"}"
   version="$({ tr -d '[:space:]' < "$SCRIPT_DIR/VERSION"; } 2>/dev/null || true)"
   [[ "$version" =~ ^[0-9]+(\.[0-9]+){0,3}$ ]] || version=""
   printf '{"hostname":"%s"' "${host:-server}"

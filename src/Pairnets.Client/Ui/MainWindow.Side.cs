@@ -127,6 +127,7 @@ public partial class MainWindow
         else
             NestRow.SetResourceReference(BackgroundProperty, PillKey(n.Tone));
         NestDot.SetResourceReference(Shape.FillProperty, DotKey(n.Dot));
+        NestTitle.Text = n.Title;
         NestSub.Text = n.Text;
         NestSub.SetResourceReference(TextBlock.ForegroundProperty, InkKey(n.Tone));
         NestRow.ToolTip = n.Tooltip;

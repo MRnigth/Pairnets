@@ -328,7 +328,7 @@ public sealed record OverviewModel
                     Facts =
                     [
                         open,
-                        new OverviewFact(OverviewIcon.Server, "Your nest", hostText),
+                        new OverviewFact(OverviewIcon.Server, s.NestTitle, hostText),
                         new OverviewFact(OverviewIcon.Key, "Account", "Signed out", OverviewTone.Bad),
                     ],
                 };
@@ -363,7 +363,7 @@ public sealed record OverviewModel
                     ],
                     Lower = OverviewLower.ChangesAndFacts,
                     Changes = changes,
-                    Facts = FactsOf(open, new OverviewFact(OverviewIcon.Server, "Your nest", hostText)),
+                    Facts = FactsOf(open, new OverviewFact(OverviewIcon.Server, s.NestTitle, hostText)),
                 };
             }
 

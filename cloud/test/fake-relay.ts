@@ -212,6 +212,10 @@ export class FakeNestServer {
   serverVersion = "1.0.48";
   freeBytes = 123456789;
   dataBytes = 456;
+  /** The name the owner gave this nest (PUT /api/relay/name); null until it was told one. */
+  name: string | null = null;
+  /** A nest from before names: no "name" in its status, no PUT /api/relay/name and no PATCH /api/relay/devices/{id}. */
+  old = false;
 
   constructor(
     readonly nestId: string,
@@ -318,7 +322,8 @@ export class FakeNestServer {
     if (bytes.length > 4096) return jsonResp(413, { error: "too_large" });
     const p = url.pathname;
     if (req.method === "GET" && p === "/api/relay/status") {
-      return jsonResp(200, { serverVersion: this.serverVersion, devices: this.devices.size, freeBytes: this.freeBytes, dataBytes: this.dataBytes });
+      const status = { serverVersion: this.serverVersion, devices: this.devices.size, freeBytes: this.freeBytes, dataBytes: this.dataBytes };
+      return jsonResp(200, this.old ? status : { ...status, name: this.name });
     }
     if (req.method === "GET" && p === "/api/relay/devices") {
       return jsonResp(200, {
@@ -327,8 +332,7 @@ export class FakeNestServer {
     }
     if (req.method === "POST" && p === "/api/relay/devices") {
       const b = JSON.parse(new TextDecoder().decode(bytes)) as { name: string; system: string | null; approvedBy: string };
-      let name = b.name;
-      for (let i = 2; [...this.devices.values()].some((d) => d.name === name); i++) name = `${b.name} (${i})`;
+      const name = this.uniqueName(b.name, null);
       const id = `dev${++this.seq}`;
       const key = "pn_" + toB64url(crypto.getRandomValues(new Uint8Array(32)));
       this.devices.set(id, {
@@ -346,7 +350,38 @@ export class FakeNestServer {
     if (req.method === "DELETE" && m) {
       return this.devices.delete(decodeURIComponent(m[1])) ? jsonResp(200, { removed: true }) : jsonResp(404, { error: "not_found" });
     }
+    // An old nest: ASP.NET's answers for a route it does not have (405 for a known path, a bare 404 otherwise).
+    if (this.old) return m ? new Response(null, { status: 405 }) : new Response(null, { status: 404 });
+    if (req.method === "PATCH" && m) {
+      const name = this.nameIn(bytes);
+      if (!name) return jsonResp(400, { error: "bad_name" });
+      const d = this.devices.get(decodeURIComponent(m[1]));
+      if (!d) return jsonResp(404, { error: "not_found" });
+      d.name = this.uniqueName(name, d.id);
+      return jsonResp(200, { id: d.id, name: d.name });
+    }
+    if (req.method === "PUT" && p === "/api/relay/name") {
+      const name = this.nameIn(bytes);
+      if (!name) return jsonResp(400, { error: "bad_name" });
+      this.name = name;
+      return jsonResp(200, { name });
+    }
     return jsonResp(404, { error: "not_found" });
+  }
+
+  /** {"name": "..."} trimmed, or null when it is empty or a name the nest refuses (AuthStore.CleanName). */
+  private nameIn(bytes: Uint8Array): string | null {
+    const b = JSON.parse(new TextDecoder().decode(bytes)) as { name?: unknown };
+    const name = typeof b.name === "string" ? b.name.trim() : "";
+    return name && name.toLowerCase() !== "unknown" ? name : null;
+  }
+
+  /** Names are unique on a nest (ignoring case): "Laptop (2)" when another computer is already called "Laptop". */
+  private uniqueName(wanted: string, exceptId: string | null): string {
+    const taken = (x: string) => [...this.devices.values()].some((d) => d.id !== exceptId && d.name.toLowerCase() === x.toLowerCase());
+    let name = wanted;
+    for (let i = 2; taken(name); i++) name = `${wanted} (${i})`;
+    return name;
   }
 
   /** Requests that reached the nest outside /api/relay/ (what apps sent through the relay). */

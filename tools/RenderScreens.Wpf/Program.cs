@@ -203,6 +203,7 @@ public static partial class Program
         window.ShowActivity(feed.Items);
         window.ShowAttention(
         [
+            new("Use this computer's own name?", new NameOffer("PC-1", "StudyPC").Detail, "Use StudyPC", () => { }, AttentionKind.Rename, SecondLabel: "Keep PC-1", Second: () => { }),
             new("PC-1 (Windows) wants to join", "Code RX4K-92TB.", "Review on your nest", () => { }, AttentionKind.Join, "RX4K-92TB", now.AddMinutes(-9)),
             new("Conflict copy: budget (conflict LAPTOP 2026-10-02 141509).xlsx", "Both computers changed this file. Both copies were kept, so nothing is lost.", "Show in folder", () => { }, AttentionKind.Conflict, null, now.AddHours(-1)),
             new("Docs/Report.TXT", "Another file with the same name in different letter case exists on your nest: report.txt can't share a folder with it.", "Show in folder", () => { }, AttentionKind.NameClash),

@@ -329,7 +329,7 @@ public partial class SignInView : UserControl
 
     private static Visibility Shown(bool on) => on ? Visibility.Visible : Visibility.Collapsed;
 
-    private string ThisName() => _current.DeviceName ?? Environment.MachineName;
+    private string ThisName() => _current.DeviceName ?? ComputerName.Default();
 
     // ------------------------------------------------------------------ 1. sign in to Pairnets
 

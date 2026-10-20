@@ -229,6 +229,16 @@ fold into `RELAY.md` or reverse.
   `status` is `pending` or `active`; removed servers are not listed.
 - `DELETE /v1/servers/{id}/devices/{deviceId}` answers `204`; the nest's `404` is `404 not_found`, an unreachable nest or
   any other answer `503 nest_offline`. No recent sign-in needed.
+- `PATCH /v1/servers/{id}/devices/{deviceId}` `{name}` answers `200 {id, name, requested}`: `requested` is the name
+  after cleaning (control and invisible characters dropped, trimmed), `name` what the nest stored (it adds " (2)" when
+  another computer has the name). Empty → `400 bad_name` "Type a name."; over 64 characters → `400 bad_name`; a name
+  the nest refuses → `400 bad_name`; the nest's `404` → `404 not_found`; a nest without the route (`405`, or a `404`
+  without a JSON `error`) → **`409 nest_too_old`** "Update your nest to rename computers here."; unreachable or any
+  other answer → `503 nest_offline`. Audit `device_renamed` `{to}`. No recent sign-in needed.
+- `PATCH /v1/servers/{id}` `{label}` answers `200 {id, label}` and works while the nest is offline: the label is saved
+  (audit `nest_renamed` `{from, to}`), then `PUT /api/relay/name` is sent after the answer, errors ignored. `GET
+  /v1/servers` sends the label again when the nest's status `name` differs (so an offline nest catches up); a status
+  without `name` (an older nest) is left alone. `PATCH /v1/nests/{id}` with a new label also audits `nest_renamed`.
 - `DELETE /v1/servers/{id}` answers `204` at once and needs a sign-in within the last 15 minutes (`401
   reauth_required`), like removing a nest in version 1 (CONTRACT §6.6). **(choice)** A notice email goes out ("A server
   was removed from your account: <label>").
