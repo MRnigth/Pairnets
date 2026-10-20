@@ -69,7 +69,7 @@ public sealed record NestResult(bool Ok, string? Problem = null, bool NestFull =
 /// on the nest. A file opened from the nest is a copy here that is saved back to the nest when it changes
 /// (<see cref="OpenedFiles"/>). While the nest is (nearly) full only opening works.
 /// </summary>
-public sealed class NestFiles
+public sealed class NestFiles : INestFiles
 {
     public const string FullMessage = "Your nest is full. You can still open files, but nothing can be added or changed until it has room.";
     public const string OfflineMessage = "Your nest can't be reached right now. Files kept on this PC still open.";
@@ -160,6 +160,20 @@ public sealed class NestFiles
         return [.. set];
     }
 
+    /// <summary>Files anywhere on the nest whose path holds <paramref name="text"/> (any letter case), by path.</summary>
+    public IReadOnlyList<NestEntry> Search(string text, int max = 200)
+    {
+        text = text.Trim();
+        if (text.Length == 0)
+            return [];
+        return _session.State.LoadRemote().Values
+            .Where(e => !e.Deleted && e.Hash is not null && e.Path.Contains(text, StringComparison.OrdinalIgnoreCase))
+            .OrderBy(e => e.Path, StringComparer.CurrentCultureIgnoreCase)
+            .Take(max)
+            .Select(e => new NestEntry(e.Path, false, e.Size, Moment(e.ModifiedMs), e.Hash, WhereNow(e.Path), PlacementOf(e.Path)))
+            .ToList();
+    }
+
     /// <summary>The bytes whose content is on this computer in <paramref name="folder"/>: what "Only on the nest" frees.</summary>
     public long BytesHere(string folder)
     {
@@ -197,12 +211,7 @@ public sealed class NestFiles
     {
         folder = PlacementMap.NormalizeFolder(folder);
         var next = _session.Settings.Clone();
-        var above = folder.Length == 0 ? FilePlacement.OnThisPc
-            : new PlacementMap(next.Placement.Where(p => PlacementMap.NormalizeFolder(p.Key) != folder)).For(folder);
-        foreach (var key in next.Placement.Keys.Where(k => PathRules.CaseKey(PlacementMap.NormalizeFolder(k)) == PathRules.CaseKey(folder)).ToList())
-            next.Placement.Remove(key);
-        if (placement != above)
-            next.Placement[folder] = placement; // the same as the folder above: no choice of its own
+        PlacementMap.Choose(next.Placement, folder, placement);
         _log.LogInformation("Files in {Folder} now live: {Placement}", folder.Length == 0 ? "(all)" : folder, placement);
         _session.ChangeSettings(next);
     }

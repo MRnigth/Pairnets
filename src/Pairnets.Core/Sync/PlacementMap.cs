@@ -48,6 +48,21 @@ public sealed class PlacementMap
     /// <summary>"Photos\\2024\\" or "/Photos/2024" → "Photos/2024"; the whole Pairnets folder is "".</summary>
     public static string NormalizeFolder(string folder) => folder.Replace('\\', '/').Trim().Trim('/');
 
+    /// <summary>
+    /// Writes the choice for <paramref name="folder"/> into <paramref name="placement"/> (the settings' list). A choice
+    /// that is the same as the folder above it is no choice of its own, so it is left out.
+    /// </summary>
+    public static void Choose(Dictionary<string, FilePlacement> placement, string folder, FilePlacement choice)
+    {
+        folder = NormalizeFolder(folder);
+        var above = folder.Length == 0 ? FilePlacement.OnThisPc
+            : new PlacementMap(placement.Where(p => NormalizeFolder(p.Key) != folder)).For(folder);
+        foreach (var key in placement.Keys.Where(k => PathRules.CaseKey(NormalizeFolder(k)) == PathRules.CaseKey(folder)).ToList())
+            placement.Remove(key);
+        if (choice != above)
+            placement[folder] = choice;
+    }
+
     /// <summary>Where the file or folder at <paramref name="path"/> lives.</summary>
     public FilePlacement For(string path)
     {
