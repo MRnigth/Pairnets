@@ -8,8 +8,9 @@ The site holds no accounts and no data of its own, and nothing secret. Accounts 
 **sync.pairnets.app** (one shared address for everyone; the "Sign in" button and `/nest` go to its `/account`
 page, which sends visitors who are not signed in to the sign-in page and back). `assets/site.js` asks
 `sync.pairnets.app/v1/signed-in` on every page, with the visitor's sign-in cookie for that site, to show the
-username in the top bar; the only thing pairnets.app keeps is a note in local storage that the cookie notice was
-closed. People's own servers are called *nests*.
+username in the top bar. pairnets.app keeps nothing in the browser: no cookies, no local storage (it has no cookie
+notice since 19 October 2026; the account pages at sync.pairnets.app still have theirs). People's own servers are
+called *nests*.
 
 ## Hosting on Cloudflare Pages (free)
 

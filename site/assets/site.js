@@ -1,63 +1,28 @@
-// Picks the download button for the visitor's system, and shows the cookie notice. Everything works without it
-// (the links are plain).
+// Picks the download button for the visitor's system. Everything works without it (the links are plain).
 "use strict";
 (() => {
   const ua = navigator.userAgent || "";
   const platform = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || "";
   const text = `${platform} ${ua}`;
+  // iPads report "Macintosh" like a Mac; only the touch screen tells them apart.
+  const isPhone = /iPhone|iPad|Android/i.test(text) || (/Mac/i.test(text) && navigator.maxTouchPoints > 1);
   let target = null;
-  if (/iPhone|iPad|Android/i.test(text)) target = null; // computers only for now: phone app later
-  else if (/Win/i.test(text)) target = { href: "/download/windows", label: "Download for Windows" };
-  else if (/Mac/i.test(text)) target = { href: "/download/mac-apple-silicon", label: "Download for Mac" };
-  else if (/Linux|X11/i.test(text)) target = { href: "/download/linux", label: "Download for Linux" };
+  // Computers only for now (phone app later): phones and tablets go to the list of downloads to get it elsewhere.
+  if (isPhone) target = { href: "/#download", label: "Get it for your computer" };
+  else if (/Win/i.test(text)) target = { system: "windows", href: "/download/windows", label: "Download for Windows" };
+  else if (/Mac/i.test(text)) target = { system: "mac", href: "/download/mac-apple-silicon", label: "Download for Mac" };
+  else if (/Linux|X11/i.test(text)) target = { system: "linux", href: "/download/linux", label: "Download for Linux" };
   const button = document.getElementById("download-main");
   if (button && target) {
     button.href = target.href;
     button.textContent = target.label;
   }
+  // "Add a computer" shows all three systems as plain buttons; only this computer's one is blue.
+  if (target && target.system) {
+    for (const b of document.querySelectorAll(`[data-system="${target.system}"]`)) b.classList.add("accent");
+  }
   const note = document.getElementById("phone-note");
-  if (note && /iPhone|iPad|Android/i.test(text)) note.hidden = false;
-})();
-
-// Cookie notice: tells visitors Pairnets only uses the cookies needed to sign in. It is a notice, not a consent wall:
-// closing it is remembered in local storage ("pn-cookie-notice" = "ok"), which is never sent anywhere.
-(() => {
-  const KEY = "pn-cookie-notice";
-  if (/^\/cookies(\/(index\.html)?)?$/.test(location.pathname)) return; // the cookie page says it all already
-  try {
-    if (window.localStorage.getItem(KEY) === "ok") return;
-  } catch (e) { /* storage blocked: show the notice, closing it lasts for this page view */ }
-
-  const box = document.createElement("div");
-  box.className = "cookie-notice";
-  box.setAttribute("role", "region");
-  box.setAttribute("aria-label", "Cookie notice");
-  const text = document.createElement("p");
-  text.textContent = "Pairnets only uses cookies that are needed to sign you in. No tracking, no ads.";
-  const actions = document.createElement("div");
-  actions.className = "cookie-notice-actions";
-  const ok = document.createElement("button");
-  ok.type = "button";
-  ok.className = "button accent";
-  ok.textContent = "OK";
-  const more = document.createElement("a");
-  more.href = "/cookies/";
-  more.textContent = "Cookie settings";
-  actions.append(ok, more);
-  box.append(text, actions);
-
-  const close = () => {
-    try { window.localStorage.setItem(KEY, "ok"); } catch (e) { /* storage blocked: hidden for this page view only */ }
-    box.remove();
-  };
-  // Escape closes the notice only while focus is inside it, never from elsewhere on the page.
-  box.addEventListener("keydown", (ev) => {
-    if (ev.key === "Escape" && !ev.defaultPrevented) close();
-  });
-  ok.addEventListener("click", close);
-  // Right after the "Skip to content" link, so that stays the first stop for keyboard users and the notice the second.
-  const skip = document.querySelector("a.skip");
-  if (skip) skip.after(box); else document.body.prepend(box);
+  if (note && isPhone) note.hidden = false;
 })();
 
 // Signed in at sync.pairnets.app? Then the top bar shows your username (a round letter and the name) and an

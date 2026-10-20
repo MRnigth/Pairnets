@@ -6,12 +6,15 @@ using Pairnets.Core.Sync;
 namespace Pairnets.Client.Platform;
 
 /// <summary>
-/// Colored status circles with a white glyph (check, arrows, pause, !, x, cloud), drawn at runtime
+/// Colored status circles with a white glyph (check, arrows, !, x, cloud; a dark pause sign on yellow), drawn at runtime
 /// so they stay sharp at 16 px and need no image assets.
 /// </summary>
 public static class TrayIcons
 {
     private static readonly Dictionary<RunnerStatus, Icon> Cache = [];
+
+    /// <summary>The sign on the yellow "paused" circle (T.NeedsActiveText, the words on amber).</summary>
+    private static readonly Color PausedInk = Color.FromArgb(0x2B, 0x1A, 0x00);
 
     [DllImport("user32.dll")]
     private static extern bool DestroyIcon(IntPtr handle);
@@ -51,7 +54,9 @@ public static class TrayIcons
     /// <summary>Same shapes as the window icons (Themes/Icons.xaml), on a 32 px canvas with a 4 px margin.</summary>
     private static void DrawGlyph(Graphics g, RunnerStatus status)
     {
-        using var pen = new Pen(Color.White, 3.6f) { StartCap = LineCap.Round, EndCap = LineCap.Round, LineJoin = LineJoin.Round };
+        // White reads on every colour but the yellow of "paused": that one gets a dark brown sign (7:1).
+        var ink = status == RunnerStatus.Paused ? PausedInk : Color.White;
+        using var pen = new Pen(ink, 3.6f) { StartCap = LineCap.Round, EndCap = LineCap.Round, LineJoin = LineJoin.Round };
         using var path = new GraphicsPath();
         static PointF P(float x, float y) => new(4 + x, 4 + y);
         switch (status)

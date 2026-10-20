@@ -40,6 +40,11 @@ public partial class DeviceCardView : UserControl
         Card.Classes.Set("off", !card.Online);
         Card.Classes.Set("moving", card.Tone == DeviceCardTone.Moving);
         DashRing.IsVisible = !card.Online;
+        // Red only when it can't be reached because of a real problem; switched off stays grey (the "off" look).
+        Problem(DashRing, Avalonia.Controls.Shapes.Shape.StrokeProperty, "T.Bad", card.Problem);
+        Problem(StatusText, TextBlock.ForegroundProperty, "T.BadText", card.Problem);
+        Problem(StateDot, Avalonia.Controls.Shapes.Shape.FillProperty, "T.Bad", card.Problem);
+        Problem(StatusDot, Avalonia.Controls.Shapes.Shape.FillProperty, "T.Bad", card.Problem);
         ThisPill.IsVisible = card.IsThis;
         NameText.Text = card.Name;
         SystemText.Text = card.SystemLine;
@@ -55,6 +60,15 @@ public partial class DeviceCardView : UserControl
         AutomationProperties.SetName(PencilButton, card.IconLabel);
         ToolTip.SetTip(MoreButton, card.MoreLabel);
         AutomationProperties.SetName(MoreButton, card.MoreLabel);
+    }
+
+    /// <summary>Paints <paramref name="property"/> red while the computer has a problem, and gives it back to the styles after.</summary>
+    private static void Problem(Control target, AvaloniaProperty property, string key, bool on)
+    {
+        if (on)
+            target.Bind(property, target.GetResourceObservable(key));
+        else
+            target.ClearValue(property);
     }
 
     private void OnMore(object? sender, RoutedEventArgs e) => RaiseEvent(new RoutedEventArgs(MoreRequestedEvent, this));

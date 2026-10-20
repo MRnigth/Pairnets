@@ -114,7 +114,7 @@ public sealed class FlowLine : Control
     private void UpdateMotion()
     {
         Classes.Set("flowing", Linked && Flow != LinkFlow.None);
-        if (IsFlowing && !_frameRequested && TopLevel.GetTopLevel(this) is { } top)
+        if (IsFlowing && Motion.Enabled && !_frameRequested && TopLevel.GetTopLevel(this) is { } top)
         {
             _frameRequested = true;
             _lastFrame = null;

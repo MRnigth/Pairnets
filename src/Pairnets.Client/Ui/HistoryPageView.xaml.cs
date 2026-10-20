@@ -241,7 +241,7 @@ public partial class HistoryPageView : UserControl
             foreach (var row in rows)
                 VersionList.Children.Add(VersionLine(row, last: row == rows[^1]));
             _versionRows = rows.Count;
-            VersionCount.Text = rows.Count == 1 ? "1 older version" : $"{rows.Count} older versions";
+            VersionCount.Text = VersionRow.CountText(rows.Count);
             if (rows.Count == 0)
             {
                 _versionsMessage.Text = file.Deleted

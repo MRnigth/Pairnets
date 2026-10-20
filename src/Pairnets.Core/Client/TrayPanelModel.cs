@@ -44,16 +44,24 @@ public sealed record TrayBranch(string Name, DeviceIconKind Icon, NestLineKind K
     public bool HasCross => Kind == NestLineKind.Unreachable;
 }
 
-/// <summary>The one red row for every computer that can't be reached ("3 can’t be reached").</summary>
-public sealed record TrayUnreachable(int Count, IReadOnlyList<DeviceIconKind> Icons, IReadOnlyList<string> Names, string Text)
+/// <summary>
+/// One folded row for several computers that are not online: the red row for the ones that can't be reached because of a
+/// real problem ("2 can’t be reached", <see cref="Problem"/>), or the grey dashed row for the ones that are simply switched
+/// off ("MEDIA-PC off since 10:45", "3 computers are off").
+/// </summary>
+/// <param name="Details">Per computer, for the tooltip of a grey row: "MEDIA-PC off since 10:45". Empty for the red row.</param>
+public sealed record TrayUnreachable(int Count, IReadOnlyList<DeviceIconKind> Icons, IReadOnlyList<string> Names, string Text, bool Problem = true, IReadOnlyList<string>? Details = null)
 {
-    /// <summary>"MEDIA-PC, OFFICE-PC and KITCHEN-PC can't be reached", for tooltips and screen readers.</summary>
-    public string Tooltip => Names.Count switch
-    {
-        0 => string.Empty,
-        1 => Names[0] + " can’t be reached",
-        _ => string.Join(", ", Names.Take(Names.Count - 1)) + " and " + Names[^1] + " can’t be reached",
-    };
+    /// <summary>"MEDIA-PC, OFFICE-PC and KITCHEN-PC can't be reached", or "MEDIA-PC off since 10:45, ...", for tooltips and screen readers.</summary>
+    public string Tooltip => !Problem && Details is { Count: > 0 } details ? string.Join(", ", details)
+        : Names.Count switch
+        {
+            0 => string.Empty,
+            1 => Names[0] + " can’t be reached",
+            _ => string.Join(", ", Names.Take(Names.Count - 1)) + " and " + Names[^1] + " can’t be reached",
+        };
+
+    public string Key => $"{Count}:{Problem}:{string.Join(",", Icons)}:{Text}";
 }
 
 /// <summary>How a row of "Latest changes" is drawn.</summary>
@@ -69,9 +77,13 @@ public enum TrayChangeKind
 }
 
 /// <summary>One row of "Latest changes": a file, what happened, and when (or how far along).</summary>
-public sealed record TrayChange(string Name, string Sub, string Right, TrayChangeKind Kind)
+/// <param name="Down">For the live row: the file comes from the nest (a down arrow), not up to it.</param>
+public sealed record TrayChange(string Name, string Sub, string Right, TrayChangeKind Kind, bool Down = false)
 {
     public bool Live => Kind == TrayChangeKind.Live;
+
+    /// <summary>The live row of a file being downloaded: drawn with a down arrow.</summary>
+    public bool LiveDown => Live && Down;
 }
 
 /// <summary>
@@ -93,6 +105,7 @@ public sealed record TrayPanelModel(
     TrayBranch This,
     IReadOnlyList<TrayBranch> Others,
     TrayUnreachable? Unreachable,
+    TrayUnreachable? Off,
     string? MoreText,
     string? FixLabel,
     bool Paused,
@@ -111,9 +124,12 @@ public sealed record TrayPanelModel(
     /// <summary>Every branch row, top to bottom: this computer, then the others that can be reached.</summary>
     public IEnumerable<TrayBranch> Branches => Others.Prepend(This);
 
+    /// <summary>The folded rows under the branches, top to bottom: the grey "off" row, then the red row.</summary>
+    public IEnumerable<TrayUnreachable> Folded => new[] { Off, Unreachable }.OfType<TrayUnreachable>();
+
     /// <summary>Changes whenever the branches would look different (so the UI redraws them only then).</summary>
     public string BranchKey => string.Join("|", Branches.Select(b => b.ToString()))
-        + (Unreachable is { } u ? $"|{u.Count}:{string.Join(",", u.Icons)}" : string.Empty) + "|" + MoreText;
+        + string.Concat(Folded.Select(f => "|" + f.Key)) + "|" + MoreText;
 
     /// <summary>"3 things need you" for the amber row (null when nothing does).</summary>
     public static string? AttentionText(int count) => count switch
@@ -180,11 +196,18 @@ public sealed record TrayPanelModel(
 
         var branches = new List<TrayBranch>();
         var gone = new List<NestMapOther>();
+        var off = new List<NestMapOther>();
         foreach (var o in map.Others)
         {
             if (o.Kind == NestLineKind.Unreachable)
             {
                 gone.Add(o);
+                continue;
+            }
+            // Switched off (not "last seen" while this computer is offline): folded into one grey row.
+            if (!o.Online && state != NestMapState.Offline && state != NestMapState.SignedOutByYou)
+            {
+                off.Add(o);
                 continue;
             }
             var ink = o.Kind switch
@@ -200,10 +223,15 @@ public sealed record TrayPanelModel(
             ? null
             : new TrayUnreachable(gone.Count, gone.Take(MaxUnreachableIcons).Select(g => g.Icon).ToList(), gone.Select(g => g.Name).ToList(),
                 gone.Count.ToString(CultureInfo.InvariantCulture) + " can’t be reached");
+        TrayUnreachable? offRow = off.Count == 0
+            ? null
+            : new TrayUnreachable(off.Count, off.Take(MaxUnreachableIcons).Select(o => o.Icon).ToList(), off.Select(o => o.Name).ToList(),
+                off.Count == 1 ? off[0].Name + " " + off[0].Status : off.Count.ToString(CultureInfo.InvariantCulture) + " computers are off",
+                Problem: false, Details: off.Select(o => o.Name + " " + o.Status).ToList());
 
         var more = map.MoreCount > 0 ? "+" + map.MoreCount.ToString(CultureInfo.InvariantCulture) + " more" : null;
         return new TrayPanelModel(state, tone, headline, detail, percent, files, left, note, map.NestSub, map.NestDot,
-            thisBranch, branches, unreachable, more, s.FixLabel, s.Paused || paused, map.NestTitle);
+            thisBranch, branches, unreachable, offRow, more, s.FixLabel, s.Paused || paused, map.NestTitle);
     }
 
     /// <summary>
@@ -216,7 +244,7 @@ public sealed record TrayPanelModel(
         if (s.IsTransferring && s.CurrentFileName is { } file)
         {
             var up = s.GoingUp || !s.GoingDown;
-            rows.Add(new TrayChange(file, up ? "Uploading now" : "Downloading now", s.Percent is { } p ? p.ToString(CultureInfo.InvariantCulture) + "%" : string.Empty, TrayChangeKind.Live));
+            rows.Add(new TrayChange(file, up ? "Uploading now" : "Downloading now", s.Percent is { } p ? p.ToString(CultureInfo.InvariantCulture) + "%" : string.Empty, TrayChangeKind.Live, Down: !up));
         }
         foreach (var item in items)
         {

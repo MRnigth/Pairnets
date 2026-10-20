@@ -77,6 +77,11 @@ public interface IMainActions
     {
     }
 
+    /// <summary>"Sign in again" on the Account page (the sign-in window opens).</summary>
+    void SignInAgain()
+    {
+    }
+
     /// <summary>"Manage your account on sync.pairnets.app": opens the website.</summary>
     void OpenAccountSite()
     {
@@ -112,6 +117,7 @@ public partial class MainWindow : Window, IPageHost
         AppIcon.Source = AppIcons.Large;
         DockIcon.Source = AppIcons.Large;
         RefreshSide();
+        HintShortcuts();
         IsVisibleChanged += (_, _) =>
         {
             if (!IsVisible)
@@ -236,7 +242,7 @@ public partial class MainWindow : Window, IPageHost
         {
             MainPage.Activity => ("Activity", "What synced recently, newest first. Right-click a file for more."),
             MainPage.History => ("History", "Get back deleted files and older versions. Your nest keeps them for 30 days."),
-            MainPage.Devices => ("Devices", "Every computer on your nest, and the nest itself."),
+            MainPage.Devices => ("Computers", "Every computer on your nest, and the nest itself."),
             MainPage.Attention => ("Needs you", "Things only you can decide."),
             MainPage.Settings => ("Settings", "Your nest, the folder, and how Pairnets behaves on this computer."),
             MainPage.Account => ("Account", "Who is signed in on this computer, and when Pairnets should tell you things."),
@@ -309,7 +315,30 @@ public partial class MainWindow : Window, IPageHost
         Overview.ShowSpeed = ShowMapSpeed;
         _overview = OverviewModel.Build(_status, ThisDevice, _folder, _attentionCount, _activityItems, now);
         Overview.Show(_overview, NestMapModel.Build(_status, ThisDevice, now), ThisDevice);
+        DrawSyncNow(_overview.SyncNow);
     }
+
+    /// <summary>
+    /// The header's "Sync now": the blue main button only when syncing is the useful thing to do; plain when the card has its
+    /// own action (so that one is the only blue button), and resting while a sync runs.
+    /// </summary>
+    private void DrawSyncNow(OverviewSyncNow look)
+    {
+        if (_syncNowPrimary != look.IsPrimary)
+        {
+            _syncNowPrimary = look.IsPrimary;
+            SyncNowButton.Style = (Style)FindResource(look.IsPrimary ? "AccentButton" : "SubtleButton");
+        }
+        // Set on every redraw (every few seconds), so a theme change reaches the plain button's icon too.
+        SyncNowIcon.Stroke = look.IsPrimary ? Brushes.White : (Brush)FindResource("T.Text");
+        SyncNowButton.IsEnabled = look.IsEnabled;
+        SyncNowButton.ToolTip = look.ToolTip(mac: false);
+    }
+
+    private bool _syncNowPrimary = true;
+
+    /// <summary>Whether the header's "Sync now" is the blue main button right now (the checks).</summary>
+    public bool SyncNowIsPrimary => _syncNowPrimary;
 
     private void OnOverviewAction(OverviewAction action)
     {
@@ -356,10 +385,10 @@ public partial class MainWindow : Window, IPageHost
             return;
         UpdateTitle.Text = _update.Title;
         UpdateTitle.ToolTip = detail.Length > 0 ? detail : null;
-        UpdateDetail.Text = _update.ShowDetail ? detail : string.Empty;
-        UpdateDetail.Visibility = Show(_update.ShowDetail);
+        UpdateReason.Text = _update.ShowsReason ? detail : string.Empty;
+        UpdateReason.Visibility = Show(_update.ShowsReason);
         UpdateButton.Content = button;
-        UpdateButton.Visibility = Show(!busy);
+        UpdateButton.Visibility = Show(_update.HasButton);
         UpdateLater.Visibility = Show(!busy);
         UpdatePercent.Visibility = Show(busy);
         UpdatePercent.Text = _update.PercentText;

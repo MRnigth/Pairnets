@@ -251,6 +251,8 @@ public sealed class RecordingActions(IHistorySource? history = null) : ITrayActi
 
     public void SignOut() => Calls.Add(nameof(SignOut));
 
+    public void SignInAgain() => Calls.Add(nameof(SignInAgain));
+
     public void OpenAccountSite() => Calls.Add(nameof(OpenAccountSite));
 }
 

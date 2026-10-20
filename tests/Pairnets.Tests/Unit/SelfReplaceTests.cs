@@ -122,10 +122,10 @@ public class SelfReplaceTests
     [Fact]
     public void TheCardWritesTheReason_WhenNothingWasInstalled_OrTheUpdateIsByHand()
     {
-        Assert.True(SideUpdate.From("Pairnets 1.0.60 could not be installed", "Why.", UpdateTexts.TryAgain).ShowDetail);
-        Assert.True(SideUpdate.From("Pairnets 1.0.60 is available", UpdateTexts.ByHand("1.0.59"), UpdateTexts.OpenDownloadPage).ShowDetail);
-        Assert.False(SideUpdate.From("Pairnets 1.0.60 is available", UpdateTexts.Ready("1.0.59"), UpdateTexts.UpdateNow).ShowDetail);
-        Assert.False(SideUpdate.From("Downloading Pairnets 1.0.60…", "Syncing continues.", UpdateTexts.UpdateNow, 40, busy: true).ShowDetail);
+        Assert.True(SideUpdate.From("Pairnets 1.0.60 could not be installed", "Why.", UpdateTexts.TryAgain).ShowsReason);
+        Assert.True(SideUpdate.From("Pairnets 1.0.60 is available", UpdateTexts.ByHand("1.0.59"), UpdateTexts.OpenDownloadPage).ShowsReason);
+        Assert.False(SideUpdate.From("Pairnets 1.0.60 is available", UpdateTexts.Ready("1.0.59"), UpdateTexts.UpdateNow).ShowsReason);
+        Assert.False(SideUpdate.From("Downloading Pairnets 1.0.60…", "Syncing continues.", UpdateTexts.UpdateNow, 40, busy: true).ShowsReason);
     }
 
     [Fact]

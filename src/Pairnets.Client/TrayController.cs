@@ -50,7 +50,7 @@ public sealed class TrayController : ITrayActions, IDisposable
     private IDisposable? _activation;
     private bool _updateDismissed;
     private double? _updateProgress;
-    private string? _updateError;
+    private UpdateProblem? _updateError;
     private string? _serverPromptShownFor;
     private bool _lowSpaceNoticed;
 
@@ -662,7 +662,7 @@ public sealed class TrayController : ITrayActions, IDisposable
                 SecondLabel: offer.KeepLabel, Second: AnswerNameOffer));
         foreach (var join in status.JoinRequests)
         {
-            items.Add(new AttentionItem(join.Title, $"Code {join.Code}. Check that it matches the code on that computer, then allow or deny it on your nest.",
+            items.Add(new AttentionItem(join.Title, join.Advice,
                 "Review in browser", () => ReviewJoin(join), AttentionKind.Join, join.Code, join.At));
         }
         if (status.FixLabel is not null)
@@ -857,8 +857,9 @@ public sealed class TrayController : ITrayActions, IDisposable
         {
             case BlockReason.MassDelete:
             case BlockReason.FolderEmpty:
-                if (_session.PendingDeletes().Count > 0
-                    && Dialogs.Ask(null, _session.DescribePendingDeletes(), "Pairnets – allow deletions?", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No) == MessageBoxResult.Yes)
+                if (_session.PendingDeletes().Count is > 0 and var pending
+                    && Dialogs.Confirm(_window is { IsVisible: true } ? _window : null, _session.DescribePendingDeletes(), "Pairnets – allow deletions?",
+                        OverviewModel.DeleteButtons(pending).Yes, OverviewModel.DeleteButtons(pending).No))
                     _session.ApproveDeletions();
                 break;
             case BlockReason.ForeignMarker:
@@ -958,13 +959,47 @@ public sealed class TrayController : ITrayActions, IDisposable
             ApplySettings(v.Result!, v.PlainToken);
             _window?.Navigate(MainPage.Overview);
         };
-        view.SignOutRequested += SignOut;
+        view.SwitchesChanged += ApplySwitches;
         view.ResetRequested += ResetEverything;
-        view.ManageDevicesRequested += ManageDevices;
+        view.ShowDevicesRequested += () => _window?.Navigate(MainPage.Devices);
         view.ReportBugRequested += () => ReportBug();
         view.OpenLinkRequested += Shell;
         view.Cancelled += () => _window?.Navigate(MainPage.Overview);
         _window.ShowSettingsPage(view);
+    }
+
+    /// <summary>
+    /// A switch on the Settings page changed: it applies at once (no Save). Most only need saving; the speed limits change
+    /// on the running connection, the file manager entry follows its switch, and the engine settings start the session
+    /// again (<see cref="SettingsSwitches"/>).
+    /// </summary>
+    private void ApplySwitches(ClientSettings fromPage)
+    {
+        var before = _settings;
+        var next = SettingsSwitches.WithSwitchesFrom(_settings, fromPage);
+        _settings = next;
+        _fileLog.Minimum = _settings.DebugMode ? LogLevel.Debug : LogLevel.Information;
+        SettingsStore.Save(_env.SettingsPath, _settings);
+        if (before.StartWithWindows != next.StartWithWindows)
+            SetAutoStart(next.StartWithWindows);
+        if (before.CheckForUpdates != next.CheckForUpdates)
+            _updates.SetEnabled(next.CheckForUpdates);
+        if (_session is { } session)
+        {
+            if (SettingsSwitches.NeedsNewSession(before, next))
+                StartSession(null); // also puts Pairnets in the file manager, or takes it away
+            else
+            {
+                if (SettingsSwitches.LimitsChanged(before, next))
+                {
+                    session.Api.UploadLimit.SetMegabytesPerSecond(next.UploadLimitMBps);
+                    session.Api.DownloadLimit.SetMegabytesPerSecond(next.DownloadLimitMBps);
+                }
+                if (SettingsSwitches.FileManagerChanged(before, next))
+                    UpdateExplorerEntry();
+            }
+        }
+        _dirty = true;
     }
 
     private void ApplySettings(ClientSettings settings, string? plainToken)
@@ -988,10 +1023,12 @@ public sealed class TrayController : ITrayActions, IDisposable
             _window.ShowUpdate(null, string.Empty, string.Empty);
             return;
         }
+        // A failed update says why in one line; its button is the next step (none for a release Pairnets did not sign),
+        // and the X puts the card away.
         if (!update.Signed)
-            _window.ShowUpdate($"Pairnets {update.Version} could not be installed", ReleaseSigning.NotSignedMessage, "Hide");
-        else if (_updateError is not null)
-            _window.ShowUpdate($"Pairnets {update.Version} could not be installed", _updateError, UpdateTexts.TryAgain);
+            _window.ShowUpdate($"Pairnets {update.Version} could not be installed", UpdateProblem.NotSigned.Reason, UpdateProblem.NotSigned.ButtonText);
+        else if (_updateError is { } problem)
+            _window.ShowUpdate($"Pairnets {update.Version} could not be installed", problem.Reason, problem.ButtonText);
         else if (_updateProgress is { } p)
             _window.ShowUpdate($"Downloading Pairnets {update.Version}…", "Syncing continues while it downloads.", UpdateTexts.UpdateNow, p, busy: true);
         else
@@ -1064,7 +1101,7 @@ public sealed class TrayController : ITrayActions, IDisposable
             or InvalidDataException or System.ComponentModel.Win32Exception)
         {
             _log.LogWarning("Update failed: {Error}", FriendlyErrors.Technical(ex));
-            _updateError = UpdateTexts.Failed(ex, _env.AppFile);
+            _updateError = UpdateProblem.From(ex, _env.AppFile);
             _updateProgress = null;
             _dirty = true;
         }
@@ -1081,7 +1118,7 @@ public sealed class TrayController : ITrayActions, IDisposable
         catch (System.ComponentModel.Win32Exception ex)
         {
             _log.LogWarning("Could not start the new Pairnets: {Error}", ex.Message);
-            _updateError = $"Pairnets {version} is installed, but it couldn't be started. Exit Pairnets and start it again to use the new version.";
+            _updateError = new UpdateProblem($"Pairnets {version} is installed, but it couldn't be started. Exit Pairnets and start it again to use the new version.", UpdateNextStep.TryAgain);
             _updateProgress = null;
             _dirty = true;
             return false;
@@ -1110,7 +1147,7 @@ public sealed class TrayController : ITrayActions, IDisposable
         if (session.Status.ServerSpaceLow && !_lowSpaceNoticed)
         {
             _lowSpaceNoticed = true;
-            Toast("disk", "The server is running out of space", $"{session.Status.ServerFreeText}. Free up space on the server or delete old history.", Forms.ToolTipIcon.Warning, ShowMainWindow);
+            Toast("disk", "Your nest is running out of space", $"{session.Status.ServerFreeText}. Free up space on your nest or delete old history.", Forms.ToolTipIcon.Warning, ShowMainWindow);
         }
         if (!session.ServerNeedsUpdate(info) || _serverPromptShownFor == info.ServerVersion)
             return;
@@ -1164,6 +1201,9 @@ public sealed class TrayController : ITrayActions, IDisposable
         if (_settings.Folder is { } f && Directory.Exists(f))
             Shell(f);
     }
+
+    /// <summary>"Sign in again" on the Account page: the sign-in window.</summary>
+    void IMainActions.SignInAgain() => ShowSettings(firstRun: true);
 
     void IMainActions.ShowSettings()
     {

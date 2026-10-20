@@ -3,12 +3,12 @@
              xmlns:v="using:Pairnets.Desktop.Views"
              xmlns:core="using:Pairnets.Core"
              x:Class="Pairnets.Desktop.Views.SettingsView">
-  <!-- The Settings page: a header with Cancel and Save, then two columns of cards (one column when the window is narrow). -->
+  <!-- The Settings page: a header with Cancel and Save (for the text boxes; the switches apply at once), then two columns of cards (one column when the window is narrow). -->
   <Grid RowDefinitions="Auto,*">
     <Grid ColumnDefinitions="*,Auto,Auto">
       <StackPanel VerticalAlignment="Center">
         <TextBlock Classes="PageTitle" Text="Settings" />
-        <TextBlock Classes="t2" Margin="0,2,0,0" TextWrapping="Wrap" FontSize="13" Text="Your nest, the folder, and how Pairnets behaves on this computer." />
+        <TextBlock Classes="t2" Margin="0,2,0,0" TextWrapping="Wrap" FontSize="13" Text="Your nest, the folder, and how Pairnets behaves on this computer. Switches apply at once." />
       </StackPanel>
       <Button Grid.Column="1" Classes="SecondaryButton" Height="38" Padding="16,0" Margin="8,0" VerticalAlignment="Center" Content="Cancel" IsCancel="True" Click="OnCancel" />
       <Button x:Name="SaveButton" Grid.Column="2" Classes="accent" Height="38" Padding="18,0" VerticalAlignment="Center" IsDefault="True" Click="OnSave">
@@ -37,7 +37,7 @@
                     </StackPanel>
                   </Border>
                 </Grid>
-                <!-- Signed in with this computer's own key: who it is, and signing out. -->
+                <!-- Signed in with this computer's own key: who it is. -->
                 <StackPanel x:Name="SignedInPanel" IsVisible="False" Spacing="14">
                   <Grid ColumnDefinitions="Auto,*">
                     <Border Width="40" Height="40" CornerRadius="12" Classes="tint-accent" Margin="0,0,12,0">
@@ -48,35 +48,19 @@
                       <TextBlock x:Name="SignedInText" Classes="t2" FontSize="13" TextTrimming="CharacterEllipsis" />
                     </StackPanel>
                   </Grid>
-                  <WrapPanel>
-                    <Button x:Name="SignInAgainButton" Classes="chipbtn" Margin="0,0,8,8">
-                      <StackPanel Orientation="Horizontal" Spacing="7">
-                        <v:LineIcon Classes="icon" Width="15" Height="15" Data="{StaticResource I.Retry}" />
-                        <TextBlock Text="Sign in again" VerticalAlignment="Center" />
-                      </StackPanel>
-                    </Button>
-                    <Button Classes="chipbtn redtext" Margin="0,0,8,8" Click="OnSignOut" ToolTip.Tip="Sign out of this computer">
-                      <StackPanel Orientation="Horizontal" Spacing="7">
-                        <v:LineIcon Classes="icon ink-bad" Width="15" Height="15" Data="{StaticResource I.Logout}" />
-                        <TextBlock Text="Sign out" VerticalAlignment="Center" />
-                      </StackPanel>
-                    </Button>
-                    <Button Classes="chipbtn" Margin="0,0,0,8" Click="OnManageDevices">
-                      <StackPanel Orientation="Horizontal" Spacing="7">
-                        <v:LineIcon Classes="icon" Width="15" Height="15" Data="{StaticResource I.External}" />
-                        <TextBlock Text="Manage devices on the web" VerticalAlignment="Center" />
-                      </StackPanel>
-                    </Button>
+                  <!-- Signing in again or out is on the Account page, the computers on their own page: one place for each. -->
+                  <WrapPanel Margin="-6,-4,0,0">
+                    <Button x:Name="ShowDevicesLink" Classes="link" Content="Manage on the Computers page" Click="OnShowDevices" />
+                    <Button x:Name="ShowAddressButton" Classes="link" Content="Advanced: nest address and key" Click="OnShowAddress" />
                   </WrapPanel>
-                  <Button x:Name="ShowAddressButton" Classes="link" HorizontalAlignment="Left" Margin="-6,-6,0,0" Content="Advanced: server address and token ▸" Click="OnShowAddress" />
                 </StackPanel>
                 <StackPanel x:Name="AddressFields" Spacing="10">
                   <StackPanel Spacing="4">
-                    <TextBlock Classes="label" Text="Server address" />
+                    <TextBlock Classes="label" Text="Nest address" />
                     <TextBox x:Name="ServerUrlBox" Classes="field" Watermark="https://sync.example.com/" />
                   </StackPanel>
                   <StackPanel Spacing="4">
-                    <TextBlock Classes="label" Text="Token" />
+                    <TextBlock Classes="label" Text="Key" />
                     <TextBox x:Name="TokenBox" Classes="field" PasswordChar="•" />
                   </StackPanel>
                   <Grid ColumnDefinitions="Auto,*">
@@ -218,29 +202,6 @@
                     </StackPanel>
                   </Border>
                 </Grid>
-                <Border Classes="hair" />
-                <StackPanel Spacing="10">
-                  <Grid ColumnDefinitions="Auto,*,Auto,Auto" MinHeight="34">
-                    <ToggleSwitch x:Name="UpLimitBox" Classes="bare" Margin="-12,0,0,0" OnContent="Limit upload to" OffContent="Limit upload to" VerticalAlignment="Center" />
-                    <TextBlock Grid.Column="1" Text="Limit upload to" FontWeight="SemiBold" VerticalAlignment="Center" Margin="-4,0,0,0" />
-                    <TextBox x:Name="UpLimitValue" Grid.Column="2" Classes="field" Width="64" Height="34" MinHeight="34" CornerRadius="10" Padding="10,0" Text="5" TextAlignment="Right" FontWeight="Bold"
-                             IsVisible="{Binding #UpLimitBox.IsChecked}" />
-                    <TextBlock Grid.Column="3" Text="MB/s" Classes="t2" FontSize="13" VerticalAlignment="Center" Margin="8,0,0,0" IsVisible="{Binding #UpLimitBox.IsChecked}" />
-                    <TextBlock Grid.Column="2" Grid.ColumnSpan="2" Text="No limit" Classes="t3" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" HorizontalAlignment="Right"
-                               IsVisible="{Binding !#UpLimitBox.IsChecked}" />
-                  </Grid>
-                  <Grid ColumnDefinitions="Auto,*,Auto,Auto" MinHeight="34">
-                    <ToggleSwitch x:Name="DownLimitBox" Classes="bare" Margin="-12,0,0,0" OnContent="Limit download from" OffContent="Limit download from" VerticalAlignment="Center" />
-                    <TextBlock Grid.Column="1" Text="Limit download" FontWeight="SemiBold" VerticalAlignment="Center" Margin="-4,0,0,0" />
-                    <TextBox x:Name="DownLimitValue" Grid.Column="2" Classes="field" Width="64" Height="34" MinHeight="34" CornerRadius="10" Padding="10,0" Text="10" TextAlignment="Right" FontWeight="Bold"
-                             IsVisible="{Binding #DownLimitBox.IsChecked}" />
-                    <TextBlock Grid.Column="3" Text="MB/s" Classes="t2" FontSize="13" VerticalAlignment="Center" Margin="8,0,0,0" IsVisible="{Binding #DownLimitBox.IsChecked}" />
-                    <TextBlock Grid.Column="2" Grid.ColumnSpan="2" Text="No limit" Classes="t3" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" HorizontalAlignment="Right"
-                               IsVisible="{Binding !#DownLimitBox.IsChecked}" />
-                  </Grid>
-                  <TextBlock Classes="t3" TextWrapping="Wrap" Text="Includes files from your other computers: they always come through your nest." />
-                </StackPanel>
-                <Border Classes="hair" />
                 <Grid ColumnDefinitions="*,Auto">
                   <StackPanel VerticalAlignment="Center">
                     <TextBlock Text="Show speed on the map" FontWeight="SemiBold" TextWrapping="Wrap" />
@@ -248,6 +209,29 @@
                   </StackPanel>
                   <ToggleSwitch x:Name="MapSpeedBox" Grid.Column="1" Classes="bare" OnContent="Show speed on the map" OffContent="Show speed on the map" />
                 </Grid>
+                <Border Classes="hair" />
+                <!-- The speed limits: the words on the left, the switch on the right like every other switch -->
+                <StackPanel Spacing="10">
+                  <Grid ColumnDefinitions="*,Auto,Auto,Auto" MinHeight="34">
+                    <TextBlock Text="Limit upload to" FontWeight="SemiBold" VerticalAlignment="Center" />
+                    <TextBox x:Name="UpLimitValue" Grid.Column="1" Classes="field" Width="64" Height="34" MinHeight="34" CornerRadius="10" Padding="10,0" Text="5" TextAlignment="Right" FontWeight="Bold"
+                             IsVisible="{Binding #UpLimitBox.IsChecked}" />
+                    <TextBlock Grid.Column="2" Text="MB/s" Classes="t2" FontSize="13" VerticalAlignment="Center" Margin="8,0,0,0" IsVisible="{Binding #UpLimitBox.IsChecked}" />
+                    <TextBlock Grid.Column="1" Grid.ColumnSpan="2" Text="No limit" Classes="t3" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" HorizontalAlignment="Right"
+                               IsVisible="{Binding !#UpLimitBox.IsChecked}" />
+                    <ToggleSwitch x:Name="UpLimitBox" Grid.Column="3" Classes="bare" Margin="12,0,0,0" OnContent="Limit upload to" OffContent="Limit upload to" VerticalAlignment="Center" />
+                  </Grid>
+                  <Grid ColumnDefinitions="*,Auto,Auto,Auto" MinHeight="34">
+                    <TextBlock Text="Limit download to" FontWeight="SemiBold" VerticalAlignment="Center" />
+                    <TextBox x:Name="DownLimitValue" Grid.Column="1" Classes="field" Width="64" Height="34" MinHeight="34" CornerRadius="10" Padding="10,0" Text="10" TextAlignment="Right" FontWeight="Bold"
+                             IsVisible="{Binding #DownLimitBox.IsChecked}" />
+                    <TextBlock Grid.Column="2" Text="MB/s" Classes="t2" FontSize="13" VerticalAlignment="Center" Margin="8,0,0,0" IsVisible="{Binding #DownLimitBox.IsChecked}" />
+                    <TextBlock Grid.Column="1" Grid.ColumnSpan="2" Text="No limit" Classes="t3" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" HorizontalAlignment="Right"
+                               IsVisible="{Binding !#DownLimitBox.IsChecked}" />
+                    <ToggleSwitch x:Name="DownLimitBox" Grid.Column="3" Classes="bare" Margin="12,0,0,0" OnContent="Limit download to" OffContent="Limit download to" VerticalAlignment="Center" />
+                  </Grid>
+                  <TextBlock Classes="t3" TextWrapping="Wrap" Text="Includes files from your other computers: they always come through your nest." />
+                </StackPanel>
               </StackPanel>
             </Border>
           </StackPanel>

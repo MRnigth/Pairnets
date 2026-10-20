@@ -591,6 +591,9 @@ yet"), the same in both apps.
   with an OK button and a Cookie settings link. OK is remembered in the browser's local storage
   (`pn-cookie-notice`), never in a cookie. The Cookie settings page shows the three kinds with their
   switches: Necessary is always on; Analytics and Advertising are not used.
+  * Since 19 October 2026 pairnets.app has no notice: it sets no cookies at all, and the notice covered about
+    a sixth of a phone screen on the first visit. The footer's Cookie settings link stays. sync.pairnets.app,
+    which does set the sign-in cookies, keeps its notice.
 * **In the apps** (both, page for page):
   * The sign-in screen's first step has the same small print, with Terms and Privacy Policy links.
   * Settings ends with an "About Pairnets" card: version, licence, who makes it, and links to the
@@ -1140,3 +1143,93 @@ The owner's answers to the 2026-10-14 audit questions:
 * **After a crash that closed the app, the next start says so once** ("Pairnets closed unexpectedly", an Attention
   notice) and "Report a bug" shows the cards near the top. **Nothing is sent anywhere**: sending crash reports
   (with the user's yes, and a privacy page change first) is a separate, undecided step.
+
+## Design review fixes: colours, focus, motion, sizes (2026-10-19)
+
+* **The keyboard focus ring is the dark accent ink, not the accent.** `T.AccentInk` (#1F55C9 light, 6.6:1 on a
+  card; #9CC2FF dark) as a 2 px ring 3 px outside the control, the same in both apps (WPF `FocusRing` styles, Avalonia
+  `AdornerLayer.DefaultFocusAdorner`). It shows only after Tab or the arrow keys, never after a click; the old faint
+  in-template rings are gone so there is one ring, not two.
+* **Reduce motion is read once at start** (macOS NSWorkspace, GNOME `enable-animations`, Windows' animation switch
+  when the Mac/Linux app runs there for tests). With it on, `Motion.Apply` takes the animations out of the app's
+  styles, so classes written in XAML (a row's "enter") do nothing too, and bars jump instead of gliding.
+* **Contrast values come from the measured review** (`findings-apps-numbers.md`): switch off track 3:1+, Fix button
+  #B95309, dark hover blue #2560D6, amber/grey dots, soft text. Both palettes keep one hex per key; `PaletteParityTests`
+  holds them together and keeps the fixed pairs above their minimum.
+* **Where the apps differed, the Mac/Linux values won** (bold button words, accent-ink bold links, soft caps and day
+  headings, bold fact values, 1 px field focus, radius 14 strips, 36 px icon squares, pressed colours instead of
+  85 % opacity, sign-in field 50, base text 14), except two: the danger hover is the darker red #A61B25 in both (not
+  88 % opacity, which made white text fainter), and the pop keeps Avalonia's overshoot. WPF still has no letter
+  spacing, so its caps labels stay without the 0.8 tracking.
+* **Windows scroll bars** are thin and rounded with no arrows (thumb `T.Dash`, `T.Off` under the mouse), drawn from
+  existing keys so the palettes stay identical.
+
+## Design review: same words and states in both apps (2026-10-19)
+
+* **Red only for a real problem; switched off is grey.** A computer that is not online is "off since 10:45" (grey,
+  dashed line or ring, no cross) on the nest picture, the left side, the tray and the Computers page. It is red "can’t
+  reach" with a cross only when it vanished in the middle of moving files: its last live report said it was busy and it
+  never sent the closing, empty report, less than an hour ago (`Presences.Of`). A stopped sync always ends with that
+  empty report, so a computer that is shut down normally never turns red. The state is told by the line style and the
+  words too, never by colour alone.
+* **One count, one name.** "3 of 6 online" (this computer included) in the side group, on the page tile and on the
+  page itself; the page is "Computers" (the nest's own web page keeps its name "Devices"). Tile notes are status words
+  ("Up to date", "Stopped", "Offline", "Waiting", a percentage), not commands.
+* **Needs you and History look the same in both apps.** Every Needs-you card: title with its time, the words, then
+  the code (for a computer asking to join) and the button at the bottom right; only the join card's button is blue.
+  The join words live in Core (`JoinRequest.Advice`). History counts "older versions" (the current one not counted),
+  shows the "Restore puts that version back…" note, and Restore has an undo arrow in both apps.
+* **Up and down are named the same everywhere:** "uploading"/"downloading" on the picture, the side and the tray (the
+  tray's live row shows a down arrow while a file comes from the nest).
+
+## Design review, first batch: one blue button, shortcuts, Settings at once (2026-10-19)
+
+* **"Sync now" is blue only when it is the useful thing to do (A1).** `OverviewSyncNow.For(state)` in Core decides it for
+  both apps: blue while up to date or waiting for another computer, resting (greyed, "Pairnets is syncing now") while a
+  sync runs, plain when signed out, offline, paused or stopped, so the card's own button is the only blue one. The
+  motion between the looks is for a later design round.
+* **Stopped to keep files safe: the calm choice is the bright one (A2).** "Keep my files" changes nothing (syncing stays
+  stopped) and opens the folder to check it; there is no "reject" command, and opening the folder is what someone would
+  do next. "Allow these deletions (N)…" became an outlined amber button. The question's buttons say "Delete N files" and
+  "Cancel" (Cancel is the default) in both apps; WPF's message box could not relabel its buttons, so `Dialogs.Confirm`
+  draws a small window of its own.
+* **Keyboard shortcuts in the main window (A4):** Ctrl+F search (Activity, History), Ctrl+R and F5 sync now, Ctrl+,
+  Settings, Ctrl+1…6 the six pages (`Shortcuts` in Core; ⌘ on a Mac). The Mac app gets a menu bar (Pairnets: About,
+  Settings…; File, Sync, View, Window, Help), built only on macOS. Tooltips that exist name the shortcut.
+* **Settings switches apply at once (A11).** Switches, the files-at-a-time choice and the speed limits apply when
+  changed (a limit's number when its box is left); only the text boxes (folder, name, ignore rules, nest address and
+  key) wait for Save, so Save and Cancel stay. Two settings the sync engine reads at its start (wait for big batches,
+  files at a time) start the session again; the limits change on the running connection (`SettingsSwitches`).
+  Signing in again or out now lives only on the Account page, managing computers only on their page (Settings links
+  there). Every switch sits on the right with its words on the left, sign-in step 4 too.
+* **Page tiles under the computers (A12).** The open side panel is top-aligned: the tiles follow the computers and the
+  spare space goes to the bottom; the computers' list still scrolls when the window is short. The dock is unchanged.
+* **A failed update says why (A13).** One reason line under the title (`UpdateProblem`); the button is the next step:
+  "Try again" after a broken download, "Open download page" after a checksum mismatch or an installer that would not
+  start, and none for a release Pairnets did not sign (it is never pointed to). The X alone puts the card away. Moving
+  these into a notification center is for a later design round.
+* **Words (A14):** the nest's version reads "Nest 1.0.58", the advanced link "nest address and key".
+
+## The 1.0.60 branch: how the waiting branches were put together (2026-10-20)
+
+`release/1.0.60` is main (1.0.59.1) with Explorer integration, computer names, crash cards, the second-start fix,
+the version-archive notes and the design review fixes merged in, in that order. Where they met:
+
+* **A second Pairnets talks to the running one in one way.** The Explorer branch sent the right-click item's command
+  through the pipe; the second-start fix made the running app answer once its window is up. Now a poke carries an
+  optional message ended by a zero byte (a plain poke sends just the zero byte, an older Pairnets' poke nothing at
+  all), and the answer comes once the window came forward or the command was done. `SecondStart` sends a right-click
+  item's command itself, so a stuck app is reported for those too.
+* **The update card keeps 1.0.59.1's behaviour, in the design review's look.** The design review (A13) sent a checksum
+  mismatch or an installer that would not start to the download page; 1.0.59.1, released after it was written, says why
+  and offers "Try again" for every failure and never opens the browser by itself. That stays. From the review: the
+  reason line under the title (`UpdateReason`, also used for the Mac's "update by hand" words), no button for a release
+  Pairnets did not sign (only the X, instead of "Hide"), and `UpdateProblem`, which now takes its words from
+  `UpdateTexts.Failed`.
+* **"Show Pairnets in File Explorer" and "Files in Explorer" apply at once**, like the other switches since A11.
+  The switch puts the entry there or takes it away; a new Files-in-Explorer choice starts the session again (the engine
+  connects to the cloud folder at its start). The Mac/Linux page's switch does the same for the file manager.
+* **The Needs-you card for a new computer name** uses the review's single card layout, with "Keep PC-1" as a plain
+  button before the blue "Use StudyPC" (both apps).
+* **The design review fixes are one merge commit** (the last one), so they can be taken out again with one revert
+  if they are not kept.

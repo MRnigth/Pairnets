@@ -7,7 +7,39 @@
   </ResourceDictionary.MergedDictionaries>
 
   <!-- The bundled font (Plus Jakarta Sans, 5 static faces linked as Resources). Segoe UI is the fallback. -->
-  <FontFamily x:Key="F.Sans">pack://application:,,,/Fonts/#Plus Jakarta Sans, Segoe UI Variable Text, Segoe UI</FontFamily>
+  <FontFamily x:Key="F.Sans">pack://application:,,,/Pairnets;component/Fonts/#Plus Jakarta Sans, Segoe UI Variable Text, Segoe UI</FontFamily>
+
+  <!-- Keyboard focus (Tab and arrow keys; WPF does not draw it after a mouse click): a 2 px ring in the dark accent
+       ink, 3 px outside the control. The Mac/Linux app draws the same ring (AdornerLayer in Styles/Controls.axaml). -->
+  <Style x:Key="FocusRing">
+    <Setter Property="Control.Template">
+      <Setter.Value>
+        <ControlTemplate>
+          <Border Margin="-3" BorderThickness="2" CornerRadius="14" BorderBrush="{DynamicResource T.AccentInk}" SnapsToDevicePixels="True" />
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+  <!-- The same ring around round buttons (the dock, round icon buttons, filter pills) -->
+  <Style x:Key="FocusRingRound">
+    <Setter Property="Control.Template">
+      <Setter.Value>
+        <ControlTemplate>
+          <Border Margin="-3" BorderThickness="2" CornerRadius="100" BorderBrush="{DynamicResource T.AccentInk}" SnapsToDevicePixels="True" />
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+  <!-- ... and around the page tiles (radius 18) -->
+  <Style x:Key="FocusRingTile">
+    <Setter Property="Control.Template">
+      <Setter.Value>
+        <ControlTemplate>
+          <Border Margin="-3" BorderThickness="2" CornerRadius="21" BorderBrush="{DynamicResource T.AccentInk}" SnapsToDevicePixels="True" />
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
 
   <!-- Window -->
   <Style x:Key="PairnetsWindow" TargetType="Window">
@@ -78,7 +110,7 @@
     <Setter Property="Background" Value="{DynamicResource T.Banner}" />
     <Setter Property="BorderBrush" Value="{DynamicResource T.BannerBorder}" />
     <Setter Property="BorderThickness" Value="1" />
-    <Setter Property="CornerRadius" Value="16" />
+    <Setter Property="CornerRadius" Value="14" />
     <Setter Property="Padding" Value="14,10,10,10" />
   </Style>
   <Style x:Key="Divider" TargetType="Border">
@@ -99,7 +131,8 @@
     <Setter Property="FontWeight" Value="SemiBold" />
     <Setter Property="Cursor" Value="Hand" />
     <Setter Property="BorderThickness" Value="0" />
-    <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+    <Setter Property="ui:Pg.Pressed" Value="{DynamicResource T.SubtleHover}" />
+    <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRing}" />
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="Button">
@@ -111,13 +144,10 @@
               <Setter TargetName="bd" Property="Background" Value="{Binding Tag, RelativeSource={RelativeSource TemplatedParent}}" />
             </Trigger>
             <Trigger Property="IsPressed" Value="True">
-              <Setter TargetName="bd" Property="Opacity" Value="0.85" />
+              <Setter TargetName="bd" Property="Background" Value="{Binding (ui:Pg.Pressed), RelativeSource={RelativeSource TemplatedParent}}" />
             </Trigger>
             <Trigger Property="IsEnabled" Value="False">
               <Setter TargetName="bd" Property="Opacity" Value="0.5" />
-            </Trigger>
-            <Trigger Property="IsKeyboardFocused" Value="True">
-              <Setter TargetName="bd" Property="BorderBrush" Value="{DynamicResource T.Accent}" />
             </Trigger>
           </ControlTemplate.Triggers>
         </ControlTemplate>
@@ -135,27 +165,32 @@
   <Style x:Key="AccentButton" TargetType="Button" BasedOn="{StaticResource ButtonBase}">
     <Setter Property="Background" Value="{DynamicResource T.AccentButton}" />
     <Setter Property="Tag" Value="{DynamicResource T.AccentButtonHover}" />
+    <Setter Property="ui:Pg.Pressed" Value="#1F55C9" />
     <Setter Property="Foreground" Value="White" />
-    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="FontWeight" Value="Bold" />
   </Style>
+  <!-- The tray's "Fix" button: a darker orange than the badge, so the white words read well. -->
   <Style x:Key="WarnButton" TargetType="Button" BasedOn="{StaticResource ButtonBase}">
-    <Setter Property="Background" Value="{StaticResource S.Orange}" />
-    <Setter Property="Tag" Value="{StaticResource S.OrangeHover}" />
+    <Setter Property="Background" Value="{StaticResource S.OrangeButton}" />
+    <Setter Property="Tag" Value="{StaticResource S.OrangeButtonHover}" />
+    <Setter Property="ui:Pg.Pressed" Value="{StaticResource S.OrangeButtonHover}" />
     <Setter Property="Foreground" Value="White" />
-    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="FontWeight" Value="Bold" />
   </Style>
 
   <!-- For actions that cannot be undone (Reset this app). -->
   <Style x:Key="DangerButton" TargetType="Button" BasedOn="{StaticResource ButtonBase}">
     <Setter Property="Background" Value="{StaticResource S.Red}" />
     <Setter Property="Tag" Value="{StaticResource S.RedHover}" />
+    <Setter Property="ui:Pg.Pressed" Value="{StaticResource S.RedHover}" />
     <Setter Property="Foreground" Value="White" />
-    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="FontWeight" Value="Bold" />
   </Style>
 
   <Style x:Key="FlatButton" TargetType="Button" BasedOn="{StaticResource ButtonBase}">
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="Tag" Value="{DynamicResource T.Hover}" />
+    <Setter Property="ui:Pg.Pressed" Value="{DynamicResource T.Hover}" />
     <Setter Property="Foreground" Value="{DynamicResource T.Text}" />
   </Style>
 
@@ -168,20 +203,14 @@
   <Style x:Key="Seg" TargetType="RadioButton">
     <Setter Property="Foreground" Value="{DynamicResource T.Muted}" />
     <Setter Property="Cursor" Value="Hand" />
-    <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+    <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRing}" />
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="RadioButton">
-          <Grid>
-            <Border x:Name="bd" Background="Transparent" CornerRadius="10" Padding="14,6">
-              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
-            </Border>
-            <Border x:Name="ring" CornerRadius="10" BorderThickness="1.5" BorderBrush="Transparent" Margin="0" IsHitTestVisible="False" />
-          </Grid>
+          <Border x:Name="bd" Background="Transparent" CornerRadius="10" Padding="14,6">
+            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+          </Border>
           <ControlTemplate.Triggers>
-            <Trigger Property="IsKeyboardFocused" Value="True">
-              <Setter TargetName="ring" Property="BorderBrush" Value="{DynamicResource T.Accent}" />
-            </Trigger>
             <Trigger Property="IsChecked" Value="True">
               <Setter TargetName="bd" Property="Background" Value="{DynamicResource T.Card}" />
               <Setter Property="Foreground" Value="{DynamicResource T.Text}" />
@@ -235,7 +264,6 @@
           <ControlTemplate.Triggers>
             <Trigger Property="IsKeyboardFocused" Value="True">
               <Setter TargetName="bd" Property="BorderBrush" Value="{DynamicResource T.Accent}" />
-              <Setter TargetName="bd" Property="BorderThickness" Value="1.5" />
             </Trigger>
           </ControlTemplate.Triggers>
         </ControlTemplate>
@@ -254,7 +282,6 @@
           <ControlTemplate.Triggers>
             <Trigger Property="IsKeyboardFocused" Value="True">
               <Setter TargetName="bd" Property="BorderBrush" Value="{DynamicResource T.Accent}" />
-              <Setter TargetName="bd" Property="BorderThickness" Value="1.5" />
             </Trigger>
           </ControlTemplate.Triggers>
         </ControlTemplate>
@@ -266,24 +293,21 @@
   <Style x:Key="Switch" TargetType="CheckBox">
     <Setter Property="Foreground" Value="{DynamicResource T.Text}" />
     <Setter Property="Cursor" Value="Hand" />
-    <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+    <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRing}" />
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="CheckBox">
           <StackPanel Orientation="Horizontal" Background="Transparent">
             <Grid Width="42" Height="24" VerticalAlignment="Center">
-              <Border x:Name="ring" CornerRadius="15" BorderThickness="1.5" BorderBrush="Transparent" Margin="-3" IsHitTestVisible="False" />
-              <Border x:Name="track" CornerRadius="12" Background="{DynamicResource T.Off}" />
-              <Ellipse x:Name="knob" Width="20" Height="20" Fill="White" HorizontalAlignment="Left" Margin="2,0,0,0" />
+              <Border x:Name="track" CornerRadius="12" Background="{DynamicResource T.SwitchOff}" />
+              <Ellipse x:Name="knob" Width="20" Height="20" Fill="{DynamicResource T.KnobOff}" HorizontalAlignment="Left" Margin="2,0,0,0" />
             </Grid>
             <ContentPresenter Margin="10,0,0,0" VerticalAlignment="Center" />
           </StackPanel>
           <ControlTemplate.Triggers>
-            <Trigger Property="IsKeyboardFocused" Value="True">
-              <Setter TargetName="ring" Property="BorderBrush" Value="{DynamicResource T.Accent}" />
-            </Trigger>
             <Trigger Property="IsChecked" Value="True">
               <Setter TargetName="track" Property="Background" Value="{DynamicResource T.AccentButton}" />
+              <Setter TargetName="knob" Property="Fill" Value="White" />
               <Setter TargetName="knob" Property="HorizontalAlignment" Value="Right" />
               <Setter TargetName="knob" Property="Margin" Value="0,0,2,0" />
             </Trigger>
@@ -313,12 +337,10 @@
         <ControlTemplate TargetType="Expander">
           <StackPanel>
             <ToggleButton IsChecked="{Binding IsExpanded, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}"
-                          Foreground="{TemplateBinding Foreground}" Cursor="Hand" FocusVisualStyle="{x:Null}"
+                          Foreground="{TemplateBinding Foreground}" Cursor="Hand" FocusVisualStyle="{StaticResource FocusRing}"
                           HorizontalAlignment="Left">
               <ToggleButton.Template>
                 <ControlTemplate TargetType="ToggleButton">
-                  <Grid>
-                  <Border x:Name="ring" CornerRadius="6" BorderThickness="1.5" BorderBrush="Transparent" Margin="-4,-2" IsHitTestVisible="False" />
                   <StackPanel Orientation="Horizontal" Background="Transparent">
                     <Path x:Name="chev" Data="M2,1 L6,5 L2,9" Stroke="{DynamicResource T.Muted}" StrokeThickness="1.8"
                           StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
@@ -329,11 +351,7 @@
                     </Path>
                     <ContentPresenter Margin="8,0,0,0" VerticalAlignment="Center" />
                   </StackPanel>
-                  </Grid>
                   <ControlTemplate.Triggers>
-            <Trigger Property="IsKeyboardFocused" Value="True">
-              <Setter TargetName="ring" Property="BorderBrush" Value="{DynamicResource T.Accent}" />
-            </Trigger>
                     <Trigger Property="IsChecked" Value="True">
                       <Setter TargetName="chev" Property="RenderTransform">
                         <Setter.Value>
@@ -365,17 +383,17 @@
   <Style x:Key="Caps" TargetType="TextBlock">
     <Setter Property="FontSize" Value="11" />
     <Setter Property="FontWeight" Value="Bold" />
-    <Setter Property="Foreground" Value="{DynamicResource T.Muted}" />
+    <Setter Property="Foreground" Value="{DynamicResource T.TextSoft}" />
   </Style>
   <Style x:Key="Value" TargetType="TextBlock">
     <Setter Property="FontSize" Value="14.5" />
-    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="FontWeight" Value="Bold" />
     <Setter Property="TextTrimming" Value="CharacterEllipsis" />
   </Style>
   <Style x:Key="Day" TargetType="TextBlock">
     <Setter Property="FontSize" Value="11.5" />
-    <Setter Property="FontWeight" Value="SemiBold" />
-    <Setter Property="Foreground" Value="{DynamicResource T.Muted}" />
+    <Setter Property="FontWeight" Value="Bold" />
+    <Setter Property="Foreground" Value="{DynamicResource T.TextSoft}" />
     <Setter Property="Margin" Value="8,12,0,4" />
   </Style>
 
@@ -389,22 +407,16 @@
   <Style x:Key="Nav" TargetType="RadioButton">
     <Setter Property="Foreground" Value="{DynamicResource T.Muted}" />
     <Setter Property="Cursor" Value="Hand" />
-    <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+    <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRing}" />
     <Setter Property="HorizontalContentAlignment" Value="Stretch" />
     <Setter Property="Margin" Value="0,0,0,3" />
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="RadioButton">
-          <Grid>
-            <Border x:Name="bd" Background="Transparent" CornerRadius="12" Padding="11,9">
-              <ContentPresenter />
-            </Border>
-            <Border x:Name="ring" CornerRadius="12" BorderThickness="1.5" BorderBrush="Transparent" Margin="0" IsHitTestVisible="False" />
-          </Grid>
+          <Border x:Name="bd" Background="Transparent" CornerRadius="12" Padding="11,9">
+            <ContentPresenter />
+          </Border>
           <ControlTemplate.Triggers>
-            <Trigger Property="IsKeyboardFocused" Value="True">
-              <Setter TargetName="ring" Property="BorderBrush" Value="{DynamicResource T.Accent}" />
-            </Trigger>
             <Trigger Property="IsMouseOver" Value="True">
               <Setter TargetName="bd" Property="Background" Value="{DynamicResource T.NavHover}" />
             </Trigger>
@@ -447,7 +459,7 @@
     <Setter Property="Background" Value="{DynamicResource T.Tile}" />
     <Setter Property="BorderBrush" Value="{DynamicResource T.Border}" />
     <Setter Property="BorderThickness" Value="1" />
-    <Setter Property="CornerRadius" Value="16" />
+    <Setter Property="CornerRadius" Value="18" />
     <Setter Property="Padding" Value="14,12" />
     <Setter Property="Margin" Value="5,0" />
   </Style>
@@ -455,7 +467,7 @@
     <Setter Property="Background" Value="{DynamicResource T.WarnPill}" />
     <Setter Property="BorderBrush" Value="{DynamicResource T.WarnBorder}" />
     <Setter Property="BorderThickness" Value="1" />
-    <Setter Property="CornerRadius" Value="16" />
+    <Setter Property="CornerRadius" Value="14" />
     <Setter Property="Padding" Value="14,10,10,10" />
   </Style>
   <Style x:Key="OkChip" TargetType="Border">
@@ -477,10 +489,17 @@
   <Style x:Key="LinkButton" TargetType="Button" BasedOn="{StaticResource ButtonBase}">
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="Tag" Value="{DynamicResource T.Hover}" />
-    <Setter Property="Foreground" Value="{DynamicResource T.Accent}" />
+    <Setter Property="ui:Pg.Pressed" Value="{DynamicResource T.Hover}" />
+    <Setter Property="Foreground" Value="{DynamicResource T.AccentInk}" />
     <Setter Property="Padding" Value="6,3" />
     <Setter Property="MinHeight" Value="0" />
     <Setter Property="FontSize" Value="12.5" />
+    <Setter Property="FontWeight" Value="Bold" />
+    <Style.Triggers>
+      <Trigger Property="IsMouseOver" Value="True">
+        <Setter Property="Foreground" Value="{DynamicResource T.AccentHover}" />
+      </Trigger>
+    </Style.Triggers>
   </Style>
   <Style x:Key="IconButton" TargetType="Button" BasedOn="{StaticResource SubtleButton}">
     <Setter Property="Padding" Value="0" />
@@ -499,21 +518,15 @@
   <Style x:Key="RowItem" TargetType="ListBoxItem">
     <Setter Property="Cursor" Value="Hand" />
     <Setter Property="Margin" Value="0,1" />
-    <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+    <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRing}" />
     <Setter Property="HorizontalContentAlignment" Value="Stretch" />
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="ListBoxItem">
-          <Grid>
-            <Border x:Name="bd" Background="Transparent" CornerRadius="12" Padding="10,9">
-              <ContentPresenter />
-            </Border>
-            <Border x:Name="ring" CornerRadius="12" BorderThickness="1.5" BorderBrush="Transparent" Margin="0" IsHitTestVisible="False" />
-          </Grid>
+          <Border x:Name="bd" Background="Transparent" CornerRadius="12" Padding="10,9">
+            <ContentPresenter />
+          </Border>
           <ControlTemplate.Triggers>
-            <Trigger Property="IsKeyboardFocused" Value="True">
-              <Setter TargetName="ring" Property="BorderBrush" Value="{DynamicResource T.Accent}" />
-            </Trigger>
             <Trigger Property="IsMouseOver" Value="True">
               <Setter TargetName="bd" Property="Background" Value="{DynamicResource T.Hover}" />
             </Trigger>
@@ -594,6 +607,7 @@
 
   <!-- Round icon-only button (34 px circle). -->
   <Style x:Key="RoundIconButton" TargetType="Button" BasedOn="{StaticResource IconButton}">
+    <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRingRound}" />
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="Button">
@@ -606,7 +620,7 @@
               <Setter TargetName="bd" Property="Background" Value="{Binding Tag, RelativeSource={RelativeSource TemplatedParent}}" />
             </Trigger>
             <Trigger Property="IsPressed" Value="True">
-              <Setter TargetName="bd" Property="Opacity" Value="0.85" />
+              <Setter TargetName="bd" Property="Background" Value="{Binding (ui:Pg.Pressed), RelativeSource={RelativeSource TemplatedParent}}" />
             </Trigger>
             <Trigger Property="IsEnabled" Value="False">
               <Setter TargetName="bd" Property="Opacity" Value="0.5" />
@@ -622,14 +636,36 @@
     <Setter Property="Background" Value="{DynamicResource T.WarnPill}" />
     <Setter Property="BorderBrush" Value="{DynamicResource T.WarnBorder}" />
     <Setter Property="BorderThickness" Value="1" />
-    <Setter Property="CornerRadius" Value="16" />
-    <Setter Property="Padding" Value="16,12" />
+    <Setter Property="CornerRadius" Value="14" />
+    <Setter Property="Padding" Value="14,10" />
   </Style>
 
-  <!-- The soft square behind an icon (34 px, radius 11). -->
+  <!-- The tray panel's "needs you" strip: a warm button the keyboard can reach too -->
+  <Style x:Key="AttentionStrip" TargetType="Button">
+    <Setter Property="Height" Value="44" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+    <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRingTile}" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="Button">
+          <Border x:Name="bd" CornerRadius="16" Background="{DynamicResource T.WarnPill}" BorderBrush="{DynamicResource T.WarnBorder}" BorderThickness="1">
+            <ContentPresenter VerticalAlignment="Center" />
+          </Border>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+              <Setter TargetName="bd" Property="Background" Value="{DynamicResource T.WarnPillHover}" />
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <!-- The soft square behind an icon (36 px, radius 11). -->
   <Style x:Key="IconSquare" TargetType="Border">
-    <Setter Property="Width" Value="34" />
-    <Setter Property="Height" Value="34" />
+    <Setter Property="Width" Value="36" />
+    <Setter Property="Height" Value="36" />
     <Setter Property="CornerRadius" Value="11" />
     <Setter Property="Background" Value="{DynamicResource T.Chip}" />
   </Style>
@@ -648,7 +684,7 @@
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="Foreground" Value="{DynamicResource T.Text}" />
     <Setter Property="Cursor" Value="Hand" />
-    <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+    <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRing}" />
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="Button">
@@ -661,9 +697,6 @@
             <Trigger Property="IsMouseOver" Value="True">
               <Setter TargetName="hv" Property="Opacity" Value="0.55" />
             </Trigger>
-            <Trigger Property="IsKeyboardFocused" Value="True">
-              <Setter TargetName="hv" Property="Opacity" Value="0.55" />
-            </Trigger>
           </ControlTemplate.Triggers>
         </ControlTemplate>
       </Setter.Value>
@@ -674,7 +707,7 @@
   <Style x:Key="SideCell" TargetType="Button">
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="Cursor" Value="Hand" />
-    <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+    <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRing}" />
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="Button">
@@ -697,7 +730,7 @@
     <Setter Property="Height" Value="72" />
     <Setter Property="Cursor" Value="Hand" />
     <Setter Property="FontWeight" Value="ExtraBold" />
-    <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+    <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRingTile}" />
     <Setter Property="HorizontalContentAlignment" Value="Stretch" />
     <Setter Property="Margin" Value="4" />
     <Setter Property="Template">
@@ -745,6 +778,9 @@
             <ContentPresenter />
           </Border>
           <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+              <Setter TargetName="bd" Property="Background" Value="{DynamicResource T.WarnPillHover}" />
+            </Trigger>
             <Trigger Property="IsChecked" Value="True">
               <Setter TargetName="bd" Property="Background" Value="{DynamicResource T.NeedsActive}" />
               <Setter TargetName="bd" Property="BorderBrush" Value="{DynamicResource T.NeedsActive}" />
@@ -792,7 +828,7 @@
     <Setter Property="Background" Value="{DynamicResource T.Chip}" />
     <Setter Property="Foreground" Value="{DynamicResource T.Text}" />
     <Setter Property="Cursor" Value="Hand" />
-    <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+    <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRingRound}" />
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="Button">
@@ -814,7 +850,7 @@
     <Setter Property="Margin" Value="0,3" />
     <Setter Property="Foreground" Value="{DynamicResource T.Muted}" />
     <Setter Property="Cursor" Value="Hand" />
-    <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+    <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRingRound}" />
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="RadioButton">
@@ -846,5 +882,104 @@
         </Style.Triggers>
       </Style>
     </Style.Resources>
+  </Style>
+
+  <!-- ================= Scroll bars: thin, rounded, no arrow buttons, on a clear track (like the Mac/Linux app) ================= -->
+  <!-- The empty track on either side of the thumb: clicking it pages, it draws nothing. -->
+  <Style x:Key="ScrollPage" TargetType="RepeatButton">
+    <Setter Property="Focusable" Value="False" />
+    <Setter Property="IsTabStop" Value="False" />
+    <Setter Property="OverridesDefaultStyle" Value="True" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="RepeatButton">
+          <Border Background="Transparent" />
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+  <!-- The thumb: T.Dash at rest, T.Off (darker) under the mouse and while dragged -->
+  <Style x:Key="ScrollThumb" TargetType="Thumb">
+    <Setter Property="Focusable" Value="False" />
+    <Setter Property="IsTabStop" Value="False" />
+    <Setter Property="OverridesDefaultStyle" Value="True" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="Thumb">
+          <Border x:Name="bd" CornerRadius="4" Background="{DynamicResource T.Dash}" />
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+              <Setter TargetName="bd" Property="Background" Value="{DynamicResource T.Off}" />
+            </Trigger>
+            <Trigger Property="IsDragging" Value="True">
+              <Setter TargetName="bd" Property="Background" Value="{DynamicResource T.Off}" />
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+  <!-- 10 px wide; the thumb is 4 px at rest and 6 px while the mouse is on the bar -->
+  <Style TargetType="ScrollBar">
+    <Setter Property="OverridesDefaultStyle" Value="True" />
+    <Setter Property="Stylus.IsPressAndHoldEnabled" Value="False" />
+    <Setter Property="Stylus.IsFlicksEnabled" Value="False" />
+    <Setter Property="Width" Value="10" />
+    <Setter Property="MinWidth" Value="0" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="ScrollBar">
+          <Grid Background="Transparent" SnapsToDevicePixels="True">
+            <Track x:Name="PART_Track" IsDirectionReversed="True">
+              <Track.DecreaseRepeatButton>
+                <RepeatButton Style="{StaticResource ScrollPage}" Command="{x:Static ScrollBar.PageUpCommand}" />
+              </Track.DecreaseRepeatButton>
+              <Track.IncreaseRepeatButton>
+                <RepeatButton Style="{StaticResource ScrollPage}" Command="{x:Static ScrollBar.PageDownCommand}" />
+              </Track.IncreaseRepeatButton>
+              <Track.Thumb>
+                <Thumb x:Name="thumb" Style="{StaticResource ScrollThumb}" Margin="3,2" />
+              </Track.Thumb>
+            </Track>
+          </Grid>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+              <Setter TargetName="thumb" Property="Margin" Value="2,2" />
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+    <Style.Triggers>
+      <Trigger Property="Orientation" Value="Horizontal">
+        <Setter Property="Width" Value="Auto" />
+        <Setter Property="Height" Value="10" />
+        <Setter Property="MinHeight" Value="0" />
+        <Setter Property="Template">
+          <Setter.Value>
+            <ControlTemplate TargetType="ScrollBar">
+              <Grid Background="Transparent" SnapsToDevicePixels="True">
+                <Track x:Name="PART_Track" IsDirectionReversed="False">
+                  <Track.DecreaseRepeatButton>
+                    <RepeatButton Style="{StaticResource ScrollPage}" Command="{x:Static ScrollBar.PageLeftCommand}" />
+                  </Track.DecreaseRepeatButton>
+                  <Track.IncreaseRepeatButton>
+                    <RepeatButton Style="{StaticResource ScrollPage}" Command="{x:Static ScrollBar.PageRightCommand}" />
+                  </Track.IncreaseRepeatButton>
+                  <Track.Thumb>
+                    <Thumb x:Name="thumb" Style="{StaticResource ScrollThumb}" Margin="2,3" />
+                  </Track.Thumb>
+                </Track>
+              </Grid>
+              <ControlTemplate.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                  <Setter TargetName="thumb" Property="Margin" Value="2,2" />
+                </Trigger>
+              </ControlTemplate.Triggers>
+            </ControlTemplate>
+          </Setter.Value>
+        </Setter>
+      </Trigger>
+    </Style.Triggers>
   </Style>
 </ResourceDictionary>

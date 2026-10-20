@@ -62,11 +62,14 @@ public partial class DeviceCardView : UserControl
         IconSolid.Visibility = online ? Visibility.Visible : Visibility.Collapsed;
         IconDashed.Visibility = online ? Visibility.Collapsed : Visibility.Visible;
         DrawIcon(card);
-        Dot.SetResourceReference(System.Windows.Shapes.Shape.FillProperty, online ? "T.Ok" : "T.Off");
-        StatusDot.SetResourceReference(System.Windows.Shapes.Shape.FillProperty, online ? "T.Ok" : "T.Off");
+        // Red only when it can't be reached because of a real problem; switched off is grey and dashed.
+        var dot = online ? "T.Ok" : card.Problem ? "T.Bad" : "T.Off";
+        Dot.SetResourceReference(System.Windows.Shapes.Shape.FillProperty, dot);
+        StatusDot.SetResourceReference(System.Windows.Shapes.Shape.FillProperty, dot);
+        IconDashed.SetResourceReference(System.Windows.Shapes.Shape.StrokeProperty, card.Problem ? "T.Bad" : "T.Dash");
 
         StatusText.Text = card.StatusText;
-        StatusText.SetResourceReference(TextBlock.ForegroundProperty, online ? "T.OkText" : "T.Muted");
+        StatusText.SetResourceReference(TextBlock.ForegroundProperty, online ? "T.OkText" : card.Problem ? "T.BadText" : "T.Muted");
         StatusText.FontWeight = online ? FontWeights.Bold : FontWeights.SemiBold;
         NoteText.Text = card.StatusNote.Length == 0 ? string.Empty : card.Tone == DeviceCardTone.Moving ? card.StatusNote : "· " + card.StatusNote;
         NoteText.SetResourceReference(TextBlock.ForegroundProperty, card.Tone == DeviceCardTone.Moving ? "T.AccentInk" : "T.TextSoft");

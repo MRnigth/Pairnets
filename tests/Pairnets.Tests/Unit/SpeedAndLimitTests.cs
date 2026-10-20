@@ -82,7 +82,7 @@ public class SpeedAndLimitTests
 
         Assert.Null(s.ServerFreeText);
         var big = s with { Server = new ServerInfo("id", 1, 1, "1.0.5", 412L << 30, 1L << 40) };
-        Assert.Equal("412 GB free on server", big.ServerFreeText);
+        Assert.Equal("412 GB free on your nest", big.ServerFreeText);
         Assert.False(big.ServerSpaceLow);
         Assert.True((s with { Server = new ServerInfo("id", 1, 1, "1.0.5", 3L << 30, 100L << 30) }).ServerSpaceLow);
         Assert.True((s with { Server = new ServerInfo("id", 1, 1, "1.0.5", 40L << 30, 1L << 40) }).ServerSpaceLow);

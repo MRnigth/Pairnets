@@ -358,6 +358,7 @@ public sealed class TrayControllerTests
         await app.Menu("Settings…");
         var main = app.Tray.Window!;
         app.Dialogs.When("Sign out of this computer?", MessageBoxResult.OK);
+        await app.Wpf.Ui(() => main.Navigate(MainPage.Account)); // signing out lives on the Account page
         await app.Press(main, "Sign out");
 
         await app.Showing<SettingsWindow>("the sign-in window after signing out");
@@ -440,9 +441,9 @@ public sealed class TrayControllerTests
         Assert.False(await app.Wpf.Ui(() => ask.IsVisible));
         Assert.Equal((null, false), (app.SavedSettings.SkippedServerVersion, app.SavedSettings.AutoUpdateServer));
 
-        // "Update server…" on the overview asks again; this test nest has no updater, so it needs the one-time setup.
+        // "Update nest…" on the overview asks again; this test nest has no updater, so it needs the one-time setup.
         var main = app.Tray.Window!;
-        await app.Press(main, "Update server…");
+        await app.Press(main, "Update nest…");
         var update = await app.Showing<ServerUpdateWindow>("the server update window");
         await app.Press(update, "Update the nest");
         await app.WaitUntil(() => update.CommandPanel.IsVisible, "the one-time setup the nest needs");
@@ -451,12 +452,12 @@ public sealed class TrayControllerTests
         Assert.Contains("get.sh | sudo bash", Assert.Single(app.Dialogs.Copied.Items));
         await app.Press(update, "Close");
 
-        await app.Press(main, "Update server…");
+        await app.Press(main, "Update nest…");
         var skip = await app.Showing<ServerUpdateWindow>("the server update window");
         await app.Press(skip, "Don’t ask for this version");
         await app.WaitUntil(() => app.SavedSettings.SkippedServerVersion == "0.9.0", "the skipped version to be saved");
 
-        await app.Press(main, "Update server…");
+        await app.Press(main, "Update nest…");
         var always = await app.Showing<ServerUpdateWindow>("the server update window");
         await app.Press(always, "From now on, update the nest by itself");
         await app.Press(always, "Not now");
@@ -523,7 +524,7 @@ public sealed class TrayControllerTests
             await app.WaitUntil(() => main.UpdateTitle.Text == "Pairnets 99.0.0 could not be installed", "the app to say it could not replace itself");
         }
         Assert.Contains("couldn't replace its own file", await app.Wpf.Ui(() => main.UpdateDetailText));
-        Assert.True(await app.Wpf.Ui(() => main.UpdateDetail.Visibility == System.Windows.Visibility.Visible), "The reason is written on the card, not only in a tooltip.");
+        Assert.True(await app.Wpf.Ui(() => main.UpdateReason.Visibility == System.Windows.Visibility.Visible), "The reason is written on the card, not only in a tooltip.");
         Assert.Equal("Try again", await app.Wpf.Ui(() => main.UpdateButton.Content));
         Assert.Equal("the old Pairnets.exe", await File.ReadAllTextAsync(exe));
         Assert.False(File.Exists(exe + ".new"), "The unpacked update was left behind.");
@@ -566,6 +567,7 @@ public sealed class TrayControllerTests
         await app.WaitUntil(() => main.UpdateTitle.Text == "Pairnets 99.0.0 could not be installed", "the app to refuse the tampered download");
         Assert.Contains("didn't match its checksum", await app.Wpf.Ui(() => main.UpdateDetailText));
         Assert.Equal("Try again", await app.Wpf.Ui(() => main.UpdateButton.Content));
+        Assert.Contains("didn't match its checksum", await app.Wpf.Ui(() => main.UpdateReason.Text)); // the reason shows on the card
         Assert.Empty(app.Platform.Installers.Items);
         Assert.Equal(0, app.Shutdowns);
         await app.Press(main, "Try again"); // still the same tampered file: refused again, and never the browser instead
@@ -574,15 +576,16 @@ public sealed class TrayControllerTests
         Assert.Empty(app.Platform.Opened.Items);
         Assert.Empty(app.Platform.Installers.Items);
 
-        // A release Pairnets did not sign is never downloaded, and its card only offers to hide it.
+        // A release Pairnets did not sign is never downloaded: its card says why, offers no button, and the X puts it away.
         feed.Publish("99.0.1", signed: false);
         var downloadsBefore = feed.Requests.Items.Count(r => r == "/download/" + FakeReleaseFeed.AssetName);
         await app.Press(main, "Check now");
         await app.WaitUntil(() => main.UpdateTitle.Text == "Pairnets 99.0.1 could not be installed", "the app to refuse the unsigned release");
         Assert.Contains("isn't signed by Pairnets", await app.Wpf.Ui(() => main.UpdateDetailText));
-        Assert.Equal("Hide", await app.Wpf.Ui(() => main.UpdateButton.Content));
+        Assert.Contains("isn't signed by Pairnets", await app.Wpf.Ui(() => main.UpdateReason.Text));
+        Assert.False(await app.Wpf.Ui(() => main.UpdateButton.IsVisible));
         Assert.DoesNotContain(app.Notifications.Items, n => n.Title == "Pairnets update available" && n.Text.Contains("99.0.1"));
-        await app.Press(main, "Hide");
+        await app.Press(main, "Later");
         await app.WaitUntil(() => !main.UpdateCard.IsVisible, "the card to go away");
         Assert.Equal(downloadsBefore, feed.Requests.Items.Count(r => r == "/download/" + FakeReleaseFeed.AssetName));
         Assert.Empty(app.Platform.Installers.Items);
@@ -617,12 +620,12 @@ public sealed class TrayControllerTests
         await app.WaitUntil(() => app.Tray.Session!.Status.NestUrl == "https://localhost", "the app to learn the nest's own name");
         var main = app.Tray.Window!;
 
-        await app.Press(main, "Devices");
+        await app.Press(main, "Computers");
         await app.WaitUntil(() => main.DevicesPane.Cards.Any(c => c.NameLabel.Contains("DESKTOP", StringComparison.Ordinal)), "this computer in the Devices grid");
         await app.Press(main, "Add a computer…");
         var steps = Assert.Single(app.Dialogs.Asked.Items);
         Assert.Contains("type localhost and press \"Sign in with your browser\"", steps.Text);
-        await app.Press(main, "Manage devices on your nest");
+        await app.Press(main, "Manage computers on your nest");
         Assert.Equal("https://localhost/devices", app.Platform.Opened.Items[^1]);
 
         await app.Press(main, "Overview"); // the "…" menu belongs to the Overview's header

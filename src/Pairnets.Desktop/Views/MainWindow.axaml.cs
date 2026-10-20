@@ -77,6 +77,11 @@ public interface IMainActions
     {
     }
 
+    /// <summary>"Sign in again" on the Account page (the sign-in window opens).</summary>
+    void SignInAgain()
+    {
+    }
+
     /// <summary>"Manage your account on sync.pairnets.app": opens the website.</summary>
     void OpenAccountSite()
     {
@@ -135,6 +140,7 @@ public partial class MainWindow : Window
         DeletedList.ItemsSource = _shownFiles;
         AccountPage.Attach(actions);
         WirePages();
+        WireShortcuts();
         AttentionSubtitle.Text = AttentionSubtitleText(0);
         RefreshSide();
         UpdatePanels();
@@ -250,10 +256,10 @@ public partial class MainWindow : Window
         (PageTitle.Text, PageSubtitle.Text) = page switch
         {
             MainPage.Activity => ("Activity", "What synced recently, newest first. Right-click a file for more."),
-            MainPage.History => ("History", "Get back deleted files and older versions. The server keeps them for 30 days."),
-            MainPage.Devices => ("Devices", "Every computer that uses your server: online now, or when it was last seen."),
-            MainPage.Attention => ("Needs attention", "Things Pairnets can't decide for you."),
-            MainPage.Settings => ("Settings", "Your server, the folder, and how Pairnets behaves."),
+            MainPage.History => ("History", "Get back deleted files and older versions. Your nest keeps them for 30 days."),
+            MainPage.Devices => ("Computers", "Every computer on your nest, and the nest itself."),
+            MainPage.Attention => ("Needs you", "Things only you can decide."),
+            MainPage.Settings => ("Settings", "Your nest, the folder, and how Pairnets behaves on this computer."),
             MainPage.Account => ("Account", "Who is signed in on this computer, and when Pairnets should tell you things."),
             _ => ("Overview", string.Empty),
         };
@@ -269,8 +275,7 @@ public partial class MainWindow : Window
         foreach (var shown in new Control[] { OverviewPage, ActivityPage, HistoryPage, DevicesPage, AttentionPage, SettingsPage, AccountPage })
         {
             shown.Classes.Remove("enter");
-            if (shown.IsVisible)
-                shown.Classes.Add("enter");
+            Motion.Set(shown, "enter", shown.IsVisible);
         }
         if (page == MainPage.Activity)
             RebuildActivity();
@@ -309,6 +314,7 @@ public partial class MainWindow : Window
         ActivityEmptyText.Text = EmptyFolderText();
         PauseText.Text = s.Paused ? "Resume" : "Pause";
         PauseGlyph.Data = Visuals.Resource<Geometry>(s.Paused ? "I.Play" : "I.Pause");
+        RefreshMacMenu();
         RefreshOverview();
     }
 
@@ -321,7 +327,26 @@ public partial class MainWindow : Window
         Overview.ShowSpeed = ShowMapSpeed;
         _overview = OverviewModel.Build(_status, ThisDevice, _folder, _attentionCount, _activityItems, now);
         Overview.Show(_overview, NestMapModel.Build(_status, ThisDevice, now), ThisDevice);
+        DrawSyncNow(_overview.SyncNow);
     }
+
+    /// <summary>
+    /// The header's "Sync now": the blue main button only when syncing is the useful thing to do; plain when the card has its
+    /// own action (so that one is the only blue button), and resting while a sync runs.
+    /// </summary>
+    private void DrawSyncNow(OverviewSyncNow look)
+    {
+        SyncNowButton.Classes.Set("accent", look.IsPrimary);
+        SyncNowButton.Classes.Set("subtle", !look.IsPrimary);
+        SyncNowIcon.Classes.Set("white", look.IsPrimary);
+        SyncNowButton.IsEnabled = look.IsEnabled;
+        ToolTip.SetTip(SyncNowButton, look.ToolTip(OperatingSystem.IsMacOS()));
+    }
+
+    /// <summary>Whether the header's "Sync now" is the blue main button right now (the checks).</summary>
+    internal bool SyncNowIsPrimary => SyncNowButton.Classes.Contains("accent");
+
+    internal bool SyncNowEnabled => SyncNowButton.IsEnabled;
 
     private void OnOverviewAction(OverviewAction action)
     {
@@ -420,15 +445,15 @@ public partial class MainWindow : Window
     {
         _update = SideUpdate.From(title, detail, button, progress, busy);
         UpdateCard.IsVisible = _update.Visible;
-        UpdateIcon.Classes.Set("bob", _update.Visible && !busy);
+        Motion.Set(UpdateIcon, "bob", _update.Visible && !busy);
         if (!_update.Visible)
             return;
         UpdateTitle.Text = _update.Title;
         ToolTip.SetTip(UpdateTitle, detail.Length > 0 ? detail : null);
-        UpdateDetail.Text = _update.ShowDetail ? detail : string.Empty;
-        UpdateDetail.IsVisible = _update.ShowDetail;
+        UpdateReason.Text = _update.ShowsReason ? detail : string.Empty;
+        UpdateReason.IsVisible = _update.ShowsReason;
         UpdateButton.Content = button;
-        UpdateButton.IsVisible = !busy;
+        UpdateButton.IsVisible = _update.HasButton;
         UpdateLater.IsVisible = !busy;
         UpdatePercent.IsVisible = busy;
         UpdatePercent.Text = _update.PercentText;
@@ -747,8 +772,7 @@ public partial class MainWindow : Window
                 return;
             foreach (var row in VersionRow.For(file, versions, DateTimeOffset.UtcNow))
                 _versions.Add(row);
-            var total = _versions.Count + (file.Deleted ? 0 : 1);
-            VersionCount.Text = total == 1 ? "1 version" : total + " versions";
+            VersionCount.Text = VersionRow.CountText(_versions.Count);
             VersionsMessage.IsVisible = _versions.Count == 0;
             VersionsMessage.Text = file.Deleted
                 ? "Your nest no longer has a copy: it was deleted more than 30 days ago."

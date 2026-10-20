@@ -116,6 +116,8 @@ public sealed class FakePlatform : IPlatformServices
 
     public string Name => "Test desktop";
 
+    public bool ReduceMotion => false;
+
     public MemorySecrets SecretStore { get; } = new();
 
     public ISecretProtector Secrets => SecretStore;

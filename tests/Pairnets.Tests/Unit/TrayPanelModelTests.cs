@@ -59,15 +59,40 @@ public class TrayPanelModelTests
         Assert.Equal("this computer", m.This.Side);
         Assert.Equal(["LAPTOP", "MINI-PC"], m.Others.Select(o => o.Name));
         Assert.Equal(["↓ 4.10 MB/s", "↓ 2.60 MB/s"], m.Others.Select(o => o.Pill));
-        Assert.All(m.Others, o => Assert.Equal(("getting them", TrayInk.Accent), (o.Side, o.SideInk)));
+        Assert.All(m.Others, o => Assert.Equal(("downloading", TrayInk.Accent), (o.Side, o.SideInk)));
         Assert.Equal(3, m.Branches.Count());
+    }
+
+    [Fact]
+    public void SwitchedOffComputersAreOneGreyRow_NotRed()
+    {
+        var m = Build(Syncing());
+        Assert.Null(m.Unreachable);
+        var off = m.Off!;
+
+        Assert.False(off.Problem);
+        Assert.Equal(3, off.Count);
+        Assert.Equal("3 computers are off", off.Text);
+        Assert.StartsWith("MEDIA-PC off since ", off.Tooltip, StringComparison.Ordinal);
+        Assert.Equal(3, off.Icons.Count);
+        Assert.Equal([off], m.Folded);
+        Assert.DoesNotContain(m.Branches, b => b.Name is "MEDIA-PC" or "OFFICE-PC" or "KITCHEN-PC");
+
+        var one = Build(Six(RunnerStatus.Idle) with { Devices = [Dev(Me), Dev("LAPTOP"), Dev("MEDIA-PC", false, 60 * 24)] }).Off!;
+        Assert.Equal("MEDIA-PC off since yesterday", one.Text);
     }
 
     [Fact]
     public void TheComputersThatCantBeReachedAreOneRedRow()
     {
-        var m = Build(Syncing());
+        // They went away while moving files (their last reports said busy, a few minutes ago): a real problem.
+        var s = Syncing();
+        foreach (var name in new[] { "MEDIA-PC", "OFFICE-PC", "KITCHEN-PC" })
+            s = s with { Peers = new ReadOnlyDictionary<string, PeerActivity>(new Dictionary<string, PeerActivity>(s.Peers) { [name] = new PeerActivity(new TransferReport(0, MB, 1, 9, 0, 0, Downloading: true), Now.AddMinutes(-3), 0, null) }) };
+        var m = Build(s);
         var red = m.Unreachable!;
+        Assert.True(red.Problem);
+        Assert.Null(m.Off);
 
         Assert.Equal(3, red.Count);
         Assert.Equal("3 can’t be reached", red.Text);
@@ -117,7 +142,8 @@ public class TrayPanelModelTests
         Assert.True(m.This.HasCross);
         Assert.Equal("can’t reach", m.This.Word);
         Assert.Null(m.Unreachable);
-        Assert.All(m.Others, o => Assert.StartsWith("seen ", o.Side));
+        Assert.All(m.Others, o => Assert.StartsWith("last seen ", o.Side));
+        Assert.Null(m.Off);
         Assert.True(m.Others.All(o => o.Dashed));
     }
 
@@ -176,12 +202,29 @@ public class TrayPanelModelTests
 
         Assert.Equal(3, rows.Count);
         Assert.Equal(("presentation-final.mp4", "Uploading now", "12%", TrayChangeKind.Live), (rows[0].Name, rows[0].Sub, rows[0].Right, rows[0].Kind));
+        Assert.False(rows[0].LiveDown);
         Assert.Equal(("holiday-0412.jpg", "Uploaded", TrayChangeKind.Up), (rows[1].Name, rows[1].Sub, rows[1].Kind));
         Assert.Equal(TrayChangeKind.Down, rows[2].Kind);
 
         var idle = TrayPanelModel.Changes(Six(RunnerStatus.Idle), items, 2, Now);
         Assert.Equal(2, idle.Count);
         Assert.DoesNotContain(idle, r => r.Live);
+    }
+
+    [Fact]
+    public void LatestChanges_AFileBeingDownloadedHasADownArrow()
+    {
+        var s = Syncing() with
+        {
+            Operation = "download", MovingUp = false, MovingDown = true, UpBytesPerSecond = 0, DownBytesPerSecond = 4.9 * MB,
+            Active = [new ActiveTransfer("Videos/presentation-final.mp4", "download", 12, 100)],
+        };
+        var live = TrayPanelModel.Changes(s, [], 3, Now)[0];
+        Assert.Equal(("Downloading now", TrayChangeKind.Live), (live.Sub, live.Kind));
+        Assert.True(live.Down);
+        Assert.True(live.LiveDown);
+        // A finished download in the list is its own kind (green down arrow), never "live".
+        Assert.False(new TrayChange("a", "Downloaded", "10:00", TrayChangeKind.Down).LiveDown);
     }
 
     [Fact]

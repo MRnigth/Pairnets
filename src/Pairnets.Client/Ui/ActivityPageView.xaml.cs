@@ -309,8 +309,9 @@ public partial class ActivityPageView : UserControl
         grid.ColumnDefinitions.Add(new ColumnDefinition());
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.Children.Add(Parts.Text(item.Primary, 13));
+        // The same right edge as the rows above: the row's padding (10) plus the chevron's column (30).
         var time = Parts.Text(Parts.Clock(item.Time), 12, "T.TextSoft");
-        time.Margin = new Thickness(10, 0, 52, 0);
+        time.Margin = new Thickness(10, 0, 40, 0);
         Grid.SetColumn(time, 1);
         grid.Children.Add(time);
         AttachMenu(grid, item);

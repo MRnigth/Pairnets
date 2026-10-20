@@ -70,6 +70,11 @@ public sealed class LinuxPlatform : IPlatformServices
         });
     }
 
+    /// <summary>GNOME's (and most GTK desktops') "Animations" switch; Windows' when the tests run there.</summary>
+    public bool ReduceMotion => OperatingSystem.IsWindows()
+        ? WindowsMotion.Reduced()
+        : Proc.Run("gsettings", ["get", "org.gnome.desktop.interface", "enable-animations"], timeoutMs: 2000) is (0, var output) && output.Trim() == "false";
+
     /// <summary>Token in the desktop keyring via secret-tool (reads the secret from stdin), else a 600 file.</summary>
     private sealed class LinuxSecrets : ISecretProtector
     {

@@ -147,9 +147,14 @@ public class OverviewModelTests
         Assert.Equal(["old-draft.docx", "budget.xlsx", "meeting.md", "holiday.jpg"], m.DeleteBox.Files.Select(f => f.Name));
         Assert.Equal("Drafts", m.DeleteBox.Files[0].Sub);
         Assert.Equal("and 33 more", m.DeleteBox.More);
-        Assert.Equal("Allow these deletions (37)…", m.Buttons[0].Label);
-        Assert.Equal(OverviewAction.Fix, m.Buttons[0].Action);
+        // The calm choice first and bright; deleting is an outlined amber button (A2).
+        Assert.Equal(["Keep my files", "See the full list", "Allow these deletions (37)…"], m.Buttons.Select(b => b.Label));
+        Assert.Equal(OverviewAction.OpenFolder, m.Buttons[0].Action);
+        Assert.Equal(OverviewButtonKind.Primary, m.Buttons[0].Kind);
         Assert.Equal(OverviewAction.SeeList, m.Buttons[1].Action);
+        Assert.Equal(OverviewAction.Fix, m.Buttons[2].Action);
+        Assert.Equal(OverviewButtonKind.WarnOutline, m.Buttons[2].Kind);
+        Assert.Single(m.Buttons, b => b.Kind == OverviewButtonKind.Primary);
         Assert.True(m.HasFix);
         Assert.Equal(OverviewLower.Strip, m.Lower);
     }

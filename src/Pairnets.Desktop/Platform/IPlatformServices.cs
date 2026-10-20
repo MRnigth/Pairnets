@@ -43,8 +43,25 @@ public interface IPlatformServices
     /// </summary>
     bool SetFileManagerEntry(string? folder);
 
+    /// <summary>True when the user asked the system for less motion: Views/Motion keeps every animation still.</summary>
+    bool ReduceMotion { get; }
+
     public static IPlatformServices Current { get; } =
         OperatingSystem.IsMacOS() ? new MacPlatform() : new LinuxPlatform();
+}
+
+/// <summary>
+/// Windows' "Show animations in Windows" switch (SPI_GETCLIENTAREAANIMATION, what WPF's
+/// SystemParameters.ClientAreaAnimation reads). This app runs on Windows only for tests and screenshots.
+/// </summary>
+internal static class WindowsMotion
+{
+    private const uint GetClientAreaAnimation = 0x1042;
+
+    [System.Runtime.InteropServices.DllImport("user32.dll", EntryPoint = "SystemParametersInfoW")]
+    private static extern bool SystemParametersInfo(uint action, uint param, out int value, uint winIni);
+
+    public static bool Reduced() => SystemParametersInfo(GetClientAreaAnimation, 0, out var on, 0) && on == 0;
 }
 
 /// <summary>Runs helper programs without a shell (no quoting or injection issues).</summary>

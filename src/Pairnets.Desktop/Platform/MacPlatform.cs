@@ -77,6 +77,47 @@ public sealed class MacPlatform : IPlatformServices
         return now is null || MacFolderIcon.Set(now, FolderIcon.Png);
     });
 
+    /// <summary>System Settings › Accessibility › Display › Reduce motion.</summary>
+    public bool ReduceMotion
+    {
+        get
+        {
+            try
+            {
+                return MacMotion.Reduced();
+            }
+            catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException or MarshalDirectiveException)
+            {
+                return Proc.Run("defaults", ["read", "com.apple.universalaccess", "reduceMotion"], timeoutMs: 2000) is (0, var output) && output.Trim() == "1";
+            }
+        }
+    }
+
+    /// <summary>[NSWorkspace sharedWorkspace].accessibilityDisplayShouldReduceMotion</summary>
+    private static class MacMotion
+    {
+        private const string ObjC = "/usr/lib/libobjc.A.dylib";
+
+        [DllImport(ObjC)]
+        private static extern IntPtr objc_getClass(string name);
+
+        [DllImport(ObjC)]
+        private static extern IntPtr sel_registerName(string name);
+
+        [DllImport(ObjC, EntryPoint = "objc_msgSend")]
+        private static extern IntPtr Send(IntPtr receiver, IntPtr selector);
+
+        [DllImport(ObjC, EntryPoint = "objc_msgSend")]
+        [return: MarshalAs(UnmanagedType.I1)]
+        private static extern bool SendBool(IntPtr receiver, IntPtr selector);
+
+        public static bool Reduced()
+        {
+            var workspace = Send(objc_getClass("NSWorkspace"), sel_registerName("sharedWorkspace"));
+            return workspace != IntPtr.Zero && SendBool(workspace, sel_registerName("accessibilityDisplayShouldReduceMotion"));
+        }
+    }
+
     // ------------------------------------------------------------------ Keychain
 
     /// <summary>Generic password in the login keychain, through the Security framework (no secrets on command lines).</summary>

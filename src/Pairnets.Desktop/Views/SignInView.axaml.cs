@@ -165,8 +165,8 @@ public partial class SignInView : UserControl
         AccountWaitFooter.IsVisible = AccountWaitStep.IsVisible;
         NoNestFooter.IsVisible = NoNestStep.IsVisible;
         AddressFooter.IsVisible = WelcomeStep.IsVisible;
-        AccountRing.Classes.Set("spin", step == SignInStep.AccountWait);
-        NoNestRing.Classes.Set("spin", step == SignInStep.NoNest);
+        Motion.Set(AccountRing, "spin", step == SignInStep.AccountWait);
+        Motion.Set(NoNestRing, "spin", step == SignInStep.NoNest);
         Frame(step);
     }
 

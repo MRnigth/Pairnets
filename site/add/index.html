@@ -37,7 +37,7 @@
     <ol class="steps">
       <li>
         <h2>Install Pairnets</h2>
-        <div class="row"><a class="button accent" href="/download/windows">Windows</a><a class="button accent" href="/download/mac-apple-silicon">Mac</a><a class="button accent" href="/download/linux">Linux</a></div>
+        <div class="row"><a class="button" data-system="windows" href="/download/windows">Windows</a><a class="button" data-system="mac" href="/download/mac-apple-silicon">Mac</a><a class="button" data-system="linux" href="/download/linux">Linux</a></div>
         <p class="muted small gap">Intel Mac? <a href="/download/mac-intel">Use this one</a>.</p>
       </li>
       <li>
@@ -53,7 +53,8 @@
     <div class="callout">
       <p><strong>Pairnets says your nest is not connected?</strong> Check that the computer your nest runs on is switched on and online. <a href="/help/">Here's what to check.</a></p>
     </div>
-    <p class="muted small gap-lg">No nest yet? On an always-on Ubuntu computer, run <code>curl -fsSL https://pairnets.app/get.sh | sudo bash</code> and open the link it shows. <a href="/docs">The guide</a> has the details.</p>
+    <p class="muted small gap-lg">No nest yet? On an always-on Ubuntu computer, run this and open the link it shows. <a href="/docs">The guide</a> has the details.</p>
+    <pre><code>curl -fsSL https://pairnets.app/get.sh | sudo bash</code></pre>
   </div>
 </main>
 <footer>

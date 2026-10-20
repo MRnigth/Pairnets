@@ -490,7 +490,7 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
         On("Open Pairnets", "hide the panel and open the main window", HidesAnd("OpenWindow(Overview)")),
         On("Folder", "hide the panel and open the synced folder", HidesAnd("OpenFolder")),
         On(["Pause", "Resume"], "ask the app to pause or resume syncing", Called("TogglePause")),
-        On("AttentionButton", "hide the panel and open \"Needs attention\" in the main window", HidesAnd("OpenWindow(Attention)")),
+        new(t => t.Element.Name == "AttentionButton", "hide the panel and open \"Needs attention\" in the main window", HidesAnd("OpenWindow(Attention)")),
     ];
 
     // ------------------------------------------------------------------ the main window
@@ -717,16 +717,17 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
             c => c.Bench.Actions.Calls.Items.Contains($"SetNotifies({NoticeOf(c.Target.Element.Name)},{c.WasChecked != true})")),
         On("Manage your account on sync.pairnets.app", "open the account website", Called("OpenAccountSite")),
         On("Sign out", "ask the app to sign out", Called("SignOut")),
+        On("Sign in again", "ask the app to open the sign-in", Called("SignInAgain")),
 
         // The sidebar.
-        On("Overview", "show the Overview page", OnPage(MainPage.Overview)),
-        On("Activity", "show the Activity page", OnPage(MainPage.Activity)),
-        On("History", "show the History page and read the server's files",
+        On(["Overview", "Overview (Ctrl+1)"], "show the Overview page", OnPage(MainPage.Overview)),
+        On(["Activity", "Activity (Ctrl+2)"], "show the Activity page", OnPage(MainPage.Activity)),
+        On(["History", "History (Ctrl+4)"], "show the History page and read the server's files",
             c => OnPage(MainPage.History)(c) && (c.WasChecked == true || c.Bench.History.Reads.Items.Contains("files"))),
-        On("Devices", "show the Devices page and ask the server for its computers",
+        On(["Computers", "Computers (Ctrl+5)"], "show the Computers page and ask the server for its computers",
             c => OnPage(MainPage.Devices)(c) && (c.WasChecked == true || Called("RefreshDevices")(c))),
         new(t => t.Label.StartsWith("Needs you", StringComparison.Ordinal), "show the Needs attention page", OnPage(MainPage.Attention)),
-        On("Settings", "ask the app for the Settings page", Called("ShowSettings")),
+        On(["Settings", "Settings (Ctrl+6)"], "ask the app for the Settings page", Called("ShowSettings")),
         On("Fold into the dock", "fold the left side into the dock", c => ((MainWindow)c.Window).SideFolded),
         On("Open the side panel", "open the left side again", c => !((MainWindow)c.Window).SideFolded),
         On("Fold the group", "fold the other computers away", c => ((MainWindow)c.Window).GroupGrid.Visibility != Visibility.Visible),
@@ -747,9 +748,10 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
         On("View log", "open the log", Called("ViewLog")),
         On("Report a bug…", "open a bug report", Called("ReportBug")),
         new(t => t.Label.StartsWith("Allow these deletions", StringComparison.Ordinal), "ask about the blocked deletions", Called("FixBlocked")),
+        On("Keep my files", "keep syncing stopped and open the folder to check it", Called("OpenFolder")),
         On("Download now anyway", "stop waiting for the other computer", Called("DownloadNow")),
         On("Review", "show the Needs attention page", OnPage(MainPage.Attention)),
-        On(["Update server…", "Check for update"], "open the server update window", Called("UpdateServer")),
+        On(["Update nest…", "Check for update"], "open the server update window", Called("UpdateServer")),
         On(["See all", "See all in Activity"], "show the Activity page", OnPage(MainPage.Activity)),
         On("See the full list", "show the Needs attention page", OnPage(MainPage.Attention)),
         new(t => t.Label.StartsWith("+", StringComparison.Ordinal) && t.Label.EndsWith(" more", StringComparison.Ordinal), "show the Devices page", OnPage(MainPage.Devices)),
@@ -769,7 +771,7 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
 
         // Devices.
         On("Add a computer…", "explain how to add a computer", Called("AddComputer")),
-        On("Manage devices on your nest", "open the nest's Devices page", Called("ManageDevices")),
+        On("Manage computers on your nest", "open the nest's Devices page", Called("ManageDevices")),
     ];
 
     // ------------------------------------------------------------------ Settings
@@ -787,12 +789,12 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
             Folder = b.Dir,
             FirstRunCompleted = true,
         };
-        var view = new SettingsView(settings, b.Secrets, b.Updates, "Server " + PairnetsInfo.ProductVersion);
+        var view = new SettingsView(settings, b.Secrets, b.Updates, "Nest " + PairnetsInfo.ProductVersion);
         view.Saved += _ => b.Events.Add("Saved");
         view.Cancelled += () => b.Events.Add("Cancelled");
-        view.SignOutRequested += () => b.Events.Add("SignOutRequested");
         view.ResetRequested += () => b.Events.Add("ResetRequested");
-        view.ManageDevicesRequested += () => b.Events.Add("ManageDevicesRequested");
+        view.ShowDevicesRequested += () => b.Events.Add("ShowDevicesRequested");
+        view.SwitchesChanged += _ => b.Events.Add("SwitchesChanged");
         view.ReportBugRequested += () => b.Events.Add("ReportBugRequested");
         view.OpenLinkRequested += b.Opened.Add;
         var host = new Window { Title = "Settings", Width = 700, Height = 560, Content = view };
@@ -812,10 +814,9 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
     private static readonly IReadOnlyList<Rule> SettingsRules =
     [
         Switch,
-        On("Manage devices on your nest", "ask the app to open the nest's Devices page", c => c.Bench.Events.Items.Contains("ManageDevicesRequested")),
-        On(["Sign out", "Sign in again"], "ask the app to sign this computer out (it then opens the sign-in)", c => c.Bench.Events.Items.Contains("SignOutRequested")),
+        On("Manage on the Computers page", "ask the app to show the page of computers", c => c.Bench.Events.Items.Contains("ShowDevicesRequested")),
         On("Report a bug…", "ask the app to open a bug report", c => c.Bench.Events.Items.Contains("ReportBugRequested")),
-        On("Advanced: server address and token", "show the server address and token", c => View(c).AddressFields.IsVisible),
+        On("Advanced: nest address and key", "show the nest address and key", c => View(c).AddressFields.IsVisible),
         On("Test connection", "test the connection and show the result",
             c => View(c).TestResult.Text is { Length: > 0 } text && !text.StartsWith("Testing", StringComparison.Ordinal), seconds: 20),
         On("Change…", "let you choose the folder and show it", c => View(c).FolderBox.Text == c.Bench.Script.Folder),

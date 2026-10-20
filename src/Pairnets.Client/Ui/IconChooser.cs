@@ -55,7 +55,7 @@ public sealed class IconChooser : Border
         foreach (var kind in DeviceIcon.Choices)
         {
             var icon = new LineIcon { Width = 22, Height = 22, StrokeThickness = 1.8, Data = DeviceIconArt.For(kind), HorizontalAlignment = HorizontalAlignment.Center };
-            var label = new TextBlock { Text = DeviceIcon.Label(kind), FontSize = 10.5, FontWeight = FontWeights.ExtraBold, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 6, 0, 0) };
+            var label = new TextBlock { Text = DeviceIcon.Label(kind), FontSize = 11, FontWeight = FontWeights.ExtraBold, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 6, 0, 0) };
             var inner = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0) };
             inner.Children.Add(icon);
             inner.Children.Add(label);
@@ -67,7 +67,8 @@ public sealed class IconChooser : Border
             layers.Children.Add(check);
             var tile = new Border { Height = 66, CornerRadius = new CornerRadius(12), Child = layers };
             var cell = new Border { Padding = new Thickness(4, 0, 4, 0), Child = tile };
-            var button = new Button { Content = cell, Template = BareTemplate(), Cursor = Cursors.Hand, Tag = kind, FocusVisualStyle = null };
+            var button = new Button { Content = cell, Template = BareTemplate(), Cursor = Cursors.Hand, Tag = kind };
+            button.SetResourceReference(FocusVisualStyleProperty, "FocusRing");
             System.Windows.Automation.AutomationProperties.SetName(button, DeviceIcon.Label(kind));
             var captured = kind;
             button.Click += (_, _) => Picked?.Invoke(captured);

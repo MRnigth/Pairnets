@@ -355,7 +355,7 @@ public sealed class HubView : UserControl
 
     private void UpdateTimer()
     {
-        var animate = IsEffectivelyVisible && this.GetVisualRoot() is not null && AnyFlowing;
+        var animate = IsEffectivelyVisible && this.GetVisualRoot() is not null && Motion.Enabled && AnyFlowing;
         if (animate && !_timer.IsEnabled)
         {
             _last = DateTime.UtcNow;

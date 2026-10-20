@@ -62,7 +62,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
     private readonly UpdatePackage _package;
     private bool _updateDismissed;
     private double? _updateProgress;
-    private string? _updateError;
+    private UpdateProblem? _updateError;
     private string? _serverPromptShownFor;
     private bool _lowSpaceNoticed;
     private IDisposable? _activation;
@@ -224,6 +224,9 @@ public sealed class DesktopController : ITrayActions, IDisposable
 
     public void OpenWindow(MainPage page) => ShowMainWindow(page);
 
+    /// <summary>White reads on every status colour but the yellow of "paused": that one gets a dark brown sign (7:1).</summary>
+    private static readonly IBrush PausedInk = new SolidColorBrush(Color.Parse("#2B1A00"));
+
     private WindowIcon IconFor(RunnerStatus status)
     {
         if (_icons.TryGetValue(status, out var icon))
@@ -241,7 +244,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
                 {
                     // 24-unit icon scaled into the middle 26 px of the circle.
                     using (ctx.PushTransform(Matrix.CreateScale(26 / 24.0, 26 / 24.0) * Matrix.CreateTranslation(9, 9)))
-                        ctx.DrawGeometry(null, new Pen(Brushes.White, 3.2, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round), glyph);
+                        ctx.DrawGeometry(null, new Pen(status == RunnerStatus.Paused ? PausedInk : Brushes.White, 3.2, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round), glyph);
                 }
             }
             using var ms = new MemoryStream();
@@ -633,7 +636,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
                 SecondLabel: offer.KeepLabel, Second: AnswerNameOffer));
         foreach (var join in status.JoinRequests)
         {
-            items.Add(new AttentionItem(join.Title, $"Code {join.Code}. Check that it matches the code on that computer, then allow or deny it on your nest.",
+            items.Add(new AttentionItem(join.Title, join.Advice,
                 "Review in browser", () => ReviewJoin(join), AttentionKind.Join, join.Code, join.At));
         }
         if (status.FixLabel is not null)
@@ -770,7 +773,9 @@ public sealed class DesktopController : ITrayActions, IDisposable
         {
             case BlockReason.MassDelete:
             case BlockReason.FolderEmpty:
-                if (_session.PendingDeletes().Count > 0 && await Dialogs.ConfirmAsync(_window, "Pairnets – allow deletions?", _session.DescribePendingDeletes()))
+                if (_session.PendingDeletes().Count is > 0 and var pending
+                    && await Dialogs.ConfirmAsync(_window, "Pairnets – allow deletions?", _session.DescribePendingDeletes(),
+                        OverviewModel.DeleteButtons(pending).Yes, OverviewModel.DeleteButtons(pending).No))
                     _session.ApproveDeletions();
                 break;
             case BlockReason.ForeignMarker:
@@ -839,15 +844,17 @@ public sealed class DesktopController : ITrayActions, IDisposable
             ApplySettings(v.Result!, v.PlainToken);
             _window?.Navigate(MainPage.Overview);
         };
-        view.SignOutRequested += SignOut;
-        view.SignInAgainRequested += ShowSignIn;
+        view.SwitchesChanged += ApplySwitches;
         view.ReportBugRequested += ReportBug;
         view.ResetRequested += ResetEverything;
-        view.ManageDevicesRequested += ManageDevices;
+        view.ShowDevicesRequested += () => _window?.Navigate(MainPage.Devices);
         view.OpenLinkRequested += url => _platform.Open(url);
         view.Cancelled += () => _window?.Navigate(MainPage.Overview);
         _window!.ShowSettingsPage(view);
     }
+
+    /// <summary>"Sign in again" on the Account page: the sign-in window.</summary>
+    public void SignInAgain() => ShowSignIn();
 
     /// <summary>The app is unsigned on Mac and Linux, so it does not replace itself: open the download page.</summary>
     private void DrawUpdateCard(MainWindow window)
@@ -855,9 +862,9 @@ public sealed class DesktopController : ITrayActions, IDisposable
         if (_updates.Available is not { } update || _updateDismissed)
             window.ShowUpdate(null, string.Empty, string.Empty);
         else if (!update.Signed)
-            window.ShowUpdate($"Pairnets {update.Version} could not be installed", ReleaseSigning.NotSignedMessage, "Hide");
-        else if (_updateError is not null)
-            window.ShowUpdate($"Pairnets {update.Version} could not be installed", _updateError, UpdateTexts.TryAgain);
+            window.ShowUpdate($"Pairnets {update.Version} could not be installed", UpdateProblem.NotSigned.Reason, UpdateProblem.NotSigned.ButtonText);
+        else if (_updateError is { } problem)
+            window.ShowUpdate($"Pairnets {update.Version} could not be installed", problem.Reason, problem.ButtonText);
         else if (_updateProgress is { } p)
             window.ShowUpdate($"Downloading Pairnets {update.Version}…", "Syncing continues while it downloads.", UpdateTexts.UpdateNow, p, busy: true);
         else if (_package.Method == UpdateMethod.ByHand)
@@ -915,7 +922,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
             or InvalidDataException)
         {
             _log.LogWarning("Update failed: {Error}", FriendlyErrors.Technical(ex));
-            _updateError = UpdateTexts.Failed(ex, app);
+            _updateError = UpdateProblem.From(ex, app);
             _updateProgress = null;
             _dirty = true;
             return;
@@ -927,7 +934,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
         catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
         {
             _log.LogWarning("Could not start the new Pairnets: {Error}", ex.Message);
-            _updateError = $"Pairnets {update.Version} is installed, but it couldn't be started. Quit Pairnets and start it again to use the new version.";
+            _updateError = new UpdateProblem($"Pairnets {update.Version} is installed, but it couldn't be started. Quit Pairnets and start it again to use the new version.", UpdateNextStep.TryAgain);
             _updateProgress = null;
             _dirty = true;
             return;
@@ -957,7 +964,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
         if (session.Status.ServerSpaceLow && !_lowSpaceNoticed)
         {
             _lowSpaceNoticed = true;
-            Notify("disk", "The server is running out of space", $"{session.Status.ServerFreeText}. Free up space on the server or delete old history.");
+            Notify("disk", "Your nest is running out of space", $"{session.Status.ServerFreeText}. Free up space on your nest or delete old history.");
         }
         if (!session.ServerNeedsUpdate(info) || _serverPromptShownFor == info.ServerVersion)
             return;
@@ -1031,6 +1038,40 @@ public sealed class DesktopController : ITrayActions, IDisposable
         };
         window.Show();
         window.Activate();
+    }
+
+    /// <summary>
+    /// A switch on the Settings page changed: it applies at once (no Save). Most only need saving; the speed limits change
+    /// on the running connection, the file manager entry follows its switch, and the engine settings start the session
+    /// again (<see cref="SettingsSwitches"/>).
+    /// </summary>
+    private void ApplySwitches(ClientSettings fromPage)
+    {
+        var before = _settings;
+        var next = SettingsSwitches.WithSwitchesFrom(_settings, fromPage);
+        _settings = next;
+        _fileLog.Minimum = _settings.DebugMode ? LogLevel.Debug : LogLevel.Information;
+        SaveSettings();
+        if (before.StartWithWindows != next.StartWithWindows)
+            SetAutoStart(next.StartWithWindows);
+        if (before.CheckForUpdates != next.CheckForUpdates)
+            _updates.SetEnabled(next.CheckForUpdates);
+        if (_session is { } session)
+        {
+            if (SettingsSwitches.NeedsNewSession(before, next))
+                StartSession(null); // also puts Pairnets in the file manager, or takes it away
+            else
+            {
+                if (SettingsSwitches.LimitsChanged(before, next))
+                {
+                    session.Api.UploadLimit.SetMegabytesPerSecond(next.UploadLimitMBps);
+                    session.Api.DownloadLimit.SetMegabytesPerSecond(next.DownloadLimitMBps);
+                }
+                if (SettingsSwitches.FileManagerChanged(before, next))
+                    UpdateFileManagerEntry();
+            }
+        }
+        _dirty = true;
     }
 
     private void ApplySettings(ClientSettings settings, string? plainToken)
