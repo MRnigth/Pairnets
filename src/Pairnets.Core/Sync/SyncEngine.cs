@@ -38,6 +38,7 @@ public sealed class SyncEngine
         Root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(options.Folder));
         Ignore = new IgnoreList(options.ExtraIgnore);
         _cloud = options.CloudFiles;
+        Placement = options.Placement;
         _scanner = new LocalScanner(Root, Ignore, state, _clock, _log)
         {
             StabilityWindow = options.StabilityWindow,
@@ -74,6 +75,15 @@ public sealed class SyncEngine
     }
 
     public string TempDirectory => Path.Combine(Root, PathRules.TempFolderName);
+
+    /// <summary>Where each folder's files live on this computer; a change counts from the next pass.</summary>
+    public PlacementMap Placement { get; set; }
+
+    /// <summary>
+    /// True while the nest is (nearly) full: no copy here is then removed to free space, so new files stay on this
+    /// computer until the nest has room. Null: not known (copies are freed; they are safely on the nest).
+    /// </summary>
+    public Func<bool>? NestFull { get; set; }
 
     public event Action<SyncProgress>? Progress;
 
@@ -324,6 +334,7 @@ public sealed class SyncEngine
         }
 
         var plan = new List<PlannedAction>();
+        var placement = Placement;
         foreach (var path in paths)
         {
             if (Ignore.IsIgnored(path) || !PathRules.IsValid(path) || scan.IsUnderUnknownPrefix(path))
@@ -337,6 +348,8 @@ public sealed class SyncEngine
             var s = remoteEntry is { Deleted: false } ? remoteEntry.Hash : null;
             var b = fileState?.BaseHash;
             var action = SyncDecision.Decide(l, s, b);
+            if (placement.For(path) == FilePlacement.NestOnly)
+                action = NestOnly(action, l, s, b);
             if (action == SyncAction.None)
                 continue;
             if (action == SyncAction.DeleteRemote && b is not null && scan.HeldVersions.Contains(b))
@@ -541,7 +554,8 @@ public sealed class SyncEngine
         SyncAction.Conflict => 2,
         SyncAction.Upload => 3,
         SyncAction.Download => 4,
-        _ => 5,
+        SyncAction.Evict => 5,
+        _ => 6,
     };
 
     private Task ExecuteAsync(PlannedAction item, PassContext ctx, CancellationToken ct)
@@ -568,6 +582,8 @@ public sealed class SyncEngine
                 return DeleteLocalAsync(item, ctx, ct);
             case SyncAction.DeleteRemote:
                 return DeleteRemoteAsync(item, ctx, ct);
+            case SyncAction.Evict:
+                return EvictAsync(item, ctx, ct);
             default:
                 return Task.CompletedTask;
         }
@@ -1003,6 +1019,108 @@ public sealed class SyncEngine
             default:
                 throw new PairnetsProtocolException($"Unexpected delete result {res.Outcome} for {item.Path}.");
         }
+    }
+
+    // ------------------------------------------------------------------ nest only
+
+    /// <summary>
+    /// The decision for a file in a folder that lives on the nest only. Nothing comes down from the nest; a copy here
+    /// still syncs up (a new or edited file is uploaded first) and is removed once the nest has it. A copy that was
+    /// here and is gone was deleted by the person: that deletion still reaches the nest, through the usual guards.
+    /// </summary>
+    internal static SyncAction NestOnly(SyncAction action, string? local, string? server, string? @base)
+    {
+        if (local is null)
+        {
+            // Not here: never downloaded. Gone after it was synced while the nest changed it: only forget it here.
+            return @base is null ? SyncAction.None : action == SyncAction.Download ? SyncAction.ClearBase : action;
+        }
+        return action switch
+        {
+            // The same here, on the nest and as last agreed: safely on the nest.
+            SyncAction.None when server is not null => SyncAction.Evict,
+            // An untouched older copy while the nest has a newer one: the newer one stays on the nest.
+            SyncAction.Download => SyncAction.Evict,
+            _ => action,
+        };
+    }
+
+    /// <summary>
+    /// Removes the copy here of a file that lives on the nest only, freeing its space: only exactly the content the
+    /// decision saw, only while the nest lists the file, and never while the nest is full. The copy is held so no one
+    /// else can write it while it is checked and removed, and it is deleted for good (the trash would keep its space;
+    /// it is on the nest). Its notes are forgotten first, so a stop half-way only makes the next pass record it again.
+    /// </summary>
+    private async Task EvictAsync(PlannedAction item, PassContext ctx, CancellationToken ct)
+    {
+        if (NestFull?.Invoke() == true)
+        {
+            lock (ctx.Gate)
+                ctx.Result.KeptForRoom++;
+            return;
+        }
+        var full = ResolveLocal(item.Path);
+        if (!File.Exists(full))
+            return;
+        if (_state.GetRemote(item.Path) is not { Deleted: false, Hash: { } onNest }
+            || (onNest != item.Local && onNest != item.Server))
+        {
+            NotFreed(item.Path, "the nest's copy changed meanwhile", ctx);
+            return;
+        }
+
+        if (_cloud.IsCloudOnly(full))
+        {
+            // A placeholder: its content is on the nest already, nothing here to read.
+            if (_cloud.CloudOnlyVersion(full) is { } version && version != item.Local)
+            {
+                NotFreed(item.Path, "it stands for another version than planned", ctx);
+                return;
+            }
+            _state.RemoveFile(item.Path);
+            File.Delete(full);
+        }
+        else
+        {
+            FileStream held;
+            try
+            {
+                // No one else may read or write it now; deleting it while held is allowed.
+                held = new FileStream(full, FileMode.Open, FileAccess.Read, FileShare.Delete, ContentHash.BufferSize,
+                    FileOptions.Asynchronous | FileOptions.SequentialScan);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                lock (ctx.Gate)
+                    ctx.Result.Unstable++;
+                _log.LogInformation("Keeping {Path} here for now: {Error}", item.Path, ex.Message);
+                return;
+            }
+            await using (held)
+            {
+                var current = await ContentHash.OfStreamAsync(held, ct).ConfigureAwait(false);
+                if (!string.Equals(current, item.Local, StringComparison.Ordinal))
+                {
+                    NotFreed(item.Path, "it changed during the pass (it is uploaded instead)", ctx);
+                    return;
+                }
+                _state.RemoveFile(item.Path);
+                File.Delete(full);
+            }
+        }
+        MarkTouched(item.Path);
+        PruneEmptyParents(item.Path);
+        lock (ctx.Gate)
+            ctx.Result.Freed++;
+        FileSynced?.Invoke(SyncAction.Evict, item.Path);
+        _log.LogInformation("Freed {Path} here: it lives on the nest only", item.Path);
+    }
+
+    private void NotFreed(string path, string why, PassContext ctx)
+    {
+        lock (ctx.Gate)
+            ctx.Result.Deferred++;
+        _log.LogInformation("Not freeing {Path} this pass: {Why}", path, why);
     }
 
     // ------------------------------------------------------------------ helpers

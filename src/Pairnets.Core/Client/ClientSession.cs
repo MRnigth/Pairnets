@@ -390,6 +390,7 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
             ExtraIgnore = settings.ExtraIgnore,
             MaxParallelTransfers = settings.EffectiveParallelTransfers,
             CloudFiles = cloudFiles ?? ICloudFiles.None,
+            Placement = settings.PlacementMap(onDemandWorks: cloudFiles?.IsActive == true),
         }, api, state, trash, loggers.CreateLogger("Pairnets.Engine"), clock, hooks);
         var options = new RunnerOptions { ServerUrl = url, Token = token, DeviceId = settings.DeviceName!, WaitForPeerBatches = settings.WaitForPeerBatches };
         if (runnerOptions is not null)
@@ -397,6 +398,7 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
         var runner = new SyncRunner(engine, options, loggers.CreateLogger("Pairnets.Runner"));
 
         var session = new ClientSession(settings, token, state, api, engine, runner, clock, loggers.CreateLogger("Pairnets.Session"));
+        engine.NestFull = () => session.Status.ServerSpaceLow;
         session.Wire();
         session._status = session._status with
         {
@@ -426,6 +428,7 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
                 SyncAction.Upload => (ActivityKind.Uploaded, "Uploaded"),
                 SyncAction.Download => (ActivityKind.Downloaded, "Downloaded"),
                 SyncAction.DeleteLocal => (ActivityKind.DeletedHere, "Deleted here (deleted on another PC)"),
+                SyncAction.Evict => (ActivityKind.Info, "Space freed here (kept on the nest)"),
                 _ => (ActivityKind.DeletedOnServer, "Deleted on the server"),
             };
             Activity.Add(kind, path, $"{verb}: {path}", _clock);

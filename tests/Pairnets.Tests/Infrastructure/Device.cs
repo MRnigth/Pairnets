@@ -41,7 +41,8 @@ public sealed class Device : IAsyncDisposable
             ExtraIgnore = extraIgnore ?? [],
             MaxParallelTransfers = parallel,
             ResumeDownloadsFrom = resumeDownloadsFrom ?? new EngineOptions { Folder = ".", DeviceName = "x" }.ResumeDownloadsFrom,
-        }, api, state, clock: clock, hooks: Hooks);
+            Placement = _placement,
+        }, api, state, clock: clock, hooks: Hooks) { NestFull = () => NestFull };
         State = new StateDb(StatePath);
         Api = _makeApi();
         Engine = _makeEngine(State, Api);
@@ -75,6 +76,26 @@ public sealed class Device : IAsyncDisposable
         Engine = _makeEngine(State, Api);
     }
     public EngineHooks Hooks { get; } = new();
+
+    private PlacementMap _placement = PlacementMap.Everywhere;
+
+    /// <summary>Where each folder's files live on this computer (also after <see cref="RestartAppAsync"/>).</summary>
+    public PlacementMap Placement
+    {
+        get => _placement;
+        set
+        {
+            _placement = value;
+            Engine.Placement = value;
+        }
+    }
+
+    /// <summary>Sets "Where your files live" for folders, e.g. <c>Place(("Photos", FilePlacement.NestOnly))</c>.</summary>
+    public void Place(params (string Folder, FilePlacement Placement)[] folders) =>
+        Placement = new PlacementMap(folders.Select(f => KeyValuePair.Create(f.Folder, f.Placement)));
+
+    /// <summary>The nest counts as (nearly) full for this computer's engine.</summary>
+    public bool NestFull { get; set; }
     public SyncRunner? Runner { get; private set; }
 
     public Task<PassResult> SyncAsync(bool full = false) => Engine.RunPassAsync(new PassOptions("test", full), CancellationToken.None);
