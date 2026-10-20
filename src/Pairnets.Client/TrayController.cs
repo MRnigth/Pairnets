@@ -35,11 +35,17 @@ public sealed class TrayController : ITrayActions, IDisposable
     private readonly Forms.NotifyIcon _icon;
     private readonly Dictionary<string, DateTime> _lastToast = [];
     private readonly DispatcherTimer _refresh;
+    /// <summary>This computer's settings: the app-wide values and every nest (the first in the top-level fields).</summary>
     private ClientSettings _settings;
-    private ClientSession? _session;
-    private Platform.CloudFiles.ICloudFolder? _cloud;
-    private CancellationTokenSource? _leaving;
-    private Task? _leaveTask;
+
+    /// <summary>One sync per nest (docs/DECISIONS.md, "Several nests at once"), in the order of <see cref="ClientSettings.Nests"/>.</summary>
+    private readonly List<NestRun> _runs = [];
+
+    /// <summary>The nest picked in the nest list; null = "All nests" (or the only nest).</summary>
+    private string? _selected;
+
+    /// <summary>The app-wide speed limits, shared by every nest's connection.</summary>
+    private readonly SpeedLimits _limits = new();
     private MainWindow? _window;
     private TrayPanel? _panel;
     private Action? _balloonClick;
@@ -51,8 +57,6 @@ public sealed class TrayController : ITrayActions, IDisposable
     private bool _updateDismissed;
     private double? _updateProgress;
     private UpdateProblem? _updateError;
-    private string? _serverPromptShownFor;
-    private bool _lowSpaceNoticed;
 
     private readonly Forms.ToolStripMenuItem _openApp = new("Open Pairnets") { Font = new System.Drawing.Font(Forms.Control.DefaultFont, System.Drawing.FontStyle.Bold) };
     private readonly Forms.ToolStripMenuItem _statusItem = new("Starting…") { Enabled = false };
@@ -89,8 +93,18 @@ public sealed class TrayController : ITrayActions, IDisposable
         menu.Items.AddRange([_openApp, _statusItem, new Forms.ToolStripSeparator(), _syncNow, _openFolder, _fixProblem,
             new Forms.ToolStripSeparator(), _settingsItem, _viewLog, _reportBug, _pause, _autoStart, new Forms.ToolStripSeparator(), _exit]);
         _openApp.Click += (_, _) => ShowMainWindow();
-        _syncNow.Click += (_, _) => SyncNow();
-        _openFolder.Click += (_, _) => OpenFolder();
+        _syncNow.Click += (_, _) =>
+        {
+            if (_runs.Count > 1)
+                SyncAll(); // the tray's "Sync all now"
+            else
+                SyncNow();
+        };
+        _openFolder.Click += (_, _) =>
+        {
+            if (_openFolder.DropDownItems.Count == 0)
+                OpenFolder();
+        };
         _fixProblem.Click += (_, _) => FixBlocked();
         _settingsItem.Click += (_, _) => ShowMainWindow(MainPage.Settings);
         _viewLog.Click += (_, _) => ViewLog();
@@ -130,6 +144,46 @@ public sealed class TrayController : ITrayActions, IDisposable
         _refresh.Start();
     }
 
+    /// <summary>One nest this app syncs: its settings, its session (null while it can't run) and its Windows cloud folder.</summary>
+    private sealed class NestRun(ClientSettings settings)
+    {
+        public ClientSettings Settings { get; set; } = settings;
+        public string Id => Settings.NestId!;
+        public ClientSession? Session { get; set; }
+        public Platform.CloudFiles.ICloudFolder? Cloud { get; set; }
+        public CancellationTokenSource? Leaving { get; set; }
+        public Task? LeaveTask { get; set; }
+        public string? ServerPromptShownFor { get; set; }
+        public bool LowSpaceNoticed { get; set; }
+        public StatusSnapshot Status => Session?.Status ?? StatusSnapshot.WithoutSession(Settings);
+    }
+
+    /// <summary>The nest the pages show: the one picked in the nest list, else the first.</summary>
+    private NestRun? Current => _runs.FirstOrDefault(r => r.Id == _selected) ?? _runs.FirstOrDefault();
+
+    /// <summary>The picked nest's session (see <see cref="Current"/>).</summary>
+    private ClientSession? _session => Current?.Session;
+
+    /// <summary>The picked nest's settings (its address, key, folder, name), or the app's own while it has no nest.</summary>
+    private ClientSettings Nest => Current?.Settings ?? _settings;
+
+    /// <summary>"Work nest: " before a notice when there are several nests.</summary>
+    private string PrefixOf(NestRun run) => NestNames.Prefix(run.Settings, _settings, run.Session?.Status);
+
+    private NestRun? RunOf(ClientSession session) => _runs.FirstOrDefault(r => ReferenceEquals(r.Session, session));
+
+    /// <summary>Saves one nest's own values (and the app-wide ones in <see cref="_settings"/>).</summary>
+    private void SaveNest(ClientSettings nest)
+    {
+        _settings.PutNest(nest);
+        SettingsStore.Save(_env.SettingsPath, _settings);
+        if (_runs.FirstOrDefault(r => r.Id == nest.NestId) is { } run)
+            run.Settings = _settings.ForNest(nest.NestId)!;
+    }
+
+    /// <summary>Some nest can sync (signed in, with a folder).</summary>
+    private bool AnyNestReady => _settings.Nests().Any(n => n.IsComplete);
+
     /// <summary>Test hook: other sync timings (null in the app).</summary>
     internal Func<RunnerOptions, RunnerOptions>? RunnerOptionsForTests { get; init; }
 
@@ -140,6 +194,7 @@ public sealed class TrayController : ITrayActions, IDisposable
     internal MainWindow? Window => _window;
     internal TrayPanel? Panel => _panel;
     internal ClientSession? Session => _session;
+    internal IReadOnlyList<ClientSession> Sessions => _runs.Select(r => r.Session).OfType<ClientSession>().ToList();
     internal ClientSettings Settings => _settings;
 
     /// <summary>Draws the current state right away instead of at the next tick.</summary>
@@ -182,12 +237,12 @@ public sealed class TrayController : ITrayActions, IDisposable
         });
         _updates.SetEnabled(_settings.CheckForUpdates);
         NoticeLastClose();
-        if (!_settings.IsComplete || !_settings.FirstRunCompleted)
+        if (!AnyNestReady || !_settings.FirstRunCompleted)
         {
             ShowSettings(firstRun: true);
             return;
         }
-        StartSession(null);
+        StartAll();
         if (FileManagerCommand.FromArguments(Environment.GetCommandLineArgs()) is { } command)
             HandleFileCommand(command); // started by a right-click item in Explorer while Pairnets was not running
         else if (!Environment.GetCommandLineArgs().Contains(AppActivation.AutoStartArgument))
@@ -201,28 +256,59 @@ public sealed class TrayController : ITrayActions, IDisposable
             Toast("crash", CrashNotice.Title, CrashNotice.Text, Forms.ToolTipIcon.Warning, ReportBug);
     }
 
-    // ------------------------------------------------------------------ session
+    // ------------------------------------------------------------------ sessions: one per nest
 
+    /// <summary>Starts a sync for every nest that can run (stopping any that ran).</summary>
+    private void StartAll()
+    {
+        StopAll();
+        _settings.EnsureNestIds();
+        foreach (var nest in _settings.Nests())
+        {
+            var run = new NestRun(nest);
+            _runs.Add(run);
+            if (nest.IsComplete)
+                StartNest(run, null);
+        }
+        if (_selected is not null && _runs.All(r => r.Id != _selected))
+            _selected = null;
+        _dirty = true;
+        UpdateExplorerEntry();
+    }
+
+    /// <summary>Starts (again) the picked nest's sync, or every nest's when none runs yet.</summary>
     private void StartSession(string? plainToken)
     {
-        StopSession();
+        if (Current is { } run)
+            StartNest(run, plainToken);
+        else
+            StartAll();
+    }
+
+    private void StartNest(NestRun run, string? plainToken)
+    {
+        StopNest(run);
+        run.Settings = _settings.ForNest(run.Id) ?? run.Settings;
+        var nest = run.Settings;
+        if (!nest.IsComplete)
+            return;
         try
         {
-            plainToken ??= _platform.Secrets.Unprotect(_settings.ProtectedToken!);
+            plainToken ??= _platform.Secrets.Unprotect(nest.ProtectedToken!);
         }
         catch (Exception ex)
         {
-            _log.LogWarning("Cannot decrypt the saved token: {Error}", ex.Message);
-            Toast("token", "Pairnets needs the token again", "The saved token cannot be read on this Windows account. Open Settings and enter it.", Forms.ToolTipIcon.Warning, () => ShowSettings(false));
+            _log.LogWarning("Cannot decrypt the saved token of {Nest}: {Error}", NestNames.Title(nest, _settings), ex.Message);
+            Toast("token", PrefixOf(run) + "Pairnets needs the token again", "The saved token cannot be read on this Windows account. Open Settings and enter it.", Forms.ToolTipIcon.Warning, () => ShowSettings(false), run);
             return;
         }
 
-        var cloud = StartCloudFolder();
+        var cloud = StartCloudFolder(run);
         ClientSession session;
         try
         {
-            session = ClientSession.Start(_settings, plainToken, _platform.CreateTrash(_loggers.CreateLogger("Pairnets.Trash")), _loggers,
-                stateBaseDir: _env.LocalDir, runnerOptions: RunnerOptionsForTests, cloudFiles: cloud);
+            session = ClientSession.Start(nest, plainToken, _platform.CreateTrash(_loggers.CreateLogger("Pairnets.Trash")), _loggers,
+                stateBaseDir: _env.LocalDir, runnerOptions: RunnerOptionsForTests, cloudFiles: cloud, limits: _limits);
         }
         catch
         {
@@ -231,45 +317,55 @@ public sealed class TrayController : ITrayActions, IDisposable
         }
         if (cloud is not null)
         {
-            _cloud = cloud;
+            run.Cloud = cloud;
             cloud.Fetch = session.FetchVersionAsync;
             session.PassCompleted += _ => cloud.Reconcile(session.SyncedHash);
             cloud.Reconcile(session.SyncedHash);
             if (_settings.CloudFolder == CloudFolderMode.Off)
-                _leaveTask = LeaveCloudFolderAsync(cloud);
+                run.LeaveTask = LeaveCloudFolderAsync(run, cloud);
         }
         session.StatusChanged += _ => _dirty = true;
         session.Activity.Added += _ => _dirty = true;
-        session.ConflictCreated += c => RunOnUi(() => Toast("conflict:" + c.Path, "Conflict: both computers changed a file",
-            $"{c.Path} was changed on both. Your version was kept as \"{PathRules.FileName(c.ConflictCopyPath)}\".", Forms.ToolTipIcon.Warning, ShowMainWindow));
-        session.PathWarningRaised += w => RunOnUi(() => Toast("warning:" + w.Path, w.Code == ErrorCodes.CaseCollision ? "Name collision" : "File name not allowed",
-            $"{w.Path}: {w.Message}", Forms.ToolTipIcon.Warning, ShowMainWindow));
-        session.PassCompleted += r => RunOnUi(() => OnPassCompleted(r));
-        session.CatchUpCompleted += n => RunOnUi(() => Toast("catchup", "Pairnets is up to date",
-            $"Synced {n} change(s) made while this computer was away.", Forms.ToolTipIcon.Info, ShowMainWindow));
-        session.ServerInfoChanged += info => RunOnUi(() => OnServerInfo(session, info));
-        session.AccountChanged += (next, token) => RunOnUi(() => OnAccountChanged(session, next, token));
-        session.JoinRequested += r => RunOnUi(() => Toast("join:" + r.Code, r.Title, $"Code {r.Code} · click to review it on your nest.",
-            Forms.ToolTipIcon.Info, () => ReviewJoin(r)));
-        _session = session;
+        session.ConflictCreated += c => RunOnUi(() => Toast("conflict:" + c.Path, PrefixOf(run) + "Conflict: both computers changed a file",
+            $"{c.Path} was changed on both. Your version was kept as \"{PathRules.FileName(c.ConflictCopyPath)}\".", Forms.ToolTipIcon.Warning, () => ShowNest(run), run));
+        session.PathWarningRaised += w => RunOnUi(() => Toast("warning:" + w.Path, PrefixOf(run) + (w.Code == ErrorCodes.CaseCollision ? "Name collision" : "File name not allowed"),
+            $"{w.Path}: {w.Message}", Forms.ToolTipIcon.Warning, () => ShowNest(run), run));
+        session.PassCompleted += r => RunOnUi(() => OnPassCompleted(run, r));
+        session.CatchUpCompleted += n => RunOnUi(() => Toast("catchup", PrefixOf(run) + "Pairnets is up to date",
+            $"Synced {n} change(s) made while this computer was away.", Forms.ToolTipIcon.Info, () => ShowNest(run), run));
+        session.ServerInfoChanged += info => RunOnUi(() => OnServerInfo(run, session, info));
+        session.AccountChanged += (next, token) => RunOnUi(() => OnAccountChanged(run, session, next, token));
+        session.JoinRequested += r => RunOnUi(() => Toast("join:" + r.Code, PrefixOf(run) + r.Title, $"Code {r.Code} · click to review it on your nest.",
+            Forms.ToolTipIcon.Info, () => ReviewJoin(session, r), run));
+        run.Session = session;
         _dirty = true;
-        _log.LogInformation("Syncing {Folder} with {Server} as {Device}", _settings.Folder, _settings.ServerUrl, _settings.DeviceName);
-        UpdateExplorerEntry();
+        _log.LogInformation("Syncing {Folder} with {Server} as {Device}", nest.Folder, nest.ServerUrl, nest.DeviceName);
+    }
+
+    /// <summary>The main window, on one nest's pages (a notice about it was clicked).</summary>
+    private void ShowNest(NestRun run)
+    {
+        if (_runs.Count > 1)
+            _selected = run.Id;
+        ShowMainWindow();
     }
 
     // ------------------------------------------------------------------ File Explorer
 
     /// <summary>
-    /// Puts Pairnets in File Explorer for the current folder (left side, right-click items, folder icon), or takes it
-    /// away when switched off in Settings. Runs at every start, so a moved program or folder is followed.
+    /// Puts Pairnets in File Explorer for the nests' folders (left side, right-click items, folder icon), or takes it away
+    /// when switched off in Settings. Runs at every start, so a moved program or folder is followed.
     /// </summary>
     private void UpdateExplorerEntry()
     {
-        var folder = _settings.ShowInFileManager && _settings.IsComplete && Directory.Exists(_settings.Folder) ? _settings.Folder : null;
+        List<ExplorerNest> folders = _settings.ShowInFileManager
+            ? _runs.Select(r => r.Settings).Where(n => n.IsComplete && Directory.Exists(n.Folder))
+                .Select(n => new ExplorerNest(n.Folder!, NestNames.Title(n, _settings), n.NestId!)).ToList()
+            : [];
         try
         {
             // A Windows cloud folder is in the left side by itself (with Pairnets' icon), so only one "Pairnets" shows.
-            if (!_platform.SetExplorerEntry(folder, leftSide: _cloud is not { IsActive: true }))
+            if (!_platform.SetExplorerEntries(folders, leftSide: !_runs.Any(r => r.Cloud is { IsActive: true })))
                 _log.LogInformation("Pairnets could not be fully added to File Explorer; it tries again at the next start");
         }
         catch (Exception ex)
@@ -279,11 +375,11 @@ public sealed class TrayController : ITrayActions, IDisposable
     }
 
     /// <summary>
-    /// The Pairnets folder as a Windows cloud folder when chosen in Settings (ticks in Explorer; Files On-Demand), or
-    /// null for a plain folder. When it was turned off but Windows still has the cloud folder, it is started once more
-    /// (keeping every file here) so that <see cref="LeaveCloudFolderAsync"/> can bring everything home and end it.
+    /// A nest's folder as a Windows cloud folder when chosen in Settings (ticks in Explorer; Files On-Demand), or null for
+    /// a plain folder. When it was turned off but Windows still has the cloud folder, it is started once more (keeping
+    /// every file here) so that <see cref="LeaveCloudFolderAsync"/> can bring everything home and end it.
     /// </summary>
-    private Platform.CloudFiles.ICloudFolder? StartCloudFolder()
+    private Platform.CloudFiles.ICloudFolder? StartCloudFolder(NestRun run)
     {
         var wanted = _settings.CloudFolder;
         if (wanted == CloudFolderMode.Off && !SafeHasCloudFolder())
@@ -293,7 +389,7 @@ public sealed class TrayController : ITrayActions, IDisposable
         string? problem;
         try
         {
-            cloud = _platform.StartCloudFolder(_settings.Folder!, mode, _loggers.CreateLogger("Pairnets.CloudFolder"), out problem);
+            cloud = _platform.StartCloudFolder(run.Settings.Folder!, mode, _loggers.CreateLogger("Pairnets.CloudFolder"), out problem);
         }
         catch (Exception ex)
         {
@@ -302,8 +398,8 @@ public sealed class TrayController : ITrayActions, IDisposable
         if (cloud is null && wanted != CloudFolderMode.Off)
         {
             _log.LogWarning("The Pairnets folder stays a plain folder: {Problem}", problem);
-            Toast("cloudfolder", "No ticks in Explorer for now", (problem ?? "Windows did not allow it.") + " Pairnets keeps syncing as before.",
-                Forms.ToolTipIcon.Warning, () => ShowMainWindow(MainPage.Settings));
+            Toast("cloudfolder", PrefixOf(run) + "No ticks in Explorer for now", (problem ?? "Windows did not allow it.") + " Pairnets keeps syncing as before.",
+                Forms.ToolTipIcon.Warning, () => ShowMainWindow(MainPage.Settings), run);
         }
         return cloud;
     }
@@ -326,14 +422,14 @@ public sealed class TrayController : ITrayActions, IDisposable
     /// that cannot finish (no connection), the folder stays a cloud folder, keeping everything here, and it is tried again
     /// at the next start.
     /// </summary>
-    private async Task LeaveCloudFolderAsync(Platform.CloudFiles.ICloudFolder cloud)
+    private async Task LeaveCloudFolderAsync(NestRun run, Platform.CloudFiles.ICloudFolder cloud)
     {
-        _leaving?.Cancel();
-        var stop = _leaving = new CancellationTokenSource();
+        run.Leaving?.Cancel();
+        var stop = run.Leaving = new CancellationTokenSource();
         string? problem;
         try
         {
-            problem = await cloud.LeaveAsync(stop.Token).ConfigureAwait(false); // (StopSession may wait for this on the window's thread)
+            problem = await cloud.LeaveAsync(stop.Token).ConfigureAwait(false); // (StopNest may wait for this on the window's thread)
         }
         catch (Exception ex)
         {
@@ -347,12 +443,12 @@ public sealed class TrayController : ITrayActions, IDisposable
             {
                 _log.LogInformation("The Pairnets folder is a plain folder again");
                 UpdateExplorerEntry();
-                Toast("cloudfolder", "Your Pairnets folder is a plain folder again", "Every file is on this PC.", Forms.ToolTipIcon.Info, OpenFolder);
+                Toast("cloudfolder", PrefixOf(run) + "Your Pairnets folder is a plain folder again", "Every file is on this PC.", Forms.ToolTipIcon.Info, () => OpenFolder(run), run);
             }
             else
             {
                 _log.LogWarning("The Pairnets folder could not become a plain folder yet: {Problem}", problem);
-                Toast("cloudfolder", "Still a cloud folder for now", problem + " Pairnets tries again at the next start.", Forms.ToolTipIcon.Warning, ShowMainWindow);
+                Toast("cloudfolder", PrefixOf(run) + "Still a cloud folder for now", problem + " Pairnets tries again at the next start.", Forms.ToolTipIcon.Warning, ShowMainWindow, run);
             }
         });
     }
@@ -360,11 +456,14 @@ public sealed class TrayController : ITrayActions, IDisposable
     /// <summary>A right-click item in Explorer: "Open in Pairnets" or "Show sync status" for a file or folder.</summary>
     internal void HandleFileCommand(FileManagerCommand command)
     {
-        if (_session is not { } session || _settings.Folder is not { } folder || FileStatusReader.ToSyncPath(folder, command.Path) is not { } rel)
+        var run = _runs.FirstOrDefault(r => r.Session is not null && r.Settings.Folder is { } f && FileStatusReader.ToSyncPath(f, command.Path) is not null);
+        if (run?.Session is not { } session || run.Settings.Folder is not { } folder || FileStatusReader.ToSyncPath(folder, command.Path) is not { } rel)
         {
             ShowMainWindow();
             return;
         }
+        if (_runs.Count > 1)
+            _selected = run.Id;
         if (command.Action == FileManagerAction.Open)
         {
             if (rel.Length == 0 || Directory.Exists(command.Path))
@@ -381,7 +480,7 @@ public sealed class TrayController : ITrayActions, IDisposable
             return;
         }
         var status = session.GetFileStatus(command.Path);
-        var name = rel.Length == 0 ? "Your Pairnets folder" : PathRules.FileName(rel);
+        var name = rel.Length == 0 ? (_runs.Count > 1 ? NestNames.Title(run.Settings, _settings) + "'s folder" : "Your Pairnets folder") : PathRules.FileName(rel);
         if (status.State == FileSyncState.Problem)
         {
             if (Dialogs.Ask(null, $"{name}\n\n{status.Text}\n\nOpen Pairnets to see what needs you?", "Pairnets – sync status",
@@ -394,9 +493,9 @@ public sealed class TrayController : ITrayActions, IDisposable
     }
 
     /// <summary>Opens the nest's page where a computer asking to join is allowed or turned away.</summary>
-    private void ReviewJoin(JoinRequest request)
+    private void ReviewJoin(ClientSession? session, JoinRequest request)
     {
-        if (_session?.Status.ReviewUrl(request) is { } url)
+        if ((session ?? _session)?.Status.ReviewUrl(request) is { } url)
             Shell(url);
         else
             ShowMainWindow(MainPage.Attention);
@@ -405,13 +504,13 @@ public sealed class TrayController : ITrayActions, IDisposable
     // ------------------------------------------------------------------ the nest: devices and signing out
 
     /// <summary>The two steps, with this nest's name (or, signed in with an account, the account) filled in.</summary>
-    public void AddComputer() => Dialogs.Ask(null, Relay.AddComputerSteps(_settings.ServerUrl, _settings.AccountEmail, _session?.Status.NestUrl ?? NestFromSettings()),
+    public void AddComputer() => Dialogs.Ask(null, Relay.AddComputerSteps(Nest.ServerUrl, Nest.AccountEmail, _session?.Status.NestUrl ?? NestFromSettings()),
         "Pairnets – add a computer", MessageBoxButton.OK, MessageBoxImage.Information);
 
     /// <summary>The nest's Devices page, or the account page when this computer signed in with a Pairnets account.</summary>
     public void ManageDevices()
     {
-        if (Relay.ManageComputersUrl(_settings.ServerUrl, _session?.Status.NestUrl ?? NestFromSettings()) is { } url)
+        if (Relay.ManageComputersUrl(Nest.ServerUrl, _session?.Status.NestUrl ?? NestFromSettings()) is { } url)
             Shell(url);
         else
             Dialogs.Ask(null, "Your nest has no website yet. On the server, give it its own name with: sudo ./install.sh --public-url https://nest.example.com",
@@ -420,39 +519,38 @@ public sealed class TrayController : ITrayActions, IDisposable
 
     /// <summary>The nest's website when this computer already talks to it over HTTPS.</summary>
     private string? NestFromSettings() =>
-        Uri.TryCreate(_settings.ServerUrl, UriKind.Absolute, out var url) && url.Scheme == Uri.UriSchemeHttps ? url.GetLeftPart(UriPartial.Authority) : null;
+        Uri.TryCreate(Nest.ServerUrl, UriKind.Absolute, out var url) && url.Scheme == Uri.UriSchemeHttps ? url.GetLeftPart(UriPartial.Authority) : null;
 
     /// <summary>
     /// "Sign out of this computer": removes its key on the nest (best effort), stops syncing, forgets the key,
-    /// and offers to sign in again. The files in the folder stay.
+    /// and offers to sign in again. The files in the folder stay. With several nests this is "Leave this nest on this
+    /// PC" (<see cref="LeaveNest"/>): only the picked nest goes, the others keep syncing.
     /// </summary>
     public async void SignOut()
     {
+        if (_runs.Count > 1)
+        {
+            LeaveNest();
+            return;
+        }
         if (_signingOut)
             return; // a second click while the first is still working
         _signingOut = true;
         try
         {
-            if (Dialogs.Ask(null, $"Sign out of this computer?\n\nSyncing stops. Your files in {_settings.Folder} stay here. Sign in again to continue.",
+            var nest = Nest;
+            if (Dialogs.Ask(null, $"Sign out of this computer?\n\nSyncing stops. Your files in {nest.Folder} stay here. Sign in again to continue.",
                     "Pairnets – sign out", MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK)
                 return;
-            var removed = false;
-            try
-            {
-                removed = _session is not null && await _session.SignOutAsync();
-            }
-            catch (Exception ex) when (ex is Pairnets.Core.Api.PairnetsNetworkException or Pairnets.Core.Api.PairnetsAuthException or Pairnets.Core.Api.PairnetsProtocolException)
-            {
-                _log.LogWarning("Could not remove this computer on the nest: {Error}", ex.Message);
-            }
+            var removed = await SignOutOnNestAsync(Current);
             StopSession();
-            _settings.ProtectedToken = null;
-            _settings.DeviceId = null;
+            nest.ProtectedToken = null;
+            nest.DeviceId = null;
             _settings.FirstRunCompleted = false;
-            SettingsStore.Save(_env.SettingsPath, _settings);
+            SaveNest(nest);
             _dirty = true;
             if (!removed)
-                Dialogs.Ask(null, "Signed out here, but your nest could not be told. " + Relay.RemoveByHandHint(_settings.ServerUrl),
+                Dialogs.Ask(null, "Signed out here, but your nest could not be told. " + Relay.RemoveByHandHint(nest.ServerUrl),
                     "Pairnets", MessageBoxButton.OK, MessageBoxImage.Warning);
             _window?.Navigate(MainPage.Overview);
         }
@@ -461,6 +559,117 @@ public sealed class TrayController : ITrayActions, IDisposable
             _signingOut = false;
         }
         ShowSettings(firstRun: true);
+    }
+
+    /// <summary>Removes this computer's key on a nest (best effort); false when the nest could not be told.</summary>
+    private async Task<bool> SignOutOnNestAsync(NestRun? run)
+    {
+        try
+        {
+            return run?.Session is { } session && await session.SignOutAsync();
+        }
+        catch (Exception ex) when (ex is Pairnets.Core.Api.PairnetsNetworkException or Pairnets.Core.Api.PairnetsAuthException or Pairnets.Core.Api.PairnetsProtocolException)
+        {
+            _log.LogWarning("Could not remove this computer on the nest: {Error}", ex.Message);
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// "Leave this nest on this PC": this computer is signed out of the picked nest (its key there is removed), stops
+    /// syncing it and forgets it; the files in its folder stay. The other nests keep syncing. With one nest left this is
+    /// the plain sign-out.
+    /// </summary>
+    public async void LeaveNest()
+    {
+        if (Current is not { } run || _signingOut)
+            return;
+        if (_runs.Count <= 1)
+        {
+            SignOut();
+            return;
+        }
+        _signingOut = true;
+        try
+        {
+            var nest = run.Settings;
+            var title = NestNames.Title(nest, _settings, run.Session?.Status);
+            if (Dialogs.Ask(null, $"Leave {title} on this computer?\n\nThis computer stops syncing {title} and is signed out of it. Your files in {nest.Folder} stay here and on the nest. Your other nests keep syncing.",
+                    "Pairnets – leave " + title, MessageBoxButton.OKCancel, MessageBoxImage.Question, MessageBoxResult.Cancel) != MessageBoxResult.OK)
+                return;
+            var removed = await SignOutOnNestAsync(run);
+            StopNest(run);
+            try
+            {
+                if (nest.ProtectedToken is { Length: > 0 } key)
+                    _platform.Secrets.Forget(key);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
+            {
+                _log.LogWarning("Could not forget the key of {Nest}: {Error}", title, ex.Message);
+            }
+            _settings.RemoveNest(run.Id);
+            SettingsStore.Save(_env.SettingsPath, _settings);
+            _log.LogInformation("Left {Nest} on this computer", title);
+            _selected = null;
+            StartAll();
+            if (!removed)
+                Dialogs.Ask(null, $"{title} was left here, but the nest could not be told. " + Relay.RemoveByHandHint(nest.ServerUrl),
+                    "Pairnets", MessageBoxButton.OK, MessageBoxImage.Warning);
+            _window?.Navigate(MainPage.Overview);
+        }
+        finally
+        {
+            _signingOut = false;
+        }
+    }
+
+    /// <summary>"Add a nest": the sign-in window for one more nest, with a folder of its own.</summary>
+    public void AddNest()
+    {
+        if (!AnyNestReady)
+        {
+            ShowSettings(firstRun: true);
+            return;
+        }
+        if (_signInWindow is { } open)
+        {
+            open.Activate();
+            return;
+        }
+        var blank = _settings.BlankNest();
+        var window = new SettingsWindow(blank, _platform.Secrets, Shell, adding: new NestAdding(_settings, blank));
+        _signInWindow = window;
+        bool? accepted;
+        try
+        {
+            accepted = window.ShowDialog();
+        }
+        finally
+        {
+            _signInWindow = null;
+        }
+        if (accepted != true || window.Result is null)
+            return;
+        var id = _settings.AddNest(window.Result);
+        SettingsStore.Save(_env.SettingsPath, _settings);
+        _log.LogInformation("Added a nest: {Server} into {Folder}", window.Result.ServerUrl, window.Result.Folder);
+        var run = new NestRun(_settings.ForNest(id)!);
+        _runs.Add(run);
+        StartNest(run, window.PlainToken);
+        _selected = id;
+        UpdateExplorerEntry();
+        ShowMainWindow();
+    }
+
+    /// <summary>A nest was picked in the nest list (null: "All nests").</summary>
+    public void SelectNest(string? id)
+    {
+        _selected = id is not null && _runs.Any(r => r.Id == id) ? id : null;
+        _dirty = true;
+        RefreshIfDirty();
+        if (Current?.Session is { } session)
+            _ = session.RefreshDevicesAsync();
     }
 
     private bool _signingOut;
@@ -475,26 +684,21 @@ public sealed class TrayController : ITrayActions, IDisposable
     {
         if (_resetting)
             return;
-        var folder = _settings.Folder;
-        var where = string.IsNullOrWhiteSpace(folder) ? "your sync folder" : folder;
+        var folders = _settings.Nests().Select(n => n.Folder).Where(f => !string.IsNullOrWhiteSpace(f)).ToList();
+        var where = folders.Count == 0 ? "your sync folder" : string.Join(" and ", folders);
         if (Dialogs.Ask(null, $"Reset Pairnets on this computer?\n\nThis signs this computer out of your nest, forgets every setting and the saved sign-in, and removes Pairnets' sync notes. Your files in {where} are not deleted. The log files are kept.\n\nYou start again from the sign-in screen.",
                 "Pairnets – reset", MessageBoxButton.OKCancel, MessageBoxImage.Warning, MessageBoxResult.Cancel) != MessageBoxResult.OK)
             return;
         _resetting = true;
         try
         {
-            var hadOwnKey = _settings.HasOwnKey;
-            var serverUrl = _settings.ServerUrl;
-            var removed = false;
-            try
+            var notTold = new List<string>();
+            foreach (var run in _runs.ToList())
             {
-                removed = _session is not null && await _session.SignOutAsync();
+                if (run.Settings.HasOwnKey && !await SignOutOnNestAsync(run))
+                    notTold.Add(Relay.RemoveByHandHint(run.Settings.ServerUrl));
             }
-            catch (Exception ex) when (ex is Pairnets.Core.Api.PairnetsNetworkException or Pairnets.Core.Api.PairnetsAuthException or Pairnets.Core.Api.PairnetsProtocolException)
-            {
-                _log.LogWarning("Could not remove this computer on the nest: {Error}", ex.Message);
-            }
-            StopSession(); // the sync notes are only free to delete once the session is gone
+            StopAll(); // the sync notes are only free to delete once the sessions are gone
             var leftExplorer = false;
             var stayedOnNest = 0;
             try
@@ -520,14 +724,14 @@ public sealed class TrayController : ITrayActions, IDisposable
             {
                 notes.Add("Start with Windows could not be turned off: " + FriendlyErrors.Describe(ex));
             }
-            if (hadOwnKey && !removed)
-                notes.Add("Your nest could not be told. " + Relay.RemoveByHandHint(serverUrl));
+            foreach (var hint in notTold.Distinct())
+                notes.Add("Your nest could not be told. " + hint);
             _log.LogInformation("Pairnets was reset on this computer ({Folders} sync folder(s) cleared, {Problems} problem(s))", result.StateFoldersRemoved, result.Problems.Count);
 
             _settings = new ClientSettings();
             _fileLog.Minimum = LogLevel.Information;
             _updates.SetEnabled(true);
-            (_updateDismissed, _updateProgress, _updateError, _serverPromptShownFor, _lowSpaceNoticed) = (false, null, null, null, false);
+            (_updateDismissed, _updateProgress, _updateError, _selected) = (false, null, null, null);
             _lastToast.Clear();
             _dirty = true;
             if (notes.Count > 0)
@@ -542,22 +746,23 @@ public sealed class TrayController : ITrayActions, IDisposable
     }
 
     /// <summary>This computer got its own key, moved to the nest's HTTPS name or was renamed: save and reconnect.</summary>
-    private void OnAccountChanged(ClientSession from, ClientSettings next, string token)
+    private void OnAccountChanged(NestRun run, ClientSession from, ClientSettings next, string token)
     {
-        if (!ReferenceEquals(_session, from))
+        if (!ReferenceEquals(run.Session, from) || !_runs.Contains(run))
             return; // settings were saved meanwhile; the new session checks again
         try
         {
-            next.ProtectedToken = _platform.Secrets.Protect(token);
+            next.ProtectedToken = _platform.Secrets.Protect(token, _settings.KeySlotFor(next));
         }
         catch (Exception ex)
         {
             _log.LogWarning("Could not protect this computer's new key: {Error}", ex.Message);
             return;
         }
-        next.NameOfferAnswered |= _settings.NameOfferAnswered; // answered after this session started
+        next.NameOfferAnswered |= run.Settings.NameOfferAnswered; // answered after this session started
         _log.LogInformation("Saving this computer's sign-in: {Server} as {Device} ({Kind})", next.ServerUrl, next.DeviceName, next.HasOwnKey ? "own key" : "shared token");
-        ApplySettings(next, token);
+        SaveNest(next);
+        StartNest(run, token);
     }
 
     /// <summary>"Use StudyPC" on the name offer: renames this computer on its nest; the session then saves the new name.</summary>
@@ -579,31 +784,46 @@ public sealed class TrayController : ITrayActions, IDisposable
     /// <summary>Either answer to the name offer: it is not offered again.</summary>
     private void AnswerNameOffer()
     {
-        _settings.NameOfferAnswered = true;
-        SettingsStore.Save(_env.SettingsPath, _settings);
+        var nest = Nest;
+        nest.NameOfferAnswered = true;
+        SaveNest(nest);
         _dirty = true;
     }
 
+    /// <summary>Stops the picked nest's sync.</summary>
     private void StopSession()
     {
-        if (_session is null)
+        if (Current is { } run)
+            StopNest(run);
+    }
+
+    /// <summary>Stops every nest's sync and forgets the list (it is built again from the settings).</summary>
+    private void StopAll()
+    {
+        foreach (var run in _runs)
+            StopNest(run);
+        _runs.Clear();
+    }
+
+    private void StopNest(NestRun run)
+    {
+        if (run.Session is not { } s)
             return;
-        var s = _session;
-        _session = null;
-        _leaving?.Cancel();
+        run.Session = null;
+        run.Leaving?.Cancel();
         try
         {
             // A folder being turned back into a plain one finishes first, so a new start never meets it half way.
-            _leaveTask?.Wait(TimeSpan.FromSeconds(30));
+            run.LeaveTask?.Wait(TimeSpan.FromSeconds(30));
         }
         catch (AggregateException)
         {
             // (it says what happened itself)
         }
-        _leaveTask = null;
+        run.LeaveTask = null;
         Task.Run(async () => await s.DisposeAsync()).Wait(TimeSpan.FromSeconds(30));
-        _cloud?.Dispose(); // after the session: nothing asks it any more
-        _cloud = null;
+        run.Cloud?.Dispose(); // after the session: nothing asks it any more
+        run.Cloud = null;
         _dirty = true;
     }
 
@@ -611,45 +831,108 @@ public sealed class TrayController : ITrayActions, IDisposable
 
     private int _ticks;
 
+    /// <summary>The nest list: every nest with its state, the picked one, and the tray icon's colour.</summary>
+    internal NestListModel NestList() =>
+        NestListModel.Build(_settings, _runs.Select(r => (r.Settings, r.Session?.Status)), _runs.Count > 1 ? _selected : Current?.Id);
+
     private void RefreshIfDirty()
     {
-        _session?.PruneJoinRequests();
+        foreach (var run in _runs)
+            run.Session?.PruneJoinRequests();
         // Redraw every 2 seconds while a window shows, so "2 min ago" and the map's moving dots stay current.
         if (++_ticks % 8 == 0 && (_window is { IsVisible: true } || _panel is { IsVisible: true }))
             _dirty = true;
         if (!_dirty)
             return;
         _dirty = false;
-        var status = _session?.Status ?? StatusSnapshot.WithoutSession(_settings);
+        var status = _session?.Status ?? StatusSnapshot.WithoutSession(Nest);
+        var nests = NestList();
 
-        if (_shownStatus != status.IconStatus)
+        // Several nests: the tray icon shows the one in the worst state (an error, then blocked, ...).
+        var iconStatus = nests.Visible ? nests.Worst : status.IconStatus;
+        if (_shownStatus != iconStatus)
         {
-            _icon.Icon = TrayIcons.For(status.IconStatus);
-            _shownStatus = status.IconStatus;
+            _icon.Icon = TrayIcons.For(iconStatus);
+            _shownStatus = iconStatus;
         }
         // What it is doing in one line: "Checking files · 12,000 of 38,206", "Uploading · 37 of 120 files · 4.90 MB/s · …".
         var line = status.StatusLine;
-        var tip = $"Pairnets: {line} ({status.LastSyncText.ToLowerInvariant()})";
+        var tip = nests.Visible ? nests.Tooltip : $"Pairnets: {line} ({status.LastSyncText.ToLowerInvariant()})";
         _icon.Text = tip.Length > 127 ? tip[..124] + "..." : tip;
         _statusItem.Text = line.Length > 80 ? line[..77] + "..." : line;
         _fixProblem.Visible = status.FixLabel is not null;
         _fixProblem.Text = status.FixLabel ?? "Fix…";
-        _pause.Text = status.Paused ? "Resume syncing" : "Pause syncing";
+        var paused = nests.Visible ? _settings.Paused : status.Paused;
+        _pause.Text = nests.Visible ? (paused ? "Resume all" : "Pause all") : paused ? "Resume syncing" : "Pause syncing";
+        DrawNestMenu(nests);
 
         if (_window is { IsVisible: true })
         {
             DrawUpdateBanner();
             _window.ShowMapSpeed = _settings.ShowMapSpeed;
-            _window.ShowStatus(status, _settings.Folder, _settings.DeviceName);
+            _window.ShowNests(nests);
+            _window.ShowStatus(status, Nest.Folder, Nest.DeviceName);
             _window.ShowActivity(_session?.Activity.Items ?? []);
             _window.ShowAttention(BuildAttention(status));
         }
         if (_panel is { IsVisible: true })
         {
-            _panel.ShowStatus(status, _settings.DeviceName);
+            _panel.ShowStatus(status, Nest.DeviceName);
             _panel.ShowActivity(_session?.Activity.Items ?? []);
             _panel.ShowAttention(BuildAttention(status).Count);
         }
+    }
+
+    private readonly List<Forms.ToolStripItem> _nestItems = [];
+    private string? _drawnNestMenu;
+
+    /// <summary>
+    /// Several nests: the tray menu lists each nest with its own dot under "Open Pairnets" (a click opens the app on it),
+    /// and "Open folder" opens a list of the nests' folders. With one nest the menu is as before.
+    /// </summary>
+    private void DrawNestMenu(NestListModel nests)
+    {
+        var key = nests.Visible ? string.Join("|", nests.Rows.Select(r => r.Id + r.Title + r.Text + r.Dot)) : "";
+        if (key == _drawnNestMenu)
+            return;
+        _drawnNestMenu = key;
+        var menu = _icon.ContextMenuStrip!;
+        foreach (var item in _nestItems)
+            menu.Items.Remove(item);
+        _nestItems.Clear();
+        _statusItem.Visible = !nests.Visible;
+        _syncNow.Text = nests.Visible ? "Sync all now" : "Sync now";
+        _openFolder.DropDownItems.Clear();
+        if (!nests.Visible)
+            return;
+        var at = menu.Items.IndexOf(_openApp) + 1;
+        foreach (var row in nests.Rows)
+        {
+            var id = row.Id;
+            var item = new Forms.ToolStripMenuItem(row.Title)
+            {
+                ShortcutKeyDisplayString = row.Text,
+                Image = TrayIcons.For(row.Icon).ToBitmap(), // the nest's own colour, as on the tray icon
+            };
+            item.Click += (_, _) =>
+            {
+                _selected = id;
+                ShowMainWindow();
+            };
+            menu.Items.Insert(at++, item);
+            _nestItems.Add(item);
+            var folder = new Forms.ToolStripMenuItem(row.Title) { Enabled = row.Folder is not null };
+            folder.Click += (_, _) =>
+            {
+                if (_runs.FirstOrDefault(r => r.Id == id) is { } run)
+                    OpenFolder(run);
+            };
+            _openFolder.DropDownItems.Add(folder);
+        }
+        var add = new Forms.ToolStripMenuItem("Add a nest…");
+        add.Click += (_, _) => AddNest();
+        menu.Items.Insert(at, add);
+        _nestItems.Add(add);
     }
 
     private List<AttentionItem> BuildAttention(StatusSnapshot status)
@@ -657,13 +940,13 @@ public sealed class TrayController : ITrayActions, IDisposable
         var items = new List<AttentionItem>();
         if (_session is null)
             return items;
-        if (NameOffer.For(_settings, ComputerName.Default()) is { } offer)
+        if (NameOffer.For(Nest, ComputerName.Default()) is { } offer)
             items.Add(new AttentionItem(offer.Title, offer.Detail, offer.UseLabel, () => UseOwnName(offer), AttentionKind.Rename,
                 SecondLabel: offer.KeepLabel, Second: AnswerNameOffer));
         foreach (var join in status.JoinRequests)
         {
             items.Add(new AttentionItem(join.Title, join.Advice,
-                "Review in browser", () => ReviewJoin(join), AttentionKind.Join, join.Code, join.At));
+                "Review in browser", () => ReviewJoin(_session, join), AttentionKind.Join, join.Code, join.At));
         }
         if (status.FixLabel is not null)
             items.Add(new AttentionItem("Syncing is paused until you decide", _session.Status.Text, status.FixLabel, FixBlocked));
@@ -677,33 +960,41 @@ public sealed class TrayController : ITrayActions, IDisposable
         return items;
     }
 
-    private void OnPassCompleted(PassResult result)
+    private void OnPassCompleted(NestRun run, PassResult result)
     {
+        void Picked(Action then)
+        {
+            if (_runs.Count > 1)
+                _selected = run.Id; // the notice is about this nest: fix it there
+            then();
+        }
         if (result.Outcome == PassOutcome.Blocked)
         {
             var deletions = result.BlockReason is BlockReason.MassDelete or BlockReason.FolderEmpty;
             var title = deletions ? "Deletions blocked"
                 : result.BlockReason == BlockReason.SignedOut ? "Signed out of your nest"
                 : result.BlockReason == BlockReason.SignInRequired ? "Sign in to your nest" : "Pairnets paused syncing";
-            Toast("blocked:" + result.BlockReason, title, result.Message ?? result.BlockReason.ToString(),
-                result.BlockReason == BlockReason.SignedOut ? Forms.ToolTipIcon.Error : Forms.ToolTipIcon.Warning, FixBlocked);
+            Toast("blocked:" + result.BlockReason, PrefixOf(run) + title, result.Message ?? result.BlockReason.ToString(),
+                result.BlockReason == BlockReason.SignedOut ? Forms.ToolTipIcon.Error : Forms.ToolTipIcon.Warning, () => Picked(FixBlocked), run);
         }
         else if (result.Outcome == PassOutcome.AuthFailed)
         {
-            Toast("auth", "Sign in to your nest", "Your nest did not accept this computer's sign-in. Sign in again to keep syncing.", Forms.ToolTipIcon.Error, () => ShowSettings(true));
+            Toast("auth", PrefixOf(run) + "Sign in to your nest", "Your nest did not accept this computer's sign-in. Sign in again to keep syncing.", Forms.ToolTipIcon.Error,
+                () => Picked(() => ShowSettings(true)), run);
         }
         _dirty = true;
     }
 
     /// <summary>Balloon tips render as Windows 10/11 toast notifications. Same key at most once per 10 minutes.</summary>
-    private void Toast(string key, string title, string text, Forms.ToolTipIcon icon, Action? onClick)
+    private void Toast(string key, string title, string text, Forms.ToolTipIcon icon, Action? onClick, NestRun? run = null)
     {
         if (!NotifyPolicy.Allows(_settings, key))
             return; // turned off in the notification switches
         var now = DateTime.UtcNow;
-        if (_lastToast.TryGetValue(key, out var last) && now - last < TimeSpan.FromMinutes(10))
+        var seen = run is null ? key : run.Id + "/" + key; // two nests' notices never hide each other
+        if (_lastToast.TryGetValue(seen, out var last) && now - last < TimeSpan.FromMinutes(10))
             return;
-        _lastToast[key] = now;
+        _lastToast[seen] = now;
         _balloonClick = onClick;
         _icon.ShowBalloonTip(8000, title, text, icon);
         Notified?.Invoke(title, text);
@@ -713,7 +1004,7 @@ public sealed class TrayController : ITrayActions, IDisposable
 
     public void ShowMainWindow()
     {
-        if (!_settings.IsComplete)
+        if (!AnyNestReady)
         {
             ShowSettings(firstRun: true);
             return;
@@ -807,7 +1098,7 @@ public sealed class TrayController : ITrayActions, IDisposable
     /// <summary>The quick-look panel next to the taskbar; a second click on the icon closes it.</summary>
     private void TogglePanel()
     {
-        if (!_settings.IsComplete || !_settings.FirstRunCompleted)
+        if (!AnyNestReady || !_settings.FirstRunCompleted)
         {
             ShowSettings(firstRun: true);
             return;
@@ -822,25 +1113,47 @@ public sealed class TrayController : ITrayActions, IDisposable
             _ = session.RefreshDevicesAsync();
         var cursor = Forms.Cursor.Position;
         var screen = Forms.Screen.FromPoint(cursor);
-        _panel.ShowStatus(_session?.Status ?? StatusSnapshot.WithoutSession(_settings), _settings.DeviceName);
+        _panel.ShowStatus(_session?.Status ?? StatusSnapshot.WithoutSession(Nest), Nest.DeviceName);
         _panel.ShowActivity(_session?.Activity.Items ?? []);
-        _panel.ShowAttention(BuildAttention(_session?.Status ?? StatusSnapshot.WithoutSession(_settings)).Count);
+        _panel.ShowAttention(BuildAttention(_session?.Status ?? StatusSnapshot.WithoutSession(Nest)).Count);
         _panel.Open(cursor, screen.Bounds, screen.WorkingArea);
         _dirty = true;
     }
 
-    public void SyncNow() => _session?.SyncNow();
+    /// <summary>"Sync now": the picked nest; on "All nests" (or from the tray with several nests) every nest.</summary>
+    public void SyncNow()
+    {
+        if (_runs.Count > 1 && _selected is null)
+            SyncAll();
+        else
+            _session?.SyncNow();
+    }
 
+    public void SyncAll()
+    {
+        foreach (var run in _runs)
+            run.Session?.SyncNow();
+    }
+
+    /// <summary>Pausing is app-wide: every nest pauses and resumes together.</summary>
     public void TogglePause()
     {
-        if (_session is null)
+        var sessions = _runs.Select(r => r.Session).OfType<ClientSession>().ToList();
+        if (sessions.Count == 0)
             return;
-        if (_session.Status.Paused || _settings.Paused)
-            _session.Resume();
-        else
-            _session.Pause();
-        _settings.Paused = _session.Settings.Paused;
+        var resume = _settings.Paused || sessions.Any(x => x.Status.Paused);
+        foreach (var session in sessions)
+        {
+            if (resume)
+                session.Resume();
+            else
+                session.Pause();
+        }
+        _settings.Paused = !resume;
         SettingsStore.Save(_env.SettingsPath, _settings);
+        foreach (var run in _runs)
+            run.Settings.Paused = _settings.Paused;
+        _dirty = true;
     }
 
     public void FixBlocked()
@@ -848,7 +1161,7 @@ public sealed class TrayController : ITrayActions, IDisposable
         if (_session is null)
         {
             // Signed out here: the Overview's and the tray menu's "Sign in…" open the sign-in window.
-            if (StatusSnapshot.WithoutSession(_settings).BlockReason == BlockReason.SignedOutByYou)
+            if (StatusSnapshot.WithoutSession(Nest).BlockReason == BlockReason.SignedOutByYou)
                 ShowSettings(firstRun: true);
             return;
         }
@@ -863,7 +1176,7 @@ public sealed class TrayController : ITrayActions, IDisposable
                     _session.ApproveDeletions();
                 break;
             case BlockReason.ForeignMarker:
-                if (Dialogs.Ask(null, $"{_settings.Folder} was synced by Pairnets before, but this computer has no record of it (for example after reinstalling).\n\n" +
+                if (Dialogs.Ask(null, $"{Nest.Folder} was synced by Pairnets before, but this computer has no record of it (for example after reinstalling).\n\n" +
                         "Continue syncing it? Files are merged: nothing is deleted, differing files become conflict copies.",
                         "Pairnets", MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes)
                     _session.AdoptExistingMarker();
@@ -893,7 +1206,7 @@ public sealed class TrayController : ITrayActions, IDisposable
             "Pairnets", MessageBoxButton.OK, MessageBoxImage.Warning);
         if (Dialogs.PickFolder(null, "Where is your Pairnets folder now?") is not { } folder || _session is null)
             return;
-        var error = _session.CheckMovedFolder(folder);
+        var error = _session.CheckMovedFolder(folder) ?? _settings.FolderProblem(folder, Nest.NestId);
         if (error is not null)
         {
             Dialogs.Ask(null, error, "Pairnets", MessageBoxButton.OK, MessageBoxImage.Warning);
@@ -909,9 +1222,11 @@ public sealed class TrayController : ITrayActions, IDisposable
         {
             Dialogs.Ask(null, FriendlyErrors.Describe(ex), "Pairnets", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
-        _settings.Folder = folder;
-        SettingsStore.Save(_env.SettingsPath, _settings);
+        var nest = Nest;
+        nest.Folder = folder;
+        SaveNest(nest);
         StartSession(null);
+        UpdateExplorerEntry();
     }
 
     private SettingsWindow? _signInWindow;
@@ -919,7 +1234,7 @@ public sealed class TrayController : ITrayActions, IDisposable
     /// <summary>Signing in is a window of its own; later, Settings is a page of the main window.</summary>
     public void ShowSettings(bool firstRun)
     {
-        if (!firstRun && _settings.IsComplete && _settings.FirstRunCompleted)
+        if (!firstRun && AnyNestReady && _settings.FirstRunCompleted)
         {
             ShowMainWindow(MainPage.Settings);
             return;
@@ -932,7 +1247,8 @@ public sealed class TrayController : ITrayActions, IDisposable
             open.Activate();
             return;
         }
-        var window = new SettingsWindow(_settings, _platform.Secrets, Shell, _session?.Status.NestUrl);
+        var window = new SettingsWindow(Nest, _platform.Secrets, Shell, _session?.Status.NestUrl);
+        window.SignIn.KeySlot = _settings.KeySlotFor(Nest); // signing in again to a nest that is not the first: its own key slot
         _signInWindow = window;
         bool? accepted;
         try
@@ -953,7 +1269,12 @@ public sealed class TrayController : ITrayActions, IDisposable
     {
         if (_window is null)
             return;
-        var view = new SettingsView(_settings, _platform.Secrets, _updates, _session?.Status.ServerVersionText);
+        var picked = Nest;
+        var view = new SettingsView(picked, _platform.Secrets, _updates, _session?.Status.ServerVersionText,
+            NestNames.Title(picked, _settings, _session?.Status), _runs.Count, folder => _settings.FolderProblem(folder, picked.NestId))
+        {
+            KeySlot = _settings.KeySlotFor(picked),
+        };
         view.Saved += v =>
         {
             ApplySettings(v.Result!, v.PlainToken);
@@ -961,6 +1282,8 @@ public sealed class TrayController : ITrayActions, IDisposable
         };
         view.SwitchesChanged += ApplySwitches;
         view.ResetRequested += ResetEverything;
+        view.LeaveNestRequested += LeaveNest;
+        view.AddNestRequested += AddNest;
         view.ShowDevicesRequested += () => _window?.Navigate(MainPage.Devices);
         view.ReportBugRequested += () => ReportBug();
         view.OpenLinkRequested += Shell;
@@ -977,6 +1300,13 @@ public sealed class TrayController : ITrayActions, IDisposable
     {
         var before = _settings;
         var next = SettingsSwitches.WithSwitchesFrom(_settings, fromPage);
+        // "Update the nest by itself" is the picked nest's own: it goes to that nest, not to the first one.
+        next.AutoUpdateServer = before.AutoUpdateServer;
+        if (next.ForNest(Nest.NestId) is { } picked)
+        {
+            picked.AutoUpdateServer = fromPage.AutoUpdateServer;
+            next.PutNest(picked);
+        }
         _settings = next;
         _fileLog.Minimum = _settings.DebugMode ? LogLevel.Debug : LogLevel.Information;
         SettingsStore.Save(_env.SettingsPath, _settings);
@@ -984,16 +1314,19 @@ public sealed class TrayController : ITrayActions, IDisposable
             SetAutoStart(next.StartWithWindows);
         if (before.CheckForUpdates != next.CheckForUpdates)
             _updates.SetEnabled(next.CheckForUpdates);
-        if (_session is { } session)
+        foreach (var run in _runs)
+            run.Settings = _settings.ForNest(run.Id) ?? run.Settings;
+        if (_runs.Any(r => r.Session is not null))
         {
             if (SettingsSwitches.NeedsNewSession(before, next))
-                StartSession(null); // also puts Pairnets in the file manager, or takes it away
+                StartAll(); // also puts Pairnets in the file manager, or takes it away
             else
             {
                 if (SettingsSwitches.LimitsChanged(before, next))
                 {
-                    session.Api.UploadLimit.SetMegabytesPerSecond(next.UploadLimitMBps);
-                    session.Api.DownloadLimit.SetMegabytesPerSecond(next.DownloadLimitMBps);
+                    // One limit for every nest: their connections share it.
+                    _limits.Upload.SetMegabytesPerSecond(next.UploadLimitMBps);
+                    _limits.Download.SetMegabytesPerSecond(next.DownloadLimitMBps);
                 }
                 if (SettingsSwitches.FileManagerChanged(before, next))
                     UpdateExplorerEntry();
@@ -1002,14 +1335,45 @@ public sealed class TrayController : ITrayActions, IDisposable
         _dirty = true;
     }
 
+    /// <summary>
+    /// Settings from the sign-in window or the Settings page's Save: one nest's (signed in again, a new address or folder)
+    /// with the app-wide values. With no nest yet they become the first; otherwise only that nest restarts.
+    /// </summary>
     private void ApplySettings(ClientSettings settings, string? plainToken)
     {
-        _settings = settings;
+        if (!_settings.HasFirstNest || _runs.Count == 0)
+        {
+            settings.OtherNests = [.. _settings.OtherNests.Select(n => n.Clone())];
+            _settings = settings;
+        }
+        else
+        {
+            var nestOnly = settings.Clone();
+            _settings = SettingsSwitches.WithSwitchesFrom(_settings, settings);
+            _settings.StartWithWindows = settings.StartWithWindows;
+            _settings.FirstRunCompleted = settings.FirstRunCompleted;
+            if (!_settings.PutNest(nestOnly))
+                _settings.AddNest(nestOnly);
+        }
+        _settings.EnsureNestIds();
         _fileLog.Minimum = _settings.DebugMode ? LogLevel.Debug : LogLevel.Information;
         SettingsStore.Save(_env.SettingsPath, _settings);
         SetAutoStart(_settings.StartWithWindows);
         _updates.SetEnabled(_settings.CheckForUpdates);
-        StartSession(plainToken);
+        _limits.Upload.SetMegabytesPerSecond(_settings.UploadLimitMBps);
+        _limits.Download.SetMegabytesPerSecond(_settings.DownloadLimitMBps);
+        if (_runs.FirstOrDefault(r => r.Id == settings.NestId) is { } run)
+            StartNest(run, plainToken);
+        else if (plainToken is not null && _settings.Nests().Count == 1)
+        {
+            StopAll();
+            var first = new NestRun(_settings.ForNest(_settings.NestId)!);
+            _runs.Add(first);
+            StartNest(first, plainToken);
+            UpdateExplorerEntry();
+        }
+        else
+            StartAll();
     }
 
     // ------------------------------------------------------------------ updates and the server
@@ -1136,31 +1500,31 @@ public sealed class TrayController : ITrayActions, IDisposable
     /// <summary>The main window's "Update server" / "Check for update" button (works even when the prompt was skipped).</summary>
     public void UpdateServer()
     {
-        if (_session is { } session && session.Status.Server is { } info)
-            ShowServerUpdate(info.ServerVersion ?? string.Empty, null);
+        if (Current is { Session: { } session } run && session.Status.Server is { } info)
+            ShowServerUpdate(run, info.ServerVersion ?? string.Empty, null);
     }
 
-    private void OnServerInfo(ClientSession session, Core.ServerInfo info)
+    private void OnServerInfo(NestRun run, ClientSession session, Core.ServerInfo info)
     {
-        if (!ReferenceEquals(session, _session))
+        if (!ReferenceEquals(session, run.Session))
             return;
-        if (session.Status.ServerSpaceLow && !_lowSpaceNoticed)
+        if (session.Status.ServerSpaceLow && !run.LowSpaceNoticed)
         {
-            _lowSpaceNoticed = true;
-            Toast("disk", "Your nest is running out of space", $"{session.Status.ServerFreeText}. Free up space on your nest or delete old history.", Forms.ToolTipIcon.Warning, ShowMainWindow);
+            run.LowSpaceNoticed = true;
+            Toast("disk", PrefixOf(run) + "Your nest is running out of space", $"{session.Status.ServerFreeText}. Free up space on your nest or delete old history.", Forms.ToolTipIcon.Warning, () => ShowNest(run), run);
         }
-        if (!session.ServerNeedsUpdate(info) || _serverPromptShownFor == info.ServerVersion)
+        if (!session.ServerNeedsUpdate(info) || run.ServerPromptShownFor == info.ServerVersion)
             return;
-        _serverPromptShownFor = info.ServerVersion;
-        if (_settings.AutoUpdateServer)
+        run.ServerPromptShownFor = info.ServerVersion;
+        if (run.Settings.AutoUpdateServer)
         {
-            UpdateServerQuietly(session, info.ServerVersion!);
+            UpdateServerQuietly(run, session, info.ServerVersion!);
             return;
         }
-        ShowServerUpdate(info.ServerVersion!, null);
+        ShowServerUpdate(run, info.ServerVersion!, null);
     }
 
-    private async void UpdateServerQuietly(ClientSession session, string serverVersion)
+    private async void UpdateServerQuietly(NestRun run, ClientSession session, string serverVersion)
     {
         ServerUpdateResult result;
         try
@@ -1174,31 +1538,39 @@ public sealed class TrayController : ITrayActions, IDisposable
         }
         _dirty = true;
         if (result.Success && !result.AlreadyUpToDate)
-            Toast("server-updated", "Server updated", $"Your server now runs {result.ServerVersion}.", Forms.ToolTipIcon.Info, ShowMainWindow);
+            Toast("server-updated", PrefixOf(run) + "Server updated", $"Your server now runs {result.ServerVersion}.", Forms.ToolTipIcon.Info, () => ShowNest(run), run);
         else if (!result.CanUpdateItself)
-            ShowServerUpdate(serverVersion, result); // needs the one-time setup
+            ShowServerUpdate(run, serverVersion, result); // needs the one-time setup
     }
 
-    private void ShowServerUpdate(string serverVersion, ServerUpdateResult? result)
+    private void ShowServerUpdate(NestRun run, string serverVersion, ServerUpdateResult? result)
     {
-        var dialog = new ServerUpdateWindow(() => _session, serverVersion, debug: () => _settings.DebugMode); // saving Settings replaces the session
+        var dialog = new ServerUpdateWindow(() => run.Session, serverVersion, debug: () => _settings.DebugMode); // saving Settings replaces the session
         if (result is not null)
             dialog.ShowResult(result);
         dialog.Closed += (_, _) =>
         {
+            var nest = run.Settings;
             if (dialog.Skipped)
-                _settings.SkippedServerVersion = dialog.ServerVersion;
+                nest.SkippedServerVersion = dialog.ServerVersion;
             if (dialog.AlwaysUpdate)
-                _settings.AutoUpdateServer = true;
+                nest.AutoUpdateServer = true;
             if (dialog.Skipped || dialog.AlwaysUpdate)
-                SettingsStore.Save(_env.SettingsPath, _settings);
+                SaveNest(nest);
         };
         dialog.Show();
     }
 
+    /// <summary>Opens the picked nest's folder.</summary>
     public void OpenFolder()
     {
-        if (_settings.Folder is { } f && Directory.Exists(f))
+        if (Current is { } run)
+            OpenFolder(run);
+    }
+
+    private void OpenFolder(NestRun run)
+    {
+        if (run.Settings.Folder is { } f && Directory.Exists(f))
             Shell(f);
     }
 
@@ -1207,7 +1579,7 @@ public sealed class TrayController : ITrayActions, IDisposable
 
     void IMainActions.ShowSettings()
     {
-        if (!_settings.IsComplete || !_settings.FirstRunCompleted)
+        if (!AnyNestReady || !_settings.FirstRunCompleted)
             ShowSettings(firstRun: true);
         else
             ShowSettingsPage();
@@ -1222,11 +1594,11 @@ public sealed class TrayController : ITrayActions, IDisposable
     public void ReportBug(Exception error) => ShowBugReport(error);
 
     /// <summary>The names to take out of a crash card: this computer's and this app's (<see cref="PrivacyCleaner.ThisComputer(ClientSettings)"/>).</summary>
-    public IEnumerable<string?> PrivateValues() => PrivacyCleaner.ThisComputer(_settings);
+    public IEnumerable<string?> PrivateValues() => _settings.Nests().DefaultIfEmpty(_settings).SelectMany(PrivacyCleaner.ThisComputer).Distinct();
 
     private void ShowBugReport(Exception? error)
     {
-        var settings = _settings;
+        var settings = Nest;
         var session = _session;
         var window = new BugReportWindow(() => BugReport.BuildAsync(settings, session, _fileLog.CurrentFile, error, AppName, _env.CrashesDir), Shell,
             afterError: error is not null, logsDir: _env.LogsDir);
@@ -1234,7 +1606,7 @@ public sealed class TrayController : ITrayActions, IDisposable
         window.Activate();
     }
 
-    private string LocalPath(string syncPath) => Path.Combine(_settings.Folder ?? string.Empty, PathRules.ToOsRelative(syncPath));
+    private string LocalPath(string syncPath) => Path.Combine(Nest.Folder ?? string.Empty, PathRules.ToOsRelative(syncPath));
 
     public void RevealFile(string syncPath)
     {
@@ -1295,7 +1667,8 @@ public sealed class TrayController : ITrayActions, IDisposable
         if (e.Mode == PowerModes.Resume)
         {
             _log.LogInformation("Resumed from sleep: catching up");
-            _session?.Runner.NotifyResume();
+            foreach (var run in _runs)
+                run.Session?.Runner.NotifyResume();
         }
     }
 
@@ -1316,7 +1689,7 @@ public sealed class TrayController : ITrayActions, IDisposable
         _updates.Dispose();
         _refresh.Stop();
         SystemEvents.PowerModeChanged -= OnPowerModeChanged;
-        StopSession();
+        StopAll();
         _icon.Visible = false;
         _icon.Dispose();
     }

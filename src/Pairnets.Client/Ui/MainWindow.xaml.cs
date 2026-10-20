@@ -86,6 +86,21 @@ public interface IMainActions
     void OpenAccountSite()
     {
     }
+
+    /// <summary>A nest was picked in the nest list (null: "All nests").</summary>
+    void SelectNest(string? id)
+    {
+    }
+
+    /// <summary>"Add a nest": the sign-in window for one more nest.</summary>
+    void AddNest()
+    {
+    }
+
+    /// <summary>"Sync all now" on the All nests page.</summary>
+    void SyncAll()
+    {
+    }
 }
 
 /// <summary>
@@ -251,9 +266,14 @@ public partial class MainWindow : Window, IPageHost
         PageSubtitle.Visibility = Show(PageSubtitle.Text.Length > 0);
         // The pages draw their own header; the shared one belongs to the Overview.
         PageHeader.Visibility = Show(page == MainPage.Overview);
+        DrawPageNest();
+        var allNests = page == MainPage.Overview && ShowsAllNests;
+        if (allNests)
+            PageTitle.Text = "All nests";
+        AllNestsPage.Visibility = Show(allNests);
         foreach (var (element, shown) in new (FrameworkElement, MainPage)[]
                  {
-                     (OverviewPage, MainPage.Overview), (ActivityPage, MainPage.Activity), (HistoryPage, MainPage.History),
+                     (OverviewPage, allNests ? (MainPage)(-1) : MainPage.Overview), (ActivityPage, MainPage.Activity), (HistoryPage, MainPage.History),
                      (DevicesPage, MainPage.Devices), (AttentionPage, MainPage.Attention), (SettingsPage, MainPage.Settings),
                      (AccountPage, MainPage.Account),
                  })
@@ -301,7 +321,7 @@ public partial class MainWindow : Window, IPageHost
             AccountPage.Show(s, ThisDevice, null);
         if (folder is not null)
             ActivityPage.Folder = folder;
-        PauseText.Text = s.Paused ? "Resume" : "Pause";
+        PauseText.Text = _nests is { Visible: true } ? (s.Paused ? "Resume all" : "Pause all") : s.Paused ? "Resume" : "Pause"; // pausing is for every nest
         PauseGlyph.Data = Visuals.Resource<Geometry>(s.Paused ? "I.Play" : "I.Pause");
         RefreshOverview();
     }

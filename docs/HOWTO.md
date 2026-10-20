@@ -582,6 +582,26 @@ You do not have to do anything. Just work in the folder on whichever PC you are 
 | **Start with Windows / Start at login** | start Pairnets automatically when you sign in |
 | **Exit / Quit Pairnets** | quit Pairnets. Nothing syncs until you start it again. |
 
+With several nests the menu also lists each nest with its colour and state (click one to open Pairnets on it),
+**Sync all now**, **Open folder ›** with each nest's folder, **Add a nest…** and **Pause all / Resume all**.
+
+### Several nests on one computer
+
+One Pairnets can sync more than one nest: your own, a friend's, or one from work. Each nest gets its own folder,
+and files never move between nests.
+
+* **Add one:** Settings › **Add a nest…** (or **Add a nest** at the top of the left side once you have two, or in the
+  icon menu). Sign in as usual; the browser page shows the nests this computer already has as "already on this
+  computer", so you pick another. On the last step choose this computer's name in that nest and its folder: by
+  default `Pairnets\<nest name>` in your home folder. A folder can't be another nest's, or inside or around one.
+* **See them:** with two nests or more the left side lists **All nests** and each nest. Pick a nest and every page
+  shows that nest; **All nests** shows a card for each. The tray icon takes the colour of the nest that needs you
+  most (red, orange, grey, yellow, blue, then green).
+* **For all nests at once:** pausing, the speed limits (one limit shared by all nests), notifications and starting
+  with Windows. A notice says which nest it is about.
+* **Leave one:** open the nest, then Settings › **Leave <nest> on this PC…**. This computer is signed out of that
+  nest and stops syncing it; the files stay in its folder and on the nest. Your other nests keep syncing.
+
 ---
 
 ### The emails your nest sends

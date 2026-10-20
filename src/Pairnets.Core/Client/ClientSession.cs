@@ -378,9 +378,10 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
 
     /// <summary>Builds and starts a session. <paramref name="runnerOptions"/> overrides timings (tests).</summary>
     /// <param name="serviceUrl">The Pairnets service whose relay addresses mean "signed in with an account" (tests; by default sync.pairnets.app).</param>
+    /// <param name="limits">Speed limits shared with the app's other nests (null: this session's own).</param>
     public static ClientSession Start(ClientSettings settings, string token, ILocalTrash trash, ILoggerFactory? loggers = null,
         string? stateBaseDir = null, Func<RunnerOptions, RunnerOptions>? runnerOptions = null, TimeProvider? clock = null,
-        EngineHooks? hooks = null, Uri? serviceUrl = null, ICloudFiles? cloudFiles = null)
+        EngineHooks? hooks = null, Uri? serviceUrl = null, ICloudFiles? cloudFiles = null, SpeedLimits? limits = null)
     {
         if (!settings.IsComplete)
             throw new InvalidOperationException("Settings are incomplete.");
@@ -392,6 +393,8 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
         state.SetMeta(StateDb.MetaFolder, Path.GetFullPath(folder));
         var url = new Uri(settings.ServerUrl!);
         var api = new PairnetsApiClient(url, token, settings.DeviceName!, serviceUrl: serviceUrl);
+        if (limits is not null)
+            api.ShareLimits(limits.Upload, limits.Download); // one limit for every nest this app syncs
         api.UploadLimit.SetMegabytesPerSecond(settings.UploadLimitMBps);
         api.DownloadLimit.SetMegabytesPerSecond(settings.DownloadLimitMBps);
         var engine = new SyncEngine(new EngineOptions
@@ -415,6 +418,7 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
             IsRelay = api.IsRelay,
             AccountEmail = string.IsNullOrWhiteSpace(settings.AccountEmail) ? null : settings.AccountEmail,
             ServerUrl = string.IsNullOrWhiteSpace(settings.ServerUrl) ? null : settings.ServerUrl,
+            NestLabel = settings.NestLabel,
         };
         if (settings.Paused)
             runner.Pause(); // before it starts, so a paused app never begins a pass

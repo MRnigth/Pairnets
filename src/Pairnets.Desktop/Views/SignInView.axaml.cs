@@ -45,6 +45,7 @@ internal enum SignInStep
 public partial class SignInView : UserControl
 {
     private readonly ClientSettings _current;
+    private readonly NestAdding? _adding;
     private readonly ISecretProtector? _protector;
     private readonly Action<string> _openUrl;
     private readonly DispatcherTimer _clock = new() { Interval = TimeSpan.FromSeconds(1) };
@@ -69,10 +70,12 @@ public partial class SignInView : UserControl
     {
     }
 
-    public SignInView(ClientSettings current, ISecretProtector? protector, bool autoStart, Action<string> openUrl, string? nestHint = null)
+    /// <param name="adding">Set when this signs in to one more nest ("Add a nest"); <paramref name="current"/> is then the new nest's blank settings.</param>
+    public SignInView(ClientSettings current, ISecretProtector? protector, bool autoStart, Action<string> openUrl, string? nestHint = null, NestAdding? adding = null)
     {
         InitializeComponent();
         _current = current;
+        _adding = adding;
         _protector = protector;
         _openUrl = openUrl;
         FolderBox.Text = current.Folder ?? string.Empty;
@@ -121,6 +124,9 @@ public partial class SignInView : UserControl
 
     /// <summary>Signed in and a folder chosen: the settings to save (key protected) and the plain key for this session.</summary>
     public event Action<ClientSettings, string>? SignedIn;
+
+    /// <summary>Where the key goes when signing in again to a nest that is not the first (Mac, Linux): see <see cref="ClientSettings.KeySlotFor"/>.</summary>
+    public string? KeySlot { get; set; }
 
     /// <summary>The Pairnets service to sign in with (tests use a stand-in); by default sync.pairnets.app.</summary>
     internal Uri? Service { get; set; }
@@ -391,7 +397,7 @@ public partial class SignInView : UserControl
         _accountStop?.Cancel();
         var stop = _accountStop = new CancellationTokenSource();
         _accountBrowserOpened = false;
-        var flow = new AccountSignIn(ThisName(), method, Service, interval: AccountPollInterval, email: email);
+        var flow = new AccountSignIn(ThisName(), method, Service, interval: AccountPollInterval, email: email, joined: _adding?.Joined);
         flow.Changed += s => Dispatcher.UIThread.Post(() =>
         {
             if (!stop.IsCancellationRequested)
@@ -692,6 +698,30 @@ public partial class SignInView : UserControl
         _nest = nest;
         ShowStep(SignInStep.Folder);
         SignedInText.Text = $"✓ Signed in as {grant.Name}" + (nest is null ? string.Empty : $" on {nest.Host}");
+        DrawNestChoices(grant, nest?.Host ?? "your nest", nest);
+    }
+
+    /// <summary>
+    /// The name this computer gets in the nest (it starts as the name the nest recorded), and, when adding a nest, its own
+    /// folder: Pairnets/&lt;nest name&gt;, and a warning when this computer already syncs that nest.
+    /// </summary>
+    private void DrawNestChoices(DeviceKeyGrant grant, string nestName, Uri? nest)
+    {
+        NameBox.Text = grant.Name;
+        NameLabel.Text = $"This computer's name in {nestName}";
+        Avalonia.Automation.AutomationProperties.SetName(NameBox, NameLabel.Text);
+        ShowFolderProblem(null);
+        if (_adding is null)
+            return;
+        FolderBox.Text = _adding.SuggestedFolder(nestName);
+        if (nest is not null && _adding.AlreadySynced(nest) is { } same)
+            ShowFolderProblem($"This computer already syncs {same}. Go back and pick another nest.");
+    }
+
+    private void ShowFolderProblem(string? problem)
+    {
+        FolderProblemBox.IsVisible = problem is not null;
+        FolderProblemText.Text = problem ?? string.Empty;
     }
 
     /// <summary>Signed in with the account: on to the folder, for the nest the account chose.</summary>
@@ -700,6 +730,7 @@ public partial class SignInView : UserControl
         ShowFolderStep(result.Device, result.ServerUrl);
         _accountResult = result;
         SignedInText.Text = $"✓ Signed in as {result.Device.Name} on {result.NestLabel}";
+        DrawNestChoices(result.Device, result.NestLabel, result.ServerUrl);
     }
 
     /// <summary>The folder field (screenshot test).</summary>
@@ -727,6 +758,12 @@ public partial class SignInView : UserControl
             await Dialogs.InfoAsync(Owner, "Pairnets", "Choose the folder to keep in sync.");
             return;
         }
+        var problem = _adding?.AlreadySynced(nest) is { } same
+            ? $"This computer already syncs {same}. Go back and pick another nest."
+            : _adding?.FolderProblem(folder);
+        ShowFolderProblem(problem);
+        if (problem is not null)
+            return;
         StartButton.IsEnabled = false;
         try
         {
@@ -736,9 +773,10 @@ public partial class SignInView : UserControl
                     return;
                 Directory.CreateDirectory(folder);
             }
+            using var api = new PairnetsApiClient(nest, grant.Key, grant.Name);
+            grant = await RenameIfAsked(api, grant);
             try
             {
-                using var api = new PairnetsApiClient(nest, grant.Key, grant.Name);
                 var preview = await FirstSyncPreview.ComputeAsync(folder, new IgnoreList(_current.ExtraIgnore), api, CancellationToken.None);
                 if (preview.IsMerge && !await Dialogs.ConfirmAsync(Owner, "Pairnets – merge folders",
                         $"This folder has {preview.LocalFiles} file(s) and your nest has {preview.ServerFiles}.\n\n{FirstSyncPreview.MergeExplanation}\n\nContinue?"))
@@ -748,7 +786,7 @@ public partial class SignInView : UserControl
             {
                 // The preview is a courtesy; syncing itself never deletes or overwrites on a first pass.
             }
-            var protectedKey = _protector?.Protect(grant.Key) ?? throw new PlainMessageException("No secret store to keep this computer's key in.");
+            var protectedKey = _protector?.Protect(grant.Key, _adding?.KeySlot ?? KeySlot) ?? throw new PlainMessageException("No secret store to keep this computer's key in.");
             var startAtLogin = AutoStartBox.IsChecked == true;
             var settings = _accountResult is { } account
                 ? AccountSignIn.SettingsAfterSignIn(_current, account, folder, startAtLogin, protectedKey)
@@ -762,6 +800,24 @@ public partial class SignInView : UserControl
         finally
         {
             StartButton.IsEnabled = true;
+        }
+    }
+
+    /// <summary>A new name typed for this computer: the nest renames it (and may add " (2)"); when it can't, the name stays.</summary>
+    private async Task<DeviceKeyGrant> RenameIfAsked(PairnetsApiClient api, DeviceKeyGrant grant)
+    {
+        var wanted = ComputerName.Clean(NameBox.Text);
+        if (wanted.Length == 0 || wanted == grant.Name)
+            return grant;
+        try
+        {
+            var me = await api.RenameThisDeviceAsync(wanted, CancellationToken.None);
+            return grant with { Name = me.Name };
+        }
+        catch (Exception ex) when (ex is PairnetsNetworkException or PairnetsProtocolException or PairnetsAuthException)
+        {
+            await Dialogs.InfoAsync(Owner, "Pairnets", $"Your nest could not rename this computer, so it stays {grant.Name}. You can rename it later on the Account page.");
+            return grant;
         }
     }
 }

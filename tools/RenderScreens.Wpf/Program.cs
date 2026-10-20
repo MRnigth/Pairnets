@@ -354,6 +354,21 @@ public static partial class Program
         if (window.MapOtherText != "LAPTOP: in sync")
             throw new InvalidOperationException("The overview's picture shows " + window.MapOtherText);
 
+        // Several nests: the nest list on the left with Home nest picked, then the All nests page.
+        var idle = StatusSnapshot.Initial with { Status = RunnerStatus.Idle, Text = "Up to date", LastSyncAt = now, Server = server, Devices = devices, NestLabel = "Home nest" };
+        var home = new ClientSettings { ServerUrl = "https://sync.pairnets.app/n/nst_aaaaaaaaaaaaaaaaaaaaaaaaaa/", ProtectedToken = "x", Folder = folder, DeviceName = "DESKTOP", NestLabel = "Home nest" };
+        var work = home.BlankNest();
+        (work.ServerUrl, work.ProtectedToken, work.Folder, work.DeviceName, work.NestLabel) = ("https://sync.pairnets.app/n/nst_bbbbbbbbbbbbbbbbbbbbbbbbbb/", "x", @"D:\Work", "DESKTOP-WORK", "Work nest");
+        home.AddNest(work);
+        var both = home.Nests();
+        var workSyncing = StatusSnapshot.Initial with { Status = RunnerStatus.Syncing, Text = "Syncing", PassBytesDone = 40, PassBytesTotal = 100, LastSyncAt = now };
+        window.ShowNests(NestListModel.Build(home, [(both[0], idle), (both[1], workSyncing)], both[0].NestId));
+        window.ShowStatus(idle, folder, "DESKTOP");
+        Save(window, outDir, $"windows-main-nests-{suffix}.png", print);
+        window.ShowNests(NestListModel.Build(home, [(both[0], idle), (both[1], workSyncing)], null));
+        Save(window, outDir, $"windows-all-nests-{suffix}.png", print);
+        window.ShowNests(NestListModel.Build(both[0], [(both[0], idle)], both[0].NestId)); // back to one nest
+
         window.ShowStatus(StatusSnapshot.Initial with
         {
             Status = RunnerStatus.Idle, Text = "Up to date", LastSyncAt = now.AddMinutes(-4), Server = server, Devices = devices,
