@@ -418,7 +418,9 @@ place_healthy() {
 place_copy() { # place_copy <source> <target> <from%> <to%> exact|live [extra rsync options]
   local src="$1" dst="$2" from="$3" to="$4" mode="$5" rc tr_cmd=(tr '\r' '\n')
   shift 5
-  local -a opts=(-aHAX --numeric-ids --exclude=/update/place-status.json --exclude=/update/place-request --exclude=/update/drives.json "$@")
+  # The apps' status files (and their .tmp while being written) change during the move: they are not the nest's files.
+  local -a opts=(-aHAX --numeric-ids --exclude=/update/place-status.json --exclude=/update/place-status.json.tmp
+    --exclude=/update/place-request --exclude=/update/drives.json --exclude=/update/drives.json.tmp "$@")
   if command -v stdbuf >/dev/null; then tr_cmd=(stdbuf -oL tr '\r' '\n'); fi
   set +e
   rsync "${opts[@]}" --info=progress2 --no-inc-recursive "$src/" "$dst/" 2>"$PLACE_WORK/rsync.err" | "${tr_cmd[@]}" |
@@ -437,8 +439,9 @@ place_copy() { # place_copy <source> <target> <from%> <to%> exact|live [extra rs
     return 1
   fi
   [[ "$mode" == exact ]] || return 0
-  # Nothing may differ any more (rsync already checked every file it copied against its checksum).
-  [[ -z "$(rsync "${opts[@]}" -n --itemize-changes "$src/" "$dst/" 2>&1)" ]]
+  # Nothing may differ any more (rsync already checked every file it copied against its checksum). Folder times are
+  # left out: writing the status file for the apps touches the update folder's time while this runs.
+  [[ -z "$(rsync "${opts[@]}" -n --omit-dir-times --itemize-changes "$src/" "$dst/" 2>&1)" ]]
 }
 
 # place_move <kind> <folder> [yes]: copy, check, switch over, start, check health; rolls back on failure.
