@@ -182,3 +182,8 @@ report=<path of report.txt>
 
 A failed box is kept for a look (`wsl -d pairnets-test`, or `pairnets-test-b` for phase B after a failed
 phase A); `-KeepBox` keeps it after a pass too. `scripts\wsl-testbox.ps1 -Remove [-Name ...]` throws it away.
+
+## After the release: archive it
+
+The rolling "Latest build" is replaced on every push to `main`, so after each release run the archive script to
+keep that version on file in `%USERPROFILE%\Pairnets\versions\<version>\`. How: [VERSION-ARCHIVE.md](VERSION-ARCHIVE.md).
