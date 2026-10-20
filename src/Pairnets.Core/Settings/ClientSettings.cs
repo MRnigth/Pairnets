@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using Pairnets.Core.Sync;
 
 namespace Pairnets.Core.Settings;
 
@@ -64,10 +65,37 @@ public sealed class ClientSettings
     public bool ShowInFileManager { get; set; } = true;
 
     /// <summary>
+    /// "Open in Pairnets", "Show sync status" and "Where this folder lives…" when right-clicking inside the Pairnets
+    /// folder (Windows Explorer; the Linux file managers' Pairnets items).
+    /// </summary>
+    public bool ExplorerRightClick { get; set; } = true;
+
+    /// <summary>The installer's choices this computer already took in (<see cref="SetupChoices"/>), by the id it gave them.</summary>
+    public string? SetupChoicesApplied { get; set; }
+
+    /// <summary>
     /// Windows only, opt-in: the Pairnets folder as a Windows cloud folder (like OneDrive), with a tick, sync arrows or a
     /// cloud on every file, and with <see cref="CloudFolderMode.OnDemand"/> files that stay on the nest until opened.
     /// </summary>
     public CloudFolderMode CloudFolder { get; set; } = CloudFolderMode.Off;
+
+    /// <summary>
+    /// "Where your files live": folder of the Pairnets folder ("Photos/2024", "" for all of it) → where its files are on
+    /// this computer. Folders not listed take the choice of the folder above them; with none, every file is here. Kept
+    /// per computer: it never reaches the nest or another computer.
+    /// </summary>
+    public Dictionary<string, FilePlacement> Placement { get; set; } = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// How the folder works with Windows' cloud files: Files On-Demand while some folder's files stay on the nest until
+    /// opened, else the ticks switch (<see cref="CloudFolder"/>: off, or ticks with everything here).
+    /// </summary>
+    public CloudFolderMode CloudFolderWanted =>
+        Placement.ContainsValue(FilePlacement.OnDemand) ? CloudFolderMode.OnDemand
+        : CloudFolder == CloudFolderMode.Off ? CloudFolderMode.Off : CloudFolderMode.KeepAllHere;
+
+    /// <summary><see cref="Placement"/> for the engine; On-Demand counts as "on this PC" where it can't work.</summary>
+    public PlacementMap PlacementMap(bool onDemandWorks) => new(Placement, onDemandWorks);
 
     /// <summary>Show the speed (MB/s) on the lines of the overview's picture while files move.</summary>
     public bool ShowMapSpeed { get; set; } = true;
@@ -131,6 +159,7 @@ public sealed class ClientSettings
     {
         var copy = (ClientSettings)MemberwiseClone();
         copy.ExtraIgnore = [.. ExtraIgnore];
+        copy.Placement = new Dictionary<string, FilePlacement>(Placement, StringComparer.Ordinal);
         return copy;
     }
 }
@@ -177,7 +206,11 @@ public static class SettingsStore
             return new ClientSettings();
         try
         {
-            return JsonSerializer.Deserialize<ClientSettings>(File.ReadAllText(path), Json) ?? new ClientSettings();
+            var settings = JsonSerializer.Deserialize<ClientSettings>(File.ReadAllText(path), Json) ?? new ClientSettings();
+            settings.Placement = settings.Placement is null
+                ? new(StringComparer.Ordinal)
+                : new(settings.Placement, StringComparer.Ordinal);
+            return settings;
         }
         catch (JsonException)
         {

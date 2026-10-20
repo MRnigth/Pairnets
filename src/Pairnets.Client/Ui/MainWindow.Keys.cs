@@ -17,7 +17,7 @@ public partial class MainWindow
         foreach (var (dock, action) in new (RadioButton, ShortcutAction)[]
                  {
                      (DockOverview, ShortcutAction.PageOverview), (DockActivity, ShortcutAction.PageActivity), (DockAttention, ShortcutAction.PageNeedsYou),
-                     (DockHistory, ShortcutAction.PageHistory), (DockDevices, ShortcutAction.PageDevices), (DockSettings, ShortcutAction.PageSettings),
+                     (DockFiles, ShortcutAction.PageFiles), (DockDevices, ShortcutAction.PageDevices), (DockSettings, ShortcutAction.PageSettings),
                  })
         {
             if (dock.ToolTip is string tip)
@@ -47,6 +47,7 @@ public partial class MainWindow
                 var box = Page switch
                 {
                     MainPage.Activity => ActivityPage.Search,
+                    MainPage.Files => NestFilesPage.FilesSearch,
                     MainPage.History => HistoryPage.HistorySearch,
                     _ => null,
                 };
@@ -72,8 +73,8 @@ public partial class MainWindow
             case ShortcutAction.PageNeedsYou:
                 GoTo(MainPage.Attention);
                 return true;
-            case ShortcutAction.PageHistory:
-                GoTo(MainPage.History);
+            case ShortcutAction.PageFiles:
+                GoTo(MainPage.Files);
                 return true;
             case ShortcutAction.PageDevices:
                 GoTo(MainPage.Devices);

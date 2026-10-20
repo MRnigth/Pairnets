@@ -26,6 +26,12 @@ public enum SyncAction
 
     /// <summary>Deleted here and untouched on the server: delete it on the server.</summary>
     DeleteRemote,
+
+    /// <summary>
+    /// A folder whose files live on the nest only: the copy here is safely on the nest (or an untouched older version),
+    /// so it is removed to free the space. Never a deletion: nothing changes on the nest. Not returned by <see cref="SyncDecision.Decide"/>.
+    /// </summary>
+    Evict,
 }
 
 /// <summary>

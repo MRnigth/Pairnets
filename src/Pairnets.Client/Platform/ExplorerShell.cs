@@ -17,8 +17,8 @@ public sealed record ExplorerEntry(string Folder, string ExePath, string AppIcon
 /// admin rights are needed and nothing changes for other people on the PC:
 /// <list type="bullet">
 /// <item>"Pairnets" with its icon in the left side, under OneDrive (a shell folder that points at the Pairnets folder);</item>
-/// <item>"Open in Pairnets" and "Show sync status" when right-clicking files and folders in the Pairnets folder
-/// (Windows 11 lists them under "Show more options");</item>
+/// <item>"Open in Pairnets" and "Show sync status" when right-clicking files and folders in the Pairnets folder, and
+/// "Where this folder lives…" on its folders (Windows 11 lists them under "Show more options");</item>
 /// <item>the blue Pairnets folder icon on the folder (a hidden desktop.ini, which Pairnets never syncs).</item>
 /// </list>
 /// None of it touches the files. <see cref="Remove"/> takes it all away again (the uninstaller runs it).
@@ -38,6 +38,10 @@ public static class ExplorerShell
 
     private const string OpenVerb = "Pairnets.Open";
     private const string StatusVerb = "Pairnets.Status";
+    private const string WhereVerb = "Pairnets.Where";
+
+    /// <summary>"Where this folder lives…": on folders only.</summary>
+    private const string FolderVerbParent = @"Classes\Directory\shell";
 
     /// <summary>First line of the desktop.ini Pairnets writes, so it never takes away one it did not write.</summary>
     public const string DesktopIniMark = "; Pairnets folder icon. Removed again when Pairnets leaves Explorer.";
@@ -50,7 +54,9 @@ public static class ExplorerShell
     /// False while the folder is a Windows cloud folder: Windows then shows it in the left side by itself, and a second
     /// "Pairnets" there would be one too many.
     /// </param>
-    public static bool Apply(RegistryKey software, ExplorerEntry entry, bool leftSide = true)
+    /// <param name="rightClick">False: no right-click items (the person turned them off at install or in Settings).</param>
+    /// <param name="folderIcon">False: the folder keeps its plain icon.</param>
+    public static bool Apply(RegistryKey software, ExplorerEntry entry, bool leftSide = true, bool rightClick = true, bool folderIcon = true)
     {
         var folder = Path.TrimEndingDirectorySeparator(Path.GetFullPath(entry.Folder));
         if (leftSide)
@@ -58,10 +64,25 @@ public static class ExplorerShell
         else
             RemoveLeftSide(software);
 
-        foreach (var parent in VerbParents)
+        using (var own = software.CreateSubKey(OwnKey))
+            own.SetValue(FolderValue, folder);
+        if (rightClick)
         {
-            AddVerb(software, parent + BS + OpenVerb, "Open in Pairnets", entry, folder, FileManagerCommand.OpenArgument);
-            AddVerb(software, parent + BS + StatusVerb, "Show sync status", entry, folder, FileManagerCommand.StatusArgument);
+            foreach (var parent in VerbParents)
+            {
+                AddVerb(software, parent + BS + OpenVerb, "Open in Pairnets", entry, folder, FileManagerCommand.OpenArgument);
+                AddVerb(software, parent + BS + StatusVerb, "Show sync status", entry, folder, FileManagerCommand.StatusArgument);
+            }
+            AddVerb(software, FolderVerbParent + BS + WhereVerb, "Where this folder lives…", entry, folder, FileManagerCommand.WhereArgument);
+        }
+        else
+        {
+            RemoveVerbs(software);
+        }
+        if (!folderIcon)
+        {
+            RemoveFolderIcon(folder);
+            return true;
         }
         return SetFolderIcon(folder, entry.FolderIcon);
     }
@@ -131,21 +152,36 @@ public static class ExplorerShell
     public static void Remove(RegistryKey software, string? folder)
     {
         RemoveLeftSide(software);
-        foreach (var parent in VerbParents)
-        {
-            software.DeleteSubKeyTree(parent + @"\" + OpenVerb, throwOnMissingSubKey: false);
-            software.DeleteSubKeyTree(parent + @"\" + StatusVerb, throwOnMissingSubKey: false);
-        }
+        RemoveVerbs(software);
+        software.DeleteSubKeyTree(OwnKey, throwOnMissingSubKey: false);
         if (!string.IsNullOrWhiteSpace(folder))
             RemoveFolderIcon(folder);
     }
 
-    /// <summary>The folder Pairnets is in Explorer for (its right-click items), or null when Pairnets is not in Explorer.</summary>
+    private static void RemoveVerbs(RegistryKey software)
+    {
+        foreach (var parent in VerbParents)
+        {
+            software.DeleteSubKeyTree(parent + BS + OpenVerb, throwOnMissingSubKey: false);
+            software.DeleteSubKeyTree(parent + BS + StatusVerb, throwOnMissingSubKey: false);
+        }
+        software.DeleteSubKeyTree(FolderVerbParent + BS + WhereVerb, throwOnMissingSubKey: false);
+    }
+
+    /// <summary>The folder Pairnets is in Explorer for, or null when Pairnets is not in Explorer.</summary>
     public static string? RegisteredFolder(RegistryKey software)
     {
-        using var verb = software.OpenSubKey(VerbParents[0] + BS + OpenVerb);
+        using (var own = software.OpenSubKey(OwnKey))
+        {
+            if (own?.GetValue(FolderValue) is string folder)
+                return folder;
+        }
+        using var verb = software.OpenSubKey(VerbParents[0] + BS + OpenVerb); // put there by versions before 1.0.60
         return verb?.GetValue(FolderValue) as string;
     }
+
+    /// <summary>Pairnets' own key, which remembers the folder also when there are no right-click items.</summary>
+    private const string OwnKey = @"Pairnets\Explorer";
 
     /// <summary>The folder the right-click items are for, kept next to them (AppliesTo is a search and hard to read back).</summary>
     private const string FolderValue = "PairnetsFolder";

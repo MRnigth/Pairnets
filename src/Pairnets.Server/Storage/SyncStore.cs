@@ -299,6 +299,148 @@ public sealed class SyncStore : IDisposable
         }
     }
 
+    /// <summary>
+    /// Moves or renames a file on the nest (the apps' Files page): <paramref name="to"/>, which must not exist, gets the
+    /// content of <paramref name="from"/>, then <paramref name="from"/> is deleted as by <see cref="DeleteAsync"/> (its
+    /// version goes to history). Computers see a new file and a deleted one. Nothing changes when <paramref name="from"/>
+    /// is no longer the version <paramref name="baseValue"/>. Returns the new file's entry.
+    /// </summary>
+    public async Task<ChangeResult> MoveAsync(string from, string to, string baseValue, CancellationToken ct)
+    {
+        if (!PathRules.IsValid(from))
+            return new ChangeResult(ChangeStatus.InvalidName, null, "Invalid path.");
+        var problem = PathRules.Check(to);
+        if (problem != PathProblem.None)
+            return new ChangeResult(ChangeStatus.InvalidName, null, $"Invalid new name: {problem}.");
+        if (!TryParseBase(baseValue, out var expectedBase) || expectedBase is null)
+            return new ChangeResult(ChangeStatus.BadRequest, null, "base must be the file's SHA-256 hash.");
+        if (PathRules.CaseKey(from) == PathRules.CaseKey(to))
+            return new ChangeResult(ChangeStatus.BadRequest, null, "The new name must differ by more than letter case.");
+
+        var current = Manifest.Get(from);
+        if (current is not { Deleted: false })
+            return new ChangeResult(ChangeStatus.NotFound, null, "No such file.");
+        if (!string.Equals(current.Hash, expectedBase, StringComparison.Ordinal))
+            return new ChangeResult(ChangeStatus.Conflict, null, "The file changed on the server since your last sync.");
+        var source = ResolveFilesPath(from);
+        if (source is null || !File.Exists(source))
+            return new ChangeResult(ChangeStatus.NotFound, null, "No such file.");
+
+        var tmp = NewTmpPath(".move");
+        try
+        {
+            string hash;
+            long size;
+            await using (var input = new FileStream(source, FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete, 1024 * 1024, FileOptions.Asynchronous))
+            await using (var output = new FileStream(tmp, FileMode.CreateNew, FileAccess.Write, FileShare.None, 1024 * 1024, FileOptions.Asynchronous))
+            {
+                await using var hashing = new HashingStream(output, leaveOpen: true);
+                await input.CopyToAsync(hashing, ct).ConfigureAwait(false);
+                hash = hashing.GetHash();
+                size = hashing.BytesTransferred;
+                output.Flush(flushToDisk: true);
+            }
+            if (!string.Equals(hash, expectedBase, StringComparison.Ordinal))
+                return new ChangeResult(ChangeStatus.Conflict, null, "The file changed on the server since your last sync.");
+            var put = await CommitFileAsync(to, tmp, hash, size, current.ModifiedMs, existing => existing is null).ConfigureAwait(false);
+            if (put.Status == ChangeStatus.Conflict)
+                return new ChangeResult(ChangeStatus.Conflict, null, "A file with the new name already exists.");
+            if (put.Status is not (ChangeStatus.Ok or ChangeStatus.Unchanged))
+                return put;
+            var removed = await DeleteAsync(from, baseValue).ConfigureAwait(false);
+            if (removed.Status is not (ChangeStatus.Ok or ChangeStatus.Unchanged or ChangeStatus.NotFound))
+                _log.LogWarning("Moved {From} to {To}, but the original stays: {Status}", from, to, removed.Status);
+            else
+                _log.LogInformation("Moved {From} to {To}", from, to);
+            return put with { Status = ChangeStatus.Ok };
+        }
+        finally
+        {
+            TryDelete(tmp);
+        }
+    }
+
+    /// <summary>
+    /// Deletes a file for good ("Clean up" in the apps, only after the person said they are completely sure): the current
+    /// version when it is still <paramref name="baseValue"/> (or "none" for a file already deleted) and every older
+    /// version in history, which frees their space at once. Computers see an ordinary deletion. Cannot be undone.
+    /// </summary>
+    public async Task<ChangeResult> PurgeAsync(string path, string baseValue)
+    {
+        if (!PathRules.IsValid(path))
+            return new ChangeResult(ChangeStatus.InvalidName, null, "Invalid path.");
+        if (!TryParseBase(baseValue, out var expectedBase))
+            return new ChangeResult(ChangeStatus.BadRequest, null, "base must be 'none' or a SHA-256 hash.");
+
+        await _lock.WaitAsync(CancellationToken.None).ConfigureAwait(false);
+        try
+        {
+            var current = Manifest.Get(path);
+            if (current is null)
+                return new ChangeResult(ChangeStatus.NotFound, null, "No such file.");
+            if (!string.Equals(LiveHash(current), expectedBase, StringComparison.Ordinal))
+                return new ChangeResult(ChangeStatus.Conflict, null, "The file changed on the server since your last sync.");
+
+            var entry = current;
+            if (!current.Deleted)
+            {
+                var full = ResolveFilesPath(path) ?? throw new IOException($"Unsafe path {path}.");
+                var now = _clock.GetUtcNow().ToUnixTimeMilliseconds();
+                var journalId = Manifest.AddJournal("delete", path, null, null, null, 0, now);
+                if (File.Exists(full))
+                    File.Delete(full);
+                entry = Manifest.Commit(path, null, 0, now, deleted: true, journalId);
+                _caseIndex.Remove(path);
+                PruneEmptyFolders(Paths.Files, Path.GetDirectoryName(full)!);
+            }
+            long freed = 0;
+            if (HistoryDirectory(path) is { } dir && Directory.Exists(dir))
+            {
+                // Only this file's versions: the folder can also hold the history of files below a folder of the same name.
+                foreach (var version in new DirectoryInfo(dir).EnumerateFiles())
+                {
+                    if ((version.Attributes & FileAttributes.ReparsePoint) != 0 || !HistoryNames.TryParse(version.Name, out _, out _))
+                        continue;
+                    freed += version.Length;
+                    version.Delete();
+                }
+                PruneEmptyFolders(Paths.History, dir);
+            }
+            _log.LogWarning("Deleted {Path} for good, with its older versions ({Bytes} bytes of history)", path, freed);
+            InvalidateHistorySize();
+            return new ChangeResult(current.Deleted ? ChangeStatus.Unchanged : ChangeStatus.Ok, entry);
+        }
+        finally
+        {
+            _lock.Release();
+        }
+    }
+
+    private long? _historyBytes;
+    private DateTimeOffset _historyBytesAt;
+
+    /// <summary>The bytes older versions and deleted files take in history/ (counted at most every ten minutes).</summary>
+    public long HistoryBytes()
+    {
+        var now = _clock.GetUtcNow();
+        if (_historyBytes is { } known && now - _historyBytesAt < TimeSpan.FromMinutes(10))
+            return known;
+        long bytes = 0;
+        try
+        {
+            foreach (var f in new DirectoryInfo(Paths.History).EnumerateFiles("*", new EnumerationOptions { RecurseSubdirectories = true, IgnoreInaccessible = true }))
+                bytes += f.Length;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return _historyBytes ?? 0;
+        }
+        (_historyBytes, _historyBytesAt) = (bytes, now);
+        return bytes;
+    }
+
+    private void InvalidateHistorySize() => _historyBytes = null;
+
     /// <summary>Adds or updates a file that already sits in files/ (rescan). Caller holds no lock.</summary>
     internal async Task<ChangeResult> AdoptExistingFileAsync(string path, string hash, long size, long modifiedMs)
     {

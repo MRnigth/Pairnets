@@ -105,9 +105,24 @@
                   <StackPanel Spacing="2" VerticalAlignment="Center">
                     <TextBlock x:Name="FileManagerTitle" Text="Show Pairnets in the file manager" FontWeight="SemiBold" />
                     <TextBlock x:Name="FileManagerText" Classes="t3" TextWrapping="Wrap"
-                               Text="In the sidebar, with right-click items and a Pairnets folder icon. Your files are not changed." />
+                               Text="In the sidebar, with a Pairnets folder icon. Your files are not changed." />
                   </StackPanel>
                   <ToggleSwitch x:Name="FileManagerBox" Grid.Column="1" Classes="bare" OnContent="Show Pairnets in the file manager" OffContent="Show Pairnets in the file manager" />
+                </Grid>
+                <Grid x:Name="RightClickRow" ColumnDefinitions="*,Auto">
+                  <StackPanel Spacing="2" VerticalAlignment="Center">
+                    <TextBlock Text="Add Pairnets to the right-click menu" FontWeight="SemiBold" />
+                    <TextBlock Classes="t3" TextWrapping="Wrap"
+                               Text="Open in Pairnets, Show sync status and Where this folder lives…, only inside your Pairnets folder." />
+                  </StackPanel>
+                  <ToggleSwitch x:Name="RightClickBox" Grid.Column="1" Classes="bare" OnContent="Add Pairnets to the right-click menu" OffContent="Add Pairnets to the right-click menu" />
+                </Grid>
+                <Grid x:Name="TicksRow" ColumnDefinitions="*,Auto">
+                  <StackPanel Spacing="2" VerticalAlignment="Center">
+                    <TextBlock Text="Show sync ticks in File Explorer" FontWeight="SemiBold" />
+                    <TextBlock Classes="t3" TextWrapping="Wrap" Text="A tick, sync arrows or a cloud on every file, like OneDrive. Windows only." />
+                  </StackPanel>
+                  <ToggleSwitch x:Name="TicksBox" Grid.Column="1" Classes="bare" OnContent="Show sync ticks in File Explorer" OffContent="Show sync ticks in File Explorer" />
                 </Grid>
               </StackPanel>
             </Border>
@@ -236,6 +251,21 @@
             </Border>
           </StackPanel>
         </Grid>
+
+        <!-- Where your files live: each top folder on this computer or only on the nest (applied at once, like the switches) -->
+        <Border x:Name="PlacementCard" Classes="pcard" Padding="20,16">
+          <StackPanel Spacing="8">
+            <Grid ColumnDefinitions="Auto,*,Auto">
+              <v:LineIcon Classes="icon ink-soft" Width="17" Height="17" Margin="0,0,8,0" Data="{StaticResource I.Cloud}" VerticalAlignment="Center" />
+              <TextBlock Grid.Column="1" Classes="stitle" Text="Where your files live" VerticalAlignment="Center" />
+              <TextBlock Grid.Column="2" Classes="t3" VerticalAlignment="Center" TextWrapping="Wrap" Text="This computer only · your other computers choose for themselves" />
+            </Grid>
+            <TextBlock x:Name="PlacementNote" Classes="t3" FontSize="13" TextWrapping="Wrap"
+                       Text="Keep big folders on your nest to free space here. Pairnets only removes a file from this computer once it is safely on your nest." />
+            <StackPanel x:Name="PlacementRows" Spacing="12" />
+            <Button Classes="link" HorizontalAlignment="Left" Margin="0,4,0,0" Content="Choose for a folder inside these… (opens Files)" Click="OnPlacementLink" />
+          </StackPanel>
+        </Border>
 
         <!-- Help -->
         <Border Classes="pcard">

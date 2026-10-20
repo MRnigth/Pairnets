@@ -41,7 +41,7 @@ public partial class MainWindow
         foreach (var (dock, action) in new (RadioButton, ShortcutAction)[]
                  {
                      (DockOverview, ShortcutAction.PageOverview), (DockActivity, ShortcutAction.PageActivity), (DockAttention, ShortcutAction.PageNeedsYou),
-                     (DockHistory, ShortcutAction.PageHistory), (DockDevices, ShortcutAction.PageDevices), (DockSettings, ShortcutAction.PageSettings),
+                     (DockFiles, ShortcutAction.PageFiles), (DockDevices, ShortcutAction.PageDevices), (DockSettings, ShortcutAction.PageSettings),
                  })
         {
             if (ToolTip.GetTip(dock) is string tip)
@@ -67,6 +67,7 @@ public partial class MainWindow
                 var box = Page switch
                 {
                     MainPage.Activity => ActivitySearch,
+                    MainPage.Files => NestFilesPage.FilesSearch,
                     MainPage.History => HistorySearch,
                     _ => null,
                 };
@@ -92,8 +93,8 @@ public partial class MainWindow
             case ShortcutAction.PageNeedsYou:
                 GoTo(MainPage.Attention);
                 return true;
-            case ShortcutAction.PageHistory:
-                GoTo(MainPage.History);
+            case ShortcutAction.PageFiles:
+                GoTo(MainPage.Files);
                 return true;
             case ShortcutAction.PageDevices:
                 GoTo(MainPage.Devices);
@@ -139,7 +140,7 @@ public partial class MainWindow
             Item("Overview", () => Run(ShortcutAction.PageOverview), new KeyGesture(Key.D1, cmd)),
             Item("Activity", () => Run(ShortcutAction.PageActivity), new KeyGesture(Key.D2, cmd)),
             Item("Needs You", () => Run(ShortcutAction.PageNeedsYou), new KeyGesture(Key.D3, cmd)),
-            Item("History", () => Run(ShortcutAction.PageHistory), new KeyGesture(Key.D4, cmd)),
+            Item("Files", () => Run(ShortcutAction.PageFiles), new KeyGesture(Key.D4, cmd)),
             Item(NavLabel(NavDevices, "Computers"), () => Run(ShortcutAction.PageDevices), new KeyGesture(Key.D5, cmd)),
             Item("Settings", () => Run(ShortcutAction.PageSettings), new KeyGesture(Key.D6, cmd)),
             new NativeMenuItemSeparator(),

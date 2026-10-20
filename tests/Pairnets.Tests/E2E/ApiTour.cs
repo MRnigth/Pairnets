@@ -49,6 +49,8 @@ public sealed partial class ApiTour : IAsyncDisposable
         new("DELETE", "/api/file"),
         new("GET", "/api/history"),
         new("POST", "/api/history/restore"),
+        new("POST", "/api/move"),
+        new("POST", "/api/purge"),
         new(Route.AnyMethod, "/hub/negotiate"),
         new(Route.AnyMethod, "/hub"),
 

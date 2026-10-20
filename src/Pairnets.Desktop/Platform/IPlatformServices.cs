@@ -41,7 +41,9 @@ public interface IPlatformServices
     /// Puts Pairnets in the file manager for <paramref name="folder"/>, or takes it away for null: on Linux the sidebar
     /// bookmark, the right-click items and the folder icon; on a Mac the folder icon. False when part of it failed.
     /// </summary>
-    bool SetFileManagerEntry(string? folder);
+    /// <param name="sidebar">Linux: the sidebar bookmark and folder icon (a Mac: the folder icon).</param>
+    /// <param name="rightClick">Linux: the right-click items (a Mac has none).</param>
+    bool SetFileManagerEntry(string? folder, bool sidebar = true, bool rightClick = true);
 
     /// <summary>True when the user asked the system for less motion: Views/Motion keeps every animation still.</summary>
     bool ReduceMotion { get; }

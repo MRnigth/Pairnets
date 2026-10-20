@@ -84,8 +84,8 @@ public sealed class OtherPagesTests
     {
         var (window, actions, _) = await OpenAsync();
         await Wpf.Ui(() => window.Navigate(MainPage.Account));
-        Assert.True(await Wpf.Ui(() => new[] { window.NavOverview, window.NavActivity, window.NavAttention, window.NavHistory, window.NavDevices, window.NavSettings }.All(t => t.IsChecked != true)));
-        Assert.True(await Wpf.Ui(() => new[] { window.DockOverview, window.DockActivity, window.DockAttention, window.DockHistory, window.DockDevices, window.DockSettings }.All(t => t.IsChecked != true)));
+        Assert.True(await Wpf.Ui(() => new[] { window.NavOverview, window.NavActivity, window.NavAttention, window.NavFiles, window.NavDevices, window.NavSettings }.All(t => t.IsChecked != true)));
+        Assert.True(await Wpf.Ui(() => new[] { window.DockOverview, window.DockActivity, window.DockAttention, window.DockFiles, window.DockDevices, window.DockSettings }.All(t => t.IsChecked != true)));
         await Wpf.Ui(() => window.NavActivity.IsChecked = true);
         await Wpf.Settle();
         Assert.Equal(MainPage.Activity, window.Page);

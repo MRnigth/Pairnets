@@ -215,6 +215,21 @@ public sealed class DesktopControllerTests
     }
 
     [AvaloniaFact]
+    public async Task WhereThisFolderLives_FromTheFileManager_OpensTheFilesPageOnThatFolderWithItsChoices()
+    {
+        await using var app = await AppUnderTest.StartAsync();
+        Directory.CreateDirectory(Path.Combine(app.Folder, "Photos"));
+        File.WriteAllText(Path.Combine(app.Folder, "Photos", "beach.jpg"), "sand");
+        await app.WaitForNestAsync(f => f.ContainsKey("Photos/beach.jpg"), "the photo to reach the nest");
+        await Wait.Until(() => app.App.Session?.Files.List("Photos").Count == 1, "this computer to know the nest's list");
+
+        app.App.HandleFileCommand(new FileManagerCommand(FileManagerAction.WhereItLives, Path.Combine(app.Folder, "Photos")));
+        await Wait.Until(() => app.App.Window is { Page: MainPage.Files } w && w.FilesView.Folder == "Photos", "the Files page on Photos");
+        await Wait.Until(() => app.MainWindow.FilesView.PlacementMenuOpen, "the choices of where Photos lives");
+        Assert.Equal("On this PC", app.MainWindow.FilesView.PlacementShown);
+    }
+
+    [AvaloniaFact]
     public async Task PauseAndResume()
     {
         await using var app = await AppUnderTest.StartAsync();
@@ -263,9 +278,10 @@ public sealed class DesktopControllerTests
         PressSyncNow(app, main);
         await app.WaitForNestAsync(f => f.TryGetValue("notes.txt", out var size) && size == 18, "the second version to reach the nest");
 
-        app.Open("History");
-        Person.Click(Screen.Find<RadioButton>(main, "All files"));
-        var row = await Wait.For(() => Screen.All<ListBoxItem>(main).FirstOrDefault(r => Screen.Describe(r).StartsWith("notes.txt", StringComparison.Ordinal)),
+        app.Open("Files");
+        Person.Click(Screen.Named<RadioButton>(main, "DeletedFilesTab"));
+        Person.Click(Screen.Find<RadioButton>(main, "Older versions"));
+        var row = await Wait.For(() => Screen.All<ListBoxItem>(main).FirstOrDefault(r => r.IsEffectivelyVisible && Screen.Describe(r).StartsWith("notes.txt", StringComparison.Ordinal)),
             "notes.txt to be listed");
         Person.Click(row);
         await Wait.Until(() => main.VersionRows == 1, "the older version of notes.txt to be listed");

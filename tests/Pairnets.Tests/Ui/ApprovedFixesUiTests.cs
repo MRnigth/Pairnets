@@ -48,7 +48,7 @@ public class ApprovedFixesUiTests
         window.ShowStatus(Status(RunnerStatus.Idle), "/Users/me/Sync");
 
         Press(window, Key.D4);
-        Assert.Equal(MainPage.History, window.Page);
+        Assert.Equal(MainPage.Files, window.Page);
         Press(window, Key.D2);
         Assert.Equal(MainPage.Activity, window.Page);
         Press(window, Key.D1);

@@ -76,7 +76,7 @@ public static class Endpoints
         {
             var (free, total) = ServerUpdater.DiskSpace(store.Paths.DataDir);
             return Json(new ServerInfo(store.ServerId, store.CurrentVersion, PairnetsInfo.ApiVersion,
-                PairnetsInfo.ProductVersion, free, total, updater.GetStatus(), UploadSessions.PiecesInFlight, auth.NestName));
+                PairnetsInfo.ProductVersion, free, total, updater.GetStatus(), UploadSessions.PiecesInFlight, auth.NestName, store.HistoryBytes()));
         });
 
         // "Update server" in the apps: asks the root-owned updater to install the newest release.
@@ -237,6 +237,26 @@ public static class Endpoints
         {
             var path = ctx.Request.Query["path"].ToString();
             var result = await store.DeleteAsync(path, ctx.Request.Query["base"].ToString());
+            return await ToResultAsync(result, ctx, path, hub);
+        });
+
+        // Move or rename one file on the nest (the apps' Files page); folders are moved file by file.
+        app.MapPost("/api/move", async (HttpContext ctx, SyncStore store, IHubContext<SyncHub> hub) =>
+        {
+            var from = ctx.Request.Query["from"].ToString();
+            var to = ctx.Request.Query["to"].ToString();
+            // Finished even when the app stops waiting (a big file takes a while to copy): it sees the result in its next list.
+            var result = await store.MoveAsync(from, to, ctx.Request.Query["base"].ToString(), CancellationToken.None);
+            if (result.Status == ChangeStatus.Ok)
+                await BroadcastAsync(ctx, hub, from);
+            return await ToResultAsync(result, ctx, to, hub);
+        });
+
+        // Delete one file for good, with its older versions ("Clean up" in the apps, behind a "completely sure" step).
+        app.MapPost("/api/purge", async (HttpContext ctx, SyncStore store, IHubContext<SyncHub> hub) =>
+        {
+            var path = ctx.Request.Query["path"].ToString();
+            var result = await store.PurgeAsync(path, ctx.Request.Query["base"].ToString());
             return await ToResultAsync(result, ctx, path, hub);
         });
 

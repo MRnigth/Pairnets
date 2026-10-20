@@ -8,6 +8,9 @@ public enum FileManagerAction
 
     /// <summary>"Show sync status": a short answer about that file or folder.</summary>
     ShowStatus,
+
+    /// <summary>"Where this folder lives…": the Files page on that folder, with its choice open.</summary>
+    WhereItLives,
 }
 
 /// <summary>
@@ -19,6 +22,7 @@ public sealed record FileManagerCommand(FileManagerAction Action, string Path)
 {
     public const string OpenArgument = "--open-in-pairnets";
     public const string StatusArgument = "--sync-status";
+    public const string WhereArgument = "--where-it-lives";
 
     private const string MessagePrefix = "pairnets-file:";
 
@@ -31,6 +35,7 @@ public sealed record FileManagerCommand(FileManagerAction Action, string Path)
             {
                 OpenArgument => FileManagerAction.Open,
                 StatusArgument => FileManagerAction.ShowStatus,
+                WhereArgument => FileManagerAction.WhereItLives,
                 _ => (FileManagerAction?)null,
             };
             if (action is { } a && args[i + 1].Length > 0)
@@ -40,7 +45,12 @@ public sealed record FileManagerCommand(FileManagerAction Action, string Path)
     }
 
     /// <summary>How the request travels to the running Pairnets.</summary>
-    public string ToMessage() => MessagePrefix + (Action == FileManagerAction.Open ? "open" : "status") + "\n" + Path;
+    public string ToMessage() => MessagePrefix + Action switch
+    {
+        FileManagerAction.Open => "open",
+        FileManagerAction.WhereItLives => "where",
+        _ => "status",
+    } + "\n" + Path;
 
     /// <summary>The request in a poke's message, or null for a plain poke or anything else.</summary>
     public static FileManagerCommand? FromMessage(string? message)
@@ -55,6 +65,7 @@ public sealed record FileManagerCommand(FileManagerAction Action, string Path)
         {
             "open" => FileManagerAction.Open,
             "status" => FileManagerAction.ShowStatus,
+            "where" => FileManagerAction.WhereItLives,
             _ => (FileManagerAction?)null,
         };
         var path = rest[(newline + 1)..];

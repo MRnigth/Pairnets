@@ -76,12 +76,14 @@ internal sealed class TrayHarness : IAsyncDisposable
     /// this sandbox's folder). <paramref name="watchFolder"/> false: only "Sync now" (and start-up) start a sync pass.
     /// </summary>
     public static async Task<TrayHarness> CreateAsync(TestServer? signedInTo = null, string name = "DESKTOP", bool watchFolder = true,
-        Func<ClientEnvironment, ClientEnvironment>? environment = null, Action<ClientSettings>? settings = null)
+        Func<ClientEnvironment, ClientEnvironment>? environment = null, Action<ClientSettings>? settings = null,
+        (string Id, string Choices)? setupChoices = null)
     {
         var root = new TempDir("wpf-app");
         var env = ClientEnvironment.Isolated(root.Path, NoUpdates);
         env = environment?.Invoke(env) ?? env;
         var harness = new TrayHarness(env, root);
+        harness.Platform.SetupChoices = setupChoices; // what an installer run by hand left (never the real registry)
         if (signedInTo is not null)
             harness.Grant = harness.SaveSignIn(signedInTo, name, settings);
         else if (settings is not null)

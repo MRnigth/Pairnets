@@ -81,6 +81,7 @@ public sealed class TrayController : ITrayActions, IDisposable
         _shutdown = shutdown;
         _log = loggers.CreateLogger("Pairnets.Tray");
         _settings = SettingsStore.Load(env.SettingsPath);
+        TakeSetupChoices();
         _package = UpdatePackage.ForThisComputer(IsInstalledCopy);
         _updates = new UpdateService(env.CreateUpdateChecker(), PairnetsInfo.ProductVersion, _package.Asset);
         _fileLog.Minimum = _settings.DebugMode ? LogLevel.Debug : LogLevel.Information; // Debug mode: more detail in the log
@@ -235,7 +236,7 @@ public sealed class TrayController : ITrayActions, IDisposable
             cloud.Fetch = session.FetchVersionAsync;
             session.PassCompleted += _ => cloud.Reconcile(session.SyncedHash);
             cloud.Reconcile(session.SyncedHash);
-            if (_settings.CloudFolder == CloudFolderMode.Off)
+            if (_settings.CloudFolderWanted == CloudFolderMode.Off)
                 _leaveTask = LeaveCloudFolderAsync(cloud);
         }
         session.StatusChanged += _ => _dirty = true;
@@ -249,6 +250,11 @@ public sealed class TrayController : ITrayActions, IDisposable
             $"Synced {n} change(s) made while this computer was away.", Forms.ToolTipIcon.Info, ShowMainWindow));
         session.ServerInfoChanged += info => RunOnUi(() => OnServerInfo(session, info));
         session.AccountChanged += (next, token) => RunOnUi(() => OnAccountChanged(session, next, token));
+        session.Files.Opened.NestFullWhileSaving += _ => RunOnUi(() =>
+        {
+            if (ReferenceEquals(_session, session))
+                _window?.ShowNestFull(); // a file opened from the nest could not be saved back
+        });
         session.JoinRequested += r => RunOnUi(() => Toast("join:" + r.Code, r.Title, $"Code {r.Code} · click to review it on your nest.",
             Forms.ToolTipIcon.Info, () => ReviewJoin(r)));
         _session = session;
@@ -265,11 +271,13 @@ public sealed class TrayController : ITrayActions, IDisposable
     /// </summary>
     private void UpdateExplorerEntry()
     {
-        var folder = _settings.ShowInFileManager && _settings.IsComplete && Directory.Exists(_settings.Folder) ? _settings.Folder : null;
+        var wanted = _settings.ShowInFileManager || _settings.ExplorerRightClick;
+        var folder = wanted && _settings.IsComplete && Directory.Exists(_settings.Folder) ? _settings.Folder : null;
         try
         {
             // A Windows cloud folder is in the left side by itself (with Pairnets' icon), so only one "Pairnets" shows.
-            if (!_platform.SetExplorerEntry(folder, leftSide: _cloud is not { IsActive: true }))
+            if (!_platform.SetExplorerEntry(folder, leftSide: _settings.ShowInFileManager && _cloud is not { IsActive: true },
+                    rightClick: _settings.ExplorerRightClick, folderIcon: _settings.ShowInFileManager))
                 _log.LogInformation("Pairnets could not be fully added to File Explorer; it tries again at the next start");
         }
         catch (Exception ex)
@@ -285,7 +293,7 @@ public sealed class TrayController : ITrayActions, IDisposable
     /// </summary>
     private Platform.CloudFiles.ICloudFolder? StartCloudFolder()
     {
-        var wanted = _settings.CloudFolder;
+        var wanted = _settings.CloudFolderWanted;
         if (wanted == CloudFolderMode.Off && !SafeHasCloudFolder())
             return null;
         var mode = wanted == CloudFolderMode.Off ? CloudFolderMode.KeepAllHere : wanted;
@@ -293,7 +301,7 @@ public sealed class TrayController : ITrayActions, IDisposable
         string? problem;
         try
         {
-            cloud = _platform.StartCloudFolder(_settings.Folder!, mode, _loggers.CreateLogger("Pairnets.CloudFolder"), out problem);
+            cloud = _platform.StartCloudFolder(_settings.Folder!, mode, _loggers.CreateLogger("Pairnets.CloudFolder"), out problem, _settings.Placement);
         }
         catch (Exception ex)
         {
@@ -302,7 +310,9 @@ public sealed class TrayController : ITrayActions, IDisposable
         if (cloud is null && wanted != CloudFolderMode.Off)
         {
             _log.LogWarning("The Pairnets folder stays a plain folder: {Problem}", problem);
-            Toast("cloudfolder", "No ticks in Explorer for now", (problem ?? "Windows did not allow it.") + " Pairnets keeps syncing as before.",
+            var onDemand = wanted == CloudFolderMode.OnDemand;
+            Toast("cloudfolder", onDemand ? "Files On-Demand can't be used here" : "No ticks in Explorer for now",
+                (problem ?? "Windows did not allow it.") + (onDemand ? " Your On-Demand folders are kept on this PC instead." : " Pairnets keeps syncing as before."),
                 Forms.ToolTipIcon.Warning, () => ShowMainWindow(MainPage.Settings));
         }
         return cloud;
@@ -363,6 +373,14 @@ public sealed class TrayController : ITrayActions, IDisposable
         if (_session is not { } session || _settings.Folder is not { } folder || FileStatusReader.ToSyncPath(folder, command.Path) is not { } rel)
         {
             ShowMainWindow();
+            return;
+        }
+        if (command.Action == FileManagerAction.WhereItLives)
+        {
+            // A folder's own choice; for a file, the folder it is in.
+            var folderPath = rel.Length == 0 || Directory.Exists(command.Path) ? rel : PathRules.Parent(rel) ?? string.Empty;
+            ShowMainWindow();
+            _window?.ShowFilesAt(folderPath, choosePlacement: true);
             return;
         }
         if (command.Action == FileManagerAction.Open)
@@ -771,6 +789,10 @@ public sealed class TrayController : ITrayActions, IDisposable
 
     public IHistorySource? History => _session;
 
+    public INestFiles? Files => _session?.Files;
+
+    public void OpenFile(string path) => Shell(path);
+
     public bool Notifies(NoticeKind kind) => kind switch
     {
         NoticeKind.JoinRequest => _settings.NotifyJoinRequests,
@@ -953,7 +975,8 @@ public sealed class TrayController : ITrayActions, IDisposable
     {
         if (_window is null)
             return;
-        var view = new SettingsView(_settings, _platform.Secrets, _updates, _session?.Status.ServerVersionText);
+        var view = new SettingsView(_settings, _platform.Secrets, _updates, _session?.Status.ServerVersionText, _session?.Files);
+        view.OpenFilesRequested += () => _window?.Navigate(MainPage.Files);
         view.Saved += v =>
         {
             ApplySettings(v.Result!, v.PlainToken);
@@ -1000,6 +1023,28 @@ public sealed class TrayController : ITrayActions, IDisposable
             }
         }
         _dirty = true;
+    }
+
+    /// <summary>
+    /// What was ticked on the installer's "Select Additional Tasks" page, taken into the settings once (a later silent
+    /// update leaves nothing, so changes made in Settings since are kept).
+    /// </summary>
+    private void TakeSetupChoices()
+    {
+        if (_platform.ReadSetupChoices() is not { } setup || setup.Id == _settings.SetupChoicesApplied)
+            return;
+        SetupChoices.Apply(_settings, setup.Choices);
+        _settings.SetupChoicesApplied = setup.Id;
+        try
+        {
+            SettingsStore.Save(_env.SettingsPath, _settings);
+            _platform.SetAutoStart(_settings.StartWithWindows);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
+        {
+            _log.LogWarning("Could not keep the installer's choices: {Error}", ex.Message);
+        }
+        _log.LogInformation("Took the installer's choices: {Choices}", setup.Choices);
     }
 
     private void ApplySettings(ClientSettings settings, string? plainToken)

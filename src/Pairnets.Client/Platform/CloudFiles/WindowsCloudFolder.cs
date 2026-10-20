@@ -45,6 +45,9 @@ public sealed class WindowsCloudFolder : ICloudFolder
 
     /// <summary>The version each file was last marked with here, so a check does not open every file to read it back.</summary>
     private readonly ConcurrentDictionary<string, string> _marked = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Files of a folder just chosen for On-Demand that are freed once they are synced (also before Windows takes the choice on them).</summary>
+    private readonly ConcurrentDictionary<string, byte> _freeWhenSynced = new(StringComparer.OrdinalIgnoreCase);
     private readonly CfApi.Callback _onFetch;
     private readonly CfApi.Callback _onCancel;
     private readonly CfApi.Callback _onDehydrate;
@@ -55,11 +58,20 @@ public sealed class WindowsCloudFolder : ICloudFolder
     private bool _reconciling;
     private Func<string, string?>? _reconcileAgain;
 
-    private WindowsCloudFolder(string root, CloudFolderMode mode, ILogger log)
+    /// <summary>Folders with their own "Where your files live" choice (sync path → placement); "" is the whole folder.</summary>
+    private readonly IReadOnlyDictionary<string, FilePlacement> _placements;
+    private readonly PlacementMap _placement;
+
+    private WindowsCloudFolder(string root, CloudFolderMode mode, ILogger log, IReadOnlyDictionary<string, FilePlacement>? placement = null)
     {
         _root = LongPath(root);
         Mode = mode;
         _log = log;
+        // Files On-Demand without folder choices: the whole folder.
+        _placements = placement ?? (mode == CloudFolderMode.OnDemand
+            ? new Dictionary<string, FilePlacement> { [""] = FilePlacement.OnDemand }
+            : new Dictionary<string, FilePlacement>());
+        _placement = new PlacementMap(_placements);
         // Kept in fields: Windows holds pointers to them for as long as the folder is connected.
         _onFetch = OnFetchData;
         _onCancel = OnCancelFetchData;
@@ -192,12 +204,17 @@ public sealed class WindowsCloudFolder : ICloudFolder
     /// null with <paramref name="problem"/> saying why it stays a plain folder. Files already there are marked where
     /// they are, in the background (<see cref="Reconcile"/>); so is the mode's keep-here choice on every file.
     /// </summary>
-    public static WindowsCloudFolder? Start(string root, CloudFolderMode mode, string iconPath, ILogger log, out string? problem)
+    /// <param name="placement">
+    /// With Files On-Demand, the folders whose files stay on the nest until opened (and those kept here inside them); null
+    /// for the whole folder.
+    /// </param>
+    public static WindowsCloudFolder? Start(string root, CloudFolderMode mode, string iconPath, ILogger log, out string? problem,
+        IReadOnlyDictionary<string, FilePlacement>? placement = null)
     {
         problem = WhyNot(root);
         if (problem is not null)
             return null;
-        var folder = new WindowsCloudFolder(root, mode, log);
+        var folder = new WindowsCloudFolder(root, mode, log, placement);
         try
         {
             folder.Register(iconPath);
@@ -269,8 +286,9 @@ public sealed class WindowsCloudFolder : ICloudFolder
 
     /// <summary>
     /// Keep everything here: the folder is "Always keep on this device", so Windows never frees space in it, and anything
-    /// still on the nest is fetched. Files On-Demand: the folder's own choice is cleared, so files can be freed.
-    /// Pairnets' own files are always kept here.
+    /// still on the nest is fetched. Files On-Demand: each folder chosen for it is "Free up space" (Windows then frees
+    /// the files in it that are safely on the nest), the rest "Always keep on this device". Pairnets' own files are always
+    /// kept here.
     /// </summary>
     private void ApplyMode()
     {
@@ -279,8 +297,8 @@ public sealed class WindowsCloudFolder : ICloudFolder
             var pinned = File.GetAttributes(_root).HasFlag(CloudPlaceholders.Pinned);
             if (Mode == CloudFolderMode.KeepAllHere && !pinned)
                 WithHandle(_root, h => Check(CfApi.CfSetPinState(h, CfApi.PinStatePinned, CfApi.SetPinFlagRecurse, IntPtr.Zero)));
-            else if (Mode == CloudFolderMode.OnDemand && pinned)
-                WithHandle(_root, h => Check(CfApi.CfSetPinState(h, CfApi.PinStateUnspecified, CfApi.SetPinFlagRecurse, IntPtr.Zero)));
+            else if (Mode == CloudFolderMode.OnDemand)
+                ApplyPlacement();
             if (Mode == CloudFolderMode.KeepAllHere)
                 FetchEverything();
         }
@@ -288,6 +306,91 @@ public sealed class WindowsCloudFolder : ICloudFolder
         {
             _log.LogDebug("Could not apply the keep-here choice to {Folder}: {Error}", _root, ex.Message);
         }
+    }
+
+    /// <summary>
+    /// Writes "Where your files live" onto the folders when it changed since it was last written: the whole folder first,
+    /// then the folders below it, so a folder's choice wins over the one above it.
+    /// <list type="bullet">
+    /// <item>On this PC: "Always keep on this device" (whatever is still on the nest is then fetched).</item>
+    /// <item>On-Demand: no keep choice, so what arrives stays on the nest until opened, and each file already here is
+    /// freed once: at once when it is safely on the nest, else marked "Free up space" so it is freed once it is
+    /// (<see cref="MarkSynced"/>). A file opened later stays here.</item>
+    /// </list>
+    /// Choices made in Explorer inside a folder are kept until that folder's choice changes again.
+    /// </summary>
+    private void ApplyPlacement()
+    {
+        var applied = Path.Combine(PairnetsPaths.LocalDir, "Explorer", SyncRootId(_root) + ".placement.json");
+        var wanted = System.Text.Json.JsonSerializer.Serialize(
+            _placements.Select(p => (PlacementMap.NormalizeFolder(p.Key), p.Value)).OrderBy(p => p.Item1, StringComparer.Ordinal)
+                .Select(p => p.Item1 + "=" + p.Value).ToList());
+        try
+        {
+            if (File.Exists(applied) && File.ReadAllText(applied) == wanted)
+                return;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // Written again below.
+        }
+
+        var folders = _placements
+            .Where(p => p.Value is FilePlacement.OnThisPc or FilePlacement.OnDemand)
+            .Select(p => (Path: PlacementMap.NormalizeFolder(p.Key), OnDemand: p.Value == FilePlacement.OnDemand))
+            .Where(p => p.Path.Length > 0)
+            .OrderBy(p => p.Path.Count(c => c == '/'))
+            .Prepend((Path: "", OnDemand: _placement.For("") == FilePlacement.OnDemand))
+            .ToList();
+        var done = true;
+        foreach (var (path, onDemand) in folders)
+        {
+            var full = path.Length == 0 ? _root : Path.Combine(_root, PathRules.ToOsRelative(path));
+            if (!Directory.Exists(full) || (path.Length > 0 && PathRules.HasReparsePoint(_root, path, cloudFolder: true)))
+                continue; // not here (yet): KeepOnNest follows the choice for what arrives in it
+            var state = onDemand ? CfApi.PinStateUnspecified : CfApi.PinStatePinned;
+            done &= WithHandle(full, h => Check(CfApi.CfSetPinState(h, state, CfApi.SetPinFlagRecurse, IntPtr.Zero)));
+            if (onDemand)
+                done &= FreeUpOnce(full);
+        }
+        if (!done)
+            return; // tried again at the next start
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(applied)!);
+            File.WriteAllText(applied, wanted);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _log.LogDebug("Could not note the applied file placement: {Error}", ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// Frees the files in a folder just chosen for On-Demand (not those in a folder below it kept on this PC): those
+    /// safely on the nest at once, the others once they are. False when one could not be done.
+    /// </summary>
+    private bool FreeUpOnce(string folder)
+    {
+        var ok = true;
+        foreach (var file in EnumerateFiles(folder).ToList())
+        {
+            if (!_connected || _stop.IsCancellationRequested)
+                return false;
+            var rel = FileStatusReader.ToSyncPath(_root, file);
+            if (rel is null || IsOwnFile(file) || _placement.For(rel) != FilePlacement.OnDemand
+                || !CloudPlaceholders.TryGetAttributesAndTag(file, out var attributes, out _) || CloudPlaceholders.IsContentOnline(attributes))
+                continue;
+            if ((PlaceholderState(file) & CfApi.PlaceholderStateInSync) != 0)
+                ok &= WithHandle(file, h => Check(CfApi.CfDehydratePlaceholder(h, 0, CfApi.Eof, 0, IntPtr.Zero)), CfApi.OpenFlagExclusive | CfApi.OpenFlagWriteAccess)
+                    || WithHandle(file, h => Check(CfApi.CfSetPinState(h, CfApi.PinStateUnpinned, 0, IntPtr.Zero))); // in use: freed later
+            else
+            {
+                _freeWhenSynced[LongPath(file)] = 0;
+                ok &= WithHandle(file, h => Check(CfApi.CfSetPinState(h, CfApi.PinStateUnpinned, 0, IntPtr.Zero)));
+            }
+        }
+        return ok;
     }
 
     /// <summary>Fetches every file still only on the nest (keeping everything here, or leaving); false when one could not.</summary>
@@ -505,6 +608,9 @@ public sealed class WindowsCloudFolder : ICloudFolder
             _log.LogDebug("Could not mark {Path} as synced for Explorer yet (in use?); the next check does", fullPath);
         if (IsOwnFile(fullPath))
             WithHandle(fullPath, h => Check(CfApi.CfSetPinState(h, CfApi.PinStatePinned, 0, IntPtr.Zero))); // never freed
+        else if (ok && Mode == CloudFolderMode.OnDemand
+            && (_freeWhenSynced.TryRemove(LongPath(fullPath), out _) || File.GetAttributes(fullPath).HasFlag(CloudPlaceholders.Unpinned)))
+            WithHandle(fullPath, h => Check(CfApi.CfDehydratePlaceholder(h, 0, CfApi.Eof, 0, IntPtr.Zero)), CfApi.OpenFlagExclusive | CfApi.OpenFlagWriteAccess); // "Free up space" waited for this
         MarkFoldersAbove(fullPath);
     }
 
@@ -512,9 +618,13 @@ public sealed class WindowsCloudFolder : ICloudFolder
     {
         if (!_connected || Mode != CloudFolderMode.OnDemand || IsOwnFile(fullPath))
             return false;
-        // The nearest file or folder that says "Always keep on this device" or "Free up space" decides; none: on the nest.
+        // The nearest file or folder that says "Always keep on this device" or "Free up space" decides, up to the nearest
+        // folder with its own "Where your files live" choice, which decides otherwise (also before it exists here).
         for (var path = fullPath; path.Length >= _root.Length; path = Path.GetDirectoryName(path) ?? string.Empty)
         {
+            var rel = string.Equals(path, _root, StringComparison.OrdinalIgnoreCase) ? "" : FileStatusReader.ToSyncPath(_root, path);
+            if (rel is not null && path != fullPath && HasOwnPlacement(rel))
+                return _placement.For(rel) == FilePlacement.OnDemand;
             if (CloudPlaceholders.TryGetAttributesAndTag(path, out var attributes, out _))
             {
                 if (attributes.HasFlag(CloudPlaceholders.Pinned))
@@ -522,10 +632,19 @@ public sealed class WindowsCloudFolder : ICloudFolder
                 if (attributes.HasFlag(CloudPlaceholders.Unpinned))
                     return true;
             }
-            if (string.Equals(path, _root, StringComparison.OrdinalIgnoreCase))
+            if (rel is "")
                 break;
         }
-        return true;
+        return _placement.For("") == FilePlacement.OnDemand;
+    }
+
+    /// <summary>True for the whole folder ("") and every folder with its own "Where your files live" choice.</summary>
+    private bool HasOwnPlacement(string syncPath)
+    {
+        if (syncPath.Length == 0)
+            return true;
+        var key = PathRules.CaseKey(syncPath);
+        return _placements.Keys.Any(k => PathRules.CaseKey(PlacementMap.NormalizeFolder(k)) == key);
     }
 
     public bool PlaceOnline(string fullPath, string hash, long size, DateTime modifiedUtc)

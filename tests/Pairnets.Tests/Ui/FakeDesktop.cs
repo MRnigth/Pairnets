@@ -159,7 +159,7 @@ public sealed class FakePlatform : IPlatformServices
         }
     }
 
-    public bool SetFileManagerEntry(string? folder)
+    public bool SetFileManagerEntry(string? folder, bool sidebar = true, bool rightClick = true)
     {
         lock (_gate)
             _fileManagerEntries.Add(folder);

@@ -265,8 +265,9 @@ public sealed class TrayControllerTests
         await app.WaitUntil(() => nest.Store.ReadManifest(null).Entries.Single(e => e.Path == "notes.txt").Hash != first, "the second version to reach the nest");
 
         var main = app.Tray.Window!;
-        await app.Press(main, "History");
-        await app.Press(main, "All files");
+        await app.Press(main, "Files");
+        await app.Press(main, "Deleted");
+        await app.Press(main, "Older versions");
         var history = main.HistoryPane;
         await app.WaitUntil(() => history.FileRows.Any(f => f.Path == "notes.txt"), "notes.txt in History");
         await app.Wpf.Ui(() => history.FileList.SelectedItem = history.FileRows.Single(f => f.Path == "notes.txt"));

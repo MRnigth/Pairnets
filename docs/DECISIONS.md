@@ -1234,3 +1234,56 @@ the version-archive notes and the design review fixes merged in, in that order. 
   button before the blue "Use StudyPC" (both apps).
 * **The design review fixes are one merge commit** (the last one), so they can be taken out again with one revert
   if they are not kept.
+
+## Where your files live: folders on this PC, On-Demand, or only on the nest (2026-10-20)
+
+* **Asked for by the owner for 1.0.60** ("all the files stay on the server and not on the device, you can change it in
+  settings"). His answers: three choices, **per folder and per computer**, the default unchanged; chosen in Settings, on
+  the new Files page and by right-clicking a folder; Mac and Linux get "On this PC" and "Only on the nest" (a Finder
+  On-Demand needs the paid Apple account); shipped as a finished feature, so the "Files in Explorer" Preview choice goes.
+* **Kept in this computer's settings only** (`ClientSettings.Placement`, folder → placement). A path takes the choice of
+  the nearest folder above it with one (`PlacementMap`); letter case does not matter, as on the nest. On-Demand counts as
+  "on this PC" where Windows can't make a cloud folder.
+* **Nest only, in the engine:** nothing is downloaded; a file here still syncs up first and is then freed (`Evict`) once
+  local, nest and last agreed are the same, or when it is an untouched older version. A file that was here and is gone was
+  deleted by the person, so that deletion still reaches the nest through the usual guards. Freeing is never a deletion:
+  the mass-delete and empty-folder guards don't count it.
+* **Freeing is the risky part, so:** only after this pass's list from the nest says the nest has that version; the file is
+  held (no one else may read or write it), hashed again, its notes forgotten first and then it is deleted for good. The
+  Recycle Bin would keep its space; the copy is on the nest. A stop half-way leaves an untracked file equal to the nest's,
+  which the next pass records and frees again. Nothing is freed while the nest is (nearly) full (`ServerSpaceLow`).
+* **On-Demand per folder** writes the choice onto the folders as Explorer's own keep choices, only when it changed since it
+  was last written (so choices made in Explorer stay): folders on this PC "Always keep on this device", On-Demand folders
+  no keep choice; their files are freed once (at once when in sync, else when they are), and a file opened later stays.
+  `KeepOnNest` asks the nearest folder with its own choice, so it also works for a folder that isn't here yet.
+* **Files page:** lists the nest from this computer's copy of the nest's list (it shows while the nest is offline). A file
+  only on the nest opens as a copy in the app's own folder (user-only), saved back with the opened version as base; a
+  save that meets a newer version on the nest becomes a conflict copy beside it, as the sync does. Copies go a day after
+  their last change reached the nest, never before. While the nest is nearly full only opening works (a pop-up says so).
+* **Moving and renaming happen on the nest** (`POST /api/move`): the new name gets the file, the old one is deleted into
+  history; other computers see a new file and a deleted one, so nothing in the sync changes. One file per request, so a
+  folder moves file by file. The copy is made before the nest answers even if the app stops waiting (big files). A
+  letter-case-only rename goes through a passing name. An older nest answers a bare 404: "update your nest".
+* **"Help me clean up"** (on the nest-full pop-up): lists the biggest files by kind (by file extension). The owner's
+  rule: "we do not delete anything, we recommend not to delete, only if the user is 1000% sure". So the screen
+  recommends keeping everything and saving copies elsewhere. Deleting needs a tick plus the word DELETE typed, and then
+  deletes for good (`POST /api/purge`: the file and its older versions), because a normal delete keeps the space in
+  History for 30 days. It works while the nest is full, which is what it is for. `/api/info` now also gives
+  `historyBytes`.
+* **The screens (both apps):** the History page button became **Files** (still six page buttons) with two tabs, "All
+  files" (new) and "Deleted" (the History page as it was; its own inner tab "All files" is now "Older versions" so two
+  tabs never say the same). `MainPage.History` stays and means the Deleted tab, so "Show versions…" and "Open in Pairnets"
+  land where they did. Clean up takes the Files page's place until "Done". A change on the Files page (and in Explorer's
+  "Where this folder lives…") is saved at once, as the Core does, and so is the Settings page's "Where your files live"
+  card, like the page's other switches since the design review (A11; it was saved with Save before the two branches met).
+  The right-click and sync-ticks switches apply at once too, and Ctrl+4 opens Files (Ctrl+F searches it). Either way,
+  choices that take files off this computer ask first ("Keep Photos only on your nest?"). The pages talk to `INestFiles`, so the UI tests
+  give them the nest's files in memory (`FakeNestFiles`).
+* **The installer asks first, like VS Code's** (owner's request, with a screenshot of VS Code's "Select Additional
+  Tasks"): Start menu, desktop icon (off), Explorer left side, right-click menu, sync ticks, where files live (three
+  choices for the whole folder), look for updates, update the nest (off), start at log-in; "Open Pairnets now" on the
+  last page. An install by hand leaves the ticks in `HKCU\Software\Pairnets\Setup` (Choices + an Id), and the app takes
+  them into its settings once per Id (`SetupChoices`). A silent update from inside Pairnets writes nothing, so changes
+  made in Settings since are kept. The right-click menu became a setting of its own (`ExplorerRightClick`), and the
+  folder Pairnets is in Explorer for is remembered in `HKCU\Software\Pairnets\Explorer`, so it is known even when there
+  are no right-click items.

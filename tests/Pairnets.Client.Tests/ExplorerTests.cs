@@ -61,6 +61,7 @@ public sealed class ExplorerTests : IDisposable
     [InlineData(@"Classes\*\shell\Pairnets.Status", "Show sync status", "--sync-status")]
     [InlineData(@"Classes\Directory\shell\Pairnets.Open", "Open in Pairnets", "--open-in-pairnets")]
     [InlineData(@"Classes\Directory\shell\Pairnets.Status", "Show sync status", "--sync-status")]
+    [InlineData(@"Classes\Directory\shell\Pairnets.Where", "Where this folder lives…", "--where-it-lives")]
     public void Apply_AddsRightClickItems_OnlyInsideThePairnetsFolder(string key, string text, string argument)
     {
         var folder = _dir.Combine("Pairnets");
@@ -73,6 +74,23 @@ public sealed class ExplorerTests : IDisposable
         Assert.Equal("Single", Value(key, "MultiSelectModel")); // one Pairnets for a whole selection
         Assert.Equal($"\"C:\\Program Files\\Pairnets\\Pairnets.exe\" {argument} \"%1\"", Value(key + @"\command"));
         Assert.Equal(FileManagerCommand.FromArguments([argument, folder + @"\a.txt"])!.Path, folder + @"\a.txt");
+    }
+
+    [Fact]
+    public void Apply_WithoutRightClickItems_KeepsTheRest_AndStillKnowsTheFolder()
+    {
+        var folder = _dir.Combine("Pairnets");
+        Directory.CreateDirectory(folder);
+        ExplorerShell.Apply(_software, Entry(folder));
+
+        ExplorerShell.Apply(_software, Entry(folder), rightClick: false);
+
+        foreach (var verb in new[] { @"Classes\*\shell\Pairnets.Open", @"Classes\Directory\shell\Pairnets.Status", @"Classes\Directory\shell\Pairnets.Where" })
+            Assert.Null(_software.OpenSubKey(verb));
+        Assert.Equal("Pairnets", Value(@"Microsoft\Windows\CurrentVersion\Explorer\Desktop\NameSpace\" + ExplorerShell.FolderClsid));
+        Assert.Equal(folder, ExplorerShell.RegisteredFolder(_software));
+        ExplorerShell.Remove(_software, folder);
+        Assert.Null(ExplorerShell.RegisteredFolder(_software));
     }
 
     [Fact]
@@ -91,8 +109,9 @@ public sealed class ExplorerTests : IDisposable
         Assert.Null(_software.OpenSubKey(@"Microsoft\Windows\CurrentVersion\Explorer\Desktop\NameSpace\" + ExplorerShell.FolderClsid));
         Assert.Null(Value(@"Microsoft\Windows\CurrentVersion\Explorer\HideDesktopIcons\NewStartPanel", ExplorerShell.FolderClsid));
         Assert.Equal("1", Value(@"Microsoft\Windows\CurrentVersion\Explorer\HideDesktopIcons\NewStartPanel", "{someone-else}"));
-        foreach (var verb in new[] { @"Classes\*\shell\Pairnets.Open", @"Classes\*\shell\Pairnets.Status", @"Classes\Directory\shell\Pairnets.Open", @"Classes\Directory\shell\Pairnets.Status" })
+        foreach (var verb in new[] { @"Classes\*\shell\Pairnets.Open", @"Classes\*\shell\Pairnets.Status", @"Classes\Directory\shell\Pairnets.Open", @"Classes\Directory\shell\Pairnets.Status", @"Classes\Directory\shell\Pairnets.Where" })
             Assert.Null(_software.OpenSubKey(verb));
+        Assert.Null(_software.OpenSubKey(@"Classes\*\shell\Pairnets.Where")); // folders only
         Assert.Null(ExplorerShell.RegisteredFolder(_software));
         Assert.False(File.Exists(Path.Combine(folder, "desktop.ini")));
     }
@@ -167,10 +186,26 @@ public sealed class ExplorerTests : IDisposable
         var main = app.Tray.Window!;
         await app.WaitUntil(() => main.SettingsPage.Content is Ui.SettingsView, "the Settings page");
         await app.Wpf.Ui(() => ((Ui.SettingsView)main.SettingsPage.Content).ExplorerBox.IsChecked = false);
+        // The switch applies at once (A11); Save afterwards puts the same entry there again.
+        await app.WaitUntil(() => app.Platform.ExplorerParts.Items.Count >= 2 && app.Platform.ExplorerParts.Items[^1] == (false, true),
+            "Pairnets to leave Explorer's left side");
         await app.Press(main, "Save");
-        await app.WaitUntil(() => app.Platform.ExplorerEntries.Items.Count == 2, "Pairnets to leave Explorer");
-        Assert.Null(app.Platform.ExplorerEntries.Items[^1]);
+        // The right-click items are a switch of their own, still on: only the left side and the folder icon go.
+        Assert.Equal(app.Folder, app.Platform.ExplorerEntries.Items[^1]);
+        Assert.Equal((false, true), app.Platform.ExplorerParts.Items[^1]);
         Assert.False(app.SavedSettings.ShowInFileManager);
+    }
+
+    [Fact]
+    public async Task App_TakesTheInstallersChoicesOnce()
+    {
+        await using var nest = await TestServer.StartWithWebsiteAsync();
+        await using var app = await TrayHarness.CreateAsync(nest, setupChoices: ("run-1", "explorerside=0;explorermenu=0;where=nest;autostart=0"));
+        await app.StartAsync();
+
+        Assert.Null(app.Platform.ExplorerEntries.Items[^1]); // neither part wanted
+        Assert.Equal(Core.Sync.FilePlacement.NestOnly, app.SavedSettings.Placement[""]);
+        Assert.Equal("run-1", app.SavedSettings.SetupChoicesApplied);
     }
 
     [Fact]
@@ -234,5 +269,28 @@ public sealed class ExplorerTests : IDisposable
         // Outside the Pairnets folder: just the window, nothing is looked up.
         await app.Wpf.Ui(() => app.Tray.HandleFileCommand(new FileManagerCommand(FileManagerAction.Open, @"C:\Windows\notepad.exe")));
         Assert.True(await app.Wpf.Ui(() => app.Tray.Window!.IsVisible));
+    }
+    [Fact]
+    public async Task WhereThisFolderLives_FromExplorer_OpensTheFilesPageOnThatFolderWithItsChoices()
+    {
+        await using var nest = await TestServer.StartWithWebsiteAsync();
+        await using var app = await TrayHarness.CreateAsync(nest);
+        Directory.CreateDirectory(Path.Combine(app.Folder, "Photos"));
+        File.WriteAllText(Path.Combine(app.Folder, "Photos", "Beach.jpg"), "sand");
+        await app.StartAsync();
+        await app.WaitUntil(() => nest.Store.ReadManifest(null).Entries.Any(e => e.Path == "Photos/Beach.jpg" && !e.Deleted), "the file to reach the nest");
+        await app.WaitUntil(() => app.Tray.Session?.Files.List("Photos").Count == 1, "this computer to know the nest's list");
+
+        await app.Wpf.Ui(() => app.Tray.HandleFileCommand(new FileManagerCommand(FileManagerAction.WhereItLives, Path.Combine(app.Folder, "Photos"))));
+        await app.WaitUntil(() => app.Tray.Window!.Page == Ui.MainPage.Files, "the Files page");
+        var files = app.Tray.Window!.FilesPane;
+        Assert.Equal("Photos", await app.Wpf.Ui(() => files.Folder));
+        await app.WaitUntil(() => files.PlacementMenuOpen, "the choices of where Photos lives");
+        Assert.Equal("On this PC", await app.Wpf.Ui(() => files.PlacementShown));
+        await app.Wpf.Ui(() => files.PlacementMenu.IsOpen = false);
+
+        // A file: the folder it is in.
+        await app.Wpf.Ui(() => app.Tray.HandleFileCommand(new FileManagerCommand(FileManagerAction.WhereItLives, Path.Combine(app.Folder, "Photos", "Beach.jpg"))));
+        Assert.Equal("Photos", await app.Wpf.Ui(() => files.Folder));
     }
 }

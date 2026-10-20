@@ -233,6 +233,7 @@ JSON is camelCase; errors are `{"code","message"}`.
 | `DELETE /api/file?path=&base=` | key | 200 tombstone (idempotent) · 409 `conflict` · 404 never existed |
 | `GET /api/history?path=` | key | `[{id, storedAtUtc, size, hash8}]` newest first |
 | `POST /api/history/restore?path=&id=` | key | restores the version as a normal new version |
+| `POST /api/move?from=&to=&base=` | key | moves or renames one file on the nest (the Files page): `to` (must not exist) gets the file, `from` is deleted into history · 409 `conflict` (changed, or `to` taken) · 404 `not_found`; an older nest answers a bare 404 |
 | `GET /api/devices` | key | `[{name, firstSeen, lastSeen, online, appVersion, system, lastChange, id}]`: every computer that sent an authenticated request (`X-Device-Id`, plus `X-Pairnets-Client` such as "1.0.38; Windows"); `online` while its push channel is open or it was seen in the last 2 minutes; `id` only for computers with their own key |
 | `/hub` (SignalR) | key | server → clients: `Changed(deviceId, path)`, `PeerBatch` (another computer's big upload starts or ends), `DeviceRemoved`, `DeviceRenamed`, `PairRequested(code, name, system)`, `PairDecided(code, approved)`, `PeerTransfer(name, report)` (another computer's live speeds and batch, see below), `PeerSynced(name, version)` (it has everything up to that version); clients → server: `BatchStarted(count)`, `BatchFinished()`, `ReportTransfer(report)`, `Synced(version)` |
 
