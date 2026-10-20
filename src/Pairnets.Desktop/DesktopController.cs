@@ -104,7 +104,13 @@ public sealed class DesktopController : ITrayActions, IDisposable
         _log.LogInformation("Pairnets {Version} starting on {Platform}", typeof(DesktopController).Assembly.GetName().Version, _platform.Name);
         // A pairnets:// link (the nest's website after approving this computer) starts a second
         // Pairnets, which pokes this one through the pipe and quits; come to the front for it.
-        _activation = AppActivation.Listen(() => Dispatcher.UIThread.Post(ComeToFront), _env.ActivationPipeName);
+        _activation = AppActivation.Listen(message => Dispatcher.UIThread.Post(() =>
+        {
+            if (FileManagerCommand.FromMessage(message) is { } command)
+                HandleFileCommand(command);
+            else
+                ComeToFront();
+        }), _env.ActivationPipeName);
         CreateTray();
         _refresh.Start();
         _updates.SetEnabled(_settings.CheckForUpdates);
@@ -126,7 +132,9 @@ public sealed class DesktopController : ITrayActions, IDisposable
             return;
         }
         StartSession(null);
-        if (!args.Contains("--autostart"))
+        if (FileManagerCommand.FromArguments(args) is { } command)
+            HandleFileCommand(command); // started by a right-click item in the file manager while Pairnets was not running
+        else if (!args.Contains("--autostart"))
             ShowMainWindow();
     }
 
@@ -276,6 +284,73 @@ public sealed class DesktopController : ITrayActions, IDisposable
         _session = session;
         _dirty = true;
         _log.LogInformation("Syncing {Folder} with {Server} as {Device}", _settings.Folder, _settings.ServerUrl, _settings.DeviceName);
+        UpdateFileManagerEntry();
+    }
+
+    // ------------------------------------------------------------------ the file manager
+
+    /// <summary>
+    /// Puts Pairnets in the file manager for the current folder (Linux: sidebar bookmark, right-click items, folder
+    /// icon; Mac: folder icon), or takes it away when switched off in Settings. Runs at every start.
+    /// </summary>
+    private void UpdateFileManagerEntry()
+    {
+        var folder = _settings.ShowInFileManager && _settings.IsComplete && Directory.Exists(_settings.Folder) ? _settings.Folder : null;
+        try
+        {
+            if (!_platform.SetFileManagerEntry(folder))
+                _log.LogInformation("Pairnets could not be fully added to the file manager; it tries again at the next start");
+        }
+        catch (Exception ex)
+        {
+            _log.LogWarning(ex, "Could not update Pairnets in the file manager");
+        }
+    }
+
+    /// <summary>A right-click item in the file manager: "Open in Pairnets" or "Show sync status" for a file or folder.</summary>
+    internal async void HandleFileCommand(FileManagerCommand command)
+    {
+        try
+        {
+            await HandleFileCommandAsync(command);
+        }
+        catch (Exception ex)
+        {
+            _log.LogWarning(ex, "Could not answer the file manager about {Path}", command.Path);
+        }
+    }
+
+    private async Task HandleFileCommandAsync(FileManagerCommand command)
+    {
+        if (_session is not { } session || _settings.Folder is not { } folder || FileStatusReader.ToSyncPath(folder, command.Path) is not { } rel)
+        {
+            ShowMainWindow();
+            return;
+        }
+        if (command.Action == FileManagerAction.Open)
+        {
+            if (rel.Length == 0 || Directory.Exists(command.Path))
+            {
+                ShowMainWindow(MainPage.History);
+                if (_window is { } w)
+                    w.SearchHistory(rel);
+            }
+            else
+            {
+                ShowMainWindow();
+                _window?.ShowVersionsFor(rel);
+            }
+            return;
+        }
+        var status = session.GetFileStatus(command.Path);
+        var name = rel.Length == 0 ? "Your Pairnets folder" : Pairnets.Core.Paths.PathRules.FileName(rel);
+        if (status.State == FileSyncState.Problem)
+        {
+            if (await Dialogs.ConfirmAsync(_window, "Pairnets – sync status", $"{name}\n\n{status.Text}\n\nOpen Pairnets to see what needs you?"))
+                ShowMainWindow(MainPage.Attention);
+            return;
+        }
+        await Dialogs.InfoAsync(_window, "Pairnets – sync status", $"{name}\n\n{status.Text}");
     }
 
     /// <summary>Opens the nest's page where a computer asking to join is allowed or turned away.</summary>
@@ -377,8 +452,19 @@ public sealed class DesktopController : ITrayActions, IDisposable
                 _log.LogWarning("Could not remove this computer on the nest: {Error}", ex.Message);
             }
             StopSession(); // the sync notes are only free to delete once the session is gone
+            var leftFileManager = false;
+            try
+            {
+                leftFileManager = _platform.SetFileManagerEntry(null);
+            }
+            catch (Exception ex)
+            {
+                _log.LogWarning(ex, "Could not take Pairnets out of the file manager");
+            }
             var result = LocalReset.Run(_settings, _platform.Secrets, _env.SettingsPath, _env.LocalDir);
             var notes = new List<string>(result.Problems);
+            if (!leftFileManager)
+                notes.Add("Pairnets could not be taken out of the file manager completely.");
             try
             {
                 _platform.SetAutoStart(false); // not SetAutoStart(): that would save the settings file again

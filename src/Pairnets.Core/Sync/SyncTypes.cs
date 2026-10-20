@@ -169,6 +169,9 @@ public sealed class EngineOptions
     /// link, so they simply start again, as before.
     /// </summary>
     public long ResumeDownloadsFrom { get; init; } = 16L * 1024 * 1024;
+
+    /// <summary>The folder as a Windows cloud folder (ticks in Explorer, Files On-Demand), or a plain folder.</summary>
+    public ICloudFiles CloudFiles { get; init; } = ICloudFiles.None;
 }
 
 /// <summary>Test seams. Production code never sets these.</summary>

@@ -57,6 +57,19 @@ public sealed class LinuxPlatform : IPlatformServices
 
     public void Reveal(string path) => Open(File.Exists(path) ? Path.GetDirectoryName(path)! : path);
 
+    public bool SetFileManagerEntry(string? folder)
+    {
+        var files = new LinuxFileManager(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), args => Proc.Run("gio", args).ExitCode);
+        return FolderIcon.Follow(folder, (before, now) =>
+        {
+            if (now is null || Environment.ProcessPath is not { } exe)
+                return files.Remove(before) && now is null;
+            if (before is { Length: > 0 } && before != now)
+                files.Remove(before); // the folder moved: the old one goes back to a plain folder
+            return files.Apply(now, exe, FolderIcon.Png);
+        });
+    }
+
     /// <summary>Token in the desktop keyring via secret-tool (reads the secret from stdin), else a 600 file.</summary>
     private sealed class LinuxSecrets : ISecretProtector
     {

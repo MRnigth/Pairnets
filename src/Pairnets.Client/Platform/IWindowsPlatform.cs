@@ -32,4 +32,26 @@ public interface IWindowsPlatform
 
     /// <summary>Starts the Pairnets.exe that just replaced this one (a copy from the zip updating itself).</summary>
     void StartUpdatedApp(string path, string arguments);
+
+    /// <summary>
+    /// Puts Pairnets in File Explorer for <paramref name="folder"/> (left side, right-click items, folder icon), or takes
+    /// it away for null. False when part of it could not be done (it is tried again at the next start).
+    /// </summary>
+    /// <param name="leftSide">False while the folder is a Windows cloud folder (Windows shows it in the left side then).</param>
+    bool SetExplorerEntry(string? folder, bool leftSide = true);
+
+    /// <summary>
+    /// Makes the folder a Windows cloud folder in <paramref name="mode"/> (ticks in Explorer; Files On-Demand) and
+    /// connects to it, or returns null with <paramref name="problem"/> saying why it stays a plain folder.
+    /// </summary>
+    CloudFiles.ICloudFolder? StartCloudFolder(string folder, CloudFolderMode mode, ILogger log, out string? problem);
+
+    /// <summary>True when Windows still has a Pairnets cloud folder (also after the switch was turned off).</summary>
+    bool HasCloudFolder();
+
+    /// <summary>
+    /// Makes every Pairnets cloud folder a plain folder again without reaching the nest ("Reset this app"). Returns how
+    /// many files stay behind as placeholders (their content was only on the nest).
+    /// </summary>
+    int ForgetCloudFolders();
 }

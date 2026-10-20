@@ -70,6 +70,8 @@ public partial class SettingsView : UserControl
         DeviceBox.Text = current.DeviceName ?? Environment.MachineName;
         IgnoreBox.Text = string.Join(Environment.NewLine, current.ExtraIgnore);
         AutoStartBox.IsChecked = current.StartWithWindows;
+        ExplorerBox.IsChecked = current.ShowInFileManager;
+        (current.CloudFolder switch { CloudFolderMode.KeepAllHere => CloudKeep, CloudFolderMode.OnDemand => CloudOnDemand, _ => CloudOff }).IsChecked = true;
         UpdateBox.IsChecked = current.CheckForUpdates;
         WaitBox.IsChecked = current.WaitForPeerBatches;
         MapSpeedBox.IsChecked = current.ShowMapSpeed;
@@ -132,6 +134,9 @@ public partial class SettingsView : UserControl
             : $"version {found.Version} isn't signed by Pairnets, so it won't be installed");
         CheckNowButton.IsEnabled = true;
     }
+
+    private CloudFolderMode CloudChoice() =>
+        CloudKeep.IsChecked == true ? CloudFolderMode.KeepAllHere : CloudOnDemand.IsChecked == true ? CloudFolderMode.OnDemand : CloudFolderMode.Off;
 
     private int ParallelChoice() => Par1.IsChecked == true ? 1 : Par2.IsChecked == true ? 2 : Par8.IsChecked == true ? 8 : 4;
 
@@ -281,6 +286,8 @@ public partial class SettingsView : UserControl
                 AccountEmail = OwnKey.AccountEmailAfterSave(_original, url, deviceId),
                 ExtraIgnore = SplitPatterns(),
                 StartWithWindows = AutoStartBox.IsChecked == true,
+                ShowInFileManager = ExplorerBox.IsChecked == true,
+                CloudFolder = CloudChoice(),
                 FirstRunCompleted = true,
                 Paused = _original.Paused,
                 SideFolded = _original.SideFolded,
