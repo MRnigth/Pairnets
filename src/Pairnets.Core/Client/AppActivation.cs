@@ -29,14 +29,23 @@ public static class AppActivation
     /// Starts answering pokes; <paramref name="activated"/> fires on a background thread for each one.
     /// Disposing the returned handle stops listening.
     /// </summary>
-    public static IDisposable Listen(Action activated, string? pipeName = null)
+    public static IDisposable Listen(Action activated, string? pipeName = null) => Listen(_ => activated(), pipeName);
+
+    /// <summary>
+    /// As <see cref="Listen(Action, string?)"/>, and hands on what the poke said: null for a plain poke, or the line a
+    /// second Pairnets sent with <see cref="TrySendToRunning"/> (the file manager's "Open in Pairnets", for example).
+    /// </summary>
+    public static IDisposable Listen(Action<string?> activated, string? pipeName = null)
     {
         var stop = new CancellationTokenSource();
         _ = Task.Run(() => ListenLoopAsync(activated, pipeName ?? DefaultPipeName, stop.Token));
         return new Stopper(stop);
     }
 
-    private static async Task ListenLoopAsync(Action activated, string name, CancellationToken ct)
+    /// <summary>The longest message a poke may carry (a command and a full path).</summary>
+    public const int MaxMessageBytes = 8192;
+
+    private static async Task ListenLoopAsync(Action<string?> activated, string name, CancellationToken ct)
     {
         NamedPipeServerStream? current = null;
         try
@@ -70,7 +79,8 @@ public static class AppActivation
                 // socket shared by its instances: if the last instance closed first, a poke arriving in that gap
                 // would sit in the old socket's queue and be lost with it.
                 var next = TryOpen(name);
-                activated();
+                var message = connected ? await ReadMessageAsync(current, ct).ConfigureAwait(false) : null;
+                activated(message);
                 await current.DisposeAsync().ConfigureAwait(false);
                 current = next;
                 if (!connected && !await PauseAsync(TimeSpan.FromMilliseconds(100), ct).ConfigureAwait(false))
@@ -89,13 +99,46 @@ public static class AppActivation
         }
     }
 
+    /// <summary>
+    /// Reads what the poker wrote before hanging up, waiting at most a second. A plain poke writes nothing; a
+    /// message too long, unreadable or not finished in time counts as a plain poke.
+    /// </summary>
+    private static async Task<string?> ReadMessageAsync(NamedPipeServerStream pipe, CancellationToken ct)
+    {
+        using var wait = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        wait.CancelAfter(TimeSpan.FromSeconds(1));
+        var buffer = new byte[MaxMessageBytes + 1];
+        var length = 0;
+        try
+        {
+            int read;
+            while (length < buffer.Length && (read = await pipe.ReadAsync(buffer.AsMemory(length), wait.Token).ConfigureAwait(false)) > 0)
+                length += read;
+        }
+        catch (Exception ex) when (ex is OperationCanceledException or IOException or ObjectDisposedException)
+        {
+            return null;
+        }
+        if (length == 0 || length > MaxMessageBytes)
+            return null;
+        try
+        {
+            return new UTF8Encoding(false, throwOnInvalidBytes: true).GetString(buffer, 0, length);
+        }
+        catch (DecoderFallbackException)
+        {
+            return null;
+        }
+    }
+
     /// <summary>Opens a listening pipe instance, or null when the name is taken (two instances of this one are allowed at once).</summary>
     private static NamedPipeServerStream? TryOpen(string name)
     {
         try
         {
+            // Only this user's programs may poke it (the pokes now carry file paths).
             return new NamedPipeServerStream(name, PipeDirection.In, maxNumberOfServerInstances: 2,
-                PipeTransmissionMode.Byte, PipeOptions.Asynchronous);
+                PipeTransmissionMode.Byte, PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -130,6 +173,32 @@ public static class AppActivation
         catch (Exception ex) when (ex is TimeoutException or IOException or UnauthorizedAccessException or ArgumentOutOfRangeException)
         {
             return false; // the last one: a pipe name too long for this platform's socket path
+        }
+    }
+
+    /// <summary>
+    /// Hands <paramref name="message"/> to the running Pairnets (see <see cref="Listen(Action{string?}, string?)"/>).
+    /// False when none is listening or the message is too long.
+    /// </summary>
+    public static bool TrySendToRunning(string message, string? pipeName = null, int timeoutMs = 2000)
+    {
+        var bytes = Encoding.UTF8.GetBytes(message);
+        if (bytes.Length == 0 || bytes.Length > MaxMessageBytes)
+            return false;
+        AllowTakingTheForeground();
+        try
+        {
+            using var client = new NamedPipeClientStream(".", pipeName ?? DefaultPipeName, PipeDirection.Out, PipeOptions.CurrentUserOnly);
+            client.Connect(timeoutMs);
+            client.Write(bytes);
+            client.Flush();
+            if (OperatingSystem.IsWindows())
+                client.WaitForPipeDrain(); // closing before the running Pairnets read it would lose the message
+            return true;
+        }
+        catch (Exception ex) when (ex is TimeoutException or IOException or UnauthorizedAccessException or ArgumentOutOfRangeException)
+        {
+            return false;
         }
     }
 

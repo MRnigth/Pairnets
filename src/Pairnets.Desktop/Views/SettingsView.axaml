@@ -117,6 +117,14 @@
                   <TextBlock Text="Start Pairnets when I log in" FontWeight="SemiBold" VerticalAlignment="Center" />
                   <ToggleSwitch x:Name="AutoStartBox" Grid.Column="1" Classes="bare" OnContent="Start Pairnets when I log in" OffContent="Start Pairnets when I log in" />
                 </Grid>
+                <Grid ColumnDefinitions="*,Auto">
+                  <StackPanel Spacing="2" VerticalAlignment="Center">
+                    <TextBlock x:Name="FileManagerTitle" Text="Show Pairnets in the file manager" FontWeight="SemiBold" />
+                    <TextBlock x:Name="FileManagerText" Classes="t3" TextWrapping="Wrap"
+                               Text="In the sidebar, with right-click items and a Pairnets folder icon. Your files are not changed." />
+                  </StackPanel>
+                  <ToggleSwitch x:Name="FileManagerBox" Grid.Column="1" Classes="bare" OnContent="Show Pairnets in the file manager" OffContent="Show Pairnets in the file manager" />
+                </Grid>
               </StackPanel>
             </Border>
 

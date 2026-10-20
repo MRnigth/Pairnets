@@ -72,6 +72,13 @@ public partial class SettingsView : UserControl
         DeviceBox.Text = current.DeviceName ?? Environment.MachineName;
         IgnoreBox.Text = string.Join(Environment.NewLine, current.ExtraIgnore);
         AutoStartBox.IsChecked = autoStart;
+        FileManagerBox.IsChecked = current.ShowInFileManager;
+        if (OperatingSystem.IsMacOS())
+        {
+            // Apple lets an app give its folder an icon, but not add it to Finder's sidebar: that stays a drag.
+            FileManagerTitle.Text = "Give the Pairnets folder its icon";
+            FileManagerText.Text = "The blue Pairnets folder icon in Finder. To keep the folder in Finder's sidebar, drag it there once.";
+        }
         UpdateBox.IsChecked = current.CheckForUpdates;
         WaitBox.IsChecked = current.WaitForPeerBatches;
         MapSpeedBox.IsChecked = current.ShowMapSpeed;
@@ -336,6 +343,8 @@ public partial class SettingsView : UserControl
                 AccountEmail = OwnKey.AccountEmailAfterSave(_original, url, deviceId),
                 ExtraIgnore = Patterns(),
                 StartWithWindows = AutoStartBox.IsChecked == true,
+                ShowInFileManager = FileManagerBox.IsChecked == true,
+                CloudFolder = _original.CloudFolder, // Windows only
                 FirstRunCompleted = true,
                 Paused = _original.Paused,
                 SideFolded = _original.SideFolded,

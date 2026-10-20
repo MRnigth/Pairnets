@@ -263,6 +263,8 @@ jobs:
       - name: Test
         env:
           PAIRNETS_CONVERGENCE_SEEDS: 50
+          # This computer is thrown away after the run: the Windows cloud folder tests may register one here.
+          PAIRNETS_CLOUD_TESTS: 1
         run: >
           dotnet test Pairnets.sln -c Release --no-build
           --logger "trx;LogFileName=windows.trx"

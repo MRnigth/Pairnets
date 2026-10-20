@@ -462,6 +462,19 @@ public sealed class StateDb : IDisposable
         }
     }
 
+    /// <summary>The nest's row for one path (deleted files included), or null when the nest has never had it.</summary>
+    public ManifestEntry? GetRemote(string path)
+    {
+        lock (_gate)
+        {
+            using var cmd = Command("SELECT path, hash, size, modifiedMs, deleted, version FROM remote WHERE path=$p", ("$p", path));
+            using var r = cmd.ExecuteReader();
+            return r.Read()
+                ? new ManifestEntry(r.GetString(0), r.IsDBNull(1) ? null : r.GetString(1), r.GetInt64(2), r.GetInt64(3), r.GetInt64(4) != 0, r.GetInt64(5))
+                : null;
+        }
+    }
+
     /// <summary>
     /// Applies a manifest response to the mirror. With <paramref name="replaceAll"/> the mirror is
     /// replaced (full fetch); otherwise entries are upserted (delta fetch). The cursor is stored in

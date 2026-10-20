@@ -37,6 +37,12 @@ public interface IPlatformServices
         System.Diagnostics.Process.Start(psi)?.Dispose();
     }
 
+    /// <summary>
+    /// Puts Pairnets in the file manager for <paramref name="folder"/>, or takes it away for null: on Linux the sidebar
+    /// bookmark, the right-click items and the folder icon; on a Mac the folder icon. False when part of it failed.
+    /// </summary>
+    bool SetFileManagerEntry(string? folder);
+
     public static IPlatformServices Current { get; } =
         OperatingSystem.IsMacOS() ? new MacPlatform() : new LinuxPlatform();
 }

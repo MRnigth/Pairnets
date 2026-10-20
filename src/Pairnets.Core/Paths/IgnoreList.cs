@@ -62,6 +62,13 @@ public sealed class IgnoreList
 
     public List<string> Patterns { get; } = [];
 
+    /// <summary>
+    /// Where Finder keeps a folder's own icon ("Icon" and a carriage return). Never synced: it only means something to
+    /// that Mac, and no other computer could even make a file with that name. Matched exactly, outside the patterns,
+    /// because patterns are trimmed and a file called just "Icon" must still sync.
+    /// </summary>
+    public const string FinderIconFile = "Icon\r";
+
     /// <summary>True when a file at <paramref name="syncPath"/> must not be synced.</summary>
     public bool IsIgnored(string syncPath) => Matches(syncPath, isDirectory: false);
 
@@ -75,6 +82,8 @@ public sealed class IgnoreList
         {
             var segment = segments[i];
             var segmentIsDirectory = isDirectory || i < segments.Length - 1;
+            if (!segmentIsDirectory && segment == FinderIconFile)
+                return true;
             foreach (var rule in _segmentRules)
             {
                 if (rule.IsMatch(segment))

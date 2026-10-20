@@ -24,6 +24,8 @@
 
   <ItemGroup>
     <AvaloniaResource Include="..\..\assets\pairnets-icon-256.png" Link="Assets\pairnets-icon-256.png" />
+    <!-- The blue folder icon the file manager shows on the Pairnets folder (FolderIcon.Png). -->
+    <EmbeddedResource Include="..\..\assets\pairnets-folder-256.png" LogicalName="Pairnets.FolderIcon.png" />
     <AvaloniaResource Include="..\..\assets\fonts\PlusJakartaSans-Regular.ttf" Link="Assets\Fonts\PlusJakartaSans-Regular.ttf" />
     <AvaloniaResource Include="..\..\assets\fonts\PlusJakartaSans-Medium.ttf" Link="Assets\Fonts\PlusJakartaSans-Medium.ttf" />
     <AvaloniaResource Include="..\..\assets\fonts\PlusJakartaSans-SemiBold.ttf" Link="Assets\Fonts\PlusJakartaSans-SemiBold.ttf" />

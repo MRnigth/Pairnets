@@ -7,9 +7,54 @@ namespace Pairnets.Client;
 
 internal static class Program
 {
+    /// <summary>Takes Pairnets out of File Explorer and quits (the uninstaller runs it).</summary>
+    public const string UnregisterExplorerArgument = "--unregister-explorer";
+
+    /// <summary>Asks before uninstalling when files are only on the nest; exit code 1 means "do not uninstall".</summary>
+    public const string CheckBeforeUninstallArgument = "--check-before-uninstall";
+
+    /// <summary>
+    /// With Files On-Demand some files may be only on the nest: without Pairnets they could not open. The person
+    /// chooses: stop (and switch Files On-Demand off in Pairnets first, which brings every file here), or go on.
+    /// </summary>
+    private static int CheckBeforeUninstall()
+    {
+        int online;
+        try
+        {
+            online = Platform.CloudFiles.WindowsCloudFolder.CountCloudOnly();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Runtime.InteropServices.COMException)
+        {
+            return 0;
+        }
+        if (online == 0)
+            return 0;
+        return MessageBox.Show($"{online} file(s) in your Pairnets folder are only on your nest (Files On-Demand). Without Pairnets they cannot open.\n\n" +
+            "To keep them on this PC: choose No, open Pairnets, and set Settings → Files in Explorer to \"Plain folder\". Pairnets downloads them, then you can uninstall.\n\n" +
+            "Uninstall anyway? (They stay safe on your nest.)", "Uninstall Pairnets", MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.Yes ? 0 : 1;
+    }
+
     [STAThread]
     private static int Main(string[] args)
     {
+        // The uninstaller first asks whether files would be left behind, then takes Pairnets out of File Explorer
+        // (left side, right-click items, folder icon, the cloud folder).
+        if (args.Contains(CheckBeforeUninstallArgument))
+            return CheckBeforeUninstall();
+        if (args.Contains(UnregisterExplorerArgument))
+        {
+            try
+            {
+                Platform.CloudFiles.WindowsCloudFolder.ForgetAll();
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Runtime.InteropServices.COMException)
+            {
+                // The rest still goes.
+            }
+            return Platform.WindowsPlatform.SetExplorerEntry(null, null, Pairnets.Core.Settings.PairnetsPaths.LocalDir) ? 0 : 1;
+        }
+
         using var mutex = new Mutex(initiallyOwned: true, PairnetsInfo.WindowsMutex, out var createdNew);
         // Started by the Pairnets this one just replaced (a copy from the zip updating itself): wait for it to quit.
         if (!createdNew && args.Contains(SelfReplace.AfterUpdateArgument))
@@ -23,6 +68,9 @@ internal static class Program
                 AppActivation.TrySignalRunning();
                 return 0;
             }
+            // A right-click item in Explorer ("Open in Pairnets", "Show sync status"): the running Pairnets does it.
+            if (FileManagerCommand.FromArguments(args) is { } command)
+                return AppActivation.TrySendToRunning(command.ToMessage()) ? 0 : 1;
             MessageBox.Show("Pairnets is already running. Look for its icon in the notification area.", "Pairnets",
                 MessageBoxButton.OK, MessageBoxImage.Information);
             return 1;
