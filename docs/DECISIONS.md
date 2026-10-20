@@ -1125,3 +1125,17 @@ The owner's answers to the 2026-10-14 audit questions:
   history; other computers see a new file and a deleted one, so nothing in the sync changes. One file per request, so a
   folder moves file by file. The copy is made before the nest answers even if the app stops waiting (big files). A
   letter-case-only rename goes through a passing name. An older nest answers a bare 404: "update your nest".
+* **"Help me clean up"** (on the nest-full pop-up): lists the biggest files by kind (by file extension). The owner's
+  rule: "we do not delete anything, we recommend not to delete, only if the user is 1000% sure". So the screen
+  recommends keeping everything and saving copies elsewhere. Deleting needs a tick plus the word DELETE typed, and then
+  deletes for good (`POST /api/purge`: the file and its older versions), because a normal delete keeps the space in
+  History for 30 days. It works while the nest is full, which is what it is for. `/api/info` now also gives
+  `historyBytes`.
+* **The installer asks first, like VS Code's** (owner's request, with a screenshot of VS Code's "Select Additional
+  Tasks"): Start menu, desktop icon (off), Explorer left side, right-click menu, sync ticks, where files live (three
+  choices for the whole folder), look for updates, update the nest (off), start at log-in; "Open Pairnets now" on the
+  last page. An install by hand leaves the ticks in `HKCU\Software\Pairnets\Setup` (Choices + an Id), and the app takes
+  them into its settings once per Id (`SetupChoices`). A silent update from inside Pairnets writes nothing, so changes
+  made in Settings since are kept. The right-click menu became a setting of its own (`ExplorerRightClick`), and the
+  folder Pairnets is in Explorer for is remembered in `HKCU\Software\Pairnets\Explorer`, so it is known even when there
+  are no right-click items.
