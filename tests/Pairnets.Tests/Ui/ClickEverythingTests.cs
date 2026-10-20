@@ -13,6 +13,7 @@ using Pairnets.Core.Sync;
 using Pairnets.Desktop.Views;
 using Pairnets.Server.Storage;
 using Pairnets.Tests.Infrastructure;
+using Pairnets.Tests.Unit;
 using Xunit.Abstractions;
 
 namespace Pairnets.Tests.Ui;
@@ -187,6 +188,9 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
     public async Task TheServerUpdateWindow_EveryButtonDoesWhatItSays() => Pass(await RunAsync("server update"));
 
     [AvaloniaFact]
+    public async Task TheNestPlaceWindow_EveryButtonDoesWhatItSays() => Pass(await RunAsync("nest place"));
+
+    [AvaloniaFact]
     public async Task TheBugReportWindow_EveryButtonDoesWhatItSays() => Pass(await RunAsync("bug report"));
 
     [AvaloniaFact]
@@ -343,6 +347,7 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
         [
             new("the Settings page (signed in with its own key)", s => SettingsStage(s, ownKey: true)),
             new("the Settings page (on the shared token)", s => SettingsStage(s, ownKey: false)),
+            new("the Settings page (a nest that can move its files, the Linux program folder)", s => SettingsStage(s, ownKey: true, canMove: true)),
         ],
         ["sign-in"] =
         [
@@ -389,6 +394,29 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
                 w => w.ShowResult(new ServerUpdateResult(false, "The download did not match its checksum.", "1.0.52", CanUpdateItself: true)))),
             new("the server update window (Debug mode)", s => ServerUpdateStage(s, new ServerUpdateWindow(() => null, "1.0.52", "1.0.58", debug: () => true),
                 w => w.AppendDetail("[  0s] Asking the server to update"))),
+        ],
+        ["nest place"] =
+        [
+            new("the nest's drives", s => NestPlaceStage(s, _ => { })),
+            new("the nest's drives (sure?)", s => NestPlaceStage(s, f => f.Choose("/mnt/data/pairnets"))),
+            new("the nest's drives (moving)", s => NestPlaceStage(s, f =>
+            {
+                f.Choose("/mnt/data/pairnets");
+                f.Asking();
+                f.Seen(NestPlaceFlowTests.Sample(new StorageMoveStatus(StorageMoveStatus.Running, 40, "Copying your files to the new drive")));
+            })),
+            new("the nest's drives (moved)", s => NestPlaceStage(s, f =>
+            {
+                f.Choose("/mnt/data/pairnets");
+                f.Asking();
+                f.Seen(NestPlaceFlowTests.Sample(new StorageMoveStatus(StorageMoveStatus.Succeeded, 100, "Done.", "/var/lib/pairnets-before-move-x"), "/mnt/data/pairnets"));
+            })),
+            new("the nest's drives (not moved)", s => NestPlaceStage(s, f =>
+            {
+                f.Choose("/mnt/data/pairnets");
+                f.Asking();
+                f.Seen(NestPlaceFlowTests.Sample(new StorageMoveStatus(StorageMoveStatus.Failed, 0, "That drive can't be used: it is read-only. Nothing was changed.")));
+            })),
         ],
         ["bug report"] =
         [
@@ -560,7 +588,7 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
 
     // ------------------------------------------------------------------ settings
 
-    private Task<SettingsView> SettingsStage(Stage s, bool ownKey)
+    private Task<SettingsView> SettingsStage(Stage s, bool ownKey, bool canMove = false)
     {
         var secrets = new MemorySecrets();
         var key = ownKey ? fixture.Nest.MintKey("MACBOOK-" + Guid.NewGuid().ToString("N")[..6]) : null;
@@ -587,10 +615,19 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
         view.OpenLinkRequested += s.Opened.Add;
         view.ReportBugRequested += () => s.Events.Add("report-bug");
         view.SwitchesChanged += _ => s.Events.Add("switches");
+        view.ChangeStorageRequested += () => s.Events.Add("change-storage");
+        view.MoveProgramRequested += () => s.Events.Add("move-program");
+        if (canMove)
+        {
+            view.ShowNestStorage(NestPlaceFlowTests.Sample());
+            view.ShowProgramFolder("~/.local/opt/pairnets");
+        }
         s.Show(new Window { Content = view, Width = 900, Height = 780 });
 
         var expected = fixture.Feed.Asset is null ? "up to date" : "version 99.0.0 is available";
         s.Expect["OnShowDevices"] = Raised(s, "show-devices");
+        s.Expect["OnChangeStorage"] = Raised(s, "change-storage");
+        s.Expect["OnMoveProgram"] = Raised(s, "move-program");
         // Switches apply at once, without Save (A11); a choice that was already made changes nothing.
         s.Expect["OnSwitchChanged"] = All(Raised(s, "switches"), That(() => view.SwitchesApplied, "the switch apply at once"));
         s.Expect["OnParChanged"] = That(() => view.SwitchesApplied, "the choice apply at once");
@@ -698,6 +735,25 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
         var auth = fixture.Website.Services.GetRequiredService<AuthStore>();
         foreach (var request in auth.ListPendingPairRequests())
             auth.DecidePairRequest(request.Id, approve: false, "test");
+    }
+
+    // ------------------------------------------------------------------ where the nest keeps its files
+
+    /// <summary>The "Where your nest keeps files" window with the sample drives, in the state <paramref name="arrange"/> puts it in (no nest: nothing is asked).</summary>
+    private static Task NestPlaceStage(Stage s, Action<NestPlaceFlow> arrange)
+    {
+        var window = s.Show(new NestPlaceWindow(null, NestPlaceFlowTests.Sample()));
+        arrange(window.Flow);
+        window.Render();
+        Dispatcher.UIThread.RunJobs();
+        s.Expect["OnClose"] = That(() => !window.IsVisible, "the window close");
+        s.Expect["OnPick"] = That(() => window.ConfirmShown && window.ExplanationText.Contains("/mnt/data/pairnets", StringComparison.Ordinal), "the move to that drive be asked about");
+        s.Expect["OnBack"] = That(() => window.ListShown, "the drives show again");
+        s.Expect["OnRetry"] = That(() => window.ListShown, "the drives show again");
+        s.Expect["OnMove"] = That(() => window.HeadingText == "Not moved" && window.ExplanationText.Contains("Not connected", StringComparison.Ordinal),
+            "the window explain that it is not connected");
+        s.Expect["OnCopy"] = Clipboard(window, () => "sudo rm -rf '/var/lib/pairnets-before-move-x'");
+        return Task.CompletedTask;
     }
 
     // ------------------------------------------------------------------ server update, bug report, questions

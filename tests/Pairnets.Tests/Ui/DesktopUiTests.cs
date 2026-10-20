@@ -517,6 +517,12 @@ public class DesktopUiTests
             null, autoStart: true, serverVersionText: "Nest 1.0.58");
         window.ShowSettingsPage(settingsPage);
         Save(window, outDir, $"main-window-settings-{suffix}.png");
+        // A Linux nest that can move its files, and the Linux app's program folder.
+        settingsPage.ShowNestStorage(Pairnets.Tests.Unit.NestPlaceFlowTests.Sample(current: "/mnt/data/pairnets"));
+        settingsPage.ShowProgramFolder("~/.local/opt/pairnets");
+        Save(window, outDir, $"main-window-settings-nest-storage-{suffix}.png");
+        settingsPage.ShowNestStorage(null);
+        settingsPage.ShowProgramFolder(null);
         settingsPage.ScrollToEnd();
         Save(window, outDir, $"main-window-settings-start-over-{suffix}.png");
         window.AllowClose = true;
@@ -635,6 +641,31 @@ public class DesktopUiTests
         serverUpdate.ShowResult(new ServerUpdateResult(false, "This nest can't update itself yet.", "1.0.48", CanUpdateItself: false));
         Save(serverUpdate, outDir, $"server-update-manual-{suffix}.png");
         serverUpdate.Close();
+
+        // Settings > Your nest > "Change…": the nest's drives, sure?, moving, moved, not moved.
+        var place = new NestPlaceWindow(null, Pairnets.Tests.Unit.NestPlaceFlowTests.Sample());
+        place.Show();
+        Save(place, outDir, $"nest-place-drives-{suffix}.png");
+        place.Flow.Choose("/mnt/data/pairnets");
+        place.Render();
+        Save(place, outDir, $"nest-place-confirm-{suffix}.png");
+        place.Flow.Asking();
+        place.Flow.Seen(Pairnets.Tests.Unit.NestPlaceFlowTests.Sample(new StorageMoveStatus(StorageMoveStatus.Running, 40, "Copying your files to the new drive")));
+        place.Render();
+        Save(place, outDir, $"nest-place-moving-{suffix}.png");
+        place.Flow.Seen(Pairnets.Tests.Unit.NestPlaceFlowTests.Sample(new StorageMoveStatus(StorageMoveStatus.Succeeded, 100, "Done.",
+            "/var/lib/pairnets-before-move-2026-10-20-120000"), "/mnt/data/pairnets"));
+        place.Render();
+        Save(place, outDir, $"nest-place-done-{suffix}.png");
+        place.Close();
+        var failed = new NestPlaceWindow(null, Pairnets.Tests.Unit.NestPlaceFlowTests.Sample());
+        failed.Show();
+        failed.Flow.Choose("/mnt/data/pairnets");
+        failed.Flow.Asking();
+        failed.Flow.Seen(Pairnets.Tests.Unit.NestPlaceFlowTests.Sample(new StorageMoveStatus(StorageMoveStatus.Failed, 0, "That drive can't be used: /mnt/data is read-only. Nothing was changed.")));
+        failed.Render();
+        Save(failed, outDir, $"nest-place-failed-{suffix}.png");
+        failed.Close();
 
         // The bug report window, with a sample report.
         var bugDir = Path.Combine(Path.GetTempPath(), "pairnets-bug-shots");

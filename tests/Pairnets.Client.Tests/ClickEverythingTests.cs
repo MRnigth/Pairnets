@@ -239,6 +239,9 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
     public Task ServerUpdateWindow_EveryButtonWorks() => Expect(fixture.Run("server update", () => PressEverything(ServerUpdateScreens(), ServerUpdateRules)));
 
     [Fact]
+    public Task NestPlaceWindow_EveryButtonWorks() => Expect(fixture.Run("nest place", () => PressEverything(NestPlaceScreens(), NestPlaceRules)));
+
+    [Fact]
     public Task BugReportWindow_EveryButtonWorks() => Expect(fixture.Run("bug report", () => PressEverything(BugReportScreens(), BugReportRules)));
 
     [Fact]
@@ -250,7 +253,7 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
     {
         // Run every window first (each runs once, whichever test asks first).
         foreach (var run in new Func<Task>[] { TrayPanel_EveryButtonWorks, MainWindow_EveryButtonWorks, Settings_EveryButtonWorks, SignIn_EveryButtonWorks,
-                     ServerUpdateWindow_EveryButtonWorks, BugReportWindow_EveryButtonWorks, TrayMenu_EveryItemWorks })
+                     ServerUpdateWindow_EveryButtonWorks, NestPlaceWindow_EveryButtonWorks, BugReportWindow_EveryButtonWorks, TrayMenu_EveryItemWorks })
         {
             try
             {
@@ -776,7 +779,7 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
 
     // ------------------------------------------------------------------ Settings
 
-    private Window SettingsHost(Bench b, bool ownKey)
+    private Window SettingsHost(Bench b, bool ownKey, bool canMove = false)
     {
         b.Updates = new UpdateService(new UpdateChecker(new HttpClient(), fixture.Feed.DownloadBase, fixture.Feed.ReleasePage, FakeReleaseFeed.SigningKey),
             PairnetsInfo.ProductVersion, UpdateChecker.AssetForThisPlatform());
@@ -797,6 +800,9 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
         view.SwitchesChanged += _ => b.Events.Add("SwitchesChanged");
         view.ReportBugRequested += () => b.Events.Add("ReportBugRequested");
         view.OpenLinkRequested += b.Opened.Add;
+        view.ChangeStorageRequested += () => b.Events.Add("ChangeStorageRequested");
+        if (canMove)
+            view.ShowNestStorage(SampleStorage());
         var host = new Window { Title = "Settings", Width = 700, Height = 560, Content = view };
         ThemeManager.Attach(host);
         return host;
@@ -807,6 +813,7 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
         // "Save anyway" when the connection test does not like the shared token.
         yield return new Screen("Settings", "signed in with this computer's own key", b => SettingsHost(b, ownKey: true), Answers: s => s.AgreeToEverything());
         yield return new Screen("Settings", "on the shared token (address and token shown)", b => SettingsHost(b, ownKey: false), Answers: s => s.AgreeToEverything());
+        yield return new Screen("Settings", "a nest that can move its files", b => SettingsHost(b, ownKey: true, canMove: true), Answers: s => s.AgreeToEverything());
     }
 
     private static SettingsView View(Check c) => (SettingsView)c.Window.Content;
@@ -819,6 +826,8 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
         On("Advanced: nest address and key", "show the nest address and key", c => View(c).AddressFields.IsVisible),
         On("Test connection", "test the connection and show the result",
             c => View(c).TestResult.Text is { Length: > 0 } text && !text.StartsWith("Testing", StringComparison.Ordinal), seconds: 20),
+        new(t => t.Handlers.Contains("SettingsView.OnChangeStorage"), "ask the app to show where the nest keeps its files",
+            c => c.Bench.Events.Items.Contains("ChangeStorageRequested")),
         On("Change…", "let you choose the folder and show it", c => View(c).FolderBox.Text == c.Bench.Script.Folder),
         new(t => t.Element is Expander, "open the files-to-ignore section", c => ((Expander)c.Target.Element).IsExpanded != c.WasChecked),
         On("Check now", "look for an app update and say what it found", c => View(c).VersionText.Text.Contains("is available", StringComparison.Ordinal), seconds: 20),
@@ -980,6 +989,60 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
             c => ((ServerUpdateWindow)c.Window) is { ResultPanel.IsVisible: true } u && u.Explanation.Text.Contains("Not connected", StringComparison.Ordinal)),
         On(["Copy command", "Copy"], "copy the install command", c => c.Bench.Script.Copied.Items.Contains(((ServerUpdateWindow)c.Window).CommandText.Text)),
         On("Copy details", "copy the details", c => c.Bench.Script.Copied.Count == 1),
+    ];
+
+    // ------------------------------------------------------------------ where the nest keeps its files
+
+    /// <summary>The nest's drives as its root helper lists them: the main disk (in use), a data drive, and a stick it can't use.</summary>
+    private static NestStorage SampleStorage(StorageMoveStatus? status = null, string current = "/var/lib/pairnets") =>
+        new(true, current, "/var/lib/pairnets", current == "/var/lib/pairnets", false, 3_960_000_000_000, 4_400_000_000_000,
+        [
+            new("/", "Main disk", "ext4", 120_000_000_000, 250_000_000_000, "/var/lib/pairnets", null, true),
+            new("/mnt/data", "data", "ext4", 4_000_000_000_000, 4_400_000_000_000, "/mnt/data/pairnets"),
+            new("/media/stick", "STICK", "vfat", 1_000_000_000, 2_000_000_000, "/media/stick/pairnets", "this drive has no Linux file permissions (vfat); format it as ext4 to use it"),
+        ], DateTimeOffset.UtcNow, status);
+
+    private static Screen NestPlace(string state, Action<NestPlaceFlow> arrange) =>
+        new("the nest's drives window", state, _ => new NestPlaceWindow(null, SampleStorage()), (_, w) => Wpf.Ui(() =>
+        {
+            var window = (NestPlaceWindow)w;
+            arrange(window.Flow);
+            window.Render();
+        }));
+
+    private static IEnumerable<Screen> NestPlaceScreens()
+    {
+        yield return NestPlace("the drives", _ => { });
+        yield return NestPlace("sure?", f => f.Choose("/mnt/data/pairnets"));
+        yield return NestPlace("moving", f =>
+        {
+            f.Choose("/mnt/data/pairnets");
+            f.Asking();
+            f.Seen(SampleStorage(new StorageMoveStatus(StorageMoveStatus.Running, 40, "Copying your files to the new drive")));
+        });
+        yield return NestPlace("moved", f =>
+        {
+            f.Choose("/mnt/data/pairnets");
+            f.Asking();
+            f.Seen(SampleStorage(new StorageMoveStatus(StorageMoveStatus.Succeeded, 100, "Done.", "/var/lib/pairnets-before-move-x"), "/mnt/data/pairnets"));
+        });
+        yield return NestPlace("not moved", f =>
+        {
+            f.Choose("/mnt/data/pairnets");
+            f.Asking();
+            f.Seen(SampleStorage(new StorageMoveStatus(StorageMoveStatus.Failed, 0, "That drive can't be used: it is read-only. Nothing was changed.")));
+        });
+    }
+
+    private static readonly IReadOnlyList<Rule> NestPlaceRules =
+    [
+        Closes,
+        new(t => t.Handlers.Contains("NestPlaceWindow.OnPick"), "ask about moving the files to that drive",
+            c => ((NestPlaceWindow)c.Window) is { ConfirmPanel.IsVisible: true } p && p.Explanation.Text.Contains("/mnt/data/pairnets", StringComparison.Ordinal)),
+        On(["Back", "Try again"], "show the drives again", c => ((NestPlaceWindow)c.Window).ListPanel.IsVisible),
+        On("Move the files", "ask the nest to move the files and show how it went",
+            c => ((NestPlaceWindow)c.Window) is { ResultPanel.IsVisible: true } p && p.Explanation.Text.Contains("Not connected", StringComparison.Ordinal)),
+        On("Copy", "copy the command that deletes the old copy", c => c.Bench.Script.Copied.Items.Contains("sudo rm -rf '/var/lib/pairnets-before-move-x'")),
     ];
 
     // ------------------------------------------------------------------ the bug report window

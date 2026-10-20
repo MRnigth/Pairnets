@@ -72,11 +72,31 @@ public static class Endpoints
                 : Error(StatusCodes.Status404NotFound, ErrorCodes.NotFound, "No such computer.");
         });
 
-        app.MapGet("/api/info", (SyncStore store, ServerUpdater updater, AuthStore auth) =>
+        app.MapGet("/api/info", (SyncStore store, ServerUpdater updater, AuthStore auth, StorageMover mover) =>
         {
             var (free, total) = ServerUpdater.DiskSpace(store.Paths.DataDir);
             return Json(new ServerInfo(store.ServerId, store.CurrentVersion, PairnetsInfo.ApiVersion,
-                PairnetsInfo.ProductVersion, free, total, updater.GetStatus(), UploadSessions.PiecesInFlight, auth.NestName));
+                PairnetsInfo.ProductVersion, free, total, updater.GetStatus(), UploadSessions.PiecesInFlight, auth.NestName, mover.CanMove));
+        });
+
+        // "Where your nest keeps files" in the apps' Settings: the drives, and how a move goes (asks the root helper
+        // for a fresh list of drives when the one it has is old).
+        app.MapGet("/api/storage", (StorageMover mover) => Json(mover.Get()));
+
+        // Moves the nest's files to another of its drives: only leaves a request for the root helper, which checks it all again.
+        app.MapPost("/api/storage/move", (StorageMover mover, StorageMoveRequest? body) =>
+        {
+            var (outcome, message) = mover.RequestMove(body?.DataDir);
+            return outcome switch
+            {
+                StorageMover.MoveOutcome.Requested => Results.Json(mover.Get(), PairnetsJson.Options, statusCode: StatusCodes.Status202Accepted),
+                StorageMover.MoveOutcome.AlreadyThere => Json(mover.Get()),
+                StorageMover.MoveOutcome.UnknownFolder => Error(StatusCodes.Status400BadRequest, ErrorCodes.BadRequest, message),
+                StorageMover.MoveOutcome.TooSoon => Error(StatusCodes.Status429TooManyRequests, ErrorCodes.BadRequest, message),
+                StorageMover.MoveOutcome.Busy => Error(StatusCodes.Status409Conflict, ErrorCodes.Busy, message),
+                StorageMover.MoveOutcome.ByHand => Error(StatusCodes.Status409Conflict, ErrorCodes.Conflict, message),
+                _ => Error(StatusCodes.Status409Conflict, ErrorCodes.UpdaterMissing, message),
+            };
         });
 
         // "Update server" in the apps: asks the root-owned updater to install the newest release.

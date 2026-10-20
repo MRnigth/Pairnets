@@ -38,6 +38,8 @@ public sealed partial class ApiTour : IAsyncDisposable
         new("POST", "/api/update"),
         new("GET", "/api/devices"),
         new("GET", "/api/update/diagnostics"),
+        new("GET", "/api/storage"),
+        new("POST", "/api/storage/move"),
         new("GET", "/api/manifest"),
         new("GET", "/api/file"),
         new("PUT", "/api/file"),

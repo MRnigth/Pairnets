@@ -965,7 +965,36 @@ public sealed class TrayController : ITrayActions, IDisposable
         view.ReportBugRequested += () => ReportBug();
         view.OpenLinkRequested += Shell;
         view.Cancelled += () => _window?.Navigate(MainPage.Overview);
+        view.ChangeStorageRequested += () => ShowNestPlace(view);
         _window.ShowSettingsPage(view);
+        _ = FillNestStorageAsync(view);
+    }
+
+    /// <summary>What the nest last said about where it keeps its files (the window shows it at once).</summary>
+    private NestStorage? _nestStorage;
+
+    /// <summary>Settings' "Where your nest keeps files" row, for a nest that can move its files (asks it once).</summary>
+    private async Task FillNestStorageAsync(SettingsView view)
+    {
+        if (_session is not { } session || session.Status.Server is not { CanMoveStorage: true })
+            return;
+        try
+        {
+            _nestStorage = await session.Api.GetStorageAsync(CancellationToken.None);
+            view.ShowNestStorage(_nestStorage);
+        }
+        catch (Exception ex) when (ex is PairnetsNetworkException or PairnetsProtocolException or PairnetsAuthException or HttpRequestException or TaskCanceledException)
+        {
+            _log.LogDebug("The nest's storage could not be read: {Error}", ex.Message);
+        }
+    }
+
+    /// <summary>"Change…" on that row: the nest's drives and the move; the row is read again when it closes.</summary>
+    private void ShowNestPlace(SettingsView view)
+    {
+        var window = new NestPlaceWindow(() => _session, _nestStorage);
+        window.Closed += (_, _) => _ = FillNestStorageAsync(view);
+        window.Show();
     }
 
     /// <summary>

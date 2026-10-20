@@ -107,7 +107,7 @@ public class InstallDesktopScriptTests : IDisposable
         var script = Path.Combine(package, "install-desktop.sh");
         File.Copy(ScriptPath(), script, overwrite: true);
         var program = Path.Combine(package, "Pairnets");
-        if (!File.Exists(program))
+        if (!File.Exists(program) && OperatingSystem.IsLinux())
         {
             File.WriteAllText(program, "#!/bin/sh\nexit 0\n");
             File.SetUnixFileMode(program, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
