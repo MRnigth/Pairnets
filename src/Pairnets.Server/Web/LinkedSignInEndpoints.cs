@@ -131,7 +131,7 @@ public static class LinkedSignInEndpoints
                     if (owner.Current(ctx) is not { } session || session.Id != sessionId)
                         return Results.Redirect("/signin?error=google-expired");
                     owner.Store.SetGoogleAccount(identity.Sub, identity.Email);
-                    log.LogInformation("Google account {Email} was connected to the nest", identity.Email);
+                    log.LogInformation("A Google account was connected to the nest");
                     return Results.Redirect("/security?connected=google");
                 }
                 if (owner.Store.GoogleAccount is not { } linked || linked.Sub != identity.Sub)

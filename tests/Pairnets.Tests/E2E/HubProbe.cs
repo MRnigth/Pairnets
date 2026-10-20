@@ -29,6 +29,8 @@ public sealed class HubProbe : IAsyncDisposable
         hub.On<string, TransferReport>(SyncHub.PeerTransferMethod, (who, report) => Heard(SyncHub.PeerTransferMethod, who, report));
         hub.On<string, long>(SyncHub.PeerSyncedMethod, (who, version) => Heard(SyncHub.PeerSyncedMethod, who, version));
         hub.On<string>(SyncHub.NestRenamedMethod, name => Heard(SyncHub.NestRenamedMethod, name));
+        hub.On<string, string>(SyncHub.KeyRequestedMethod, (id, who) => Heard(SyncHub.KeyRequestedMethod, id, who));
+        hub.On(SyncHub.NestSealedMethod, () => Heard(SyncHub.NestSealedMethod));
         hub.On<string, string, string>(PairingEndpoints.PairRequestedMethod, (code, who, system) => Heard(PairingEndpoints.PairRequestedMethod, code, who, system));
         hub.On<string, string, string, string>(PairingEndpoints.PairRequestedFromMethod, (code, who, system, address) => Heard(PairingEndpoints.PairRequestedFromMethod, code, who, system, address));
         hub.On<string, bool>(PairingEndpoints.PairDecidedMethod, (code, approved) => Heard(PairingEndpoints.PairDecidedMethod, code, approved));
@@ -55,6 +57,7 @@ public sealed class HubProbe : IAsyncDisposable
                 o.AccessTokenProvider = () => Task.FromResult<string?>(key);
                 o.Headers[PairnetsHeaders.DeviceId] = Uri.EscapeDataString(device);
                 o.Headers[PairnetsHeaders.Client] = PairnetsInfo.ClientDescription;
+                o.Headers[PairnetsHeaders.Features] = PairnetsHeaders.SealedFeature; // only an encrypted nest looks at it
                 o.HttpMessageHandlerFactory = inner => new RecordingHandler(record, inner);
             })
             .Build();

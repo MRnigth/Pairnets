@@ -6,11 +6,14 @@ using Pairnets.Core.Paths;
 namespace Pairnets.Server.Storage;
 
 /// <summary>A change that was started but not yet committed (used for crash recovery).</summary>
-public sealed record JournalEntry(long Id, string Op, string Path, string? TmpFile, string? HistoryFile, string? Hash, long Size, long ModifiedMs);
+public sealed record JournalEntry(long Id, string Op, string Path, string? TmpFile, string? HistoryFile, string? Hash, long Size, long ModifiedMs,
+    string? Tag = null, string? Meta = null);
 
 /// <summary>
 /// SQLite manifest: one row per path with a global monotonic version, plus a journal that makes
-/// the multi-step file moves recoverable after a crash.
+/// the multi-step file moves recoverable after a crash. An encrypted nest (docs/ENCRYPTION.md) also keeps each row's
+/// keyed tag and opaque meta blob from the app. The columns are added to any database, but only an encrypted nest
+/// moves to schema 2, so an older server refuses to start on it instead of serving encrypted blobs as files.
 /// </summary>
 public sealed class ManifestStore
 {
@@ -28,7 +31,7 @@ public sealed class ManifestStore
         using var conn = Open();
         Exec(conn, "PRAGMA journal_mode=WAL;");
         var version = Convert.ToInt32(Scalar(conn, "PRAGMA user_version;"), CultureInfo.InvariantCulture);
-        if (version > 1)
+        if (version > SealedSchema)
             throw new InvalidOperationException($"manifest.db schema {version} is newer than this server supports.");
         if (version == 0)
         {
@@ -57,7 +60,33 @@ public sealed class ManifestStore
                 """);
         }
 
+        AddColumnIfMissing(conn, "files", "tag");
+        AddColumnIfMissing(conn, "files", "meta");
+        AddColumnIfMissing(conn, "journal", "tag");
+        AddColumnIfMissing(conn, "journal", "meta");
+
         ServerId = Scalar(conn, "SELECT value FROM meta WHERE key='serverId'") as string ?? CreateServerId(conn);
+        Sealed = Scalar(conn, "SELECT value FROM meta WHERE key='sealed'") as string == "1";
+    }
+
+    private const int SealedSchema = 2;
+
+    /// <summary>True when this nest keeps only encrypted data (docs/ENCRYPTION.md); it never goes back.</summary>
+    public bool Sealed { get; private set; }
+
+    /// <summary>Makes this an encrypted nest: from now on only apps that encrypt may change it.</summary>
+    public void TurnOnSealed()
+    {
+        using var conn = Open();
+        Exec(conn, $"INSERT INTO meta(key, value) VALUES('sealed', '1') ON CONFLICT(key) DO UPDATE SET value='1'; PRAGMA user_version={SealedSchema};");
+        Sealed = true;
+    }
+
+    private static void AddColumnIfMissing(SqliteConnection conn, string table, string column)
+    {
+        using var cmd = Command(conn, $"SELECT COUNT(*) FROM pragma_table_info('{table}') WHERE name=$c", ("$c", column));
+        if (Convert.ToInt64(cmd.ExecuteScalar(), CultureInfo.InvariantCulture) == 0)
+            Exec(conn, $"ALTER TABLE {table} ADD COLUMN {column} TEXT NULL;");
     }
 
     /// <summary>Random identity of this data directory; clients notice when it changes.</summary>
@@ -91,7 +120,7 @@ public sealed class ManifestStore
     public ManifestEntry? Get(string path)
     {
         using var conn = Open();
-        using var cmd = Command(conn, "SELECT path, hash, size, modifiedMs, deleted, version FROM files WHERE path=$p", ("$p", path));
+        using var cmd = Command(conn, "SELECT path, hash, size, modifiedMs, deleted, version, tag, meta FROM files WHERE path=$p", ("$p", path));
         using var r = cmd.ExecuteReader();
         return r.Read() ? ReadEntry(r) : null;
     }
@@ -104,8 +133,8 @@ public sealed class ManifestStore
         var version = ReadVersion(conn, tx);
         var list = new List<ManifestEntry>();
         using var cmd = since is null
-            ? Command(conn, "SELECT path, hash, size, modifiedMs, deleted, version FROM files ORDER BY version")
-            : Command(conn, "SELECT path, hash, size, modifiedMs, deleted, version FROM files WHERE version > $v ORDER BY version", ("$v", since.Value));
+            ? Command(conn, "SELECT path, hash, size, modifiedMs, deleted, version, tag, meta FROM files ORDER BY version")
+            : Command(conn, "SELECT path, hash, size, modifiedMs, deleted, version, tag, meta FROM files WHERE version > $v ORDER BY version", ("$v", since.Value));
         cmd.Transaction = tx;
         using (var r = cmd.ExecuteReader())
         {
@@ -126,7 +155,7 @@ public sealed class ManifestStore
     public List<ManifestEntry> AllLive()
     {
         using var conn = Open();
-        using var cmd = Command(conn, "SELECT path, hash, size, modifiedMs, deleted, version FROM files WHERE deleted=0");
+        using var cmd = Command(conn, "SELECT path, hash, size, modifiedMs, deleted, version, tag, meta FROM files WHERE deleted=0");
         using var r = cmd.ExecuteReader();
         var list = new List<ManifestEntry>();
         while (r.Read())
@@ -134,26 +163,29 @@ public sealed class ManifestStore
         return list;
     }
 
-    public long AddJournal(string op, string path, string? tmpFile, string? historyFile, string? hash, long size, long modifiedMs)
+    public long AddJournal(string op, string path, string? tmpFile, string? historyFile, string? hash, long size, long modifiedMs,
+        string? tag = null, string? meta = null)
     {
         using var conn = Open();
         using var cmd = Command(conn, """
-            INSERT INTO journal(op, path, tmpFile, historyFile, hash, size, modifiedMs) VALUES($o, $p, $t, $h, $x, $s, $m);
+            INSERT INTO journal(op, path, tmpFile, historyFile, hash, size, modifiedMs, tag, meta) VALUES($o, $p, $t, $h, $x, $s, $m, $g, $e);
             SELECT last_insert_rowid();
-            """, ("$o", op), ("$p", path), ("$t", tmpFile), ("$h", historyFile), ("$x", hash), ("$s", size), ("$m", modifiedMs));
+            """, ("$o", op), ("$p", path), ("$t", tmpFile), ("$h", historyFile), ("$x", hash), ("$s", size), ("$m", modifiedMs),
+            ("$g", tag), ("$e", meta));
         return Convert.ToInt64(cmd.ExecuteScalar(), CultureInfo.InvariantCulture);
     }
 
     public List<JournalEntry> PendingJournal()
     {
         using var conn = Open();
-        using var cmd = Command(conn, "SELECT id, op, path, tmpFile, historyFile, hash, size, modifiedMs FROM journal ORDER BY id");
+        using var cmd = Command(conn, "SELECT id, op, path, tmpFile, historyFile, hash, size, modifiedMs, tag, meta FROM journal ORDER BY id");
         using var r = cmd.ExecuteReader();
         var list = new List<JournalEntry>();
         while (r.Read())
         {
             list.Add(new JournalEntry(r.GetInt64(0), r.GetString(1), r.GetString(2), r.IsDBNull(3) ? null : r.GetString(3),
-                r.IsDBNull(4) ? null : r.GetString(4), r.IsDBNull(5) ? null : r.GetString(5), r.GetInt64(6), r.GetInt64(7)));
+                r.IsDBNull(4) ? null : r.GetString(4), r.IsDBNull(5) ? null : r.GetString(5), r.GetInt64(6), r.GetInt64(7),
+                r.IsDBNull(8) ? null : r.GetString(8), r.IsDBNull(9) ? null : r.GetString(9)));
         }
         return list;
     }
@@ -167,18 +199,20 @@ public sealed class ManifestStore
 
     /// <summary>
     /// Writes a new state for a path with the next global version, and removes the journal row,
-    /// in one transaction.
+    /// in one transaction. <paramref name="tag"/> and <paramref name="meta"/> are an encrypted nest's (null otherwise).
     /// </summary>
-    public ManifestEntry Commit(string path, string? hash, long size, long modifiedMs, bool deleted, long? journalId)
+    public ManifestEntry Commit(string path, string? hash, long size, long modifiedMs, bool deleted, long? journalId,
+        string? tag = null, string? meta = null)
     {
         using var conn = Open();
         using var tx = conn.BeginTransaction();
         var version = ReadVersion(conn, tx) + 1;
         using (var cmd = Command(conn, """
-            INSERT INTO files(path, pathLower, hash, size, modifiedMs, deleted, version) VALUES($p, $l, $h, $s, $m, $d, $v)
+            INSERT INTO files(path, pathLower, hash, size, modifiedMs, deleted, version, tag, meta) VALUES($p, $l, $h, $s, $m, $d, $v, $g, $e)
             ON CONFLICT(path) DO UPDATE SET hash=excluded.hash, size=excluded.size, modifiedMs=excluded.modifiedMs,
-                deleted=excluded.deleted, version=excluded.version
-            """, ("$p", path), ("$l", PathRules.CaseKey(path)), ("$h", hash), ("$s", size), ("$m", modifiedMs), ("$d", deleted ? 1 : 0), ("$v", version)))
+                deleted=excluded.deleted, version=excluded.version, tag=excluded.tag, meta=excluded.meta
+            """, ("$p", path), ("$l", PathRules.CaseKey(path)), ("$h", hash), ("$s", size), ("$m", modifiedMs), ("$d", deleted ? 1 : 0), ("$v", version),
+            ("$g", tag), ("$e", meta)))
         {
             cmd.Transaction = tx;
             cmd.ExecuteNonQuery();
@@ -196,7 +230,7 @@ public sealed class ManifestStore
             cmd.ExecuteNonQuery();
         }
         tx.Commit();
-        return new ManifestEntry(path, hash, size, modifiedMs, deleted, version);
+        return new ManifestEntry(path, hash, size, modifiedMs, deleted, version, tag, meta);
     }
 
     /// <summary>Copies the database consistently (used by tests and documented for backups).</summary>
@@ -216,7 +250,8 @@ public sealed class ManifestStore
     }
 
     private static ManifestEntry ReadEntry(SqliteDataReader r) =>
-        new(r.GetString(0), r.IsDBNull(1) ? null : r.GetString(1), r.GetInt64(2), r.GetInt64(3), r.GetInt64(4) != 0, r.GetInt64(5));
+        new(r.GetString(0), r.IsDBNull(1) ? null : r.GetString(1), r.GetInt64(2), r.GetInt64(3), r.GetInt64(4) != 0, r.GetInt64(5),
+            r.IsDBNull(6) ? null : r.GetString(6), r.IsDBNull(7) ? null : r.GetString(7));
 
     private static SqliteCommand Command(SqliteConnection conn, string sql, params (string Name, object? Value)[] parameters)
     {

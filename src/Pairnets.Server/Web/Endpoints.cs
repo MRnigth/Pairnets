@@ -21,13 +21,14 @@ public static class Endpoints
         // No sign-in needed: lets an app (or the nest's web page) recognise a Pairnets server and find its HTTPS name.
         // The sign-in ways are told too, so the apps can show matching buttons (the sign-in page lists them anyway).
         // A nest linked to Pairnets says so (relay): it has no name of its own then, and computers sign in with the account.
-        app.MapGet("/api/hello", (SyncOptions options, Auth.OwnerAuth owner) =>
+        app.MapGet("/api/hello", (SyncOptions options, Auth.OwnerAuth owner, SyncStore store) =>
         {
             var (password, passkeys, email, google) = owner.UsableMethods();
             return Json(new ServerHello(PairnetsInfo.ProductName, PairnetsInfo.ApiVersion,
                 PairnetsInfo.ProductVersion, options.PublicUrl, DeviceKeys: true, SignIn: options.PublicUrl is not null,
                 new SignInMethods(password, passkeys > 0, email, google),
-                options.RelayMode ? new RelayHello(options.RelayNestId!, options.RelayServiceUrl) : null));
+                options.RelayMode ? new RelayHello(options.RelayNestId!, options.RelayServiceUrl) : null,
+                store.Sealed ? true : null));
         });
 
         // Who the server thinks this computer is (the apps adopt a name changed on the nest), and who let it in
@@ -76,7 +77,8 @@ public static class Endpoints
         {
             var (free, total) = ServerUpdater.DiskSpace(store.Paths.DataDir);
             return Json(new ServerInfo(store.ServerId, store.CurrentVersion, PairnetsInfo.ApiVersion,
-                PairnetsInfo.ProductVersion, free, total, updater.GetStatus(), UploadSessions.PiecesInFlight, auth.NestName));
+                PairnetsInfo.ProductVersion, free, total, updater.GetStatus(), UploadSessions.PiecesInFlight, auth.NestName,
+                store.Sealed ? true : null));
         });
 
         // "Update server" in the apps: asks the root-owned updater to install the newest release.
@@ -126,6 +128,11 @@ public static class Endpoints
             // Also under the old Tether names, so an app that is not updated yet keeps syncing.
             ctx.Response.Headers[PairnetsHeaders.Hash] = ctx.Response.Headers[TetherNames.HashHeader] = entry.Hash;
             ctx.Response.Headers[PairnetsHeaders.ModifiedMs] = ctx.Response.Headers[TetherNames.ModifiedMsHeader] = entry.ModifiedMs.ToString(CultureInfo.InvariantCulture);
+            if (entry.Tag is not null && entry.Meta is not null)
+            {
+                ctx.Response.Headers[PairnetsHeaders.Tag] = entry.Tag;
+                ctx.Response.Headers[PairnetsHeaders.Meta] = entry.Meta;
+            }
             return Results.File(opened.Stream, "application/octet-stream",
                 lastModified: DateTimeOffset.FromUnixTimeMilliseconds(entry.ModifiedMs),
                 entityTag: new EntityTagHeaderValue("\"" + entry.Hash + "\""),
@@ -146,7 +153,7 @@ public static class Endpoints
             ChangeResult result;
             try
             {
-                result = await store.PutAsync(path, baseValue, mtime, ctx.Request.Body, ctx.RequestAborted);
+                result = await store.PutAsync(path, baseValue, mtime, ctx.Request.Body, ctx.RequestAborted, SealedFieldsOf(ctx));
             }
             catch (OperationCanceledException) when (!ctx.RequestAborted.IsCancellationRequested)
             {
@@ -216,7 +223,7 @@ public static class Endpoints
             var hash = ctx.Request.Query["hash"].ToString();
             if (!ContentHash.IsValid(hash))
                 return Error(StatusCodes.Status400BadRequest, ErrorCodes.BadRequest, "hash must be a SHA-256 hash.");
-            var result = await uploads.CommitAsync(id, hash, ctx.RequestAborted);
+            var result = await uploads.CommitAsync(id, hash, ctx.RequestAborted, SealedFieldsOf(ctx));
             return result.Status switch
             {
                 UploadSessions.CommitStatus.Done => await ToResultAsync(result.Change!, ctx, result.Change!.Entry?.Path ?? string.Empty, hub),
@@ -366,6 +373,14 @@ public static class Endpoints
     /// app sent (URL-escaped on the wire so any name fits in a header).
     /// </summary>
     public static string DeviceId(HttpContext ctx) => DeviceIdentity.Of(ctx)?.Name ?? DeviceIdentity.HeaderName(ctx);
+
+    /// <summary>An encrypted nest's "tag" and "meta" query values, or null when the app sent neither.</summary>
+    private static SealedFields? SealedFieldsOf(HttpContext ctx)
+    {
+        var tag = ctx.Request.Query["tag"].ToString();
+        var meta = ctx.Request.Query["meta"].ToString();
+        return tag.Length == 0 && meta.Length == 0 ? null : new SealedFields(tag, meta);
+    }
 
     /// <summary>Reads the optional "mtime" (Unix milliseconds). False when it is present but invalid.</summary>
     private static bool TryReadMtime(HttpContext ctx, out long? mtime)

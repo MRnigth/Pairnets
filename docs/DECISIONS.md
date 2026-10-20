@@ -1271,10 +1271,10 @@ is built yet, and steps 1, 2, 6 and 8 there wait for the owner's yes or no.
 
 ## Encryption core (1.0.61.1, 2026-10-20)
 
-The owner approved the build plan for 1.0.61.1 with the recommended answers: encrypt on the computer (step 1), a
-recovery key with no copy at Pairnets (step 2), a "Turn on encryption" button for existing nests (step 6), and real
-computer names kept for now (step 8, not built). The core is in `src/Pairnets.Core/Crypto`. Where it differs from
-ENCRYPTION.md:
+The owner approved building it for 1.0.61.1 and answered steps 1 and 2: yes, encrypt on the computer, and yes, a
+recovery key with no copy at Pairnets. Steps 6 (switching existing nests, deleting the plain copy) and 8 (hiding
+computer names) are not answered yet, so nothing of them is built; they are asked when the apps' side needs them.
+The core is in `src/Pairnets.Core/Crypto`. Where it differs from ENCRYPTION.md:
 
 * **A file's segments are bound to a random file id in its header, not to the path id.** 1.0.60 moves and renames
   files that live only on the nest without downloading them, so the blob must stay valid under a new path. The
@@ -1295,3 +1295,27 @@ ENCRYPTION.md:
 * **The recovery key is 31 random base32 letters (155 bits) plus a check letter.** That makes eight groups of four.
   0, 1 and 8 count as O, I and B when typed.
 * **Meta blobs are padded to 64 bytes**, so their length says little about the name.
+* **The nest's encrypted mode keeps today's store.**
+  * Files sit under `ab/<id>` in `files/` and `history/`, so the base check, history, pieces, resuming and the
+    `since` manifest stay unchanged.
+  * The `hash` column stays the SHA-256 of the stored bytes. The nest computes it, and it is used for the commit
+    check, `ETag`, `If-Range` and history names.
+  * New `tag` and `meta` columns hold what the app sends (`tag=` and `meta=` on `PUT /api/file` and on an upload's
+    commit). The base an app sends is compared with the tag.
+  * Downloads carry `X-Pairnets-Tag` and `X-Pairnets-Meta`.
+* **Only an encrypted nest moves `manifest.db` to schema 2.** A plain nest gets the new columns but stays on
+  schema 1, so rolling the nest back still works. An older server refuses to start on an encrypted nest instead of
+  serving blobs as files.
+* **On an encrypted nest the app restores old versions itself.** The nest can't make an old version's tag and meta,
+  so the app downloads the version and sends it as a new one. For the same reason `rescan` can't take in files on an
+  encrypted nest.
+* **Apps say they encrypt with `X-Pairnets-Features: sealed`** (or `?features=sealed` on the push), not in
+  `X-Pairnets-Client`, so the Devices list still shows "1.0.61.1 · Windows". Without it, an encrypted nest answers
+  file, history and push calls with `426 update-required`. Info, sign-in, Devices and updating still work, so an old
+  app can update itself. The apps send the feature only once their sync engine encrypts.
+* **Turning encryption on (`POST /api/keys/seal`)** needs the recovery envelope and at least one computer's
+  envelope. For now it works only on a nest with no files (a new nest). Moving an existing nest goes through the
+  `sealed/` area together with the apps' side.
+* **The key mailbox** (`/api/keys/requests`) lives in memory for 15 minutes, holds at most 20 requests, and lets each
+  message be written once. Envelopes are files in `keys/`.
+* **The nest no longer logs the Google account's email** when one is connected.

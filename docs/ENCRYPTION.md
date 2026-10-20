@@ -1,9 +1,11 @@
 # End-to-end encryption (plan)
 
-> **Status: plan only, nothing is built yet.** This file describes where user data goes today, how end-to-end
-> encryption will work, and what may be said about it afterwards. The decisions behind it are in
-> [DECISIONS.md](DECISIONS.md) under "End-to-end encryption plan (2026-10-19)". The owner answers the open questions
-> at the end before any code is written.
+> **Status (1.0.61.1, in progress):** the encryption core (`src/Pairnets.Core/Crypto`) and the nest's encrypted
+> mode and key mailbox are built and tested; the apps' sync engine, screens and moving existing nests are not yet, so
+> nothing is encrypted for users and none of §3 may be said yet. The decisions are in [DECISIONS.md](DECISIONS.md)
+> under "End-to-end encryption plan (2026-10-19)" and "Encryption core (1.0.61.1, 2026-10-20)", which also lists
+> where the build differs from this plan (segments bound to a random file id, tags from the plain SHA-256, signed
+> envelopes).
 
 The goal: everything that passes through or sits on machines Pairnets runs is unreadable to Pairnets, and only the
 user's own computers hold the keys. Built only with .NET 8's own `System.Security.Cryptography` (no new packages).

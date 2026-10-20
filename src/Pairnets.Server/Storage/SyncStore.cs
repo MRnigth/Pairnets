@@ -1,8 +1,26 @@
 using Pairnets.Core;
+using Pairnets.Core.Crypto;
 using Pairnets.Core.Hashing;
 using Pairnets.Core.Paths;
 
 namespace Pairnets.Server.Storage;
+
+/// <summary>
+/// What an app that encrypts sends with every new version on an encrypted nest: its keyed tag (compared as the base,
+/// like a hash) and the opaque meta blob with the real path. The nest can read neither.
+/// </summary>
+public sealed record SealedFields(string Tag, string Meta)
+{
+    public const int MaxMetaLength = 8192;
+
+    public bool IsValid => ContentHash.IsValid(Tag) && Meta.Length is > 0 and <= MaxMetaLength && IsBase64(Meta);
+
+    private static bool IsBase64(string text)
+    {
+        Span<byte> buffer = stackalloc byte[MaxMetaLength];
+        return Convert.TryFromBase64String(text, buffer, out _);
+    }
+}
 
 /// <summary>
 /// The server's file store. Every change runs under one global lock: compare the client's base
@@ -35,6 +53,28 @@ public sealed class SyncStore : IDisposable
     public ManifestStore Manifest { get; }
 
     public string ServerId => Manifest.ServerId;
+
+    /// <summary>
+    /// An encrypted nest (docs/ENCRYPTION.md): files are stored under their ids (<c>ab/abcdef…</c>), each version comes
+    /// with the app's tag and meta, and the base an app sends is compared with the tag instead of the content hash.
+    /// The hash column still holds the SHA-256 of the stored (encrypted) bytes, for the commit check, ETag and If-Range.
+    /// </summary>
+    public bool Sealed => Manifest.Sealed;
+
+    /// <summary>Why a change can't be taken on this nest as it was sent (plain vs encrypted), or null when it can.</summary>
+    internal string? SealedProblem(string path, SealedFields? fields, bool deleting = false)
+    {
+        if (!Sealed)
+            return fields is null ? null : "This nest isn't encrypted.";
+        if (!PathId.IsStoragePath(path))
+            return "An encrypted nest stores files only under their ids.";
+        if (!deleting && fields is not { IsValid: true })
+            return "An encrypted nest needs the tag and the meta of every new version.";
+        return null;
+    }
+
+    /// <summary>What an app's base is compared with: the tag on an encrypted nest, the content hash otherwise.</summary>
+    private string? LiveBase(ManifestEntry? entry) => entry is { Deleted: false } ? Sealed ? entry.Tag : entry.Hash : null;
 
     public long CurrentVersion => Manifest.CurrentVersion;
 
@@ -125,7 +165,7 @@ public sealed class SyncStore : IDisposable
             var collision = _caseIndex.FindCollision(path);
             if (collision is not null)
                 return new ChangeResult(ChangeStatus.CaseCollision, null, collision);
-            var current = LiveHash(Manifest.Get(path));
+            var current = LiveBase(Manifest.Get(path));
             if (!string.Equals(current, expectedBase, StringComparison.Ordinal))
                 return new ChangeResult(ChangeStatus.Conflict, null, "The file changed on the server since your last sync.");
             return null;
@@ -137,11 +177,14 @@ public sealed class SyncStore : IDisposable
     }
 
     /// <summary>Streams <paramref name="body"/> into tmp/ and commits it if the base still matches.</summary>
-    public async Task<ChangeResult> PutAsync(string path, string baseValue, long? mtimeMs, Stream body, CancellationToken ct)
+    public async Task<ChangeResult> PutAsync(string path, string baseValue, long? mtimeMs, Stream body, CancellationToken ct,
+        SealedFields? sealedFields = null)
     {
         var problem = PathRules.Check(path);
         if (problem != PathProblem.None)
             return new ChangeResult(ChangeStatus.InvalidName, null, $"Invalid path: {problem}.");
+        if (SealedProblem(path, sealedFields) is { } sealedProblem)
+            return new ChangeResult(ChangeStatus.BadRequest, null, sealedProblem);
         if (!TryParseBase(baseValue, out var expectedBase))
             return new ChangeResult(ChangeStatus.BadRequest, null, "base must be 'none' or a SHA-256 hash.");
 
@@ -165,7 +208,7 @@ public sealed class SyncStore : IDisposable
             }
             var modified = mtimeMs ?? _clock.GetUtcNow().ToUnixTimeMilliseconds();
             return await CommitFileAsync(path, tmp, hash, size, modified,
-                current => string.Equals(current, expectedBase, StringComparison.Ordinal)).ConfigureAwait(false);
+                current => string.Equals(current, expectedBase, StringComparison.Ordinal), sealedFields).ConfigureAwait(false);
         }
         finally
         {
@@ -177,12 +220,15 @@ public sealed class SyncStore : IDisposable
     /// Commits a fully received upload from <paramref name="tmp"/> (in tmp/) if the base still
     /// matches, exactly like <see cref="PutAsync"/> does after receiving its body.
     /// </summary>
-    public async Task<ChangeResult> CommitUploadAsync(string path, string? expectedBase, string tmp, string hash, long size, long modifiedMs)
+    public async Task<ChangeResult> CommitUploadAsync(string path, string? expectedBase, string tmp, string hash, long size, long modifiedMs,
+        SealedFields? sealedFields = null)
     {
         try
         {
+            if (SealedProblem(path, sealedFields) is { } sealedProblem)
+                return new ChangeResult(ChangeStatus.BadRequest, null, sealedProblem);
             return await CommitFileAsync(path, tmp, hash, size, modifiedMs,
-                current => string.Equals(current, expectedBase, StringComparison.Ordinal)).ConfigureAwait(false);
+                current => string.Equals(current, expectedBase, StringComparison.Ordinal), sealedFields).ConfigureAwait(false);
         }
         finally
         {
@@ -225,6 +271,8 @@ public sealed class SyncStore : IDisposable
             return new ChangeResult(ChangeStatus.InvalidName, null, $"Invalid path: {problem}.");
         if (!TryParseBase(baseValue, out var expectedBase))
             return new ChangeResult(ChangeStatus.BadRequest, null, "base must be 'none' or a SHA-256 hash.");
+        if (SealedProblem(path, null, deleting: true) is { } sealedProblem)
+            return new ChangeResult(ChangeStatus.BadRequest, null, sealedProblem);
 
         await _lock.WaitAsync(CancellationToken.None).ConfigureAwait(false);
         try
@@ -234,7 +282,7 @@ public sealed class SyncStore : IDisposable
                 return new ChangeResult(ChangeStatus.NotFound, null, "No such file.");
             if (current.Deleted)
                 return new ChangeResult(ChangeStatus.Unchanged, current);
-            if (!string.Equals(current.Hash, expectedBase, StringComparison.Ordinal))
+            if (!string.Equals(LiveBase(current), expectedBase, StringComparison.Ordinal))
                 return new ChangeResult(ChangeStatus.Conflict, null, "The file changed on the server since your last sync.");
 
             var full = ResolveFilesPath(path) ?? throw new IOException($"Unsafe path {path}.");
@@ -270,6 +318,11 @@ public sealed class SyncStore : IDisposable
             return new ChangeResult(ChangeStatus.InvalidName, null, "Invalid path.");
         if (!HistoryNames.IsValidId(id))
             return new ChangeResult(ChangeStatus.BadRequest, null, "Invalid history id.");
+        if (Sealed)
+        {
+            // The nest can't make the tag and meta of an old version: the app downloads it and sends it as a new one.
+            return new ChangeResult(ChangeStatus.BadRequest, null, "On an encrypted nest the app restores a version itself.");
+        }
         var source = HistoryFilePath(path, id);
         if (source is null || !File.Exists(source))
             return new ChangeResult(ChangeStatus.NotFound, null, "No such history version.");
@@ -302,6 +355,8 @@ public sealed class SyncStore : IDisposable
     /// <summary>Adds or updates a file that already sits in files/ (rescan). Caller holds no lock.</summary>
     internal async Task<ChangeResult> AdoptExistingFileAsync(string path, string hash, long size, long modifiedMs)
     {
+        if (Sealed)
+            return new ChangeResult(ChangeStatus.BadRequest, null, "An encrypted nest can't take in files from its folder (it has no tag or meta for them).");
         await _lock.WaitAsync().ConfigureAwait(false);
         try
         {
@@ -321,7 +376,8 @@ public sealed class SyncStore : IDisposable
         }
     }
 
-    private async Task<ChangeResult> CommitFileAsync(string path, string tmp, string hash, long size, long modifiedMs, Func<string?, bool> baseMatches)
+    private async Task<ChangeResult> CommitFileAsync(string path, string tmp, string hash, long size, long modifiedMs, Func<string?, bool> baseMatches,
+        SealedFields? sealedFields = null)
     {
         // Once the content is fully received, the commit runs to completion even if the client goes away.
         await _lock.WaitAsync(CancellationToken.None).ConfigureAwait(false);
@@ -335,7 +391,7 @@ public sealed class SyncStore : IDisposable
             var currentHash = LiveHash(current);
             if (string.Equals(currentHash, hash, StringComparison.Ordinal))
                 return new ChangeResult(ChangeStatus.Unchanged, current);
-            if (!baseMatches(currentHash))
+            if (!baseMatches(LiveBase(current)))
                 return new ChangeResult(ChangeStatus.Conflict, null, "The file changed on the server since your last sync.");
 
             var full = ResolveFilesPath(path) ?? throw new IOException($"Unsafe path {path}.");
@@ -346,7 +402,8 @@ public sealed class SyncStore : IDisposable
                 var oldHash = currentHash ?? (await ContentHash.OfFileAsync(full).ConfigureAwait(false)).Hash;
                 historyRel = NewHistoryRelative(path, oldHash);
             }
-            var journalId = Manifest.AddJournal("put", path, Path.GetFileName(tmp), historyRel, hash, size, modifiedMs);
+            var journalId = Manifest.AddJournal("put", path, Path.GetFileName(tmp), historyRel, hash, size, modifiedMs,
+                sealedFields?.Tag, sealedFields?.Meta);
 
             string? historyFull = null;
             try
@@ -373,7 +430,7 @@ public sealed class SyncStore : IDisposable
             }
 
             TrySetMtime(full, modifiedMs);
-            var entry = Manifest.Commit(path, hash, size, modifiedMs, deleted: false, journalId);
+            var entry = Manifest.Commit(path, hash, size, modifiedMs, deleted: false, journalId, sealedFields?.Tag, sealedFields?.Meta);
             _caseIndex.Add(path);
             _log.LogInformation("Stored {Path} ({Size} bytes, version {Version})", path, size, entry.Version);
             return new ChangeResult(ChangeStatus.Ok, entry);
@@ -496,7 +553,7 @@ public sealed class SyncStore : IDisposable
                 {
                     // The new file is in place but the manifest was not updated: roll forward.
                     TrySetMtime(full, j.ModifiedMs);
-                    Manifest.Commit(j.Path, j.Hash, j.Size, j.ModifiedMs, deleted: false, j.Id);
+                    Manifest.Commit(j.Path, j.Hash, j.Size, j.ModifiedMs, deleted: false, j.Id, j.Tag, j.Meta);
                     _log.LogWarning("Recovered interrupted upload of {Path}: completed", j.Path);
                 }
                 else

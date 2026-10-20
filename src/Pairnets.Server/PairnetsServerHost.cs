@@ -45,6 +45,7 @@ public static class PairnetsServerHost
         builder.Services.AddSingleton(new ServerPaths(options.DataDir));
         builder.Services.AddSingleton<SyncStore>();
         builder.Services.AddSingleton<UploadSessions>();
+        builder.Services.AddSingleton<KeyStore>();
         builder.Services.AddSingleton<RestoreJobs>();
         builder.Services.AddSingleton<FailureThrottle>();
         builder.Services.AddSingleton<ServerUpdater>();
@@ -126,8 +127,10 @@ public static class PairnetsServerHost
                 devices.Seen(identity.RegistryKey, identity.Name, ClientDescription(ctx.Request));
             await next();
         });
+        app.Use((ctx, next) => KeyEndpoints.SealedGateAsync(ctx, () => next(ctx)));
         app.UseRateLimiter();
         Endpoints.Map(app);
+        KeyEndpoints.Map(app);
         PairingEndpoints.Map(app);
         RelayEndpoints.Map(app);
         WebUi.Map(app);

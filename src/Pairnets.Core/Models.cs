@@ -3,14 +3,21 @@ using System.Text.Json.Serialization;
 
 namespace Pairnets.Core;
 
-/// <summary>One row of the server manifest. <see cref="Hash"/> is null for tombstones.</summary>
+/// <summary>
+/// One row of the server manifest. <see cref="Hash"/> is null for tombstones. On an encrypted nest (docs/ENCRYPTION.md)
+/// <see cref="Path"/> is the file's id (<c>ab/abcdef…</c>), <see cref="Hash"/> the SHA-256 of the encrypted bytes,
+/// <see cref="Tag"/> the app's keyed tag (what the sync decision compares) and <see cref="Meta"/> the encrypted real
+/// path, size and time; both are missing elsewhere.
+/// </summary>
 public sealed record ManifestEntry(
     string Path,
     string? Hash,
     long Size,
     long ModifiedMs,
     bool Deleted,
-    long Version);
+    long Version,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Tag = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Meta = null);
 
 /// <summary>Body of every non-2xx JSON response from the server.</summary>
 public sealed record ErrorBody(string Code, string? Message = null);
@@ -21,7 +28,8 @@ public sealed record ErrorBody(string Code, string? Message = null);
 /// <see cref="ApiVersion"/> are missing on older servers. <see cref="PiecesInFlight"/>: how many pieces of one upload
 /// the server takes at once (2: the next one may be sent while the one before is still arriving; missing: one).
 /// <see cref="NestName"/>: the name the owner gave the nest on their account page (missing until they did, and on
-/// nests that are not linked to an account).
+/// nests that are not linked to an account). <see cref="Sealed"/>: true on an encrypted nest (docs/ENCRYPTION.md),
+/// missing otherwise.
 /// </summary>
 public sealed record ServerInfo(
     string ServerId,
@@ -32,7 +40,8 @@ public sealed record ServerInfo(
     long? DiskTotalBytes = null,
     UpdaterStatus? Updater = null,
     int? PiecesInFlight = null,
-    string? NestName = null);
+    string? NestName = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? Sealed = null);
 
 /// <summary>The server's self-updater. <see cref="State"/>: missing, idle, requested, running, succeeded or failed.</summary>
 public sealed record UpdaterStatus(bool Installed, string State, string? Message = null, DateTimeOffset? At = null);
@@ -127,7 +136,8 @@ public sealed record DeviceIconRequest(string? Icon);
 /// through the service then, and it has no public name of its own.</remarks>
 public sealed record ServerHello(string Product, int ApiVersion, string? ServerVersion, string? PublicUrl, bool DeviceKeys, bool SignIn,
     SignInMethods? Methods = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] RelayHello? Relay = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] RelayHello? Relay = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? Sealed = null);
 
 /// <summary>A nest in relay mode: its id at the Pairnets service and the service's address (https://sync.pairnets.app).</summary>
 public sealed record RelayHello(string NestId, string ServiceUrl);
@@ -216,6 +226,9 @@ public static class ErrorCodes
 
     public const string Busy = "busy";
 
+    /// <summary>With 426: this nest is encrypted and the app doesn't encrypt yet; it must be updated first.</summary>
+    public const string UpdateRequired = "update-required";
+
     /// <summary>The computer's own key was removed on the nest (or by "Sign out of this computer").</summary>
     public const string DeviceRemoved = "device-removed";
 
@@ -301,6 +314,17 @@ public static class PairnetsHeaders
     public const string Hash = "X-Pairnets-Hash";
     public const string ModifiedMs = "X-Pairnets-Modified-Ms";
 
+    /// <summary>On an encrypted nest's file downloads: the version's keyed tag and its encrypted meta.</summary>
+    public const string Tag = "X-Pairnets-Tag";
+    public const string Meta = "X-Pairnets-Meta";
+
+    /// <summary>
+    /// What the app can do, comma-separated. "sealed": it encrypts, so an encrypted nest lets it sync (others get 426).
+    /// </summary>
+    public const string Features = "X-Pairnets-Features";
+
+    public const string SealedFeature = "sealed";
+
     /// <summary>The app's version and system ("1.0.38; Windows"), shown in the Devices tab.</summary>
     public const string Client = "X-Pairnets-Client";
 }
@@ -314,3 +338,19 @@ public static class PairnetsJson
         WriteIndented = false,
     };
 }
+
+/// <summary>
+/// <c>GET /api/keys</c>: whether the nest is encrypted, whether it holds a recovery envelope, and which computers have
+/// an envelope (their ids in the ring). The envelopes themselves are opaque to the nest (docs/ENCRYPTION.md §2.1).
+/// </summary>
+public sealed record KeysInfo(bool Sealed, bool Recovery, List<string> Computers);
+
+/// <summary><c>POST /api/keys/requests</c>: a new computer asks to be unlocked, sending only its commitment first.</summary>
+public sealed record KeyRequestStart(string? Name, byte[]? Commitment);
+
+/// <summary>One message of an unlock request (the offer, the reveal or the sealed ring).</summary>
+public sealed record KeyRequestMessage(byte[]? Data);
+
+/// <summary>An unlock request as the nest passes it on; the messages are opaque to it.</summary>
+public sealed record KeyRequestView(string Id, string Name, DateTimeOffset Created, byte[] Commitment,
+    byte[]? Offer = null, byte[]? Reveal = null, byte[]? Ring = null);

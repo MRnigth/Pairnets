@@ -25,6 +25,10 @@ public static class PathId
     /// <summary>The path the nest stores the blob at: <c>ab/abcdef…</c>.</summary>
     public static string StoragePath(string id) => id[..2] + "/" + id;
 
+    /// <summary>True for <c>ab/abcdef…</c>: a valid id under its own shard folder (what an encrypted nest accepts).</summary>
+    public static bool IsStoragePath(string? path) =>
+        path is { Length: Length + 3 } && path[2] == '/' && IsValid(path[3..]) && path.AsSpan(0, 2).SequenceEqual(path.AsSpan(3, 2));
+
     public static bool IsValid(string? id)
     {
         if (id is null || id.Length != Length)

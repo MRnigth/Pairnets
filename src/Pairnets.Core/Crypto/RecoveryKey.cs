@@ -57,6 +57,16 @@ public sealed class RecoveryKey
         HKDF.DeriveKey(HashAlgorithmName.SHA256, Encoding.ASCII.GetBytes(_letters), 32,
             salt: Encoding.UTF8.GetBytes("pairnets/recovery/" + nestId), info: "pairnets/v1/recovery"u8.ToArray());
 
-    private static char Check(string data) =>
-        Base32.Alphabet[SHA256.HashData(Encoding.ASCII.GetBytes("pairnets-recovery:" + data))[0] & 31];
+    /// <summary>
+    /// The check letter: Σ (2i + 1) · letter value, mod 32. Every weight is odd, so any single wrong letter changes it;
+    /// most swapped neighbours do too.
+    /// </summary>
+    private static char Check(string data)
+    {
+        var values = Base32.Values(data)!;
+        var sum = 0;
+        for (var i = 0; i < values.Length; i++)
+            sum += (2 * i + 1) * values[i];
+        return Base32.Alphabet[sum & 31];
+    }
 }

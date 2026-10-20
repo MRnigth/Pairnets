@@ -357,8 +357,16 @@ public class EncryptionTests
         Assert.Equal(text.Substring(10, 4), key.Group(2));
         Assert.Equal(text, RecoveryKey.Parse(text.Replace('O', '0').Replace('I', '1').Replace('B', '8'))!.ToString());
 
-        var typo = text[..5] + (text[5] == 'A' ? 'C' : 'A') + text[6..];
-        Assert.Null(RecoveryKey.Parse(typo));
+        // every single wrong letter, anywhere, is caught
+        var letters = text.Replace("-", "");
+        for (var i = 0; i < letters.Length; i++)
+        {
+            foreach (var c in "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567")
+            {
+                if (c != letters[i])
+                    Assert.Null(RecoveryKey.Parse(letters[..i] + c + letters[(i + 1)..]));
+            }
+        }
         Assert.Null(RecoveryKey.Parse(text[..^1]));
         Assert.Null(RecoveryKey.Parse(null));
         Assert.Null(RecoveryKey.Parse(text[..^1] + "9"));
