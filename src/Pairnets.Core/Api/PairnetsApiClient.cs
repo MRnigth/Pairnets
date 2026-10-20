@@ -317,6 +317,49 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
         }
     }
 
+    /// <summary>Where the nest keeps its files and the drives it could use (GET /api/storage), or null for a nest from before it.</summary>
+    public async Task<NestStorage?> GetStorageAsync(CancellationToken ct)
+    {
+        using var timeout = Linked(ct, TimeSpan.FromSeconds(15));
+        using var resp = await SendAsync(() => new HttpRequestMessage(HttpMethod.Get, "api/storage"), HttpCompletionOption.ResponseContentRead, timeout, ct).ConfigureAwait(false);
+        if ((int)resp.StatusCode is 404 or 405)
+            return null;
+        await ThrowForStatusAsync(resp).ConfigureAwait(false);
+        return await ReadJsonAsync<NestStorage>(resp, timeout, ct).ConfigureAwait(false);
+    }
+
+    public enum StorageMoveOutcome { Requested, AlreadyThere, Refused, NotSupported }
+
+    /// <summary>The nest's answer to a move: what it did, its plain message when it said no, and the storage it reports.</summary>
+    public sealed record StorageMoveAnswer(StorageMoveOutcome Outcome, string? Message, NestStorage? Storage);
+
+    /// <summary>
+    /// Asks the nest to move its files to <paramref name="dataDir"/> (a drive's folder from <see cref="GetStorageAsync"/>).
+    /// A no (409 busy or set up by hand, 400 not one of its drives, 429 asked just now) comes back as
+    /// <see cref="StorageMoveOutcome.Refused"/> with the nest's own words.
+    /// </summary>
+    public async Task<StorageMoveAnswer> RequestStorageMoveAsync(string dataDir, CancellationToken ct)
+    {
+        using var timeout = Linked(ct, TimeSpan.FromSeconds(30));
+        using var resp = await SendAsync(() => new HttpRequestMessage(HttpMethod.Post, "api/storage/move")
+            { Content = JsonContent.Create(new StorageMoveRequest(dataDir), options: PairnetsJson.Options) },
+            HttpCompletionOption.ResponseContentRead, timeout, ct, ownTooMany: true).ConfigureAwait(false);
+        switch ((int)resp.StatusCode)
+        {
+            case 200 or 202:
+                var storage = await ReadJsonAsync<NestStorage>(resp, timeout, ct).ConfigureAwait(false);
+                return new StorageMoveAnswer(resp.StatusCode == HttpStatusCode.Accepted ? StorageMoveOutcome.Requested : StorageMoveOutcome.AlreadyThere, null, storage);
+            case 404 or 405:
+                return new StorageMoveAnswer(StorageMoveOutcome.NotSupported, "Your nest can't move its files yet. Update it first.", null);
+            case 400 or 409 or 429:
+                var message = (await TryReadErrorAsync(resp, timeout.Token).ConfigureAwait(false))?.Message;
+                return new StorageMoveAnswer(StorageMoveOutcome.Refused, message ?? "Your nest said no to the move.", null);
+            default:
+                await ThrowForStatusAsync(resp).ConfigureAwait(false);
+                return new StorageMoveAnswer(StorageMoveOutcome.NotSupported, null, null);
+        }
+    }
+
     /// <summary>Checks reachability (health, no auth) and then the token (info). Never throws.</summary>
     public static async Task<ConnectionTestResult> TestConnectionAsync(string? serverUrl, string? token, string deviceId,
         HttpMessageHandler? handler = null, CancellationToken ct = default)

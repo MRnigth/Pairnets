@@ -130,6 +130,23 @@
                     </Border>
                   </Grid>
                 </StackPanel>
+
+                <!-- Where the nest keeps its files (only when the nest can move them: a Linux nest with the helper) -->
+                <StackPanel x:Name="StoragePanel" Visibility="Collapsed">
+                  <Border Style="{StaticResource PgHair}" Margin="0,14" />
+                  <Grid>
+                    <Grid.ColumnDefinitions>
+                      <ColumnDefinition Width="*" />
+                      <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel VerticalAlignment="Center">
+                      <TextBlock Style="{StaticResource RowTitle}" Text="Where your nest keeps files" />
+                      <TextBlock x:Name="StorageText" Style="{StaticResource PgSmall}" Margin="0,2,0,0" TextTrimming="CharacterEllipsis" />
+                    </StackPanel>
+                    <Button x:Name="StorageButton" Grid.Column="1" Style="{StaticResource PgChipButton}" Height="34" Content="Change…" Margin="12,0,0,0"
+                            VerticalAlignment="Center" Click="OnChangeStorage" AutomationProperties.Name="Change where your nest keeps files" />
+                  </Grid>
+                </StackPanel>
               </StackPanel>
             </Border>
 

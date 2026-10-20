@@ -48,6 +48,7 @@ public static class PairnetsServerHost
         builder.Services.AddSingleton<RestoreJobs>();
         builder.Services.AddSingleton<FailureThrottle>();
         builder.Services.AddSingleton<ServerUpdater>();
+        builder.Services.AddSingleton<StorageMover>();
         builder.Services.AddSingleton<BatchRegistry>();
         builder.Services.AddSingleton<LiveTransfers>();
         builder.Services.AddSingleton<SyncedRegistry>();

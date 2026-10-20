@@ -51,6 +51,7 @@ public sealed partial class ApiTour
             await EmailLinksAsync();
             await GoogleAsync();
             await RemovingSignInWaysAsync();
+            await NestStorageAsync();
             await UpdateServerAsync();
             await NoSecretsInTheLogAsync();
         }
@@ -773,6 +774,29 @@ public sealed partial class ApiTour
         if ((await Security(_owner)).Methods is { Passkeys: 0, Email: false, Google: false })
             await Delete(_owner, "web/api/password", HttpStatusCode.Conflict); // now the password is the last way in
         await Post(Browser(), "web/api/signin/password", new { password = _password }, HttpStatusCode.NoContent);
+    }
+
+    // ------------------------------------------------------------------ where the nest keeps its files
+
+    /// <summary>
+    /// Settings' "Where your nest keeps files": the drives, and a move. On every target (also the Linux test box, where the
+    /// root helper is real) the tour only ever asks to move to where the files already are, which changes nothing.
+    /// </summary>
+    private async Task NestStorageAsync()
+    {
+        Step("Where the nest keeps its files (a move only to where they already are)");
+        await Refused(HttpMethod.Get, "api/storage");
+        var storage = await Read<NestStorage>(Get(_laptopApi, "api/storage"));
+        Assert.True(storage.CanMove, "The nest says it can't move its files, but the drive mover is installed.");
+        Assert.True((await Read<ServerInfo>(Get(_laptopApi, "api/info"))).CanMoveStorage);
+        Assert.False(string.IsNullOrEmpty(storage.Current));
+        Assert.False(storage.ByHand);
+
+        await Refused(HttpMethod.Post, "api/storage/move", json: new StorageMoveRequest(storage.Current));
+        await Post(_laptopApi, "api/storage/move", new StorageMoveRequest("/etc/not-a-drive"), HttpStatusCode.BadRequest); // only a listed drive
+        var same = await Read<NestStorage>(Post(_laptopApi, "api/storage/move", new StorageMoveRequest(storage.Current))); // already there: nothing to do
+        Assert.Equal(storage.Current, same.Current);
+        Assert.NotEqual(StorageMoveStatus.Requested, same.Status?.State);
     }
 
     // ------------------------------------------------------------------ the last step

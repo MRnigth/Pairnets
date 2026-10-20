@@ -405,6 +405,9 @@ public static partial class Program
             new NoProtector(), serverVersionText: "Nest 1.0.58", files: new FakeNestFiles());
         window.ShowSettingsPage(settingsPage);
         Save(window, outDir, $"windows-main-settings-{suffix}.png", print);
+        settingsPage.ShowNestStorage(SampleStorage(current: "/mnt/data/pairnets"));
+        Save(window, outDir, $"windows-main-settings-nest-storage-{suffix}.png", print);
+        settingsPage.ShowNestStorage(null);
         settingsPage.ScrollToEnd();
         Save(window, outDir, $"windows-main-settings-start-over-{suffix}.png", print);
         window.AllowClose = true;
@@ -509,6 +512,30 @@ public static partial class Program
         Save(serverUpdate, outDir, $"windows-server-update-manual-{suffix}.png", print);
         serverUpdate.Close();
 
+        // Settings > Your nest > "Change…": the nest's drives, sure?, moving, moved, not moved.
+        var place = new NestPlaceWindow(null, SampleStorage());
+        Place(place);
+        Save(place, outDir, $"windows-nest-place-drives-{suffix}.png", print);
+        place.Flow.Choose("/mnt/data/pairnets");
+        place.Render();
+        Save(place, outDir, $"windows-nest-place-confirm-{suffix}.png", print);
+        place.Flow.Asking();
+        place.Flow.Seen(SampleStorage(new StorageMoveStatus(StorageMoveStatus.Running, 40, "Copying your files to the new drive")));
+        place.Render();
+        Save(place, outDir, $"windows-nest-place-moving-{suffix}.png", print);
+        place.Flow.Seen(SampleStorage(new StorageMoveStatus(StorageMoveStatus.Succeeded, 100, "Done.", "/var/lib/pairnets-before-move-2026-10-20-120000"), "/mnt/data/pairnets"));
+        place.Render();
+        Save(place, outDir, $"windows-nest-place-done-{suffix}.png", print);
+        place.Close();
+        var failed = new NestPlaceWindow(null, SampleStorage());
+        Place(failed);
+        failed.Flow.Choose("/mnt/data/pairnets");
+        failed.Flow.Asking();
+        failed.Flow.Seen(SampleStorage(new StorageMoveStatus(StorageMoveStatus.Failed, 0, "That drive can't be used: /mnt/data is read-only. Nothing was changed.")));
+        failed.Render();
+        Save(failed, outDir, $"windows-nest-place-failed-{suffix}.png", print);
+        failed.Close();
+
         var bugText = string.Join("\n", "Pairnets bug report", "Created:   2026-10-11 10:15:00", "App:       Windows app 1.0.49",
             "Nest:      nest.example.com (1.0.48)", "Computer:  DESKTOP", @"Folder:    D:\Sync\Work", "Status:    Up to date, last sync 10:14", "",
             "## Last log lines", "10:14:01 INF Uploaded report-q3.xlsx (1.2 MB)", "10:14:02 INF Up to date");
@@ -566,6 +593,15 @@ public static partial class Program
             ("paused", basis with { Status = RunnerStatus.Paused, Text = "Paused", Paused = true }),
         ];
     }
+
+    /// <summary>A Linux nest's drives as its root helper lists them: the main disk, a data drive, and a stick it can't use.</summary>
+    private static NestStorage SampleStorage(StorageMoveStatus? status = null, string current = "/var/lib/pairnets") =>
+        new(true, current, "/var/lib/pairnets", current == "/var/lib/pairnets", false, 3_960_000_000_000, 4_400_000_000_000,
+        [
+            new("/", "Main disk", "ext4", 182_000_000_000, 250_000_000_000, "/var/lib/pairnets", null, true),
+            new("/mnt/data", "data", "ext4", 3_960_000_000_000, 4_400_000_000_000, "/mnt/data/pairnets"),
+            new("/media/stick", "STICK", "vfat", 12_000_000_000, 32_000_000_000, "/media/stick/pairnets", "this drive has no Linux file permissions (vfat); format it as ext4 to use it"),
+        ], DateTimeOffset.UtcNow, status);
 
     internal static void Place(Window window)
     {

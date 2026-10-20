@@ -70,6 +70,18 @@
                     </Border>
                   </Grid>
                 </StackPanel>
+                <!-- Where the nest keeps its files (only when the nest can move them: a Linux nest with the helper) -->
+                <StackPanel x:Name="StoragePanel" IsVisible="False" Spacing="14">
+                  <Border Classes="hair" />
+                  <Grid ColumnDefinitions="*,Auto">
+                    <StackPanel Spacing="2" VerticalAlignment="Center">
+                      <TextBlock Text="Where your nest keeps files" FontWeight="SemiBold" TextWrapping="Wrap" />
+                      <TextBlock x:Name="StorageText" Classes="t3" TextTrimming="CharacterEllipsis" />
+                    </StackPanel>
+                    <Button x:Name="StorageButton" Grid.Column="1" Classes="chipbtn" Margin="12,0,0,0" VerticalAlignment="Center" Content="Change…"
+                            Click="OnChangeStorage" AutomationProperties.Name="Change where your nest keeps files" />
+                  </Grid>
+                </StackPanel>
               </StackPanel>
             </Border>
 
@@ -95,6 +107,20 @@
                   <TextBlock FontSize="13" FontWeight="Bold" Text="This computer's name" />
                   <TextBox x:Name="DeviceBox" Classes="field" Height="38" MinHeight="38" CornerRadius="11" FontWeight="SemiBold" MaxLength="64" />
                   <TextBlock Classes="t3" TextWrapping="Wrap" Text="Shown on your other computers, in conflict file names and on your account page at pairnets.app, where you can change it too." />
+                </StackPanel>
+                <!-- Linux only: where the app itself is (install-desktop.sh puts it in ~/.local/opt/pairnets) -->
+                <StackPanel x:Name="ProgramPanel" IsVisible="False" Spacing="6">
+                  <TextBlock FontSize="13" FontWeight="Bold" Text="Program folder" />
+                  <Grid ColumnDefinitions="*,Auto">
+                    <TextBox x:Name="ProgramText" Classes="field" Height="38" MinHeight="38" CornerRadius="11" IsReadOnly="True">
+                      <TextBox.InnerLeftContent>
+                        <v:LineIcon Classes="icon" Stroke="{DynamicResource T.Folder}" Width="16" Height="16" Margin="12,0,0,0" Data="{StaticResource I.Folder}" />
+                      </TextBox.InnerLeftContent>
+                    </TextBox>
+                    <Button x:Name="ProgramButton" Grid.Column="1" Classes="chipbtn" Height="38" Margin="8,0,0,0" Content="Move…" Click="OnMoveProgram"
+                            AutomationProperties.Name="Move the Pairnets program folder" />
+                  </Grid>
+                  <TextBlock Classes="t3" TextWrapping="Wrap" Text="Where the Pairnets app itself is. Your synced files are not in it." />
                 </StackPanel>
                 <Border Classes="hair" />
                 <Grid ColumnDefinitions="*,Auto">

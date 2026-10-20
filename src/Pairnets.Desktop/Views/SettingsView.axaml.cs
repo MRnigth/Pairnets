@@ -449,6 +449,40 @@ public partial class SettingsView : UserControl
             OpenLinkRequested?.Invoke(url);
     }
 
+    /// <summary>"Change…" next to where the nest keeps its files: the controller opens the window with the nest's drives.</summary>
+    public event Action? ChangeStorageRequested;
+
+    private void OnChangeStorage(object? sender, RoutedEventArgs e) => ChangeStorageRequested?.Invoke();
+
+    /// <summary>
+    /// The "Where your nest keeps files" row: "/mnt/data/pairnets · 3.60 TB free" with "Change…", shown only when the nest
+    /// can move its files (null or an older nest: hidden).
+    /// </summary>
+    public void ShowNestStorage(NestStorage? storage)
+    {
+        var shown = storage is { CanMove: true };
+        StoragePanel.IsVisible = shown;
+        StorageText.Text = shown ? NestPlaceFlow.PlaceLine(storage!) : string.Empty;
+    }
+
+    /// <summary>The row's line as shown (tests), or null while it is hidden.</summary>
+    internal string? StorageLine => StoragePanel.IsVisible ? StorageText.Text : null;
+
+    /// <summary>"Move…" next to the program folder (Linux): the controller asks where to and moves the app.</summary>
+    public event Action? MoveProgramRequested;
+
+    private void OnMoveProgram(object? sender, RoutedEventArgs e) => MoveProgramRequested?.Invoke();
+
+    /// <summary>The Linux app's "Program folder" row ("~/.local/opt/pairnets"); null hides it.</summary>
+    public void ShowProgramFolder(string? folder)
+    {
+        ProgramPanel.IsVisible = folder is not null;
+        ProgramText.Text = folder ?? string.Empty;
+    }
+
+    /// <summary>The program folder as shown (tests), or null while the row is hidden.</summary>
+    internal string? ProgramLine => ProgramPanel.IsVisible ? ProgramText.Text : null;
+
     private void OnShowAddress(object? sender, RoutedEventArgs e)
     {
         AddressFields.IsVisible = true;

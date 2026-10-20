@@ -1,3 +1,4 @@
+using System.Net.Http;
 using Pairnets.Core.Api;
 using Avalonia;
 using Avalonia.Controls;
@@ -874,7 +875,89 @@ public sealed class DesktopController : ITrayActions, IDisposable
         view.ShowDevicesRequested += () => _window?.Navigate(MainPage.Devices);
         view.OpenLinkRequested += url => _platform.Open(url);
         view.Cancelled += () => _window?.Navigate(MainPage.Overview);
+        view.ChangeStorageRequested += () => ShowNestPlace(view);
+        view.MoveProgramRequested += MoveProgram;
+        if (ProgramPlace() is { } place)
+            view.ShowProgramFolder(place.DisplayDir);
         _window!.ShowSettingsPage(view);
+        _ = FillNestStorageAsync(view);
+    }
+
+    /// <summary>What the nest last said about where it keeps its files (the window shows it at once).</summary>
+    private NestStorage? _nestStorage;
+
+    /// <summary>Settings' "Where your nest keeps files" row, for a nest that can move its files (asks it once).</summary>
+    private async Task FillNestStorageAsync(SettingsView view)
+    {
+        if (_session is not { } session || session.Status.Server is not { CanMoveStorage: true })
+            return;
+        try
+        {
+            _nestStorage = await session.Api.GetStorageAsync(CancellationToken.None);
+            view.ShowNestStorage(_nestStorage);
+        }
+        catch (Exception ex) when (ex is PairnetsNetworkException or PairnetsProtocolException or PairnetsAuthException or HttpRequestException or TaskCanceledException)
+        {
+            _log.LogDebug("The nest's storage could not be read: {Error}", ex.Message);
+        }
+    }
+
+    /// <summary>"Change…" on that row: the nest's drives and the move; the row is read again when it closes.</summary>
+    private void ShowNestPlace(SettingsView view)
+    {
+        var window = new NestPlaceWindow(() => _session, _nestStorage);
+        window.Closed += (_, _) => _ = FillNestStorageAsync(view);
+        window.Show();
+    }
+
+    /// <summary>The Linux app's own folder, when it runs as the Pairnets program (not under dotnet, not on a Mac).</summary>
+    private LinuxAppPlace? ProgramPlace() =>
+        OperatingSystem.IsLinux() && LinuxAppPlace.ForThisApp(_env) is { } place
+            && string.Equals(Path.GetFileNameWithoutExtension(place.AppFile), "Pairnets", StringComparison.OrdinalIgnoreCase)
+            ? place : null;
+
+    /// <summary>
+    /// "Move…" next to the program folder (Linux): asks where to, copies the app there and points the command, the app
+    /// menu and start at login at the copy (<see cref="LinuxAppPlace"/>), then starts the copy and quits. The copy removes
+    /// the old folder when it starts.
+    /// </summary>
+    private async void MoveProgram()
+    {
+        if (ProgramPlace() is not { } place || _window is null)
+            return;
+        if (await Dialogs.PickFolderAsync(_window, "Choose where the Pairnets program goes") is not { } chosen)
+            return;
+        if (place.Check(chosen) is { } problem)
+        {
+            await Dialogs.InfoAsync(_window, "Pairnets", problem);
+            return;
+        }
+        var target = LinuxAppPlace.TargetFor(chosen);
+        if (!await Dialogs.ConfirmAsync(_window, "Move Pairnets",
+                $"Move the Pairnets program to {target}? Pairnets starts again from there. Your synced files and settings stay as they are.", "Move", "Cancel"))
+            return;
+        string newApp;
+        try
+        {
+            newApp = await Task.Run(() => place.Move(chosen));
+        }
+        catch (PlainMessageException ex)
+        {
+            await Dialogs.InfoAsync(_window, "Pairnets", ex.Message);
+            return;
+        }
+        _log.LogInformation("Moved the program from {Old} to {New}", place.AppDir, target);
+        try
+        {
+            _platform.StartUpdatedApp(newApp, SelfReplace.AfterUpdateArgument);
+        }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
+        {
+            _log.LogWarning("Could not start the moved Pairnets: {Error}", ex.Message);
+            await Dialogs.InfoAsync(_window, "Pairnets", $"Pairnets is copied to {target}, but it couldn't be started from there. Quit Pairnets and start it again.");
+            return;
+        }
+        Quit();
     }
 
     /// <summary>"Sign in again" on the Account page: the sign-in window.</summary>

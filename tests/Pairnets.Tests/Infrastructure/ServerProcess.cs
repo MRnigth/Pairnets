@@ -43,6 +43,9 @@ public sealed class ServerProcess : IAsyncDisposable
         UpdateDir = dir.Combine("update");
         var updater = dir.Combine("update.sh");
         File.WriteAllText(updater, "#!/bin/sh\n# Stand-in: its presence turns on \"Update server\". It is never run here.\nexit 0\n");
+        // Stand-ins for the drive mover (place.sh next to update.sh, and its path unit): they turn on "Where your nest keeps files".
+        File.WriteAllText(dir.Combine("place.sh"), "#!/bin/sh\n# Stand-in: never run here.\nexit 0\n");
+        File.WriteAllText(dir.Combine("pairnets-place.path"), "[Path]\n");
         TestCertificates.Create("localhost").WriteLeafOnlyTo(TlsDir);
         _environment = new Dictionary<string, string>
         {
@@ -51,6 +54,7 @@ public sealed class ServerProcess : IAsyncDisposable
             ["Sync__TlsDir"] = TlsDir,
             ["Sync__UpdateDir"] = UpdateDir,
             ["Sync__UpdaterScript"] = updater,
+            ["Sync__PlacePathUnit"] = dir.Combine("pairnets-place.path"),
             ["Sync__PurgeInitialDelay"] = "01:00:00",
             ["ASPNETCORE_URLS"] = $"http://127.0.0.1:{httpPort}",
             ["Sync__HttpsUrl"] = $"https://127.0.0.1:{httpsPort}",

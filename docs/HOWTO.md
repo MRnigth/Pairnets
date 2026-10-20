@@ -98,6 +98,27 @@ Once you pressed **Add this nest**, `install.sh` does the rest:
 * makes the old shared **token**, which only older Pairnets apps use;
 * installs and starts the background service `pairnets-server`; both services also start at boot.
 
+**Where your files go.** First it asks where the nest should keep your files, with a list of the
+drives and their free space. Press **Enter** to keep them on the main disk, or pick a bigger drive:
+
+```text
+Where should Pairnets keep your files?
+
+  1) Main disk    /var/lib/pairnets            412.0GB free  (default)
+  2) data         /mnt/data/pairnets           3.6TB free
+  3) Type a folder...
+
+Pick 1-3 [1]: 2
+Put the program somewhere else too? (it is small; most people keep /opt/pairnets) [y/N]
+```
+
+Or give it on the command line (then it doesn't ask): `... | sudo bash -s -- --data-dir /mnt/data/pairnets`
+(and `--program-dir <folder>` for the program). It refuses a drive it can't use and says why, before
+anything changes: a USB stick formatted FAT or NTFS (no Linux permissions), a network drive, a drive that
+isn't plugged in, a folder that isn't empty, or too little space. You can change the place later, in
+the app's **Settings > Your nest > Where your nest keeps files**, or with the same option on an installed
+server; see [Moving the nest's data to another disk](DEPLOY.md#moving-the-nests-data-to-another-disk).
+
 At the end it waits until Pairnets can reach your server (usually about 30 seconds, at most 3
 minutes) and prints the next step: **on each computer, install Pairnets and choose Continue with
 email, with the same account** ([section 5](#5-set-up-the-first-computer-for-example-the-desktop)).
@@ -315,7 +336,11 @@ and click **Open Anyway**. The Terminal command above avoids this. On a Mac, Pai
 curl -fsSL https://raw.githubusercontent.com/MRnigth/Pairnets/main/deploy/get.sh | bash -s -- --desktop
 ```
 
-It installs into your home folder, adds Pairnets to the app menu and starts it. For the best
+It installs into your home folder (`~/.local/opt/pairnets`), adds Pairnets to the app menu and starts it.
+To put the program on another drive, add `--program-dir <folder>` (for example
+`... | bash -s -- --desktop --program-dir /media/me/data/pairnets`); a first install in a terminal asks,
+with a list of the drives you can write to. Installing again keeps the place, and
+**Settings > This computer > Program folder > Move…** moves it later. For the best
 experience also run `sudo apt install libsecret-tools libnotify-bin`. Pairnets then keeps its
 sign-in key in your keyring and can show notifications. On GNOME the tray icon needs the *AppIndicator*
 extension, which Ubuntu enables by default.
@@ -979,7 +1004,8 @@ had it on, then delete **Pairnets** from Applications. The sign-in key is in the
 app under "Pairnets" (Reset removes it).
 
 **Uninstall from Linux**: quit Pairnets, then
-`rm -rf ~/.local/opt/pairnets ~/.local/bin/pairnets ~/.local/share/applications/pairnets.desktop ~/.config/autostart/pairnets.desktop`.
+`rm -rf "$(dirname "$(readlink -f ~/.local/bin/pairnets)")" ~/.local/bin/pairnets ~/.local/share/applications/pairnets.desktop ~/.config/autostart/pairnets.desktop`
+(the first part is the program's folder: `~/.local/opt/pairnets`, or the one you chose).
 
 **Uninstall from Windows**: right-click → **Exit**. Untick "Start with Windows" first if you had it
 on. Then delete `Pairnets.exe`, or uninstall through *Settings → Apps* if you used the installer.
@@ -991,14 +1017,21 @@ state, use **Reset this app…** before uninstalling (or delete `%AppData%\Pairn
 
 ```bash
 sudo systemctl disable --now pairnets-server
-sudo systemctl disable --now pairnets-update.path pairnets-update.timer 2>/dev/null
+sudo /opt/pairnets/place.sh show   # where your files are (to delete them later yourself)
+sudo systemctl disable --now pairnets-update.path pairnets-update.timer pairnets-place.path 2>/dev/null
 sudo systemctl disable --now pairnets-tunnel 2>/dev/null   # only with a Cloudflare Tunnel
+sudo rm -rf /opt/pairnets/*                                 # the program, wherever you put it
+sudo systemctl disable --now var-lib-pairnets.mount opt-pairnets.mount 2>/dev/null   # only with a chosen place
 sudo rm -f /etc/systemd/system/pairnets-server.service /etc/systemd/system/pairnets-tunnel.service \
            /etc/systemd/system/pairnets-update.service /etc/systemd/system/pairnets-update.path \
-           /etc/systemd/system/pairnets-update.timer
+           /etc/systemd/system/pairnets-update.timer /etc/systemd/system/pairnets-place.service \
+           /etc/systemd/system/pairnets-place.path /etc/systemd/system/var-lib-pairnets.mount \
+           /etc/systemd/system/opt-pairnets.mount
+sudo rm -rf /etc/systemd/system/pairnets-server.service.d /etc/systemd/system/pairnets-update.service.d \
+            /etc/systemd/system/pairnets-tunnel.service.d
 sudo systemctl daemon-reload
 sudo rm -rf /opt/pairnets /etc/pairnets
-# your files remain in /var/lib/pairnets until you delete that folder yourself
+# your files remain in /var/lib/pairnets (or the folder place.sh showed) until you delete it yourself
 ```
 This also removes the self-updater, which the server installer added. If the server was linked to
 your Pairnets account, also press **Remove this nest from my account** at <https://sync.pairnets.app/account>

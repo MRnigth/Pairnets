@@ -45,6 +45,9 @@ public sealed class InProcessTarget : IServerTarget
         TestCertificates.Create("localhost").WriteLeafOnlyTo(updater.Combine("tls"));
         var script = updater.Combine("update.sh");
         await File.WriteAllTextAsync(script, "#!/bin/sh\n# Stand-in: its presence turns on \"Update server\". It is never run here.\nexit 0\n");
+        // Stand-ins for the drive mover (place.sh next to update.sh, and its path unit): they turn on "Where your nest keeps files".
+        await File.WriteAllTextAsync(updater.Combine("place.sh"), "#!/bin/sh\n# Stand-in: never run here.\nexit 0\n");
+        await File.WriteAllTextAsync(updater.Combine("pairnets-place.path"), "[Path]\n");
         var target = new InProcessTarget(new FakeSmtpServer(), await FakeGoogle.StartAsync(), updater);
         for (var attempt = 1; ; attempt++)
         {
@@ -66,6 +69,7 @@ public sealed class InProcessTarget : IServerTarget
                     ["Sync:GoogleTokenUrl"] = target._google.TokenUrl,
                     ["Sync:UpdaterScript"] = script,
                     ["Sync:UpdateDir"] = updater.Combine("update"),
+                    ["Sync:PlacePathUnit"] = updater.Combine("pairnets-place.path"),
                     ["Sync:TlsDir"] = updater.Combine("tls"),
                 }, https: true, installCertificate: false, configureBuilder: builder =>
                     builder.Services.AddSingleton<IStartupFilter>(new AnsweredRoutesFilter((route, status) => target._answered.Enqueue((route, status)))));

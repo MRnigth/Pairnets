@@ -35,6 +35,8 @@ internal static class Program
         }
 
         SelfReplace.CleanUp(Environment.ProcessPath);
+        if (OperatingSystem.IsLinux())
+            LinuxAppPlace.CleanUpOldCopy(PairnetsPaths.LocalDir, Environment.ProcessPath); // after "Program folder: Move…"
         using (instanceLock)
             return BuildAvaloniaApp().StartWithClassicDesktopLifetime(args, Avalonia.Controls.ShutdownMode.OnExplicitShutdown);
     }

@@ -535,6 +535,25 @@ public partial class SettingsView : UserControl
             OpenLinkRequested?.Invoke(url);
     }
 
+    /// <summary>"Change…" next to where the nest keeps its files: the controller opens the window with the nest's drives.</summary>
+    public event Action? ChangeStorageRequested;
+
+    private void OnChangeStorage(object sender, RoutedEventArgs e) => ChangeStorageRequested?.Invoke();
+
+    /// <summary>
+    /// The "Where your nest keeps files" row: "/mnt/data/pairnets · 3.60 TB free" with "Change…", shown only when the nest
+    /// can move its files (null or an older nest: hidden).
+    /// </summary>
+    public void ShowNestStorage(NestStorage? storage)
+    {
+        var shown = storage is { CanMove: true };
+        StoragePanel.Visibility = shown ? Visibility.Visible : Visibility.Collapsed;
+        StorageText.Text = shown ? NestPlaceFlow.PlaceLine(storage!) : string.Empty;
+    }
+
+    /// <summary>The row's line as shown (tests), or null while it is hidden.</summary>
+    internal string? StorageLine => StoragePanel.Visibility == Visibility.Visible ? StorageText.Text : null;
+
     private void OnShowAddress(object sender, RoutedEventArgs e)
     {
         AddressFields.Visibility = Visibility.Visible;

@@ -47,6 +47,7 @@ public class XamlParityTests
         // The Windows pages wire these from code.
         ("MainWindow", "OnFilter", WindowsApp, "the Activity filter pills are built in code on the Mac/Linux page"),
         ("MainWindow", "OnShowInFolder", WindowsApp, "the Show in folder button of a History row is built in code on the Mac/Linux page"),
+        ("SettingsView", "OnMoveProgram", MacLinuxApp, "Program folder > Move… is for the Linux app only (the Windows app has its installer)"),
     ];
 
     /// <summary>
