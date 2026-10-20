@@ -174,6 +174,6 @@ begin
   if CurStep = ssInstall then
     RemoveTether();
   // Only a first install: an upgrade (by hand or silent) never overwrites what was changed in Pairnets' Settings since.
-  if (CurStep = ssPostInstall) and not WizardSilent() and not WasInstalled then
-    LeaveChoicesForTheApp();
+  if (CurStep = ssPostInstall) and not WizardSilent() then
+    if IsFirstInstall() then LeaveChoicesForTheApp();
 end;
