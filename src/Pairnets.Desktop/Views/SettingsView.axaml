@@ -264,21 +264,21 @@
         </Border>
 
         <!-- Start over -->
-        <Border x:Name="StartOverCard" Classes="pcard dangercard" Padding="20,18">
+        <Border x:Name="StartOverCard" Classes="pcard dangercard" Padding="20,12">
           <Grid ColumnDefinitions="Auto,*,Auto">
-            <Border Classes="sq44 tint-bad" Margin="0,0,16,0" VerticalAlignment="Center">
-              <v:LineIcon Classes="icon ink-bad" Width="22" Height="22" StrokeThickness="1.9" Data="{StaticResource I.Restore}" />
+            <Border Classes="sq34 tint-bad" Margin="0,0,12,0" VerticalAlignment="Center">
+              <v:LineIcon Classes="icon ink-bad" Width="17" Height="17" StrokeThickness="2" Data="{StaticResource I.Restore}" />
             </Border>
-            <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
-              <TextBlock Classes="stitle" Text="Start over" />
-              <TextBlock Classes="t2" FontSize="13" TextWrapping="Wrap"
-                         Text="Forgets every setting and signs this computer out of your nest, then opens the sign-in screen so you can set it up again." />
-              <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,4,0,0">
-                <v:LineIcon Classes="icon ink-ok" Width="13" Height="13" StrokeThickness="2.6" Data="{StaticResource I.Check}" VerticalAlignment="Center" />
-                <TextBlock x:Name="StartOverNote" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource T.OkText}" TextWrapping="Wrap" />
+            <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
+              <TextBlock Text="Start over" FontWeight="Bold" />
+              <TextBlock Classes="t3" TextTrimming="CharacterEllipsis"
+                         Text="Forgets every setting and signs this computer out, then opens the sign-in screen." />
+              <StackPanel Orientation="Horizontal" Spacing="5" Margin="0,2,0,0">
+                <v:LineIcon Classes="icon ink-ok" Width="11" Height="11" StrokeThickness="2.6" Data="{StaticResource I.Check}" VerticalAlignment="Center" />
+                <TextBlock x:Name="StartOverNote" FontSize="11.5" FontWeight="SemiBold" Foreground="{DynamicResource T.OkText}" TextTrimming="CharacterEllipsis" />
               </StackPanel>
             </StackPanel>
-            <Button x:Name="ResetButton" Grid.Column="2" Classes="reset" Height="38" Padding="16,0" Margin="16,0,0,0" VerticalAlignment="Center" Content="Reset this app…" Click="OnReset" />
+            <Button x:Name="ResetButton" Grid.Column="2" Classes="reset" Height="32" FontSize="12.5" Padding="12,0" Margin="12,0,0,0" VerticalAlignment="Center" Content="Reset this app…" Click="OnReset" />
           </Grid>
         </Border>
 

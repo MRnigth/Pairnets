@@ -76,7 +76,7 @@ internal sealed class TrayHarness : IAsyncDisposable
     /// this sandbox's folder). <paramref name="watchFolder"/> false: only "Sync now" (and start-up) start a sync pass.
     /// </summary>
     public static async Task<TrayHarness> CreateAsync(TestServer? signedInTo = null, string name = "DESKTOP", bool watchFolder = true,
-        Func<ClientEnvironment, ClientEnvironment>? environment = null, Action<ClientSettings>? settings = null)
+        Func<ClientEnvironment, ClientEnvironment>? environment = null, Action<ClientSettings>? settings = null, string[]? arguments = null)
     {
         var root = new TempDir("wpf-app");
         var env = ClientEnvironment.Isolated(root.Path, NoUpdates);
@@ -91,31 +91,50 @@ internal sealed class TrayHarness : IAsyncDisposable
             settings(remembered);
             SettingsStore.Save(env.SettingsPath, remembered);
         }
-        await harness.Wpf.Ui(() =>
-        {
-            harness.Tray = new TrayController(harness._loggers, harness._fileLog, harness.Platform, env, harness.Wpf.Dispatcher,
-                () => Interlocked.Increment(ref harness._shutdowns))
-            {
-                RunnerOptionsForTests = o => new RunnerOptions
-                {
-                    ServerUrl = o.ServerUrl,
-                    Token = o.Token,
-                    DeviceId = o.DeviceId,
-                    WaitForPeerBatches = o.WaitForPeerBatches,
-                    EnableWatcher = watchFolder,
-                    WatcherDebounce = TimeSpan.FromMilliseconds(200),
-                    PeriodicInterval = TimeSpan.FromHours(1),
-                    UnstableRetry = TimeSpan.FromMilliseconds(300),
-                    ErrorRetry = TimeSpan.FromMilliseconds(500),
-                    OfflineBackoff = [TimeSpan.FromMilliseconds(200)],
-                },
-            };
-            harness.Tray.Notified += (title, text) => harness.Notifications.Add((title, text));
-            var items = harness.Tray.TrayIcon.ContextMenuStrip!.Items.OfType<Forms.ToolStripMenuItem>().ToList();
-            harness.MenuItems = items.ToDictionary(i => i, i => i.Text ?? string.Empty);
-            harness.PressableMenuItems = items.Where(i => i.Enabled).Select(i => i.Text ?? string.Empty).ToList();
-        });
+        harness._watchFolder = watchFolder;
+        await harness.Wpf.Ui(() => harness.MakeTray(arguments));
         return harness;
+    }
+
+    private bool _watchFolder = true;
+
+    private void MakeTray(string[]? arguments)
+    {
+        Tray = new TrayController(_loggers, _fileLog, Platform, Env, Wpf.Dispatcher,
+            () => Interlocked.Increment(ref _shutdowns))
+        {
+            Arguments = arguments ?? ["Pairnets.exe"],
+            RunnerOptionsForTests = o => new RunnerOptions
+            {
+                ServerUrl = o.ServerUrl,
+                Token = o.Token,
+                DeviceId = o.DeviceId,
+                WaitForPeerBatches = o.WaitForPeerBatches,
+                EnableWatcher = _watchFolder,
+                WatcherDebounce = TimeSpan.FromMilliseconds(200),
+                PeriodicInterval = TimeSpan.FromHours(1),
+                UnstableRetry = TimeSpan.FromMilliseconds(300),
+                ErrorRetry = TimeSpan.FromMilliseconds(500),
+                OfflineBackoff = [TimeSpan.FromMilliseconds(200)],
+            },
+        };
+        Tray.Notified += (title, text) => Notifications.Add((title, text));
+        var items = Tray.TrayIcon.ContextMenuStrip!.Items.OfType<Forms.ToolStripMenuItem>().ToList();
+        MenuItems = items.ToDictionary(i => i, i => i.Text ?? string.Empty);
+        PressableMenuItems = items.Where(i => i.Enabled).Select(i => i.Text ?? string.Empty).ToList();
+    }
+
+    /// <summary>
+    /// As after an update: this Pairnets ends and the new version starts on the same settings, saved sign-in and sync
+    /// notes, with <paramref name="arguments"/> (the installer passes --after-update).
+    /// </summary>
+    public async Task RestartAsNewVersionAsync(params string[] arguments)
+    {
+        await Wpf.Ui(() => Tray.Dispose());
+        await Wpf.CloseAllWindows();
+        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+        await Wpf.Ui(() => MakeTray(["Pairnets.exe", .. arguments]));
+        await Wpf.Ui(Tray.Start);
     }
 
     /// <summary>This computer's key on the nest when the sandbox started signed in.</summary>

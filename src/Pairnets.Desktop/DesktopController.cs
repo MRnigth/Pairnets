@@ -83,7 +83,8 @@ public sealed class DesktopController : ITrayActions, IDisposable
         _fileLog = new RollingFileLoggerProvider(_env.LogsDir, retentionDays: 14);
         _loggers = LoggerFactory.Create(b => b.AddProvider(_fileLog).SetMinimumLevel(LogLevel.Debug));
         _log = _loggers.CreateLogger("Pairnets.Desktop");
-        _settings = SettingsStore.Load(_env.SettingsPath);
+        _settings = SettingsStore.Load(_env.SettingsPath, problem => _log.LogWarning("Settings: {Problem}", problem));
+        UpgradeSettings();
         _crashes = new CrashCatcher(_env.CrashesDir, AppName, _log, () => PrivacyCleaner.ThisComputer(_settings));
         Dispatcher.UIThread.UnhandledException += OnUnhandledException;
         _fileLog.Minimum = _settings.DebugMode ? LogLevel.Debug : LogLevel.Information; // Debug mode: more detail in the log
@@ -146,6 +147,8 @@ public sealed class DesktopController : ITrayActions, IDisposable
         StartSession(null);
         if (FileManagerCommand.FromArguments(args) is { } command)
             HandleFileCommand(command); // started by a right-click item in the file manager while Pairnets was not running
+        else if (args.Contains(SelfReplace.AfterUpdateArgument))
+            Notify("updated", UpdateTexts.UpdatedTitle, UpdateTexts.Updated(PairnetsInfo.ProductVersion)); // updated itself: say so, don't pop the window up
         else if (!args.Contains(AppActivation.AutoStartArgument))
             ShowMainWindow();
     }
@@ -420,6 +423,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
                 _log.LogWarning("Could not remove this computer on the nest: {Error}", ex.Message);
             }
             StopSession();
+            _log.LogInformation("Signed out of this computer by the person (Sign out); the nest was {Told}", removed ? "told" : "not told");
             _settings.ProtectedToken = null;
             _settings.DeviceId = null;
             _settings.FirstRunCompleted = false;
@@ -476,6 +480,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
             {
                 _log.LogWarning(ex, "Could not take Pairnets out of the file manager");
             }
+            _log.LogInformation("Reset this app chosen by the person: forgetting the settings, the saved key and the sync notes");
             var result = LocalReset.Run(_settings, _platform.Secrets, _env.SettingsPath, _env.LocalDir);
             var notes = new List<string>(result.Problems);
             if (!leftFileManager)
@@ -1085,6 +1090,24 @@ public sealed class DesktopController : ITrayActions, IDisposable
     }
 
     private void SaveSettings() => SettingsStore.Save(_env.SettingsPath, _settings);
+
+    /// <summary>One-time changes for settings an older Pairnets saved (<see cref="SettingsUpgrades"/>), saved at once.</summary>
+    private void UpgradeSettings()
+    {
+        var done = SettingsUpgrades.Apply(_settings);
+        if (done.Count == 0 || !File.Exists(_env.SettingsPath))
+            return; // nothing changed, or nothing set up yet (the first run saves them)
+        foreach (var line in done)
+            _log.LogInformation("Settings: {Change}", line);
+        try
+        {
+            SaveSettings();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _log.LogWarning("Could not save the upgraded settings: {Error}", ex.Message);
+        }
+    }
 
     public void OpenFolder()
     {

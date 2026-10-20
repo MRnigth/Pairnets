@@ -781,9 +781,12 @@ repository to be public.
 and you get a notification.
 
 * **Windows** (installed with `PairnetsSetup.exe`): click **Update now**. Pairnets downloads the new
-  installer, checks it against the signed `SHA256SUMS.txt`, installs it and starts again by itself, in about
-  10 seconds. A copy run from the zip does the same with `pairnets-client-win-x64.zip`: it swaps its own
+  installer, checks it against the signed `SHA256SUMS.txt`, installs it hidden (no installer window) and starts
+  again by itself, in about 10 seconds; a note says "Pairnets is up to date". You stay signed in and every setting
+  is kept. A copy run from the zip does the same with `pairnets-client-win-x64.zip`: it swaps its own
   `Pairnets.exe` for the new one and starts it.
+* **The installer is for the first install.** You never need to run `PairnetsSetup.exe` again to update. If you
+  do, over an installed Pairnets, it skips its pages, updates in place and keeps your sign-in and settings.
 * **Linux**: click **Update now**. Pairnets downloads `pairnets-desktop-linux-x64.tar.gz`, checks it, swaps
   its own file for the new one and starts again by itself.
 * **Mac**: the card says Pairnets can't update itself on a Mac yet; click **Open download page**, get the
@@ -791,6 +794,13 @@ and you get a notification.
 
 If anything goes wrong (no internet, the check fails, Pairnets may not change its own folder), nothing is
 installed, you keep your current version, and the card says why, with **Try again**.
+
+**Never got an update?** Check that **Settings → Updates and speed → Check for updates** is on. Pairnets 1.0.60
+switches it on once on every computer (some test set-ups had it off); if you turn it off again, it stays off.
+
+**Signed out after an update?** An update never signs you out. If the sign-in window says **Sign in again**, this
+computer was signed out (Sign out, or Reset) — the log says when. Your folder, computer name and settings are kept;
+signing in again carries on where you were.
 
 **Pairnets 1.0.59 and older** opened the download page instead of updating when it ran from the zip
 (Windows) or on Linux. Update those once by hand: replace `Pairnets.exe` with the one in

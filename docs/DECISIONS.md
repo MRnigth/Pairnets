@@ -1234,3 +1234,41 @@ the version-archive notes and the design review fixes merged in, in that order. 
   button before the blue "Use StudyPC" (both apps).
 * **The design review fixes are one merge commit** (the last one), so they can be taken out again with one revert
   if they are not kept.
+
+## Updates are hidden; the installer is for the first install (2026-10-20)
+
+The owner: "we can't update without all the info/login thing is wiped … the installer is one-time". What was really
+going on, from this PC's own log and settings: no update ever touched the settings (they live in
+`%AppData%\Pairnets\settings.json`, the key DPAPI-protected per Windows user with a fixed entropy, nothing tied to the
+exe's path or version). The computer had been **signed out** four minutes before the update (Sign out wrote no log
+line, so it looked like the update did it), and **"Check for updates" was off** (a leftover test setting), so 1.0.53
+to 1.0.58 were never offered and 1.0.59 was installed by hand through the whole wizard. Even the in-app update showed
+Inno's progress window (`/SILENT`).
+
+* **The in-app update runs the installer `/VERYSILENT`** (`UpdatePackage.InstallerArguments`): nothing shows. The
+  installer starts the new Pairnets with `--after-update`, which shows a small "Pairnets is up to date" note instead of
+  opening the window (both apps). An installed 1.0.59.1 or older still runs it with `/SILENT`, so the step to 1.0.60
+  shows the progress window one last time.
+* **The installer started by hand over an installed Pairnets skips its pages** (it finds its own uninstall entry):
+  same folder, earlier tick boxes (`UsePreviousTasks`, the default), and a finish page that says the sign-in and
+  settings were kept. `WasInstalled` (and `IsFirstInstall()`) guard the Tasks page (feature/nest-files): its
+  `LeaveChoicesForTheApp()` must run only on the first install, or a hand update would write the ticks over the app's
+  settings. A test fails if a call to it is not guarded so.
+* **We kept Inno Setup** rather than MSIX (needs a trusted signing certificate, moves app data into a package folder:
+  a migration risk for the very sign-in this protects, and harder for the Explorer work), ClickOnce (no single-file
+  exe, a new folder each version breaks start-at-login and Explorer) or swapping the exe without the installer (the
+  Windows Apps list would show the old version).
+* **"Check for updates" is switched on once** (`SettingsUpgrades`, `ClientSettings.SettingsVersion` = 1). A settings
+  file without the number reads as version 0; new settings start current, so the first run's own choice is never
+  overruled. Switched off again later, it stays off. Updates still ask: one click on "Update now", no restart by itself
+  (the owner's choice).
+* **Safety copy:** every save also writes `settings.json.bak` (a copy of what was just written, so it never holds a
+  key a Sign out removed). A missing or unreadable settings.json is replaced by it, with a line in the log. Reset deletes
+  it too; deleting settings.json by hand no longer starts over — use Reset.
+* **Logged now:** Sign out, Reset, and a settings file that was missing or unreadable. A computer that knows its nest,
+  folder and name but has no key gets "Sign in again … your settings are kept" instead of the new-computer greeting.
+* **Tests:** `UpdateKeepsSettingsTests` (safety copy, the one-time switch, the sign-in-again words, the installer
+  script never deleting app data and skipping pages on an update), `SavedKeyTests` (real DPAPI, pinned entropy) and
+  `AppUpdate_TheNewVersion_StaysSignedIn_KeepsEverySetting_AndOnlySaysItWasUpdated` (a whole update in the Windows
+  app's harness, then the new version starting on the same files).
+* **Smaller "Start over" card** in Settings (asked the same day): the size of the Report a bug row, both apps.
