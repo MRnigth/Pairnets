@@ -102,10 +102,10 @@
                   <TextBlock x:Name="AttentionCount" HorizontalAlignment="Right" VerticalAlignment="Top" FontSize="20" />
                 </Grid>
               </RadioButton>
-              <RadioButton x:Name="NavHistory" Classes="sidetile" GroupName="page" IsCheckedChanged="OnNav">
+              <RadioButton x:Name="NavFiles" Classes="sidetile" GroupName="page" IsCheckedChanged="OnNav">
                 <Grid>
-                  <TextBlock Text="History" VerticalAlignment="Bottom" FontSize="14" />
-                  <v:LineIcon Data="{StaticResource I.History}" />
+                  <TextBlock Text="Files" VerticalAlignment="Bottom" FontSize="14" />
+                  <v:LineIcon Data="{StaticResource I.Folder}" />
                 </Grid>
               </RadioButton>
               <RadioButton x:Name="NavDevices" Classes="sidetile" GroupName="page" IsCheckedChanged="OnNav">
@@ -215,8 +215,8 @@
                   <TextBlock x:Name="DockBadgeText" Foreground="{DynamicResource T.NeedsActiveText}" FontSize="10" FontWeight="ExtraBold" HorizontalAlignment="Center" VerticalAlignment="Center" />
                 </Border>
               </Grid>
-              <RadioButton x:Name="DockHistory" Classes="dockpage" GroupName="dock" ToolTip.Tip="History" AutomationProperties.Name="History" IsCheckedChanged="OnNav">
-                <v:LineIcon Data="{StaticResource I.History}" />
+              <RadioButton x:Name="DockFiles" Classes="dockpage" GroupName="dock" ToolTip.Tip="Files" AutomationProperties.Name="Files" IsCheckedChanged="OnNav">
+                <v:LineIcon Data="{StaticResource I.Folder}" />
               </RadioButton>
               <RadioButton x:Name="DockDevices" Classes="dockpage" GroupName="dock" ToolTip.Tip="Devices" AutomationProperties.Name="Devices" IsCheckedChanged="OnNav">
                 <v:LineIcon Data="{StaticResource I.Desktop}" />
@@ -498,12 +498,34 @@
           </Border>
         </Grid>
 
-        <!-- ============ History ============ -->
-        <Grid x:Name="HistoryPage" RowDefinitions="Auto,Auto,*" Margin="28,40,28,24" IsVisible="False">
-          <StackPanel>
-            <TextBlock Classes="PageTitle" Text="History" />
-            <TextBlock Classes="t2" Margin="0,2,0,0" TextWrapping="Wrap" Text="Get back deleted files and older versions. Your nest keeps them for 30 days." />
+        <!-- ============ Files: all files on the nest, and the deleted ones (History); Clean up in its place ============ -->
+        <Grid x:Name="FilesPage" RowDefinitions="Auto,*" IsVisible="False">
+          <StackPanel x:Name="FilesHeader" Margin="28,40,28,0">
+            <TextBlock Classes="PageTitle" Text="Files" />
+            <TextBlock Classes="t2" Margin="0,2,0,0" TextWrapping="Wrap" Text="Everything on your nest, and what was deleted in the last 30 days." />
+            <Border Classes="tabs" HorizontalAlignment="Left" Margin="0,16,0,0">
+              <StackPanel Orientation="Horizontal" Spacing="4">
+                <RadioButton x:Name="AllFilesTab" Classes="tab" GroupName="files" IsChecked="True" IsCheckedChanged="OnFilesTab">
+                  <StackPanel Orientation="Horizontal" Spacing="7">
+                    <v:LineIcon Classes="icon" Width="14" Height="14" Stroke="{Binding $parent[RadioButton].Foreground}" Data="{StaticResource I.Folder}" />
+                    <TextBlock Text="All files" />
+                  </StackPanel>
+                </RadioButton>
+                <RadioButton x:Name="DeletedFilesTab" Classes="tab" GroupName="files" IsCheckedChanged="OnFilesTab">
+                  <StackPanel Orientation="Horizontal" Spacing="7">
+                    <v:LineIcon Classes="icon" Width="14" Height="14" Stroke="{Binding $parent[RadioButton].Foreground}" Data="{StaticResource I.Trash}" />
+                    <TextBlock Text="Deleted" />
+                    <TextBlock x:Name="DeletedTabCount" FontWeight="Bold" Foreground="{DynamicResource T.AccentInk}" />
+                  </StackPanel>
+                </RadioButton>
+              </StackPanel>
+            </Border>
           </StackPanel>
+          <v:NestFilesView x:Name="NestFilesPage" Grid.Row="1" />
+          <v:CleanupView x:Name="CleanupPage" Grid.RowSpan="2" IsVisible="False" />
+
+        <!-- ============ History: the Files page's Deleted tab ============ -->
+        <Grid x:Name="HistoryPage" Grid.Row="1" RowDefinitions="Auto,Auto,*" Margin="28,0,28,24" IsVisible="False">
           <Grid Grid.Row="1" ColumnDefinitions="Auto,*,Auto" Margin="0,16,0,0">
             <Border Classes="tabs" VerticalAlignment="Center">
               <StackPanel Orientation="Horizontal" Spacing="4">
@@ -517,7 +539,7 @@
                 <RadioButton x:Name="FilesTab" Classes="tab" GroupName="history" IsCheckedChanged="OnHistoryModeChanged">
                   <StackPanel Orientation="Horizontal" Spacing="7">
                     <v:LineIcon Classes="icon" Width="14" Height="14" Stroke="{Binding $parent[RadioButton].Foreground}" Data="{StaticResource I.File}" />
-                    <TextBlock Text="All files" />
+                    <TextBlock Text="Older versions" />
                   </StackPanel>
                 </RadioButton>
               </StackPanel>
@@ -688,6 +710,7 @@
               </StackPanel>
             </Border>
           </Panel>
+        </Grid>
         </Grid>
 
         <!-- ============ Devices: the nest and every computer that uses it ============ -->

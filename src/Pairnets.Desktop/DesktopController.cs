@@ -279,6 +279,11 @@ public sealed class DesktopController : ITrayActions, IDisposable
         };
         session.ServerInfoChanged += info => Dispatcher.UIThread.Post(() => OnServerInfo(session, info));
         session.AccountChanged += (next, token) => Dispatcher.UIThread.Post(() => OnAccountChanged(session, next, token));
+        session.Files.Opened.NestFullWhileSaving += path => Dispatcher.UIThread.Post(() =>
+        {
+            if (ReferenceEquals(_session, session) && _window is { } w)
+                _ = w.ShowNestFullAsync(); // a file opened from the nest could not be saved back
+        });
         session.JoinRequested += r => Notify("join:" + r.Code, r.Title, $"Code {r.Code}. Review it on your nest (Pairnets → Needs attention).");
         session.CatchUpCompleted += n => Notify("catchup", "Pairnets is up to date", $"Synced {n} change(s) made while this computer was away.");
         _session = session;
@@ -326,6 +331,14 @@ public sealed class DesktopController : ITrayActions, IDisposable
         if (_session is not { } session || _settings.Folder is not { } folder || FileStatusReader.ToSyncPath(folder, command.Path) is not { } rel)
         {
             ShowMainWindow();
+            return;
+        }
+        if (command.Action == FileManagerAction.WhereItLives)
+        {
+            // A folder's own choice; for a file, the folder it is in.
+            var folderPath = rel.Length == 0 || Directory.Exists(command.Path) ? rel : Pairnets.Core.Paths.PathRules.Parent(rel) ?? string.Empty;
+            ShowMainWindow();
+            _window?.ShowFilesAt(folderPath, choosePlacement: true);
             return;
         }
         if (command.Action == FileManagerAction.Open)
@@ -668,6 +681,10 @@ public sealed class DesktopController : ITrayActions, IDisposable
 
     public IHistorySource? History => _session;
 
+    public INestFiles? Files => _session?.Files;
+
+    public void OpenFile(string path) => _platform.Open(path);
+
     public bool Notifies(NoticeKind kind) => kind switch
     {
         NoticeKind.JoinRequest => _settings.NotifyJoinRequests,
@@ -794,7 +811,8 @@ public sealed class DesktopController : ITrayActions, IDisposable
         }
         if (_window is not { IsVisible: true })
             ShowMainWindow();
-        var view = new SettingsView(_settings, _platform.Secrets, SafeIsAutoStart(), _updates, _session?.Status.ServerVersionText);
+        var view = new SettingsView(_settings, _platform.Secrets, SafeIsAutoStart(), _updates, _session?.Status.ServerVersionText, _session?.Files);
+        view.OpenFilesRequested += () => _window?.Navigate(MainPage.Files);
         view.Saved += v =>
         {
             ApplySettings(v.Result!, v.PlainToken);

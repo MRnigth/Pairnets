@@ -1,0 +1,145 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:v="using:Pairnets.Desktop.Views"
+             xmlns:c="using:Pairnets.Core.Client"
+             x:Class="Pairnets.Desktop.Views.NestFilesView">
+  <UserControl.Resources>
+    <v:WhereIconConverter x:Key="WhereIcon" />
+    <v:WhereBrushConverter x:Key="WhereBrush" />
+    <v:RowIconConverter x:Key="RowIcon" />
+  </UserControl.Resources>
+  <!-- "All files" on the Files page: the nest's folders and files, where each lives, and what can be done with them. -->
+  <Grid RowDefinitions="Auto,Auto,Auto,*,Auto" Margin="28,16,28,24">
+    <!-- Search, refresh, clean up, add -->
+    <Grid ColumnDefinitions="*,Auto,Auto,Auto">
+      <TextBox x:Name="FilesSearch" Classes="search" Height="42" MinHeight="42" CornerRadius="14" Watermark="Search files by name or folder" VerticalContentAlignment="Center">
+        <TextBox.InnerLeftContent>
+          <v:LineIcon Classes="icon muted" Width="15" Height="15" Margin="12,0,0,0" Data="{StaticResource I.Search}" />
+        </TextBox.InnerLeftContent>
+      </TextBox>
+      <Button Grid.Column="1" Classes="SecondaryButton" Width="42" Height="42" MinHeight="42" Padding="0" CornerRadius="14" Margin="10,0,0,0"
+              ToolTip.Tip="Refresh" AutomationProperties.Name="Refresh" Click="OnFilesRefresh">
+        <v:LineIcon Classes="icon" Width="17" Height="17" Data="{StaticResource I.Sync}" />
+      </Button>
+      <Button Grid.Column="2" Classes="SecondaryButton" Height="42" MinHeight="42" Padding="14,0" CornerRadius="14" Margin="10,0,0,0"
+              AutomationProperties.Name="Clean up…" Click="OnCleanUp">
+        <StackPanel Orientation="Horizontal" Spacing="7">
+          <v:LineIcon Classes="icon" Width="16" Height="16" Data="{StaticResource I.Disk}" />
+          <TextBlock Text="Clean up…" VerticalAlignment="Center" />
+        </StackPanel>
+      </Button>
+      <Button x:Name="AddFilesButton" Grid.Column="3" Classes="accent" Height="42" MinHeight="42" Padding="16,0" CornerRadius="14" Margin="10,0,0,0"
+              AutomationProperties.Name="Add files" Click="OnAddFiles">
+        <StackPanel Orientation="Horizontal" Spacing="7">
+          <v:LineIcon Classes="icon white" Width="16" Height="16" Data="{StaticResource I.UpArrow}" />
+          <TextBlock Text="Add files" VerticalAlignment="Center" />
+        </StackPanel>
+      </Button>
+    </Grid>
+
+    <!-- Where we are, and where this folder lives -->
+    <Border Grid.Row="1" Classes="pcard" Margin="0,12,0,0" Padding="16,8,10,8">
+      <Grid ColumnDefinitions="*,Auto,Auto">
+        <WrapPanel x:Name="CrumbPanel" VerticalAlignment="Center" />
+        <TextBlock x:Name="LivesLabel" Grid.Column="1" Classes="t3" FontSize="13" VerticalAlignment="Center" Margin="12,0,8,0" Text="This folder lives" />
+        <Button x:Name="PlacementButton" Grid.Column="2" Classes="SecondaryButton" Height="34" MinHeight="34" Padding="10,0" AutomationProperties.Name="Where this folder lives" Click="OnPlacementMenu">
+          <StackPanel Orientation="Horizontal" Spacing="7">
+            <v:LineIcon x:Name="PlacementIcon" Width="15" Height="15" StrokeThickness="2.1" Data="{StaticResource I.Desktop}" />
+            <TextBlock x:Name="PlacementText" Text="On this PC" VerticalAlignment="Center" />
+            <v:LineIcon Classes="icon muted" Width="12" Height="12" StrokeThickness="2.4" Data="{StaticResource I.ChevronDown}" />
+          </StackPanel>
+          <Button.ContextMenu>
+            <ContextMenu x:Name="PlacementMenu" Placement="BottomEdgeAlignedRight">
+              <MenuItem x:Name="PickOnThisPc" Tag="ThisPc" Click="OnPickPlacement" />
+              <MenuItem x:Name="PickOnDemand" Tag="Demand" Click="OnPickPlacement" />
+              <MenuItem x:Name="PickNestOnly" Tag="Nest" Click="OnPickPlacement" />
+            </ContextMenu>
+          </Button.ContextMenu>
+        </Button>
+      </Grid>
+    </Border>
+
+    <!-- The nest can't be reached; how the last change went -->
+    <StackPanel Grid.Row="2">
+      <Border x:Name="OfflineBanner" Classes="tint-warn" Margin="0,12,0,0" Padding="16,12" CornerRadius="14" IsVisible="False">
+        <Grid ColumnDefinitions="Auto,*">
+          <v:LineIcon Width="20" Height="20" Margin="0,0,12,0" StrokeThickness="2" Stroke="{DynamicResource T.WarnText}" Data="{StaticResource I.CloudOff}" VerticalAlignment="Top" />
+          <TextBlock Grid.Column="1" TextWrapping="Wrap" FontSize="14" Foreground="{DynamicResource T.WarnText}">
+            <Run FontWeight="Bold" Text="Your nest can't be reached." />
+            <Run x:Name="OfflineRun" />
+          </TextBlock>
+        </Grid>
+      </Border>
+      <Border x:Name="FilesMessage" Classes="msg" Margin="0,12,0,0" HorizontalAlignment="Left" IsVisible="False">
+        <TextBlock x:Name="FilesMessageText" TextWrapping="Wrap" FontSize="12.5" />
+      </Border>
+    </StackPanel>
+
+    <!-- The list (files can be dropped on it) -->
+    <Border x:Name="ListCard" Grid.Row="3" Classes="pcard" Margin="0,12,0,0" Padding="8,4,8,6" DragDrop.AllowDrop="True">
+      <Grid RowDefinitions="Auto,*">
+        <Grid ColumnDefinitions="2.4*,1.4*,1.1*,1.1*,40" Margin="10,10,10,6">
+          <TextBlock Classes="heading" Text="NAME" Margin="48,0,0,0" />
+          <TextBlock Grid.Column="1" Classes="heading" Text="WHERE" />
+          <TextBlock Grid.Column="2" Classes="heading" Text="SIZE" />
+          <TextBlock Grid.Column="3" Classes="heading" Text="CHANGED" />
+        </Grid>
+        <ListBox x:Name="EntryList" Grid.Row="1" Classes="frows" AutomationProperties.Name="Files on your nest">
+          <ListBox.ItemTemplate>
+            <DataTemplate DataType="c:NestRow">
+              <Grid ColumnDefinitions="2.4*,1.4*,1.1*,1.1*,40" Background="Transparent">
+                <Grid ColumnDefinitions="Auto,*">
+                  <Border Classes="sq34" Classes.tint-accent="{Binding IsFolder}" Margin="0,0,12,0">
+                    <v:LineIcon Classes="icon ink-soft" Width="17" Height="17" StrokeThickness="2" Data="{Binding IsFolder, Converter={StaticResource RowIcon}}" />
+                  </Border>
+                  <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                    <TextBlock Text="{Binding Detail}" Classes="t3" TextTrimming="CharacterEllipsis" IsVisible="{Binding HasDetail}" />
+                  </StackPanel>
+                </Grid>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                  <v:LineIcon Width="15" Height="15" StrokeThickness="2" Data="{Binding Shows, Converter={StaticResource WhereIcon}}" Stroke="{Binding Shows, Converter={StaticResource WhereBrush}}" />
+                  <TextBlock Text="{Binding WhereText}" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                </StackPanel>
+                <TextBlock Grid.Column="2" Text="{Binding SizeText}" Classes="t3" FontSize="13" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                <TextBlock Grid.Column="3" Text="{Binding WhenText}" Classes="t3" FontSize="13" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                <Button Grid.Column="4" Classes="icon" Width="32" Height="32" ToolTip.Tip="{Binding Name, StringFormat='More for {0}'}" AutomationProperties.Name="{Binding Name, StringFormat='More for {0}'}" Click="OnRowMore">
+                  <v:LineIcon Classes="icon muted" Width="16" Height="16" StrokeThickness="3" Data="{StaticResource I.More}" />
+                  <Button.ContextMenu>
+                    <ContextMenu Placement="BottomEdgeAlignedRight">
+                      <MenuItem Header="Open" Click="OnRowOpen" />
+                      <MenuItem Header="Save a copy…" Click="OnRowSaveCopy" IsVisible="{Binding !IsFolder}" />
+                      <MenuItem Header="Rename…" Click="OnRowRename" />
+                      <MenuItem Header="Move to…" Click="OnRowMove" />
+                      <MenuItem Header="Delete…" Click="OnRowDelete" />
+                      <Separator IsVisible="{Binding IsFolder}" />
+                      <MenuItem Header="Where this folder lives" IsVisible="{Binding IsFolder}">
+                        <MenuItem Header="On this PC" Tag="ThisPc" Click="OnRowPlace" />
+                        <MenuItem Header="On-Demand" Tag="Demand" Click="OnRowPlace" IsVisible="{x:Static v:NestFilesView.OnDemandOffered}" />
+                        <MenuItem Header="Only on the nest" Tag="Nest" Click="OnRowPlace" />
+                      </MenuItem>
+                    </ContextMenu>
+                  </Button.ContextMenu>
+                </Button>
+              </Grid>
+            </DataTemplate>
+          </ListBox.ItemTemplate>
+        </ListBox>
+        <!-- Not connected, nothing here, nothing found -->
+        <StackPanel x:Name="EmptyMessage" Grid.Row="1" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,24" Spacing="10" IsVisible="False">
+          <v:LineIcon Classes="icon muted" Width="30" Height="30" StrokeThickness="1.6" Data="{StaticResource I.Folder}" HorizontalAlignment="Center" />
+          <TextBlock x:Name="EmptyText" Classes="t2" TextAlignment="Center" MaxWidth="360" TextWrapping="Wrap" />
+        </StackPanel>
+      </Grid>
+    </Border>
+
+    <!-- How much is here, and the drop hint -->
+    <StackPanel Grid.Row="4" Margin="4,12,0,0" Spacing="6">
+      <TextBlock x:Name="FooterText" Classes="t3" FontSize="13" />
+      <StackPanel Orientation="Horizontal" Spacing="8">
+        <v:LineIcon Classes="icon muted" Width="15" Height="15" StrokeThickness="1.9" Data="{StaticResource I.InfoCircle}" />
+        <TextBlock Classes="t3" FontSize="13" TextWrapping="Wrap" Text="Drop files here to put them on your nest. Double-click a file to open it: changes you save go back to your nest." />
+      </StackPanel>
+    </StackPanel>
+  </Grid>
+</UserControl>

@@ -47,9 +47,18 @@ public partial class SettingsView : UserControl
         e.Handled = true;
     }
 
-    public SettingsView(ClientSettings current, ISecretProtector? protector, bool autoStart, UpdateService? updates = null, string? serverVersionText = null)
+    /// <summary>"Where your files live" as chosen on this page (saved with the rest).</summary>
+    private readonly Dictionary<string, FilePlacement> _placement;
+
+    /// <summary>The nest's files (the folders to choose for); null when not connected.</summary>
+    private readonly INestFiles? _files;
+
+    public SettingsView(ClientSettings current, ISecretProtector? protector, bool autoStart, UpdateService? updates = null, string? serverVersionText = null,
+        INestFiles? files = null)
     {
         _updates = updates;
+        _files = files;
+        _placement = new Dictionary<string, FilePlacement>(current.Placement, StringComparer.Ordinal);
         InitializeComponent();
         _original = current;
         _protector = protector;
@@ -73,6 +82,11 @@ public partial class SettingsView : UserControl
         IgnoreBox.Text = string.Join(Environment.NewLine, current.ExtraIgnore);
         AutoStartBox.IsChecked = autoStart;
         FileManagerBox.IsChecked = current.ShowInFileManager;
+        RightClickBox.IsChecked = current.ExplorerRightClick;
+        RightClickRow.IsVisible = !OperatingSystem.IsMacOS(); // Finder has no right-click items from Pairnets
+        TicksBox.IsChecked = current.CloudFolder != CloudFolderMode.Off;
+        TicksRow.IsVisible = OperatingSystem.IsWindows(); // ticks are Windows' cloud files
+        DrawPlacement();
         if (OperatingSystem.IsMacOS())
         {
             // Apple lets an app give its folder an icon, but not add it to Finder's sidebar: that stays a drag.
@@ -113,6 +127,85 @@ public partial class SettingsView : UserControl
         }
         return "?";
     }
+
+    // ------------------------------------------------------------------ where your files live
+
+    /// <summary>The folders the card lists: "" (everything else), each top folder, and any folder with a choice of its own.</summary>
+    public IReadOnlyList<string> PlacementFolders =>
+        [string.Empty, .. (_files?.Folders() ?? []).Concat(_placement.Keys.Select(PlacementMap.NormalizeFolder).Where(k => k.Length > 0))
+            .Distinct(StringComparer.OrdinalIgnoreCase).Order(StringComparer.CurrentCultureIgnoreCase)];
+
+    /// <summary>Where <paramref name="folder"/>'s files live as chosen on this page so far.</summary>
+    public FilePlacement PlacementChosen(string folder) => new PlacementMap(_placement).For(folder);
+
+    /// <summary>The choices as Save will save them.</summary>
+    public IReadOnlyDictionary<string, FilePlacement> PlacementToSave => _placement;
+
+    private void DrawPlacement()
+    {
+        PlacementRows.Children.Clear();
+        PlacementRows.IsEnabled = _files is not null;
+        PlacementRows.Opacity = _files is null ? 0.55 : 1;
+        PlacementNote.Text = _files is null ? FilesPageText.SettingsOff : FilesPageText.SettingsText.Replace("this PC", "this computer", StringComparison.Ordinal);
+        var tops = _files?.List(string.Empty) ?? [];
+        foreach (var folder in PlacementFolders)
+        {
+            var name = folder.Length == 0 ? FilesPageText.EverythingElse : folder;
+            var row = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+            var size = folder.Length == 0 ? FilesPageText.EverythingElseNote
+                : _files is null ? string.Empty
+                : FilesPageText.SizeLine(tops.FirstOrDefault(e => e.IsFolder && e.Path == folder)?.Size ?? 0, _files.BytesHere(folder));
+            row.Children.Add(new StackPanel
+            {
+                VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
+                Margin = new Thickness(0, 0, 12, 0),
+                Children =
+                {
+                    new TextBlock { Text = name, FontWeight = FontWeight.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis },
+                    new TextBlock { Text = size, Classes = { "t3" } },
+                },
+            });
+            var segments = new StackPanel { Orientation = Avalonia.Layout.Orientation.Horizontal };
+            var now = PlacementChosen(folder);
+            foreach (var choice in NestFiles.Choices)
+            {
+                var button = new RadioButton
+                {
+                    Content = NestFiles.PlacementText(choice),
+                    Classes = { "seg" },
+                    GroupName = "placement:" + folder,
+                    IsChecked = choice == now,
+                };
+                Avalonia.Automation.AutomationProperties.SetName(button, $"{name}: {NestFiles.PlacementText(choice)}");
+                button.IsCheckedChanged += (_, _) =>
+                {
+                    if (button.IsChecked == true)
+                        Avalonia.Threading.Dispatcher.UIThread.Post(() => _ = ChoosePlacementAsync(folder, choice));
+                };
+                segments.Children.Add(button);
+            }
+            var frame = new Border { Classes = { "segments" }, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center, Child = segments };
+            Grid.SetColumn(frame, 1);
+            row.Children.Add(frame);
+            PlacementRows.Children.Add(row);
+        }
+    }
+
+    /// <summary>A choice in the card: asked first when files leave this computer, saved with Save.</summary>
+    public async Task ChoosePlacementAsync(string folder, FilePlacement choice)
+    {
+        var now = PlacementChosen(folder);
+        if (now == choice)
+            return;
+        if (await Dialogs.ConfirmAwayAsync(Owner, folder, now, choice, _files?.BytesHere(folder) ?? 0))
+            PlacementMap.Choose(_placement, folder, choice);
+        DrawPlacement(); // also puts the choice back when the person said no
+    }
+
+    /// <summary>"Choose for a folder inside these…": the Files page.</summary>
+    public event Action? OpenFilesRequested;
+
+    private void OnPlacementLink(object? sender, RoutedEventArgs e) => OpenFilesRequested?.Invoke();
 
     private static string SystemName() => OperatingSystem.IsMacOS() ? "macOS" : OperatingSystem.IsWindows() ? "Windows" : "Linux";
 
@@ -344,7 +437,10 @@ public partial class SettingsView : UserControl
                 ExtraIgnore = Patterns(),
                 StartWithWindows = AutoStartBox.IsChecked == true,
                 ShowInFileManager = FileManagerBox.IsChecked == true,
-                CloudFolder = _original.CloudFolder, // Windows only
+                ExplorerRightClick = RightClickBox.IsChecked == true,
+                CloudFolder = !OperatingSystem.IsWindows() ? _original.CloudFolder // Windows only
+                    : TicksBox.IsChecked == true ? CloudFolderMode.KeepAllHere : CloudFolderMode.Off,
+                Placement = new Dictionary<string, FilePlacement>(_placement, StringComparer.Ordinal),
                 FirstRunCompleted = true,
                 Paused = _original.Paused,
                 SideFolded = _original.SideFolded,
