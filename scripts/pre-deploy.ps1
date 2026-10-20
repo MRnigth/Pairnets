@@ -51,7 +51,7 @@ $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'predeploy-lib.ps1')
 
 # ---------------------------------------------------------------------------------------------- settings
-$LocalVersion = '1.0.65000'       # the version of the packages built here (newer than any real release)
+$LocalVersion = '1.0.65000.1'       # the version of the packages built here (newer than any real release)
 $BoxName = 'pairnets-test'
 $BoxShell = "wsl.exe -d $BoxName -u root --exec" # --exec: the script reaches bash as written, without a second shell
 $Ports = @(15075, 15443, 15025, 15480)
