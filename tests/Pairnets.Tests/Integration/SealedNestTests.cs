@@ -290,12 +290,27 @@ public class SealedNestTests : IAsyncLifetime
         return (long)cmd.ExecuteScalar()!;
     }
 
+    /// <summary>Reads a file the nest may still have open (SQLite's -wal/-shm); a file that is just going away reads as empty.</summary>
     private static async Task<byte[]> ReadSharedAsync(string path)
     {
-        await using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
-        var buffer = new MemoryStream();
-        await fs.CopyToAsync(buffer);
-        return buffer.ToArray();
+        for (var attempt = 0; ; attempt++)
+        {
+            try
+            {
+                await using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+                var buffer = new MemoryStream();
+                await fs.CopyToAsync(buffer);
+                return buffer.ToArray();
+            }
+            catch (FileNotFoundException)
+            {
+                return [];
+            }
+            catch (IOException) when (attempt < 5)
+            {
+                await Task.Delay(100);
+            }
+        }
     }
 
     private static bool Contains(byte[] haystack, byte[] needle) => haystack.AsSpan().IndexOf(needle) >= 0;
