@@ -25,6 +25,8 @@ ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 UninstallDisplayIcon={app}\Pairnets.exe
 CloseApplications=yes
+; An upgrade keeps the boxes ticked last time (and the app's settings: see LeaveChoicesForTheApp).
+UsePreviousTasks=yes
 ; Tell Explorer to reload icons after an update, so the taskbar and Start menu show the current logo.
 ChangesAssociations=yes
 
@@ -79,6 +81,18 @@ Filename: "{app}\Pairnets.exe"; Parameters: "--unregister-explorer"; Flags: runh
 const
   // The installer's id from when Pairnets was called Tether.
   TetherUninstallKey = 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{6E7A3C4B-2D7F-4E5A-9B1C-7F3E2A9D4C10}_is1';
+  // Pairnets' own entry (its AppId): there when Pairnets is already installed.
+  PairnetsUninstallKey = 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{5DB04D62-50C8-4967-B220-449C44AC1BA3}_is1';
+
+var
+  // Pairnets was already installed when this Setup started (an upgrade): looked at before the install writes its entry.
+  WasInstalled: Boolean;
+
+function InitializeSetup(): Boolean;
+begin
+  WasInstalled := RegKeyExists(HKCU, PairnetsUninstallKey) or RegKeyExists(HKLM, PairnetsUninstallKey);
+  Result := True;
+end;
 
 // Removes the old Tether program (its uninstaller also stops it), so it does not run next to
 // Pairnets. Its settings, sync state and logs stay: Pairnets takes them over when it first starts.
@@ -134,6 +148,7 @@ procedure CurStepChanged(CurStep: TSetupStep);
 begin
   if CurStep = ssInstall then
     RemoveTether();
-  if (CurStep = ssPostInstall) and not WizardSilent() then
+  // Only a first install: an upgrade (by hand or silent) never overwrites what was changed in Pairnets' Settings since.
+  if (CurStep = ssPostInstall) and not WizardSilent() and not WasInstalled then
     LeaveChoicesForTheApp();
 end;

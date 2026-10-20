@@ -45,5 +45,8 @@ public class SetupChoicesTests
         foreach (var task in new[] { "startmenu", "desktopicon", "explorerside", "explorermenu", "syncticks", "wherehere", "whereondemand", "wherenest", "checkupdates", "updatenest", "autostart" })
             Assert.Contains($"Name: \"{task}\"", iss);
         Assert.Contains("not WizardSilent()", iss); // a silent update leaves the settings alone
+        Assert.Contains("not WasInstalled", iss); // so does an upgrade by hand: only a first install passes the ticks on
+        Assert.Contains("UsePreviousTasks=yes", iss);
+        Assert.Contains("{5DB04D62-50C8-4967-B220-449C44AC1BA3}_is1", iss); // the upgrade is told by Pairnets' own AppId
     }
 }
