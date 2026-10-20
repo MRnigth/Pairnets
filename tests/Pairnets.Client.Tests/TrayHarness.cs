@@ -161,7 +161,24 @@ internal sealed class TrayHarness : IAsyncDisposable
     }
 
     /// <summary>The settings file as it is on disk now.</summary>
-    public ClientSettings SavedSettings => SettingsStore.Load(Env.SettingsPath);
+    /// Read again for a moment while the app is still swapping in its new copy (Windows refuses a read during the swap).
+    public ClientSettings SavedSettings
+    {
+        get
+        {
+            for (var tries = 1; ; tries++)
+            {
+                try
+                {
+                    return SettingsStore.Load(Env.SettingsPath);
+                }
+                catch (IOException) when (tries < 40)
+                {
+                    Thread.Sleep(50);
+                }
+            }
+        }
+    }
 
     /// <summary>Starts the app signed in: it opens the main window and syncs.</summary>
     public async Task StartAsync()

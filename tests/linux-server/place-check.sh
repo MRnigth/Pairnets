@@ -137,7 +137,12 @@ step "install onto a chosen drive (files on $BIG, program in /srv/pd-prog)"
 mark="$(journal_mark)"
 install_line --bind 127.0.0.1 --port "$E2E_HTTP_PORT" --data-dir "$BIG/pairnets" --program-dir /srv/pd-prog --no-questions
 printf '%s\n' "$OUT" | redact | sed 's/^/  | /'
-[[ $RC -eq 0 ]] || die "get.sh / install.sh exited with $RC"
+if [[ $RC -ne 0 ]]; then
+  # Show why a mount would not start (a drive's own unit, or what it depends on).
+  { systemctl --failed --no-pager; systemctl status --no-pager -l var-lib-pairnets.mount opt-pairnets.mount "$(systemd-escape -p --suffix=mount "$BIG")" mnt.mount srv.mount
+    systemctl list-dependencies --no-pager var-lib-pairnets.mount; journalctl -xe --no-pager -n 80; } 2>&1 | redact | sed 's/^/  ! /'
+  die "get.sh / install.sh exited with $RC"
+fi
 ok "get.sh and install.sh finished"
 check "it warned that the drive is small" grep -q "will have only" <<<"$OUT"
 check "the summary names the chosen drive" grep -q "Data:    $BIG/pairnets (shown at $DATA_DIR)" <<<"$OUT"

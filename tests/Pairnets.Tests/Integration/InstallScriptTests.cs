@@ -112,13 +112,13 @@ public class InstallScriptTests : IDisposable
     }
 
     [Theory]
-    [InlineData("--data-dir", "pairnets", "must be a full path starting with /")]
+    [InlineData("--data-dir", "pairnets", "the folder must be a full path starting with /")]
     [InlineData("--data-dir", "/etc/pairnets-files", "/etc/pairnets-files is a system folder")]
     [InlineData("--data-dir", "/", "the whole disk (/) can't be the folder")]
     [InlineData("--data-dir", "/mnt", "/mnt is a top folder; choose a folder inside it, for example /mnt/pairnets")]
-    [InlineData("--data-dir", "/mnt/data/../etc", "must not contain . or .. parts")]
-    [InlineData("--program-dir", "/var/lib/pairnets/program", "inside Pairnets' own folders")]
-    [InlineData("--program-dir", "/usr/local/pairnets", "is a system folder")]
+    [InlineData("--data-dir", "/mnt/data/../etc", "the folder must not contain . or .. parts")]
+    [InlineData("--program-dir", "/var/lib/pairnets/program", "/var/lib/pairnets/program is inside Pairnets' own folders")]
+    [InlineData("--program-dir", "/usr/local/pairnets", "/usr/local/pairnets is a system folder")]
     public async Task AFolderThatCanNeverHoldPairnetsIsRefusedFirst(string option, string folder, string message)
     {
         if (!OperatingSystem.IsLinux())
