@@ -1,3 +1,4 @@
+using Pairnets.Core;
 using Pairnets.Core.Hashing;
 using Pairnets.Core.Paths;
 using Pairnets.Server.Storage;
@@ -55,7 +56,7 @@ public static class CliCommands
         }
         if (args[0] == "--version")
         {
-            await output.WriteLineAsync(typeof(CliCommands).Assembly.GetName().Version?.ToString(3) ?? "unknown");
+            await output.WriteLineAsync(PairnetsInfo.ProductVersion);
             return 0;
         }
 
