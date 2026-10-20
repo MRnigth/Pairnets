@@ -1234,3 +1234,13 @@ the version-archive notes and the design review fixes merged in, in that order. 
   button before the blue "Use StudyPC" (both apps).
 * **The design review fixes are one merge commit** (the last one), so they can be taken out again with one revert
   if they are not kept.
+* **1.0.60.1: the Overview map is balanced.** This computer's line and each other computer's line are the same length
+  (110-230 px, or what their pill or word needs), and the picture sits in the middle of its card. A name shows up to
+  150 px before it ends in "…" (84 px, as before, when the window is narrow), with the full name in its tooltip. The other
+  computers' word ("in sync", "next", "off since …") sits on their line like this computer's; with a speed pill or a ✕ on
+  the line, it follows the name instead. In a narrow window the curve from the nest gets shorter (down to 32 px) before
+  the whole picture is shrunk.
+* **1.0.60.1: the sign-in boxes count their padding once (Windows).** A WPF text box keeps its own Padding around its
+  text, so the shared `Input` frame (which also sets the content's margin from Padding) put the email 92 px in, far
+  right of the envelope. Only the sign-in boxes (`BigInput`) got their own frame; the shared `Input` style is used by
+  Settings and other pages and was left alone for this small release.

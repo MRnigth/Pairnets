@@ -12,7 +12,7 @@ namespace Pairnets.Tools;
 /// <summary>Stage 6: the icon of each computer (chooser, Devices page, left side, Hub, dock).</summary>
 internal static class Stage6
 {
-    private sealed class Actions : IMainActions
+    internal sealed class Actions : IMainActions
     {
         public void FixBlocked() { }
         public void SyncNow() { }

@@ -19,7 +19,7 @@ namespace Pairnets.Tools;
 /// </summary>
 public static partial class Program
 {
-    private sealed class NoProtector : ISecretProtector
+    internal sealed class NoProtector : ISecretProtector
     {
         public string Protect(string plainText) => plainText;
         public string Unprotect(string protectedText) => protectedText;
@@ -89,6 +89,8 @@ public static partial class Program
                     RenderStage3(outDir, dark ? "dark" : "light", print);
                 else if (args.Contains("--stage6"))
                     Stage6.Render(outDir, dark ? "dark" : "light", print);
+                else if (args.Contains("--stage7"))
+                    Stage7.Render(outDir, dark ? "dark" : "light", print);
                 else if (args.Contains("--stage4"))
                     RenderStage4(outDir, dark ? "dark" : "light", print);
                 else
