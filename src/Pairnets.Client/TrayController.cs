@@ -80,7 +80,8 @@ public sealed class TrayController : ITrayActions, IDisposable
         _ui = ui;
         _shutdown = shutdown;
         _log = loggers.CreateLogger("Pairnets.Tray");
-        _settings = SettingsStore.Load(env.SettingsPath);
+        _settings = SettingsStore.Load(env.SettingsPath, problem => _log.LogWarning("Settings: {Problem}", problem));
+        UpgradeSettings();
         TakeSetupChoices();
         _package = UpdatePackage.ForThisComputer(IsInstalledCopy);
         _updates = new UpdateService(env.CreateUpdateChecker(), PairnetsInfo.ProductVersion, _package.Asset);
@@ -133,6 +134,9 @@ public sealed class TrayController : ITrayActions, IDisposable
 
     /// <summary>Test hook: other sync timings (null in the app).</summary>
     internal Func<RunnerOptions, RunnerOptions>? RunnerOptionsForTests { get; init; }
+
+    /// <summary>What Pairnets was started with (--after-update, the start-at-login flag, an Explorer command); tests set their own.</summary>
+    internal string[] Arguments { get; init; } = Environment.GetCommandLineArgs();
 
     /// <summary>Raised with the title and text of every notification shown (tests read it; the icon is hidden there).</summary>
     internal event Action<string, string>? Notified;
@@ -189,9 +193,11 @@ public sealed class TrayController : ITrayActions, IDisposable
             return;
         }
         StartSession(null);
-        if (FileManagerCommand.FromArguments(Environment.GetCommandLineArgs()) is { } command)
+        if (FileManagerCommand.FromArguments(Arguments) is { } command)
             HandleFileCommand(command); // started by a right-click item in Explorer while Pairnets was not running
-        else if (!Environment.GetCommandLineArgs().Contains(AppActivation.AutoStartArgument))
+        else if (Arguments.Contains(SelfReplace.AfterUpdateArgument))
+            Toast("updated", UpdateTexts.UpdatedTitle, UpdateTexts.Updated(PairnetsInfo.ProductVersion), Forms.ToolTipIcon.Info, ShowMainWindow);
+        else if (!Arguments.Contains(AppActivation.AutoStartArgument))
             ShowMainWindow();
     }
 
@@ -464,6 +470,7 @@ public sealed class TrayController : ITrayActions, IDisposable
                 _log.LogWarning("Could not remove this computer on the nest: {Error}", ex.Message);
             }
             StopSession();
+            _log.LogInformation("Signed out of this computer by the person (Sign out); the nest was {Told}", removed ? "told" : "not told");
             _settings.ProtectedToken = null;
             _settings.DeviceId = null;
             _settings.FirstRunCompleted = false;
@@ -482,6 +489,24 @@ public sealed class TrayController : ITrayActions, IDisposable
     }
 
     private bool _signingOut;
+
+    /// <summary>One-time changes for settings an older Pairnets saved (<see cref="SettingsUpgrades"/>), saved at once.</summary>
+    private void UpgradeSettings()
+    {
+        var done = SettingsUpgrades.Apply(_settings);
+        if (done.Count == 0 || !File.Exists(_env.SettingsPath))
+            return; // nothing changed, or nothing set up yet (the first run saves them)
+        foreach (var line in done)
+            _log.LogInformation("Settings: {Change}", line);
+        try
+        {
+            SettingsStore.Save(_env.SettingsPath, _settings);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _log.LogWarning("Could not save the upgraded settings: {Error}", ex.Message);
+        }
+    }
 
     private bool _resetting;
 
@@ -524,6 +549,7 @@ public sealed class TrayController : ITrayActions, IDisposable
             {
                 _log.LogWarning(ex, "Could not take Pairnets out of File Explorer");
             }
+            _log.LogInformation("Reset this app chosen by the person: forgetting the settings, the saved key and the sync notes");
             var result = LocalReset.Run(_settings, _platform.Secrets, _env.SettingsPath, _env.LocalDir);
             var notes = new List<string>(result.Problems);
             if (stayedOnNest > 0)
@@ -1093,7 +1119,7 @@ public sealed class TrayController : ITrayActions, IDisposable
 
     /// <summary>
     /// Downloads the update and checks it against the signed SHA256SUMS.txt. An installed copy runs PairnetsSetup.exe
-    /// silently (it closes this Pairnets, replaces it and starts the new one). A copy started from the zip swaps its own
+    /// hidden (it closes this Pairnets, replaces it and starts the new one; no installer window shows). A copy started from the zip swaps its own
     /// Pairnets.exe for the one in pairnets-client-win-x64.zip and starts it (<see cref="SelfReplace"/>). When anything
     /// fails, the card says why and offers to try again; it never sends the person to the browser instead.
     /// </summary>
@@ -1123,7 +1149,7 @@ public sealed class TrayController : ITrayActions, IDisposable
             if (_package.Method == UpdateMethod.Installer)
             {
                 _log.LogInformation("Installing Pairnets {Version}", update.Version);
-                _platform.RunInstaller(download, "/SILENT /SUPPRESSMSGBOXES /NORESTART /CLOSEAPPLICATIONS");
+                _platform.RunInstaller(download, UpdatePackage.InstallerArguments);
             }
             else
             {

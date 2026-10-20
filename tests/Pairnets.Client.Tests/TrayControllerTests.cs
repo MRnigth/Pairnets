@@ -545,6 +545,57 @@ public sealed class TrayControllerTests
     }
 
     [Fact]
+    public async Task AppUpdate_TheNewVersion_StaysSignedIn_KeepsEverySetting_AndOnlySaysItWasUpdated()
+    {
+        await using var nest = await TestServer.StartWithWebsiteAsync();
+        await using var feed = await FakeReleaseFeed.StartAsync("99.0.0");
+        await using var app = await TrayHarness.CreateAsync(nest, name: "OFFICE", environment: e => e with
+        {
+            UpdateDownloadBase = feed.DownloadBase,
+            UpdateSigningKey = FakeReleaseFeed.SigningKey,
+            UpdateReleasePage = feed.ReleasePage,
+        }, settings: s =>
+        {
+            s.AccountEmail = "you@example.com";
+            s.StartWithWindows = true;
+            s.ParallelTransfers = 3;
+            s.NotifyJoinRequests = false;
+        });
+        var exe = app.Env.AppFile!;
+        Directory.CreateDirectory(Path.GetDirectoryName(exe)!);
+        await File.WriteAllTextAsync(exe, "the old Pairnets.exe");
+        await app.StartAsync();
+        await app.SyncedOnce();
+        var before = app.SavedSettings;
+
+        await app.Menu("Settings…");
+        var main = app.Tray.Window!;
+        await app.Press(main, "Check now");
+        await app.WaitUntil(() => main.UpdateCard.IsVisible, "the update card");
+        Assert.Contains("You stay signed in", await app.Wpf.Ui(() => main.UpdateDetailText));
+        await app.Press(main, "Update now");
+        await app.WaitUntil(() => app.Platform.UpdatedApps.Count == 1, "the new Pairnets.exe to start");
+        Assert.Equal((exe, SelfReplace.AfterUpdateArgument), app.Platform.UpdatedApps.Items[0]);
+
+        // The new version starts the way the update starts it: no sign-in window, no main window popping up, only a note.
+        await app.RestartAsNewVersionAsync(SelfReplace.AfterUpdateArgument);
+        await app.WaitUntil(() => app.Notifications.Items.Any(n => n.Title == UpdateTexts.UpdatedTitle), "the 'updated' note");
+        await app.SyncedOnce();
+        Assert.NotNull(app.Tray.Session);
+        Assert.False(await app.Wpf.Ui(() => System.Windows.Application.Current.Windows.OfType<System.Windows.Window>().Any(w => w.IsVisible)),
+            "After an update nothing pops up: no sign-in window and no main window.");
+
+        var after = app.SavedSettings;
+        Assert.True(after.IsComplete && after.FirstRunCompleted);
+        Assert.Equal(
+            (before.ServerUrl, before.ProtectedToken, before.DeviceId, before.DeviceName, before.Folder, before.AccountEmail),
+            (after.ServerUrl, after.ProtectedToken, after.DeviceId, after.DeviceName, after.Folder, after.AccountEmail));
+        Assert.Equal((true, 3, false), (after.StartWithWindows, after.ParallelTransfers, after.NotifyJoinRequests));
+        Assert.Equal(app.Grant!.Key, app.Platform.Secrets.Unprotect(after.ProtectedToken!));
+        Assert.Empty(app.Platform.Opened.Items); // never the browser
+    }
+
+    [Fact]
     public async Task AppUpdate_UpdateNow_DownloadsVerifiesAndRunsInstaller()
     {
         await using var nest = await TestServer.StartWithWebsiteAsync();
@@ -600,7 +651,7 @@ public sealed class TrayControllerTests
         var (setup, arguments) = app.Platform.Installers.Items[0];
         try
         {
-            Assert.Equal("/SILENT /SUPPRESSMSGBOXES /NORESTART /CLOSEAPPLICATIONS", arguments);
+            Assert.Equal("/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /CLOSEAPPLICATIONS", arguments); // hidden: no installer window
             Assert.Equal(feed.Asset, await File.ReadAllBytesAsync(setup));
             Assert.Equal(1, app.Shutdowns);
             Assert.Contains("/download/" + FakeReleaseFeed.AssetName, feed.Requests.Items);

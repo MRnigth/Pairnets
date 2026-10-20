@@ -32,6 +32,12 @@ public sealed record UpdatePackage(UpdateMethod Method, string? Asset, string? A
     public const string WindowsZip = "pairnets-client-win-x64.zip";
     public const string LinuxDesktop = "pairnets-desktop-linux-x64.tar.gz";
 
+    /// <summary>
+    /// How an installed copy runs PairnetsSetup.exe for an update: fully hidden (no wizard, no progress window). The
+    /// installer is only seen on the first install; it starts the new Pairnets with <see cref="SelfReplace.AfterUpdateArgument"/>.
+    /// </summary>
+    public const string InstallerArguments = "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /CLOSEAPPLICATIONS";
+
     public static UpdatePackage None { get; } = new(UpdateMethod.None, null);
 
     /// <summary>
@@ -62,7 +68,13 @@ public static class UpdateTexts
     public const string OpenDownloadPage = "Open download page";
 
     public static string Ready(string current) =>
-        $"You have {current}. The update takes about 10 seconds and Pairnets restarts by itself.";
+        $"You have {current}. The update takes about 10 seconds and Pairnets restarts by itself. You stay signed in.";
+
+    /// <summary>The note the new version shows once after updating itself (instead of opening its window).</summary>
+    public const string UpdatedTitle = "Pairnets is up to date";
+
+    public static string Updated(string version) =>
+        $"Pairnets updated itself to {version}. You are still signed in and your settings are kept.";
 
     /// <summary>The Mac card: why Pairnets opens the download page instead of updating.</summary>
     public static string ByHand(string current) =>

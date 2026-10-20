@@ -23,7 +23,7 @@ public static class NotifyPolicy
 {
     public static NoticeKind KindOf(string key) =>
         key.StartsWith("join:", StringComparison.Ordinal) ? NoticeKind.JoinRequest
-        : key.StartsWith("update:", StringComparison.Ordinal) || key == "server-updated" ? NoticeKind.Update
+        : key.StartsWith("update:", StringComparison.Ordinal) || key == "server-updated" || key == "updated" ? NoticeKind.Update
         : key == "catchup" ? NoticeKind.Info
         : NoticeKind.Attention;
 

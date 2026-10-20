@@ -173,7 +173,8 @@ public partial class SignInView : UserControl
             case SignInStep.Account:
                 DrawSteps(1);
                 Picture.ShowIcon(StepIcons.User, PictureTone.Accent);
-                Say("Sign in to Pairnets", "Keep one folder the same on all your computers.");
+                var (title, sub) = SignInTexts.First(_current);
+                Say(title, sub);
                 Foot(null);
                 break;
             case SignInStep.AccountWait:

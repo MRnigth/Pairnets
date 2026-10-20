@@ -1,6 +1,9 @@
 ; Optional per-user installer for the Pairnets client (built by release.yml with Inno Setup 6).
 ; No admin rights needed. The extras (Explorer, start-up, updates, where files live) are ticked on the Tasks page and
 ; stay settings inside Pairnets.
+; It is only seen on the first install: Pairnets updates itself by running it hidden (/VERYSILENT), and started again by
+; hand over an installed Pairnets it skips its pages. It never deletes or rewrites the app's data
+; (%AppData%\Pairnets, %LocalAppData%\Pairnets): no [InstallDelete] or [UninstallDelete] for them, ever.
 #ifndef AppVersion
   #define AppVersion "1.0.0"
 #endif
@@ -68,8 +71,9 @@ Root: HKCU; Subkey: "Software\Classes\pairnets\shell\open\command"; ValueType: s
 ; Windows 10/11 keep icons in a cache keyed by the exe path; refresh it so a replaced Pairnets.exe shows its new icon.
 Filename: "{sys}\ie4uinit.exe"; Parameters: "-show"; Flags: runhidden nowait skipifdoesntexist
 Filename: "{app}\Pairnets.exe"; Description: "Open Pairnets now"; Flags: nowait postinstall skipifsilent
-; After an update from inside Pairnets (a silent install) start it again by itself.
-Filename: "{app}\Pairnets.exe"; Flags: nowait; Check: WizardSilent
+; After an update from inside Pairnets (a hidden install) start it again by itself; --after-update makes it show a
+; small "updated" note instead of opening its window.
+Filename: "{app}\Pairnets.exe"; Parameters: "--after-update"; Flags: nowait; Check: WizardSilent
 
 [UninstallRun]
 ; Stop Pairnets, then take it out of File Explorer (left side, right-click items, the folder's icon, the cloud folder);
@@ -81,17 +85,38 @@ Filename: "{app}\Pairnets.exe"; Parameters: "--unregister-explorer"; Flags: runh
 const
   // The installer's id from when Pairnets was called Tether.
   TetherUninstallKey = 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{6E7A3C4B-2D7F-4E5A-9B1C-7F3E2A9D4C10}_is1';
-  // Pairnets' own entry (its AppId): there when Pairnets is already installed.
+  // This installer's own entry (the AppId above): there when Pairnets is installed already.
   PairnetsUninstallKey = 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{5DB04D62-50C8-4967-B220-449C44AC1BA3}_is1';
 
 var
-  // Pairnets was already installed when this Setup started (an upgrade): looked at before the install writes its entry.
+  // Pairnets is installed already: this run is an update, not the first install.
   WasInstalled: Boolean;
 
+// The installer is for the first install. Started again over an installed Pairnets (by hand), it is a one-click
+// update: no pages to go through, the same folder and the earlier choices, and the app's settings are left alone.
 function InitializeSetup(): Boolean;
 begin
   WasInstalled := RegKeyExists(HKCU, PairnetsUninstallKey) or RegKeyExists(HKLM, PairnetsUninstallKey);
   Result := True;
+end;
+
+// True only for the first install on this PC. Anything that writes choices into the app's settings must check it,
+// so an update never resets them.
+function IsFirstInstall(): Boolean;
+begin
+  Result := not WasInstalled;
+end;
+
+function ShouldSkipPage(PageID: Integer): Boolean;
+begin
+  Result := WasInstalled and ((PageID = wpWelcome) or (PageID = wpSelectDir) or (PageID = wpSelectProgramGroup)
+    or (PageID = wpSelectTasks) or (PageID = wpReady));
+end;
+
+procedure CurPageChanged(CurPageID: Integer);
+begin
+  if WasInstalled and (CurPageID = wpFinished) then
+    WizardForm.FinishedLabel.Caption := 'Pairnets is updated to {#AppVersion}. You are still signed in and your settings are kept.';
 end;
 
 // Removes the old Tether program (its uninstaller also stops it), so it does not run next to
