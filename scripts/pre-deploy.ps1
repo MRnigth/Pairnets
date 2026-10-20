@@ -518,6 +518,7 @@ function Step-LinuxBox($Ctx) {
 
     # A phase B box kept from an earlier run would hold the ports (every WSL box shares one network).
     Invoke-TestBox $Ctx '-Stop' "$BoxName-b" | Out-Null
+    Invoke-TestBox $Ctx '-Stop' "$BoxName-c" | Out-Null
 
     # ---- Phase A: install feed 1 with get.sh, the test-only settings, the tour, the update to feed 2.
     $script:CurrentBox = $BoxName
@@ -605,9 +606,25 @@ function Step-LinuxBox($Ctx) {
     }
     $kept = @()
     if ($failedA) { $kept += $BoxName }
-    if ($failedB -or $KeepBox) {
-        $why = if ($failedB) { 'it failed' } else { '-KeepBox' }
-        Add-Note $Ctx "the phase B box is kept ($why); open it with: wsl -d $script:CurrentBox"
+    if ($failedB) {
+        Invoke-TestBox $Ctx '-Stop' | Out-Null
+        Add-Note $Ctx "phase B failed: its box is kept (stopped); open it with: wsl -d $script:CurrentBox"
+        if ($kept -notcontains $script:CurrentBox) { $kept += $script:CurrentBox }
+    }
+
+    # ---- Phase C: where the nest keeps its files and program (deploy/place.sh): refusing drives it can't use,
+    #      installing onto a chosen drive, an update, a missing drive, and moving the files (also the apps' way).
+    $script:CurrentBox = if ($kept -contains $script:CurrentBox) { "$BoxName-c" } else { $script:CurrentBox }
+    Say "   - a fresh box for phase C ($script:CurrentBox)"
+    $failedC = $true
+    if (-not (Invoke-TestBox $Ctx '-Fresh')) { Add-Problem $Ctx 'could not start a fresh Linux test box for phase C (see the log)' }
+    elseif (Copy-ToBox $Ctx) {
+        $failedC = -not (Invoke-BoxCheck $Ctx 'choosing a drive and moving the files (phase C)' 'bash tests/linux-server/place-check.sh --feed /root/pd/feed1 --feed2 /root/pd/feed2')
+        Save-BoxJournal $Ctx 'phase-c'
+    }
+    if ($failedC -or $KeepBox) {
+        $why = if ($failedC) { 'it failed' } else { '-KeepBox' }
+        Add-Note $Ctx "the phase C box is kept ($why); open it with: wsl -d $script:CurrentBox"
         if ($kept -notcontains $script:CurrentBox) { $kept += $script:CurrentBox }
     } else {
         Invoke-TestBox $Ctx '-Remove' | Out-Null

@@ -120,7 +120,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        check: [install-and-update, upgrade-from-release]
+        check: [install-and-update, upgrade-from-release, choose-a-drive]
     steps:
       - uses: actions/checkout@v4
 
@@ -198,6 +198,10 @@ jobs:
       - name: Upgrade from the published release (phase B)
         if: matrix.check == 'upgrade-from-release'
         run: sudo bash tests/linux-server/upgrade-check.sh --feed dist/feed1
+
+      - name: Choose a drive, update, move the files (phase C)
+        if: matrix.check == 'choose-a-drive'
+        run: sudo bash tests/linux-server/place-check.sh --feed dist/feed1 --feed2 dist/feed2
 
       - name: Server logs
         if: always()

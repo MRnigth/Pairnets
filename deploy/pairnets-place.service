@@ -1,0 +1,12 @@
+[Unit]
+Description=Pairnets: list the drives or move the nest's files (started by pairnets-place.path)
+Documentation=https://github.com/MRnigth/Pairnets/blob/main/docs/DEPLOY.md
+# Runs only for a waiting request, and is never disabled by systemd's start limit.
+ConditionPathExists=/var/lib/pairnets/update/place-request
+StartLimitIntervalSec=0
+
+[Service]
+Type=oneshot
+ExecStart=/opt/pairnets/place.sh --from-request
+# Copying a big nest to another drive takes long; the nest keeps running until the last moment.
+TimeoutStartSec=infinity

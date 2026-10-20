@@ -83,6 +83,22 @@ what cannot lose or silently overwrite data.
   unit and `update.sh` watch `/var/lib/pairnets/update`, so DEPLOY.md copies the data, mounts the
   new place onto the old path through `/etc/fstab`, and adds a `RequiresMountsFor=` drop-in so the
   server never starts on an empty folder when the disk is missing.
+* **Choosing the place at install, or later in Settings, does the same with systemd (1.0.60).** `deploy/place.sh`
+  (sourced by `install.sh`, run as root by `pairnets-place.path` when an app asks) writes `var-lib-pairnets.mount` /
+  `opt-pairnets.mount` (bind mounts of the chosen folder onto the fixed paths) and `RequiresMountsFor=` drop-ins. The
+  mount units are the only record of the choice, so `install.sh` without options (every update) keeps them, and
+  nothing in the server, the updater or the tests changes. A `.pairnets-drive` file in the chosen folder plus
+  `AssertPathExists=` stop an empty leftover folder of the same name on the main disk from being mounted as the nest
+  when the drive is missing. A move copies with rsync while the nest runs, stops it for a last `--delete` pass and a
+  check that nothing differs, switches the mount, and goes back if the server does not answer; it never deletes the
+  old copy. Refused before anything changes: FAT/exFAT/NTFS (no owners or modes for the 700 data folder), network
+  drives (SQLite and a dropped connection), tmpfs, folders not empty or reached through a symlink, and less than 1 GB
+  (or the nest's size + 1 GB) free; under 10 GB it warns. The apps only pick from the drive list the root helper wrote
+  (`drives.json`), and the helper checks the folder again, as root, before it moves anything.
+* **The Linux app remembers its program folder through `~/.local/bin/pairnets`.** `install-desktop.sh --program-dir`
+  (or the question in a terminal) installs there; installing again follows the link, so the place is kept without a
+  settings file, and a new place moves it (only Pairnets' own files are removed from the old one). The app's own
+  updates already replace the program where it runs.
 * **Only the newest setup link works.** `owner-link` cancels every older unused link. A link shown
   to someone else (a shared terminal, a chat) would otherwise stay good for 24 hours, and on a nest
   without an owner the first person to open it takes the nest.

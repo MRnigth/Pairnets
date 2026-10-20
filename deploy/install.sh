@@ -14,6 +14,10 @@
 #   sudo ./install.sh --public-url https://sync.example.com
 #       advanced, your own domain: the server listens on 127.0.0.1 only and your own Cloudflare Tunnel gives it
 #       its public name (asks for the tunnel token, or reads it from TUNNEL_TOKEN; see docs/HOWTO.md)
+#   sudo ./install.sh --data-dir /mnt/data/pairnets
+#       keep the nest's files on another drive or folder (a first install in a terminal asks, with a list of
+#       drives). On a server that is already installed it moves them there: copy, check, switch over.
+#       --program-dir does the same for the program. Updates keep the choice (deploy/place.sh).
 #
 # At the end it prints the next steps: for a linked server, sign in on each computer with the same Pairnets
 # account; with your own domain, a one-time link (on a terminal) to set up the nest's website. Exits non-zero
@@ -28,6 +32,9 @@ PORT_GIVEN=""
 TUNNEL=""
 PUBLIC_URL=""
 LINK=""
+DATA_CHOICE=""
+PROGRAM_CHOICE=""
+NO_QUESTIONS=""
 SRC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 INSTALL_DIR=/opt/pairnets
 DATA_DIR=/var/lib/pairnets
@@ -62,6 +69,10 @@ Options:
   --cloudflare-tunnel           set up the tunnel again (new token) for the name already configured
   --bind <ip>                   advanced: listen on this address instead of using the tunnel
   --port <port>                 the port the server listens on (default 5075)
+  --data-dir <folder>           keep the nest's files in this folder, on any drive (default /var/lib/pairnets,
+                                on the main disk); on an installed server this moves them there
+  --program-dir <folder>        put the program in this folder (default /opt/pairnets); moves it when installed
+  --no-questions                don't ask where to put things (a first install in a terminal asks)
   -h, --help                    show this help
 USAGE
 }
@@ -73,6 +84,8 @@ missing_value() { # missing_value <option>
   case "$1" in
     --public-url) example=https://sync.example.com ;;
     --port) example=5075 ;;
+    --data-dir) example=/mnt/data/pairnets ;;
+    --program-dir) example=/mnt/data/pairnets-program ;;
   esac
   echo "error: $1 needs a value, for example: $1 $example" >&2
   exit 2
@@ -84,18 +97,21 @@ set_option() { # set_option <option> <value>
     --bind) BIND="$2" ;;
     --port) PORT="$2"; PORT_GIVEN=1 ;;
     --public-url) PUBLIC_URL="$2" ;;
+    --data-dir) DATA_CHOICE="$2" ;;
+    --program-dir) PROGRAM_CHOICE="$2" ;;
   esac
 }
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --bind|--port|--public-url)
+    --bind|--port|--public-url|--data-dir|--program-dir)
       # Last on the line, or followed by another option: the value is missing.
       if [[ $# -lt 2 || "$2" == -* ]]; then missing_value "$1"; fi
       set_option "$1" "$2"
       shift 2 ;;
-    --bind=*|--port=*|--public-url=*) set_option "${1%%=*}" "${1#*=}"; shift ;;
+    --bind=*|--port=*|--public-url=*|--data-dir=*|--program-dir=*) set_option "${1%%=*}" "${1#*=}"; shift ;;
     --link) LINK=asked; shift ;;
+    --no-questions) NO_QUESTIONS=1; shift ;;
     --cloudflare-tunnel) TUNNEL=1; shift ;;
     -h|--help) usage; exit 0 ;;
     https://*) usage_error "unknown option: $1 (to give the nest this name use: --public-url $1)" ;;
@@ -109,6 +125,20 @@ if [[ -n "$LINK" ]]; then
   [[ -z "$BIND" && -z "$TUNNEL" ]] || usage_error "--link sets up the tunnel itself, which listens on 127.0.0.1; leave out --bind and --cloudflare-tunnel"
   [[ -z "$PORT_GIVEN" || "$PORT" == "$RELAY_PORT" ]] || usage_error "--link uses port $RELAY_PORT (where Pairnets reaches the server); leave out --port"
 fi
+
+# Where the files and the program go (deploy/place.sh): the folders are checked as text here, the drives later.
+[[ -f "$SRC_DIR/place.sh" ]] || die "place.sh not found next to install.sh"
+# shellcheck source=deploy/place.sh
+source "$SRC_DIR/place.sh"
+for choice in "data:$DATA_CHOICE" "program:$PROGRAM_CHOICE"; do
+  if [[ -n "${choice#*:}" ]]; then
+    problem="$(place_path_problem "${choice%%:*}" "${choice#*:}")"
+    [[ -z "$problem" ]] || usage_error "--${choice%%:*}-dir: $problem"
+  fi
+done
+# Checked as given above ("/" is not "no folder"); from here on without a trailing /.
+DATA_CHOICE="${DATA_CHOICE%/}"
+PROGRAM_CHOICE="${PROGRAM_CHOICE%/}"
 
 [[ $EUID -eq 0 ]] || die "run as root (sudo $0)"
 [[ -x "$SRC_DIR/pairnets-server" ]] || die "pairnets-server binary not found next to install.sh"
@@ -186,6 +216,38 @@ if [[ -n "$PUBLIC_URL" ]]; then
   PUBLIC_URL="${PUBLIC_URL%/}"
   [[ "$PUBLIC_URL" =~ ^https://[A-Za-z0-9.-]+(:[0-9]+)?$ ]] || die "--public-url must look like https://sync.example.com (https, no path)"
 fi
+
+# 0a. Where the files and the program go. A first install in a terminal asks (a list of drives with free space;
+#     Enter keeps the main disk). Never on an upgrade, nor without a terminal (the self-updater): those keep the
+#     place chosen before, which the mount units remember. Everything is checked before anything changes.
+FIRST_INSTALL=""
+[[ -f "$ENV_FILE" ]] || FIRST_INSTALL=1
+if [[ -n "$FIRST_INSTALL" && -z "$DATA_CHOICE$PROGRAM_CHOICE$NO_QUESTIONS" && -t 1 ]]; then
+  place_ask_install
+  DATA_CHOICE="$PLACE_DATA_CHOICE"
+  PROGRAM_CHOICE="$PLACE_PROGRAM_CHOICE"
+fi
+MOVE_DATA=""
+MOVE_PROGRAM=""
+for kind in data program; do
+  if [[ "$kind" == data ]]; then choice="$DATA_CHOICE"; else choice="$PROGRAM_CHOICE"; fi
+  if [[ -n "$choice" ]]; then
+    ! place_mounted_by_hand "$kind" || die "$(place_link "$kind") is already on another drive, set up by hand (in /etc/fstab); change it there, or remove that mount and run this again"
+    if place_is_empty "$kind" && [[ ! -f "$PLACE_UNIT_DIR/$(place_unit "$kind")" ]]; then
+      place_check "$kind" "$choice" 0
+    elif [[ "$choice" != "$(place_current "$kind")" ]]; then
+      # Already installed there: moved at the end, once the new version runs (place_move checks the drive itself).
+      if [[ "$kind" == data ]]; then MOVE_DATA="$choice"; else MOVE_PROGRAM="$choice"; fi
+    fi
+    [[ -z "$PLACE_WARNING" ]] || echo "Note: $PLACE_WARNING."
+  fi
+  # A drive chosen before must be there: without it the folders below would be made on the main disk.
+  if [[ -f "$PLACE_UNIT_DIR/$(place_unit "$kind")" ]] && ! findmnt -rn --mountpoint "$(place_link "$kind")" >/dev/null 2>&1; then
+    systemctl start "$(place_unit "$kind")" 2>/dev/null || true
+    findmnt -rn --mountpoint "$(place_link "$kind")" >/dev/null 2>&1 ||
+      die "the drive with Pairnets' $([[ "$kind" == data ]] && echo files || echo program) ($(place_current "$kind")) is not there. Plug it in or mount it, then run this again. Nothing was changed."
+  fi
+done
 
 # 0b. Linking to a Pairnets account (cloud/RELAY.md, section 2). A first install without options does it, and --link. It
 #     never happens on an upgrade: an installed server (it has $ENV_FILE) keeps what it has. pairnets-link.sh prints
@@ -286,6 +348,13 @@ fi
 if ! id pairnets >/dev/null 2>&1; then
   useradd --system --home-dir "$DATA_DIR" --no-create-home --shell /usr/sbin/nologin pairnets
 fi
+# A chosen place on a fresh install: mounted at the usual folder before anything is put there.
+if [[ -n "$DATA_CHOICE" && -z "$MOVE_DATA" && "$DATA_CHOICE" != "$(place_current data)" ]]; then
+  place_prepare data "$DATA_CHOICE"
+fi
+if [[ -n "$PROGRAM_CHOICE" && -z "$MOVE_PROGRAM" && "$PROGRAM_CHOICE" != "$(place_current program)" ]]; then
+  place_prepare program "$PROGRAM_CHOICE"
+fi
 install -d -m 0755 -o root -g root "$INSTALL_DIR"
 install -d -m 0700 -o pairnets -g pairnets "$DATA_DIR"
 install -d -m 0700 -o root -g root "$CONF_DIR"
@@ -300,7 +369,7 @@ for f in "$SRC_DIR"/*.so "$SRC_DIR"/appsettings.json "$SRC_DIR"/VERSION; do
   [[ -e "$f" ]] && install -m 0644 -o root -g root "$f" "$INSTALL_DIR/"
 done
 # The self-updater (runs as root only when the server asks for it; see DEPLOY.md) and the link helper.
-for f in update.sh pairnets-link.sh; do
+for f in update.sh pairnets-link.sh place.sh; do
   if [[ -f "$SRC_DIR/$f" ]]; then
     install -m 0755 -o root -g root "$SRC_DIR/$f" "$INSTALL_DIR/$f"
   fi
@@ -389,6 +458,11 @@ fi
 if [[ -f "$SRC_DIR/pairnets-update.timer" ]]; then
   install -m 0644 -o root -g root "$SRC_DIR/pairnets-update.timer" /etc/systemd/system/pairnets-update.timer
 fi
+# "Where your nest keeps files" in the apps' Settings: the root helper that lists the drives and moves the files.
+if [[ -f "$SRC_DIR/pairnets-place.service" && -f "$SRC_DIR/pairnets-place.path" ]]; then
+  install -m 0644 -o root -g root "$SRC_DIR/pairnets-place.service" /etc/systemd/system/pairnets-place.service
+  install -m 0644 -o root -g root "$SRC_DIR/pairnets-place.path" /etc/systemd/system/pairnets-place.path
+fi
 # 4b. Cloudflare Tunnel (a link, --public-url or --cloudflare-tunnel; upgrades keep an existing one as it is).
 if [[ -n "$TUNNEL" ]]; then
   # The token stays in a root-only file: unit files are readable by every local user.
@@ -418,6 +492,11 @@ fi
 if [[ -f /etc/systemd/system/pairnets-update.timer ]]; then
   systemctl enable --now pairnets-update.timer
 fi
+if [[ -f /etc/systemd/system/pairnets-place.path ]]; then
+  systemctl reset-failed pairnets-place.path pairnets-place.service 2>/dev/null || true
+  systemctl enable pairnets-place.path
+  systemctl restart pairnets-place.path
+fi
 
 # 5. Wait for health, on this machine first. This result decides the exit code, so the self-updater
 #    reports a server that does not come back as a failed update. The server only answers after it has
@@ -442,6 +521,15 @@ if [[ "$LOCAL_HEALTH" == failed ]]; then
   echo "WARNING: the service did not answer on http://$BIND:$PORT/api/health (state: $(systemctl is-active "$SERVICE" 2>/dev/null || true), after ${SECONDS}s)." >&2
   echo "         Check: sudo systemctl status $SERVICE" >&2
   echo "         Log:   sudo journalctl -u $SERVICE -n 50" >&2
+fi
+
+# 5b. A new place for an installed server: moved now that the new version runs (copy, check, switch over).
+#     With --no-questions, or without a terminal, the option on the command line is the answer.
+if [[ -n "$MOVE_DATA$MOVE_PROGRAM" && "$LOCAL_HEALTH" != failed ]]; then
+  MOVE_YES=""
+  if [[ -n "$NO_QUESTIONS" ]] || ! { : < /dev/tty; } 2>/dev/null; then MOVE_YES=1; fi
+  [[ -z "$MOVE_PROGRAM" ]] || place_move program "$MOVE_PROGRAM" "$MOVE_YES"
+  [[ -z "$MOVE_DATA" ]] || place_move data "$MOVE_DATA" "$MOVE_YES"
 fi
 
 SERVER_DATA_DIR="$(env_value Sync__DataDir)"
@@ -518,7 +606,15 @@ if [[ "$LOCAL_HEALTH" == failed ]]; then
 else
   echo "Pairnets server is installed."
 fi
-echo "  Data:    $SERVER_DATA_DIR"
+DATA_PLACE="$(place_current data)"
+if [[ "$SERVER_DATA_DIR" == "$DATA_DIR" && "$DATA_PLACE" != "$DATA_DIR" ]]; then
+  echo "  Data:    $DATA_PLACE (shown at $DATA_DIR), $(place_human "$(findmnt -rn -b -o AVAIL --target "$DATA_DIR" 2>/dev/null | head -n1 || echo 0)") free"
+else
+  echo "  Data:    $SERVER_DATA_DIR"
+fi
+if [[ "$(place_current program)" != "$INSTALL_DIR" ]]; then
+  echo "  Program: $(place_current program) (shown at $INSTALL_DIR)"
+fi
 echo "  Config:  $ENV_FILE (root only)"
 echo "  Logs:    sudo journalctl -u $SERVICE -f"
 echo "  Updater: pairnets-update.path is ${UPDATER_STATE:-unknown} (should be: active)"

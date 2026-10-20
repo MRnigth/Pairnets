@@ -63,6 +63,10 @@ It asks for the tunnel token (nothing is shown while you paste it) and, at the e
 10 characters). Step by step, and what Cloudflare can see:
 [HOWTO sections 3 and 4](docs/HOWTO.md#3-advanced-your-own-domain).
 
+To keep the nest's files on another drive, add `--data-dir /mnt/data/pairnets` (a first install in a terminal also
+asks, with a list of drives); move them later in the apps' Settings or with the same option.
+[Moving the nest's data to another disk](docs/DEPLOY.md#moving-the-nests-data-to-another-disk).
+
 ### Your nest's name
 
 The address you give with `--public-url` (here `sync.example.com`) is your **nest's** name. The apps
