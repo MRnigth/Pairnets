@@ -140,7 +140,11 @@ public sealed class ExplorerTests : IDisposable
         var pipe = "pairnets-test-" + Guid.NewGuid().ToString("N")[..8];
         var heard = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
         var plain = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
-        using var listening = AppActivation.Listen(message => (heard.Task.IsCompleted ? plain : heard).TrySetResult(message), pipe);
+        using var listening = AppActivation.Listen(message =>
+        {
+            (heard.Task.IsCompleted ? plain : heard).TrySetResult(message);
+            return Task.CompletedTask;
+        }, pipe);
         var command = new FileManagerCommand(FileManagerAction.ShowStatus, @"D:\Pairnets\Photos\Beach ø.jpg");
 
         Assert.True(SpinWait.SpinUntil(() => AppActivation.TrySendToRunning(command.ToMessage(), pipe, 200), TimeSpan.FromSeconds(10)));

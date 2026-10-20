@@ -61,18 +61,13 @@ internal static class Program
             createdNew = WaitForOldApp(mutex);
         if (!createdNew)
         {
-            // Started for a pairnets:// link (the nest's website sending you back after approving
-            // this computer): poke the running Pairnets to the front and leave quietly.
-            if (args.Any(AppActivation.IsActivationUrl))
-            {
-                AppActivation.TrySignalRunning();
+            // Opened again (Start menu, a shortcut, the installer, a pairnets:// link from the nest's website):
+            // bring the running Pairnets to the front and leave quietly, like other apps do. A right-click item in
+            // Explorer ("Open in Pairnets", "Show sync status") is handed to the running Pairnets the same way.
+            if (AppActivation.SecondStart(args) == AppActivation.SecondStartResult.Quiet)
                 return 0;
-            }
-            // A right-click item in Explorer ("Open in Pairnets", "Show sync status"): the running Pairnets does it.
-            if (FileManagerCommand.FromArguments(args) is { } command)
-                return AppActivation.TrySendToRunning(command.ToMessage()) ? 0 : 1;
-            MessageBox.Show("Pairnets is already running. Look for its icon in the notification area.", "Pairnets",
-                MessageBoxButton.OK, MessageBoxImage.Information);
+            MessageBox.Show(AppActivation.NotAnsweringMessage + " If it stays stuck, end Pairnets in Task Manager and start it again.",
+                "Pairnets", MessageBoxButton.OK, MessageBoxImage.Information);
             return 1;
         }
 

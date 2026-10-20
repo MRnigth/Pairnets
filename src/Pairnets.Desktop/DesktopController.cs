@@ -111,14 +111,15 @@ public sealed class DesktopController : ITrayActions, IDisposable
     {
         _log.LogInformation("Pairnets {Version} starting on {Platform}", typeof(DesktopController).Assembly.GetName().Version, _platform.Name);
         // A pairnets:// link (the nest's website after approving this computer) starts a second
-        // Pairnets, which pokes this one through the pipe and quits; come to the front for it.
-        _activation = AppActivation.Listen(message => Dispatcher.UIThread.Post(() =>
+        // Pairnets, which pokes this one through the pipe and quits; come to the front for it, or do what a
+        // right-click item in the file manager asked. The poke is answered once that is done.
+        _activation = AppActivation.Listen(message => Dispatcher.UIThread.InvokeAsync(() =>
         {
             if (FileManagerCommand.FromMessage(message) is { } command)
                 HandleFileCommand(command);
             else
                 ComeToFront();
-        }), _env.ActivationPipeName);
+        }).GetTask(), _env.ActivationPipeName);
         CreateTray();
         _refresh.Start();
         _updates.SetEnabled(_settings.CheckForUpdates);
@@ -145,7 +146,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
         StartSession(null);
         if (FileManagerCommand.FromArguments(args) is { } command)
             HandleFileCommand(command); // started by a right-click item in the file manager while Pairnets was not running
-        else if (!args.Contains("--autostart"))
+        else if (!args.Contains(AppActivation.AutoStartArgument))
             ShowMainWindow();
     }
 

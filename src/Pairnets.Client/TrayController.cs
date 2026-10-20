@@ -159,16 +159,18 @@ public sealed class TrayController : ITrayActions, IDisposable
 
     public void Start()
     {
-        // A pairnets:// link (the nest's website after approving this computer) starts a second Pairnets,
-        // which pokes this one through the pipe and quits; come to the front for it. Listening starts before
-        // the sign-in window below opens (and waits), because that is when the link comes.
-        _activation = AppActivation.Listen(message => RunOnUi(() =>
+        // Opening Pairnets again (Start menu, a shortcut, a pairnets:// link from the nest's website, a right-click
+        // item in Explorer) starts a second Pairnets, which pokes this one through the pipe and quits; come to the
+        // front for it, or do what the right-click item asked. The poke is answered once that is done, so a stuck
+        // app gets reported. Listening starts before the sign-in window below opens (and waits), because that is
+        // when the link comes.
+        _activation = AppActivation.Listen(message => _ui.InvokeAsync(() =>
         {
             if (FileManagerCommand.FromMessage(message) is { } command)
                 HandleFileCommand(command);
             else
                 ComeToFront();
-        }), _env.ActivationPipeName);
+        }).Task, _env.ActivationPipeName);
         _updates.UpdateAvailable += u => RunOnUi(() =>
         {
             _updateDismissed = false;
@@ -188,7 +190,7 @@ public sealed class TrayController : ITrayActions, IDisposable
         StartSession(null);
         if (FileManagerCommand.FromArguments(Environment.GetCommandLineArgs()) is { } command)
             HandleFileCommand(command); // started by a right-click item in Explorer while Pairnets was not running
-        else if (!Environment.GetCommandLineArgs().Contains("--autostart"))
+        else if (!Environment.GetCommandLineArgs().Contains(AppActivation.AutoStartArgument))
             ShowMainWindow();
     }
 

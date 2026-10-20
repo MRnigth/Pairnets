@@ -20,11 +20,12 @@ public partial class App : Application
             desktop.ShutdownRequested += (_, _) => _controller.Dispose();
             _controller.WatchForCrashes();
             _controller.Start(desktop.Args ?? []);
-            // macOS hands a pairnets:// link to the running app as an event (no second process starts).
+            // macOS hands a pairnets:// link, or opening the running app again from Finder, Spotlight or
+            // Launchpad, to the running app as an event (no second process starts).
             if (TryGetFeature(typeof(IActivatableLifetime)) is IActivatableLifetime activatable)
                 activatable.Activated += (_, e) =>
                 {
-                    if (e.Kind == ActivationKind.OpenUri)
+                    if (e.Kind is ActivationKind.OpenUri or ActivationKind.Reopen)
                         _controller?.ComeToFront();
                 };
         }

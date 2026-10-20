@@ -23,17 +23,14 @@ internal static class Program
         }
         catch (IOException)
         {
-            // Started for a pairnets:// link (the nest's website sending you back after approving
-            // this computer): poke the running Pairnets to the front and leave quietly.
-            if (args.Any(AppActivation.IsActivationUrl))
-            {
-                AppActivation.TrySignalRunning();
+            // Opened again (the app menu, a shortcut, a pairnets:// link from the nest's website): bring the
+            // running Pairnets to the front and leave quietly, like other apps do. A right-click item in the file
+            // manager ("Open in Pairnets", "Show sync status") is handed to the running Pairnets the same way.
+            if (AppActivation.SecondStart(args) == AppActivation.SecondStartResult.Quiet)
                 return 0;
-            }
-            // A right-click item in the file manager ("Open in Pairnets", "Show sync status"): the running Pairnets does it.
-            if (FileManagerCommand.FromArguments(args) is { } command)
-                return AppActivation.TrySendToRunning(command.ToMessage()) ? 0 : 1;
-            Console.Error.WriteLine("Pairnets is already running (look for its icon in the menu bar / system tray).");
+            const string message = AppActivation.NotAnsweringMessage + " If it stays stuck, quit Pairnets (Force Quit on a Mac) and start it again.";
+            Console.Error.WriteLine(message);
+            Platform.IPlatformServices.Current.Notify("Pairnets", message);
             return 1;
         }
 
