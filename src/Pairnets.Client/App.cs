@@ -14,6 +14,7 @@ public sealed class App : Application
     private TrayController? _tray;
     private ILoggerFactory? _loggerFactory;
     private RollingFileLoggerProvider? _fileLog;
+    private CrashCatcher? _crashes;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -27,9 +28,13 @@ public sealed class App : Application
         var log = _loggerFactory.CreateLogger("Pairnets.Client");
         log.LogInformation("Pairnets {Version} starting", typeof(App).Assembly.GetName().Version);
 
+        // Errors nothing else caught are logged and kept as a cleaned crash card (nothing is sent anywhere).
+        _crashes = new CrashCatcher(env.CrashesDir, TrayController.AppName, log,
+            () => _tray is { } tray ? tray.PrivateValues() : PrivacyCleaner.ThisComputer());
+        _crashes.Watch();
         DispatcherUnhandledException += (_, args) =>
         {
-            log.LogError(args.Exception, "Unhandled UI exception");
+            _crashes.Record(args.Exception, CrashPlace.Screen);
             args.Handled = true;
             var answer = Dialogs.Ask(null, "Pairnets hit an unexpected error and will keep running:\n" + args.Exception.Message
                 + "\n\nCreate a bug report? It is copied to the clipboard so you can paste it to whoever helps you; nothing is sent anywhere.",
@@ -46,12 +51,6 @@ public sealed class App : Application
                 }
             }
         };
-        AppDomain.CurrentDomain.UnhandledException += (_, args) => log.LogCritical(args.ExceptionObject as Exception, "Unhandled exception");
-        TaskScheduler.UnobservedTaskException += (_, args) =>
-        {
-            log.LogError(args.Exception, "Unobserved task exception");
-            args.SetObserved();
-        };
 
         // The tray also answers the pairnets:// "come to the front" pokes (it starts listening before the sign-in window).
         _tray = new TrayController(_loggerFactory, _fileLog, new WindowsPlatform(), env, Dispatcher, Shutdown);
@@ -61,6 +60,7 @@ public sealed class App : Application
     protected override void OnExit(ExitEventArgs e)
     {
         _tray?.Dispose();
+        _crashes?.Dispose();
         _loggerFactory?.Dispose();
         _fileLog?.Dispose();
         base.OnExit(e);

@@ -1,7 +1,6 @@
 using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Text;
-using System.Text.RegularExpressions;
 using Pairnets.Core.Settings;
 
 namespace Pairnets.Core.Client;
@@ -14,16 +13,15 @@ public static class BugReport
 {
     public const int LogLines = 300;
     public const int ActivityItems = 30;
+    public const int MaxCrashCards = 5;
     private static readonly TimeSpan ServerTimeout = TimeSpan.FromSeconds(10);
-
-    // Anything token-like that might have reached a log line.
-    private static readonly Regex TokenLike = new(@"((?:sync[_-]?token|x-sync-token|token)\s*[:=]\s*)\S+", RegexOptions.IgnoreCase);
 
     /// <param name="app">Which app wrote the report ("Windows app", "Mac app", …).</param>
     /// <param name="logFile">Today's log (<c>RollingFileLoggerProvider.CurrentFile</c>), or null.</param>
     /// <param name="error">The unexpected error that led to the report, or null when the user asked for it.</param>
+    /// <param name="crashesDir">The crash cards kept on this computer (<see cref="ClientEnvironment.CrashesDir"/>), or null.</param>
     public static async Task<string> BuildAsync(ClientSettings settings, ClientSession? session, string? logFile, Exception? error,
-        string app, CancellationToken ct = default)
+        string app, string? crashesDir = null, CancellationToken ct = default)
     {
         var sb = new StringBuilder();
         var inv = CultureInfo.InvariantCulture;
@@ -37,6 +35,16 @@ public static class BugReport
         {
             sb.AppendLine().AppendLine("## Error");
             sb.AppendLine(error.ToString());
+        }
+
+        if (crashesDir is not null)
+        {
+            var cards = CrashCards.All(crashesDir);
+            sb.AppendLine().AppendLine(inv, $"## Crash cards (cleaned, kept on this computer; {cards.Count})");
+            if (cards.Count == 0)
+                sb.AppendLine("(none)");
+            foreach (var card in cards.Take(MaxCrashCards))
+                sb.AppendLine(card.ToText());
         }
 
         sb.AppendLine().AppendLine("## Settings (the token is never included)");
@@ -104,7 +112,7 @@ public static class BugReport
         foreach (var line in ReadTail(logFile, LogLines))
             sb.AppendLine(line);
 
-        return TokenLike.Replace(sb.ToString(), "$1(hidden)");
+        return PrivacyCleaner.HideSecrets(sb.ToString());
     }
 
     /// <summary>Saves the report as bug-report-yyyyMMdd-HHmmss.txt in <paramref name="directory"/> and returns its path.</summary>

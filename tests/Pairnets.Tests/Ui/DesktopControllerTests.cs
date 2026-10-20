@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.DependencyInjection;
 using Pairnets.Core;
+using Pairnets.Core.Client;
 using Pairnets.Core.Settings;
 using Pairnets.Core.Sync;
 using Pairnets.Desktop.Views;
@@ -608,6 +609,32 @@ public sealed class DesktopControllerTests
     }
 
     // ------------------------------------------------------------------ the rest of the buttons
+
+    [AvaloniaFact]
+    public async Task ClosedAfterACrash_SaysSoOnce_ReportABugShowsTheCleanedCard()
+    {
+        CrashCard? card = null;
+        await using var app = await AppUnderTest.StartAsync(beforeStart: env =>
+        {
+            card = CrashCard.From(new IOException("Could not read '/home/me/Work/taxes.pdf'"), CrashPlace.Background, "Linux app");
+            CrashCards.Add(env.CrashesDir, card);
+        });
+        await Wait.Until(() => app.Platform.Notices.Any(n => n.Title == CrashNotice.Title), "the notice that Pairnets closed unexpectedly");
+        Assert.Empty(CrashCards.TakeNewCloses(app.Env.CrashesDir)); // said once, not at every start
+
+        var main = app.MainWindow;
+        app.Open("Overview");
+        Person.Click(Screen.Find<Button>(main, "More"));
+        Person.Click(Screen.Find<MenuItem>(main, "Report a bug…"));
+        var report = await app.WindowAsync("Report a bug");
+        var open = Screen.Find<Button>(report, "Open the saved file");
+        await Wait.Until(() => open.IsEffectivelyEnabled, "the bug report to be ready");
+        Person.Click(open);
+        var text = File.ReadAllText(app.Platform.Opened[^1]);
+        Assert.Contains($"Crash {card!.Id}: System.IO.IOException (Pairnets had to close)", text);
+        Assert.DoesNotContain("taxes.pdf", text);
+        Person.Click(Screen.Find<Button>(report, "Close"));
+    }
 
     [AvaloniaFact]
     public async Task AddComputer_ManageDevices_ViewLog_ReportBug()

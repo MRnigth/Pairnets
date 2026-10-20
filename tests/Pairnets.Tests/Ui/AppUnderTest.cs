@@ -59,7 +59,8 @@ public sealed class AppUnderTest : IAsyncDisposable
     /// otherwise it starts at the sign-in window, as on a new computer.
     /// </summary>
     public static async Task<AppUnderTest> StartAsync(bool signedIn = true, Dictionary<string, string?>? nestConfig = null,
-        Action<WebApplicationBuilder>? configureNest = null, string? releaseVersion = null, Action<ClientSettings>? rememberedWhenSignedOut = null)
+        Action<WebApplicationBuilder>? configureNest = null, string? releaseVersion = null, Action<ClientSettings>? rememberedWhenSignedOut = null,
+        Action<ClientEnvironment>? beforeStart = null)
     {
         var nest = await TestServer.StartWithWebsiteAsync(nestConfig, configureNest);
         var feed = await FakeReleaseFeed.StartAsync(releaseVersion ?? PairnetsInfo.ProductVersion);
@@ -84,6 +85,7 @@ public sealed class AppUnderTest : IAsyncDisposable
             rememberedWhenSignedOut(remembered);
             SettingsStore.Save(app.Env.SettingsPath, remembered);
         }
+        beforeStart?.Invoke(app.Env);
         app.App = new DesktopController(Application.Current!, app.Desktop, app.Platform, app.Env);
         app.App.Start([]);
         Dispatcher.UIThread.RunJobs();

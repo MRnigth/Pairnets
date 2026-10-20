@@ -22,6 +22,9 @@ namespace Pairnets.Client;
 /// </summary>
 public sealed class TrayController : ITrayActions, IDisposable
 {
+    /// <summary>How reports and crash cards name this app.</summary>
+    public const string AppName = "Windows app";
+
     private readonly ILoggerFactory _loggers;
     private readonly RollingFileLoggerProvider _fileLog;
     private readonly ILogger _log;
@@ -176,6 +179,7 @@ public sealed class TrayController : ITrayActions, IDisposable
             Toast("update:" + u.Version, "Pairnets update available", $"Version {u.Version} is ready. Open Pairnets to update.", Forms.ToolTipIcon.Info, ShowMainWindow);
         });
         _updates.SetEnabled(_settings.CheckForUpdates);
+        NoticeLastClose();
         if (!_settings.IsComplete || !_settings.FirstRunCompleted)
         {
             ShowSettings(firstRun: true);
@@ -186,6 +190,13 @@ public sealed class TrayController : ITrayActions, IDisposable
             HandleFileCommand(command); // started by a right-click item in Explorer while Pairnets was not running
         else if (!Environment.GetCommandLineArgs().Contains("--autostart"))
             ShowMainWindow();
+    }
+
+    /// <summary>Pairnets had to close after an error since it last ran: say so once (the card is in "Report a bug").</summary>
+    private void NoticeLastClose()
+    {
+        if (CrashCards.TakeNewCloses(_env.CrashesDir).Count > 0)
+            Toast("crash", CrashNotice.Title, CrashNotice.Text, Forms.ToolTipIcon.Warning, ReportBug);
     }
 
     // ------------------------------------------------------------------ session
@@ -1168,11 +1179,14 @@ public sealed class TrayController : ITrayActions, IDisposable
     /// <summary>Offered after an unexpected error: the same report, with that error in it.</summary>
     public void ReportBug(Exception error) => ShowBugReport(error);
 
+    /// <summary>The names to take out of a crash card: this computer's and this app's (<see cref="PrivacyCleaner.ThisComputer(ClientSettings)"/>).</summary>
+    public IEnumerable<string?> PrivateValues() => PrivacyCleaner.ThisComputer(_settings);
+
     private void ShowBugReport(Exception? error)
     {
         var settings = _settings;
         var session = _session;
-        var window = new BugReportWindow(() => BugReport.BuildAsync(settings, session, _fileLog.CurrentFile, error, "Windows app"), Shell,
+        var window = new BugReportWindow(() => BugReport.BuildAsync(settings, session, _fileLog.CurrentFile, error, AppName, _env.CrashesDir), Shell,
             afterError: error is not null, logsDir: _env.LogsDir);
         window.Show();
         window.Activate();
