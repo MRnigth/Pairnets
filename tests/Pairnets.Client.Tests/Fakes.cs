@@ -100,8 +100,17 @@ public sealed class FakeWindowsPlatform : IWindowsPlatform
     /// <summary>Every change to Pairnets' place in File Explorer, in order (null: taken away).</summary>
     public Log<string?> ExplorerEntries { get; } = new();
 
-    public bool SetExplorerEntry(string? folder, bool leftSide = true)
+    /// <summary>What the installer's Tasks page left for the app (null: nothing).</summary>
+    public (string Id, string Choices)? SetupChoices { get; set; }
+
+    public (string Id, string Choices)? ReadSetupChoices() => SetupChoices;
+
+    /// <summary>Which parts each of those asked for: the left side, the right-click items.</summary>
+    public Log<(bool LeftSide, bool RightClick)> ExplorerParts { get; } = new();
+
+    public bool SetExplorerEntry(string? folder, bool leftSide = true, bool rightClick = true, bool folderIcon = true)
     {
+        ExplorerParts.Add((leftSide, rightClick));
         ExplorerEntries.Add(folder);
         return true;
     }

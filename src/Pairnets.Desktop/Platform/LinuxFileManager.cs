@@ -52,15 +52,27 @@ public sealed class LinuxFileManager(string home, Func<string[], int> runGio)
     ];
 
     /// <summary>Adds (or brings up to date) the bookmark, the right-click items and the folder icon.</summary>
-    public bool Apply(string folder, string exePath, string folderIconPng)
+    /// <param name="sidebar">The sidebar bookmark and the folder icon; false takes them away.</param>
+    /// <param name="rightClick">The right-click items; false takes them away.</param>
+    public bool Apply(string folder, string exePath, string folderIconPng, bool sidebar = true, bool rightClick = true)
     {
         folder = Path.TrimEndingDirectorySeparator(Path.GetFullPath(folder));
         var ok = true;
-        ok &= Try(() => SetGtkBookmark(folder));
-        ok &= Try(() => SetKdePlace(folder));
-        ok &= Try(() => WriteServiceMenus(exePath));
-        ok &= Try(() => WriteScripts(exePath));
-        ok &= runGio(["set", folder, "metadata::custom-icon", FileUri(folderIconPng)]) == 0;
+        ok &= Try(() => SetGtkBookmark(sidebar ? folder : null));
+        ok &= Try(() => SetKdePlace(sidebar ? folder : null));
+        if (rightClick)
+        {
+            ok &= Try(() => WriteServiceMenus(exePath));
+            ok &= Try(() => WriteScripts(exePath));
+        }
+        else
+        {
+            ok &= RemoveRightClick();
+        }
+        if (sidebar)
+            ok &= runGio(["set", folder, "metadata::custom-icon", FileUri(folderIconPng)]) == 0;
+        else
+            runGio(["set", "-t", "unset", folder, "metadata::custom-icon"]); // nothing to take away is fine too
         return ok;
     }
 
@@ -70,21 +82,24 @@ public sealed class LinuxFileManager(string home, Func<string[], int> runGio)
         var ok = true;
         ok &= Try(() => SetGtkBookmark(null));
         ok &= Try(() => SetKdePlace(null));
-        ok &= Try(() =>
+        ok &= RemoveRightClick();
+        if (!string.IsNullOrWhiteSpace(folder) && Directory.Exists(folder))
+            runGio(["set", "-t", "unset", folder, "metadata::custom-icon"]);
+        return ok;
+    }
+
+    private bool RemoveRightClick() =>
+        Try(() =>
         {
             foreach (var file in ServiceMenus)
                 File.Delete(file);
-        });
-        ok &= Try(() =>
+        })
+        & Try(() =>
         {
             foreach (var dir in ScriptDirs)
                 foreach (var (name, _) in Scripts)
                     File.Delete(Path.Combine(dir, name));
         });
-        if (!string.IsNullOrWhiteSpace(folder) && Directory.Exists(folder))
-            runGio(["set", "-t", "unset", folder, "metadata::custom-icon"]);
-        return ok;
-    }
 
     private static bool Try(Action action)
     {

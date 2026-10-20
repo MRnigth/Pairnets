@@ -57,7 +57,7 @@ public sealed class LinuxPlatform : IPlatformServices
 
     public void Reveal(string path) => Open(File.Exists(path) ? Path.GetDirectoryName(path)! : path);
 
-    public bool SetFileManagerEntry(string? folder)
+    public bool SetFileManagerEntry(string? folder, bool sidebar = true, bool rightClick = true)
     {
         var files = new LinuxFileManager(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), args => Proc.Run("gio", args).ExitCode);
         return FolderIcon.Follow(folder, (before, now) =>
@@ -66,7 +66,7 @@ public sealed class LinuxPlatform : IPlatformServices
                 return files.Remove(before) && now is null;
             if (before is { Length: > 0 } && before != now)
                 files.Remove(before); // the folder moved: the old one goes back to a plain folder
-            return files.Apply(now, exe, FolderIcon.Png);
+            return files.Apply(now, exe, FolderIcon.Png, sidebar, rightClick);
         });
     }
 

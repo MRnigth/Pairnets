@@ -54,7 +54,9 @@ public static class ExplorerShell
     /// False while the folder is a Windows cloud folder: Windows then shows it in the left side by itself, and a second
     /// "Pairnets" there would be one too many.
     /// </param>
-    public static bool Apply(RegistryKey software, ExplorerEntry entry, bool leftSide = true)
+    /// <param name="rightClick">False: no right-click items (the person turned them off at install or in Settings).</param>
+    /// <param name="folderIcon">False: the folder keeps its plain icon.</param>
+    public static bool Apply(RegistryKey software, ExplorerEntry entry, bool leftSide = true, bool rightClick = true, bool folderIcon = true)
     {
         var folder = Path.TrimEndingDirectorySeparator(Path.GetFullPath(entry.Folder));
         if (leftSide)
@@ -62,12 +64,26 @@ public static class ExplorerShell
         else
             RemoveLeftSide(software);
 
-        foreach (var parent in VerbParents)
+        using (var own = software.CreateSubKey(OwnKey))
+            own.SetValue(FolderValue, folder);
+        if (rightClick)
         {
-            AddVerb(software, parent + BS + OpenVerb, "Open in Pairnets", entry, folder, FileManagerCommand.OpenArgument);
-            AddVerb(software, parent + BS + StatusVerb, "Show sync status", entry, folder, FileManagerCommand.StatusArgument);
+            foreach (var parent in VerbParents)
+            {
+                AddVerb(software, parent + BS + OpenVerb, "Open in Pairnets", entry, folder, FileManagerCommand.OpenArgument);
+                AddVerb(software, parent + BS + StatusVerb, "Show sync status", entry, folder, FileManagerCommand.StatusArgument);
+            }
+            AddVerb(software, FolderVerbParent + BS + WhereVerb, "Where this folder lives…", entry, folder, FileManagerCommand.WhereArgument);
         }
-        AddVerb(software, FolderVerbParent + BS + WhereVerb, "Where this folder lives…", entry, folder, FileManagerCommand.WhereArgument);
+        else
+        {
+            RemoveVerbs(software);
+        }
+        if (!folderIcon)
+        {
+            RemoveFolderIcon(folder);
+            return true;
+        }
         return SetFolderIcon(folder, entry.FolderIcon);
     }
 
@@ -136,22 +152,36 @@ public static class ExplorerShell
     public static void Remove(RegistryKey software, string? folder)
     {
         RemoveLeftSide(software);
-        foreach (var parent in VerbParents)
-        {
-            software.DeleteSubKeyTree(parent + @"\" + OpenVerb, throwOnMissingSubKey: false);
-            software.DeleteSubKeyTree(parent + @"\" + StatusVerb, throwOnMissingSubKey: false);
-        }
-        software.DeleteSubKeyTree(FolderVerbParent + @"\" + WhereVerb, throwOnMissingSubKey: false);
+        RemoveVerbs(software);
+        software.DeleteSubKeyTree(OwnKey, throwOnMissingSubKey: false);
         if (!string.IsNullOrWhiteSpace(folder))
             RemoveFolderIcon(folder);
     }
 
-    /// <summary>The folder Pairnets is in Explorer for (its right-click items), or null when Pairnets is not in Explorer.</summary>
+    private static void RemoveVerbs(RegistryKey software)
+    {
+        foreach (var parent in VerbParents)
+        {
+            software.DeleteSubKeyTree(parent + BS + OpenVerb, throwOnMissingSubKey: false);
+            software.DeleteSubKeyTree(parent + BS + StatusVerb, throwOnMissingSubKey: false);
+        }
+        software.DeleteSubKeyTree(FolderVerbParent + BS + WhereVerb, throwOnMissingSubKey: false);
+    }
+
+    /// <summary>The folder Pairnets is in Explorer for, or null when Pairnets is not in Explorer.</summary>
     public static string? RegisteredFolder(RegistryKey software)
     {
-        using var verb = software.OpenSubKey(VerbParents[0] + BS + OpenVerb);
+        using (var own = software.OpenSubKey(OwnKey))
+        {
+            if (own?.GetValue(FolderValue) is string folder)
+                return folder;
+        }
+        using var verb = software.OpenSubKey(VerbParents[0] + BS + OpenVerb); // put there by versions before 1.0.60
         return verb?.GetValue(FolderValue) as string;
     }
+
+    /// <summary>Pairnets' own key, which remembers the folder also when there are no right-click items.</summary>
+    private const string OwnKey = @"Pairnets\Explorer";
 
     /// <summary>The folder the right-click items are for, kept next to them (AppliesTo is a search and hard to read back).</summary>
     private const string FolderValue = "PairnetsFolder";

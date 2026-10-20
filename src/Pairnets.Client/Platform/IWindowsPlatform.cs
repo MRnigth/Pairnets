@@ -38,7 +38,15 @@ public interface IWindowsPlatform
     /// it away for null. False when part of it could not be done (it is tried again at the next start).
     /// </summary>
     /// <param name="leftSide">False while the folder is a Windows cloud folder (Windows shows it in the left side then).</param>
-    bool SetExplorerEntry(string? folder, bool leftSide = true);
+    /// <param name="rightClick">False: no right-click items.</param>
+    /// <param name="folderIcon">False: the folder keeps its plain icon.</param>
+    bool SetExplorerEntry(string? folder, bool leftSide = true, bool rightClick = true, bool folderIcon = true);
+
+    /// <summary>
+    /// What the person ticked on the installer's "Select Additional Tasks" page, left for the app by an installer run by
+    /// hand (never by a silent update), with an id for that run; null when there is none.
+    /// </summary>
+    (string Id, string Choices)? ReadSetupChoices() => null;
 
     /// <summary>
     /// Makes the folder a Windows cloud folder in <paramref name="mode"/> (ticks in Explorer; Files On-Demand) and

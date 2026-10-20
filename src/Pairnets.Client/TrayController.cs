@@ -78,6 +78,7 @@ public sealed class TrayController : ITrayActions, IDisposable
         _shutdown = shutdown;
         _log = loggers.CreateLogger("Pairnets.Tray");
         _settings = SettingsStore.Load(env.SettingsPath);
+        TakeSetupChoices();
         _package = UpdatePackage.ForThisComputer(IsInstalledCopy);
         _updates = new UpdateService(env.CreateUpdateChecker(), PairnetsInfo.ProductVersion, _package.Asset);
         _fileLog.Minimum = _settings.DebugMode ? LogLevel.Debug : LogLevel.Information; // Debug mode: more detail in the log
@@ -252,11 +253,13 @@ public sealed class TrayController : ITrayActions, IDisposable
     /// </summary>
     private void UpdateExplorerEntry()
     {
-        var folder = _settings.ShowInFileManager && _settings.IsComplete && Directory.Exists(_settings.Folder) ? _settings.Folder : null;
+        var wanted = _settings.ShowInFileManager || _settings.ExplorerRightClick;
+        var folder = wanted && _settings.IsComplete && Directory.Exists(_settings.Folder) ? _settings.Folder : null;
         try
         {
             // A Windows cloud folder is in the left side by itself (with Pairnets' icon), so only one "Pairnets" shows.
-            if (!_platform.SetExplorerEntry(folder, leftSide: _cloud is not { IsActive: true }))
+            if (!_platform.SetExplorerEntry(folder, leftSide: _settings.ShowInFileManager && _cloud is not { IsActive: true },
+                    rightClick: _settings.ExplorerRightClick, folderIcon: _settings.ShowInFileManager))
                 _log.LogInformation("Pairnets could not be fully added to File Explorer; it tries again at the next start");
         }
         catch (Exception ex)
@@ -926,6 +929,28 @@ public sealed class TrayController : ITrayActions, IDisposable
         view.OpenLinkRequested += Shell;
         view.Cancelled += () => _window?.Navigate(MainPage.Overview);
         _window.ShowSettingsPage(view);
+    }
+
+    /// <summary>
+    /// What was ticked on the installer's "Select Additional Tasks" page, taken into the settings once (a later silent
+    /// update leaves nothing, so changes made in Settings since are kept).
+    /// </summary>
+    private void TakeSetupChoices()
+    {
+        if (_platform.ReadSetupChoices() is not { } setup || setup.Id == _settings.SetupChoicesApplied)
+            return;
+        SetupChoices.Apply(_settings, setup.Choices);
+        _settings.SetupChoicesApplied = setup.Id;
+        try
+        {
+            SettingsStore.Save(_env.SettingsPath, _settings);
+            _platform.SetAutoStart(_settings.StartWithWindows);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
+        {
+            _log.LogWarning("Could not keep the installer's choices: {Error}", ex.Message);
+        }
+        _log.LogInformation("Took the installer's choices: {Choices}", setup.Choices);
     }
 
     private void ApplySettings(ClientSettings settings, string? plainToken)

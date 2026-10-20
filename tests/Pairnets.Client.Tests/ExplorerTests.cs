@@ -77,6 +77,23 @@ public sealed class ExplorerTests : IDisposable
     }
 
     [Fact]
+    public void Apply_WithoutRightClickItems_KeepsTheRest_AndStillKnowsTheFolder()
+    {
+        var folder = _dir.Combine("Pairnets");
+        Directory.CreateDirectory(folder);
+        ExplorerShell.Apply(_software, Entry(folder));
+
+        ExplorerShell.Apply(_software, Entry(folder), rightClick: false);
+
+        foreach (var verb in new[] { @"Classes\*\shell\Pairnets.Open", @"Classes\Directory\shell\Pairnets.Status", @"Classes\Directory\shell\Pairnets.Where" })
+            Assert.Null(_software.OpenSubKey(verb));
+        Assert.Equal("Pairnets", Value(@"Microsoft\Windows\CurrentVersion\Explorer\Desktop\NameSpace\" + ExplorerShell.FolderClsid));
+        Assert.Equal(folder, ExplorerShell.RegisteredFolder(_software));
+        ExplorerShell.Remove(_software, folder);
+        Assert.Null(ExplorerShell.RegisteredFolder(_software));
+    }
+
+    [Fact]
     public void Remove_TakesEverythingAwayAgain_AndIsSafeToRepeat()
     {
         var folder = _dir.Combine("Pairnets");
@@ -166,9 +183,23 @@ public sealed class ExplorerTests : IDisposable
         await app.WaitUntil(() => main.SettingsPage.Content is Ui.SettingsView, "the Settings page");
         await app.Wpf.Ui(() => ((Ui.SettingsView)main.SettingsPage.Content).ExplorerBox.IsChecked = false);
         await app.Press(main, "Save");
-        await app.WaitUntil(() => app.Platform.ExplorerEntries.Items.Count == 2, "Pairnets to leave Explorer");
-        Assert.Null(app.Platform.ExplorerEntries.Items[^1]);
+        await app.WaitUntil(() => app.Platform.ExplorerEntries.Items.Count == 2, "Pairnets to leave Explorer's left side");
+        // The right-click items are a switch of their own, still on: only the left side and the folder icon go.
+        Assert.Equal(app.Folder, app.Platform.ExplorerEntries.Items[^1]);
+        Assert.Equal((false, true), app.Platform.ExplorerParts.Items[^1]);
         Assert.False(app.SavedSettings.ShowInFileManager);
+    }
+
+    [Fact]
+    public async Task App_TakesTheInstallersChoicesOnce()
+    {
+        await using var nest = await TestServer.StartWithWebsiteAsync();
+        await using var app = await TrayHarness.CreateAsync(nest, setupChoices: ("run-1", "explorerside=0;explorermenu=0;where=nest;autostart=0"));
+        await app.StartAsync();
+
+        Assert.Null(app.Platform.ExplorerEntries.Items[^1]); // neither part wanted
+        Assert.Equal(Core.Sync.FilePlacement.NestOnly, app.SavedSettings.Placement[""]);
+        Assert.Equal("run-1", app.SavedSettings.SetupChoicesApplied);
     }
 
     [Fact]

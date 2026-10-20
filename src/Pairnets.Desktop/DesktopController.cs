@@ -295,10 +295,11 @@ public sealed class DesktopController : ITrayActions, IDisposable
     /// </summary>
     private void UpdateFileManagerEntry()
     {
-        var folder = _settings.ShowInFileManager && _settings.IsComplete && Directory.Exists(_settings.Folder) ? _settings.Folder : null;
+        var wanted = _settings.ShowInFileManager || (_settings.ExplorerRightClick && !OperatingSystem.IsMacOS());
+        var folder = wanted && _settings.IsComplete && Directory.Exists(_settings.Folder) ? _settings.Folder : null;
         try
         {
-            if (!_platform.SetFileManagerEntry(folder))
+            if (!_platform.SetFileManagerEntry(folder, sidebar: _settings.ShowInFileManager, rightClick: _settings.ExplorerRightClick))
                 _log.LogInformation("Pairnets could not be fully added to the file manager; it tries again at the next start");
         }
         catch (Exception ex)

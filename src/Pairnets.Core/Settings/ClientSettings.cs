@@ -59,6 +59,15 @@ public sealed class ClientSettings
     public bool ShowInFileManager { get; set; } = true;
 
     /// <summary>
+    /// "Open in Pairnets", "Show sync status" and "Where this folder lives…" when right-clicking inside the Pairnets
+    /// folder (Windows Explorer; the Linux file managers' Pairnets items).
+    /// </summary>
+    public bool ExplorerRightClick { get; set; } = true;
+
+    /// <summary>The installer's choices this computer already took in (<see cref="SetupChoices"/>), by the id it gave them.</summary>
+    public string? SetupChoicesApplied { get; set; }
+
+    /// <summary>
     /// Windows only, opt-in: the Pairnets folder as a Windows cloud folder (like OneDrive), with a tick, sync arrows or a
     /// cloud on every file, and with <see cref="CloudFolderMode.OnDemand"/> files that stay on the nest until opened.
     /// </summary>
