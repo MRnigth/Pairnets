@@ -1131,6 +1131,14 @@ The owner's answers to the 2026-10-14 audit questions:
   deletes for good (`POST /api/purge`: the file and its older versions), because a normal delete keeps the space in
   History for 30 days. It works while the nest is full, which is what it is for. `/api/info` now also gives
   `historyBytes`.
+* **The screens (both apps):** the History page button became **Files** (still six page buttons) with two tabs, "All
+  files" (new) and "Deleted" (the History page as it was; its own inner tab "All files" is now "Older versions" so two
+  tabs never say the same). `MainPage.History` stays and means the Deleted tab, so "Show versions…" and "Open in Pairnets"
+  land where they did. Clean up takes the Files page's place until "Done". A change on the Files page (and in Explorer's
+  "Where this folder lives…") is saved at once, as the Core does; on the Settings page the "Where your files live" card
+  is saved with Save like everything else there, so Cancel still means nothing changed. Either way, choices that take
+  files off this computer ask first ("Keep Photos only on your nest?"). The pages talk to `INestFiles`, so the UI tests
+  give them the nest's files in memory (`FakeNestFiles`).
 * **The installer asks first, like VS Code's** (owner's request, with a screenshot of VS Code's "Select Additional
   Tasks"): Start menu, desktop icon (off), Explorer left side, right-click menu, sync ticks, where files live (three
   choices for the whole folder), look for updates, update the nest (off), start at log-in; "Open Pairnets now" on the
