@@ -264,4 +264,27 @@ public sealed class ExplorerTests : IDisposable
         await app.Wpf.Ui(() => app.Tray.HandleFileCommand(new FileManagerCommand(FileManagerAction.Open, @"C:\Windows\notepad.exe")));
         Assert.True(await app.Wpf.Ui(() => app.Tray.Window!.IsVisible));
     }
+    [Fact]
+    public async Task WhereThisFolderLives_FromExplorer_OpensTheFilesPageOnThatFolderWithItsChoices()
+    {
+        await using var nest = await TestServer.StartWithWebsiteAsync();
+        await using var app = await TrayHarness.CreateAsync(nest);
+        Directory.CreateDirectory(Path.Combine(app.Folder, "Photos"));
+        File.WriteAllText(Path.Combine(app.Folder, "Photos", "Beach.jpg"), "sand");
+        await app.StartAsync();
+        await app.WaitUntil(() => nest.Store.ReadManifest(null).Entries.Any(e => e.Path == "Photos/Beach.jpg" && !e.Deleted), "the file to reach the nest");
+        await app.WaitUntil(() => app.Tray.Session?.Files.List("Photos").Count == 1, "this computer to know the nest's list");
+
+        await app.Wpf.Ui(() => app.Tray.HandleFileCommand(new FileManagerCommand(FileManagerAction.WhereItLives, Path.Combine(app.Folder, "Photos"))));
+        await app.WaitUntil(() => app.Tray.Window!.Page == Ui.MainPage.Files, "the Files page");
+        var files = app.Tray.Window!.FilesPane;
+        Assert.Equal("Photos", await app.Wpf.Ui(() => files.Folder));
+        await app.WaitUntil(() => files.PlacementMenuOpen, "the choices of where Photos lives");
+        Assert.Equal("On this PC", await app.Wpf.Ui(() => files.PlacementShown));
+        await app.Wpf.Ui(() => files.PlacementMenu.IsOpen = false);
+
+        // A file: the folder it is in.
+        await app.Wpf.Ui(() => app.Tray.HandleFileCommand(new FileManagerCommand(FileManagerAction.WhereItLives, Path.Combine(app.Folder, "Photos", "Beach.jpg"))));
+        Assert.Equal("Photos", await app.Wpf.Ui(() => files.Folder));
+    }
 }

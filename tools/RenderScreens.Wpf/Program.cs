@@ -10,6 +10,7 @@ using Pairnets.Core;
 using Pairnets.Core.Client;
 using Pairnets.Core.Settings;
 using Pairnets.Core.Sync;
+using Pairnets.Tests.Infrastructure;
 
 namespace Pairnets.Tools;
 
@@ -139,6 +140,7 @@ public static partial class Program
     private sealed class Stage4Actions : ITrayActions
     {
         public IHistorySource? History { get; } = new Stage4History();
+        public INestFiles? Files { get; } = new FakeNestFiles();
         public void FixBlocked() { }
         public void SyncNow() { }
         public void TogglePause() { }
@@ -226,6 +228,13 @@ public static partial class Program
         Settle(window, 900);
         Save(window, outDir, $"stage4-history-all-{suffix}.png", print);
 
+        window.Navigate(MainPage.Files);
+        Save(window, outDir, $"stage4-files-{suffix}.png", print);
+        window.ShowFilesAt("Documents");
+        Save(window, outDir, $"stage4-files-folder-{suffix}.png", print);
+        window.ShowCleanup();
+        Save(window, outDir, $"stage4-files-cleanup-{suffix}.png", print);
+
         window.ShowStatus(status, folder, "DESKTOP");
         window.Navigate(MainPage.Devices);
         Save(window, outDir, $"stage4-devices-{suffix}.png", print);
@@ -242,7 +251,7 @@ public static partial class Program
         };
         using var updates = new UpdateService(new UpdateChecker(new HttpClient(), new Uri("https://downloads.example.com/"), new Uri("https://releases.example.com/")),
             PairnetsInfo.ProductVersion, null);
-        var page = new SettingsView(settings, new NoProtector(), updates, "Server " + PairnetsInfo.ProductVersion);
+        var page = new SettingsView(settings, new NoProtector(), updates, "Server " + PairnetsInfo.ProductVersion, new FakeNestFiles());
         window.ShowSettingsPage(page);
         Save(window, outDir, $"stage4-settings-{suffix}.png", print);
         page.ScrollToEnd();
@@ -386,7 +395,7 @@ public static partial class Program
         Save(window, outDir, $"windows-main-history-{suffix}.png", print);
 
         var settingsPage = new SettingsView(new ClientSettings { ServerUrl = "https://sync.example.com/", Folder = folder, DeviceName = "DESKTOP" },
-            new NoProtector(), serverVersionText: "Server 1.0.58");
+            new NoProtector(), serverVersionText: "Server 1.0.58", files: new FakeNestFiles());
         window.ShowSettingsPage(settingsPage);
         Save(window, outDir, $"windows-main-settings-{suffix}.png", print);
         settingsPage.ScrollToEnd();

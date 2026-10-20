@@ -66,6 +66,13 @@ public sealed class SampleActions : ITrayActions
 
     public IHistorySource? History => HistoryFrom ?? Samples;
 
+    /// <summary>The nest's files for the Files page (null: not connected).</summary>
+    public FakeNestFiles? NestFiles { get; set; } = new();
+
+    public INestFiles? Files => NestFiles;
+
+    public void OpenFile(string path) => Calls.Add("open-file:" + path);
+
     public void FixBlocked() => Calls.Add("fix");
     public void SyncNow() => Calls.Add("sync");
     public void TogglePause() => Calls.Add("pause");

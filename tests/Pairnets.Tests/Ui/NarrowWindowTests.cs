@@ -189,6 +189,28 @@ public class NarrowWindowTests
     [AvaloniaTheory]
     [InlineData(980)]
     [InlineData(800)]
+    public void TheFilesPageKeepsItsToolsApartAndItsNamesReadable(double width)
+    {
+        var window = Open(width, Synced());
+        window.Navigate(MainPage.Files);
+        Layout(window);
+        var page = window.FilesView;
+        var search = Where(Screen.Named<TextBox>(page, "FilesSearch"), window);
+        var add = Where(Screen.Named<Button>(page, "AddFilesButton"), window);
+        Assert.False(search.Intersects(add), "Add files is drawn over the search box");
+        Assert.True(add.Right <= Where(page, window).Right + 0.5, "Add files is cut off at the right");
+        var card = Where(Screen.Named<Border>(page, "ListCard"), window);
+        foreach (var more in Screen.All<Button>(page).Where(b => ToolTip.GetTip(b) is string tip && tip.StartsWith("More", StringComparison.Ordinal) && b.IsEffectivelyVisible))
+            Assert.True(Where(more, window).Right <= card.Right + 0.5, "a row's … button is cut off");
+        var name = Screen.All<TextBlock>(page).First(t => t.Text == "Documents" && t.IsEffectivelyVisible);
+        var column = ((Control)name.Parent!).Bounds.Width;
+        Assert.True(column >= (width < 900 ? 80 : 100), $"the names get only {column:0} px");
+        Close(window);
+    }
+
+    [AvaloniaTheory]
+    [InlineData(980)]
+    [InlineData(800)]
     public void OtherComputersAndItsNoteDoNotOverlap(double width)
     {
         var window = Open(width, Synced() with { Status = RunnerStatus.Offline, Text = "Offline: timeout" });

@@ -6,6 +6,7 @@ using Pairnets.Core;
 using Pairnets.Core.Client;
 using Pairnets.Core.Settings;
 using Pairnets.Core.Sync;
+using Pairnets.Tests.Infrastructure;
 
 namespace Pairnets.Client.Tests;
 
@@ -161,6 +162,60 @@ internal sealed class DialogScript : Dialogs.IResponder
     /// <summary>True acts like another program holding the clipboard.</summary>
     public bool ClipboardBusy { get; set; }
 
+    /// <summary>The Files page's pop-ups that opened, by title.</summary>
+    public Log<string> Popups { get; } = new();
+
+    /// <summary>The button pressed in a pop-up with buttons of its own, by the start of its label; unset closes it.</summary>
+    public Func<Dialogs.Choice, string?> Chooses { get; set; } = _ => null;
+
+    /// <summary>What the rename box answers (null: Cancel).</summary>
+    public string? Typed { get; set; }
+
+    /// <summary>What the strong delete question answers (null: Keep it).</summary>
+    public string? DeleteWord { get; set; }
+
+    /// <summary>Where "Save a copy…" saves (null: Cancel).</summary>
+    public string? SaveTo { get; set; }
+
+    /// <summary>The files "Add files" adds (null: Cancel).</summary>
+    public IReadOnlyList<string>? AddFiles { get; set; }
+
+    public string? Choose(Dialogs.Choice choice)
+    {
+        Popups.Add(choice.Title);
+        return Chooses(choice);
+    }
+
+    public string? Prompt(string title, string initial)
+    {
+        Popups.Add(title);
+        return Typed;
+    }
+
+    public string? PickOne(string title, IReadOnlyList<string> items)
+    {
+        Popups.Add(title);
+        return items.Count > 0 ? items[0] : null;
+    }
+
+    public string? DeleteForGood(string title)
+    {
+        Popups.Add(title);
+        return DeleteWord;
+    }
+
+    public string? SaveFile(string title, string fileName)
+    {
+        Popups.Add(title);
+        return SaveTo;
+    }
+
+    public IReadOnlyList<string>? OpenFiles(string title)
+    {
+        Popups.Add(title);
+        return AddFiles;
+    }
+
     /// <summary>Answers questions whose text contains <paramref name="contains"/> with <paramref name="answer"/>.</summary>
     public DialogScript When(string contains, MessageBoxResult answer)
     {
@@ -222,6 +277,13 @@ public sealed class RecordingActions(IHistorySource? history = null) : ITrayActi
     public Log<string> Calls { get; } = new();
 
     public IHistorySource? History { get; } = history;
+
+    /// <summary>The nest's files for the Files page (null: not connected).</summary>
+    public FakeNestFiles? NestFiles { get; set; } = new();
+
+    public INestFiles? Files => NestFiles;
+
+    public void OpenFile(string path) => Calls.Add($"{nameof(OpenFile)}({path})");
 
     public void FixBlocked() => Calls.Add(nameof(FixBlocked));
     public void SyncNow() => Calls.Add(nameof(SyncNow));

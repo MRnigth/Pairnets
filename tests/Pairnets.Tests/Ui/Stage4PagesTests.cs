@@ -290,7 +290,7 @@ public class Stage4PagesTests
         Layout(window);
         Assert.Equal(MainPage.Account, window.Page);
         Assert.True(window.AccountShown);
-        Assert.All(new[] { "NavOverview", "NavActivity", "NavAttention", "NavHistory", "NavDevices", "NavSettings" },
+        Assert.All(new[] { "NavOverview", "NavActivity", "NavAttention", "NavFiles", "NavDevices", "NavSettings" },
             name => Assert.False(Screen.Named<RadioButton>(window, name).IsChecked));
         var page = window.Account;
         Assert.Equal("alex@example.com", page.TitleValue);
