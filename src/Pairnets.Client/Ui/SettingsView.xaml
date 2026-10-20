@@ -194,24 +194,30 @@
                   </StackPanel>
                   <CheckBox x:Name="ExplorerBox" Grid.Column="1" Style="{StaticResource PgSwitch}" AutomationProperties.Name="Show Pairnets in File Explorer" />
                 </Grid>
-                <StackPanel Margin="0,14,0,0">
-                  <StackPanel Orientation="Horizontal">
-                    <TextBlock Style="{StaticResource RowTitle}" VerticalAlignment="Center" Text="Files in Explorer" />
-                    <Border x:Name="CloudPreviewBadge" Style="{StaticResource Pill}" Margin="8,0,0,0" Padding="8,2" VerticalAlignment="Center">
-                      <TextBlock FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource T.Muted}" Text="Preview" />
-                    </Border>
+                <Grid Margin="0,14,0,0">
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                  </Grid.ColumnDefinitions>
+                  <StackPanel VerticalAlignment="Center">
+                    <TextBlock Style="{StaticResource RowTitle}" Text="Add Pairnets to the right-click menu" />
+                    <TextBlock Style="{StaticResource PgSmall}" Margin="0,2,0,0" TextWrapping="Wrap"
+                               Text="Open in Pairnets, Show sync status and Where this folder lives…, only inside your Pairnets folder." />
                   </StackPanel>
-                  <TextBlock Style="{StaticResource PgSmall}" Margin="0,2,0,8" TextWrapping="Wrap"
-                             Text="New and off by default. Ticks show which files are synced, like OneDrive. With Files On-Demand, files from your other computers stay on your nest until you open them, and &quot;Free up space&quot; works. Your files are not moved or copied, and choosing Plain folder again brings every file back to this PC." />
-                  <Border CornerRadius="11" Padding="2" BorderThickness="1" HorizontalAlignment="Left"
-                          Background="{DynamicResource T.Chip}" BorderBrush="{DynamicResource T.Border}">
-                    <StackPanel Orientation="Horizontal">
-                      <RadioButton x:Name="CloudOff" Style="{StaticResource PgSeg}" GroupName="cloud" Content="Plain folder" AutomationProperties.Name="Files in Explorer: plain folder" />
-                      <RadioButton x:Name="CloudKeep" Style="{StaticResource PgSeg}" GroupName="cloud" Content="Ticks, all here" AutomationProperties.Name="Files in Explorer: ticks, every file on this PC" />
-                      <RadioButton x:Name="CloudOnDemand" Style="{StaticResource PgSeg}" GroupName="cloud" Content="Files On-Demand" AutomationProperties.Name="Files in Explorer: Files On-Demand" />
-                    </StackPanel>
-                  </Border>
-                </StackPanel>
+                  <CheckBox x:Name="RightClickBox" Grid.Column="1" Style="{StaticResource PgSwitch}" AutomationProperties.Name="Add Pairnets to the right-click menu" />
+                </Grid>
+                <Grid Margin="0,14,0,0">
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                  </Grid.ColumnDefinitions>
+                  <StackPanel VerticalAlignment="Center">
+                    <TextBlock Style="{StaticResource RowTitle}" Text="Show sync ticks in File Explorer" />
+                    <TextBlock Style="{StaticResource PgSmall}" Margin="0,2,0,0" TextWrapping="Wrap"
+                               Text="A tick, sync arrows or a cloud on every file, like OneDrive. Windows only." />
+                  </StackPanel>
+                  <CheckBox x:Name="TicksBox" Grid.Column="1" Style="{StaticResource PgSwitch}" AutomationProperties.Name="Show sync ticks in File Explorer" />
+                </Grid>
               </StackPanel>
             </Border>
 
@@ -439,6 +445,26 @@
             </Border>
           </StackPanel>
         </Grid>
+
+        <!-- Where your files live: each top folder on this PC, On-Demand or only on the nest (saved with Save) -->
+        <Border x:Name="PlacementCard" Style="{StaticResource Section}" Margin="0,16,0,0">
+          <StackPanel>
+            <Grid>
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+              </Grid.ColumnDefinitions>
+              <ui:LineIcon Style="{StaticResource CardIcon}" Data="{StaticResource I.Cloud}" />
+              <TextBlock Grid.Column="1" Style="{StaticResource PgCardTitle}" Text="Where your files live" VerticalAlignment="Center" />
+              <TextBlock Grid.Column="2" Style="{StaticResource PgSmall}" VerticalAlignment="Center" Text="This PC only · your other computers choose for themselves" />
+            </Grid>
+            <TextBlock x:Name="PlacementNote" Style="{StaticResource PgSmall}" FontSize="13" Margin="0,8,0,4" TextWrapping="Wrap"
+                       Text="Keep big folders on your nest to free space here. Pairnets only removes a file from this PC once it is safely on your nest." />
+            <StackPanel x:Name="PlacementRows" />
+            <Button Style="{StaticResource PgLink}" HorizontalAlignment="Left" Margin="0,12,0,0" Padding="0,2" Content="Choose for a folder inside these… (opens Files)" Click="OnPlacementLink" />
+          </StackPanel>
+        </Border>
 
         <!-- Help: a bug report, and debug mode -->
         <Border Style="{StaticResource PgCard}" Margin="0,16,0,0">

@@ -237,6 +237,11 @@ public sealed class TrayController : ITrayActions, IDisposable
             $"Synced {n} change(s) made while this computer was away.", Forms.ToolTipIcon.Info, ShowMainWindow));
         session.ServerInfoChanged += info => RunOnUi(() => OnServerInfo(session, info));
         session.AccountChanged += (next, token) => RunOnUi(() => OnAccountChanged(session, next, token));
+        session.Files.Opened.NestFullWhileSaving += _ => RunOnUi(() =>
+        {
+            if (ReferenceEquals(_session, session))
+                _window?.ShowNestFull(); // a file opened from the nest could not be saved back
+        });
         session.JoinRequested += r => RunOnUi(() => Toast("join:" + r.Code, r.Title, $"Code {r.Code} · click to review it on your nest.",
             Forms.ToolTipIcon.Info, () => ReviewJoin(r)));
         _session = session;
@@ -355,6 +360,14 @@ public sealed class TrayController : ITrayActions, IDisposable
         if (_session is not { } session || _settings.Folder is not { } folder || FileStatusReader.ToSyncPath(folder, command.Path) is not { } rel)
         {
             ShowMainWindow();
+            return;
+        }
+        if (command.Action == FileManagerAction.WhereItLives)
+        {
+            // A folder's own choice; for a file, the folder it is in.
+            var folderPath = rel.Length == 0 || Directory.Exists(command.Path) ? rel : PathRules.Parent(rel) ?? string.Empty;
+            ShowMainWindow();
+            _window?.ShowFilesAt(folderPath, choosePlacement: true);
             return;
         }
         if (command.Action == FileManagerAction.Open)
@@ -735,6 +748,10 @@ public sealed class TrayController : ITrayActions, IDisposable
 
     public IHistorySource? History => _session;
 
+    public INestFiles? Files => _session?.Files;
+
+    public void OpenFile(string path) => Shell(path);
+
     public bool Notifies(NoticeKind kind) => kind switch
     {
         NoticeKind.JoinRequest => _settings.NotifyJoinRequests,
@@ -916,7 +933,8 @@ public sealed class TrayController : ITrayActions, IDisposable
     {
         if (_window is null)
             return;
-        var view = new SettingsView(_settings, _platform.Secrets, _updates, _session?.Status.ServerVersionText);
+        var view = new SettingsView(_settings, _platform.Secrets, _updates, _session?.Status.ServerVersionText, _session?.Files);
+        view.OpenFilesRequested += () => _window?.Navigate(MainPage.Files);
         view.Saved += v =>
         {
             ApplySettings(v.Result!, v.PlainToken);
