@@ -23,6 +23,7 @@ public sealed class FileManagerTests : IDisposable
     [Theory]
     [InlineData(FileManagerCommand.OpenArgument, FileManagerAction.Open)]
     [InlineData(FileManagerCommand.StatusArgument, FileManagerAction.ShowStatus)]
+    [InlineData(FileManagerCommand.WhereArgument, FileManagerAction.WhereItLives)]
     public void Command_ComesFromTheProgramsArguments_AndTravelsAsAMessage(string argument, FileManagerAction action)
     {
         var path = Path.Combine(_dir.Path, "Photos", "Beach ø.jpg");
