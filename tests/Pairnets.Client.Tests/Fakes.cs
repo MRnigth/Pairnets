@@ -109,7 +109,8 @@ public sealed class FakeWindowsPlatform : IWindowsPlatform
     /// <summary>What "make it a cloud folder" was asked for, in order; the stand-in never touches Windows' cloud files.</summary>
     public Log<CloudFolderMode> CloudFolderStarts { get; } = new();
 
-    public Client.Platform.CloudFiles.ICloudFolder? StartCloudFolder(string folder, CloudFolderMode mode, ILogger log, out string? problem)
+    public Client.Platform.CloudFiles.ICloudFolder? StartCloudFolder(string folder, CloudFolderMode mode, ILogger log, out string? problem,
+        IReadOnlyDictionary<string, Core.Sync.FilePlacement>? placement = null)
     {
         CloudFolderStarts.Add(mode);
         problem = "Tests leave Windows' cloud files alone.";

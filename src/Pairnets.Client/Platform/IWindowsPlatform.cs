@@ -44,7 +44,9 @@ public interface IWindowsPlatform
     /// Makes the folder a Windows cloud folder in <paramref name="mode"/> (ticks in Explorer; Files On-Demand) and
     /// connects to it, or returns null with <paramref name="problem"/> saying why it stays a plain folder.
     /// </summary>
-    CloudFiles.ICloudFolder? StartCloudFolder(string folder, CloudFolderMode mode, ILogger log, out string? problem);
+    /// <param name="placement">With Files On-Demand, the folders it is for ("Where your files live"); null: the whole folder.</param>
+    CloudFiles.ICloudFolder? StartCloudFolder(string folder, CloudFolderMode mode, ILogger log, out string? problem,
+        IReadOnlyDictionary<string, Pairnets.Core.Sync.FilePlacement>? placement = null);
 
     /// <summary>True when Windows still has a Pairnets cloud folder (also after the switch was turned off).</summary>
     bool HasCloudFolder();

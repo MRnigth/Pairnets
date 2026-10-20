@@ -222,7 +222,7 @@ public sealed class TrayController : ITrayActions, IDisposable
             cloud.Fetch = session.FetchVersionAsync;
             session.PassCompleted += _ => cloud.Reconcile(session.SyncedHash);
             cloud.Reconcile(session.SyncedHash);
-            if (_settings.CloudFolder == CloudFolderMode.Off)
+            if (_settings.CloudFolderWanted == CloudFolderMode.Off)
                 _leaveTask = LeaveCloudFolderAsync(cloud);
         }
         session.StatusChanged += _ => _dirty = true;
@@ -272,7 +272,7 @@ public sealed class TrayController : ITrayActions, IDisposable
     /// </summary>
     private Platform.CloudFiles.ICloudFolder? StartCloudFolder()
     {
-        var wanted = _settings.CloudFolder;
+        var wanted = _settings.CloudFolderWanted;
         if (wanted == CloudFolderMode.Off && !SafeHasCloudFolder())
             return null;
         var mode = wanted == CloudFolderMode.Off ? CloudFolderMode.KeepAllHere : wanted;
@@ -280,7 +280,7 @@ public sealed class TrayController : ITrayActions, IDisposable
         string? problem;
         try
         {
-            cloud = _platform.StartCloudFolder(_settings.Folder!, mode, _loggers.CreateLogger("Pairnets.CloudFolder"), out problem);
+            cloud = _platform.StartCloudFolder(_settings.Folder!, mode, _loggers.CreateLogger("Pairnets.CloudFolder"), out problem, _settings.Placement);
         }
         catch (Exception ex)
         {
@@ -289,7 +289,9 @@ public sealed class TrayController : ITrayActions, IDisposable
         if (cloud is null && wanted != CloudFolderMode.Off)
         {
             _log.LogWarning("The Pairnets folder stays a plain folder: {Problem}", problem);
-            Toast("cloudfolder", "No ticks in Explorer for now", (problem ?? "Windows did not allow it.") + " Pairnets keeps syncing as before.",
+            var onDemand = wanted == CloudFolderMode.OnDemand;
+            Toast("cloudfolder", onDemand ? "Files On-Demand can't be used here" : "No ticks in Explorer for now",
+                (problem ?? "Windows did not allow it.") + (onDemand ? " Your On-Demand folders are kept on this PC instead." : " Pairnets keeps syncing as before."),
                 Forms.ToolTipIcon.Warning, () => ShowMainWindow(MainPage.Settings));
         }
         return cloud;

@@ -167,6 +167,43 @@ public sealed class CloudFolderTests : IDisposable
     }
 
     [CloudFact]
+    public void OnDemandForOneFolder_FreesItsSyncedFiles_KeepsTheRestHere_AndNewFilesFollowTheirFolder()
+    {
+        var root = Root();
+        var photo = Path.Combine(root, "Photos", "beach.txt");
+        var draft = Path.Combine(root, "Photos", "draft.txt");
+        var doc = Path.Combine(root, "Docs", "report.txt");
+        foreach (var f in new[] { photo, draft, doc })
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(f)!);
+            File.WriteAllText(f, "content of " + Path.GetFileName(f));
+        }
+        var placement = new Dictionary<string, FilePlacement> { ["Photos"] = FilePlacement.OnDemand };
+        var cloud = WindowsCloudFolder.Start(root, CloudFolderMode.OnDemand, Path.Combine(Environment.SystemDirectory, "imageres.dll"),
+            new ListLogger(), out var problem, placement);
+        Assert.True(cloud is not null, problem);
+        using (cloud)
+        {
+            cloud!.MarkSynced(photo, "p1");
+            cloud.MarkSynced(doc, "d1");
+            // The synced photo is freed; the draft (not on the nest yet) and the other folder stay here.
+            Assert.True(SpinWait.SpinUntil(() => cloud.IsCloudOnly(photo), TimeSpan.FromSeconds(20)), "the synced photo was not freed\n" + Log());
+            Assert.False(cloud.IsCloudOnly(draft));
+            Assert.False(cloud.IsCloudOnly(doc));
+
+            // Once the draft is on the nest, it is freed too.
+            cloud.MarkSynced(draft, "x1");
+            Assert.True(SpinWait.SpinUntil(() => cloud.IsCloudOnly(draft), TimeSpan.FromSeconds(20)), "the draft was not freed once synced\n" + Log());
+            Assert.False(cloud.IsCloudOnly(doc));
+
+            // New files from the nest: placeholders in Photos (also in a folder not here yet), downloaded elsewhere.
+            Assert.True(cloud.KeepOnNest(Path.Combine(root, "Photos", "2025", "snow.txt")));
+            Assert.False(cloud.KeepOnNest(Path.Combine(root, "Docs", "new.txt")));
+            Assert.False(cloud.KeepOnNest(Path.Combine(root, "top.txt")));
+        }
+    }
+
+    [CloudFact]
     public void AFetchThatFails_GivesTheOpenerAnError_AndTheFileStaysOnTheNest()
     {
         var root = Root();

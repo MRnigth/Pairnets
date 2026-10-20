@@ -71,6 +71,14 @@ public sealed class ClientSettings
     /// </summary>
     public Dictionary<string, FilePlacement> Placement { get; set; } = new(StringComparer.Ordinal);
 
+    /// <summary>
+    /// How the folder works with Windows' cloud files: Files On-Demand while some folder's files stay on the nest until
+    /// opened, else the ticks switch (<see cref="CloudFolder"/>: off, or ticks with everything here).
+    /// </summary>
+    public CloudFolderMode CloudFolderWanted =>
+        Placement.ContainsValue(FilePlacement.OnDemand) ? CloudFolderMode.OnDemand
+        : CloudFolder == CloudFolderMode.Off ? CloudFolderMode.Off : CloudFolderMode.KeepAllHere;
+
     /// <summary><see cref="Placement"/> for the engine; On-Demand counts as "on this PC" where it can't work.</summary>
     public PlacementMap PlacementMap(bool onDemandWorks) => new(Placement, onDemandWorks);
 

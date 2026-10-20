@@ -30,7 +30,8 @@ public sealed class WindowsPlatform : IWindowsPlatform
 
     public bool SetExplorerEntry(string? folder, bool leftSide = true) => SetExplorerEntry(folder, Environment.ProcessPath, PairnetsPaths.LocalDir, leftSide);
 
-    public CloudFiles.ICloudFolder? StartCloudFolder(string folder, CloudFolderMode mode, ILogger log, out string? problem)
+    public CloudFiles.ICloudFolder? StartCloudFolder(string folder, CloudFolderMode mode, ILogger log, out string? problem,
+        IReadOnlyDictionary<string, Pairnets.Core.Sync.FilePlacement>? placement = null)
     {
         string icon;
         try
@@ -44,7 +45,7 @@ public sealed class WindowsPlatform : IWindowsPlatform
             problem = "Pairnets could not write its icon: " + ex.Message;
             return null;
         }
-        return CloudFiles.WindowsCloudFolder.Start(folder, mode, icon, log, out problem);
+        return CloudFiles.WindowsCloudFolder.Start(folder, mode, icon, log, out problem, placement);
     }
 
     public bool HasCloudFolder() => CloudFiles.WindowsCloudFolder.Registered().Count > 0;
