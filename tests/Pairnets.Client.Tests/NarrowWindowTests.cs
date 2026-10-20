@@ -64,7 +64,8 @@ public sealed class NarrowWindowTests
     {
         var whole = new TextBlock { Text = t.Text, FontFamily = t.FontFamily, FontSize = t.FontSize, FontWeight = t.FontWeight };
         whole.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-        return whole.DesiredSize.Width > t.ActualWidth + 0.5;
+        // Layout rounds to whole device pixels (and fonts differ between computers), so allow a pixel of give.
+        return whole.DesiredSize.Width > t.ActualWidth + 1.5;
     }
 
     private static List<TextBlock> Shown(Window window) => Presser.Elements(window).OfType<TextBlock>().Where(t => t.IsVisible).ToList();
