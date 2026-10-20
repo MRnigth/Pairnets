@@ -240,6 +240,18 @@ public static class Endpoints
             return await ToResultAsync(result, ctx, path, hub);
         });
 
+        // Move or rename one file on the nest (the apps' Files page); folders are moved file by file.
+        app.MapPost("/api/move", async (HttpContext ctx, SyncStore store, IHubContext<SyncHub> hub) =>
+        {
+            var from = ctx.Request.Query["from"].ToString();
+            var to = ctx.Request.Query["to"].ToString();
+            // Finished even when the app stops waiting (a big file takes a while to copy): it sees the result in its next list.
+            var result = await store.MoveAsync(from, to, ctx.Request.Query["base"].ToString(), CancellationToken.None);
+            if (result.Status == ChangeStatus.Ok)
+                await BroadcastAsync(ctx, hub, from);
+            return await ToResultAsync(result, ctx, to, hub);
+        });
+
         app.MapGet("/api/history", (HttpContext ctx, SyncStore store) =>
         {
             var path = ctx.Request.Query["path"].ToString();

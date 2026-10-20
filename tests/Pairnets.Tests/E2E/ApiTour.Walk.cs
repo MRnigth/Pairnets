@@ -352,6 +352,16 @@ public sealed partial class ApiTour
         Assert.Equal(first, await (await Get(_desktopApi, $"api/file?path={Uri.EscapeDataString(notes)}")).Content.ReadAsByteArrayAsync());
         await _desktopHub.WaitForAsync(SyncHub.ChangedMethod, a => Equals(a[0], _laptop.Name) && Equals(a[1], notes));
 
+        Step("Moving a file on the nest (the Files page)");
+        var moved = $"tour-{_tag}/moved/notes.txt";
+        var move = $"api/move?from={Uri.EscapeDataString(notes)}&to={Uri.EscapeDataString(moved)}&base={restored.Hash}";
+        await Refused(HttpMethod.Post, move);
+        Assert.Equal(moved, (await Read<ManifestEntry>(Post(_laptopApi, move))).Path);
+        Assert.Equal(first, await (await Get(_desktopApi, $"api/file?path={Uri.EscapeDataString(moved)}")).Content.ReadAsByteArrayAsync());
+        await _desktopHub.WaitForAsync(SyncHub.ChangedMethod, a => Equals(a[0], _laptop.Name) && Equals(a[1], moved));
+        Assert.Equal(notes, (await Read<ManifestEntry>(Post(_laptopApi,
+            $"api/move?from={Uri.EscapeDataString(moved)}&to={Uri.EscapeDataString(notes)}&base={restored.Hash}"))).Path); // and back, for what follows
+
         Step("A big file in pieces, and an upload given up half-way");
         var big = $"tour-{_tag}/big.bin";
         var data = new byte[300 * 1024];

@@ -941,6 +941,32 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
         return await ReadChangeResultAsync(resp, timeout, ct).ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// Moves or renames one file on the nest (POST /api/move): the new name gets the file, the old one is deleted into
+    /// history. <see cref="ApiOutcome.NotFound"/> also when the nest is too old to move files (it has no such address).
+    /// </summary>
+    public async Task<ApiResult> MoveAsync(string from, string to, string baseHash, CancellationToken ct)
+    {
+        using var timeout = Linked(ct, _metadataTimeout);
+        var uri = $"api/move?from={Uri.EscapeDataString(from)}&to={Uri.EscapeDataString(to)}&base={Uri.EscapeDataString(baseHash)}";
+        using var resp = await SendAsync(() => new HttpRequestMessage(HttpMethod.Post, uri), HttpCompletionOption.ResponseContentRead, timeout, ct).ConfigureAwait(false);
+        if (resp.StatusCode is HttpStatusCode.NotFound or HttpStatusCode.MethodNotAllowed)
+        {
+            ErrorBody? error = null;
+            try
+            {
+                error = JsonSerializer.Deserialize<ErrorBody>(await resp.Content.ReadAsByteArrayAsync(ct).ConfigureAwait(false), PairnetsJson.Options);
+            }
+            catch (JsonException)
+            {
+            }
+            return error is null
+                ? new ApiResult(ApiOutcome.NotSupported, null, "Your nest is too old to move or rename files. Update it first.")
+                : new ApiResult(ApiOutcome.NotFound, null, error.Message);
+        }
+        return await ReadChangeResultAsync(resp, timeout, ct).ConfigureAwait(false);
+    }
+
     // ------------------------------------------------------------------ history
 
     public async Task<IReadOnlyList<HistoryVersion>> GetHistoryAsync(string path, CancellationToken ct)

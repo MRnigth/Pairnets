@@ -299,6 +299,67 @@ public sealed class SyncStore : IDisposable
         }
     }
 
+    /// <summary>
+    /// Moves or renames a file on the nest (the apps' Files page): <paramref name="to"/>, which must not exist, gets the
+    /// content of <paramref name="from"/>, then <paramref name="from"/> is deleted as by <see cref="DeleteAsync"/> (its
+    /// version goes to history). Computers see a new file and a deleted one. Nothing changes when <paramref name="from"/>
+    /// is no longer the version <paramref name="baseValue"/>. Returns the new file's entry.
+    /// </summary>
+    public async Task<ChangeResult> MoveAsync(string from, string to, string baseValue, CancellationToken ct)
+    {
+        if (!PathRules.IsValid(from))
+            return new ChangeResult(ChangeStatus.InvalidName, null, "Invalid path.");
+        var problem = PathRules.Check(to);
+        if (problem != PathProblem.None)
+            return new ChangeResult(ChangeStatus.InvalidName, null, $"Invalid new name: {problem}.");
+        if (!TryParseBase(baseValue, out var expectedBase) || expectedBase is null)
+            return new ChangeResult(ChangeStatus.BadRequest, null, "base must be the file's SHA-256 hash.");
+        if (PathRules.CaseKey(from) == PathRules.CaseKey(to))
+            return new ChangeResult(ChangeStatus.BadRequest, null, "The new name must differ by more than letter case.");
+
+        var current = Manifest.Get(from);
+        if (current is not { Deleted: false })
+            return new ChangeResult(ChangeStatus.NotFound, null, "No such file.");
+        if (!string.Equals(current.Hash, expectedBase, StringComparison.Ordinal))
+            return new ChangeResult(ChangeStatus.Conflict, null, "The file changed on the server since your last sync.");
+        var source = ResolveFilesPath(from);
+        if (source is null || !File.Exists(source))
+            return new ChangeResult(ChangeStatus.NotFound, null, "No such file.");
+
+        var tmp = NewTmpPath(".move");
+        try
+        {
+            string hash;
+            long size;
+            await using (var input = new FileStream(source, FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete, 1024 * 1024, FileOptions.Asynchronous))
+            await using (var output = new FileStream(tmp, FileMode.CreateNew, FileAccess.Write, FileShare.None, 1024 * 1024, FileOptions.Asynchronous))
+            {
+                await using var hashing = new HashingStream(output, leaveOpen: true);
+                await input.CopyToAsync(hashing, ct).ConfigureAwait(false);
+                hash = hashing.GetHash();
+                size = hashing.BytesTransferred;
+                output.Flush(flushToDisk: true);
+            }
+            if (!string.Equals(hash, expectedBase, StringComparison.Ordinal))
+                return new ChangeResult(ChangeStatus.Conflict, null, "The file changed on the server since your last sync.");
+            var put = await CommitFileAsync(to, tmp, hash, size, current.ModifiedMs, existing => existing is null).ConfigureAwait(false);
+            if (put.Status == ChangeStatus.Conflict)
+                return new ChangeResult(ChangeStatus.Conflict, null, "A file with the new name already exists.");
+            if (put.Status is not (ChangeStatus.Ok or ChangeStatus.Unchanged))
+                return put;
+            var removed = await DeleteAsync(from, baseValue).ConfigureAwait(false);
+            if (removed.Status is not (ChangeStatus.Ok or ChangeStatus.Unchanged or ChangeStatus.NotFound))
+                _log.LogWarning("Moved {From} to {To}, but the original stays: {Status}", from, to, removed.Status);
+            else
+                _log.LogInformation("Moved {From} to {To}", from, to);
+            return put with { Status = ChangeStatus.Ok };
+        }
+        finally
+        {
+            TryDelete(tmp);
+        }
+    }
+
     /// <summary>Adds or updates a file that already sits in files/ (rescan). Caller holds no lock.</summary>
     internal async Task<ChangeResult> AdoptExistingFileAsync(string path, string hash, long size, long modifiedMs)
     {
