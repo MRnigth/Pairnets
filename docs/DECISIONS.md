@@ -1268,3 +1268,30 @@ is built yet, and steps 1, 2, 6 and 8 there wait for the owner's yes or no.
 * **Claims stay narrow.** The pages may say Pairnets can't see files, names or folders. They must also say what it
   still sees: the account, computer names, when computers are online, and file counts, sizes and change times. They
   must not say "zero-knowledge", "unbreakable", "audited" or "we can recover your files".
+
+## Encryption core (1.0.61.1, 2026-10-20)
+
+The owner approved the build plan for 1.0.61.1 with the recommended answers: encrypt on the computer (step 1), a
+recovery key with no copy at Pairnets (step 2), a "Turn on encryption" button for existing nests (step 6), and real
+computer names kept for now (step 8, not built). The core is in `src/Pairnets.Core/Crypto`. Where it differs from
+ENCRYPTION.md:
+
+* **A file's segments are bound to a random file id in its header, not to the path id.** 1.0.60 moves and renames
+  files that live only on the nest without downloading them, so the blob must stay valid under a new path. The
+  encrypted meta pins the blob instead: it holds the path, size, modified time, the plain SHA-256 and the SHA-256 of
+  the blob's header, and its associated data is the path id. The nest still can't swap two files' blobs (the header
+  hash wouldn't match) or move a meta blob to another row.
+* **tag = HMAC(tag key, path id ‖ plain SHA-256).** A move gets its new tag from the meta without reading the file.
+  The id and tag keys come from generation 0 and never change, so a rotation doesn't make every file look changed.
+  The content-wrap and meta keys are per generation, so new uploads after a removal use keys the removed computer
+  never had.
+* **Computer envelopes are signed.** Anyone can encrypt to a public key, so a ring sealed to a computer is also signed
+  (ECDSA P-256) by the computer that made it. A computer takes a ring only if a computer its own ring trusts signed it,
+  it is for the same nest, it has no older generation, and every generation it already has is unchanged. Each computer
+  has two key pairs, one for agreement and one for signing. A computer with no ring yet never takes a computer
+  envelope: its first ring comes through pairing (sealed with the paired session key) or the recovery key.
+* **Honest limit:** a computer that is offline when another is removed could still take a ring signed by the removed
+  computer, if that computer and the nest work together before the honest rotation reaches it.
+* **The recovery key is 31 random base32 letters (155 bits) plus a check letter.** That makes eight groups of four.
+  0, 1 and 8 count as O, I and B when typed.
+* **Meta blobs are padded to 64 bytes**, so their length says little about the name.
