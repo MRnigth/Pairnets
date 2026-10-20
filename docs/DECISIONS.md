@@ -1225,7 +1225,8 @@ the version-archive notes and the design review fixes merged in, in that order. 
   and offers "Try again" for every failure and never opens the browser by itself. That stays. From the review: the
   reason line under the title (`UpdateReason`, also used for the Mac's "update by hand" words), no button for a release
   Pairnets did not sign (only the X, instead of "Hide"), and `UpdateProblem`, which now takes its words from
-  `UpdateTexts.Failed`.
+  `UpdateTexts.Failed`. The reason line sits under the title row, the whole card wide (as in 1.0.59.1): beside the
+  button it was a narrow column, and the Mac's longer words made the card so tall that the page tiles left the window.
 * **"Show Pairnets in File Explorer" and "Files in Explorer" apply at once**, like the other switches since A11.
   The switch puts the entry there or takes it away; a new Files-in-Explorer choice starts the session again (the engine
   connects to the cloud folder at its start). The Mac/Linux page's switch does the same for the file manager.

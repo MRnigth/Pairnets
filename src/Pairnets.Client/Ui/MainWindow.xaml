@@ -150,8 +150,6 @@
                   <ui:LineIcon x:Name="UpdateIcon" Width="16" Height="16" StrokeThickness="2.2" Margin="0,0,8,0" Stroke="{DynamicResource T.AccentInk}" Data="{StaticResource I.Download}" VerticalAlignment="Center" />
                   <StackPanel Grid.Column="1" VerticalAlignment="Center">
                     <TextBlock x:Name="UpdateTitle" FontWeight="ExtraBold" FontSize="13" TextWrapping="Wrap" />
-                    <!-- Why a failed update was not installed (one line) -->
-                    <TextBlock x:Name="UpdateReason" FontSize="12" Foreground="{DynamicResource T.Muted}" TextWrapping="Wrap" Margin="0,2,0,0" Visibility="Collapsed" />
                   </StackPanel>
                   <TextBlock x:Name="UpdatePercent" Grid.Column="2" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource T.AccentInk}" VerticalAlignment="Center" Margin="8,0,4,0" Visibility="Collapsed" />
                   <Button x:Name="UpdateButton" Grid.Column="3" Style="{StaticResource AccentButton}" Height="30" MinHeight="30" Padding="12,0" FontSize="12" Margin="8,0,0,0" Content="Update" Click="OnUpdateNow" />
@@ -160,6 +158,8 @@
                     <ui:LineIcon Width="12" Height="12" StrokeThickness="2.4" Stroke="{DynamicResource T.Muted}" Data="{StaticResource I.Close}" />
                   </Button>
                 </Grid>
+                <!-- Why the update was not installed, or why it is done by hand (a Mac), the whole card wide -->
+                <TextBlock x:Name="UpdateReason" FontSize="12" Foreground="{DynamicResource T.Muted}" TextWrapping="Wrap" Margin="24,4,4,2" Visibility="Collapsed" />
                 <ProgressBar x:Name="UpdateProgress" Style="{StaticResource RoundProgress}" Height="5" Minimum="0" Maximum="100" Margin="0,8,4,2" Visibility="Collapsed" />
               </StackPanel>
             </Border>
