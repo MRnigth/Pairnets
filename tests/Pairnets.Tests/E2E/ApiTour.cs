@@ -52,6 +52,10 @@ public sealed partial class ApiTour : IAsyncDisposable
         new(Route.AnyMethod, "/hub/negotiate"),
         new(Route.AnyMethod, "/hub"),
 
+        // Friend invites: what a computer may do, and the owner's People list (Web/FriendEndpoints.cs).
+        new("GET", "/api/access"),
+        new("GET", "/api/people"),
+
         // An encrypted nest's key mailbox (Web/KeyEndpoints.cs).
         new("GET", "/api/keys"),
         new("GET", "/api/keys/envelopes/{id}"),
@@ -79,6 +83,9 @@ public sealed partial class ApiTour : IAsyncDisposable
         new("PATCH", "/api/relay/devices/{id}"),
         new("DELETE", "/api/relay/devices/{id}"),
         new("PUT", "/api/relay/name"),
+        new("PATCH", "/api/relay/people/{personId}"),
+        new("DELETE", "/api/relay/people/{personId}"),
+        new("PUT", "/api/relay/requests"),
 
         // The website's pages (Web/WebUi.cs).
         new("GET", "/"),

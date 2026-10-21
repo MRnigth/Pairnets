@@ -56,6 +56,8 @@ public static class PairnetsServerHost
         builder.Services.AddSingleton<TlsCertificateStore>();
         builder.Services.AddSingleton(sp => new AuthStore(sp.GetRequiredService<ServerPaths>()));
         builder.Services.AddSingleton<DeviceKeys>();
+        builder.Services.AddSingleton<FriendRequests>();
+        builder.Services.AddSingleton<FriendConnections>();
         builder.Services.AddSingleton(sp => new RelaySignature(sp.GetRequiredService<SyncOptions>()));
         builder.Services.AddSingleton<OwnerAuth>();
         builder.Services.AddSingleton<Pairnets.Server.Auth.WebAuthn.WebAuthnChallenges>();
@@ -127,9 +129,11 @@ public static class PairnetsServerHost
                 devices.Seen(identity.RegistryKey, identity.Name, ClientDescription(ctx.Request));
             await next();
         });
+        app.Use((ctx, next) => AccessGate.InvokeAsync(ctx, () => next(ctx))); // what a friend's computer may do
         app.Use((ctx, next) => KeyEndpoints.SealedGateAsync(ctx, () => next(ctx)));
         app.UseRateLimiter();
         Endpoints.Map(app);
+        FriendEndpoints.Map(app);
         KeyEndpoints.Map(app);
         PairingEndpoints.Map(app);
         RelayEndpoints.Map(app);

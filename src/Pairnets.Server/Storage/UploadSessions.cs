@@ -117,6 +117,9 @@ public sealed class UploadSessions : IDisposable
     /// <summary>How much of the upload the server has, or null when there is no such session.</summary>
     public long? Received(string id) => _sessions.TryGetValue(id, out var s) && !s.Closed ? s.Received : null;
 
+    /// <summary>The path an upload was started for (what a friend's access is checked against), or null when there is no such session.</summary>
+    public string? PathOf(string id) => _sessions.TryGetValue(id, out var s) && !s.Closed ? s.Path : null;
+
     /// <summary>
     /// Where the next piece starts, and whether the session is busy (a piece is still arriving), so the client
     /// waits instead of sending a piece that would be refused. Null when there is no such session.

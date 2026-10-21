@@ -15,18 +15,40 @@ namespace Pairnets.Server.Web;
 /// service can reach a linked nest, but the relay also carries the apps' requests, so every call under /api/relay is
 /// signed with the nest key (<see cref="RelaySignature"/>, checked by <see cref="RelayAuthMiddleware"/>). The relay
 /// itself refuses to pass /api/relay/* from anyone. On a nest that is not linked every call here answers 401.
+/// <para>
+/// Friend invites (1.0.61.2): the status lists the <see cref="FriendsFeature"/>, a computer can be added for a friend
+/// (with what it may do and whose it is), a friend's share is changed or ended for all their computers at once
+/// (/people/{personId}), and the service hands over who waits for the owner's OK (/requests).
+/// </para>
 /// </summary>
 public static class RelayEndpoints
 {
     public const string Prefix = "/api/relay";
 
-    public sealed record Status(string? ServerVersion, int Devices, long? FreeBytes, long DataBytes, string? Name);
+    /// <summary>In the status' features: this nest knows friends (the service only adds a friend's computer to such a nest).</summary>
+    public const string FriendsFeature = "friends";
 
-    public sealed record Device(string Id, string Name, string? System, string CreatedAt, string? LastSeen);
+    public static readonly IReadOnlyList<string> Features = [FriendsFeature];
+
+    public sealed record Status(string? ServerVersion, int Devices, long? FreeBytes, long DataBytes, string? Name, IReadOnlyList<string> Features, bool Sealed);
+
+    /// <param name="Access">"owner", "edit" or "view".</param>
+    /// <param name="Folders">The shared folders of a friend's computer; null for the whole nest.</param>
+    public sealed record Device(string Id, string Name, string? System, string CreatedAt, string? LastSeen, string Access, IReadOnlyList<string>? Folders,
+        string? Person, string? PersonId);
 
     public sealed record DeviceList(IReadOnlyList<Device> Devices);
 
-    public sealed record AddDeviceRequest(string? Name, string? System, string? ApprovedBy);
+    /// <summary>
+    /// The body of <c>POST /devices</c>. "access" and "folders" are read on their own (see <see cref="DeviceAccess.TryRead"/>):
+    /// without them the computer is the owner's, as before friends.
+    /// </summary>
+    public sealed record AddDeviceRequest(string? Name, string? System, string? ApprovedBy, string? Person = null, string? PersonId = null);
+
+    /// <summary>How many computers a change to a friend's share touched (0 is fine: it is done already).</summary>
+    public sealed record PeopleResult(int Devices);
+
+    public sealed record RequestsResult(int Requests);
 
     public sealed record AddedDevice(string Id, string Name, string Key);
 
@@ -48,7 +70,8 @@ public static class RelayEndpoints
         relay.MapGet("/status", (SyncStore store, DeviceKeys keys) =>
         {
             var (free, _) = ServerUpdater.DiskSpace(store.Paths.DataDir);
-            return Json(new Status(PairnetsInfo.ProductVersion, keys.Store.ListDevices().Count, free, store.Manifest.LiveBytes(), keys.Store.NestName));
+            return Json(new Status(PairnetsInfo.ProductVersion, keys.Store.ListDevices().Count, free, store.Manifest.LiveBytes(), keys.Store.NestName,
+                Features, store.Sealed));
         });
 
         // The nest's name as the owner gave it on the account page; kept so the apps can show it (/api/info).
@@ -91,12 +114,14 @@ public static class RelayEndpoints
                     lastSeen.TryAdd(id, seen.LastSeen);
             }
             return Json(new DeviceList(keys.Store.ListDevices()
-                .Select(d => new Device(d.Id, d.Name, d.System, Iso(d.Created), lastSeen.TryGetValue(d.Id, out var at) ? Iso(at) : null))
+                .Select(d => new Device(d.Id, d.Name, d.System, Iso(d.Created), lastSeen.TryGetValue(d.Id, out var at) ? Iso(at) : null,
+                    d.AccessOrOwner.Level, d.AccessOrOwner.Folders, d.Person, d.PersonId))
                 .ToList()));
         });
 
-        // An app signed in with the owner's account: the service asks for its key and hands it over once.
-        relay.MapPost("/devices", (HttpContext ctx, AuthStore auth, DeviceRegistry devices, SyncOptions options, ILogger<AddDeviceRequest> log) =>
+        // An app signed in with the owner's account, or a friend's the owner let in: the service asks for its key and hands
+        // it over once. A friend's computer comes with what it may do and whose it is; an encrypted nest is only shared whole.
+        relay.MapPost("/devices", (HttpContext ctx, AuthStore auth, DeviceRegistry devices, SyncStore store, SyncOptions options, ILogger<AddDeviceRequest> log) =>
         {
             AddDeviceRequest? body;
             try
@@ -109,12 +134,27 @@ public static class RelayEndpoints
             }
             if (body is null)
                 return Error(StatusCodes.Status400BadRequest, "bad_request");
+            if (BodyJson(ctx) is not { } json || !DeviceAccess.TryRead(json, ownerAllowed: true, out var access)
+                || (body.PersonId is { } given && !DeviceAccess.IsPersonId(given)) || (!access.IsOwner && body.PersonId is null))
+                return Error(StatusCodes.Status400BadRequest, "bad_access");
+            if (access.Folders is not null && store.Sealed)
+                return Error(StatusCodes.Status400BadRequest, "sealed_whole_only");
             var who = Clean(body.ApprovedBy, 80);
             var approvedBy = who is null ? $"approved on {options.RelayServiceHost}" : $"approved by {who} on {options.RelayServiceHost}";
             // Exactly like Allow on the nest's own website: a new key, only its hash kept, the name made unique.
-            var (device, key) = auth.AddDevice(body.Name ?? string.Empty, body.System, approvedBy);
-            devices.Adopt(device.Name, new DeviceIdentity(device.Id, device.Name, DeviceAuthKind.DeviceKey).RegistryKey, device.Name);
-            log.LogInformation("{Name} joined the nest ({By})", device.Name, device.ApprovedBy);
+            var (device, key) = auth.AddDevice(body.Name ?? string.Empty, body.System, approvedBy, access,
+                PlainText.Clean(body.Person, AuthStore.MaxPersonLength) is { Length: > 0 } person ? person : null, body.PersonId);
+            if (access.IsOwner)
+            {
+                // Only the owner's own computer takes over the history of one that used the shared token under its name.
+                devices.Adopt(device.Name, new DeviceIdentity(device.Id, device.Name, DeviceAuthKind.DeviceKey).RegistryKey, device.Name);
+                log.LogInformation("{Name} joined the nest ({By})", device.Name, device.ApprovedBy);
+            }
+            else
+            {
+                log.LogInformation("{Name} joined the nest as a friend's computer ({Access}, {Share}; {By})", device.Name, access.Level,
+                    access.Folders is null ? "whole nest" : $"{access.Folders.Count} folder(s)", device.ApprovedBy);
+            }
             return Json(new AddedDevice(device.Id, device.Name, key));
         });
 
@@ -152,6 +192,68 @@ public static class RelayEndpoints
             await Endpoints.RemoveDeviceAsync(device, $"removed on {options.RelayServiceHost}", keys, devices, hub, log);
             return Json(new RemoveResult(true));
         });
+
+        // The owner changed what a friend may do on the account page: every computer of that person, at once (keys looked up
+        // again, live push connections told what they may hear). The owner's own computers are never changed.
+        relay.MapPatch("/people/{personId}", (string personId, HttpContext ctx, DeviceKeys keys, SyncStore store, FriendConnections friends,
+            ILogger<DeviceKeys> log) =>
+        {
+            if (BodyJson(ctx) is not { } json)
+                return Error(StatusCodes.Status400BadRequest, "bad_request");
+            if (!DeviceAccess.TryRead(json, ownerAllowed: false, out var access))
+                return Error(StatusCodes.Status400BadRequest, "bad_access");
+            if (access.Folders is not null && store.Sealed)
+                return Error(StatusCodes.Status400BadRequest, "sealed_whole_only");
+            if (!DeviceAccess.IsPersonId(personId))
+                return Json(new PeopleResult(0)); // no computer can belong to such an id
+            var changed = keys.Store.SetFriendAccess(personId, access);
+            foreach (var device in changed)
+            {
+                keys.Forget(device.Id);
+                friends.Update(device.Id, access);
+            }
+            if (changed.Count > 0)
+                log.LogInformation("A friend's share was changed on the account page ({Access}, {Share}; {Count} computer(s))", access.Level,
+                    access.Folders is null ? "whole nest" : $"{access.Folders.Count} folder(s)", changed.Count);
+            return Json(new PeopleResult(changed.Count));
+        });
+
+        // The owner stopped sharing with a friend (or the friend left): every computer of that person is removed, the same
+        // way as removing one computer (keys refused, the apps told, live connections closed).
+        relay.MapDelete("/people/{personId}", async (string personId, DeviceKeys keys, DeviceRegistry devices, IHubContext<SyncHub> hub, SyncOptions options,
+            ILogger<DeviceKeys> log) =>
+        {
+            IReadOnlyList<PairedDevice> gone = DeviceAccess.IsPersonId(personId) ? keys.Store.ListFriendDevices(personId) : [];
+            foreach (var device in gone)
+                await Endpoints.RemoveDeviceAsync(device, $"sharing ended on {options.RelayServiceHost}", keys, devices, hub, log);
+            return Json(new PeopleResult(gone.Count));
+        });
+
+        // Who asked to join and waits for the owner's OK: the service sends the whole list each time it changes.
+        relay.MapPut("/requests", (HttpContext ctx, FriendRequests requests, ILogger<FriendRequests> log) =>
+        {
+            if (BodyJson(ctx) is not { } json)
+                return Error(StatusCodes.Status400BadRequest, "bad_request");
+            if (FriendRequests.TryRead(json, out var list) is { } problem)
+                return Error(StatusCodes.Status400BadRequest, problem);
+            requests.Replace(list);
+            log.LogInformation("{Count} person(s) wait to be let in", list.Count);
+            return Json(new RequestsResult(list.Count));
+        });
+    }
+
+    /// <summary>The signed body as JSON, or null when it is not JSON.</summary>
+    private static JsonElement? BodyJson(HttpContext ctx)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(RelayAuthMiddleware.VerifiedBody(ctx)!);
+            return doc.RootElement.Clone();
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
     }
 
     /// <summary>The one answer to any call that is not properly signed: no detail about which check failed.</summary>
@@ -184,9 +286,19 @@ public sealed class RelayAuthMiddleware(RequestDelegate next, RelaySignature sig
 {
     public const int MaxBodyBytes = 4096;
 
+    /// <summary>The two calls that carry lists (the people waiting, a friend's folders) may be longer.</summary>
+    public const int MaxListBodyBytes = 32 * 1024;
+
     private const string BodyItem = "pairnets.relay-body";
 
     public static bool IsRelayPath(PathString path) => path.StartsWithSegments(RelayEndpoints.Prefix, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>How long a body may be: <see cref="MaxListBodyBytes"/> for /requests and /people/…, else <see cref="MaxBodyBytes"/>.</summary>
+    public static int MaxBodyFor(PathString path) =>
+        path.StartsWithSegments(RelayEndpoints.Prefix + "/requests", StringComparison.OrdinalIgnoreCase)
+        || path.StartsWithSegments(RelayEndpoints.Prefix + "/people", StringComparison.OrdinalIgnoreCase)
+            ? MaxListBodyBytes
+            : MaxBodyBytes;
 
     /// <summary>The body of a request whose signature checked out, or null.</summary>
     public static byte[]? VerifiedBody(HttpContext context) => context.Items[BodyItem] as byte[];
@@ -199,7 +311,8 @@ public sealed class RelayAuthMiddleware(RequestDelegate next, RelaySignature sig
             return;
         }
         var request = context.Request;
-        var body = request.ContentLength > MaxBodyBytes ? null : await ReadBodyAsync(request.Body, MaxBodyBytes, context.RequestAborted);
+        var max = MaxBodyFor(request.Path);
+        var body = request.ContentLength > max ? null : await ReadBodyAsync(request.Body, max, context.RequestAborted);
         if (body is null)
         {
             await RelayEndpoints.Error(StatusCodes.Status413PayloadTooLarge, "too_large").ExecuteAsync(context);

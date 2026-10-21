@@ -90,13 +90,20 @@ public static class Endpoints
                 "This server cannot update itself yet. Run the install command on the server once."),
         });
 
-        // The apps' Devices page and their "this computer ⇄ server ⇄ other computer" picture.
-        app.MapGet("/api/devices", (DeviceRegistry devices, DeviceKeys keys) =>
+        // The apps' Devices page and their "this computer ⇄ server ⇄ other computer" picture. Each computer says whose it
+        // is (access, person), so the owner's apps can put friends' computers under People. A friend's computer sees the
+        // owner's computers and itself, never the other friends.
+        app.MapGet("/api/devices", (HttpContext ctx, DeviceRegistry devices, DeviceKeys keys) =>
         {
             // Computers removed from the command line (another process) drop out here too.
-            var keyed = keys.Store.ListDevices();
-            var active = keyed.Select(d => d.Id).ToHashSet(StringComparer.Ordinal);
-            return Json(devices.List(keyed).Where(d => d.Id is null || active.Contains(d.Id)).ToList());
+            var keyed = keys.Store.ListDevices().ToDictionary(d => d.Id, StringComparer.Ordinal);
+            var me = DeviceIdentity.Of(ctx);
+            var owner = me?.AccessOrOwner.IsOwner ?? true;
+            return Json(devices.List(keyed.Values)
+                .Where(d => d.Id is null || keyed.ContainsKey(d.Id))
+                .Select(d => DeviceListing.Of(d, d.Id is null ? null : keyed[d.Id]))
+                .Where(d => owner || d.Access is null or DeviceAccess.Owner || d.Id == me!.Id)
+                .ToList());
         });
 
         // Debug mode in the apps: why an update did not happen (status, request, path unit, update.log).
@@ -113,6 +120,9 @@ public static class Endpoints
                 since = parsed;
             }
             var (entries, version) = store.ReadManifest(since);
+            // A friend shared some folders only hears of what is in them (the version still counts every change).
+            if (DeviceIdentity.Of(ctx)?.AccessOrOwner is { Folders: not null } access)
+                entries = entries.Where(e => access.Allows(e.Path)).ToList();
             ctx.Response.Headers[PairnetsHeaders.ServerId] = ctx.Response.Headers[TetherNames.ServerIdHeader] = store.ServerId;
             ctx.Response.Headers[PairnetsHeaders.Version] = ctx.Response.Headers[TetherNames.VersionHeader] = version.ToString(CultureInfo.InvariantCulture);
             return Json(entries);
@@ -360,7 +370,11 @@ public static class Endpoints
         ctx.RequestServices.GetRequiredService<DeviceRegistry>().Changed(DeviceIdentity.Of(ctx)?.RegistryKey ?? device);
         try
         {
-            await hub.Clients.All.SendAsync(SyncHub.ChangedMethod, device, path, CancellationToken.None);
+            // Every connection but friends' hears it; a friend's computer only when the path is in its share (see FriendConnections).
+            await hub.Clients.Group(SyncHub.EveryChangeGroup).SendAsync(SyncHub.ChangedMethod, device, path, CancellationToken.None);
+            var friends = ctx.RequestServices.GetRequiredService<FriendConnections>().Sharing(path);
+            if (friends.Count > 0)
+                await hub.Clients.Clients(friends).SendAsync(SyncHub.ChangedMethod, device, path, CancellationToken.None);
         }
         catch (Exception ex)
         {
@@ -394,6 +408,17 @@ public static class Endpoints
             return false;
         mtime = parsed;
         return true;
+    }
+
+    /// <summary>
+    /// One computer in <c>GET /api/devices</c>: the fields of <see cref="DeviceInfo"/> plus, for a computer with its own
+    /// key, <see cref="Access"/> ("owner", "edit" or "view") and <see cref="Person"/> (whose computer, for a friend's).
+    /// </summary>
+    public sealed record DeviceListing(string Name, DateTimeOffset FirstSeen, DateTimeOffset LastSeen, bool Online, string? AppVersion,
+        string? System, DateTimeOffset? LastChange, string? Id, string? Icon, string? Access, string? Person)
+    {
+        public static DeviceListing Of(DeviceInfo d, PairedDevice? keyed) => new(d.Name, d.FirstSeen, d.LastSeen, d.Online, d.AppVersion,
+            d.System, d.LastChange, d.Id, d.Icon, keyed?.AccessOrOwner.Level, keyed?.Person);
     }
 
     private static IResult UploadNotFound() =>
