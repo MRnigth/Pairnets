@@ -54,15 +54,15 @@ public sealed class SiteTests
     public void DownloadsPointAtFilesTheReleaseWorkflowBuilds()
     {
         var workflow = File.ReadAllText(Path.Combine(RepoRoot, ".github", "workflows", "release.yml"));
-        var downloads = Redirects().Where(r => r.Value.Contains("/releases/download/latest/", StringComparison.Ordinal)).ToList();
+        var downloads = Redirects().Where(r => r.Value.Contains("/releases/latest/download/", StringComparison.Ordinal)).ToList();
         Assert.True(downloads.Count >= 6);
         foreach (var (from, to) in downloads)
         {
             var file = to[(to.LastIndexOf('/') + 1)..];
             Assert.True(workflow.Contains(file, StringComparison.Ordinal), $"{from} → {file} is not built by release.yml");
         }
-        // /get.sh is piped into "sudo bash", so it must point at the copy in the latest release, never at main.
-        Assert.Equal("https://github.com/MRnigth/Pairnets/releases/download/latest/get.sh", Redirects()["/get.sh"]);
+        // The tagged release, not the main "Latest build" (higher numbers since 1.0.61, would never update). /get.sh is piped into "sudo bash" too.
+        Assert.Equal("https://github.com/MRnigth/Pairnets/releases/latest/download/get.sh", Redirects()["/get.sh"]);
         Assert.True(File.Exists(Path.Combine(RepoRoot, "deploy", "get.sh")));
         Assert.DoesNotContain("raw.githubusercontent.com", File.ReadAllText(Path.Combine(Root, "_redirects")));
         Assert.Equal(2, Regex.Matches(workflow, @"cp deploy/get\.sh release-files/get\.sh").Count); // both the release and the latest-build job upload it (and checksum it)
