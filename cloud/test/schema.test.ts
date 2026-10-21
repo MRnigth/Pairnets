@@ -7,6 +7,7 @@ import migration3 from "../migrations/0003_username.sql?raw";
 import migration4 from "../migrations/0004_request_place.sql?raw";
 import migration5 from "../migrations/0005_inactive.sql?raw";
 import migration6 from "../migrations/0006_friends.sql?raw";
+import migration7 from "../migrations/0007_links.sql?raw";
 import { b64urlEncode } from "../src/b64";
 import { FakeGoogle } from "./fake-google";
 import { addServer, appSignIn, claim, Harness, lastEmailCode, startServer } from "./helpers";
@@ -172,6 +173,33 @@ describe("schema", () => {
     await db.prepare("UPDATE nest_invites SET decision = 'declined', decided_at = 3").run();
     const indexes = (await db.prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name IN ('nest_members', 'nest_invites') AND name NOT LIKE 'sqlite_%' ORDER BY name").all<{ name: string }>()).results;
     expect(indexes.map((i) => i.name)).toEqual(["nest_invites_expires", "nest_invites_nest", "nest_members_account", "nest_members_synced"]);
+  });
+
+  it("migration 0007 adds an invite's kind (old invites are for a person) and the links table, and keeps every row of 0006", async () => {
+    const db = env.DB;
+    for (const t of ["nest_links", ...TABLES]) await db.prepare(`DROP TABLE IF EXISTS ${t}`).run();
+    for (const m of [migration, migration2, migration3, migration4, migration5, migration6]) await runSql(db, m);
+    await db
+      .prepare(
+        `INSERT INTO nest_invites (id, nest_id, token, access, created_by, created_at, expires_at)
+           VALUES ('inv_testinvite0000000000000001', 'nst_testnest000000000000000001', 'pni_${"a".repeat(32)}', 'view', 'acc_testacct000000000000000001', 1, 2)`,
+      )
+      .run();
+    await runSql(db, migration7);
+    expect(await db.prepare("SELECT id, kind, joining_nest FROM nest_invites").first()).toEqual({ id: "inv_testinvite0000000000000001", kind: "person", joining_nest: null });
+    await expect(db.prepare("UPDATE nest_invites SET kind = 'robot'").run()).rejects.toThrow();
+    await db.prepare("UPDATE nest_invites SET kind = 'nest', joining_nest = 'nst_testnest000000000000000002'").run();
+
+    const add = (id: string, to: string, status = "pending") =>
+      db
+        .prepare("INSERT INTO nest_links (id, from_nest, to_nest, account_id, device_id, status, created_at) VALUES (?1, 'nst_testnest000000000000000001', ?2, 'acc_testacct000000000000000002', NULL, ?3, 1)")
+        .bind(id, to, status)
+        .run();
+    await add("lnk_testlink00000000000000001", "nst_testnest000000000000000002");
+    await expect(add("lnk_testlink00000000000000002", "nst_testnest000000000000000002")).rejects.toThrow(); // one link per pair
+    await expect(add("lnk_testlink00000000000000003", "nst_testnest000000000000000003", "broken")).rejects.toThrow();
+    const indexes = (await db.prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'nest_links' AND name NOT LIKE 'sqlite_%' ORDER BY name").all<{ name: string }>()).results;
+    expect(indexes.map((i) => i.name)).toEqual(["nest_links_account", "nest_links_to"]);
   });
 
   it("no secret is stored in clear", async () => {

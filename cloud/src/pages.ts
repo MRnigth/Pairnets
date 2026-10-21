@@ -186,7 +186,7 @@ function inviteForm(n: ServerView, open: { folders: string[] | null; access: "vi
   const chosen = !!open?.folders;
   const edit = open?.access === "edit";
   return `<form class="invite-form" data-field="invite-form"${open ? " data-open" : " hidden"}>
-<h3>Invite to ${e(n.label)}</h3>
+<h3>Invite a friend to ${e(n.label)}</h3>
 <p class="muted">They sign in with their own Pairnets account. You can change or take back access any time.</p>
 <fieldset><legend>Who are you inviting?</legend>
 <label class="choice"><input type="radio" name="kind-${id}" value="person" checked> <span><strong>A person</strong> <span class="muted">They add your nest on the computers they choose.</span></span></label>
@@ -700,7 +700,7 @@ function nestAskScreen(v: InvitePageView): string {
   const can = v.access === "view" ? "view only" : "can change";
   const choices = v.myNests.length
     ? `<fieldset class="q-nests"><legend>Which of your nests should join?</legend>
-<div class="q-choices">
+<div class="q-choices" id="joining-nests">
 ${v.myNests.map((n, i) => `<label class="q-choice"><input type="radio" name="joining" value="${e(n.id)}"${i === 0 ? " checked" : ""}> ${e(n.label)}</label>`).join("\n")}
 </div>
 </fieldset>`
@@ -752,6 +752,15 @@ function inviteAskScreen(v: InvitePageView): string {
 
 function inviteWaitingScreen(v: InvitePageView, shown: boolean): string {
   const owner = e(v.owner);
+  if (v.kind === "nest") {
+    return screen(
+      "waiting",
+      shown,
+      `<p class="q-note q-info">Waiting for ${owner} to let your nest in. We'll email you when that happens.</p>
+<h1 id="screen-waiting-title" tabindex="-1">Asked to link with ${e(v.nest)}</h1>
+${addNestSteps(v)}`,
+    );
+  }
   return screen(
     "waiting",
     shown,

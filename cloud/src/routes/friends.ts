@@ -358,10 +358,16 @@ export async function createInviteRoute(ctx: Ctx, nestId: string): Promise<Respo
     .bind(n.id, ctx.now, ctx.now - REQUEST_KEEP, id, token, emailed ? email : null, access, foldersJson(folders), s.accountId, expires, MAX_FRIENDS, kind)
     .run();
   if (r.meta.changes !== 1) throw tooManyFriends();
-  await audit(ctx, "invite_created", s.accountId, n.id, { kind, access, folders: folders?.length ?? null, emailed, mailSkipped: email !== null && !emailed });
+  await audit(ctx, "invite_created", s.accountId, n.id, {
+    ...(kind === "nest" ? { kind } : {}),
+    access,
+    folders: folders?.length ?? null,
+    emailed,
+    mailSkipped: email !== null && !emailed,
+  });
   const link = inviteLink(ctx, token);
   if (emailed) sendLater(ctx, inviteEmail(email!, { name: personName(owner), email: owner.email }, { nest: n.label, folders, access }, link, expires));
-  return json(201, { id, kind, link, expiresAt: iso(expires), emailed });
+  return json(201, kind === "nest" ? { id, kind, link, expiresAt: iso(expires), emailed } : { id, link, expiresAt: iso(expires), emailed });
 }
 
 async function ownInvite(ctx: Ctx, nestId: string, invId: string): Promise<InviteRow> {
@@ -418,7 +424,9 @@ export async function approveInviteRoute(ctx: Ctx, nestId: string, invId: string
   if (await reserveMail(ctx, "invite")) sendLater(ctx, friendInEmail(friend.email, owner ? personName(owner) : "The owner", share));
   else await audit(ctx, "invite_mail_skipped", s.accountId, n.id);
   ctx.defer(pushRequests(ctx, n));
-  return json(200, { status: "in", member: member ? memberJson(member, friend) : null, link: link ? { id: link.id, status: link.status } : null });
+  const answer: Record<string, unknown> = { status: "in", member: member ? memberJson(member, friend) : null };
+  if (i.kind === "nest") answer.link = link ? { id: link.id, status: link.status } : null;
+  return json(200, answer);
 }
 
 // POST /v1/servers/{id}/invites/{inv}/decline

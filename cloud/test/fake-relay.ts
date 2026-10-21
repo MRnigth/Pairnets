@@ -203,6 +203,18 @@ export interface SeenRequest {
   body: string;
 }
 
+/** A link as the joining nest keeps it (C#: LinkStore). */
+export interface FakeLink {
+  id: string;
+  remoteNestId: string;
+  deviceId: string;
+  key: string | null;
+  access: string;
+  folders: string[] | null;
+  ownerName: string;
+  nestName: string;
+}
+
 /** What POST /v1/servers/poll answered (the installer writes it into the nest's settings). */
 export interface InstallAnswer {
   nestId: string;
@@ -240,6 +252,14 @@ export class FakeNestServer {
   sealed = false;
   /** The people waiting for the owner's answer, as last PUT; null until the service sent a list. */
   waiting: FakeRequest[] | null = null;
+  /** Can keep linked nests (RELAY.md 11): /api/relay/links and /api/relay/offers. */
+  linksSupported = true;
+  /** The links set up on this nest (it is the joining side), by id, with the key it was handed. */
+  links = new Map<string, FakeLink>();
+  /** Top-level folders that came in through links (GET /api/relay/links answers them). */
+  linkedIn: string[] = [];
+  /** The nests shared with the owner's account, as last PUT; null until the service sent a list. */
+  offers: unknown[] | null = null;
 
   constructor(
     readonly nestId: string,
@@ -416,6 +436,13 @@ export class FakeNestServer {
       this.waiting = b.requests as FakeRequest[];
       return jsonResp(200, { requests: this.waiting.length });
     }
+    if (this.linksSupported && !this.old && p.startsWith("/api/relay/links")) return this.linkAdmin(req.method, p, bytes);
+    if (this.linksSupported && !this.old && req.method === "PUT" && p === "/api/relay/offers") {
+      const b = JSON.parse(new TextDecoder().decode(bytes)) as { offers?: unknown };
+      if (!Array.isArray(b.offers) || b.offers.length > 50) return jsonResp(400, { error: "bad_request" });
+      this.offers = b.offers;
+      return jsonResp(200, { offers: b.offers });
+    }
     const m = /^\/api\/relay\/devices\/([^/]+)$/.exec(p);
     if (req.method === "DELETE" && m) {
       return this.devices.delete(decodeURIComponent(m[1])) ? jsonResp(200, { removed: true }) : jsonResp(404, { error: "not_found" });
@@ -435,6 +462,34 @@ export class FakeNestServer {
       if (!name) return jsonResp(400, { error: "bad_name" });
       this.name = name;
       return jsonResp(200, { name });
+    }
+    return jsonResp(404, { error: "not_found" });
+  }
+
+  /** /api/relay/links on the joining side (C#: LinkEndpoints). */
+  private linkAdmin(method: string, p: string, bytes: Uint8Array): Response {
+    const view = (l: FakeLink) => ({ id: l.id, remoteNestId: l.remoteNestId, access: l.access, folders: l.folders, ownerName: l.ownerName, nestName: l.nestName, state: l.key ? "new" : "unlinked" });
+    if (method === "GET" && p === "/api/relay/links") return jsonResp(200, { links: [...this.links.values()].map(view), linkedIn: this.linkedIn });
+    if (method === "POST" && p === "/api/relay/links") {
+      const b = JSON.parse(new TextDecoder().decode(bytes)) as FakeLink;
+      if (!/^lnk_/.test(b.id) || typeof b.key !== "string" || !b.key.startsWith("pn_")) return jsonResp(400, { error: "bad_request" });
+      if (this.sealed) return jsonResp(409, { error: "sealed" });
+      if ([...this.links.values()].filter((l) => l.id !== b.id && l.key).length >= 4) return jsonResp(409, { error: "link_limit" });
+      this.links.set(b.id, { ...b, folders: b.folders ?? null });
+      return jsonResp(200, view(this.links.get(b.id)!));
+    }
+    const one = /^\/api\/relay\/links\/([^/]+)$/.exec(p);
+    const l = one ? this.links.get(decodeURIComponent(one[1])) : undefined;
+    if (!l) return jsonResp(404, { error: "not_found" });
+    if (method === "PATCH") {
+      const b = JSON.parse(new TextDecoder().decode(bytes)) as { access?: string; folders?: string[] | null };
+      l.access = b.access ?? l.access;
+      l.folders = b.folders ?? null;
+      return jsonResp(200, view(l));
+    }
+    if (method === "DELETE") {
+      l.key = null;
+      return jsonResp(200, { removed: true });
     }
     return jsonResp(404, { error: "not_found" });
   }

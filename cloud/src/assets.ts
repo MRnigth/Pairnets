@@ -940,8 +940,9 @@ const INVITE_JS = String.raw`(function () {
     ask.disabled = true;
     no.disabled = true;
     error.hidden = true;
-    var picked = document.querySelector('input[name="joining"]:checked');
     var body = { t: token };
+    var nests = document.getElementById("joining-nests");
+    var picked = nests ? nests.querySelector("input[name=joining]:checked") : null;
     if (picked) body.nestId = picked.value;
     pnApi("POST", "/v1/invite/request", body).then(function (res) {
       var err = res.body && res.body.error;

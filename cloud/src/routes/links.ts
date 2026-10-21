@@ -124,8 +124,9 @@ export async function startLink(ctx: Ctx, invite: InviteRow): Promise<LinkRow | 
     .bind(id, invite.nest_id, invite.joining_nest, invite.requested_by, ctx.now)
     .run();
   const row = await ctx.env.DB.prepare("SELECT * FROM nest_links WHERE from_nest = ?1 AND to_nest = ?2").bind(invite.nest_id, invite.joining_nest).first<LinkRow>();
-  if (row && row.status === "pending") await deliverLink(ctx, row);
-  return row;
+  if (!row || row.status !== "pending") return row;
+  await deliverLink(ctx, row);
+  return ctx.env.DB.prepare("SELECT * FROM nest_links WHERE id = ?1").bind(row.id).first<LinkRow>();
 }
 
 /**
