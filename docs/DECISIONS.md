@@ -1394,3 +1394,30 @@ nest" canvas (a copy is in `Pairnets\designs\invite-friends-2026-10-21`). The ow
   service makes no invites for it and never hands a friend a key to it.
 * **Limits:** 10 friends per nest (people plus open invites), 20 invites a day per account, and invite emails have their
   own budget of 5 a day, apart from the sign-in and notice mail.
+
+## 4 nests per account, and linked nests (1.0.61.3, 2026-10-21)
+
+The owner asked: "make it so you can add up to 4 nests on one account.. and invite nests that are linked to accounts to
+join". The pictures (claude.ai canvas "4 nests per account + linked nests") showed three readings. The owner picked A,
+a nest that joins another nest, with the recommended answers.
+
+* **4 nests of your own per account** (`MAX_NESTS_PER_ACCOUNT`, was 3). Nests friends share with you, and nests linked
+  to yours, never count. `GET /v1/me` returns `nests: {used, max}`. The account page says "2 of 4 used". At the limit,
+  the add page (`/add?code=`) offers only "Not mine" and says why. The apps keep no sign-in to the service after
+  setup, so they can't count. The All nests page's "Add a nest" line says "up to 4 per account", and the count stays on
+  the website.
+* **A linked nest is one more member of the inviting nest.** It gets the same invite (link or email, 7 days, used once,
+  cancellable) as a friend, with `kind = 'nest'`. On the accept page the friend picks which of their own nests joins.
+  The owner then lets it in, like a friend. The joining nest gets one key on the inviting nest, with the same access
+  ('view' by default, or 'edit') and folder list as a friend, so the nest's access gate needs nothing new.
+* **The joining nest does the syncing.** A link worker on the joining nest keeps the shared folders in step with a
+  top-level folder of its own, "From <owner> – <nest name>". The joining nest's computers see an ordinary folder and
+  need no extra sign-in.
+  * Changes only go across while both nests are on, and the folder says "waiting" when the other is off.
+  * View only: the joining nest only takes changes in, and what its own computers change in that folder stays on it.
+* **Limits and refusals.** At most 4 links per nest.
+  * An encrypted nest can't be linked, either way, because the nest itself can't read the files.
+  * A folder that came in through a link can't be passed on to a third nest, so there are no A→B→A loops.
+  * A nest must be on this version to invite or join ("Update your nest first").
+* **Unlinking** from either side deletes the key at once. The copy on the joining nest stays, stops changing and is
+  marked "Unlinked".
