@@ -1527,8 +1527,8 @@ to that main build. The owner decided:
   app; it only refreshes the "Latest build" downloads.
 * **The website's downloads and `/get.sh` go to the tagged release** (`releases/latest/download/<file>`, from
   `feature/new-site` 751383b): a main build's number (1.0.<run>, already 68) is higher than every release, so an install
-  from it would never take a release update. Only what really wants the main build names its tag,
-  `releases/download/latest/<file>` (README and HOWTO's "Latest build" links). `get.sh` without `PAIRNETS_VERSION`
+  from it would never take a release update. The README and HOWTO download links do the same. Only what
+  really wants the main build names its tag, `releases/download/latest/<file>` (nothing does today). `get.sh` without `PAIRNETS_VERSION`
   installs the Latest release, now always a tag.
 * **Apps that took 1.0.68 stay on it until a version above 1.0.68 is released**: the update check only moves to a
   higher number, so 1.0.61 (and 1.0.61.x) is never offered to them. They update again at the first tag above 1.0.68.

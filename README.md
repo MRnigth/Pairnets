@@ -38,9 +38,9 @@ Or let Claude do it: copy a ready-made prompt from [Set Pairnets up with Claude]
 | Install on | How |
 |-----------|-----|
 | **Ubuntu server** | `curl -fsSL https://raw.githubusercontent.com/MRnigth/Pairnets/main/deploy/get.sh \| sudo bash -s -- --public-url https://sync.example.com` |
-| **Windows** | **[Download PairnetsSetup.exe](https://github.com/MRnigth/Pairnets/releases/download/latest/PairnetsSetup.exe)** (installer) or [pairnets-client-win-x64.zip](https://github.com/MRnigth/Pairnets/releases/download/latest/pairnets-client-win-x64.zip) (just `Pairnets.exe`) |
-| **macOS** | [Pairnets-macos-arm64.dmg](https://github.com/MRnigth/Pairnets/releases/download/latest/Pairnets-macos-arm64.dmg) (Apple Silicon) / [Pairnets-macos-x64.dmg](https://github.com/MRnigth/Pairnets/releases/download/latest/Pairnets-macos-x64.dmg) (Intel), or `curl -fsSL https://raw.githubusercontent.com/MRnigth/Pairnets/main/deploy/get.sh \| bash -s -- --mac` |
-| **Linux desktop** | [pairnets-desktop-linux-x64.tar.gz](https://github.com/MRnigth/Pairnets/releases/download/latest/pairnets-desktop-linux-x64.tar.gz) or `curl -fsSL https://raw.githubusercontent.com/MRnigth/Pairnets/main/deploy/get.sh \| bash -s -- --desktop` |
+| **Windows** | **[Download PairnetsSetup.exe](https://github.com/MRnigth/Pairnets/releases/latest/download/PairnetsSetup.exe)** (installer) or [pairnets-client-win-x64.zip](https://github.com/MRnigth/Pairnets/releases/latest/download/pairnets-client-win-x64.zip) (just `Pairnets.exe`) |
+| **macOS** | [Pairnets-macos-arm64.dmg](https://github.com/MRnigth/Pairnets/releases/latest/download/Pairnets-macos-arm64.dmg) (Apple Silicon) / [Pairnets-macos-x64.dmg](https://github.com/MRnigth/Pairnets/releases/latest/download/Pairnets-macos-x64.dmg) (Intel), or `curl -fsSL https://raw.githubusercontent.com/MRnigth/Pairnets/main/deploy/get.sh \| bash -s -- --mac` |
+| **Linux desktop** | [pairnets-desktop-linux-x64.tar.gz](https://github.com/MRnigth/Pairnets/releases/latest/download/pairnets-desktop-linux-x64.tar.gz) or `curl -fsSL https://raw.githubusercontent.com/MRnigth/Pairnets/main/deploy/get.sh \| bash -s -- --desktop` |
 
 More detail: [Architecture](docs/ARCHITECTURE.md) · [Deploy](docs/DEPLOY.md) ·
 [Security](docs/SECURITY.md) · [Testing](docs/TESTING.md) · [Decisions](docs/DECISIONS.md)

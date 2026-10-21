@@ -308,9 +308,9 @@ Then go on with [section 5](#5-set-up-the-first-computer-for-example-the-desktop
 **Windows**: download one of these from the
 [latest release](https://github.com/MRnigth/Pairnets/releases/latest):
 
-* [`PairnetsSetup.exe`](https://github.com/MRnigth/Pairnets/releases/download/latest/PairnetsSetup.exe): the installer. It installs for your user only (no admin rights) and adds
+* [`PairnetsSetup.exe`](https://github.com/MRnigth/Pairnets/releases/latest/download/PairnetsSetup.exe): the installer. It installs for your user only (no admin rights) and adds
   Pairnets to the Start menu.
-* [`pairnets-client-win-x64.zip`](https://github.com/MRnigth/Pairnets/releases/download/latest/pairnets-client-win-x64.zip): extract `Pairnets.exe` to a permanent place, for example
+* [`pairnets-client-win-x64.zip`](https://github.com/MRnigth/Pairnets/releases/latest/download/pairnets-client-win-x64.zip): extract `Pairnets.exe` to a permanent place, for example
   `%LocalAppData%\Programs\Pairnets\`.
 
 Windows may say "Windows protected your PC" because the program is not code-signed. Click
