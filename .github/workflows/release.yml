@@ -3,6 +3,8 @@ name: Release
 # Tags (v*) and releases published on GitHub (Releases -> Draft a new release) get the packages
 # attached. Every push to main also replaces the "latest" release ("Latest build"), so the newest
 # packages always have fixed links: https://github.com/<owner>/<repo>/releases/download/latest/<file>
+# Only a v* tag's release is ever GitHub's "Latest release" (releases/latest/download), which the apps,
+# update.sh and get.sh update from: "Latest build" is a pre-release and never marked latest.
 on:
   push:
     tags: ["v*"]
@@ -301,8 +303,8 @@ jobs:
           if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release upload "$GITHUB_REF_NAME" release-files/* --repo "$GITHUB_REPOSITORY" --clobber
           else
-            # --latest: the apps and the server update from GitHub's "latest release" (releases/latest/download), so a quick
-            # fix like v1.0.59.1 must become it. The next push to main makes "Latest build" the latest again.
+            # --latest: the apps and the server update from GitHub's "latest release" (releases/latest/download), so every
+            # tagged version (v1.0.61, a quick fix like v1.0.59.1) becomes it. Only tags do: "Latest build" never is.
             gh release create "$GITHUB_REF_NAME" release-files/* --repo "$GITHUB_REPOSITORY" --title "Pairnets $GITHUB_REF_NAME" --generate-notes --latest
           fi
 
@@ -348,8 +350,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # Never GitHub's "Latest release": a pre-release marked not latest, so releases/latest/download (what the apps,
+          # update.sh and get.sh read) only ever serves a v* tag's version. Its own links use the tag name: download/latest/.
           gh release delete latest --repo "$GITHUB_REPOSITORY" --cleanup-tag --yes || true
-          gh release create latest release-files/* --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --latest \
+          gh release create latest release-files/* --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --latest=false \
             --title "Latest build" \
             --notes "Built automatically from the newest commit on main (${GITHUB_SHA::7}).
 

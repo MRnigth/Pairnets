@@ -1426,3 +1426,21 @@ merge decided how they fit:
 * **Version 1.0.61 comes from the tag `v1.0.61`**, like 1.0.60.1: the release workflow takes the version from a `v*`
   tag, so nothing in the code changes. 1.0.60.1 < 1.0.61 is already in `OldUpdaterCompatTests` and `UpdateScriptTests`.
 * **The nest list's row type is now `NestListRow`**: the Files page (1.0.60) already had a `NestRow`.
+
+## Only tagged versions are GitHub's "Latest release" (1.0.61, 2026-10-21)
+
+On 2026-10-21 the main build ("Latest build", tag `latest`) briefly became GitHub's Latest release as **1.0.68** while
+the `v1.0.60.1` tag run was being re-run, so `releases/latest/download/version.json` said 1.0.68 and some apps updated
+to that main build. The owner decided:
+
+* **The main-push "Latest build" is never GitHub's Latest release.** `release.yml` creates it with `--prerelease
+  --latest=false`; only a `v*` tag's release is created with `--latest`. So `releases/latest/download` (read by the
+  apps' update check, `update.sh` and `get.sh`) only ever serves a real tagged version. A test in
+  `OldUpdaterCompatTests` holds both flags.
+* **This means an app update is a tag** (`v1.0.61`, `v1.0.61.1`, ...). A push to main alone no longer reaches anyone's
+  app; it only refreshes the "Latest build" downloads.
+* **Links that want the main build use its tag name**, `releases/download/latest/<file>`: the site's `/download/...`
+  and `/get.sh` redirects, the README and HOWTO download links (a pre-release can still be downloaded by tag). Those
+  already did; nothing else changes. `get.sh` without `PAIRNETS_VERSION` installs the Latest release, now always a tag.
+* **Apps that took 1.0.68 stay on it until a version above 1.0.68 is released**: the update check only moves to a
+  higher number, so 1.0.61 (and 1.0.61.x) is never offered to them. They update again at the first tag above 1.0.68.

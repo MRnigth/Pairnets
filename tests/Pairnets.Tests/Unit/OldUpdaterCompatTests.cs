@@ -211,6 +211,20 @@ public class OldUpdaterCompatTests
         Assert.Contains(@"[[ ""$VERSION"" =~ ^[0-9]+(\.[0-9]+)*$ ]]", RepoPaths.Read("scripts", "package-server.sh"));
     }
 
+    [Fact]
+    public void TheMainBuild_IsNeverTheLatestRelease_SoAppsOnlyUpdateToTaggedVersions()
+    {
+        // 2026-10-21: the main build briefly became GitHub's latest release as 1.0.68, and apps updated to it.
+        var workflow = RepoPaths.Read(".github", "workflows", "release.yml");
+        var create = Assert.Single(Regex.Matches(workflow, @"gh release create latest [^\n]*")).Value;
+        Assert.Contains("--prerelease", create);
+        Assert.Contains("--latest=false", create);
+        Assert.DoesNotMatch(new Regex(@"--latest(\s|\\|$)"), create);
+        // Links that want the main build name its tag (download/latest/), not GitHub's latest release.
+        foreach (var line in RepoPaths.Read("site", "_redirects").Split('\n').Where(l => l.Contains("github.com", StringComparison.Ordinal)))
+            Assert.Contains("/releases/download/latest/", line);
+    }
+
     /// <summary>
     /// The update check and download of Pairnets 1.0.52 (commit 8a4c1ab, src/Pairnets.Core/Client/UpdateChecker.cs), kept as
     /// it was: it knows nothing of SHA256SUMS.txt.sig and only checks the download against SHA256SUMS.txt. Do not change it
