@@ -25,4 +25,10 @@ public interface IPairnetsApi
     Task AbandonUploadAsync(string uploadId);
 
     Task<ApiResult> DeleteAsync(string path, string baseHash, CancellationToken ct);
+
+    /// <summary>
+    /// What this computer may do on the nest (friend invites), or null when the nest does not say (an older nest: the
+    /// owner's). The engine asks before a pass that reads the whole list on a nest shared with it.
+    /// </summary>
+    Task<AccessAnswer?> GetAccessAsync(CancellationToken ct) => Task.FromResult<AccessAnswer?>(null);
 }

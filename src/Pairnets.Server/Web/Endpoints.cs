@@ -21,13 +21,14 @@ public static class Endpoints
         // No sign-in needed: lets an app (or the nest's web page) recognise a Pairnets server and find its HTTPS name.
         // The sign-in ways are told too, so the apps can show matching buttons (the sign-in page lists them anyway).
         // A nest linked to Pairnets says so (relay): it has no name of its own then, and computers sign in with the account.
-        app.MapGet("/api/hello", (SyncOptions options, Auth.OwnerAuth owner) =>
+        app.MapGet("/api/hello", (SyncOptions options, Auth.OwnerAuth owner, SyncStore store) =>
         {
             var (password, passkeys, email, google) = owner.UsableMethods();
             return Json(new ServerHello(PairnetsInfo.ProductName, PairnetsInfo.ApiVersion,
                 PairnetsInfo.ProductVersion, options.PublicUrl, DeviceKeys: true, SignIn: options.PublicUrl is not null,
                 new SignInMethods(password, passkeys > 0, email, google),
-                options.RelayMode ? new RelayHello(options.RelayNestId!, options.RelayServiceUrl) : null));
+                options.RelayMode ? new RelayHello(options.RelayNestId!, options.RelayServiceUrl) : null,
+                store.Sealed ? true : null));
         });
 
         // Who the server thinks this computer is (the apps adopt a name changed on the nest), and who let it in
@@ -76,7 +77,8 @@ public static class Endpoints
         {
             var (free, total) = ServerUpdater.DiskSpace(store.Paths.DataDir);
             return Json(new ServerInfo(store.ServerId, store.CurrentVersion, PairnetsInfo.ApiVersion,
-                PairnetsInfo.ProductVersion, free, total, updater.GetStatus(), UploadSessions.PiecesInFlight, auth.NestName, store.HistoryBytes(), mover.CanMove));
+                PairnetsInfo.ProductVersion, free, total, updater.GetStatus(), UploadSessions.PiecesInFlight, auth.NestName, store.HistoryBytes(), mover.CanMove,
+                store.Sealed ? true : null));
         });
 
         // "Where your nest keeps files" in the apps' Settings: the drives, and how a move goes (asks the root helper
@@ -108,13 +110,20 @@ public static class Endpoints
                 "This server cannot update itself yet. Run the install command on the server once."),
         });
 
-        // The apps' Devices page and their "this computer ⇄ server ⇄ other computer" picture.
-        app.MapGet("/api/devices", (DeviceRegistry devices, DeviceKeys keys) =>
+        // The apps' Devices page and their "this computer ⇄ server ⇄ other computer" picture. Each computer says whose it
+        // is (access, person), so the owner's apps can put friends' computers under People. A friend's computer sees the
+        // owner's computers and itself, never the other friends.
+        app.MapGet("/api/devices", (HttpContext ctx, DeviceRegistry devices, DeviceKeys keys) =>
         {
             // Computers removed from the command line (another process) drop out here too.
-            var keyed = keys.Store.ListDevices();
-            var active = keyed.Select(d => d.Id).ToHashSet(StringComparer.Ordinal);
-            return Json(devices.List(keyed).Where(d => d.Id is null || active.Contains(d.Id)).ToList());
+            var keyed = keys.Store.ListDevices().ToDictionary(d => d.Id, StringComparer.Ordinal);
+            var me = DeviceIdentity.Of(ctx);
+            var owner = me?.AccessOrOwner.IsOwner ?? true;
+            return Json(devices.List(keyed.Values)
+                .Where(d => d.Id is null || keyed.ContainsKey(d.Id))
+                .Select(d => DeviceListing.Of(d, d.Id is null ? null : keyed[d.Id]))
+                .Where(d => owner || d.Access is null or DeviceAccess.Owner || d.Id == me!.Id)
+                .ToList());
         });
 
         // Debug mode in the apps: why an update did not happen (status, request, path unit, update.log).
@@ -131,6 +140,9 @@ public static class Endpoints
                 since = parsed;
             }
             var (entries, version) = store.ReadManifest(since);
+            // A friend shared some folders only hears of what is in them (the version still counts every change).
+            if (DeviceIdentity.Of(ctx)?.AccessOrOwner is { Folders: not null } access)
+                entries = entries.Where(e => access.Allows(e.Path)).ToList();
             ctx.Response.Headers[PairnetsHeaders.ServerId] = ctx.Response.Headers[TetherNames.ServerIdHeader] = store.ServerId;
             ctx.Response.Headers[PairnetsHeaders.Version] = ctx.Response.Headers[TetherNames.VersionHeader] = version.ToString(CultureInfo.InvariantCulture);
             return Json(entries);
@@ -146,6 +158,11 @@ public static class Endpoints
             // Also under the old Tether names, so an app that is not updated yet keeps syncing.
             ctx.Response.Headers[PairnetsHeaders.Hash] = ctx.Response.Headers[TetherNames.HashHeader] = entry.Hash;
             ctx.Response.Headers[PairnetsHeaders.ModifiedMs] = ctx.Response.Headers[TetherNames.ModifiedMsHeader] = entry.ModifiedMs.ToString(CultureInfo.InvariantCulture);
+            if (entry.Tag is not null && entry.Meta is not null)
+            {
+                ctx.Response.Headers[PairnetsHeaders.Tag] = entry.Tag;
+                ctx.Response.Headers[PairnetsHeaders.Meta] = entry.Meta;
+            }
             return Results.File(opened.Stream, "application/octet-stream",
                 lastModified: DateTimeOffset.FromUnixTimeMilliseconds(entry.ModifiedMs),
                 entityTag: new EntityTagHeaderValue("\"" + entry.Hash + "\""),
@@ -166,7 +183,7 @@ public static class Endpoints
             ChangeResult result;
             try
             {
-                result = await store.PutAsync(path, baseValue, mtime, ctx.Request.Body, ctx.RequestAborted);
+                result = await store.PutAsync(path, baseValue, mtime, ctx.Request.Body, ctx.RequestAborted, SealedFieldsOf(ctx));
             }
             catch (OperationCanceledException) when (!ctx.RequestAborted.IsCancellationRequested)
             {
@@ -236,7 +253,7 @@ public static class Endpoints
             var hash = ctx.Request.Query["hash"].ToString();
             if (!ContentHash.IsValid(hash))
                 return Error(StatusCodes.Status400BadRequest, ErrorCodes.BadRequest, "hash must be a SHA-256 hash.");
-            var result = await uploads.CommitAsync(id, hash, ctx.RequestAborted);
+            var result = await uploads.CommitAsync(id, hash, ctx.RequestAborted, SealedFieldsOf(ctx));
             return result.Status switch
             {
                 UploadSessions.CommitStatus.Done => await ToResultAsync(result.Change!, ctx, result.Change!.Entry?.Path ?? string.Empty, hub),
@@ -393,7 +410,11 @@ public static class Endpoints
         ctx.RequestServices.GetRequiredService<DeviceRegistry>().Changed(DeviceIdentity.Of(ctx)?.RegistryKey ?? device);
         try
         {
-            await hub.Clients.All.SendAsync(SyncHub.ChangedMethod, device, path, CancellationToken.None);
+            // Every connection but friends' hears it; a friend's computer only when the path is in its share (see FriendConnections).
+            await hub.Clients.Group(SyncHub.EveryChangeGroup).SendAsync(SyncHub.ChangedMethod, device, path, CancellationToken.None);
+            var friends = ctx.RequestServices.GetRequiredService<FriendConnections>().Sharing(path);
+            if (friends.Count > 0)
+                await hub.Clients.Clients(friends).SendAsync(SyncHub.ChangedMethod, device, path, CancellationToken.None);
         }
         catch (Exception ex)
         {
@@ -407,6 +428,14 @@ public static class Endpoints
     /// </summary>
     public static string DeviceId(HttpContext ctx) => DeviceIdentity.Of(ctx)?.Name ?? DeviceIdentity.HeaderName(ctx);
 
+    /// <summary>An encrypted nest's "tag" and "meta" query values, or null when the app sent neither.</summary>
+    private static SealedFields? SealedFieldsOf(HttpContext ctx)
+    {
+        var tag = ctx.Request.Query["tag"].ToString();
+        var meta = ctx.Request.Query["meta"].ToString();
+        return tag.Length == 0 && meta.Length == 0 ? null : new SealedFields(tag, meta);
+    }
+
     /// <summary>Reads the optional "mtime" (Unix milliseconds). False when it is present but invalid.</summary>
     private static bool TryReadMtime(HttpContext ctx, out long? mtime)
     {
@@ -419,6 +448,17 @@ public static class Endpoints
             return false;
         mtime = parsed;
         return true;
+    }
+
+    /// <summary>
+    /// One computer in <c>GET /api/devices</c>: the fields of <see cref="DeviceInfo"/> plus, for a computer with its own
+    /// key, <see cref="Access"/> ("owner", "edit" or "view") and <see cref="Person"/> (whose computer, for a friend's).
+    /// </summary>
+    public sealed record DeviceListing(string Name, DateTimeOffset FirstSeen, DateTimeOffset LastSeen, bool Online, string? AppVersion,
+        string? System, DateTimeOffset? LastChange, string? Id, string? Icon, string? Access, string? Person)
+    {
+        public static DeviceListing Of(DeviceInfo d, PairedDevice? keyed) => new(d.Name, d.FirstSeen, d.LastSeen, d.Online, d.AppVersion,
+            d.System, d.LastChange, d.Id, d.Icon, keyed?.AccessOrOwner.Level, keyed?.Person);
     }
 
     private static IResult UploadNotFound() =>

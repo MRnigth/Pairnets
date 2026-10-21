@@ -56,6 +56,26 @@ public sealed partial class ApiTour : IAsyncDisposable
         new(Route.AnyMethod, "/hub/negotiate"),
         new(Route.AnyMethod, "/hub"),
 
+        // Friend invites: what a computer may do, and the owner's People list (Web/FriendEndpoints.cs).
+        new("GET", "/api/access"),
+        new("GET", "/api/people"),
+
+        // An encrypted nest's key mailbox (Web/KeyEndpoints.cs).
+        new("GET", "/api/keys"),
+        new("GET", "/api/keys/envelopes/{id}"),
+        new("PUT", "/api/keys/envelopes/{id}"),
+        new("DELETE", "/api/keys/envelopes/{id}"),
+        new("GET", "/api/keys/recovery"),
+        new("PUT", "/api/keys/recovery"),
+        new("POST", "/api/keys/seal"),
+        new("GET", "/api/keys/requests"),
+        new("POST", "/api/keys/requests"),
+        new("GET", "/api/keys/requests/{id}"),
+        new("POST", "/api/keys/requests/{id}/offer"),
+        new("POST", "/api/keys/requests/{id}/reveal"),
+        new("POST", "/api/keys/requests/{id}/ring"),
+        new("DELETE", "/api/keys/requests/{id}"),
+
         // Adding a computer (Web/PairingEndpoints.cs).
         new("POST", "/api/pair/start"),
         new("POST", "/api/pair/poll"),
@@ -67,6 +87,9 @@ public sealed partial class ApiTour : IAsyncDisposable
         new("PATCH", "/api/relay/devices/{id}"),
         new("DELETE", "/api/relay/devices/{id}"),
         new("PUT", "/api/relay/name"),
+        new("PATCH", "/api/relay/people/{personId}"),
+        new("DELETE", "/api/relay/people/{personId}"),
+        new("PUT", "/api/relay/requests"),
 
         // The website's pages (Web/WebUi.cs).
         new("GET", "/"),
@@ -128,6 +151,8 @@ public sealed partial class ApiTour : IAsyncDisposable
         SyncHub.PeerTransferMethod,
         SyncHub.PeerSyncedMethod,
         SyncHub.NestRenamedMethod,
+        SyncHub.KeyRequestedMethod,
+        SyncHub.NestSealedMethod,
         PairingEndpoints.PairRequestedMethod,
         PairingEndpoints.PairRequestedFromMethod,
         PairingEndpoints.PairDecidedMethod,

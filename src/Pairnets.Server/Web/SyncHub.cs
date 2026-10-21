@@ -14,11 +14,13 @@ namespace Pairnets.Server.Web;
 /// ReportTransfer(report) (about once a second while it transfers, once all zero when it stops), and the others get
 /// "PeerTransfer"(name, report): real speeds for every computer, nothing guessed. A computer calls Synced(version) after a
 /// sync with nothing left to do; the others get "PeerSynced"(name, version), so they can show that it has their changes.
+/// "Changed" goes to the owner's connections as a group (<see cref="EveryChangeGroup"/>) and to each friend's connection only
+/// for paths inside its share (<see cref="FriendConnections"/>), so a connection that is not sorted yet hears nothing.
 /// Messages keep their argument
 /// lists forever (older apps fail on a mismatch); new information gets a new message name.
 /// </summary>
 public sealed class SyncHub(BatchRegistry batches, SyncedRegistry synced, Services.DeviceRegistry devices, Storage.AuthStore auth,
-    Auth.DeviceKeys keys, LiveTransfers live) : Hub
+    Auth.DeviceKeys keys, LiveTransfers live, FriendConnections friends) : Hub
 {
     public const string Path = "/hub";
     public const string ChangedMethod = "Changed";
@@ -28,6 +30,15 @@ public sealed class SyncHub(BatchRegistry batches, SyncedRegistry synced, Servic
     public const string PeerTransferMethod = "PeerTransfer";
     public const string PeerSyncedMethod = "PeerSynced";
     public const string NestRenamedMethod = PushNames.NestRenamed;
+
+    /// <summary>The connections that hear every "Changed": all but friends' computers.</summary>
+    public const string EveryChangeGroup = "every-change";
+
+    /// <summary>A new computer asks to be unlocked on an encrypted nest: (request id, its name).</summary>
+    public const string KeyRequestedMethod = "KeyRequested";
+
+    /// <summary>The nest became encrypted: the apps unlock or ask to be updated.</summary>
+    public const string NestSealedMethod = "NestSealed";
 
     /// <summary>The computer behind this connection, from the key or token it connected with.</summary>
     private DeviceIdentity? Identity => DeviceIdentity.Of(Context.User);
@@ -72,6 +83,12 @@ public sealed class SyncHub(BatchRegistry batches, SyncedRegistry synced, Servic
     {
         if (Identity is { } identity)
         {
+            // A friend's computer hears what it may see, from the records (not the claims, which are as old as the
+            // connection); every other connection hears every change.
+            if (!identity.AccessOrOwner.IsOwner && identity.Id is { } id)
+                friends.Add(Context.ConnectionId, id, auth.GetDevice(id)?.AccessOrOwner ?? identity.AccessOrOwner);
+            else
+                await Groups.AddToGroupAsync(Context.ConnectionId, EveryChangeGroup);
             devices.Connected(Context.ConnectionId, identity.RegistryKey, Context.Abort, () => StillAllowed(identity));
             // Removed while this connection was being set up: the removal may have looked for connections just
             // before this one was registered, so check again now that it is. The same check as the background one, so
@@ -111,6 +128,7 @@ public sealed class SyncHub(BatchRegistry batches, SyncedRegistry synced, Servic
     public override async Task OnDisconnectedAsync(Exception? exception)
     {
         devices.Disconnected(Context.ConnectionId);
+        friends.Remove(Context.ConnectionId);
         if (batches.Remove(Context.ConnectionId) is { } batch)
             await Clients.Others.SendAsync(PeerBatchMethod, batch.Device, 0, false);
         // Gone while it was moving files: it moves nothing now.
@@ -118,6 +136,38 @@ public sealed class SyncHub(BatchRegistry batches, SyncedRegistry synced, Servic
             await Clients.Others.SendAsync(PeerTransferMethod, gone.Name, TransferReport.Idle);
         await base.OnDisconnectedAsync(exception);
     }
+}
+
+/// <summary>
+/// The push connections of friends' computers and what each may see: "Changed" is sent to each of them only for paths
+/// inside its share. The owner's connections are never in here (they are in <see cref="SyncHub.EveryChangeGroup"/>).
+/// Changing a friend's access (PATCH /api/relay/people) updates its live connections at once.
+/// </summary>
+public sealed class FriendConnections
+{
+    private readonly ConcurrentDictionary<string, (string DeviceId, Storage.DeviceAccess Access)> _byConnection = new(StringComparer.Ordinal);
+
+    public void Add(string connectionId, string deviceId, Storage.DeviceAccess access)
+    {
+        if (!access.IsOwner)
+            _byConnection[connectionId] = (deviceId, access);
+    }
+
+    public void Remove(string connectionId) => _byConnection.TryRemove(connectionId, out _);
+
+    /// <summary>A friend's computer may now see something else (a connection that just closed is not brought back).</summary>
+    public void Update(string deviceId, Storage.DeviceAccess access)
+    {
+        foreach (var (connectionId, entry) in _byConnection)
+        {
+            if (entry.DeviceId == deviceId)
+                _byConnection.TryUpdate(connectionId, (deviceId, access), entry);
+        }
+    }
+
+    /// <summary>The friends' connections that may hear about <paramref name="path"/>.</summary>
+    public IReadOnlyList<string> Sharing(string path) =>
+        _byConnection.Where(c => c.Value.Access.Allows(path)).Select(c => c.Key).ToList();
 }
 
 /// <summary>Big batches currently being uploaded, by hub connection.</summary>

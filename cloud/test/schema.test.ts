@@ -6,9 +6,10 @@ import migration2 from "../migrations/0002_relay.sql?raw";
 import migration3 from "../migrations/0003_username.sql?raw";
 import migration4 from "../migrations/0004_request_place.sql?raw";
 import migration5 from "../migrations/0005_inactive.sql?raw";
+import migration6 from "../migrations/0006_friends.sql?raw";
 import { b64urlEncode } from "../src/b64";
 import { FakeGoogle } from "./fake-google";
-import { claim, Harness, lastEmailCode, startServer } from "./helpers";
+import { addServer, appSignIn, claim, Harness, lastEmailCode, startServer } from "./helpers";
 import { TABLES } from "./setup";
 
 const lf = (s: string) => s.replace(/\r\n/g, "\n");
@@ -91,6 +92,7 @@ describe("schema", () => {
     await runSql(db, migration3);
     await runSql(db, migration4);
     await runSql(db, migration5);
+    await runSql(db, migration6);
   });
 
   it("migration 0004 adds the nullable place columns to device_logins and keeps its rows", async () => {
@@ -111,6 +113,8 @@ describe("schema", () => {
       request_country: null,
       request_city: null,
     });
+    await runSql(db, migration5);
+    await runSql(db, migration6);
   });
 
   it("migration 0005 adds the nullable inactive_warned_at to accounts and keeps its rows", async () => {
@@ -120,6 +124,54 @@ describe("schema", () => {
     await db.prepare("INSERT INTO accounts (id, email, created_at, updated_at) VALUES ('acc_testacct000000000000000001', 'you@example.com', 1, 2)").run();
     await runSql(db, migration5);
     expect(await db.prepare("SELECT email, inactive_warned_at FROM accounts").first()).toEqual({ email: "you@example.com", inactive_warned_at: null });
+    await runSql(db, migration6);
+  });
+
+  it("migration 0006 adds the friends' tables and keeps every row of 0005", async () => {
+    const db = env.DB;
+    for (const t of TABLES) await db.prepare(`DROP TABLE IF EXISTS ${t}`).run();
+    for (const m of [migration, migration2, migration3, migration4, migration5]) await runSql(db, m);
+    await db.prepare("INSERT INTO accounts (id, email, created_at, updated_at) VALUES ('acc_testacct000000000000000001', 'you@example.com', 1, 2)").run();
+    await db
+      .prepare(
+        `INSERT INTO nests (id, account_id, label, public_url, status, created_at, mode) VALUES
+           ('nst_testnest000000000000000001', 'acc_testacct000000000000000001', 'Home nest', '', 'active', 10, 'relay')`,
+      )
+      .run();
+    await runSql(db, migration6);
+    expect((await db.prepare("SELECT id, label FROM nests").all()).results).toEqual([{ id: "nst_testnest000000000000000001", label: "Home nest" }]);
+    expect((await db.prepare("SELECT COUNT(*) AS n FROM nest_members").first<{ n: number }>())!.n).toBe(0);
+    expect((await db.prepare("SELECT COUNT(*) AS n FROM nest_invites").first<{ n: number }>())!.n).toBe(0);
+
+    // A member: synced defaults to 1, removed_at to NULL; access is "view" or "edit" only.
+    await db
+      .prepare("INSERT INTO nest_members (nest_id, account_id, access, folders, added_at) VALUES ('nst_testnest000000000000000001', 'acc_testacct000000000000000002', 'view', '[\"Photos\"]', 5)")
+      .run();
+    expect(await db.prepare("SELECT access, folders, synced, removed_at FROM nest_members").first()).toEqual({ access: "view", folders: '["Photos"]', synced: 1, removed_at: null });
+    await expect(
+      db.prepare("INSERT INTO nest_members (nest_id, account_id, access, added_at) VALUES ('nst_testnest000000000000000001', 'acc_testacct000000000000000003', 'owner', 5)").run(),
+    ).rejects.toThrow();
+    await expect(db.prepare("UPDATE nest_members SET synced = 2").run()).rejects.toThrow();
+    // One row per person and nest.
+    await expect(
+      db.prepare("INSERT INTO nest_members (nest_id, account_id, access, added_at) VALUES ('nst_testnest000000000000000001', 'acc_testacct000000000000000002', 'edit', 6)").run(),
+    ).rejects.toThrow();
+
+    // An invite: the token is unique, and a decision is "in" or "declined".
+    const invite = (id: string, token: string) =>
+      db
+        .prepare(
+          `INSERT INTO nest_invites (id, nest_id, token, access, created_by, created_at, expires_at)
+             VALUES (?1, 'nst_testnest000000000000000001', ?2, 'view', 'acc_testacct000000000000000001', 1, 2)`,
+        )
+        .bind(id, token)
+        .run();
+    await invite("inv_testinvite0000000000000001", "pni_" + "a".repeat(32));
+    await expect(invite("inv_testinvite0000000000000002", "pni_" + "a".repeat(32))).rejects.toThrow();
+    await expect(db.prepare("UPDATE nest_invites SET decision = 'maybe'").run()).rejects.toThrow();
+    await db.prepare("UPDATE nest_invites SET decision = 'declined', decided_at = 3").run();
+    const indexes = (await db.prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name IN ('nest_members', 'nest_invites') AND name NOT LIKE 'sqlite_%' ORDER BY name").all<{ name: string }>()).results;
+    expect(indexes.map((i) => i.name)).toEqual(["nest_invites_expires", "nest_invites_nest", "nest_members_account", "nest_members_synced"]);
   });
 
   it("no secret is stored in clear", async () => {
@@ -176,6 +228,19 @@ describe("schema", () => {
     h.advance(3);
     const done = (await app.call("POST", "/v1/app/poll", { body: { deviceCode: s.json.deviceCode } })).json;
     secrets.push(s.json.deviceCode, done.appToken, done.device.key);
+
+    // A friend: invited, asks to join, let in, and their computer signs in (RELAY.md 10). The invite's token is kept
+    // as it is on purpose (using it only makes a request), so it is not on the list; the friend's device key is.
+    const friend = h.browser("203.0.113.30");
+    await friend.signInByEmail("anna.berg@example.com");
+    const inv = await b.call("POST", `/v1/servers/${server.nestId}/invites`, { body: { access: "view", folders: ["Photos"], email: "anna.berg@example.com" } });
+    expect(inv.status, inv.text).toBe(201);
+    expect((await friend.call("POST", "/v1/invite/request", { body: { t: new URL(inv.json.link).searchParams.get("t") } })).status).toBe(200);
+    expect((await b.call("POST", `/v1/servers/${server.nestId}/invites/${inv.json.id}/approve`)).status).toBe(200);
+    // One more invite, still open, so its table has a row after the cron-free run.
+    expect((await b.call("POST", `/v1/servers/${server.nestId}/invites`, { body: {} })).status).toBe(201);
+    const friendApp = await appSignIn(h, friend, server.nestId, "Anna-Laptop", "198.51.100.90");
+    secrets.push(friendApp.deviceCode, friendApp.poll.json.appToken, friendApp.poll.json.device.key);
 
     // The server's own secrets.
     secrets.push(h.env.HB_MASTER, h.env.COOKIE_KEY, h.signing.privateJwk.d!, h.env.CF_API_TOKEN);

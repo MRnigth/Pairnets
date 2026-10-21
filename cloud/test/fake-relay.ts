@@ -178,6 +178,21 @@ export interface FakeDevice {
   lastSeen: string | null;
   key: string;
   approvedBy: string;
+  /** RELAY.md 10: "owner", or a friend's "view" / "edit", with their folders (null = whole) and who they are. */
+  access: "owner" | "view" | "edit";
+  folders: string[] | null;
+  person: string | null;
+  personId: string | null;
+}
+
+/** A person waiting for the owner's answer, as the service last told the nest (PUT /api/relay/requests). */
+export interface FakeRequest {
+  id: string;
+  name: string;
+  email: string;
+  access: string;
+  folders: string[] | null;
+  at: string;
 }
 
 export interface SeenRequest {
@@ -216,6 +231,15 @@ export class FakeNestServer {
   name: string | null = null;
   /** A nest from before names: no "name" in its status, no PUT /api/relay/name and no PATCH /api/relay/devices/{id}. */
   old = false;
+  /**
+   * Keeps friends to what was shared (RELAY.md 10): "features": ["friends"] in its status and the people endpoints. A
+   * nest without it (false, or `old`) ignores access and folders and would give a friend everything.
+   */
+  friends = true;
+  /** An encrypted nest: friends get it whole only (folders → 400 sealed_whole_only). */
+  sealed = false;
+  /** The people waiting for the owner's answer, as last PUT; null until the service sent a list. */
+  waiting: FakeRequest[] | null = null;
 
   constructor(
     readonly nestId: string,
@@ -321,17 +345,33 @@ export class FakeNestServer {
     }
     if (bytes.length > 4096) return jsonResp(413, { error: "too_large" });
     const p = url.pathname;
+    const friends = this.friends && !this.old;
     if (req.method === "GET" && p === "/api/relay/status") {
       const status = { serverVersion: this.serverVersion, devices: this.devices.size, freeBytes: this.freeBytes, dataBytes: this.dataBytes };
-      return jsonResp(200, this.old ? status : { ...status, name: this.name });
+      if (this.old) return jsonResp(200, status);
+      return jsonResp(200, friends ? { ...status, name: this.name, features: ["friends"], sealed: this.sealed } : { ...status, name: this.name });
     }
     if (req.method === "GET" && p === "/api/relay/devices") {
       return jsonResp(200, {
-        devices: [...this.devices.values()].map((d) => ({ id: d.id, name: d.name, system: d.system, createdAt: d.createdAt, lastSeen: d.lastSeen })),
+        devices: [...this.devices.values()].map((d) => {
+          const base = { id: d.id, name: d.name, system: d.system, createdAt: d.createdAt, lastSeen: d.lastSeen };
+          return friends ? { ...base, access: d.access, folders: d.folders, person: d.person, personId: d.personId } : base;
+        }),
       });
     }
     if (req.method === "POST" && p === "/api/relay/devices") {
-      const b = JSON.parse(new TextDecoder().decode(bytes)) as { name: string; system: string | null; approvedBy: string };
+      const b = JSON.parse(new TextDecoder().decode(bytes)) as {
+        name: string;
+        system: string | null;
+        approvedBy: string;
+        access?: unknown;
+        folders?: unknown;
+        person?: unknown;
+        personId?: unknown;
+      };
+      // Only a nest with friends reads these; an older one makes every computer an owner.
+      const share = friends ? this.shareIn(b.access ?? "owner", b.folders ?? null) : { access: "owner" as const, folders: null };
+      if (typeof share === "string") return jsonResp(400, { error: share });
       const name = this.uniqueName(b.name, null);
       const id = `dev${++this.seq}`;
       const key = "pn_" + toB64url(crypto.getRandomValues(new Uint8Array(32)));
@@ -343,8 +383,38 @@ export class FakeNestServer {
         lastSeen: null,
         key,
         approvedBy: `approved by ${b.approvedBy} on sync.pairnets.app`,
+        access: share.access,
+        folders: share.folders,
+        person: friends && share.access !== "owner" && typeof b.person === "string" ? b.person : null,
+        personId: friends && share.access !== "owner" && typeof b.personId === "string" ? b.personId : null,
       });
       return jsonResp(200, { id, name, key });
+    }
+    const person = /^\/api\/relay\/people\/([^/]+)$/.exec(p);
+    if (friends && person && (req.method === "PATCH" || req.method === "DELETE")) {
+      const personId = decodeURIComponent(person[1]);
+      const theirs = [...this.devices.values()].filter((d) => d.personId === personId);
+      if (req.method === "DELETE") {
+        for (const d of theirs) {
+          this.devices.delete(d.id);
+          this.deviceKeys.delete(d.key);
+        }
+        return jsonResp(200, { devices: theirs.length });
+      }
+      const b = JSON.parse(new TextDecoder().decode(bytes)) as { access?: unknown; folders?: unknown };
+      const share = this.shareIn(b.access, b.folders ?? null);
+      if (typeof share === "string" || share.access === "owner") return jsonResp(400, { error: typeof share === "string" ? share : "bad_access" });
+      for (const d of theirs) {
+        d.access = share.access;
+        d.folders = share.folders;
+      }
+      return jsonResp(200, { devices: theirs.length });
+    }
+    if (friends && req.method === "PUT" && p === "/api/relay/requests") {
+      const b = JSON.parse(new TextDecoder().decode(bytes)) as { requests?: unknown };
+      if (!Array.isArray(b.requests) || b.requests.length > 20) return jsonResp(400, { error: "bad_request" });
+      this.waiting = b.requests as FakeRequest[];
+      return jsonResp(200, { requests: this.waiting.length });
     }
     const m = /^\/api\/relay\/devices\/([^/]+)$/.exec(p);
     if (req.method === "DELETE" && m) {
@@ -367,6 +437,17 @@ export class FakeNestServer {
       return jsonResp(200, { name });
     }
     return jsonResp(404, { error: "not_found" });
+  }
+
+  /** access and folders as the nest checks them: the error code to answer, or what it keeps. */
+  private shareIn(access: unknown, folders: unknown): { access: "owner" | "view" | "edit"; folders: string[] | null } | string {
+    if (access !== "owner" && access !== "view" && access !== "edit") return "bad_access";
+    if (folders !== null && (!Array.isArray(folders) || folders.length === 0 || folders.length > 20 || folders.some((f) => typeof f !== "string" || !f || /[/\\]/.test(f)))) {
+      return "bad_access";
+    }
+    if (access === "owner" && folders !== null) return "bad_access";
+    if (this.sealed && folders !== null) return "sealed_whole_only";
+    return { access, folders: folders as string[] | null };
   }
 
   /** {"name": "..."} trimmed, or null when it is empty or a name the nest refuses (AuthStore.CleanName). */

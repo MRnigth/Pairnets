@@ -54,6 +54,25 @@ public static partial class Relay
     /// <summary>The account page on the service: the servers, and the computers that use each, with Remove.</summary>
     public static string AccountUrl(Uri? service = null) => Origin(service) + "/account";
 
+    /// <summary>
+    /// The account page at one nest's People (friend invites): where the owner lets people in, declines, changes what a
+    /// friend gets and removes them. <c>https://sync.pairnets.app/account#people-nst_…</c>.
+    /// </summary>
+    public static string PeopleUrl(string nestId, Uri? service = null) => AccountUrl(service) + "#people-" + nestId;
+
+    /// <summary>
+    /// The account page's invite form for a nest, filled in from the app's "Invite a friend…" window:
+    /// <c>/account?invite=nst_…&amp;folders=Photos,School&amp;access=view</c> (no folders: the whole nest). Each folder name is
+    /// escaped on its own, so a comma inside a name stays part of it.
+    /// </summary>
+    public static string InviteUrl(string nestId, IReadOnlyList<string>? folders, bool canChange, Uri? service = null)
+    {
+        var link = AccountUrl(service) + "?invite=" + Uri.EscapeDataString(nestId);
+        if (folders is { Count: > 0 })
+            link += "&folders=" + string.Join(",", folders.Select(Uri.EscapeDataString));
+        return link + "&access=" + (canChange ? "edit" : "view");
+    }
+
     /// <summary>The service's sign-in page. Accounts are made by signing in, so it is also where "Make an account" goes.</summary>
     public static string LoginUrl(Uri? service = null) => Origin(service) + "/login";
 

@@ -401,6 +401,20 @@ public sealed record StatusSnapshot(
     /// <summary>The Pairnets account this computer signed in with ("you@example.com"), or null.</summary>
     public string? AccountEmail { get; init; }
 
+    // ---- friends (1.0.61.2)
+
+    /// <summary>What this computer may do on the nest: the owner's, or a nest someone shared with it ("View only", folders).</summary>
+    public Sync.NestAccess Access { get; init; } = Sync.NestAccess.Full;
+
+    /// <summary>
+    /// The people the nest is shared with and those waiting to be let in (the Computers page's People section), or null:
+    /// not read yet, a nest from before friends, not the owner's computer, or a nest reached at its own address.
+    /// </summary>
+    public PeopleAnswer? People { get; init; }
+
+    /// <summary>On a nest shared "View only": the changes made here that stay here (the Needs you card), or none.</summary>
+    public IReadOnlyList<string> HeldBack { get; init; } = [];
+
     /// <summary>
     /// The server address in this computer's settings ("https://sync.pairnets.app/n/&lt;nest id&gt;/"), or null before a
     /// session starts. The Account and Devices pages name the nest by it when the nest has no website of its own.

@@ -269,6 +269,8 @@ public sealed record OverviewModel
         var flow = FlowOf(s);
 
         var model = new OverviewModel { State = state, SyncNow = OverviewSyncNow.For(state), NeedsTitle = needsTitle, NeedsDetail = needsDetail, Flow = flow };
+        if (s.Access.IsViewOnly)
+            model = model with { Badge = ShareText.ViewOnly, BadgeTone = OverviewTone.Neutral }; // a state's own pill wins
         var open = new OverviewFact(OverviewIcon.FolderFill, "Your folder", folderText, LinkText: "Open", LinkAction: OverviewAction.OpenFolder);
         var version = VersionFact(s);
         var space = s.Server?.DiskFreeBytes is { } free
@@ -302,7 +304,7 @@ public sealed record OverviewModel
                     Detail = (lastSynced is null ? "Connected to your nest" : $"Last synced {lastSynced} · connected to your nest"),
                     Lower = OverviewLower.ChangesAndFacts,
                     Changes = changes,
-                    Facts = FactsOf(open, version, space),
+                    Facts = s.Access.IsShared ? SharedFacts(s.Access, open) : FactsOf(open, version, space),
                 };
 
             case NestMapState.Waiting:
@@ -359,11 +361,14 @@ public sealed record OverviewModel
                     Border = OverviewTone.Bad,
                     Glyph = OverviewIcon.UserX,
                     GlyphTone = OverviewTone.Bad,
-                    Title = "Signed out of your nest",
+                    // A nest a friend shared: they stopped sharing it (or took this computer off it).
+                    Title = s.Access.IsShared ? $"{s.Access.SharedBy ?? "Its owner"} stopped sharing {s.NestTitle}" : "Signed out of your nest",
                     Badge = "Not syncing",
                     BadgeTone = OverviewTone.Bad,
-                    Detail = "This computer was removed from your nest, or its key was turned off. It stays stopped until you sign in again. Your files here stay as they are.",
-                    Note = "Didn’t do this yourself? After you sign in, check which computers can use your nest.",
+                    Detail = s.Access.IsShared
+                        ? $"This computer can’t sync {s.NestTitle} any more. Your files here stay as they are."
+                        : "This computer was removed from your nest, or its key was turned off. It stays stopped until you sign in again. Your files here stay as they are.",
+                    Note = s.Access.IsShared ? null : "Didn’t do this yourself? After you sign in, check which computers can use your nest.",
                     Buttons =
                     [
                         new OverviewButton("Sign in again", OverviewIcon.SignIn, OverviewAction.Fix, OverviewButtonKind.Primary),
@@ -525,6 +530,14 @@ public sealed record OverviewModel
     public static (string Yes, string No) DeleteButtons(int count) => ("Delete " + Count(count, "file"), "Cancel");
 
     private static IReadOnlyList<OverviewFact> FactsOf(params OverviewFact?[] facts) => facts.Where(f => f is not null).Select(f => f!).ToList();
+
+    /// <summary>A nest shared with this computer: whose it is, what it gets, and where it is here ("Shared by / You get / On this computer in").</summary>
+    private static IReadOnlyList<OverviewFact> SharedFacts(Sync.NestAccess access, OverviewFact open) =>
+    [
+        new OverviewFact(OverviewIcon.Info, "Shared by", ShareText.Owner(access)),
+        new OverviewFact(OverviewIcon.Folder, "You get", ShareText.Folders(access.Folders)),
+        open with { Label = "On this computer in" },
+    ];
 
     private static OverviewFact? VersionFact(StatusSnapshot s) => s.Server is null
         ? null

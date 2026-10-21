@@ -241,6 +241,34 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
         return await ReadJsonAsync<DeviceMe>(resp, timeout, ct).ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// What this computer may do on the nest (friend invites): "owner", "edit" or "view" and the shared folders. Null for
+    /// a nest from before friends, where every computer is the owner's.
+    /// </summary>
+    public async Task<AccessAnswer?> GetAccessAsync(CancellationToken ct)
+    {
+        using var timeout = Linked(ct, TimeSpan.FromSeconds(30));
+        using var resp = await SendAsync(() => new HttpRequestMessage(HttpMethod.Get, "api/access"), HttpCompletionOption.ResponseContentRead, timeout, ct).ConfigureAwait(false);
+        if ((int)resp.StatusCode is 404 or 405)
+            return null;
+        await ThrowForStatusAsync(resp).ConfigureAwait(false);
+        return await ReadJsonAsync<AccessAnswer>(resp, timeout, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// The people the nest is shared with and those waiting to be let in (the owner's computers only). Null for a nest
+    /// from before friends, and for a computer that is not the owner's (403 owner_only).
+    /// </summary>
+    public async Task<PeopleAnswer?> GetPeopleAsync(CancellationToken ct)
+    {
+        using var timeout = Linked(ct, TimeSpan.FromSeconds(30));
+        using var resp = await SendAsync(() => new HttpRequestMessage(HttpMethod.Get, "api/people"), HttpCompletionOption.ResponseContentRead, timeout, ct).ConfigureAwait(false);
+        if ((int)resp.StatusCode is 403 or 404 or 405)
+            return null;
+        await ThrowForStatusAsync(resp).ConfigureAwait(false);
+        return await ReadJsonAsync<PeopleAnswer>(resp, timeout, ct).ConfigureAwait(false);
+    }
+
     /// <summary>Removes a computer from the nest (this one too: "Sign out of this computer"). False when it was already gone.</summary>
     public async Task<bool> RemoveDeviceAsync(string id, CancellationToken ct)
     {
@@ -1358,12 +1386,20 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
         FriendlyErrors.Describe(ex) is var text && text == FriendlyErrors.Generic ? FriendlyErrors.Offline : text;
 
 
-    /// <summary>The server turned a request down with an answer Pairnets has no special handling for.</summary>
-    private static PairnetsProtocolException RefusedRequest(HttpResponseMessage resp, ErrorBody? error) =>
-        new(error?.Message is { } said && !FriendlyErrors.LooksTechnical(said)
+    /// <summary>
+    /// The server turned a request down with an answer Pairnets has no special handling for, or (403) because of what
+    /// this computer may do on a nest shared with it (<see cref="PairnetsShareRefusedException"/>).
+    /// </summary>
+    private static PairnetsProtocolException RefusedRequest(HttpResponseMessage resp, ErrorBody? error)
+    {
+        var details = $"Server answered {(int)resp.StatusCode}: {error?.Code ?? "no error code"} {error?.Message}".TrimEnd();
+        if (resp.StatusCode == HttpStatusCode.Forbidden && PairnetsShareRefusedException.IsCode(error?.Code))
+            return new PairnetsShareRefusedException(error!.Code, FriendlyErrors.ShareRefused(error.Code), details);
+        return new(error?.Message is { } said && !FriendlyErrors.LooksTechnical(said)
                 ? said
                 : "The server turned that request down. Update the server and the app to the same release, then try again.",
-            $"Server answered {(int)resp.StatusCode}: {error?.Code ?? "no error code"} {error?.Message}".TrimEnd());
+            details);
+    }
 
     private static string Describe(HttpRequestException ex)
     {

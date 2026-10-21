@@ -6,10 +6,19 @@ using Pairnets.Core;
 
 namespace Pairnets.Server.Storage;
 
-/// <summary>A computer with its own key. <see cref="Revoked"/> is set once it was removed.</summary>
-public sealed record PairedDevice(string Id, string Name, string? System, DateTimeOffset Created, string ApprovedBy, DateTimeOffset? Revoked, string? Icon = null)
+/// <summary>
+/// A computer with its own key. <see cref="Revoked"/> is set once it was removed. <see cref="Access"/> is what it may do
+/// (null: the owner, like every computer from before friends); a friend's computer also has <see cref="Person"/>, the
+/// line the account page shows ("Anna Berg · a•••@gmail.com"), and <see cref="PersonId"/>, that person's account id at
+/// the Pairnets service, which changing or ending a share goes by.
+/// </summary>
+public sealed record PairedDevice(string Id, string Name, string? System, DateTimeOffset Created, string ApprovedBy, DateTimeOffset? Revoked, string? Icon = null,
+    DeviceAccess? Access = null, string? Person = null, string? PersonId = null)
 {
     public bool IsActive => Revoked is null;
+
+    /// <summary>What this computer may do: <see cref="Access"/>, or the owner's access when none is written down.</summary>
+    public DeviceAccess AccessOrOwner => Access ?? DeviceAccess.Full;
 
     /// <summary>
     /// How the owner was signed in on the nest's website when they let this computer in, from
@@ -41,7 +50,7 @@ public sealed record PairedDevice(string Id, string Name, string? System, DateTi
 /// </summary>
 public sealed partial class AuthStore
 {
-    public const int SchemaVersion = 5;
+    public const int SchemaVersion = 6;
 
     /// <summary>Prefix of every computer key, so they are easy to recognise (and to keep out of commits).</summary>
     public const string KeyPrefix = "pn_";
@@ -166,6 +175,17 @@ public sealed partial class AuthStore
                 PRAGMA user_version=5;
                 """);
         }
+        if (version < 6)
+        {
+            // Friends (1.0.61.2): every computer already here is the owner's.
+            Exec(conn, """
+                ALTER TABLE devices ADD COLUMN access TEXT NOT NULL DEFAULT 'owner';
+                ALTER TABLE devices ADD COLUMN folders TEXT NULL;
+                ALTER TABLE devices ADD COLUMN person TEXT NULL;
+                ALTER TABLE devices ADD COLUMN personId TEXT NULL;
+                PRAGMA user_version=6;
+                """);
+        }
     }
 
     // ------------------------------------------------------------------ keys
@@ -182,35 +202,44 @@ public sealed partial class AuthStore
 
     /// <summary>
     /// Adds a computer and returns it with its key (shown once, never stored). A name already used by an
-    /// active computer gets " (2)", " (3)", … so every computer stays recognisable.
+    /// active computer gets " (2)", " (3)", … so every computer stays recognisable. Without <paramref name="access"/>
+    /// it is the owner's; a friend's computer comes with what it may do and whose it is.
     /// </summary>
-    public (PairedDevice Device, string Key) AddDevice(string name, string? system, string approvedBy)
+    public (PairedDevice Device, string Key) AddDevice(string name, string? system, string approvedBy, DeviceAccess? access = null,
+        string? person = null, string? personId = null)
     {
         using var conn = Open();
         using var tx = conn.BeginTransaction();
-        var added = AddDevice(conn, tx, name, system, approvedBy);
+        var added = AddDevice(conn, tx, name, system, approvedBy, access, person, personId);
         tx.Commit();
         return added;
     }
 
-    private (PairedDevice Device, string Key) AddDevice(SqliteConnection conn, SqliteTransaction tx, string name, string? system, string approvedBy)
+    private (PairedDevice Device, string Key) AddDevice(SqliteConnection conn, SqliteTransaction tx, string name, string? system, string approvedBy,
+        DeviceAccess? access = null, string? person = null, string? personId = null)
     {
         var baseName = CleanName(name) ?? "Computer";
         var key = NewKey();
         var id = Guid.NewGuid().ToString("N");
         var now = _clock.GetUtcNow();
         var unique = UniqueName(conn, tx, baseName, exceptId: null);
+        var rights = access ?? DeviceAccess.Full;
+        person = Trim(person, MaxPersonLength);
         using (var cmd = Command(conn, """
-            INSERT INTO devices(id, name, tokenHash, system, createdMs, approvedBy, revokedMs)
-            VALUES($id, $name, $hash, $system, $created, $by, NULL)
+            INSERT INTO devices(id, name, tokenHash, system, createdMs, approvedBy, revokedMs, access, folders, person, personId)
+            VALUES($id, $name, $hash, $system, $created, $by, NULL, $access, $folders, $person, $personId)
             """, ("$id", id), ("$name", unique), ("$hash", HashKey(key)), ("$system", Trim(system, 120)),
-            ("$created", now.ToUnixTimeMilliseconds()), ("$by", Trim(approvedBy, 120) ?? "unknown")))
+            ("$created", now.ToUnixTimeMilliseconds()), ("$by", Trim(approvedBy, 120) ?? "unknown"),
+            ("$access", rights.Level), ("$folders", DeviceAccess.FoldersToJson(rights.Folders)), ("$person", person), ("$personId", personId)))
         {
             cmd.Transaction = tx;
             cmd.ExecuteNonQuery();
         }
-        return (new PairedDevice(id, unique, Trim(system, 120), FromMs(now.ToUnixTimeMilliseconds()), approvedBy, null), key);
+        return (new PairedDevice(id, unique, Trim(system, 120), FromMs(now.ToUnixTimeMilliseconds()), approvedBy, null, null, rights, person, personId), key);
     }
+
+    /// <summary>The longest <see cref="PairedDevice.Person"/> line kept.</summary>
+    public const int MaxPersonLength = 160;
 
     /// <summary>Gives an active computer a new key (the old one stops working). Null when it is unknown or removed.</summary>
     public string? ReplaceKey(string id)
@@ -258,6 +287,25 @@ public sealed partial class AuthStore
         while (r.Read())
             list.Add(ReadDevice(r));
         return list;
+    }
+
+    /// <summary>The active computers of a friend (never the owner's, whatever they were sent with), oldest first.</summary>
+    public IReadOnlyList<PairedDevice> ListFriendDevices(string personId) =>
+        ListDevices().Where(d => !d.AccessOrOwner.IsOwner && d.PersonId == personId).ToList();
+
+    /// <summary>
+    /// Changes what every active computer of a friend may do (the owner's own computers are never touched). Returns the
+    /// computers that changed, as they are now.
+    /// </summary>
+    public IReadOnlyList<PairedDevice> SetFriendAccess(string personId, DeviceAccess access)
+    {
+        if (access.IsOwner)
+            throw new ArgumentException("A friend's access is edit or view.", nameof(access));
+        using (var conn = Open())
+        using (var cmd = Command(conn, "UPDATE devices SET access=$access, folders=$folders WHERE personId=$person AND access<>'owner' AND revokedMs IS NULL",
+            ("$access", access.Level), ("$folders", DeviceAccess.FoldersToJson(access.Folders)), ("$person", personId)))
+            cmd.ExecuteNonQuery();
+        return ListFriendDevices(personId);
     }
 
     /// <summary>Removes a computer: its key stops working. Returns false when it was unknown or already removed.</summary>
@@ -328,11 +376,23 @@ public sealed partial class AuthStore
         }
     }
 
-    private const string SelectDevice = "SELECT id, name, system, createdMs, approvedBy, revokedMs, icon FROM devices";
+    private const string SelectDevice = "SELECT id, name, system, createdMs, approvedBy, revokedMs, icon, access, folders, person, personId FROM devices";
 
     private static PairedDevice ReadDevice(SqliteDataReader r) => new(
         r.GetString(0), r.GetString(1), r.IsDBNull(2) ? null : r.GetString(2), FromMs(r.GetInt64(3)), r.GetString(4),
-        r.IsDBNull(5) ? null : FromMs(r.GetInt64(5)), r.IsDBNull(6) ? null : r.GetString(6));
+        r.IsDBNull(5) ? null : FromMs(r.GetInt64(5)), r.IsDBNull(6) ? null : r.GetString(6),
+        ReadAccess(r.GetString(7), r.IsDBNull(8) ? null : r.GetString(8)), r.IsDBNull(9) ? null : r.GetString(9), r.IsDBNull(10) ? null : r.GetString(10));
+
+    /// <summary>
+    /// What a row may do. A level this server does not know counts as "view" with nothing shared: a damaged or newer row
+    /// must never become the owner.
+    /// </summary>
+    private static DeviceAccess ReadAccess(string level, string? folders) => level switch
+    {
+        DeviceAccess.Owner => DeviceAccess.Full,
+        DeviceAccess.Edit or DeviceAccess.View => new DeviceAccess(level, DeviceAccess.FoldersFromJson(folders)),
+        _ => new DeviceAccess(DeviceAccess.View, []),
+    };
 
     // ------------------------------------------------------------------ settings
 

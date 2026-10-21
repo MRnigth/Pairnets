@@ -33,7 +33,7 @@
     <div class="hero tight">
       <h1>Privacy policy</h1>
       <p class="lead">What Pairnets knows about you, why, and for how long. As little as it can, and never your files.</p>
-      <p class="updated">Last updated 19 October 2026</p>
+      <p class="updated">Last updated 21 October 2026</p>
     </div>
     <div class="doc">
 <div class="callout">
@@ -41,6 +41,7 @@
 <ul>
 <li>Your files are stored only on your nest, your own server. They pass through sync.pairnets.app on the way and are never kept there.</li>
 <li>Your Pairnets account stores your email address, your username if you set one, how you sign in, and which computers and nests you have linked.</li>
+<li>If you share a nest with a friend, we keep who may use which nest and what they may do there. Nobody gets in from an invite until the nest's owner lets them in.</li>
 <li>No ads, no tracking, no analytics. We never sell your data or share it for marketing.</li>
 <li>This website, pairnets.app, sets no cookies. Its pages ask sync.pairnets.app whether you are signed in, and Cloudflare, which delivers the site, handles visitors' IP addresses. It collects nothing else.</li>
 <li>You can see most of it on your account page, and delete all of it with one button. An account nobody uses for a year is deleted, after a warning email.</li>
@@ -92,12 +93,14 @@
 <tr><td><strong>Signed-in browsers and apps</strong>: the browser type, the computer's name, when it signed in and when it was last used</td><td>So you can see them on your account page and sign them out.</td></tr>
 <tr><td><strong>Computers asking to join</strong>: the computer's name, its system (for example Windows) and its Pairnets version</td><td>So you can recognise the computer before you press Allow. When you allow it, your nest gets the same details.</td></tr>
 <tr><td><strong>Your nests</strong> (up to 3 per account): the name you gave each one, its address, Pairnets version, whether it's online and when it was last seen</td><td>To connect your computers to it and show you how it's doing.</td></tr>
+<tr><td><strong>People you share a nest with</strong>: who may use which of your nests, whether they can change files or only view them, and the names of the folders you share with them</td><td>So they can sync your nest, and so you can see, change and remove them on your account page and in the app. The person you invite sees your username (or the part of your email address before the @) and your email address in masked form; you see their username and email address.</td></tr>
+<tr><td><strong>Invites</strong>: the invite link, what it offers, and the email address you sent it to (only if Pairnets emailed it for you)</td><td>So the person can ask to join, and so you can let them in, decline, copy the link again or cancel it. Using the link only asks: the person gets in when you let them in.</td></tr>
 <tr><td>An <strong>activity log</strong>: sign-ins, computers allowed, renamed or removed, and nests added, renamed or removed, with the time. It also keeps a computer's name when it is allowed or renamed, and a nest's name when it is added or renamed</td><td>To keep your account safe and to look into problems.</td></tr>
 <tr><td><strong>Server logs</strong>: sign-ins and errors</td><td>To find and fix problems, and to spot abuse.</td></tr>
 <tr><td><strong>IP addresses</strong>: not stored</td><td>Used for a moment to stop abuse. To count requests we keep only a scrambled form, for 2 days. The address is also passed to Cloudflare's bot check on the sign-in page, and to your nest, so it can slow down anyone guessing keys.</td></tr>
 </tbody>
 </table></div>
-<p><strong>Emails.</strong> We only send sign-in links, security notices and other notices about your account, from <code>signin@mail.pairnets.app</code>. They go out through Cloudflare's email service, or through Resend if that fails. No newsletters, no marketing.</p>
+<p><strong>Emails.</strong> We only send sign-in links, security notices, other notices about your account, and the invites you ask us to send for you, from <code>signin@mail.pairnets.app</code>. They go out through Cloudflare's email service, or through Resend if that fails. No newsletters, no marketing.</p>
 <p><strong>Support email.</strong> Email to <a href="mailto:support@pairnets.app">support@pairnets.app</a> is received by Cloudflare and forwarded to our mailbox at Google (Gmail). Our replies are sent through Resend.</p>
 <p><strong>Google sign-in.</strong> Pairnets' use and transfer of information received from Google APIs will adhere to the <a href="https://developers.google.com/terms/api-services-user-data-policy">Google API Services User Data Policy</a>, including the Limited Use requirements. We use your Google email address and account ID only to sign you in. We don't use them for ads, we don't sell them, and no person reads them unless you ask us to, for security, or because the law requires it.</p>
 
@@ -124,7 +127,9 @@
 <li>A nest linked to your Pairnets account gets its requests through sync.pairnets.app. When you allow a computer, the service tells your nest the computer's name and a masked form of your email address (like <code>m***@example.com</code>), so the nest can show who allowed it.</li>
 <li>When you rename a computer or your nest on your account page, the service passes the new name to your nest. The service keeps your nest's name (see the table above), and a computer's new name only in the activity log.</li>
 <li>The one-line installer sends the server's name and Pairnets version to sync.pairnets.app, to link the nest to your account.</li>
-<li>If you let other people use your nest, you are responsible for their data on it.</li>
+<li>When you let a friend in, the service tells your nest their username, a masked form of their email address, what they may do and which folders they get, so the nest can hold them to it and show you who they are. Changing or removing a friend is passed on the same way, and the people waiting for your OK are passed to your nest so the app can show them to you.</li>
+<li>In an encrypted nest you can only share the whole nest, so the service never learns the names of folders in it.</li>
+<li>If you let other people use your nest, you are responsible for their data on it. Files a friend already has stay on their computers after you remove them.</li>
 </ul>
 
 <h2 id="website">7. This website (pairnets.app)</h2>
@@ -176,6 +181,8 @@
 <tr><td>Signed-in browsers</td><td>30 days after you last use them, 90 days at most</td></tr>
 <tr><td>App sign-ins</td><td>1 hour (a computer's lasting key lives on your nest, not with us)</td></tr>
 <tr><td>Email sign-in links</td><td>15 minutes</td></tr>
+<tr><td>Invites</td><td>Until used, declined or cancelled, and at most 7 days. The email address you sent one to goes with it.</td></tr>
+<tr><td>People you share a nest with</td><td>Until you remove them, they leave, or either of you deletes the account</td></tr>
 <tr><td>Computers waiting for you to allow them</td><td>10 minutes (30 minutes while waiting for a new nest)</td></tr>
 <tr><td>Activity log</td><td>90 days</td></tr>
 <tr><td>Server logs (sign-ins, errors)</td><td>30 days, then deleted</td></tr>

@@ -541,6 +541,23 @@ public sealed class TrayController : ITrayActions, IDisposable
                 "Pairnets", MessageBoxButton.OK, MessageBoxImage.Information);
     }
 
+    /// <summary>"Invite a friend…": the invite window for the nest shown, which hands over to the account page in the browser.</summary>
+    public void InviteFriend()
+    {
+        if (_session?.Status is not { } status || PeopleSection.From(status) is not { Visible: true, NestId: { } nestId } people)
+            return;
+        var window = new InviteWindow(status.NestTitle, nestId, Nest.Folder, people.Sealed, Shell) { Owner = _window is { IsVisible: true } ? _window : null };
+        window.Show();
+        window.Activate();
+    }
+
+    /// <summary>Change…, Remove, Decline and "Let … in" under People: the account page at this nest's People.</summary>
+    public void OpenPeople()
+    {
+        if (_session?.Status is { } status && PeopleSection.From(status).PeopleUrl is { } url)
+            Shell(url);
+    }
+
     /// <summary>The nest's website when this computer already talks to it over HTTPS.</summary>
     private string? NestFromSettings() =>
         Uri.TryCreate(Nest.ServerUrl, UriKind.Absolute, out var url) && url.Scheme == Uri.UriSchemeHttps ? url.GetLeftPart(UriPartial.Authority) : null;
@@ -992,6 +1009,10 @@ public sealed class TrayController : ITrayActions, IDisposable
             items.Add(new AttentionItem(join.Title, join.Advice,
                 "Review in browser", () => ReviewJoin(_session, join), AttentionKind.Join, join.Code, join.At));
         }
+        // A nest shared to view: the changes made here that stay here, one card for them all.
+        if (status.HeldBack.Count > 0 && _session is { } holding)
+            items.Add(new AttentionItem(ShareText.HeldBackTitle(status.HeldBack.Count), ShareText.HeldBackDetail(status.Access, status.NestTitle, status.HeldBack),
+                ShareText.PutBack(status.Access), holding.PutBackHeldBack, SecondLabel: ShareText.KeepMine, Second: holding.KeepHeldBack));
         if (status.FixLabel is not null)
             items.Add(new AttentionItem("Syncing is paused until you decide", _session.Status.Text, status.FixLabel, FixBlocked));
         foreach (var w in _session.Warnings())

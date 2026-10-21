@@ -114,6 +114,16 @@ public interface IMainActions
     void SyncAll()
     {
     }
+
+    /// <summary>"Invite a friend…" on the Computers page: the invite window, which hands over to the account page.</summary>
+    void InviteFriend()
+    {
+    }
+
+    /// <summary>Change…, Remove, Decline or "Let … in" under People: the account page at this nest's People.</summary>
+    void OpenPeople()
+    {
+    }
 }
 
 public partial class MainWindow : Window
@@ -521,6 +531,7 @@ public partial class MainWindow : Window
         NestOnlineDot.Fill = Visuals.Resource<IBrush>(nest.Online ? "T.Ok" : "T.Bad");
         NestOnlineText.Foreground = Visuals.Resource<IBrush>(nest.Online ? "T.OkText" : "T.BadText");
 
+        DrawPeople(PeopleSection.From(s));
         if (s.DevicesUnsupported)
             DevicesEmptyText.Text = "Update your nest to see the computers that use it.";
         if (s.Devices is not null)
@@ -591,6 +602,36 @@ public partial class MainWindow : Window
             RebuildActivity();
         UpdatePanels();
     }
+
+    private IReadOnlyList<PersonRow> _people = [];
+
+    /// <summary>The People section: shown on the owner's computers of a nest reached through Pairnets (see <see cref="PeopleSection"/>).</summary>
+    private void DrawPeople(PeopleSection people)
+    {
+        PeoplePanel.IsVisible = people.Visible;
+        PeopleSummary.Text = people.Summary;
+        PeopleCard.IsVisible = people.Rows.Count > 0;
+        PeopleEmpty.IsVisible = people.Rows.Count == 0;
+        if (!people.Rows.SequenceEqual(_people))
+            PeopleList.ItemsSource = people.Rows;
+        _people = people.Rows;
+    }
+
+    /// <summary>The people shown, in order (a friend, or someone waiting to be let in).</summary>
+    internal IReadOnlyList<PersonRow> PeopleRows => PeoplePanel.IsVisible ? _people : [];
+
+    internal string PeopleSummaryValue => PeopleSummary.Text ?? string.Empty;
+
+    private void OnInviteFriend(object? sender, Avalonia.Interactivity.RoutedEventArgs e) => _actions?.InviteFriend();
+
+    // Changing, removing, letting in and declining happen on the account page, at this nest's People.
+    private void OnPersonChange(object? sender, Avalonia.Interactivity.RoutedEventArgs e) => _actions?.OpenPeople();
+
+    private void OnPersonRemove(object? sender, Avalonia.Interactivity.RoutedEventArgs e) => _actions?.OpenPeople();
+
+    private void OnPersonDecline(object? sender, Avalonia.Interactivity.RoutedEventArgs e) => _actions?.OpenPeople();
+
+    private void OnPersonLetIn(object? sender, Avalonia.Interactivity.RoutedEventArgs e) => _actions?.OpenPeople();
 
     private void OnAddComputer(object? sender, Avalonia.Interactivity.RoutedEventArgs e) => _actions?.AddComputer();
 

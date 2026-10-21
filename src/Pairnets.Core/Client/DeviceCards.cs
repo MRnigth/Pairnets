@@ -47,7 +47,10 @@ public sealed record DeviceCard(
 
     public string MoreLabel => "More for " + Name;
 
-    /// <summary>The cards for the Devices page: this computer first, then the online ones, then by when they were last seen.</summary>
+    /// <summary>
+    /// The cards for the Devices page: this computer first, then the online ones, then by when they were last seen.
+    /// Friends' computers are left out (the People section lists them by person).
+    /// </summary>
     public static IReadOnlyList<DeviceCard> From(StatusSnapshot s, string? thisDevice, DateTimeOffset now)
     {
         if (s.Devices is not { } devices)
@@ -56,6 +59,7 @@ public sealed record DeviceCard(
         var others = side.AllOthers.ToDictionary(o => o.Name, o => o, StringComparer.OrdinalIgnoreCase);
         return devices
             .Select(d => (Device: d, IsThis: string.Equals(d.Name, thisDevice, StringComparison.OrdinalIgnoreCase)))
+            .Where(x => x.IsThis || !x.Device.IsFriends)
             .OrderByDescending(x => x.IsThis)
             .ThenByDescending(x => x.Device.Online)
             .ThenByDescending(x => x.Device.LastSeen)

@@ -196,6 +196,9 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
     [AvaloniaFact]
     public async Task TheQuestions_EveryButtonDoesWhatItSays() => Pass(await RunAsync("questions"));
 
+    [AvaloniaFact]
+    public async Task TheInviteWindow_EveryButtonDoesWhatItSays() => Pass(await RunAsync("invite"));
+
     /// <summary>Every handler an AXAML file names ran at least once in the runs above.</summary>
     /// <summary>
     /// Every button in the main window and the tray panel, in every state, has a name screen readers read out. A button
@@ -334,6 +337,17 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
                 w.ShowStatus(Idle with { JoinRequests = [new JoinRequest("RX4K-92TB", "PC-1", "Windows", DateTimeOffset.UtcNow)] }, "/Users/me/Work", "MacBook");
                 w.Navigate(MainPage.Devices);
             })),
+            new("the main window (Devices page with People: two friends and one waiting)", s => MainStage(s, w =>
+            {
+                w.ShowStatus(OwnersNestWithFriends, "/Users/me/Work", "MacBook");
+                w.Navigate(MainPage.Devices);
+            })),
+            new("the main window (Needs you page with changes held back on a nest shared to view)", s => MainStage(s, w =>
+            {
+                w.ShowAttention([new AttentionItem("3 changes stay on this computer", "Your edits to trip.jpg aren't sent.", "Put back Anna's version",
+                    () => s.Events.Add("attention"), SecondLabel: ShareText.KeepMine, Second: () => s.Events.Add("attention second"))]);
+                w.Navigate(MainPage.Attention);
+            })),
             new("the main window (folded into the dock)", s => MainStage(s, w =>
             {
                 w.ShowStatus(Idle, "/Users/me/Work", "MacBook");
@@ -443,6 +457,11 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
         ["bug report"] =
         [
             new("the bug report window", BugReportStage),
+        ],
+        ["invite"] =
+        [
+            new("the invite window (the whole nest, view only)", s => InviteStage(s, chooseFolders: false)),
+            new("the invite window (chosen folders)", s => InviteStage(s, chooseFolders: true)),
         ],
         ["questions"] =
         [
@@ -567,6 +586,11 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
         s.Expect["OnMore"] = Calls(a, "manage-devices");
         s.Expect["OnRestore"] = That(() => a.Samples.Restored.Count == 1 && w.RestoreText.StartsWith("Restored.", StringComparison.Ordinal), "that version come back",
             () => $"{a.Samples.Restored.Count} restored, it says \"{w.RestoreText}\"");
+        s.Expect["OnInviteFriend"] = Calls(a, "invite-friend");
+        s.Expect["OnPersonChange"] = Calls(a, "people");
+        s.Expect["OnPersonRemove"] = Calls(a, "people");
+        s.Expect["OnPersonDecline"] = Calls(a, "people");
+        s.Expect["OnPersonLetIn"] = Calls(a, "people");
         s.Expect["OnAttentionAction"] = That(() => s.Events.SequenceEqual(["attention"]), "the item's action run");
         s.Expect["OnAttentionSecond"] = That(() => s.Events.SequenceEqual(["attention second"]), "the item's second choice run");
     }
@@ -874,6 +898,44 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
         s.Expect["OnOpenFile"] = That(() => s.Opened.SequenceEqual([window.SavedPath!]), "the saved report open");
         s.Expect["OnCopy"] = All(Clipboard(window, () => "Pairnets bug report\nline two"), That(() => Screen.Named<TextBlock>(window, "Heading").Text == "Bug report copied", "it say it was copied"));
         s.Expect["OnClose"] = That(() => !window.IsVisible, "the window close");
+    }
+
+    private const string FriendsNest = "nst_0123456789abcdefghjkmnpqrs";
+
+    /// <summary>The owner's computer on a nest reached through Pairnets, shared with two friends and with someone waiting to be let in.</summary>
+    private static StatusSnapshot OwnersNestWithFriends => Idle with
+    {
+        IsRelay = true,
+        ServerUrl = $"https://sync.pairnets.app/n/{FriendsNest}/",
+        People = new PeopleAnswer(
+        [
+            new FriendPerson("acc_anna", "Anna Berg · a•••@gmail.com", "edit", ["Photos", "School"], [new FriendDevice("dev_anna", "ANNA-LAPTOP", "Windows", DateTimeOffset.UtcNow)]),
+            new FriendPerson("acc_jonas", "Jonas · j•••@outlook.com", "view", null, [new FriendDevice("dev_jonas", "JONAS-PC", "Linux", DateTimeOffset.UtcNow)]),
+        ],
+        [new FriendRequestEntry("inv_oskar", "Oskar Nilsson", "oskar.n@example.com", "view", ["Music"])]),
+    };
+
+    /// <summary>"Invite a friend…" for a nest whose folder holds Photos and School.</summary>
+    private async Task InviteStage(Stage s, bool chooseFolders)
+    {
+        var folder = Path.Combine(fixture.Reports, "invite-" + Guid.NewGuid().ToString("N")[..6]);
+        Directory.CreateDirectory(Path.Combine(folder, "Photos"));
+        File.WriteAllText(Path.Combine(folder, "Photos", "trip.jpg"), "photo");
+        Directory.CreateDirectory(Path.Combine(folder, "School"));
+        var window = s.Show(new InviteWindow("Home nest", FriendsNest, folder, sealedNest: false, s.Opened.Add));
+        await Wait.Until(() => window.FoldersLoaded, "this computer's folders to show");
+        if (chooseFolders)
+            Screen.Named<RadioButton>(window, "FoldersChoice").IsChecked = true;
+        Dispatcher.UIThread.RunJobs();
+        var whole = $"https://sync.pairnets.app/account?invite={FriendsNest}&access=view";
+        s.Expect["OnScopeChanged:Chosen folders"] = That(() => Screen.Named<Border>(window, "FolderBox").IsVisible && Screen.Named<StackPanel>(window, "FolderList").Children.Count == 2,
+            "this computer's folders show to tick");
+        s.Expect["OnScopeChanged:The whole nest"] = That(() => !Screen.Named<Border>(window, "FolderBox").IsVisible, "the folders to tick go away");
+        s.Expect["OnCancel"] = That(() => !window.IsVisible && s.Opened.Count == 0, "the window close without opening anything");
+        // Nothing ticked yet with chosen folders: it asks for one first.
+        s.Expect["OnContinue"] = chooseFolders
+            ? That(() => window.ProblemShown && s.Opened.Count == 0, "it ask for a folder first")
+            : That(() => s.Opened.SequenceEqual([whole]) && !window.IsVisible, "the account page's invite form open, for the whole nest, view only");
     }
 
     private static async Task QuestionStage(Stage s, bool confirm)

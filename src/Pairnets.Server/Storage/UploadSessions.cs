@@ -117,6 +117,9 @@ public sealed class UploadSessions : IDisposable
     /// <summary>How much of the upload the server has, or null when there is no such session.</summary>
     public long? Received(string id) => _sessions.TryGetValue(id, out var s) && !s.Closed ? s.Received : null;
 
+    /// <summary>The path an upload was started for (what a friend's access is checked against), or null when there is no such session.</summary>
+    public string? PathOf(string id) => _sessions.TryGetValue(id, out var s) && !s.Closed ? s.Path : null;
+
     /// <summary>
     /// Where the next piece starts, and whether the session is busy (a piece is still arriving), so the client
     /// waits instead of sending a piece that would be refused. Null when there is no such session.
@@ -238,7 +241,7 @@ public sealed class UploadSessions : IDisposable
     /// Finishes the upload: every byte must have arrived and match <paramref name="hash"/>. Then the
     /// file is committed exactly like a single PUT (base check, history, manifest).
     /// </summary>
-    public async Task<CommitResult> CommitAsync(string id, string hash, CancellationToken ct)
+    public async Task<CommitResult> CommitAsync(string id, string hash, CancellationToken ct, SealedFields? sealedFields = null)
     {
         if (!_sessions.TryGetValue(id, out var s))
             return new(CommitStatus.NotFound);
@@ -260,7 +263,7 @@ public sealed class UploadSessions : IDisposable
             await using (var fs = new FileStream(s.PartPath, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
                 fs.Flush(flushToDisk: true);
             var modified = s.ModifiedMs ?? _clock.GetUtcNow().ToUnixTimeMilliseconds();
-            var change = await _store.CommitUploadAsync(s.Path, s.ExpectedBase, s.PartPath, actual, s.Size, modified).ConfigureAwait(false);
+            var change = await _store.CommitUploadAsync(s.Path, s.ExpectedBase, s.PartPath, actual, s.Size, modified, sealedFields).ConfigureAwait(false);
             return new(CommitStatus.Done, change);
         }
         finally

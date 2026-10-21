@@ -11,6 +11,7 @@ namespace Pairnets.Client.Ui;
 public partial class DevicesPageView : UserControl
 {
     private IReadOnlyList<DeviceCard> _shown = [];
+    private IReadOnlyList<PersonRow> _people = [];
 
     public DevicesPageView()
     {
@@ -77,6 +78,8 @@ public partial class DevicesPageView : UserControl
         else if (s.Devices.Count == 0)
             DevicesEmptyText.Text = "No computers have used this nest yet.";
 
+        DrawPeople(PeopleSection.From(s));
+
         var cards = DeviceCard.From(s, thisDevice, DateTimeOffset.UtcNow);
         Summary.Text = DevicesSummary.Line(cards);
         DevicesEmpty.Visibility = cards.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
@@ -104,6 +107,34 @@ public partial class DevicesPageView : UserControl
         }
         _shown = cards;
     }
+
+    /// <summary>The People section: shown on the owner's computers of a nest reached through Pairnets (see <see cref="PeopleSection"/>).</summary>
+    private void DrawPeople(PeopleSection people)
+    {
+        PeoplePanel.Visibility = people.Visible ? Visibility.Visible : Visibility.Collapsed;
+        PeopleSummary.Text = people.Summary;
+        PeopleCard.Visibility = people.Rows.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        PeopleEmpty.Visibility = people.Rows.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        if (!people.Rows.SequenceEqual(_people))
+            PeopleList.ItemsSource = people.Rows;
+        _people = people.Rows;
+    }
+
+    /// <summary>The people shown, in order (a friend, or someone waiting to be let in).</summary>
+    public IReadOnlyList<PersonRow> PeopleRows => PeoplePanel.Visibility == Visibility.Visible ? _people : [];
+
+    public string PeopleSummaryText => PeopleSummary.Text;
+
+    private void OnInviteFriend(object sender, RoutedEventArgs e) => Host?.Actions?.InviteFriend();
+
+    // Changing, removing, letting in and declining happen on the account page, at this nest's People.
+    private void OnPersonChange(object sender, RoutedEventArgs e) => Host?.Actions?.OpenPeople();
+
+    private void OnPersonRemove(object sender, RoutedEventArgs e) => Host?.Actions?.OpenPeople();
+
+    private void OnPersonDecline(object sender, RoutedEventArgs e) => Host?.Actions?.OpenPeople();
+
+    private void OnPersonLetIn(object sender, RoutedEventArgs e) => Host?.Actions?.OpenPeople();
 
     private void OnAddComputer(object sender, RoutedEventArgs e) => Host?.Actions?.AddComputer();
 

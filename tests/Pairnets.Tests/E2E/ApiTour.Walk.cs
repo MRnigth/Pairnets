@@ -47,6 +47,8 @@ public sealed partial class ApiTour
             await RemovingAsync();
             await SharedTokenAsync();
             await LinkedNestAsync();
+            await FriendsAsync();
+            await EncryptedNestAsync();
             await MaintenanceCommandsAsync();
             await EmailLinksAsync();
             await GoogleAsync();

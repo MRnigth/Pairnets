@@ -147,7 +147,7 @@ public partial class MainWindow
         var circle = new Border { Width = 44, Height = 44, CornerRadius = new CornerRadius(22), Margin = new Thickness(0, 0, 14, 0), Child = mark };
         circle.SetResourceReference(Border.BackgroundProperty, badge);
         var title = new TextBlock { Text = row.Title, FontSize = 18, FontWeight = FontWeights.ExtraBold, TextTrimming = TextTrimming.CharacterEllipsis };
-        var state = new TextBlock { Text = char.ToUpperInvariant(row.Text[0]) + row.Text[1..] + (row.AccountEmail is { } email ? " · signed in as " + AccountSignIn.MaskEmail(email) : string.Empty), FontSize = 13, TextTrimming = TextTrimming.CharacterEllipsis };
+        var state = new TextBlock { Text = row.CardLine, FontSize = 13, TextTrimming = TextTrimming.CharacterEllipsis };
         state.SetResourceReference(TextBlock.ForegroundProperty, "T.Muted");
         var show = new Button { Style = (Style)FindResource("SubtleButton"), Content = "Show", VerticalAlignment = VerticalAlignment.Center };
         System.Windows.Automation.AutomationProperties.SetName(show, "Show " + row.Title);

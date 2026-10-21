@@ -345,10 +345,11 @@ public sealed class DeviceKeyTests : IAsyncLifetime
 
         Assert.True(await session.SignOutAsync());
 
-        // Several triggers (the push message, the closed push channel) may each run a pass; wait for one to settle.
-        await WaitUntil(() => session.Status is { BlockReason: BlockReason.SignedOut, Status: RunnerStatus.Blocked }, "signed-out stop",
+        // Several triggers (the push message, the closed push channel, the info, access and People checks) may each run a
+        // pass; check the very status that settled, as a later read can catch the next short pass.
+        StatusSnapshot status = session.Status;
+        await WaitUntil(() => (status = session.Status) is { BlockReason: BlockReason.SignedOut, Status: RunnerStatus.Blocked }, "signed-out stop",
             () => $"{session.Status.Status} {session.Status.BlockReason} {session.Status.Text}");
-        var status = session.Status;
         Assert.Equal("Signed out of your nest", status.Headline);
         Assert.Equal("Sign in again…", status.FixLabel);
         Assert.Contains("removed", status.Text, StringComparison.OrdinalIgnoreCase);

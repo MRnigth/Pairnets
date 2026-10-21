@@ -1,0 +1,68 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:v="using:Pairnets.Desktop.Views"
+        x:Class="Pairnets.Desktop.Views.InviteWindow"
+        Title="Invite a friend" Width="560" Height="680" MinWidth="460" MinHeight="520"
+        Background="{DynamicResource T.Card}"
+        WindowStartupLocation="CenterScreen" Icon="avares://Pairnets/Assets/pairnets-icon-256.png">
+  <!-- "Invite a friend…" (friend invites): what they get and what they can do, then the account page in the browser
+       finishes it (it sends the email or gives the link; only a signed-in browser may make an invite). -->
+  <Grid Margin="24,20" RowDefinitions="Auto,*,Auto">
+    <StackPanel Spacing="4">
+      <TextBlock x:Name="Heading" FontSize="20" FontWeight="ExtraBold" TextWrapping="Wrap" Text="Invite a friend" />
+      <TextBlock Classes="muted" FontSize="13" TextWrapping="Wrap"
+                 Text="They sign in with their own Pairnets account. You can change or take back access any time." />
+    </StackPanel>
+
+    <ScrollViewer Grid.Row="1" Margin="0,16,0,0" HorizontalScrollBarVisibility="Disabled">
+      <StackPanel>
+        <TextBlock FontSize="15" FontWeight="ExtraBold" Text="What they get" />
+        <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,8,0,0">
+          <RadioButton x:Name="WholeChoice" Classes="seg" GroupName="scope" Content="The whole nest" IsChecked="True" IsCheckedChanged="OnScopeChanged" />
+          <RadioButton x:Name="FoldersChoice" Classes="seg" GroupName="scope" Content="Chosen folders" IsCheckedChanged="OnScopeChanged" />
+        </StackPanel>
+        <TextBlock x:Name="SealedNote" Classes="muted" FontSize="12.5" TextWrapping="Wrap" Margin="0,8,0,0" IsVisible="False"
+                   Text="Your nest is encrypted, so for now it can only be shared whole." />
+        <Border x:Name="FolderBox" Margin="0,10,0,0" CornerRadius="14" BorderThickness="1" BorderBrush="{DynamicResource T.Border}" Background="{DynamicResource T.Bg}"
+                Padding="14,10" IsVisible="False">
+          <StackPanel>
+            <TextBlock x:Name="FolderNote" Classes="muted" FontSize="12.5" TextWrapping="Wrap" Text="Looking at the folders…" />
+            <StackPanel x:Name="FolderList" />
+          </StackPanel>
+        </Border>
+
+        <TextBlock FontSize="15" FontWeight="ExtraBold" Margin="0,20,0,0" Text="What they can do" />
+        <RadioButton x:Name="ViewChoice" GroupName="access" IsChecked="True" Margin="0,10,0,0" AutomationProperties.Name="View only">
+          <StackPanel Margin="4,0,0,0">
+            <TextBlock Text="View only" FontWeight="Bold" />
+            <TextBlock Classes="muted" FontSize="12.5" TextWrapping="Wrap"
+                       Text="They get your files and your changes. What they change stays on their computer." />
+          </StackPanel>
+        </RadioButton>
+        <RadioButton x:Name="EditChoice" GroupName="access" Margin="0,10,0,0" AutomationProperties.Name="Can change">
+          <StackPanel Margin="4,0,0,0">
+            <TextBlock Text="Can change" FontWeight="Bold" />
+            <TextBlock Classes="muted" FontSize="12.5" TextWrapping="Wrap"
+                       Text="They can add, edit and delete in these folders. Deleted files still go to your nest's history." />
+          </StackPanel>
+        </RadioButton>
+
+        <TextBlock x:Name="Problem" Foreground="{DynamicResource T.BadText}" FontSize="13" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,16,0,0" IsVisible="False" />
+        <Border Margin="0,16,0,0" CornerRadius="14" Padding="14,12" Background="{DynamicResource T.Chip}">
+          <TextBlock Classes="muted" FontSize="12.5" TextWrapping="Wrap"
+                     Text="Your browser finishes it: there you send the invite by email or copy its link. Whoever uses it still waits for you to let them in before they get any files." />
+        </Border>
+      </StackPanel>
+    </ScrollViewer>
+
+    <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="0,16,0,0">
+      <Button Classes="SecondaryButton" Background="{DynamicResource T.Chip}" Content="Cancel" Click="OnCancel" />
+      <Button Classes="accent" Padding="18,0" Click="OnContinue">
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <v:LineIcon Width="15" Height="15" StrokeThickness="2" Stroke="White" Data="{StaticResource I.External}" />
+          <TextBlock Text="Continue in your browser" VerticalAlignment="Center" />
+        </StackPanel>
+      </Button>
+    </StackPanel>
+  </Grid>
+</Window>

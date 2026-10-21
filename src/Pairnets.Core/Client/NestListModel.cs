@@ -8,12 +8,20 @@ namespace Pairnets.Core.Client;
 /// <param name="Title">"Home nest".</param>
 /// <param name="Folder">The nest's folder on this computer.</param>
 /// <param name="Text">"up to date", "syncing 40%", "paused", "can't reach it"...</param>
-/// <param name="Sub">The line under the name in the nest list: "Pairnets\Home nest · up to date".</param>
+/// <param name="Sub">The line under the name in the nest list: "Pairnets\Home nest · up to date", or "Shared by Oskar · view only".</param>
+/// <param name="Shared">"Shared by Oskar · view only" on a nest a friend shared with this computer, else null.</param>
 public sealed record NestListRow(string Id, string Title, string? Folder, string Text, string Sub, SideDot Dot, SideTone Tone,
-    RunnerStatus Icon, int? Percent, bool Selected, string DeviceName, string? AccountEmail)
+    RunnerStatus Icon, int? Percent, bool Selected, string DeviceName, string? AccountEmail, string? Shared = null)
 {
     /// <summary>"Home nest, up to date".</summary>
     public string Tooltip => Title + ", " + Text;
+
+    /// <summary>
+    /// The line under the name on the All nests page: "Up to date · signed in as y•••@example.com", or for a nest a friend
+    /// shared, "Up to date · Shared by Oskar · view only".
+    /// </summary>
+    public string CardLine => char.ToUpperInvariant(Text[0]) + Text[1..]
+        + (Shared is { } shared ? " · " + shared : AccountEmail is { } email ? " · signed in as " + AccountSignIn.MaskEmail(email) : string.Empty);
 }
 
 /// <summary>
@@ -45,8 +53,13 @@ public sealed record NestListModel(IReadOnlyList<NestListRow> Rows, string AllSu
             var (text, dot, tone, percent) = Describe(s);
             var title = NestNames.Title(nest, all, status);
             var place = ShortFolder(nest.Folder, home);
-            rows.Add(new NestListRow(nest.NestId ?? "", title, nest.Folder, text, place is null ? text : place + " · " + text, dot, tone, s.IconStatus,
-                percent, nest.NestId == selectedId, nest.DeviceName ?? "", nest.AccountEmail));
+            // A friend's nest says whose it is: "Shared by Oskar · view only" (its state when there is more to say).
+            var access = status?.Access is { IsShared: true } live ? live : nest.ShareAccess();
+            var shared = access.IsShared ? ShareText.SharedLine(access) : null;
+            var sub = shared is not null ? (s.Status == RunnerStatus.Idle ? shared : ShareText.SharedBy(access) + " · " + text)
+                : place is null ? text : place + " · " + text;
+            rows.Add(new NestListRow(nest.NestId ?? "", title, nest.Folder, text, sub, dot, tone, s.IconStatus,
+                percent, nest.NestId == selectedId, nest.DeviceName ?? "", nest.AccountEmail, shared));
         }
         var syncing = rows.Count(r => r.Icon == RunnerStatus.Syncing);
         var needs = rows.Count(r => r.Icon is RunnerStatus.Error or RunnerStatus.Blocked);

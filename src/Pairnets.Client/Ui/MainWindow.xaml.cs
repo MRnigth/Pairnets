@@ -114,6 +114,16 @@ public interface IMainActions
     void SyncAll()
     {
     }
+
+    /// <summary>"Invite a friend…" on the Computers page: the invite window, which hands over to the account page.</summary>
+    void InviteFriend()
+    {
+    }
+
+    /// <summary>Change…, Remove, Decline or "Let … in" under People: the account page at this nest's People.</summary>
+    void OpenPeople()
+    {
+    }
 }
 
 /// <summary>

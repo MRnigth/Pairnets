@@ -16,7 +16,15 @@ namespace Pairnets.Core.Client;
 /// <param name="NestLabel">The server's name on the account page ("soro").</param>
 /// <param name="Device">This computer's id, its name as the server recorded it (it may add " (2)"), and its key.</param>
 /// <param name="Email">The account it signed in with, for showing.</param>
-public sealed record AccountSignInResult(Uri ServerUrl, string NestId, string NestLabel, DeviceKeyGrant Device, string Email);
+/// <param name="Access">
+/// What this computer may do on the nest (friend invites): the owner's own nest, or one a friend shared with it, with
+/// whose it is (<see cref="Sync.NestAccess.SharedBy"/>) and the folders it gets.
+/// </param>
+public sealed record AccountSignInResult(Uri ServerUrl, string NestId, string NestLabel, DeviceKeyGrant Device, string Email, Sync.NestAccess? Access = null)
+{
+    /// <summary>The nest's access: the owner's when the service said nothing (one from before friends).</summary>
+    public Sync.NestAccess ShareAccess => Access ?? Sync.NestAccess.Full;
+}
 
 /// <summary>An account sign-in's progress, for the window to draw.</summary>
 /// <param name="Code">The code to show ("ABCD-EFGH"); the browser page shows the same one.</param>
@@ -128,6 +136,11 @@ public sealed class AccountSignIn
     {
         var next = Nest.SettingsAfterSignIn(previous, result.ServerUrl, result.Device, folder, startAtLogin, protectedKey, result.Email);
         next.NestLabel = ComputerName.Clean(result.NestLabel) is { Length: > 0 } label ? label : null;
+        // A nest a friend shared with this account: what it may do there and whose it is (the nest keeps it up to date).
+        var access = result.ShareAccess;
+        next.Access = access.IsOwner ? null : access.Level;
+        next.SharedFolders = access.Folders is null ? null : [.. access.Folders];
+        next.SharedBy = access.SharedBy;
         return next;
     }
 
@@ -250,8 +263,10 @@ public sealed class AccountSignIn
             // server the answer names, is taken.
             if (!Relay.IsNestId(nestId) || Relay.NestId(address, _service) != nestId || !PairnetsApiClient.TryParseServerUrl(address, out var serverUrl) || serverUrl is null)
                 return Set(State with { Stage = PairingStage.Failed, ServerOffline = false, Message = "Pairnets answered with a server address this app cannot use. Update Pairnets, then try again." });
-            var result = new AccountSignInResult(serverUrl, nestId, string.IsNullOrWhiteSpace(nest.Label) ? "Your server" : nest.Label.Trim(),
-                new DeviceKeyGrant(device.Id, device.Name, device.Key), answer.Email?.Trim() ?? string.Empty);
+            var label = string.IsNullOrWhiteSpace(nest.Label) ? "Your server" : nest.Label.Trim();
+            var result = new AccountSignInResult(serverUrl, nestId, label,
+                new DeviceKeyGrant(device.Id, device.Name, device.Key), answer.Email?.Trim() ?? string.Empty,
+                Sync.NestAccess.Read(nest.Access, nest.Folders, nest.SharedBy, label));
             return Set(State with { Stage = PairingStage.Approved, Message = null, ServerOffline = false, NoNest = false, Result = result });
         }
         finally
@@ -373,7 +388,8 @@ public sealed class AccountSignIn
 
     private sealed record PollAnswer(string? Status, string? AppToken, string? Email, PollNest? Nest, PollDevice? Device);
 
-    private sealed record PollNest(string? Id, string? Label, string? ServerUrl);
+    /// <summary>The nest in an allowed sign-in. On a nest a friend shared: whose it is, "edit" or "view", and the folders (null: whole).</summary>
+    private sealed record PollNest(string? Id, string? Label, string? ServerUrl, string? SharedBy = null, string? Access = null, List<string?>? Folders = null);
 
     private sealed record PollDevice(string? Id, string? Name, string? Key);
 }

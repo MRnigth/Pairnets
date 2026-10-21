@@ -736,9 +736,12 @@ address) and `GET /login/google/callback` (protected by state, nonce, PKCE and t
 | `GET /app?code=XXXX-XXXX` | 1B | approve an app sign-in |
 | `GET /privacy`, `/terms`, `/guidelines`, `/cookies`, `/security`, `/faq`, `/help`, `/contact`, `/delete-account`, `/licenses` (with or without a trailing `/`) | 1A | 302 to the same page on the website, `https://pairnets.app/<page>/`. Every page's footer links Privacy, Terms, Guidelines, Cookie settings and Help; the sign-in page also says that continuing means agreeing to the Terms and the Privacy Policy |
 | `GET /nest-login` | 1A | §3.2 |
+| `GET /invite?t=pni_…` | 1.0.61.2 | an invite to a friend's nest (`RELAY.md` §10) |
 
 `next` (everywhere on the service) MUST match `^/(account|app(\?code=[0-9A-Za-z-]{1,16})?|nest-login\?[^#\s]{1,600})$`;
-anything else becomes `/account`. Version 2 adds `/add` and `/add?code=` (same code pattern as `/app`).
+anything else becomes `/account`. Version 2 adds `/add` and `/add?code=` (same code pattern as `/app`). Friends
+(`RELAY.md` §10) add `/invite?t=pni_` + 32 base32-lower, and `/account?invite=nst_…` followed by `&` and up to 600
+characters of `A-Z a-z 0-9 % . _ ~ , + = & ! * ' ( ) -` (the apps' hand-over to the invite form).
 
 ### 6.5 Browser sign-in `[1A]`
 
@@ -823,6 +826,7 @@ Limits: at most **3 nests** per account (pending included); at most **5 unused, 
 | `invalid_code`, `expired`, `used`, `wrong_browser` | 400 / 400 / 409 / 400 | codes |
 | `bad_url`, `nest_limit`, `too_many_codes` | 400 / 409 / 429 | claim |
 | `already_decided`, `slow_down` | 409 / 429 | app sign-in |
+| `bad_access`, `sealed_whole_only`, `too_many_friends`, `own_nest`, `already_member`, `cancelled`, `used` | 400 / 400 / 409 / 409 / 409 / 409 / 409 | friends (`RELAY.md` §10) |
 | `unlinked`, `bad_signature`, `stale`, `not_confirmed` | 410 / 401 / 401 / 409 | nest-signed requests |
 | `server_error` | 500 | anything unexpected (no details) |
 
@@ -873,6 +877,9 @@ so no raw IP or address is stored there.
 | `POST /v1/app/start` | IP | 10 / hour | 429 `rate_limited` |
 | `POST /v1/app/poll` | device code | once per `interval` (3 s) | 429 `slow_down` |
 | `POST /v1/heartbeat` | nest | 1 / 60 s | 429 `rate_limited` |
+| `POST /v1/servers/{id}/invites` (`RELAY.md` §10) | account | 20 / day | 429 `rate_limited` |
+| `POST /v1/invite/request` | account | 20 / hour | 429 `rate_limited` |
+| invite emails (an invite, "You're in") | whole service | 5 per UTC day, outside the 95 above | `emailed:false`, the invite is made without an address |
 | `POST /v1/nest/confirm`, `/unlink` | nest | 10 / hour | 429 `rate_limited` |
 
 ### 6.11 Email (internal to the service)
@@ -880,6 +887,8 @@ so no raw IP or address is stored there.
 A small `Mailer` interface (`send({to, subject, text, html})`) with a Resend implementation
 (`POST https://api.resend.com/emails`, `Authorization: Bearer RESEND_API_KEY`, from `MAIL_FROM`) and a fake for tests.
 Emails: sign-in link; notices for identity added, nest linked (confirmed), nest removed or unlinked, account deleted.
+Friends (`RELAY.md` §10): the invite a friend gets and "You're in <nest>" (the `invite` budget), and "<name> wants to
+join <nest>" to the owner (a notice).
 
 ### 6.12 Cron (internal)
 
@@ -892,6 +901,9 @@ Accounts nobody uses (`src/inactive.ts`, migration 0005): "used" is the newest o
 ("will be deleted on <day>"), at most 20 a day and only within the day's email budget; `accounts.inactive_warned_at`
 is set only when it was sent. Used again after that: the warning is cleared. Warned 30 days ago and still unused: the
 account is deleted exactly as `DELETE /v1/me` does it (tunnels included), and a last email says so.
+
+Friends (`RELAY.md` §10): ended invites, members and invites of nests that are gone, and telling nests about friends'
+changes and removals they missed.
 
 ---
 

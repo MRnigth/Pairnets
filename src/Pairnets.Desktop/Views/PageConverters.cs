@@ -102,3 +102,21 @@ public sealed class JoinComputer : IValueConverter
 
     public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) => throw new NotSupportedException();
 }
+
+/// <summary>
+/// A theme brush picked by a true/false value, "T.OkPill|T.Chip" as the parameter (the first when true); a missing key is
+/// no colour. The People rows use it for the waiting row's tint and the access pill.
+/// </summary>
+public sealed class BrushWhen : IValueConverter
+{
+    public static readonly BrushWhen Instance = new();
+
+    public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
+    {
+        var keys = (parameter as string ?? string.Empty).Split('|');
+        var key = value is true ? keys[0] : keys.ElementAtOrDefault(1);
+        return string.IsNullOrEmpty(key) ? Avalonia.Media.Brushes.Transparent : Visuals.Resource<Avalonia.Media.IBrush>(key);
+    }
+
+    public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) => throw new NotSupportedException();
+}

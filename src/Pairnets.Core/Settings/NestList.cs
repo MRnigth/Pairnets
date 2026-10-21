@@ -38,12 +38,21 @@ public sealed class NestProfile
 
     /// <summary>"Where your files live" in this nest's folder (see <see cref="ClientSettings.Placement"/>): each nest has its own.</summary>
     public Dictionary<string, FilePlacement> Placement { get; set; } = new(StringComparer.Ordinal);
+    /// <inheritdoc cref="ClientSettings.Access"/>
+    public string? Access { get; set; }
+
+    /// <inheritdoc cref="ClientSettings.SharedFolders"/>
+    public List<string>? SharedFolders { get; set; }
+
+    /// <inheritdoc cref="ClientSettings.SharedBy"/>
+    public string? SharedBy { get; set; }
 
     public NestProfile Clone()
     {
         var copy = (NestProfile)MemberwiseClone();
         copy.ExtraIgnore = [.. ExtraIgnore];
         copy.Placement = new Dictionary<string, FilePlacement>(Placement ?? [], StringComparer.Ordinal);
+        copy.SharedFolders = SharedFolders is null ? null : [.. SharedFolders];
         return copy;
     }
 }
@@ -179,6 +188,9 @@ public sealed partial class ClientSettings
         AutoUpdateServer = s.AutoUpdateServer,
         SkippedServerVersion = s.SkippedServerVersion,
         Placement = new Dictionary<string, FilePlacement>(s.Placement ?? [], StringComparer.Ordinal),
+        Access = s.Access,
+        SharedFolders = s.SharedFolders is null ? null : [.. s.SharedFolders],
+        SharedBy = s.SharedBy,
     };
 
     private static void Write(NestProfile n, ClientSettings s)
@@ -196,6 +208,9 @@ public sealed partial class ClientSettings
         s.AutoUpdateServer = n.AutoUpdateServer;
         s.SkippedServerVersion = n.SkippedServerVersion;
         s.Placement = new Dictionary<string, FilePlacement>(n.Placement ?? [], StringComparer.Ordinal);
+        s.Access = n.Access;
+        s.SharedFolders = n.SharedFolders is null ? null : [.. n.SharedFolders];
+        s.SharedBy = n.SharedBy;
     }
 
     /// <summary>

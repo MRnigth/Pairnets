@@ -304,6 +304,8 @@ public sealed class RecordingActions(IHistorySource? history = null) : ITrayActi
     }
     public void AddComputer() => Calls.Add(nameof(AddComputer));
     public void ManageDevices() => Calls.Add(nameof(ManageDevices));
+    public void InviteFriend() => Calls.Add(nameof(InviteFriend));
+    public void OpenPeople() => Calls.Add(nameof(OpenPeople));
     public void RevealFile(string syncPath) => Calls.Add($"{nameof(RevealFile)}({syncPath})");
     public void OpenWindow(MainPage page) => Calls.Add($"{nameof(OpenWindow)}({page})");
     public void Quit() => Calls.Add(nameof(Quit));

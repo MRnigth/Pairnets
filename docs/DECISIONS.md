@@ -1360,6 +1360,92 @@ Inno's progress window (`/SILENT`).
   `sort -V` all put 1.0.60 < 1.0.60.1 < 1.0.61 (test rows in `OldUpdaterCompatTests` and `UpdateScriptTests`), the
   app calls itself by all four numbers, and the tag's release job passes `--latest`. The next main build
   (1.0.<run>, 61 or more) is newer.
+
+## End-to-end encryption plan (2026-10-19)
+
+The owner wants to be able to say "we can't see your files". The plan is in [ENCRYPTION.md](ENCRYPTION.md); nothing
+is built yet, and steps 1, 2, 6 and 8 there wait for the owner's yes or no.
+
+* **Encrypt on the computer; the nest keeps only encrypted data.** The service can create a computer key on any linked
+  nest (`HB_MASTER` → `/api/relay/devices`), so an encrypted channel to a nest that still keeps plain files would
+  not stop it reading them. With the nest as an opaque store, neither the relay, the service, Cloudflare nor root on
+  the nest can read files, names or folders.
+* **.NET's own crypto only:** `AesGcm`, `HKDF`, `HMACSHA256`, `ECDiffieHellman` (P-256) and `RandomNumberGenerator`,
+  plus the DPAPI / Keychain / keyring storage the apps already use. No new packages.
+* **Flat ids, not encrypted folder names.** Each file is stored under an HMAC of its full path, so the nest sees no
+  tree, depth or names, Linux name-length limits never bite, and the nest's per-path base check, history and
+  `since` manifest work unchanged. The real path lives in an encrypted `meta` column. Name rules (case, Windows names)
+  move into the app.
+* **The three-hash logic keeps working on keyed tags.** L, S and B become `HMAC(tag key, id ‖ content)`, so
+  `SyncDecision.Decide` is untouched and the nest never sees a plain-content hash. The nest checks transport
+  integrity with a SHA-256 of the encrypted bytes.
+* **1 MiB AES-GCM segments with a per-upload data key.** Resumable pieces and ranged downloads map to segment
+  boundaries, and the app keeps the wrapped data key with the upload so a resumed piece is byte-identical.
+* **A new computer is unlocked by another computer (6-digit code compare with a commitment) or by the recovery key**,
+  never by anything the service holds. Signing in still only lets a computer talk to the nest.
+* **Recovery key with no copy at Pairnets.** Losing every computer and the recovery key loses the files; the app and
+  the site say so before encryption is turned on. Any copy at Pairnets would break the promise.
+* **A removed computer leads to a new ring generation**, and computers refuse an older generation than the newest
+  they have seen, so a replayed ring cannot re-admit it. Files it already had cannot be taken back, and the docs say
+  so.
+* **Existing nests move over in a separate `sealed/` area and switch in one step**; plain files and their history are
+  deleted when every computer has switched or after 7 days. Old apps get `426 update_required` from an encrypted
+  nest; `ApiVersion` stays 1 and the capability is an optional field, as before.
+* **Claims stay narrow.** The pages may say Pairnets can't see files, names or folders. They must also say what it
+  still sees: the account, computer names, when computers are online, and file counts, sizes and change times. They
+  must not say "zero-knowledge", "unbreakable", "audited" or "we can recover your files".
+
+## Encryption core (1.0.61.1, 2026-10-20)
+
+The owner approved building it for 1.0.61.1 and answered steps 1 and 2: yes, encrypt on the computer, and yes, a
+recovery key with no copy at Pairnets. Steps 6 (switching existing nests, deleting the plain copy) and 8 (hiding
+computer names) are not answered yet, so nothing of them is built; they are asked when the apps' side needs them.
+The core is in `src/Pairnets.Core/Crypto`. Where it differs from ENCRYPTION.md:
+
+* **A file's segments are bound to a random file id in its header, not to the path id.** 1.0.60 moves and renames
+  files that live only on the nest without downloading them, so the blob must stay valid under a new path. The
+  encrypted meta pins the blob instead: it holds the path, size, modified time, the plain SHA-256 and the SHA-256 of
+  the blob's header, and its associated data is the path id. The nest still can't swap two files' blobs (the header
+  hash wouldn't match) or move a meta blob to another row.
+* **tag = HMAC(tag key, path id ‖ plain SHA-256).** A move gets its new tag from the meta without reading the file.
+  The id and tag keys come from generation 0 and never change, so a rotation doesn't make every file look changed.
+  The content-wrap and meta keys are per generation, so new uploads after a removal use keys the removed computer
+  never had.
+* **Computer envelopes are signed.** Anyone can encrypt to a public key, so a ring sealed to a computer is also signed
+  (ECDSA P-256) by the computer that made it. A computer takes a ring only if a computer its own ring trusts signed it,
+  it is for the same nest, it has no older generation, and every generation it already has is unchanged. Each computer
+  has two key pairs, one for agreement and one for signing. A computer with no ring yet never takes a computer
+  envelope: its first ring comes through pairing (sealed with the paired session key) or the recovery key.
+* **Honest limit:** a computer that is offline when another is removed could still take a ring signed by the removed
+  computer, if that computer and the nest work together before the honest rotation reaches it.
+* **The recovery key is 31 random base32 letters (155 bits) plus a check letter.** That makes eight groups of four.
+  0, 1 and 8 count as O, I and B when typed.
+* **Meta blobs are padded to 64 bytes**, so their length says little about the name.
+* **The nest's encrypted mode keeps today's store.**
+  * Files sit under `ab/<id>` in `files/` and `history/`, so the base check, history, pieces, resuming and the
+    `since` manifest stay unchanged.
+  * The `hash` column stays the SHA-256 of the stored bytes. The nest computes it, and it is used for the commit
+    check, `ETag`, `If-Range` and history names.
+  * New `tag` and `meta` columns hold what the app sends (`tag=` and `meta=` on `PUT /api/file` and on an upload's
+    commit). The base an app sends is compared with the tag.
+  * Downloads carry `X-Pairnets-Tag` and `X-Pairnets-Meta`.
+* **Only an encrypted nest moves `manifest.db` to schema 2.** A plain nest gets the new columns but stays on
+  schema 1, so rolling the nest back still works. An older server refuses to start on an encrypted nest instead of
+  serving blobs as files.
+* **On an encrypted nest the app restores old versions itself.** The nest can't make an old version's tag and meta,
+  so the app downloads the version and sends it as a new one. For the same reason `rescan` can't take in files on an
+  encrypted nest.
+* **Apps say they encrypt with `X-Pairnets-Features: sealed`** (or `?features=sealed` on the push), not in
+  `X-Pairnets-Client`, so the Devices list still shows "1.0.61.1 · Windows". Without it, an encrypted nest answers
+  file, history and push calls with `426 update-required`. Info, sign-in, Devices and updating still work, so an old
+  app can update itself. The apps send the feature only once their sync engine encrypts.
+* **Turning encryption on (`POST /api/keys/seal`)** needs the recovery envelope and at least one computer's
+  envelope. For now it works only on a nest with no files (a new nest). Moving an existing nest goes through the
+  `sealed/` area together with the apps' side.
+* **The key mailbox** (`/api/keys/requests`) lives in memory for 15 minutes, holds at most 20 requests, and lets each
+  message be written once. Envelopes are files in `keys/`.
+* **The nest no longer logs the Google account's email** when one is connected.
+
 ## Several nests at once (1.0.61, 2026-10-20)
 
 One Pairnets app can sync two nests or more, each into its own folder. The owner's answers, and what follows from them:
@@ -1444,3 +1530,34 @@ to that main build. The owner decided:
   already did; nothing else changes. `get.sh` without `PAIRNETS_VERSION` installs the Latest release, now always a tag.
 * **Apps that took 1.0.68 stay on it until a version above 1.0.68 is released**: the update check only moves to a
   higher number, so 1.0.61 (and 1.0.61.x) is never offered to them. They update again at the first tag above 1.0.68.
+
+## Friend invites (1.0.61.2, 2026-10-21)
+
+The owner of a nest can let friends sync it with their own Pairnets accounts. Pictures: the "Invite friends to your
+nest" canvas (a copy is in `Pairnets\designs\invite-friends-2026-10-21`). The owner's answers, and what follows from them:
+
+* **Whole nest or chosen folders, view only or can change.** A friend gets the whole nest or some of its top-level
+  folders, and either "View only" (the default) or "Can change". The nest holds every friend's computer to that
+  (`AccessGate`): a view-only computer can't write, a computer with folders can't reach paths outside them, listings and
+  the live push only show what is shared, and only the owner's computers may remove other computers, update or rename
+  the nest, or change encryption. Every computer from before is the owner's, and so is every way of signing in that is
+  not a computer key; a damaged row counts as view only with nothing shared, never as the owner.
+* **A link alone never lets anyone in.** An invite is a link (it ends after 7 days) that the owner copies or has
+  Pairnets email. The friend signs in, presses "Ask to join", and waits; the owner presses "Let in" or "Decline" on the
+  account page (the apps' People section and the owner's email lead there). Only then does the nest appear on the
+  friend's app sign-in page, under "Shared with you". Because using the link only asks, the link itself is kept (not
+  only a hash) so the owner can copy it again; "Let in" needs a recent sign-in, like allowing a computer.
+* **The website does the account part; the apps hand over to it.** Creating invites, letting in, changing and
+  removing friends need a signed-in browser, so the apps' "Invite a friend…" window collects the choices and opens the
+  account page with them filled in, and their People rows open the account page at that nest. The apps hold no
+  account token, as before. The People list itself comes from the nest (`GET /api/people`), which the service keeps
+  up to date (`PUT /api/relay/requests`, `PATCH`/`DELETE /api/relay/people/{id}`).
+* **Removing a friend** removes every computer of theirs from the nest at once. Files already on their computers stay
+  there, and the page says so. If the nest is offline, the service tries again every hour until it hears back.
+* **Encrypted nests are shared whole only.** The key ring is one per nest, so a share of some folders would need a key
+  per folder; that is a later step. The friend's computer gets the key like any new computer (the 6-digit code compare
+  with one of the owner's computers), which comes with encryption phase B.
+* **Old nests can't take friends.** The nest says it can (`features: ["friends"]` in its status); without that, the
+  service makes no invites for it and never hands a friend a key to it.
+* **Limits:** 10 friends per nest (people plus open invites), 20 invites a day per account, and invite emails have their
+  own budget of 5 a day, apart from the sign-in and notice mail.

@@ -136,6 +136,7 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
             var info = await Api.GetInfoAsync(CancellationToken.None).ConfigureAwait(false);
             Update(s => s with { Server = info });
             ServerInfoChanged?.Invoke(info);
+            await RefreshAccessAsync().ConfigureAwait(false);
             await RefreshDevicesAsync().ConfigureAwait(false);
             await CheckAccountAsync(info).ConfigureAwait(false);
             return info;
@@ -169,6 +170,93 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
         catch (Exception ex) when (ex is PairnetsNetworkException or PairnetsAuthException or PairnetsProtocolException or ObjectDisposedException or OperationCanceledException)
         {
         }
+        await RefreshPeopleAsync().ConfigureAwait(false);
+    }
+
+    // ------------------------------------------------------------------ friends (1.0.61.2)
+
+    private NestAccess? _savedAccess;
+
+    /// <summary>
+    /// Asks the nest what this computer may do there (on connect and every few minutes, and when the nest refused a
+    /// change). A change is used at once and saved (<see cref="AccountChanged"/>); a nest from before friends says
+    /// nothing, and the settings stand.
+    /// </summary>
+    public async Task RefreshAccessAsync()
+    {
+        try
+        {
+            if (await Api.GetAccessAsync(CancellationToken.None).ConfigureAwait(false) is not { } answer)
+                return;
+            var known = Engine.Access;
+            var now = NestAccess.Read(answer.Access, answer.Folders, known.SharedBy, known.NestName);
+            if (!now.Equals(known))
+                Engine.Access = now;
+            OnAccess(now);
+        }
+        catch (PairnetsAuthException ex) when (ex.NeedsSignIn)
+        {
+            NoticeSignedOut();
+        }
+        catch (Exception ex) when (ex is PairnetsNetworkException or PairnetsAuthException or PairnetsProtocolException or ObjectDisposedException or OperationCanceledException)
+        {
+        }
+    }
+
+    /// <summary>Shows the nest's access, and saves it when it is not what the settings say (the owner changed the share).</summary>
+    private void OnAccess(NestAccess now)
+    {
+        Update(s => s.Access.Equals(now) ? s : s with { Access = now, People = now.IsOwner ? s.People : null });
+        var saved = _savedAccess ?? Settings.ShareAccess();
+        if (new NestAccess(now.Level, now.Folders).Equals(new NestAccess(saved.Level, saved.Folders)))
+            return;
+        _savedAccess = now;
+        var next = Settings.Clone();
+        next.Access = now.IsOwner ? null : now.Level;
+        next.SharedFolders = now.Folders is null ? null : [.. now.Folders];
+        Activity.Add(ActivityKind.Info, null, $"{Status.NestTitle} is now shared with you: {ShareText.Folders(now.Folders)}, {ShareText.Words(now.Level)}", _clock);
+        AccountChanged?.Invoke(next, _token);
+    }
+
+    /// <summary>
+    /// Reads the People section of the Computers page: the friends and those waiting to be let in. Only the owner's
+    /// computers on a nest reached through Pairnets (an own-address nest has no account page to manage people on).
+    /// </summary>
+    public async Task RefreshPeopleAsync()
+    {
+        if (!Status.IsRelay || !Engine.Access.IsOwner)
+        {
+            if (Status.People is not null)
+                Update(s => s with { People = null });
+            return;
+        }
+        try
+        {
+            var people = await Api.GetPeopleAsync(CancellationToken.None).ConfigureAwait(false);
+            Update(s => s with { People = people });
+        }
+        catch (PairnetsAuthException ex) when (ex.NeedsSignIn)
+        {
+            NoticeSignedOut();
+        }
+        catch (Exception ex) when (ex is PairnetsNetworkException or PairnetsAuthException or PairnetsProtocolException or ObjectDisposedException or OperationCanceledException)
+        {
+        }
+    }
+
+    /// <summary>"Keep mine here": the changes held back on a view-only nest stay here without asking again.</summary>
+    public void KeepHeldBack()
+    {
+        Engine.KeepHeldBack();
+        Update(s => s with { HeldBack = [] });
+    }
+
+    /// <summary>"Put back &lt;owner&gt;'s version": the next pass (now) undoes the held-back changes.</summary>
+    public void PutBackHeldBack()
+    {
+        Engine.RequestPutBack();
+        Update(s => s with { HeldBack = [] });
+        Runner.RequestSync("put-back", full: true);
     }
 
     /// <summary>
@@ -423,6 +511,7 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
             MaxParallelTransfers = settings.EffectiveParallelTransfers,
             CloudFiles = cloudFiles ?? ICloudFiles.None,
             Placement = settings.PlacementMap(onDemandWorks: cloudFiles?.IsActive == true),
+            Access = settings.ShareAccess(),
         }, api, state, trash, loggers.CreateLogger("Pairnets.Engine"), clock, hooks);
         var options = new RunnerOptions { ServerUrl = url, Token = token, DeviceId = settings.DeviceName!, WaitForPeerBatches = settings.WaitForPeerBatches };
         if (runnerOptions is not null)
@@ -441,6 +530,7 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
             AccountEmail = string.IsNullOrWhiteSpace(settings.AccountEmail) ? null : settings.AccountEmail,
             ServerUrl = string.IsNullOrWhiteSpace(settings.ServerUrl) ? null : settings.ServerUrl,
             NestLabel = settings.NestLabel,
+            Access = engine.Access,
         };
         if (settings.Paused)
             runner.Pause(); // before it starts, so a paused app never begins a pass
@@ -597,6 +687,9 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
             Update(s => s with { Peers = WithPeer(s, device, p => p with { SyncedVersion = version, SyncedAt = at }) });
         };
         Engine.ChangeSent += version => Update(s => version > s.MyChangeVersion ? s with { MyChangeVersion = version } : s);
+        // A nest shared with this computer: what it may do there changed, or the nest refused a change for it.
+        Engine.AccessChanged += OnAccess;
+        Engine.AccessRefused += path => _ = RefreshAccessAsync();
         Runner.JoinRequestedFrom += (code, name, system, address) => OnJoinRequested(code, name, system, address);
         Runner.JoinRequested += (code, name, system) => OnJoinRequested(code, name, system, null);
         Runner.JoinDecided += code => Update(s => s with { JoinRequests = LiveJoinRequests(s).Where(r => r.Code != code).ToList() });
@@ -642,6 +735,7 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
                 PendingDeletePaths = r.BlockedDeletes.Take(8).Select(d => d.Path).ToList(),
                 Warnings = SafeWarningCount(),
                 CurrentPath = null,
+                HeldBack = r.Outcome == PassOutcome.Completed ? (r.HeldBack.Count == 0 && s.HeldBack.Count == 0 ? s.HeldBack : [.. r.HeldBack]) : s.HeldBack,
             });
             switch (r.Outcome)
             {

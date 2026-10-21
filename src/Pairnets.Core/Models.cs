@@ -3,14 +3,21 @@ using System.Text.Json.Serialization;
 
 namespace Pairnets.Core;
 
-/// <summary>One row of the server manifest. <see cref="Hash"/> is null for tombstones.</summary>
+/// <summary>
+/// One row of the server manifest. <see cref="Hash"/> is null for tombstones. On an encrypted nest (docs/ENCRYPTION.md)
+/// <see cref="Path"/> is the file's id (<c>ab/abcdef…</c>), <see cref="Hash"/> the SHA-256 of the encrypted bytes,
+/// <see cref="Tag"/> the app's keyed tag (what the sync decision compares) and <see cref="Meta"/> the encrypted real
+/// path, size and time; both are missing elsewhere.
+/// </summary>
 public sealed record ManifestEntry(
     string Path,
     string? Hash,
     long Size,
     long ModifiedMs,
     bool Deleted,
-    long Version);
+    long Version,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Tag = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Meta = null);
 
 /// <summary>Body of every non-2xx JSON response from the server.</summary>
 public sealed record ErrorBody(string Code, string? Message = null);
@@ -22,7 +29,8 @@ public sealed record ErrorBody(string Code, string? Message = null);
 /// the server takes at once (2: the next one may be sent while the one before is still arriving; missing: one).
 /// <see cref="NestName"/>: the name the owner gave the nest on their account page (missing until they did, and on
 /// nests that are not linked to an account). <see cref="CanMoveStorage"/>: the nest can move its files to another drive
-/// when an app asks (<c>GET /api/storage</c>); missing on older nests, so false.
+/// when an app asks (<c>GET /api/storage</c>); missing on older nests, so false. <see cref="Sealed"/>: true on an encrypted nest (docs/ENCRYPTION.md),
+/// missing otherwise.
 /// </summary>
 public sealed record ServerInfo(
     string ServerId,
@@ -35,7 +43,8 @@ public sealed record ServerInfo(
     int? PiecesInFlight = null,
     string? NestName = null,
     long? HistoryBytes = null,
-    bool? CanMoveStorage = null);
+    bool? CanMoveStorage = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? Sealed = null);
 
 /// <summary>The server's self-updater. <see cref="State"/>: missing, idle, requested, running, succeeded or failed.</summary>
 public sealed record UpdaterStatus(bool Installed, string State, string? Message = null, DateTimeOffset? At = null);
@@ -92,6 +101,9 @@ public sealed record UpdaterDiagnostics(
 /// <summary>
 /// A computer that uses this server (<c>GET /api/devices</c>, the apps' Devices tab). <see cref="Id"/> is set
 /// for computers with their own key (they can be removed); computers still on the shared token have none.
+/// <see cref="Access"/> ("owner", "edit" or "view") and <see cref="Person"/> ("Anna Berg · a•••@gmail.com") say whose
+/// computer it is on a nest that knows friends (1.0.61.2): a friend's computer is listed under People, not with the
+/// owner's computers. Older nests leave both out.
 /// </summary>
 public sealed record DeviceInfo(
     string Name,
@@ -102,7 +114,13 @@ public sealed record DeviceInfo(
     string? System = null,
     DateTimeOffset? LastChange = null,
     string? Id = null,
-    string? Icon = null);
+    string? Icon = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Access = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Person = null)
+{
+    /// <summary>A friend's computer (someone the nest is shared with), not one of the owner's.</summary>
+    public bool IsFriends => Access is Sync.NestAccess.Edit or Sync.NestAccess.View;
+}
 
 /// <summary>The icons a computer can be given on the nest (<c>PATCH /api/devices/{id}/icon</c>).</summary>
 public static class DeviceIcons
@@ -130,7 +148,8 @@ public sealed record DeviceIconRequest(string? Icon);
 /// through the service then, and it has no public name of its own.</remarks>
 public sealed record ServerHello(string Product, int ApiVersion, string? ServerVersion, string? PublicUrl, bool DeviceKeys, bool SignIn,
     SignInMethods? Methods = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] RelayHello? Relay = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] RelayHello? Relay = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? Sealed = null);
 
 /// <summary>A nest in relay mode: its id at the Pairnets service and the service's address (https://sync.pairnets.app).</summary>
 public sealed record RelayHello(string NestId, string ServiceUrl);
@@ -219,6 +238,9 @@ public static class ErrorCodes
 
     public const string Busy = "busy";
 
+    /// <summary>With 426: this nest is encrypted and the app doesn't encrypt yet; it must be updated first.</summary>
+    public const string UpdateRequired = "update-required";
+
     /// <summary>The computer's own key was removed on the nest (or by "Sign out of this computer").</summary>
     public const string DeviceRemoved = "device-removed";
 
@@ -304,6 +326,17 @@ public static class PairnetsHeaders
     public const string Hash = "X-Pairnets-Hash";
     public const string ModifiedMs = "X-Pairnets-Modified-Ms";
 
+    /// <summary>On an encrypted nest's file downloads: the version's keyed tag and its encrypted meta.</summary>
+    public const string Tag = "X-Pairnets-Tag";
+    public const string Meta = "X-Pairnets-Meta";
+
+    /// <summary>
+    /// What the app can do, comma-separated. "sealed": it encrypts, so an encrypted nest lets it sync (others get 426).
+    /// </summary>
+    public const string Features = "X-Pairnets-Features";
+
+    public const string SealedFeature = "sealed";
+
     /// <summary>The app's version and system ("1.0.38; Windows"), shown in the Devices tab.</summary>
     public const string Client = "X-Pairnets-Client";
 }
@@ -317,3 +350,41 @@ public static class PairnetsJson
         WriteIndented = false,
     };
 }
+
+/// <summary>
+/// <c>GET /api/keys</c>: whether the nest is encrypted, whether it holds a recovery envelope, and which computers have
+/// an envelope (their ids in the ring). The envelopes themselves are opaque to the nest (docs/ENCRYPTION.md §2.1).
+/// </summary>
+public sealed record KeysInfo(bool Sealed, bool Recovery, List<string> Computers);
+
+/// <summary><c>POST /api/keys/requests</c>: a new computer asks to be unlocked, sending only its commitment first.</summary>
+public sealed record KeyRequestStart(string? Name, byte[]? Commitment);
+
+/// <summary>One message of an unlock request (the offer, the reveal or the sealed ring).</summary>
+public sealed record KeyRequestMessage(byte[]? Data);
+
+/// <summary>An unlock request as the nest passes it on; the messages are opaque to it.</summary>
+public sealed record KeyRequestView(string Id, string Name, DateTimeOffset Created, byte[] Commitment,
+    byte[]? Offer = null, byte[]? Reveal = null, byte[]? Ring = null);
+
+/// <summary>
+/// <c>GET /api/access</c> (friend invites, 1.0.61.2): what this computer may do on the nest: "owner", "edit" or "view",
+/// the shared top-level folders (null: the whole nest), the line about this computer's person, and the nest's name.
+/// </summary>
+public sealed record AccessAnswer(string? Access, IReadOnlyList<string>? Folders = null, string? Person = null, string? NestName = null);
+
+/// <summary>
+/// <c>GET /api/people</c> (the owner's computers only): the friends with computers on the nest, and the people who used
+/// an invite link and wait for the owner to let them in.
+/// </summary>
+public sealed record PeopleAnswer(IReadOnlyList<FriendPerson>? People, IReadOnlyList<FriendRequestEntry>? Requests);
+
+/// <summary>One friend: their account id at the service, the line about them ("Anna Berg · a•••@gmail.com"), what they may do, their computers.</summary>
+public sealed record FriendPerson(string? PersonId, string? Person, string? Access, IReadOnlyList<string>? Folders, IReadOnlyList<FriendDevice>? Devices);
+
+/// <summary>One of a friend's computers.</summary>
+public sealed record FriendDevice(string? Id, string? Name, string? System, DateTimeOffset? LastSeen);
+
+/// <summary>Someone who asked to join with an invite link, waiting for the owner's OK (the service sends the list to the nest).</summary>
+/// <param name="At">When they asked, as the service sent it (a time or a number).</param>
+public sealed record FriendRequestEntry(string? Id, string? Name, string? Email, string? Access, IReadOnlyList<string>? Folders, JsonElement? At = null);

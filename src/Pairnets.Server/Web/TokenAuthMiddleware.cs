@@ -98,7 +98,7 @@ public sealed class TokenAuthMiddleware
                 return (null, ErrorCodes.Unauthorized, "Missing or wrong token.");
             if (!device.IsActive)
                 return (null, ErrorCodes.DeviceRemoved, "This computer was removed from your nest. Sign in again to keep syncing.");
-            return (new DeviceIdentity(device.Id, device.Name, DeviceAuthKind.DeviceKey), string.Empty, string.Empty);
+            return (new DeviceIdentity(device.Id, device.Name, DeviceAuthKind.DeviceKey, device.AccessOrOwner), string.Empty, string.Empty);
         }
 
         var digest = SHA256.HashData(Encoding.UTF8.GetBytes(provided));

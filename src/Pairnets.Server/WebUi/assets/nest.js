@@ -564,13 +564,23 @@
       return wrap;
     }
 
+    // A friend's computer (the nest is shared with them): "Anna Berg's · view only". The person line is
+    // "Anna Berg · a•••@gmail.com"; only the name is shown here.
+    function friendLine(d) {
+      if (!d.access || d.access === "owner") return null;
+      const who = (d.person || "").split(" · ")[0].trim();
+      return (who ? who + "'s" : "A friend's") + " · " + (d.access === "view" ? "view only" : "can change");
+    }
+
     function deviceRow(d) {
       const parts = [d.system, d.appVersion ? "Pairnets " + d.appVersion : null];
       parts.push(d.lastChange ? "last change " + ago(d.lastChange) : isToday(d.firstSeen) ? "joined today" : "added " + day(d.firstSeen));
+      const friend = friendLine(d);
       return h("li", {},
         ring(systemIcon(d.system), d.online),
         h("div", { class: "grow" },
           h("div", { class: "title" }, d.name),
+          friend ? h("div", { class: "friend" }, friend) : null,
           h("div", { class: "detail" }, parts.filter(Boolean).join(" · ")),
           d.ownKey ? null : h("div", { class: "note" }, "ⓘ Uses the old shared token. Pairnets on it stops syncing and shows “Sign in to your nest” until you sign it in there and approve it here.")),
         h("span", { class: d.online ? "pill ok" : "pill" }, d.online ? "Online" : "Last seen " + ago(d.lastSeen)),

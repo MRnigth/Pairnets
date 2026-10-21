@@ -1,11 +1,12 @@
 // Apps sign in with the account: a device-code flow (CONTRACT.md section 6.9, extended by RELAY.md section 6). The
 // person picks which of their servers the computer joins; the first poll after that asks the server for a device key
-// (a signed admin call) and hands it to the app once. The service never stores the device key.
+// (a signed admin call) and hands it to the app once. The service never stores the device key. A nest a friend let
+// this account in to (RELAY.md 10) is one more choice: its key carries what was shared (access, folders, person).
 
 import { audit } from "../audit";
 import type { Ctx } from "../context";
 import { B32_UPPER, newId, randomBase32, randomToken } from "../crypto";
-import { cleanText, DEVICE_ID_RE, displayUserCode, iso, maskEmail, NEST_ID_RE, normaliseUserCode, placeName } from "../formats";
+import { cleanText, DEVICE_ID_RE, displayUserCode, dottedEmail, iso, maskEmail, NEST_ID_RE, normaliseUserCode, parseFolders, personName, placeName } from "../formats";
 import { HttpError, htmlResponse, json, noContent, redirect } from "../http";
 import { adminCall, markReached, NestOffline } from "../nestadmin";
 import { sendNotice } from "../mail";
@@ -14,6 +15,7 @@ import { enforce, HOUR } from "../ratelimit";
 import { jsonBody } from "../request";
 import { APP_TOKEN_LIFETIME, bearerToken, isRecent, loadBrowserSession, requireBrowser, requireRecent, secretHash, startAppSession } from "../sessions";
 import type { NestRow } from "./account";
+import { memberOf, nestFriendFeatures, sharedNestsOf } from "./friends";
 import { relayUrl, serversOf } from "./servers";
 
 export const DEVICE_LOGIN_LIFETIME = 600;
@@ -22,6 +24,10 @@ export const POLL_INTERVAL = 3;
 const KEY_REQUEST_HOLD = 10;
 /** A computer allowed while its account had no nest waits this long for one (from the moment it was allowed). */
 export const NO_NEST_WAIT = 1800;
+
+/** The nest `n` (binds ?2 = the account) is the account's own, or a friend let the account in to it. */
+const OWN_OR_SHARED =
+  "(n.account_id = ?2 OR EXISTS (SELECT 1 FROM nest_members m WHERE m.nest_id = n.id AND m.account_id = ?2 AND m.removed_at IS NULL))";
 
 interface DeviceLoginRow {
   id: string;
@@ -127,8 +133,10 @@ export async function appPageRoute(ctx: Ctx): Promise<Response> {
   if (row && row.status === "pending" && !isRecent(ctx, s)) {
     return redirect(`/login?reauth=1&next=${encodeURIComponent(`/app?code=${displayUserCode(row.user_code)}`)}`);
   }
-  // Pending: the nests to choose from. Answered: the account's nests, to name the one it joined.
+  // Pending: the nests to choose from, its own and then the ones shared with it. Answered: the same, to name the one
+  // it joined.
   const servers = row ? await serversOf(ctx, s.accountId) : [];
+  const shared = row ? await sharedNestsOf(ctx, s.accountId) : [];
   // The nests the app already syncs (it adds ?have=nst_…,nst_… when adding one more): a hint for the list, nothing more.
   const have = new Set((ctx.url.searchParams.get("have") ?? "").split(",").filter((id) => NEST_ID_RE.test(id)).slice(0, 20));
   return htmlResponse(
@@ -150,7 +158,15 @@ export async function appPageRoute(ctx: Ctx): Promise<Response> {
           }
         : null,
       typed,
-      servers.map((n) => ({ id: n.id, label: n.label, have: have.has(n.id) })),
+      [
+        ...servers.map((n) => ({ id: n.id, label: n.label, have: have.has(n.id) })),
+        ...shared.map((x) => ({
+          id: x.nest.id,
+          label: x.nest.label,
+          have: have.has(x.nest.id),
+          shared: { by: x.sharedBy, folders: parseFolders(x.member.folders), access: x.member.access },
+        })),
+      ],
     ),
   );
 }
@@ -179,10 +195,9 @@ export async function appApproveRoute(ctx: Ctx): Promise<Response> {
   if (withoutNest) {
     if ((await serversOf(ctx, s.accountId)).length > 0) throw new HttpError(400, "bad_request"); // it has one: choose it
   } else if (b.approve) {
-    // It MUST be one of this account's relayed servers (another account's answers like an unknown one).
-    const nest = await ctx.env.DB.prepare(
-      "SELECT id FROM nests WHERE id = ?1 AND account_id = ?2 AND mode = 'relay' AND status IN ('pending', 'active')",
-    )
+    // It MUST be one of this account's relayed servers, or one it was let in to (another account's answers like an
+    // unknown one).
+    const nest = await ctx.env.DB.prepare(`SELECT id FROM nests n WHERE id = ?1 AND mode = 'relay' AND status IN ('pending', 'active') AND ${OWN_OR_SHARED}`)
       .bind(b.nestId, s.accountId)
       .first<{ id: string }>();
     if (!nest) throw new HttpError(404, "not_found");
@@ -261,19 +276,36 @@ async function deliver(ctx: Ctx, row: DeviceLoginRow): Promise<Response> {
     row = { ...row, nest_id: newest.id };
   }
   const nest = row.nest_id
-    ? await ctx.env.DB.prepare("SELECT * FROM nests WHERE id = ?1 AND account_id = ?2 AND mode = 'relay' AND status IN ('pending', 'active')")
+    ? await ctx.env.DB.prepare(`SELECT * FROM nests n WHERE id = ?1 AND mode = 'relay' AND status IN ('pending', 'active') AND ${OWN_OR_SHARED}`)
         .bind(row.nest_id, accountId)
         .first<NestRow>()
     : null;
-  const account = await ctx.env.DB.prepare("SELECT email FROM accounts WHERE id = ?1").bind(accountId).first<{ email: string }>();
-  if (!nest || !account) throw new HttpError(400, "expired"); // the server was removed meanwhile
+  const account = await ctx.env.DB.prepare("SELECT email, username FROM accounts WHERE id = ?1").bind(accountId).first<{ email: string; username: string | null }>();
+  if (!nest || !account) throw new HttpError(400, "expired"); // the server was removed meanwhile, or the friend was
 
+  // A friend's computer: only a nest that keeps friends to what was shared is asked (an older one would hand out a key
+  // to everything), and the key carries the access, the folders and who the person is.
+  const member = nest.account_id === accountId ? null : await memberOf(ctx, nest.id, accountId);
+  if (nest.account_id !== accountId && !member) throw new HttpError(400, "expired");
+  const body: Record<string, unknown> = { name: row.name, system: row.system, approvedBy: maskEmail(account.email) };
   let answer;
   try {
-    answer = await adminCall(ctx.env, ctx.now, nest, "POST", "/api/relay/devices", { name: row.name, system: row.system, approvedBy: maskEmail(account.email) });
+    if (member) {
+      if (!(await nestFriendFeatures(ctx, nest)).friends) {
+        throw new HttpError(409, "nest_too_old", "This nest needs an update before friends can use it. Ask its owner to update it.");
+      }
+      body.access = member.access;
+      body.folders = parseFolders(member.folders);
+      body.person = `${personName(account)} · ${dottedEmail(account.email)}`;
+      body.personId = accountId;
+    }
+    answer = await adminCall(ctx.env, ctx.now, nest, "POST", "/api/relay/devices", body);
   } catch (e) {
     if (e instanceof NestOffline) throw new HttpError(503, "nest_offline");
     throw e;
+  }
+  if (member && answer.status === 400 && (answer.json as { error?: unknown } | null)?.error === "sealed_whole_only") {
+    throw new HttpError(409, "sealed_whole_only", "This nest is encrypted, so it can only be shared whole. Ask its owner to share the whole nest.");
   }
   const d = answer.status === 200 && answer.json && typeof answer.json === "object" ? (answer.json as Record<string, unknown>) : null;
   if (!d || typeof d.id !== "string" || !DEVICE_ID_RE.test(d.id) || typeof d.name !== "string" || typeof d.key !== "string" || d.key.length === 0) {
@@ -291,9 +323,23 @@ async function deliver(ctx: Ctx, row: DeviceLoginRow): Promise<Response> {
     appToken,
     expiresIn: APP_TOKEN_LIFETIME,
     email: account.email,
-    nest: { id: nest.id, label: nest.label, serverUrl: relayUrl(ctx, nest.id) },
+    nest: {
+      id: nest.id,
+      label: nest.label,
+      serverUrl: relayUrl(ctx, nest.id),
+      // A shared nest (RELAY.md 10): whose it is and what this computer may do. One's own: null, "owner", null.
+      sharedBy: member ? await ownerName(ctx, nest.account_id) : null,
+      access: member ? member.access : "owner",
+      folders: member ? parseFolders(member.folders) : null,
+    },
     device: { id: d.id, name: d.name, key: d.key },
   });
+}
+
+/** The owner's name as a friend sees it (username, or the part of the email before the @). */
+async function ownerName(ctx: Ctx, accountId: string): Promise<string> {
+  const a = await ctx.env.DB.prepare("SELECT email, username FROM accounts WHERE id = ?1").bind(accountId).first<{ email: string; username: string | null }>();
+  return a ? personName(a) : "";
 }
 
 // POST /v1/app/logout (Bearer; 204 also for unknown tokens)

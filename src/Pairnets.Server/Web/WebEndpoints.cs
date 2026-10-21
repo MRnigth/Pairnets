@@ -38,8 +38,10 @@ public static class WebEndpoints
     /// </summary>
     public static readonly TimeSpan SetupLinkPasswordWindow = TimeSpan.FromMinutes(30);
 
+    /// <param name="Access">"owner", "edit" or "view" for a computer with its own key (null on the old shared token).</param>
+    /// <param name="Person">Whose computer it is, for a friend's ("Anna Berg · a•••@gmail.com").</param>
     public sealed record DeviceView(string? Id, string Name, string? System, string? AppVersion, bool Online,
-        DateTimeOffset FirstSeen, DateTimeOffset LastSeen, DateTimeOffset? LastChange, bool OwnKey);
+        DateTimeOffset FirstSeen, DateTimeOffset LastSeen, DateTimeOffset? LastChange, bool OwnKey, string? Access = null, string? Person = null);
 
     public sealed record PairView(string Code, string Name, string? System, string? AppVersion, string? Address,
         DateTimeOffset Created, DateTimeOffset Expires, string Status, bool SameComputer);
@@ -139,10 +141,13 @@ public static class WebEndpoints
 
         signedIn.MapGet("/devices", (HttpContext ctx, DeviceRegistry devices, DeviceKeys keys) =>
         {
-            var active = keys.Store.ListDevices().Select(d => d.Id).ToHashSet(StringComparer.Ordinal);
+            var active = keys.Store.ListDevices().ToDictionary(d => d.Id, StringComparer.Ordinal);
             var list = devices.List()
-                .Where(d => d.Id is null || active.Contains(d.Id))
-                .Select(d => new DeviceView(d.Id, d.Name, d.System, d.AppVersion, d.Online, d.FirstSeen, d.LastSeen, d.LastChange, d.Id is not null))
+                .Where(d => d.Id is null || active.ContainsKey(d.Id))
+                .Select(d => d.Id is { } id && active[id] is var keyed
+                    ? new DeviceView(d.Id, d.Name, d.System, d.AppVersion, d.Online, d.FirstSeen, d.LastSeen, d.LastChange, true,
+                        keyed.AccessOrOwner.Level, keyed.Person)
+                    : new DeviceView(d.Id, d.Name, d.System, d.AppVersion, d.Online, d.FirstSeen, d.LastSeen, d.LastChange, false))
                 .ToList();
             var pending = keys.Store.ListPendingPairRequests().Select(r => View(r, ctx)).ToList();
             return Json(new DevicesView(list, pending, keys.AllowSharedToken));

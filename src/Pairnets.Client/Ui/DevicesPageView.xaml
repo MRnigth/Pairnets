@@ -114,6 +114,104 @@
                    Text="Loading the computers on your nest…" />
       </StackPanel>
 
+      <!-- People: the friends the nest is shared with, and those waiting to be let in (the owner's computers, nests reached
+           through Pairnets). Every button but "Invite a friend…" opens the account page at this nest's People. -->
+      <StackPanel x:Name="PeoplePanel" Visibility="Collapsed">
+        <Grid Margin="4,22,0,0" Height="38">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="Auto" />
+          </Grid.ColumnDefinitions>
+          <TextBlock Text="People" FontSize="16" FontWeight="ExtraBold" VerticalAlignment="Center" />
+          <TextBlock x:Name="PeopleSummary" Grid.Column="1" Style="{StaticResource PgSmall}" Margin="12,0,0,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+          <Button Grid.Column="2" Style="{StaticResource PgButton}" VerticalAlignment="Center" Foreground="{DynamicResource T.AccentInk}" Click="OnInviteFriend">
+            <StackPanel Orientation="Horizontal">
+              <ui:LineIcon Width="16" Height="16" Margin="0,0,8,0" StrokeThickness="2" Stroke="{DynamicResource T.AccentInk}" Data="{StaticResource I.UserPlus}" />
+              <TextBlock Text="Invite a friend…" VerticalAlignment="Center" />
+            </StackPanel>
+          </Button>
+        </Grid>
+        <Border x:Name="PeopleCard" Style="{StaticResource PgCard}" Margin="0,10,0,0" ClipToBounds="True">
+          <ItemsControl x:Name="PeopleList" Focusable="False">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <Border x:Name="Row" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource T.Border}" Padding="20,14">
+                  <Grid>
+                    <Grid.ColumnDefinitions>
+                      <ColumnDefinition Width="Auto" />
+                      <ColumnDefinition Width="*" />
+                      <ColumnDefinition Width="Auto" />
+                      <ColumnDefinition Width="Auto" />
+                      <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <Border Width="40" Height="40" CornerRadius="20" Margin="0,0,14,0" Background="{DynamicResource T.WarnPill}">
+                      <TextBlock Text="{Binding Letter}" FontWeight="ExtraBold" FontSize="15" Foreground="{DynamicResource T.WarnText}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                      <TextBlock Text="{Binding Title}" FontSize="15" FontWeight="ExtraBold" TextTrimming="CharacterEllipsis" />
+                      <TextBlock Text="{Binding Line}" Style="{StaticResource PgSmall}" TextTrimming="CharacterEllipsis" ToolTip="{Binding Line}" />
+                    </StackPanel>
+                    <ItemsControl Grid.Column="2" ItemsSource="{Binding Chips}" VerticalAlignment="Center" Focusable="False" Margin="10,0,0,0">
+                      <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                          <StackPanel Orientation="Horizontal" />
+                        </ItemsPanelTemplate>
+                      </ItemsControl.ItemsPanel>
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                          <Border Background="{DynamicResource T.Chip}" CornerRadius="13" Padding="10,4" Margin="0,0,6,0">
+                            <TextBlock Text="{Binding}" FontSize="12" FontWeight="Bold" />
+                          </Border>
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <Border x:Name="Pill" Grid.Column="3" CornerRadius="13" Padding="10,4" MinWidth="92" Margin="4,0,10,0" VerticalAlignment="Center" Background="{DynamicResource T.OkPill}">
+                      <TextBlock x:Name="PillText" Text="{Binding Pill}" FontSize="12" FontWeight="Bold" HorizontalAlignment="Center" Foreground="{DynamicResource T.OkText}" />
+                    </Border>
+                    <StackPanel x:Name="FriendButtons" Grid.Column="4" Orientation="Horizontal" VerticalAlignment="Center">
+                      <Button Style="{StaticResource PgChipButton}" Height="34" Content="Change…" ToolTip="{Binding ChangeLabel}"
+                              AutomationProperties.Name="{Binding ChangeLabel}" Click="OnPersonChange" />
+                      <Button Style="{StaticResource PgLink}" Margin="12,0,0,0" FontSize="13" Foreground="{DynamicResource T.BadText}" Content="Remove"
+                              AutomationProperties.Name="{Binding RemoveLabel}" Click="OnPersonRemove" />
+                    </StackPanel>
+                    <StackPanel x:Name="WaitingButtons" Grid.Column="4" Orientation="Horizontal" VerticalAlignment="Center" Visibility="Collapsed">
+                      <Button Style="{StaticResource PgButton}" Height="34" Foreground="{DynamicResource T.BadText}" Content="Decline"
+                              AutomationProperties.Name="{Binding DeclineLabel}" Click="OnPersonDecline" />
+                      <Button Style="{StaticResource PgPrimary}" Height="34" Margin="8,0,0,0" Content="{Binding LetInLabel}"
+                              AutomationProperties.Name="{Binding LetInLabel}" Click="OnPersonLetIn" />
+                    </StackPanel>
+                  </Grid>
+                </Border>
+                <DataTemplate.Triggers>
+                  <DataTrigger Binding="{Binding ViewOnly}" Value="True">
+                    <Setter TargetName="Pill" Property="Background" Value="{DynamicResource T.Chip}" />
+                    <Setter TargetName="PillText" Property="Foreground" Value="{DynamicResource T.Muted}" />
+                  </DataTrigger>
+                  <DataTrigger Binding="{Binding Waiting}" Value="True">
+                    <Setter TargetName="Row" Property="Background" Value="{DynamicResource T.WarnPill}" />
+                    <Setter TargetName="Pill" Property="Visibility" Value="Collapsed" />
+                    <Setter TargetName="FriendButtons" Property="Visibility" Value="Collapsed" />
+                    <Setter TargetName="WaitingButtons" Property="Visibility" Value="Visible" />
+                  </DataTrigger>
+                </DataTemplate.Triggers>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </Border>
+        <TextBlock x:Name="PeopleEmpty" Style="{StaticResource PgSub}" Margin="4,10,0,0" FontSize="13"
+                   Text="Nobody else uses this nest yet. Invite a friend to share all of it, or just some folders." />
+        <Grid Margin="4,12,0,0">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="*" />
+          </Grid.ColumnDefinitions>
+          <ui:LineIcon Width="16" Height="16" Margin="0,1,8,0" VerticalAlignment="Top" StrokeThickness="1.9" Stroke="{DynamicResource T.Muted}" Data="{StaticResource I.InfoCircle}" />
+          <TextBlock Grid.Column="1" Style="{StaticResource PgSub}" Margin="0" FontSize="13" TextWrapping="Wrap"
+                     Text="Nobody gets in from a link alone: you let each person in. Friends only see the folders you share with them, and can't invite others, remove computers or update your nest. Change…, Remove and Let in open your account page." />
+        </Grid>
+      </StackPanel>
+
       <!-- Removing and renaming happens on the nest's website -->
       <Grid Margin="4,16,0,0">
         <Grid.ColumnDefinitions>

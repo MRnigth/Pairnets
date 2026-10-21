@@ -45,10 +45,27 @@ public sealed class PairnetsSlowDownException(TimeSpan retryAfter)
 public sealed class DownloadMismatchException(string message) : PairnetsNetworkException(message);
 
 /// <summary>The server answered something unexpected for one file. Only that file is skipped.</summary>
-public sealed class PairnetsProtocolException(string message, string? details = null, Exception? inner = null) : Exception(message, inner)
+public class PairnetsProtocolException(string message, string? details = null, Exception? inner = null) : Exception(message, inner)
 {
     /// <summary>The technical side (status, parser text) for the log and the bug report; never shown to people.</summary>
     public string? Details { get; } = details;
+}
+
+/// <summary>
+/// The nest said no because of what this computer may do there (403, friend invites): <see cref="ViewOnly"/> (the nest
+/// is shared with it to look at), <see cref="NotShared"/> (the file is outside the shared folders) or
+/// <see cref="OwnerOnly"/> (only the owner's computers may). Nothing is wrong with the file: the sync engine keeps such
+/// a change on this computer instead of counting an error, and the app asks the nest again what it may do.
+/// </summary>
+public sealed class PairnetsShareRefusedException(string code, string message, string? details = null) : PairnetsProtocolException(message, details)
+{
+    public const string ViewOnly = "view_only";
+    public const string NotShared = "not_shared";
+    public const string OwnerOnly = "owner_only";
+
+    public string Code { get; } = code;
+
+    public static bool IsCode(string? code) => code is ViewOnly or NotShared or OwnerOnly;
 }
 
 /// <summary>Reading the local file failed during an upload (locked, vanished, I/O error).</summary>

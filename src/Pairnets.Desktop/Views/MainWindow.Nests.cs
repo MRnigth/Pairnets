@@ -158,7 +158,7 @@ public partial class MainWindow
         var title = new TextBlock { Text = row.Title, FontSize = 18, FontWeight = FontWeight.ExtraBold, TextTrimming = TextTrimming.CharacterEllipsis };
         var state = new TextBlock
         {
-            Text = char.ToUpperInvariant(row.Text[0]) + row.Text[1..] + (row.AccountEmail is { } email ? " · signed in as " + AccountSignIn.MaskEmail(email) : string.Empty),
+            Text = row.CardLine,
             FontSize = 13,
             TextTrimming = TextTrimming.CharacterEllipsis,
         };

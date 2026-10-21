@@ -103,6 +103,10 @@ export interface AccountView {
   servers: ServerView[];
   nests: NestView[];
   sessions: SessionView[];
+  /** Nests other accounts share with this one (RELAY.md 10). */
+  shared?: SharedView[];
+  /** /account?invite=nst_…&folders=…&access=…: that nest's invite form is drawn open and filled in (the apps hand over to it). */
+  invite?: { nestId: string; folders: string[] | null; access: "view" | "edit" } | null;
 }
 
 /** A relayed server; the page's script fills in online, version, free space and computers from GET /v1/servers. */
@@ -110,6 +114,26 @@ export interface ServerView {
   id: string;
   label: string;
   status: "pending" | "active";
+  /** Its People: friends let in, people waiting for an answer, and invite links still open. */
+  people?: PeopleView;
+}
+
+export interface PersonShare {
+  access: "view" | "edit";
+  /** Top-level folders, or null for the whole nest. */
+  folders: string[] | null;
+}
+
+export interface PeopleView {
+  members: ({ accountId: string; name: string; email: string } & PersonShare)[];
+  waiting: ({ id: string; name: string; email: string } & PersonShare)[];
+  links: ({ id: string; link: string; email: string | null; expiresAt: number } & PersonShare)[];
+}
+
+export interface SharedView extends PersonShare {
+  nestId: string;
+  label: string;
+  sharedBy: string;
 }
 
 export interface NestView {
@@ -138,6 +162,109 @@ function when(sec: number | null): string {
   return sec === null ? "never" : `<time datetime="${e(iso(sec))}">${e(iso(sec).replace("T", " ").replace("Z", " UTC"))}</time>`;
 }
 
+/** "Photos, School · view only" / "Whole nest · can change". */
+function shareWords(p: PersonShare): string {
+  return `${p.folders ? p.folders.join(", ") : "Whole nest"} · ${p.access === "view" ? "view only" : "can change"}`;
+}
+
+/** The round letter before a person's name. */
+function letter(name: string): string {
+  return `<span class="letter" aria-hidden="true">${e(([...name.trim()][0] ?? "?").toUpperCase())}</span>`;
+}
+
+function day(sec: number): string {
+  return new Date(sec * 1000).toLocaleDateString("en-GB", { day: "numeric", month: "long", timeZone: "UTC" });
+}
+
+/** The invite form under a nest's People: drawn hidden, or open and filled in when the apps handed over to it. */
+function inviteForm(n: ServerView, open: { folders: string[] | null; access: "view" | "edit" } | null): string {
+  const id = e(n.id);
+  const chosen = !!open?.folders;
+  const edit = open?.access === "edit";
+  return `<form class="invite-form" data-field="invite-form"${open ? " data-open" : " hidden"}>
+<h3>Invite a friend to ${e(n.label)}</h3>
+<p class="muted">They sign in with their own Pairnets account. You can change or take back access any time.</p>
+<fieldset><legend>What they get</legend>
+<label class="choice"><input type="radio" name="what-${id}" value="whole"${chosen ? "" : " checked"}> The whole nest</label>
+<label class="choice"><input type="radio" name="what-${id}" value="folders" data-field="chosen"${chosen ? " checked" : ""}> Chosen folders</label>
+<label for="folders-${id}">Folder names, separated by commas (top-level folders of the nest)</label>
+<input id="folders-${id}" name="folders" maxlength="2000" autocomplete="off" placeholder="Photos, School" value="${e(open?.folders ? open.folders.join(", ") : "")}">
+<p class="muted" data-field="sealed-note" hidden>An encrypted nest can only be shared whole.</p>
+</fieldset>
+<fieldset><legend>What they can do</legend>
+<label class="choice"><input type="radio" name="access-${id}" value="view"${edit ? "" : " checked"}> <span><strong>View only</strong> <span class="muted">They get your files and your changes. What they change stays on their computer.</span></span></label>
+<label class="choice"><input type="radio" name="access-${id}" value="edit"${edit ? " checked" : ""}> <span><strong>Can change</strong> <span class="muted">They can add, edit and delete in these folders. Deleted files still go to your nest's history.</span></span></label>
+</fieldset>
+<label for="invite-email-${id}">Their email (or leave it empty and copy the link)</label>
+<input id="invite-email-${id}" name="email" type="email" maxlength="254" autocomplete="off" placeholder="friend@example.com">
+<div class="actions"><button type="submit">Send invite</button> <button type="button" class="secondary" data-action="invite-link">Copy invite link</button> <button type="button" class="link" data-action="invite-close">Close</button></div>
+<p class="muted">Whoever uses the link still waits for you: you let each person in before they get any files. It ends after 7 days.</p>
+<p class="error" data-field="invite-error" role="alert" hidden></p>
+<div data-field="invite-done" hidden><p class="saved" data-field="invite-said" role="status"></p><div class="input-row"><input data-field="invite-url" readonly aria-label="Invite link"><button type="button" data-action="invite-copy-new">Copy</button></div><p><button type="button" class="secondary" data-action="invite-finish">Done</button></p></div>
+</form>`;
+}
+
+/** A nest's People (RELAY.md 10): its friends, the people waiting for an answer, open links, and the invite form. */
+function peopleSection(n: ServerView, invite: AccountView["invite"]): string {
+  const p = n.people ?? { members: [], waiting: [], links: [] };
+  const rows = [
+    ...p.waiting.map(
+      (w) => `<li class="person waiting" data-invite="${e(w.id)}">${letter(w.name)}<div class="who">
+<div><strong>${e(w.name)} wants to join</strong> <span class="muted">· ${e(w.email)}</span></div>
+<div class="muted">Used your invite link · ${e(shareWords(w))}</div>
+<div class="actions"><button type="button" class="secondary" data-action="invite-decline">Decline</button> <button type="button" data-action="invite-approve">Let ${e(w.name)} in</button></div>
+</div></li>`,
+    ),
+    ...p.members.map(
+      (m) => `<li class="person" data-person="${e(m.accountId)}" data-access="${e(m.access)}" data-folders="${e(m.folders ? m.folders.join(", ") : "")}">${letter(m.name)}<div class="who">
+<div><strong data-field="name">${e(m.name)}</strong> <span class="muted">· ${e(m.email)}</span></div>
+<div class="muted"><span data-field="share">${e(shareWords(m))}</span><span data-field="computers"></span></div>
+<div class="actions"><button type="button" class="secondary" data-action="person-change">Change…</button> <button type="button" class="danger" data-action="person-remove">Remove</button></div>
+</div></li>`,
+    ),
+    ...p.links.map(
+      (l) => `<li class="person link" data-invite="${e(l.id)}" data-link="${e(l.link)}">${letter("@")}<div class="who">
+<div><strong>${l.email ? `Invite sent to ${e(l.email)}` : "Invite link"}</strong></div>
+<div class="muted">${e(shareWords(l))} · ends ${e(day(l.expiresAt))}</div>
+<div class="actions"><button type="button" class="secondary" data-action="invite-copy">Copy link</button> <button type="button" class="danger" data-action="invite-cancel">Cancel</button></div>
+</div></li>`,
+    ),
+  ];
+  const friends = p.members.length;
+  const summary = [
+    friends ? `${friends} ${friends === 1 ? "friend" : "friends"}` : "",
+    p.waiting.length ? `${p.waiting.length} waiting` : "",
+  ].filter(Boolean);
+  const open = invite && invite.nestId === n.id ? invite : null;
+  return `<section class="people" id="people-${e(n.id)}" aria-labelledby="people-${e(n.id)}-title">
+<div class="row"><h3 id="people-${e(n.id)}-title">People</h3> <span class="muted">${e(summary.length ? summary.join(" · ") : rows.length ? "" : "Only you")}</span> <button type="button" class="secondary small" data-action="invite-open">Invite a friend…</button></div>
+<p class="notice" data-field="friends-note" hidden></p>
+${rows.length ? `<ul class="list people-list">\n${rows.join("\n")}\n</ul>` : ""}
+${inviteForm(n, open)}
+</section>`;
+}
+
+/** "Shared with you": the nests other accounts let this one in to, each with Leave. */
+function sharedSection(shared: SharedView[]): string {
+  if (!shared.length) return "";
+  const rows = shared
+    .map(
+      (s) => `<li data-shared="${e(s.nestId)}">
+<div class="row"><strong>${e(s.label)}</strong> <span class="muted">· shared by ${e(s.sharedBy)}</span></div>
+<div class="muted">${e(shareWords(s))}</div>
+<div class="actions"><button type="button" class="danger" data-action="leave">Leave</button></div>
+</li>`,
+    )
+    .join("\n");
+  return `<section class="card" id="shared">
+<h2>Shared with you</h2>
+<ul class="list" id="shared-list">
+${rows}
+</ul>
+<p class="muted">To add one of these on a computer: open Pairnets, choose Add a nest and sign in with this account.</p>
+</section>`;
+}
+
 export function accountPage(v: AccountView): string {
   const servers = v.servers.length
     ? v.servers
@@ -148,6 +275,7 @@ export function accountPage(v: AccountView): string {
 <p class="muted">Computers using this nest:</p>
 <ul class="list devices" data-field="devices"><li class="muted">Loading...</li></ul>
 <p class="muted" data-field="rename-offline" hidden>Your computers can be renamed when your nest is connected again. The nest's own name can be changed any time.</p>
+${peopleSection(n, v.invite ?? null)}
 <div class="actions"><button type="button" class="danger" data-action="remove-server">Remove this nest from my account</button></div>
 </li>`,
         )
@@ -201,6 +329,7 @@ ${servers}
 </ul>
 <p class="muted">To add a nest: on the Linux computer that will keep your files, run <code>curl -fsSL https://pairnets.app/get.sh | sudo bash</code>. It shows a link and a code: open the link and choose Add this nest. Then, on each computer, install Pairnets and choose Continue with email (or Google) with this account.</p>
 </section>
+${sharedSection(v.shared ?? [])}
 <details class="card"${v.nests.length ? " open" : ""}>
 <summary>Nests on their own address</summary>
 <p class="muted">Only for a nest that has its own web address (installed with --public-url).</p>
@@ -253,6 +382,13 @@ export interface ServerChoice {
   label: string;
   /** The computer asking already syncs this nest (the app says so when it adds one more nest): shown, not offered. */
   have?: boolean;
+  /** A nest shared with this account (RELAY.md 10): its owner's name and what was shared. Absent for the account's own. */
+  shared?: { by: string; folders: string[] | null; access: "view" | "edit" };
+}
+
+/** "Shared by Jonas · Photos, School · view only" / "Shared by Jonas · whole nest · can change". */
+function sharedLine(sh: NonNullable<ServerChoice["shared"]>): string {
+  return `Shared by ${sh.by} · ${sh.folders ? sh.folders.join(", ") : "whole nest"} · ${sh.access === "view" ? "view only" : "can change"}`;
 }
 
 // ------------------------------------------------------------------ "Sign in an app?" (/app)
@@ -310,17 +446,27 @@ function askScreen(req: AppRequestView, servers: ServerChoice[]): string {
   if (!servers.length) {
     nest = `<p class="q-note"><b>You don't have a nest yet.</b> Allow ${name} now and it waits. Next you set up your nest, and ${name} joins it by itself.</p>`;
   } else if (servers.length === 1) {
-    nest = `<p class="q-syncwith">${icon("server")}<span>It will sync with <b>${e(servers[0].label)}</b></span></p>`;
+    const only = servers[0];
+    const by = only.shared ? ` <span class="q-have-note">· shared by ${e(only.shared.by)}</span>` : "";
+    nest = `<p class="q-syncwith">${icon("server")}<span>It will sync with <b>${e(only.label)}</b>${by}</span></p>`;
   } else {
-    // Nests this computer already syncs stay in the list, greyed out, unless that would leave nothing to pick.
+    // Nests this computer already syncs stay in the list, greyed out, unless that would leave nothing to pick. The
+    // account's own nests come first, then the ones shared with it, under a heading of their own.
     const offered = servers.some((n) => !n.have) ? servers : servers.map((n) => ({ ...n, have: false }));
     const first = offered.findIndex((n) => !n.have);
+    const firstShared = offered.findIndex((n) => n.shared);
     const options = offered
-      .map((n, i) =>
-        n.have
+      .map((n, i) => {
+        const heading = i === firstShared ? `<p class="q-group">Shared with you</p>\n` : "";
+        if (n.shared) {
+          const sub = `${sharedLine(n.shared)}${n.have ? " · already on this computer" : ""}`;
+          const text = `<span class="q-choice-text">${e(n.label)}<span class="q-choice-sub">${e(sub)}</span></span>`;
+          return `${heading}<label class="q-choice${n.have ? " q-have" : ""}"><input type="radio" name="nest" value="${e(n.id)}" data-label="${e(n.label)}"${n.have ? " disabled" : i === first ? " checked" : ""}> ${text}</label>`;
+        }
+        return n.have
           ? `<label class="q-choice q-have"><input type="radio" name="nest" value="${e(n.id)}" data-label="${e(n.label)}" disabled> ${e(n.label)} <span class="q-have-note">· already on this computer</span></label>`
-          : `<label class="q-choice"><input type="radio" name="nest" value="${e(n.id)}" data-label="${e(n.label)}"${i === first ? " checked" : ""}> ${e(n.label)}</label>`,
-      )
+          : `<label class="q-choice"><input type="radio" name="nest" value="${e(n.id)}" data-label="${e(n.label)}"${i === first ? " checked" : ""}> ${e(n.label)}</label>`;
+      })
       .join("\n");
     nest = `<fieldset class="q-nests"><legend>Sync ${name} with</legend>
 <div class="q-choices">
@@ -459,6 +605,146 @@ export function appPage(req: AppRequestView | null, typed: string | null, server
     styles: ["app.css"],
     bodyClass: "q-page",
   });
+}
+
+// ------------------------------------------------------------------ An invite to a friend's nest (/invite?t=)
+// The same Quiet look as /app. Open: what is shared and "Ask to join". After asking, and on every visit while waiting,
+// "Asked to join" with how to get ready. Every other state is one screen that says where the invite stands.
+
+export interface InvitePageView {
+  state: "unknown" | "own" | "open" | "waiting" | "in" | "declined" | "cancelled" | "expired" | "used" | "member";
+  token: string;
+  nestId: string;
+  /** The nest's name, its owner's name and the owner's email with dots ("m•••@gmail.com"). */
+  nest: string;
+  owner: string;
+  ownerEmail: string;
+  folders: string[] | null;
+  access: "view" | "edit";
+  /** Who is signed in: their name (what the owner will see) and email. */
+  me: string;
+  myEmail: string;
+}
+
+/** How to add a shared nest on a computer: the steps on the waiting and "You're in" screens. */
+function addNestSteps(v: InvitePageView): string {
+  return `<ol class="q-steps">
+<li>Open Pairnets and choose <b>Add a nest</b> (in Settings, or the list on the left).</li>
+<li>Sign in as <b>${e(v.myEmail)}</b> and pick <b>${e(v.nest)} · shared by ${e(v.owner)}</b>.</li>
+<li>Choose where the folders go on your computer.</li>
+</ol>
+<div class="q-actions"><a class="q-btn q-primary" href="pairnets://open">Open Pairnets</a></div>
+<p class="q-close">No Pairnets yet? <a href="https://pairnets.app/">Download it</a></p>`;
+}
+
+function inviteAskScreen(v: InvitePageView): string {
+  const owner = e(v.owner);
+  const what = v.folders ? `these folders from their nest` : `their whole nest`;
+  const them = v.folders && v.folders.length === 1 ? "it" : "them";
+  const can =
+    v.access === "view"
+      ? `<b>View only</b><span class="q-fact-sub">Your own changes stay on your computer.</span>`
+      : `<b>Can change</b><span class="q-fact-sub">You can add, change and delete files. Deleted files still go to the nest's history.</span>`;
+  return screen(
+    "ask",
+    true,
+    `<p class="q-from">An invite from ${owner} · ${e(v.ownerEmail)}</p>
+<h1 id="screen-ask-title" tabindex="-1">Join ${e(v.nest)}?</h1>
+<p class="q-lead">${owner} shares ${what} with you. Pairnets will keep ${them} in sync on the computers you choose.</p>
+<dl class="q-facts">
+<div><dt>${v.folders ? "Folders" : "You get"}</dt><dd><b>${e(v.folders ? v.folders.join(", ") : "The whole nest")}</b></dd></div>
+<div><dt>You can</dt><dd>${can}</dd></div>
+<div><dt>Signed in as</dt><dd>${e(v.myEmail)} · <button type="button" class="q-link" id="not-you">not you?</button></dd></div>
+</dl>
+<p class="q-error" id="invite-error" role="alert" hidden></p>
+<div class="q-actions">
+<button type="button" class="q-btn q-primary" id="ask">Ask to join</button>
+<button type="button" class="q-btn q-ghost" id="no-thanks">No thanks</button>
+</div>
+<p class="q-fine">${owner} sees your name (${e(v.me)}) and your email, and lets you in. You can leave the nest any time.</p>`,
+  );
+}
+
+function inviteWaitingScreen(v: InvitePageView, shown: boolean): string {
+  const owner = e(v.owner);
+  return screen(
+    "waiting",
+    shown,
+    `<p class="q-note q-info">Waiting for ${owner} to let you in. We'll email you when that happens.</p>
+<h1 id="screen-waiting-title" tabindex="-1">Asked to join ${e(v.nest)}</h1>
+<p class="q-lead">You can get ready now. Once ${owner} says yes, add the nest on each computer you want it on:</p>
+${addNestSteps(v)}`,
+  );
+}
+
+/** One screen for an invite that can't be asked with (any more), or was already answered. */
+function inviteStateScreen(v: InvitePageView): string {
+  const owner = e(v.owner);
+  const nest = e(v.nest);
+  const one = (badge: string, title: string, lead: string, after = "") =>
+    screen(v.state, true, `${badge}\n<h1 id="screen-${v.state}-title" tabindex="-1">${title}</h1>\n<p class="q-lead">${lead}</p>${after ? `\n${after}` : ""}`);
+  const lock = `<span class="q-badge">${icon("lock")}</span>`;
+  const clock = `<span class="q-badge q-warn">${icon("clock")}</span>`;
+  const home = `<div class="q-actions"><a class="q-btn q-ghost" href="/account">Go to your account</a></div>`;
+  switch (v.state) {
+    case "in":
+      return one(RING_DONE, `You're in ${nest}`, `${owner} let you in. Add the nest on each computer you want it on:`, addNestSteps(v));
+    case "member":
+      return one(RING_DONE, `You already have ${nest}`, `${owner} shares it with you. To add it on another computer:`, addNestSteps(v));
+    case "declined":
+      return one(lock, `${owner} didn't let you in`, `Nothing was shared. If you think that's a mistake, ask ${owner}.`, home);
+    case "cancelled":
+      return one(lock, "This invite was cancelled", `${owner} took it back. Ask them if they meant to share ${nest} with you.`, home);
+    case "expired":
+      return one(clock, "This invite has run out", `Invites work for 7 days. Ask ${owner} for a new one.`, home);
+    case "used":
+      return one(lock, "This invite was already used", `Someone else asked to join with it. An invite works once: ask ${owner} for a new one.`, home);
+    case "own":
+      return one(
+        `<span class="q-badge">${icon("server")}</span>`,
+        "This is your own invite",
+        "Send the link to the friend you want to invite. They ask to join, and you let them in on your account page.",
+        `<div class="q-actions"><a class="q-btn q-ghost" href="/account#people-${e(v.nestId)}">Go to your nest's people</a></div>`,
+      );
+    default:
+      return one(clock, "This invite link doesn't work", "Check that the whole link was copied, or ask for a new one.", home);
+  }
+}
+
+export function invitePage(v: InvitePageView): string {
+  if (v.state === "open" || v.state === "waiting") {
+    const screens: string[] = [];
+    if (v.state === "open") {
+      screens.push(inviteAskScreen(v));
+      screens.push(
+        screen(
+          "no",
+          false,
+          `<span class="q-badge">${icon("lock")}</span>
+<h1 id="screen-no-title" tabindex="-1">No problem</h1>
+<p class="q-lead">Nothing was shared, and ${e(v.owner)} wasn't told. The link keeps working until it runs out, if you change your mind.</p>
+<p class="q-close">You can close this tab.</p>`,
+        ),
+      );
+    }
+    screens.push(inviteWaitingScreen(v, v.state === "waiting"));
+    const title = v.state === "open" ? `Join ${v.nest}?` : `Asked to join ${v.nest}`;
+    return layout(title, `<div id="invite-request" class="q-col" data-token="${e(v.token)}">\n${screens.join("\n")}\n</div>`, {
+      scripts: v.state === "open" ? ["invite.js"] : [],
+      styles: ["app.css"],
+      bodyClass: "q-page",
+    });
+  }
+  const titles: Record<string, string> = {
+    in: `You're in ${v.nest}`,
+    member: `You already have ${v.nest}`,
+    declined: "Not let in",
+    cancelled: "Invite cancelled",
+    expired: "Invite ran out",
+    used: "Invite already used",
+    own: "Your own invite",
+  };
+  return layout(titles[v.state] ?? "Invite", `<div class="q-col">\n${inviteStateScreen(v)}\n</div>`, { styles: ["app.css"], bodyClass: "q-page" });
 }
 
 export interface ServerRequestView {

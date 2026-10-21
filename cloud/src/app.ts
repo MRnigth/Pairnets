@@ -27,6 +27,19 @@ import {
 import { appApproveRoute, appLogoutRoute, appPageRoute, appPollRoute, appRequestRoute, appStartRoute } from "./routes/apps";
 import { claimRoute } from "./routes/claim";
 import {
+  approveInviteRoute,
+  cancelInviteRoute,
+  changePersonRoute,
+  createInviteRoute,
+  declineInviteRoute,
+  invitePageRoute,
+  inviteRequestRoute,
+  leaveSharedRoute,
+  listPeopleRoute,
+  listSharedRoute,
+  removePersonRoute,
+} from "./routes/friends";
+import {
   emailLandingRoute,
   googleCallbackRoute,
   googleStartRoute,
@@ -113,6 +126,16 @@ const API_ROUTES: Route[] = [
   { method: "GET", pattern: /^\/v1\/servers$/, handler: listServersRoute },
   { method: "PATCH", pattern: /^\/v1\/servers\/([^/]+)\/devices\/([^/]+)$/, handler: renameDeviceRoute },
   { method: "DELETE", pattern: /^\/v1\/servers\/([^/]+)\/devices\/([^/]+)$/, handler: removeDeviceRoute },
+  { method: "POST", pattern: /^\/v1\/servers\/([^/]+)\/invites$/, handler: createInviteRoute },
+  { method: "DELETE", pattern: /^\/v1\/servers\/([^/]+)\/invites\/([^/]+)$/, handler: cancelInviteRoute },
+  { method: "POST", pattern: /^\/v1\/servers\/([^/]+)\/invites\/([^/]+)\/approve$/, handler: approveInviteRoute },
+  { method: "POST", pattern: /^\/v1\/servers\/([^/]+)\/invites\/([^/]+)\/decline$/, handler: declineInviteRoute },
+  { method: "GET", pattern: /^\/v1\/servers\/([^/]+)\/people$/, handler: listPeopleRoute },
+  { method: "PATCH", pattern: /^\/v1\/servers\/([^/]+)\/people\/([^/]+)$/, handler: changePersonRoute },
+  { method: "DELETE", pattern: /^\/v1\/servers\/([^/]+)\/people\/([^/]+)$/, handler: removePersonRoute },
+  { method: "GET", pattern: /^\/v1\/shared$/, handler: listSharedRoute },
+  { method: "DELETE", pattern: /^\/v1\/shared\/([^/]+)$/, handler: leaveSharedRoute },
+  { method: "POST", pattern: /^\/v1\/invite\/request$/, handler: inviteRequestRoute },
   { method: "PATCH", pattern: /^\/v1\/servers\/([^/]+)$/, handler: renameServerRoute },
   { method: "DELETE", pattern: /^\/v1\/servers\/([^/]+)$/, handler: removeServerRoute },
 ];
@@ -126,6 +149,7 @@ const PAGE_ROUTES: Route[] = [
   { method: "GET", pattern: /^\/account$/, handler: accountPageRoute },
   { method: "GET", pattern: /^\/app$/, handler: appPageRoute },
   { method: "GET", pattern: /^\/add$/, handler: addPageRoute },
+  { method: "GET", pattern: /^\/invite$/, handler: invitePageRoute },
   { method: "GET", pattern: /^\/nest-login$/, handler: nestLoginRoute },
   ...WEBSITE_PAGES.map((page): Route => ({
     method: "GET",
