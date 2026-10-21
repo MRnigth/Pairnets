@@ -152,13 +152,17 @@ public sealed class MacPlatform : IPlatformServices
         [DllImport(CoreFoundation)]
         private static extern void CFRelease(IntPtr cf);
 
-        public string Protect(string plainText)
+        public string Protect(string plainText) => Protect(plainText, null);
+
+        /// <summary>The first nest's key is "sync-token"; another nest's is "sync-token-&lt;slot&gt;" (marker "keychain:v1:&lt;slot&gt;").</summary>
+        public string Protect(string plainText, string? slot)
         {
+            var account = AccountFor(slot);
             var data = Encoding.UTF8.GetBytes(plainText);
-            var rc = SecKeychainAddGenericPassword(IntPtr.Zero, (uint)Service.Length, Service, (uint)Account.Length, Account, (uint)data.Length, data, IntPtr.Zero);
+            var rc = SecKeychainAddGenericPassword(IntPtr.Zero, (uint)Service.Length, Service, (uint)account.Length, account, (uint)data.Length, data, IntPtr.Zero);
             if (rc == ErrSecDuplicateItem)
             {
-                rc = SecKeychainFindGenericPassword(IntPtr.Zero, (uint)Service.Length, Service, (uint)Account.Length, Account, out _, out var old, out var item);
+                rc = SecKeychainFindGenericPassword(IntPtr.Zero, (uint)Service.Length, Service, (uint)account.Length, account, out _, out var old, out var item);
                 if (rc == 0)
                 {
                     SecKeychainItemFreeContent(IntPtr.Zero, old);
@@ -168,17 +172,19 @@ public sealed class MacPlatform : IPlatformServices
             }
             if (rc != 0)
                 throw new InvalidOperationException($"Could not store the token in the Keychain (error {rc}).");
-            return Marker;
+            return SecretSlots.Marker(Marker, slot);
         }
 
         public string Unprotect(string protectedText)
         {
-            if (protectedText != Marker)
+            if (!SecretSlots.TryRead(Marker, protectedText, out var slot))
                 throw new InvalidOperationException("Unknown token storage.");
-            if (Find(Service, out var token, out var rc))
+            if (Find(Service, AccountFor(slot), out var token, out var rc))
                 return token;
+            if (slot is not null)
+                throw new InvalidOperationException($"The token is not in the Keychain (error {rc}).");
             // Saved by Tether: copy it to Pairnets' entry (macOS may ask once whether Pairnets may read it).
-            if (Find(TetherService, out token, out _))
+            if (Find(TetherService, Account, out token, out _))
             {
                 Protect(token);
                 return token;
@@ -189,9 +195,10 @@ public sealed class MacPlatform : IPlatformServices
         /// <summary>Removes Pairnets' Keychain entry (one saved by Tether is left alone, as everywhere else).</summary>
         public void Forget(string protectedText)
         {
-            if (protectedText != Marker)
+            if (!SecretSlots.TryRead(Marker, protectedText, out var slot))
                 return;
-            var rc = SecKeychainFindGenericPassword(IntPtr.Zero, (uint)Service.Length, Service, (uint)Account.Length, Account, out _, out var data, out var item);
+            var account = AccountFor(slot);
+            var rc = SecKeychainFindGenericPassword(IntPtr.Zero, (uint)Service.Length, Service, (uint)account.Length, account, out _, out var data, out var item);
             if (rc == ErrSecItemNotFound)
                 return; // nothing left to remove
             if (rc != 0)
@@ -209,10 +216,12 @@ public sealed class MacPlatform : IPlatformServices
                 throw new InvalidOperationException($"Could not remove the key from the Keychain (error {rc}).");
         }
 
-        private static bool Find(byte[] service, out string token, out int rc)
+        private static byte[] AccountFor(string? slot) => slot is null ? Account : Encoding.UTF8.GetBytes("sync-token-" + slot);
+
+        private static bool Find(byte[] service, byte[] account, out string token, out int rc)
         {
             token = string.Empty;
-            rc = SecKeychainFindGenericPassword(IntPtr.Zero, (uint)service.Length, service, (uint)Account.Length, Account, out var length, out var data, out var item);
+            rc = SecKeychainFindGenericPassword(IntPtr.Zero, (uint)service.Length, service, (uint)account.Length, account, out var length, out var data, out var item);
             if (rc != 0)
                 return false;
             try

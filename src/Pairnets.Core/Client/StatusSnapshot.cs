@@ -413,7 +413,11 @@ public sealed record StatusSnapshot(
     public ServerInfo? Server { get; init; }
 
     /// <summary>What the apps call the nest: the name its owner gave it on their account page ("soro"), else "Your nest".</summary>
-    public string NestTitle => Server?.NestName is { } name && ComputerName.Clean(name) is { Length: > 0 } clean ? clean : "Your nest";
+    public string NestTitle => Server?.NestName is { } name && ComputerName.Clean(name) is { Length: > 0 } clean ? clean
+        : ComputerName.Clean(NestLabel) is { Length: > 0 } label ? label : "Your nest";
+
+    /// <summary>The nest's name saved at sign-in (<see cref="ClientSettings.NestLabel"/>), until the nest itself says it.</summary>
+    public string? NestLabel { get; init; }
 
     /// <summary>"412 GB free on your nest" or null when the nest does not say.</summary>
     /// <summary>True once the server has answered and the connection is not currently down.</summary>

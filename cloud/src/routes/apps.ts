@@ -129,6 +129,8 @@ export async function appPageRoute(ctx: Ctx): Promise<Response> {
   }
   // Pending: the nests to choose from. Answered: the account's nests, to name the one it joined.
   const servers = row ? await serversOf(ctx, s.accountId) : [];
+  // The nests the app already syncs (it adds ?have=nst_…,nst_… when adding one more): a hint for the list, nothing more.
+  const have = new Set((ctx.url.searchParams.get("have") ?? "").split(",").filter((id) => NEST_ID_RE.test(id)).slice(0, 20));
   return htmlResponse(
     200,
     appPage(
@@ -148,7 +150,7 @@ export async function appPageRoute(ctx: Ctx): Promise<Response> {
           }
         : null,
       typed,
-      servers.map((n) => ({ id: n.id, label: n.label })),
+      servers.map((n) => ({ id: n.id, label: n.label, have: have.has(n.id) })),
     ),
   );
 }

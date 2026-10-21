@@ -44,6 +44,36 @@ public sealed class WindowsPlatform : IWindowsPlatform
         }
     }
 
+    public bool SetExplorerEntries(IReadOnlyList<ExplorerNest> nests, bool leftSide = true, bool rightClick = true, bool folderIcon = true) =>
+        nests.Count == 0 ? SetExplorerEntry(null, leftSide) : SetExplorerEntries(nests, Environment.ProcessPath, PairnetsPaths.LocalDir, leftSide, rightClick, folderIcon);
+
+    /// <summary><see cref="SetExplorerEntries(IReadOnlyList{ExplorerNest}, bool, bool, bool)"/> with the program and the folder for the icons given.</summary>
+    public static bool SetExplorerEntries(IReadOnlyList<ExplorerNest> nests, string? exePath, string localDir, bool leftSide = true, bool rightClick = true, bool folderIcon = true)
+    {
+        if (exePath is null)
+            return SetExplorerEntry(null, null, localDir);
+        try
+        {
+            using var software = Registry.CurrentUser.CreateSubKey("Software");
+            var before = ExplorerShell.RegisteredFolders(software);
+            var now = nests.Select(n => Path.TrimEndingDirectorySeparator(Path.GetFullPath(n.Folder))).ToList();
+            foreach (var gone in before.Where(b => !now.Contains(Path.TrimEndingDirectorySeparator(Path.GetFullPath(b)), StringComparer.OrdinalIgnoreCase)))
+                ExplorerShell.RemoveFolderIcon(gone); // a nest left or its folder moved: that folder goes back to a plain folder
+            var icons = Path.Combine(localDir, "Explorer");
+            Directory.CreateDirectory(icons);
+            var appIcon = CopyIcon("Pairnets.AppIcon.ico", icons);
+            var folderIconFile = CopyIcon("Pairnets.FolderIcon.ico", icons);
+            var ok = ExplorerShell.Apply(software, nests.Select(n => new ExplorerEntry(n.Folder, exePath, appIcon, folderIconFile, n.Name, n.Key)).ToList(), leftSide, rightClick, folderIcon);
+            if (!before.SequenceEqual(now, StringComparer.OrdinalIgnoreCase))
+                ExplorerShell.TellExplorer(); // only when something Explorer shows changed (it redraws every icon)
+            return ok;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException or ArgumentException)
+        {
+            return false;
+        }
+    }
+
     public CloudFiles.ICloudFolder? StartCloudFolder(string folder, CloudFolderMode mode, ILogger log, out string? problem,
         IReadOnlyDictionary<string, Pairnets.Core.Sync.FilePlacement>? placement = null)
     {

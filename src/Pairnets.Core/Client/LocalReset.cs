@@ -29,27 +29,32 @@ public static partial class LocalReset
         settingsPath ??= SettingsStore.DefaultPath;
         localDir ??= PairnetsPaths.LocalDir;
 
-        // The key first: once the settings file is gone nothing says where it was kept.
+        // The keys first: once the settings file is gone nothing says where they were kept. Every nest's (several nests
+        // each keep their own key) and its folder's marker.
+        IReadOnlyList<ClientSettings> nests = settings is null ? [] : settings.Nests() is { Count: > 0 } all ? all : [settings];
         var keyForgotten = false;
-        if (settings?.ProtectedToken is { Length: > 0 } saved && protector is not null)
-        {
-            try
-            {
-                protector.Forget(saved);
-                keyForgotten = true;
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or System.ComponentModel.Win32Exception)
-            {
-                problems.Add($"The saved key could not be removed from the system's secret store ({FriendlyErrors.Describe(ex)}).");
-            }
-        }
-
         var markerRemoved = false;
-        if (settings?.Folder is { Length: > 0 } folder && Path.IsPathFullyQualified(folder) && Directory.Exists(folder))
+        foreach (var nest in nests)
         {
-            // Only the two names Pairnets itself put there; nothing else in the folder is looked at.
-            markerRemoved = TryDelete(Path.Combine(folder, PathRules.MarkerFileName), problems);
-            TryDeleteFolder(Path.Combine(folder, PathRules.TempFolderName), problems);
+            if (nest.ProtectedToken is { Length: > 0 } saved && protector is not null)
+            {
+                try
+                {
+                    protector.Forget(saved);
+                    keyForgotten = true;
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or System.ComponentModel.Win32Exception)
+                {
+                    problems.Add($"The saved key could not be removed from the system's secret store ({FriendlyErrors.Describe(ex)}).");
+                }
+            }
+
+            if (nest.Folder is { Length: > 0 } folder && Path.IsPathFullyQualified(folder) && Directory.Exists(folder))
+            {
+                // Only the two names Pairnets itself put there; nothing else in the folder is looked at.
+                markerRemoved |= TryDelete(Path.Combine(folder, PathRules.MarkerFileName), problems);
+                TryDeleteFolder(Path.Combine(folder, PathRules.TempFolderName), problems);
+            }
         }
 
         var stateFolders = 0;

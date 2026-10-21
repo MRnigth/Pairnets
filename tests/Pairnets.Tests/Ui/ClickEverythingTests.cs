@@ -369,6 +369,7 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
             new("the Settings page (signed in with its own key)", s => SettingsStage(s, ownKey: true)),
             new("the Settings page (on the shared token)", s => SettingsStage(s, ownKey: false)),
             new("the Settings page (a nest that can move its files, the Linux program folder)", s => SettingsStage(s, ownKey: true, canMove: true)),
+            new("the Settings page (one of two nests, with Leave)", s => SettingsStage(s, ownKey: true, nests: 2)),
         ],
         ["sign-in"] =
         [
@@ -670,7 +671,7 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
 
     // ------------------------------------------------------------------ settings
 
-    private Task<SettingsView> SettingsStage(Stage s, bool ownKey, bool canMove = false)
+    private Task<SettingsView> SettingsStage(Stage s, bool ownKey, bool canMove = false, int nests = 1)
     {
         var secrets = new MemorySecrets();
         var key = ownKey ? fixture.Nest.MintKey("MACBOOK-" + Guid.NewGuid().ToString("N")[..6]) : null;
@@ -689,9 +690,11 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
             updates.Dispose();
             return Task.CompletedTask;
         });
-        var view = new SettingsView(settings, secrets, autoStart: false, updates, "Nest 1.0.0", new FakeNestFiles());
+        var view = new SettingsView(settings, secrets, autoStart: false, updates, "Nest 1.0.0", new FakeNestFiles(), "Work nest", nests);
         view.OpenFilesRequested += () => s.Events.Add("open-files");
         view.Saved += _ => s.Events.Add("saved");
+        view.AddNestRequested += () => s.Events.Add("add-nest");
+        view.LeaveNestRequested += () => s.Events.Add("leave-nest");
         view.Cancelled += () => s.Events.Add("cancelled");
         view.ResetRequested += () => s.Events.Add("reset");
         view.ShowDevicesRequested += () => s.Events.Add("show-devices");
@@ -715,6 +718,8 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
         s.Expect["OnSwitchChanged"] = All(Raised(s, "switches"), That(() => view.SwitchesApplied, "the switch apply at once"));
         s.Expect["OnParChanged"] = That(() => view.SwitchesApplied, "the choice apply at once");
         s.Expect["OnReset"] = Raised(s, "reset");
+        s.Expect["OnAddNest"] = Raised(s, "add-nest");
+        s.Expect["OnLeaveNest"] = Raised(s, "leave-nest");
         s.Expect["OnCancel"] = Raised(s, "cancelled");
         s.Expect["OnReportBug"] = Raised(s, "report-bug");
         s.Expect["OnPlacementLink"] = Raised(s, "open-files");

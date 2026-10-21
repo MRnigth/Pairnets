@@ -70,6 +70,21 @@ describe("the Sign in an app page", () => {
     expect(page.text).not.toContain("data-nest=");
   });
 
+  it("adding a nest: the nests the app already syncs are shown greyed out, and the next one is picked", async () => {
+    const { h, b, code } = await setup();
+    const one = await addServer(h, b, { label: "pairnets-server" });
+    const two = await addServer(h, b, { label: "office-nest", ip: "198.51.100.42" });
+    const page = await b.call("GET", `/app?code=${code}&have=${one.nestId},not-a-nest`);
+    expect(page.text).toContain(
+      `<label class="q-choice q-have"><input type="radio" name="nest" value="${one.nestId}" data-label="pairnets-server" disabled> pairnets-server <span class="q-have-note">· already on this computer</span></label>`,
+    );
+    expect(page.text).toContain(`<input type="radio" name="nest" value="${two.nestId}" data-label="office-nest" checked> office-nest`);
+    // Every nest already here: nothing is greyed out (there would be nothing left to pick).
+    const all = await b.call("GET", `/app?code=${code}&have=${one.nestId},${two.nestId}`);
+    expect(all.text).not.toContain("q-have");
+    expect(all.text).toContain(`value="${one.nestId}" data-label="pairnets-server" checked>`);
+  });
+
   it("asking, no nest yet: says so, and the allowed screen is the one that waits for the nest", async () => {
     const { b, code } = await setup();
     const page = await b.call("GET", `/app?code=${code}`);

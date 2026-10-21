@@ -882,7 +882,7 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
 
     // ------------------------------------------------------------------ Settings
 
-    private Window SettingsHost(Bench b, bool ownKey, bool canMove = false)
+    private Window SettingsHost(Bench b, bool ownKey, bool canMove = false, int nests = 1)
     {
         b.Updates = new UpdateService(new UpdateChecker(new HttpClient(), fixture.Feed.DownloadBase, fixture.Feed.ReleasePage, FakeReleaseFeed.SigningKey),
             PairnetsInfo.ProductVersion, UpdateChecker.AssetForThisPlatform());
@@ -895,9 +895,11 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
             Folder = b.Dir,
             FirstRunCompleted = true,
         };
-        var view = new SettingsView(settings, b.Secrets, b.Updates, "Nest " + PairnetsInfo.ProductVersion, new FakeNestFiles());
+        var view = new SettingsView(settings, b.Secrets, b.Updates, "Nest " + PairnetsInfo.ProductVersion, new FakeNestFiles(), "Work nest", nests);
         view.OpenFilesRequested += () => b.Events.Add("OpenFilesRequested");
         view.Saved += _ => b.Events.Add("Saved");
+        view.AddNestRequested += () => b.Events.Add("AddNestRequested");
+        view.LeaveNestRequested += () => b.Events.Add("LeaveNestRequested");
         view.Cancelled += () => b.Events.Add("Cancelled");
         view.ResetRequested += () => b.Events.Add("ResetRequested");
         view.ShowDevicesRequested += () => b.Events.Add("ShowDevicesRequested");
@@ -918,6 +920,7 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
         yield return new Screen("Settings", "signed in with this computer's own key", b => SettingsHost(b, ownKey: true), Answers: AnswerTheFilesPage);
         yield return new Screen("Settings", "on the shared token (address and token shown)", b => SettingsHost(b, ownKey: false), Answers: s => s.AgreeToEverything());
         yield return new Screen("Settings", "a nest that can move its files", b => SettingsHost(b, ownKey: true, canMove: true), Answers: s => s.AgreeToEverything());
+        yield return new Screen("Settings", "one of two nests (with Leave)", b => SettingsHost(b, ownKey: true, nests: 2), Answers: s => s.AgreeToEverything());
     }
 
     private static SettingsView View(Check c) => (SettingsView)c.Window.Content;
@@ -940,6 +943,8 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
             c => View(c).PlacementChosen(((RadioButton)c.Target.Element).GroupName["placement:".Length..]) == PlacementNamed(c.Target.Label)),
         On("Choose for a folder inside these… (opens Files)", "ask the app for the Files page", c => c.Bench.Events.Items.Contains("OpenFilesRequested")),
         On("Reset this app…", "ask the app to reset everything", c => c.Bench.Events.Items.Contains("ResetRequested")),
+        On("Add a nest…", "ask the app to sign in to one more nest", c => c.Bench.Events.Items.Contains("AddNestRequested")),
+        On("Leave…", "ask the app to leave this nest on this computer", c => c.Bench.Events.Items.Contains("LeaveNestRequested")),
         new(t => t.Handlers.Contains("SettingsView.OnAboutLink"),"ask the app to open that page of pairnets.app in the browser",
             c => c.Target.Element is Button { CommandParameter: string url } && url.StartsWith(PairnetsLinks.Website, StringComparison.Ordinal)
                 && c.Bench.Opened.Items.SequenceEqual([url])),

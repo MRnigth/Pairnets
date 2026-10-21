@@ -75,29 +75,39 @@ public sealed class LinuxPlatform : IPlatformServices
         ? WindowsMotion.Reduced()
         : Proc.Run("gsettings", ["get", "org.gnome.desktop.interface", "enable-animations"], timeoutMs: 2000) is (0, var output) && output.Trim() == "false";
 
-    /// <summary>Token in the desktop keyring via secret-tool (reads the secret from stdin), else a 600 file.</summary>
+    /// <summary>
+    /// Token in the desktop keyring via secret-tool (reads the secret from stdin), else a 600 file. The first nest's key
+    /// is "sync-token" (file "token"); another nest's is "sync-token-&lt;slot&gt;" (file "token-&lt;slot&gt;").
+    /// </summary>
     private sealed class LinuxSecrets : ISecretProtector
     {
         private const string Marker = "libsecret:v1";
-        private static readonly string[] Attributes = ["service", "pairnets", "account", "sync-token"];
         private static readonly string[] TetherAttributes = ["service", Pairnets.Core.Legacy.TetherNames.SecretToolService, "account", "sync-token"];
-        private readonly PrivateFileSecrets _fallback = new(Path.Combine(PairnetsPaths.LocalDir, "token"));
 
-        public string Protect(string plainText)
+        private static string[] Attributes(string? slot) => ["service", "pairnets", "account", slot is null ? "sync-token" : "sync-token-" + slot];
+
+        private static PrivateFileSecrets Fallback(string? slot) =>
+            new(Path.Combine(PairnetsPaths.LocalDir, slot is null ? "token" : "token-" + slot), slot);
+
+        public string Protect(string plainText) => Protect(plainText, null);
+
+        public string Protect(string plainText, string? slot)
         {
-            var (code, _) = Proc.Run("secret-tool", ["store", "--label=Pairnets sync token", .. Attributes], stdin: plainText);
-            return code == 0 ? Marker : _fallback.Protect(plainText);
+            var (code, _) = Proc.Run("secret-tool", ["store", "--label=Pairnets sync token", .. Attributes(slot)], stdin: plainText);
+            return code == 0 ? SecretSlots.Marker(Marker, slot) : Fallback(slot).Protect(plainText);
         }
 
         public string Unprotect(string protectedText)
         {
-            if (protectedText == PrivateFileSecrets.Marker)
-                return _fallback.Unprotect(protectedText);
-            if (protectedText != Marker)
+            if (SecretSlots.TryRead(PrivateFileSecrets.Marker, protectedText, out var fileSlot))
+                return Fallback(fileSlot).Unprotect(protectedText);
+            if (!SecretSlots.TryRead(Marker, protectedText, out var slot))
                 throw new InvalidOperationException("Unknown token storage.");
-            var (code, output) = Proc.Run("secret-tool", ["lookup", .. Attributes]);
+            var (code, output) = Proc.Run("secret-tool", ["lookup", .. Attributes(slot)]);
             if (code == 0 && output.Length > 0)
                 return output.Trim();
+            if (slot is not null)
+                throw new PlainMessageException("The token is not in the keyring (is it unlocked?).");
             // Saved by Tether: copy it to Pairnets' entry.
             (code, output) = Proc.Run("secret-tool", ["lookup", .. TetherAttributes]);
             if (code != 0 || output.Length == 0)
@@ -108,13 +118,15 @@ public sealed class LinuxPlatform : IPlatformServices
 
         public void Forget(string protectedText)
         {
-            if (protectedText == PrivateFileSecrets.Marker)
+            if (SecretSlots.TryRead(PrivateFileSecrets.Marker, protectedText, out var fileSlot))
             {
-                _fallback.Forget(protectedText);
+                Fallback(fileSlot).Forget(protectedText);
                 return;
             }
+            if (!SecretSlots.TryRead(Marker, protectedText, out var slot))
+                return;
             // Pairnets' own entry only; one saved by Tether is left alone, as everywhere else.
-            var (code, _) = Proc.Run("secret-tool", ["clear", .. Attributes]);
+            var (code, _) = Proc.Run("secret-tool", ["clear", .. Attributes(slot)]);
             if (code != 0)
                 throw new PlainMessageException("The key could not be removed from the keyring (is it unlocked?).");
         }

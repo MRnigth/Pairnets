@@ -73,6 +73,7 @@ public sealed class AccountSignIn
     private readonly TimeProvider _clock;
     private readonly HttpMessageHandler? _handler;
     private readonly TimeSpan? _interval;
+    private readonly IReadOnlyList<string> _joined;
 
     /// <param name="name">This computer's name, as the browser page and later the account page show it.</param>
     /// <param name="method">"email" or "google": the button pressed in the app, so the page starts that way (anything else is left out).</param>
@@ -83,9 +84,14 @@ public sealed class AccountSignIn
     /// does (<see cref="Nest.ApprovalLink"/>), so it need not be typed twice. Only with <paramref name="method"/> "email"
     /// and only when it looks like an address.
     /// </param>
+    /// <param name="joined">
+    /// The nests this computer already syncs (their nest ids): the browser page shows them as already here, so the
+    /// person picks another one when adding a nest (docs/DECISIONS.md, "Several nests at once").
+    /// </param>
     public AccountSignIn(string name, string? method = null, Uri? service = null, TimeProvider? clock = null,
-        HttpMessageHandler? handler = null, TimeSpan? interval = null, string? email = null)
+        HttpMessageHandler? handler = null, TimeSpan? interval = null, string? email = null, IEnumerable<string>? joined = null)
     {
+        _joined = joined?.Where(Relay.IsNestId).Distinct(StringComparer.Ordinal).Take(20).ToList() ?? [];
         _name = CleanName(name);
         _method = method is "email" or "google" ? method : null;
         _email = _method == "email" && Nest.LooksLikeEmail(email) ? email!.Trim() : null;
@@ -118,8 +124,12 @@ public sealed class AccountSignIn
     /// plus the account's email for showing. Everything else carries over.
     /// </summary>
     public static ClientSettings SettingsAfterSignIn(ClientSettings? previous, AccountSignInResult result, string folder,
-        bool startAtLogin, string protectedKey) =>
-        Nest.SettingsAfterSignIn(previous, result.ServerUrl, result.Device, folder, startAtLogin, protectedKey, result.Email);
+        bool startAtLogin, string protectedKey)
+    {
+        var next = Nest.SettingsAfterSignIn(previous, result.ServerUrl, result.Device, folder, startAtLogin, protectedKey, result.Email);
+        next.NestLabel = ComputerName.Clean(result.NestLabel) is { Length: > 0 } label ? label : null;
+        return next;
+    }
 
     /// <summary>Runs the whole sign-in. Returns the final state; cancelling returns quietly.</summary>
     public async Task<AccountSignInState> RunAsync(CancellationToken ct)
@@ -281,7 +291,9 @@ public sealed class AccountSignIn
         if (_method is not null)
             link += (link.Contains('?', StringComparison.Ordinal) ? "&" : "?") + "method=" + _method;
         if (_email is not null)
-            link += "&email=" + Uri.EscapeDataString(_email);
+            link += (link.Contains('?', StringComparison.Ordinal) ? "&" : "?") + "email=" + Uri.EscapeDataString(_email);
+        if (_joined.Count > 0)
+            link += (link.Contains('?', StringComparison.Ordinal) ? "&" : "?") + "have=" + string.Join(",", _joined);
         return link;
     }
 

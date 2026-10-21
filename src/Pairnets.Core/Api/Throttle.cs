@@ -59,3 +59,14 @@ public sealed class Throttle(TimeProvider? clock = null)
         return Task.Delay(wait, _clock, ct);
     }
 }
+
+/// <summary>
+/// The app's upload and download limits, shared by the sessions of every nest it syncs (the limits are app-wide, so two
+/// nests together stay under them).
+/// </summary>
+public sealed class SpeedLimits
+{
+    public Throttle Upload { get; } = new();
+
+    public Throttle Download { get; } = new();
+}

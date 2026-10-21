@@ -48,7 +48,11 @@ public partial class SettingsView : UserControl
     /// <summary>The nest's files (the folders to choose for); null when not connected.</summary>
     private readonly INestFiles? _files;
 
-    public SettingsView(ClientSettings current, ISecretProtector protector, UpdateService? updates = null, string? serverVersionText = null, INestFiles? files = null)
+    /// <param name="files">The nest's files (the folders to choose where they live); null when not connected.</param>
+    /// <param name="nestTitle">The nest these settings are for ("Work nest"), when this computer syncs several (<paramref name="nestCount"/>).</param>
+    /// <param name="folderProblem">Why a folder can't be this nest's (another nest's, or inside or around one), or null.</param>
+    public SettingsView(ClientSettings current, ISecretProtector protector, UpdateService? updates = null, string? serverVersionText = null,
+        INestFiles? files = null, string? nestTitle = null, int nestCount = 1, Func<string, string?>? folderProblem = null)
     {
         _updates = updates;
         _files = files;
@@ -56,6 +60,17 @@ public partial class SettingsView : UserControl
         InitializeComponent();
         _original = current;
         _protector = protector;
+        _folderProblem = folderProblem;
+        if (nestCount > 1 && nestTitle is not null)
+        {
+            // Several nests: the nest card, the folder and the name are this nest's; the switches are for all of them.
+            ServerHeading.Text = "This nest: " + nestTitle;
+            PageSub.Text = $"The address, folder and name are for {nestTitle}. Everything else is for all your nests. Switches apply at once.";
+            LeaveRow.Visibility = Visibility.Visible;
+            LeaveTitle.Text = $"Leave {nestTitle} on this PC";
+            LeaveText.Text = $"Stops syncing it here. Files in {(string.IsNullOrWhiteSpace(current.Folder) ? "its folder" : current.Folder)} stay on this computer and on the nest.";
+            System.Windows.Automation.AutomationProperties.SetName(LeaveButton, LeaveTitle.Text);
+        }
         var host = Uri.TryCreate(current.ServerUrl, UriKind.Absolute, out var nest) ? nest.Authority : current.ServerUrl;
         NestHost.Text = string.IsNullOrWhiteSpace(host) ? "Not connected" : host;
         // Who is signed in: the account's email, or the computer's own name on an older nest that did not send one.
@@ -424,6 +439,11 @@ public partial class SettingsView : UserControl
             Fail("Choose the folder to sync.");
             return;
         }
+        if (_folderProblem?.Invoke(folder) is { } problem)
+        {
+            Fail(problem);
+            return;
+        }
         if (!Directory.Exists(folder))
         {
             if (Ask($"The folder {folder} does not exist. Create it?", "Pairnets", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
@@ -454,8 +474,10 @@ public partial class SettingsView : UserControl
             var (deviceId, deviceName) = await OwnKey.CarryOverAsync(_original, url, token, tokenTyped: TokenBox.Password.Length > 0, DeviceName());
             Result = new ClientSettings
             {
+                NestId = _original.NestId, // the same nest: saved in its own place, not added as another
+                NestLabel = _original.NestLabel,
                 ServerUrl = url.ToString(),
-                ProtectedToken = _protector.Protect(token),
+                ProtectedToken = _protector.Protect(token, KeySlot),
                 Folder = folder,
                 DeviceName = deviceName,
                 DeviceId = deviceId,
@@ -518,6 +540,21 @@ public partial class SettingsView : UserControl
     public event Action? ResetRequested;
 
     private void OnReset(object sender, RoutedEventArgs e) => ResetRequested?.Invoke();
+
+    private readonly Func<string, string?>? _folderProblem;
+
+    /// <summary>Where this nest's key is saved outside the settings file (Mac, Linux): see <see cref="ClientSettings.KeySlotFor"/>.</summary>
+    public string? KeySlot { get; init; }
+
+    /// <summary>"Leave this nest on this PC…" (the controller asks first). Shown with several nests.</summary>
+    public event Action? LeaveNestRequested;
+
+    private void OnLeaveNest(object sender, RoutedEventArgs e) => LeaveNestRequested?.Invoke();
+
+    /// <summary>"Add a nest…": the sign-in window for one more nest.</summary>
+    public event Action? AddNestRequested;
+
+    private void OnAddNest(object sender, RoutedEventArgs e) => AddNestRequested?.Invoke();
 
     /// <summary>"Report a bug…": opens the bug report window.</summary>
     public event Action? ReportBugRequested;

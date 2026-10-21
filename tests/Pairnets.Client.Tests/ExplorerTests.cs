@@ -94,6 +94,27 @@ public sealed class ExplorerTests : IDisposable
     }
 
     [Fact]
+    public void Apply_ForTwoNests_PutsWhereThisFolderLivesInBothFolders_AndKnowsThemWithoutRightClickItems()
+    {
+        var home = _dir.Combine("Home");
+        var work = _dir.Combine("Work");
+        Directory.CreateDirectory(home);
+        Directory.CreateDirectory(work);
+        ExplorerShell.Apply(_software, [Entry(home), Entry(work) with { Name = "Work nest", Key = "n1" }]);
+
+        var appliesTo = Value(@"Classes\Directory\shell\Pairnets.Where", "AppliesTo")!;
+        Assert.Contains(home, appliesTo);
+        Assert.Contains(work, appliesTo);
+
+        ExplorerShell.Apply(_software, [Entry(home), Entry(work) with { Name = "Work nest", Key = "n1" }], rightClick: false);
+        Assert.Null(_software.OpenSubKey(@"Classes\Directory\shell\Pairnets.Where"));
+        Assert.Equal([home, work], ExplorerShell.RegisteredFolders(_software));
+        ExplorerShell.Remove(_software, home);
+        Assert.Empty(ExplorerShell.RegisteredFolders(_software));
+        ExplorerShell.RemoveFolderIcon(work);
+    }
+
+    [Fact]
     public void Remove_TakesEverythingAwayAgain_AndIsSafeToRepeat()
     {
         var folder = _dir.Combine("Pairnets");
