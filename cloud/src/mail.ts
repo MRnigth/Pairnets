@@ -136,18 +136,27 @@ export async function loginMailAvailable(ctx: Ctx): Promise<boolean> {
 }
 
 /**
- * Invites a friend gets by email (RELAY.md 10) have a small budget of their own, outside the day's total, so they can
- * never use up the emails that sign-ins and security notices need. 95 + 5 is Resend's free 100 a day.
+ * Invites a friend gets by email (RELAY.md 10) have a budget of their own, outside the day's total, so they can never
+ * use up the emails that sign-ins and security notices need: each account may have INVITE_MAIL_DAILY_LIMIT sent a day
+ * (one owner can't use up everyone's), and all accounts together INVITE_MAIL_SERVICE_DAILY_LIMIT, so the bill has a ceiling.
  */
 export const INVITE_MAIL_DAILY_LIMIT = 5;
+export const INVITE_MAIL_SERVICE_DAILY_LIMIT = 25;
 
 /**
  * Takes one email from today's budget. Sign-in emails also count against EMAIL_DAILY_LIMIT and may only use the
- * total up to LOGIN_MAIL_CEILING; notices may use all of it; invites only their own INVITE_MAIL_DAILY_LIMIT. Returns
- * false when the budget is used up (the caller then does not send).
+ * total up to LOGIN_MAIL_CEILING; notices may use all of it; invites only their own budget, counted for the account
+ * that sends them (`accountId`). Returns false when the budget is used up (the caller then does not send).
  */
-export async function reserveMail(ctx: Ctx, kind: "login" | "notice" | "invite"): Promise<boolean> {
-  if (kind === "invite") return !(await hit(ctx, "mail-invite", "service", INVITE_MAIL_DAILY_LIMIT, DAY)).limited;
+export async function reserveMail(ctx: Ctx, kind: "login" | "notice"): Promise<boolean>;
+export async function reserveMail(ctx: Ctx, kind: "invite", accountId: string): Promise<boolean>;
+export async function reserveMail(ctx: Ctx, kind: "login" | "notice" | "invite", accountId?: string): Promise<boolean> {
+  if (kind === "invite") {
+    // The account's own five first, so one that used them up never takes from the service's ceiling.
+    if ((await peek(ctx, "mail-invite-account", accountId!, INVITE_MAIL_DAILY_LIMIT, DAY)).limited) return false;
+    if ((await hit(ctx, "mail-invite", "service", INVITE_MAIL_SERVICE_DAILY_LIMIT, DAY)).limited) return false;
+    return !(await hit(ctx, "mail-invite-account", accountId!, INVITE_MAIL_DAILY_LIMIT, DAY)).limited;
+  }
   if (kind === "login") {
     const login = await hit(ctx, "mail-login", "service", loginMailLimit(ctx), DAY);
     if (login.limited) return false;
