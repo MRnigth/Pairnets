@@ -24,9 +24,9 @@ public class NestOnlyTests : IAsyncLifetime
         await _server.DisposeAsync();
     }
 
-    private static PassResult Completed(PassResult r)
+    private PassResult Completed(PassResult r)
     {
-        Assert.True(r.Outcome == PassOutcome.Completed, r.ToString());
+        Assert.True(r.Outcome == PassOutcome.Completed, $"{r}\nserver:\n{_server.Logs.Problems()}");
         return r;
     }
 

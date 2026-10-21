@@ -320,7 +320,9 @@ jobs:
       - name: Test (case-insensitive APFS)
         env:
           PAIRNETS_CONVERGENCE_SEEDS: 50
+        # macOS lets a program hold only 256 open files by default; the test nests running side by side need more.
         run: >
+          ulimit -n 10240 &&
           dotnet test tests/Pairnets.Tests/Pairnets.Tests.csproj -c Release --no-build
           --logger "trx;LogFileName=macos.trx"
           --logger "console;verbosity=normal"
