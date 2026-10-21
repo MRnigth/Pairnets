@@ -1423,3 +1423,6 @@ merge decided how they fit:
 * **The Files page shows the nest picked in the nest list**; from "All nests" it shows the first nest, as Activity does.
   A nest full while a file opened from it is saved shows the pop-up only when that nest is the one shown.
 * **Mac and Linux:** the file manager entry stays for the first nest only, now also with the right-click switch.
+* **Version 1.0.61 comes from the tag `v1.0.61`**, like 1.0.60.1: the release workflow takes the version from a `v*`
+  tag, so nothing in the code changes. 1.0.60.1 < 1.0.61 is already in `OldUpdaterCompatTests` and `UpdateScriptTests`.
+* **The nest list's row type is now `NestListRow`**: the Files page (1.0.60) already had a `NestRow`.
