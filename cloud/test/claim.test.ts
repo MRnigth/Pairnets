@@ -126,17 +126,17 @@ describe("claim", () => {
     }
   });
 
-  it("3 nests per account, pending ones included", async () => {
+  it("4 nests per account, pending ones included", async () => {
     const h = await Harness.create();
     const { b } = await signedIn(h);
     const codes: string[] = [];
-    for (let i = 0; i < 4; i++) codes.push((await b.call("POST", "/v1/nests/claim-codes", { body: {} })).json.code);
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < 5; i++) codes.push((await b.call("POST", "/v1/nests/claim-codes", { body: {} })).json.code);
+    for (let i = 0; i < 4; i++) {
       expect((await h.client().call("POST", "/v1/claim", { body: { code: codes[i], publicUrl: `https://n${i}.example.com`, serverVersion: "1" } })).status).toBe(201);
     }
-    const fourth = await h.client().call("POST", "/v1/claim", { body: { code: codes[3], publicUrl: "https://n3.example.com", serverVersion: "1" } });
-    expect(fourth.status).toBe(409);
-    expect(fourth.json.error).toBe("nest_limit");
+    const fifth = await h.client().call("POST", "/v1/claim", { body: { code: codes[4], publicUrl: "https://n4.example.com", serverVersion: "1" } });
+    expect(fifth.status).toBe(409);
+    expect(fifth.json.error).toBe("nest_limit");
     const more = await b.call("POST", "/v1/nests/claim-codes", { body: {} });
     expect(more.status).toBe(409);
     expect(more.json.error).toBe("nest_limit");

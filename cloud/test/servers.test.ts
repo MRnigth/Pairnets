@@ -174,17 +174,37 @@ describe("adding a server", () => {
     expect((await h.client().call("GET", `/v1/servers/requests/${userCode}`)).status).toBe(401);
   });
 
-  it("an account has at most 3 servers, own-domain nests included (409 nest_limit, nothing made)", async () => {
+  it("an account has at most 4 servers, own-domain nests included (409 nest_limit, nothing made)", async () => {
     const { h, b } = await setup();
     await linkNest(h, b);
     await addServer(h, b, { ip: "198.51.100.44" });
     await addServer(h, b, { ip: "198.51.100.45" });
-    const fourth = await startServer(h, "fourth", "198.51.100.46");
-    const r = await b.call("POST", "/v1/servers/approve", { body: { userCode: fourth.userCode, approve: true } });
+    await addServer(h, b, { ip: "198.51.100.48" });
+    const fifth = await startServer(h, "fifth", "198.51.100.46");
+    const r = await b.call("POST", "/v1/servers/approve", { body: { userCode: fifth.userCode, approve: true } });
     expect(r.status).toBe(409);
-    expect(r.json).toEqual({ error: "nest_limit", message: "This account already has 3 servers. Remove one first." });
-    expect(h.cf.tunnels.size).toBe(2);
-    expect((await b.call("GET", `/v1/servers/requests/${fourth.userCode}`)).json.status).toBe("pending");
+    expect(r.json).toEqual({ error: "nest_limit", message: "This account already has 4 nests. Remove one first." });
+    expect(h.cf.tunnels.size).toBe(3);
+    expect((await b.call("GET", `/v1/servers/requests/${fifth.userCode}`)).json.status).toBe("pending");
+  });
+
+  it("the account says how many nests it has and may have; the add page at the limit offers no Add", async () => {
+    const { h, b } = await setup();
+    expect((await b.call("GET", "/v1/me")).json.nests).toEqual({ used: 0, max: 4 });
+    await addServer(h, b, { ip: "198.51.100.44" });
+    await linkNest(h, b);
+    expect((await b.call("GET", "/v1/me")).json.nests).toEqual({ used: 2, max: 4 });
+    const page = (await b.call("GET", "/account")).text;
+    expect(page).toContain("2 of 4 used");
+    expect(page).toContain("You can add 2 more nests of your own.");
+    await addServer(h, b, { ip: "198.51.100.45" });
+    await addServer(h, b, { ip: "198.51.100.48" });
+    expect((await b.call("GET", "/account")).text).toContain("You have 4 of 4 nests.");
+    const fifth = await startServer(h, "fifth", "198.51.100.46");
+    const add = (await b.call("GET", `/add?code=${fifth.userCode}`)).text;
+    expect(add).toContain('id="nest-full"');
+    expect(add).not.toContain('id="approve"');
+    expect(add).toContain('id="deny"');
   });
 
   it("MAX_NESTS_PER_ACCOUNT sets the limit; servers an account already has stay", async () => {
@@ -195,7 +215,7 @@ describe("adding a server", () => {
     const third = await startServer(h, "third", "198.51.100.46");
     const r = await b.call("POST", "/v1/servers/approve", { body: { userCode: third.userCode, approve: true } });
     expect(r.status).toBe(409);
-    expect(r.json).toEqual({ error: "nest_limit", message: "This account already has 1 servers. Remove one first." });
+    expect(r.json).toEqual({ error: "nest_limit", message: "This account already has 1 nest. Remove one first." });
     expect((await h.env.DB.prepare("SELECT COUNT(*) AS n FROM nests").first<{ n: number }>())?.n).toBe(2);
     expect(h.cf.tunnels.size).toBe(2);
     expect((await b.call("POST", "/v1/nests/claim-codes", { body: {} })).json.error).toBe("nest_limit");
@@ -345,8 +365,8 @@ describe("adding a server", () => {
       const s = await startServer(h, "pc", `198.51.100.${100 + Math.floor(ip++ / 10)}`);
       return b.call("POST", "/v1/servers/approve", { body: { userCode: s.userCode, approve: true } });
     };
-    for (let i = 0; i < 3; i++) expect((await attempt()).status).toBe(200);
-    for (let i = 3; i < 20; i++) expect((await attempt()).json.error).toBe("nest_limit");
+    for (let i = 0; i < 4; i++) expect((await attempt()).status).toBe(200);
+    for (let i = 4; i < 20; i++) expect((await attempt()).json.error).toBe("nest_limit");
     const over = await attempt();
     expect(over.status).toBe(429);
     expect(over.json.error).toBe("rate_limited");

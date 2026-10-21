@@ -461,7 +461,7 @@ Errors (body `{error, message}`):
 | 400 | `expired` | code older than 10 minutes |
 | 409 | `used` | code already redeemed |
 | 400 | `bad_url` | `publicUrl` fails §1.8 |
-| 409 | `nest_limit` | the account already has 3 nests (pending ones count) |
+| 409 | `nest_limit` | the account already has 4 nests (`MAX_NESTS_PER_ACCOUNT`) (pending ones count) |
 | 429 | `rate_limited` | §6.10, with `Retry-After` (seconds) |
 
 ### 4.3 Nest: `pairnets-server hosted link <CODE> [--yes] [--label <text>] [--data-dir <dir>]`
@@ -790,7 +790,7 @@ characters of `A-Z a-z 0-9 % . _ ~ , + = & ! * ' ( ) -` (the apps' hand-over to 
 
 | Method and path | Request | Success | Errors |
 |---|---|---|---|
-| `GET /v1/me` | — | 200 `{accountId, email, username, createdAt, identities:[{provider, email, createdAt, lastUsedAt}], session:{id, kind, authTime, amr, recentAuth}}` | 401 `unauthorized` |
+| `GET /v1/me` | — | 200 `{accountId, email, username, createdAt, identities:[{provider, email, createdAt, lastUsedAt}], session:{id, kind, authTime, amr, recentAuth}, nests:{used, max}}` (`nests`: the account's own nests, both kinds, pending included, and `MAX_NESTS_PER_ACCOUNT`) | 401 `unauthorized` |
 | `PATCH /v1/me` | `{username}`: 1 to 32 characters, or `null`/`""` to clear | 200 like `GET /v1/me`; audit `username_changed` | 400 `bad_request`, 401 `unauthorized` |
 | `DELETE /v1/me` | — | 204, cookie cleared, everything cascades | 401 `unauthorized`, 401 `reauth_required` |
 | `GET /v1/signed-in` | — (cookie only, never an app token) | 200 `{signedIn:false}` or `{signedIn:true, name}`: the username, else the part of the email before the @. pairnets.app shows it in its top bar. The only route with CORS: `Access-Control-Allow-Origin` (echoed) and `Access-Control-Allow-Credentials: true` for `https://pairnets.app` and `https://www.pairnets.app` only; `Vary: Origin` always. | — |
@@ -809,7 +809,7 @@ characters of `A-Z a-z 0-9 % . _ ~ , + = & ! * ' ( ) -` (the apps' hand-over to 
 ready|null, publicHost|null, hostedLogin, createdAt, confirmedAt|null}`. `hostedLogin` here is the service-side
 per-nest switch (`nests.hosted_login`). A nest of another account answers 404 `not_found`, never 403.
 
-Limits: at most **3 nests** per account (pending included); at most **5 unused, unexpired claim codes** and 20 per day.
+Limits: at most **4 nests** per account (`MAX_NESTS_PER_ACCOUNT`; nests shared by friends never count) (pending included); at most **5 unused, unexpired claim codes** and 20 per day.
 
 ### 6.8 Uniform error codes (service)
 

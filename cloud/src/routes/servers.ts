@@ -29,7 +29,7 @@ import { enforce, HOUR } from "../ratelimit";
 import { jsonBody } from "../request";
 import { runRouterLogged } from "../router";
 import { isRecent, loadBrowserSession, requireBrowser, requireRecent, secretHash } from "../sessions";
-import { maxNestsPerAccount, nestLimitError, type NestRow } from "./account";
+import { maxNestsPerAccount, nestCount, nestLimitError, type NestRow } from "./account";
 
 export const SERVER_LINK_LIFETIME = 900;
 export const SERVER_POLL_INTERVAL = 3;
@@ -135,7 +135,8 @@ export async function addPageRoute(ctx: Ctx): Promise<Response> {
   const view = row
     ? { userCode: row.user_code, hostname: row.hostname, serverVersion: row.server_version, createdAt: row.created_at, status: row.status }
     : null;
-  return htmlResponse(typed && !row ? 404 : 200, addPage(view, typed));
+  const count = row && row.status === "pending" ? await nestCount(ctx, s.accountId) : null;
+  return htmlResponse(typed && !row ? 404 : 200, addPage(view, typed, count));
 }
 
 // POST /v1/servers/approve
@@ -180,7 +181,7 @@ export async function serverApproveRoute(ctx: Ctx): Promise<Response> {
 
 /**
  * The nest row ('relay', 'pending', no address) and the link's 'approving' state, in one batch (one transaction): the
- * row is made only while the link is still pending, the account has fewer than 3 nests and the service has room.
+ * row is made only while the link is still pending, the account is under its nest limit and the service has room.
  */
 async function createNestRow(ctx: Ctx, accountId: string, link: ServerLinkRow, label: string): Promise<string> {
   const db = ctx.env.DB;

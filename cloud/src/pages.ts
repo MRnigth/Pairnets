@@ -100,6 +100,8 @@ export interface AccountView {
   email: string;
   /** The username the owner chose, or null (then the part of the email before the @ is shown). */
   username: string | null;
+  /** The account's own nests (both kinds, pending included) and how many it may have. */
+  nestCount: { used: number; max: number };
   servers: ServerView[];
   nests: NestView[];
   sessions: SessionView[];
@@ -323,10 +325,15 @@ ${n.addressWarning ? `<p class="error">${e(n.addressWarning)}</p>` : ""}
 <p id="status" class="status" role="status" hidden></p>
 </section>
 <section class="card">
-<h2>${v.servers.length > 1 ? "Your nests" : "Your nest"}</h2>
+<h2>${v.servers.length > 1 ? "Your nests" : "Your nest"} <span class="muted" id="nest-count">${v.nestCount.used} of ${v.nestCount.max} used</span></h2>
 <ul class="list" id="servers">
 ${servers}
 </ul>
+${
+  v.nestCount.used >= v.nestCount.max
+    ? `<p class="notice" id="nest-full">You have ${v.nestCount.max} of ${v.nestCount.max} nests. Remove one to add another. Nests friends share with you don't count.</p>`
+    : `<p class="muted" id="nest-room">You can add ${v.nestCount.max - v.nestCount.used} more ${v.nestCount.max - v.nestCount.used === 1 ? "nest" : "nests"} of your own. Nests friends share with you don't count.</p>`
+}
 <p class="muted">To add a nest: on the Linux computer that will keep your files, run <code>curl -fsSL https://pairnets.app/get.sh | sudo bash</code>. It shows a link and a code: open the link and choose Add this nest. Then, on each computer, install Pairnets and choose Continue with email (or Google) with this account.</p>
 </section>
 ${sharedSection(v.shared ?? [])}
@@ -756,7 +763,7 @@ export interface ServerRequestView {
 }
 
 /** /add?code= (RELAY.md 2): approve a server that runs the installer. Unknown codes are answered with status 404. */
-export function addPage(req: ServerRequestView | null, typed: string | null): string {
+export function addPage(req: ServerRequestView | null, typed: string | null, count: { used: number; max: number } | null = null): string {
   if (!req) {
     const msg = typed ? `<p class="error" role="alert">That code is not valid or has expired. Check the code the installer shows.</p>` : "";
     return layout(
@@ -779,6 +786,7 @@ ${req.serverVersion ? `<dt>Version</dt><dd>${e(req.serverVersion)}</dd>` : ""}
 <dt>Asked</dt><dd>${when(req.createdAt)}</dd>
 </dl>`;
   const pending = req.status === "pending";
+  const full = pending && count !== null && count.used >= count.max;
   return layout(
     "Add a nest",
     `<section class="card" id="server-request" data-code="${e(displayUserCode(req.userCode))}">
@@ -786,7 +794,10 @@ ${req.serverVersion ? `<dt>Version</dt><dd>${e(req.serverVersion)}</dd>` : ""}
 <p>A computer where the Pairnets nest is being installed wants to join your account. Your files stay on it; Pairnets connects your other computers to it. Add it only if you are installing it yourself and the code matches the one the installer shows.</p>
 ${details}
 ${
-  pending
+  full
+    ? `<p class="notice" id="nest-full">You have ${count?.max} of ${count?.max} nests, so this one can't be added. Remove one on <a href="/account">your account page</a>, then open this link again.</p>
+<div class="actions"><button type="button" id="deny" class="danger">Not mine</button></div>`
+    : pending
     ? `<label for="label">Name</label>
 <input id="label" maxlength="64" autocomplete="off" value="${e(req.hostname ?? "My nest")}">
 <div class="actions"><button type="button" id="approve">Add this nest</button> <button type="button" id="deny" class="danger">Not mine</button></div>`

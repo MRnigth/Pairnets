@@ -27,16 +27,23 @@ import { inviteLink, peopleOf, sharedNestsOf } from "./friends";
 import { serversOf } from "./servers";
 
 /** Nests per account, both kinds together (pending ones count), unless wrangler.toml's MAX_NESTS_PER_ACCOUNT says otherwise. */
-export const MAX_NESTS_PER_ACCOUNT = 3;
+export const MAX_NESTS_PER_ACCOUNT = 4;
 
-/** How many nests one account may have (MAX_NESTS_PER_ACCOUNT in wrangler.toml, default 3). Ones it has already stay. */
+/** How many nests one account may have (MAX_NESTS_PER_ACCOUNT in wrangler.toml, default 4). Ones it has already stay. */
 export function maxNestsPerAccount(env: Env): number {
   return intVar(env.MAX_NESTS_PER_ACCOUNT, MAX_NESTS_PER_ACCOUNT);
 }
 
 /** 409 nest_limit, naming the limit in force. */
 export function nestLimitError(env: Env): HttpError {
-  return new HttpError(409, "nest_limit", `This account already has ${maxNestsPerAccount(env)} servers. Remove one first.`);
+  const max = maxNestsPerAccount(env);
+  return new HttpError(409, "nest_limit", `This account already has ${max} ${max === 1 ? "nest" : "nests"}. Remove one first.`);
+}
+
+/** The account's own nests, both kinds and pending ones (what the limit counts), and the limit. Shared nests never count. */
+export async function nestCount(ctx: Ctx, accountId: string): Promise<{ used: number; max: number }> {
+  const r = await ctx.env.DB.prepare("SELECT COUNT(*) AS n FROM nests WHERE account_id = ?1").bind(accountId).first<{ n: number }>();
+  return { used: r?.n ?? 0, max: maxNestsPerAccount(ctx.env) };
 }
 export const MAX_UNUSED_CODES = 5;
 export const MAX_CODES_PER_DAY = 20;
@@ -185,6 +192,7 @@ export async function accountPageRoute(ctx: Ctx): Promise<Response> {
       accountId: account.id,
       email: account.email,
       username: account.username,
+      nestCount: await nestCount(ctx, s.accountId),
       servers: servers.map((n, i) => ({ id: n.id, label: n.label, status: n.status === "active" ? "active" : "pending", people: people[i] })),
       nests: view,
       shared: shared.map((x) => ({
@@ -250,6 +258,7 @@ async function meJson(ctx: Ctx, s: Session, account: AccountRow): Promise<Record
     createdAt: iso(account.created_at),
     identities: ids.results.map((i) => ({ provider: i.provider, email: i.email, createdAt: iso(i.created_at), lastUsedAt: iso(i.last_used_at) })),
     session: { id: s.id, kind: s.kind, authTime: iso(s.authTime), amr: s.amr, recentAuth: s.kind === "browser" && isRecent(ctx, s) },
+    nests: await nestCount(ctx, s.accountId),
   };
 }
 

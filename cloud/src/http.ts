@@ -64,7 +64,7 @@ export const MESSAGES: Record<ErrorCode, string> = {
   used: "That code was already used.",
   wrong_browser: "Open the link in the browser where you asked for it.",
   bad_url: "That is not a public https address for a nest (like https://nest.example.com).",
-  nest_limit: "This account already has 3 servers. Remove one first.",
+  nest_limit: "This account already has 4 nests. Remove one first.",
   too_many_codes: "Too many link codes. Use or cancel the ones you have, or try again tomorrow.",
   already_decided: "This sign-in was already answered.",
   slow_down: "Asking too often. Wait a few seconds.",
