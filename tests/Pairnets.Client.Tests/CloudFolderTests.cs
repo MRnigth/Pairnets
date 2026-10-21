@@ -232,9 +232,15 @@ public sealed class CloudFolderTests : IDisposable
             StabilityWindow = TimeSpan.Zero,
         };
 
+        // Windows' cloud files service may still hold here.txt for a moment after it was marked in sync; the next pass reads it.
         var scan = await scanner.ScanAsync(CancellationToken.None);
+        for (var tries = 0; !scan.Files["here.txt"].Stable && tries < 20; tries++)
+        {
+            await Task.Delay(100);
+            scan = await scanner.ScanAsync(CancellationToken.None);
+        }
 
-        Assert.True(scan.Files["here.txt"].Stable);
+        Assert.True(scan.Files["here.txt"].Stable, scan.Files["here.txt"].UnstableReason);
         Assert.False(scan.Files["there.txt"].Stable); // unknown to the notes and only on the nest: not read, not deleted
         Assert.True(cloud.IsCloudOnly(Path.Combine(root, "there.txt")));
 
