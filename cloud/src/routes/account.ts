@@ -5,7 +5,7 @@ import { audit } from "../audit";
 import type { Ctx } from "../context";
 import { type Env, intVar } from "../env";
 import { B32_UPPER, randomBase32, sha256 } from "../crypto";
-import { cleanAccess, cleanFolders, cleanLabel, cleanText, iso, MAX_USERNAME, NEST_ID_RE, parseFolders, personName, safeNext, SESSION_ID_RE } from "../formats";
+import { cleanAccess, cleanFolders, cleanLabel, cleanText, iso, MAX_NEXT_INVITE, MAX_USERNAME, NEST_ID_RE, parseFolders, personName, safeNext, SESSION_ID_RE } from "../formats";
 import { HttpError, htmlResponse, json, noContent, redirect } from "../http";
 import { sendNotice } from "../mail";
 import { accountPage, type AccountView, type NestView, type PeopleView } from "../pages";
@@ -112,18 +112,22 @@ function addressWarning(n: NestRow): string | null {
 }
 
 /**
- * /account?invite=nst_…&folders=Photos,School&access=view: the apps' "Invite a friend" hands over to the website (only
- * a signed-in browser makes invites). Folders that would not be accepted fall back to the whole nest.
+ * /account?invite=nst_…&folders=Photos&folders=School&access=view: the apps' "Invite a friend" hands over to the website
+ * (only a signed-in browser makes invites). Each folders= is one name, commas and all. A list that would not be accepted
+ * leaves "Chosen folders" picked with nothing typed: never the whole nest, which is more than was asked for. So does a
+ * list too long to come back through the sign-in page (MAX_NEXT_INVITE): it sends "." (a name never accepted) instead.
  */
 function inviteAsked(ctx: Ctx): { nestId: string; folders: string[] | null; access: "view" | "edit"; next: string } | null {
   const q = ctx.url.searchParams;
   const nestId = q.get("invite");
   if (!nestId || !NEST_ID_RE.test(nestId)) return null;
-  const typed = (q.get("folders") ?? "").split(",").map((f) => f.trim()).filter((f) => f.length > 0);
+  const typed = q.getAll("folders").filter((f) => f.length > 0);
   const folders = typed.length ? cleanFolders(typed) : null;
   const access = cleanAccess(q.get("access")) ?? "view";
-  const kept = folders && folders !== "invalid" ? folders : null;
-  const next = `/account?invite=${nestId}${kept ? `&folders=${encodeURIComponent(kept.join(","))}` : ""}&access=${access}`;
+  const kept = folders === "invalid" ? [] : folders;
+  let own = `${(kept ?? []).map((f) => `&folders=${encodeURIComponent(f)}`).join("")}&access=${access}`;
+  if (own.length > MAX_NEXT_INVITE) own = `&folders=.&access=${access}`;
+  const next = `/account?invite=${nestId}${own}`;
   return { nestId, folders: kept, access, next };
 }
 
@@ -137,6 +141,7 @@ async function peopleView(ctx: Ctx, nestId: string): Promise<PeopleView> {
       email: m.account?.email ?? "",
       access: m.row.access,
       folders: parseFolders(m.row.folders),
+      applied: m.row.synced === 1,
     })),
     waiting: p.invites
       .filter((i) => i.row.requested_by !== null)

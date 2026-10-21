@@ -62,7 +62,9 @@ button.small { font-size: .9375rem; vertical-align: baseline; margin-left: 10px;
 body:not(.q-page) .button.home { padding: 6px 14px; min-height: 38px; font-size: .9375rem; }
 .wide { width: 100%; }
 label { display: block; margin: 8px 0 6px; font-weight: 600; }
-input { width: 100%; font: inherit; height: 46px; padding: 0 14px; border-radius: 8px; border: 1px solid var(--line); background: transparent; color: var(--text); }
+input, textarea { width: 100%; font: inherit; padding: 0 14px; border-radius: 8px; border: 1px solid var(--line); background: transparent; color: var(--text); }
+input { height: 46px; }
+textarea { padding: 10px 14px; resize: vertical; min-height: 4.5em; }
 form button { margin-top: 12px; }
 .input-row { display: flex; gap: 8px; align-items: center; max-width: 560px; }
 .input-row input { flex: 1; min-width: 0; }
@@ -439,8 +441,9 @@ const ACCOUNT_JS = String.raw`(function () {
     if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(copied, fallback);
     else fallback();
   }
+  // One folder per line: a comma is part of a name.
   function folderList(text) {
-    return text.split(",").map(function (f) { return f.trim(); }).filter(function (f) { return f.length > 0; });
+    return text.split(/\r?\n/).map(function (f) { return f.trim(); }).filter(function (f) { return f.length > 0; });
   }
   // What a form says: {access, folders?}, or the problem to show.
   function shareOf(form, whatName, accessName) {
@@ -448,7 +451,7 @@ const ACCOUNT_JS = String.raw`(function () {
     var access = form.querySelector("input[name='" + accessName + "']:checked");
     var body = { access: access ? access.value : "view", folders: null };
     if (what && what.value === "folders") {
-      var list = folderList(form.querySelector("input[name=folders]").value);
+      var list = folderList(form.querySelector("[name=folders]").value);
       if (!list.length) return "Type at least one folder name, or choose The whole nest.";
       body.folders = list;
     }
@@ -498,16 +501,18 @@ const ACCOUNT_JS = String.raw`(function () {
     if (row.querySelector("form.change")) return;
     var n = ++changes;
     var form = el("form", "change");
-    var folders = row.getAttribute("data-folders") || "";
+    var folders = [];
+    try { folders = JSON.parse(row.getAttribute("data-folders") || "[]"); } catch (e) { folders = []; }
     var access = row.getAttribute("data-access");
-    form.appendChild(radio("change-what-" + n, "whole", "The whole nest", !folders));
-    form.appendChild(radio("change-what-" + n, "folders", "Chosen folders", !!folders));
-    var label = el("label", "", "Folder names, separated by commas");
+    form.appendChild(radio("change-what-" + n, "whole", "The whole nest", !folders.length));
+    form.appendChild(radio("change-what-" + n, "folders", "Chosen folders", !!folders.length));
+    var label = el("label", "", "Folder names, one per line");
     label.htmlFor = "change-folders-" + n;
-    var input = el("input");
+    var input = el("textarea");
     input.id = "change-folders-" + n;
     input.name = "folders";
-    input.value = folders;
+    input.rows = 3;
+    input.value = folders.join("\n");
     input.autocomplete = "off";
     form.appendChild(label);
     form.appendChild(input);

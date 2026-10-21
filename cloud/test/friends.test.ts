@@ -68,13 +68,36 @@ describe("friend invites: the formats", () => {
     expect(dottedEmail("anna.berg@example.com")).toBe("a•••@example.com");
   });
 
+  it("folder names follow the same rule as the apps and the nest (DeviceAccessTests.FolderNamesAreTopLevelNames has the same list)", () => {
+    const names: [string, boolean][] = [
+      ["Photos", true],
+      ["My Documents", true],
+      ["Ørsted 2026", true],
+      ["Photos, 2026", true],
+      ["", false],
+      [".", false],
+      ["..", false],
+      ["Photos/2026", false],
+      ["Photos\\2026", false],
+      ["Pho\ntos", false],
+      ["Photos ", false],
+      [" Photos", false],
+      ["Pho​tos", false],
+      ["‮Photos", false],
+      ["Pho­tos", false],
+      ["Pho\u0085tos", false],
+      ["Photos﻿", false],
+    ];
+    for (const [name, valid] of names) expect(cleanFolders([name]), JSON.stringify(name)).toEqual(valid ? [name] : "invalid");
+  });
+
   it("the sign-in page may come back to an invite, and to the apps' hand-over to the invite form", () => {
     const t = "pni_" + "a".repeat(32);
     expect(safeNext(`/invite?t=${t}`)).toBe(`/invite?t=${t}`);
     expect(safeNext("/invite?t=pni_short")).toBe("/account");
     expect(safeNext(`/invite?t=${t}&x=1`)).toBe("/account");
     const n = "nst_" + "a".repeat(26);
-    for (const ok of [`/account?invite=${n}`, `/account?invite=${n}&folders=Photos%2CSchool&access=view`, `/account?invite=${n}&folders=My%20(old)%20files&access=edit`]) {
+    for (const ok of [`/account?invite=${n}`, `/account?invite=${n}&folders=Photos%2C%202026&folders=School&access=view`, `/account?invite=${n}&folders=My%20(old)%20files&access=edit`]) {
       expect(safeNext(ok)).toBe(ok);
     }
     for (const bad of ["/account?invite=nst_x", `/account?invite=${n}&next=//evil.example`, `/account?invite=${n}#x`, `/account?x=1`]) expect(safeNext(bad)).toBe("/account");
@@ -124,7 +147,7 @@ describe("friend invites: making one", () => {
   });
 
   it("by email: the friend gets the invite, from the invites' own small budget; the owner's own address is refused", async () => {
-    const { h, b, nest } = await setup();
+    const { h, b, nest, anna } = await setup();
     const r = await invite(b, nest, { access: "edit", folders: ["Photos"], email: " Anna.Berg@Example.com " });
     expect(r.status, r.text).toBe(201);
     expect(r.json.emailed).toBe(true);
@@ -147,7 +170,7 @@ describe("friend invites: making one", () => {
     expect(own.status).toBe(409);
     expect(own.json.error).toBe("own_nest");
 
-    // Five a day for the whole service; then the invite is still made (with no address kept) and the page says so.
+    // Five a day for each account; then the invite is still made (with no address kept) and the page says so.
     const allBefore = await h.query<{ count: number }>("SELECT count FROM rate_counters WHERE bucket LIKE 'mail-all:%'");
     for (let i = 1; i < INVITE_MAIL_DAILY_LIMIT; i++) {
       const more = await invite(b, nest, { email: `friend${i}@example.com` });
@@ -163,6 +186,11 @@ describe("friend invites: making one", () => {
     );
     // Invites never took from the day's total that sign-ins and notices share.
     expect(await h.query("SELECT count FROM rate_counters WHERE bucket LIKE 'mail-all:%'")).toEqual(allBefore);
+    // Another owner still has their own five: one account can't use up everyone's.
+    const annasNest = await addServer(h, anna, { label: "Anna's nest" });
+    const fromAnna = await invite(anna, annasNest, { access: "view", email: "olle@example.com" });
+    expect(fromAnna.json.emailed).toBe(true);
+    expect(h.mailer.to("olle@example.com")).toHaveLength(1);
     expect((await h.browser("203.0.113.99").call("POST", "/v1/login/email", { body: { email: "someone@example.com", turnstile: "ok" } })).status).toBe(202);
     expect(h.mailer.to("someone@example.com")).toHaveLength(1);
   });
@@ -232,30 +260,32 @@ describe("friend invites: making one", () => {
 
   it("at most 10 friends per nest, members and open invites together; a cancelled or ended invite frees its place", async () => {
     const { h, b, nest, anna } = await setup();
+    let k = 0;
+    const fresh = () => ({ access: "view", folders: [`Folder ${++k}`] }); // a new link each time, not the open one again
     await letIn(b, nest, anna);
     const ids: string[] = [];
     for (let i = 0; i < 9; i++) {
-      const r = await invite(b, nest, {});
+      const r = await invite(b, nest, fresh());
       expect(r.status, `invite ${i}`).toBe(201);
       ids.push(r.json.id);
     }
-    const full = await invite(b, nest, {});
+    const full = await invite(b, nest, fresh());
     expect(full.status).toBe(409);
     expect(full.json).toEqual({
       error: "too_many_friends",
       message: "A nest can have at most 10 friends, open invites included. Remove someone or cancel an invite first.",
     });
     expect((await b.call("DELETE", `/v1/servers/${nest.nestId}/invites/${ids[0]}`)).status).toBe(204);
-    expect((await invite(b, nest, {})).status).toBe(201);
-    expect((await invite(b, nest, {})).status).toBe(409);
+    expect((await invite(b, nest, fresh())).status).toBe(201);
+    expect((await invite(b, nest, fresh())).status).toBe(409);
     // A week on, the open links have ended: their places are free again (Anna's stays).
     h.advance(7 * 86400 + 1);
     await b.signInByEmail(OWNER);
-    for (let i = 0; i < 9; i++) expect((await invite(b, nest, {})).status).toBe(201);
-    expect((await invite(b, nest, {})).json.error).toBe("too_many_friends");
+    for (let i = 0; i < 9; i++) expect((await invite(b, nest, fresh())).status).toBe(201);
+    expect((await invite(b, nest, fresh())).json.error).toBe("too_many_friends");
     // Another nest has its own ten.
-    const other = await addServer(h, b, { label: "Work nest", ip: "198.51.100.41" });
-    expect((await invite(b, other, {})).status).toBe(201);
+    const work = await addServer(h, b, { label: "Work nest", ip: "198.51.100.41" });
+    expect((await invite(b, work, fresh())).status).toBe(201);
   });
 
   it("an account makes at most 20 invites a day", async () => {
@@ -272,6 +302,33 @@ describe("friend invites: making one", () => {
     h.advance(86400);
     await b.signInByEmail(OWNER);
     expect((await invite(b, nest, {})).status).toBe(201);
+  });
+
+  it("Copy invite link again gives the same open link, not one more invite; other choices, a used or ended link, or an email make a new one", async () => {
+    const { h, b, nest, anna } = await setup();
+    const first = await invite(b, nest);
+    expect(first.status).toBe(201);
+    const again = await invite(b, nest);
+    expect(again.status).toBe(200);
+    expect(again.json).toEqual({ id: first.json.id, link: first.json.link, expiresAt: first.json.expiresAt, emailed: false });
+    expect(await h.query("SELECT id FROM nest_invites")).toHaveLength(1);
+    // Other choices are another link.
+    const edit = await invite(b, nest, { access: "edit", folders: ["Photos", "School"] });
+    expect(edit.status).toBe(201);
+    expect(edit.json.id).not.toBe(first.json.id);
+    // An email is always its own invite (the address is kept with it).
+    expect((await invite(b, nest, { access: "view", folders: ["Photos", "School"], email: OSKAR })).status).toBe(201);
+    // Once someone asked to join with it, it is theirs: the next copy is a new link.
+    await anna.call("POST", "/v1/invite/request", { body: { t: tokenOf(first.json.link) } });
+    const after = await invite(b, nest);
+    expect(after.status).toBe(201);
+    expect(after.json.id).not.toBe(first.json.id);
+    // An ended link is never handed out again.
+    h.advance(7 * 86400 + 1);
+    await b.signInByEmail(OWNER);
+    const later = await invite(b, nest);
+    expect(later.status).toBe(201);
+    expect(later.json.id).not.toBe(after.json.id);
   });
 });
 
@@ -407,7 +464,7 @@ describe("friend invites: the invite page and asking to join", () => {
     expect((await ask(anna, tokenOf(d.json.link))).json).toMatchObject({ error: "already_decided", message: "Jonas Lund said no to this invite." });
 
     // In, and then every other open link to this nest says Anna already has it.
-    const open = await invite(b, nest);
+    const open = await invite(b, nest, { access: "view", folders: ["Music"] });
     const { t: inT } = await letIn(b, nest, anna);
     const inPage = await anna.call("GET", `/invite?t=${inT}`);
     expect(inPage.text).toContain("<title>You&#39;re in Home nest · Pairnets</title>");
@@ -702,6 +759,28 @@ describe("friend invites: changing, removing and leaving", () => {
     expect((await b.call("PATCH", path, { body: { access: "view" } })).json.error).toBe("nest_too_old");
   });
 
+  it("a change the nest refuses when it is back is never marked done: it stays pending and the account page says so", async () => {
+    const { h, b, nest, annaId, deviceId } = await withFriendComputer();
+    const path = `/v1/servers/${nest.nestId}/people/${annaId}`;
+    nest.running = false;
+    expect((await b.call("PATCH", path, { body: { folders: ["Photos"] } })).json).toMatchObject({ folders: ["Photos"], synced: false });
+    // Encrypted while it was off: it now takes only the whole nest, so the hourly retry hears "no".
+    nest.running = true;
+    nest.sealed = true;
+    h.advance(3600);
+    await h.scheduled();
+    expect((await h.query("SELECT folders, synced FROM nest_members"))[0]).toEqual({ folders: '["Photos"]', synced: 0 });
+    expect(nest.devices.get(deviceId)!.folders).toEqual(["Photos", "School"]);
+    expect(await h.query("SELECT event FROM audit WHERE event = 'friend_sync_refused'")).toHaveLength(1);
+    expect((await b.call("GET", "/account")).text).toContain("Not applied on your nest yet");
+    // Still pending at the next sweep; sharing the whole nest settles it.
+    h.advance(3600);
+    await h.scheduled();
+    expect((await h.query("SELECT synced FROM nest_members"))[0]).toEqual({ synced: 0 });
+    expect((await b.call("PATCH", path, { body: { folders: null } })).json).toMatchObject({ folders: null, synced: true });
+    expect((await b.call("GET", "/account")).text).not.toContain("Not applied on your nest yet");
+  });
+
   it("removing a friend: their computers lose the nest at once, and it leaves their list", async () => {
     const { h, b, nest, anna, annaId, deviceId, t } = await withFriendComputer();
     expect((await anna.call("DELETE", `/v1/servers/${nest.nestId}/people/${annaId}`)).status).toBe(404);
@@ -814,7 +893,7 @@ describe("friend invites: the account page", () => {
     expect(page).toContain(`<strong>oskar.nilsson wants to join</strong> <span class="muted">· ${OSKAR}</span>`);
     expect(page).toContain("Used your invite link · Whole nest · can change");
     expect(page).toContain('<button type="button" class="secondary" data-action="invite-decline">Decline</button> <button type="button" data-action="invite-approve">Let oskar.nilsson in</button>');
-    expect(page).toContain(`<li class="person" data-person="${annaId}" data-access="view" data-folders="Photos, School"><span class="letter" aria-hidden="true">A</span>`);
+    expect(page).toContain(`<li class="person" data-person="${annaId}" data-access="view" data-folders="[&quot;Photos&quot;,&quot;School&quot;]"><span class="letter" aria-hidden="true">A</span>`);
     expect(page).toContain(`<strong data-field="name">Anna Berg</strong> <span class="muted">· ${ANNA}</span>`);
     expect(page).toContain('<span data-field="share">Photos, School · view only</span><span data-field="computers"></span>');
     expect(page).toContain('data-action="person-change">Change…</button> <button type="button" class="danger" data-action="person-remove">Remove</button>');
@@ -859,17 +938,22 @@ describe("friend invites: the account page", () => {
   it("/account?invite=…&folders=…&access=… opens that nest's invite form filled in (the apps hand over to it)", async () => {
     const { h, b, nest, anna } = await setup();
     const other = await addServer(h, b, { label: "Work nest", ip: "198.51.100.41" });
-    const path = `/account?invite=${nest.nestId}&folders=Photos,%20School&access=edit`;
+    const path = `/account?invite=${nest.nestId}&folders=Photos%2C%202026&folders=School&access=edit`;
     const page = (await b.call("GET", path)).text;
     expect(page).toContain('<form class="invite-form" data-field="invite-form" data-open>');
     expect(page).toContain(`<input type="radio" name="what-${nest.nestId}" value="folders" data-field="chosen" checked> Chosen folders`);
-    expect(page).toContain(`value="Photos, School">`);
+    // One folder per line: the comma stays part of "Photos, 2026".
+    expect(page).toContain('placeholder="Photos&#10;School">Photos, 2026\nSchool</textarea>');
     expect(page).toContain(`<input type="radio" name="access-${nest.nestId}" value="edit" checked>`);
     // Only that nest's form.
     expect(page.match(/data-field="invite-form" data-open>/g)).toHaveLength(1);
     expect(page).toContain(`<input type="radio" name="what-${other.nestId}" value="whole" checked>`);
-    // The whole nest and view only when nothing (or nothing usable) is said.
-    const plain = (await b.call("GET", `/account?invite=${nest.nestId}&folders=a/b`)).text;
+    // Folders it would refuse: still "Chosen folders", with nothing typed; never the whole nest, which is more.
+    const refused = (await b.call("GET", `/account?invite=${nest.nestId}&folders=a/b`)).text;
+    expect(refused).toContain(`<input type="radio" name="what-${nest.nestId}" value="folders" data-field="chosen" checked> Chosen folders`);
+    expect(refused).toContain(`placeholder="Photos&#10;School"></textarea>`);
+    // The whole nest and view only when nothing is said.
+    const plain = (await b.call("GET", `/account?invite=${nest.nestId}`)).text;
     expect(plain).toContain(`<input type="radio" name="what-${nest.nestId}" value="whole" checked>`);
     expect(plain).toContain(`<input type="radio" name="access-${nest.nestId}" value="view" checked>`);
     expect(plain).toContain("data-open>");
@@ -879,10 +963,25 @@ describe("friend invites: the account page", () => {
 
     // Not signed in: the sign-in comes back here, with what was asked.
     const out = await h.browser("203.0.113.84").call("GET", path);
-    const next = `/account?invite=${nest.nestId}&folders=${encodeURIComponent("Photos,School")}&access=edit`;
+    const next = `/account?invite=${nest.nestId}&folders=${encodeURIComponent("Photos, 2026")}&folders=School&access=edit`;
     expect(out.location).toBe(`/login?next=${encodeURIComponent(next)}`);
     expect(safeNext(next)).toBe(next);
     expect((await h.browser("203.0.113.84").call("GET", out.location!)).text).toContain(`data-next="${next.replace(/&/g, "&amp;")}"`);
+
+    // Twenty long folder names don't fit through the sign-in page's address: the form comes back with "Chosen folders"
+    // and nothing typed, never lost and never the whole nest.
+    const long = Array.from({ length: 20 }, (_, i) => `Folder ${i} ${"ø".repeat(200)}`);
+    const longPath = `/account?invite=${nest.nestId}${long.map((f) => `&folders=${encodeURIComponent(f)}`).join("")}&access=view`;
+    expect((await b.call("GET", longPath)).text).toContain(`${long[19]}</textarea>`); // signed in: all of them
+    const longOut = await h.browser("203.0.113.85").call("GET", longPath);
+    const back = decodeURIComponent(longOut.location!.slice("/login?next=".length));
+    expect(back).toBe(`/account?invite=${nest.nestId}&folders=.&access=view`);
+    expect(safeNext(back)).toBe(back);
+    const signedIn = h.browser("203.0.113.85");
+    await signedIn.signInByEmail(OWNER);
+    const form = (await signedIn.call("GET", back)).text;
+    expect(form).toContain(`<input type="radio" name="what-${nest.nestId}" value="folders" data-field="chosen" checked> Chosen folders`);
+    expect(form).toContain(`placeholder="Photos&#10;School"></textarea>`);
   });
 });
 
@@ -891,9 +990,9 @@ describe("friend invites: the cron, and deleting accounts", () => {
     const { h, b, nest, anna } = await setup();
     await invite(b, nest, { email: ANNA });
     await invite(b, nest, {});
-    const asked = await invite(b, nest, {});
+    const asked = await invite(b, nest, { folders: ["Photos"] });
     await anna.call("POST", "/v1/invite/request", { body: { t: tokenOf(asked.json.link) } });
-    const cancelled = await invite(b, nest, {});
+    const cancelled = await invite(b, nest, { folders: ["School"] });
     await b.call("DELETE", `/v1/servers/${nest.nestId}/invites/${cancelled.json.id}`);
     h.advance(3600);
     await h.scheduled();

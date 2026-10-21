@@ -473,6 +473,14 @@ public sealed class SyncEngine
                     plan.Add(new PlannedAction(path, s is null ? SyncAction.DeleteLocal : SyncAction.Download, l, s, b, PutBack: true));
                     continue;
             }
+            // On a nest shared with this computer, only the nest saying a file was deleted (its entry marked deleted)
+            // deletes it here. A file that is just not in the list left the share, also when the owner made the share
+            // smaller after this pass asked what it may see: it stays here and is no longer synced.
+            if (action == SyncAction.DeleteLocal && access.IsShared && remoteEntry is null)
+            {
+                result.LocalOnly++;
+                action = SyncAction.ClearBase;
+            }
             if (action == SyncAction.DeleteRemote && b is not null && scan.HeldVersions.Contains(b))
             {
                 result.Deferred++;

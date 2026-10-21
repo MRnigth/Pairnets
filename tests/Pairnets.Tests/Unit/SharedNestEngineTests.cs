@@ -168,6 +168,45 @@ public class SharedNestEngineTests : IDisposable
         Assert.Null(_state.GetFile("School/x.txt")?.BaseHash); // no longer synced
     }
 
+    [Theory]
+    [InlineData("edit")]
+    [InlineData("view")]
+    public async Task AShareMadeSmallerDuringAPassNeverDeletesTheFriendsFiles(string level)
+    {
+        _engine.Access = NestAccess.Read(level, ["Photos", "School"], "Oskar Nilsson", "Home nest");
+        _api.Access = new AccessAnswer(level, ["Photos", "School"]);
+        _nest.Put("School/x.txt", "school");
+        _nest.Put("School/sub/y.txt", "deeper");
+        _nest.Put("Photos/y.jpg", "photo");
+        await Pass(full: true);
+        Assert.Equal("school", File.ReadAllText(Local("School/x.txt")));
+
+        // The owner takes School out after this pass asked what it may see, but before it reads the list: the nest
+        // already leaves School out, while the app still thinks it is shared.
+        _api.ListsOnly = ["Photos"];
+        var r = await Pass(full: true);
+        Assert.Equal(0, r.DeletedLocal);
+        Assert.Equal(0, r.Errors);
+        Assert.Equal("school", File.ReadAllText(Local("School/x.txt")));
+        Assert.Equal("deeper", File.ReadAllText(Local("School/sub/y.txt")));
+        Assert.Null(_state.GetFile("School/x.txt")?.BaseHash); // no longer synced
+        Assert.Equal("photo", File.ReadAllText(Local("Photos/y.jpg")));
+
+        // The next passes, with the nest's new answer: the files still stay, and nothing is sent.
+        _api.Access = new AccessAnswer(level, ["Photos"]);
+        r = await Pass(full: true);
+        r = await Pass();
+        Assert.Equal(0, r.DeletedLocal + r.Uploaded + r.Errors);
+        Assert.True(File.Exists(Local("School/x.txt")));
+        Assert.Equal(["Photos/y.jpg", "School/sub/y.txt", "School/x.txt"], _nest.LivePaths()); // the nest's copies are untouched
+
+        // A file the nest says was deleted, inside the share, still goes.
+        _nest.Delete("Photos/y.jpg");
+        r = await Pass();
+        Assert.Equal(1, r.DeletedLocal);
+        Assert.False(File.Exists(Local("Photos/y.jpg")));
+    }
+
     [Fact]
     public async Task ARefusalFromTheNestIsHeldBackNotAnError()
     {
@@ -233,7 +272,17 @@ public class SharedNestEngineTests : IDisposable
 
         public string ServerKey => inner.ServerKey;
 
-        public Task<ManifestResponse> GetManifestAsync(long? since, CancellationToken ct) => inner.GetManifestAsync(since, ct);
+        /// <summary>The folders the nest lists to this computer now (null: everything), as a real nest filters its list.</summary>
+        public IReadOnlyList<string>? ListsOnly { get; set; }
+
+        public async Task<ManifestResponse> GetManifestAsync(long? since, CancellationToken ct)
+        {
+            var all = await inner.GetManifestAsync(since, ct);
+            if (ListsOnly is not { } folders)
+                return all;
+            var share = NestAccess.Read(NestAccess.Edit, folders);
+            return all with { Entries = all.Entries.Where(e => share.Allows(e.Path)).ToList() };
+        }
 
         public Task<DownloadResult> DownloadAsync(string path, Stream destination, Action<long>? progress, CancellationToken ct, DownloadResume? resume = null) =>
             inner.DownloadAsync(path, destination, progress, ct, resume);

@@ -125,7 +125,8 @@ export interface PersonShare {
 }
 
 export interface PeopleView {
-  members: ({ accountId: string; name: string; email: string } & PersonShare)[];
+  /** applied: false while the nest has not taken the last change yet (offline, or it said no). */
+  members: ({ accountId: string; name: string; email: string; applied?: boolean } & PersonShare)[];
   waiting: ({ id: string; name: string; email: string } & PersonShare)[];
   links: ({ id: string; link: string; email: string | null; expiresAt: number } & PersonShare)[];
 }
@@ -187,8 +188,8 @@ function inviteForm(n: ServerView, open: { folders: string[] | null; access: "vi
 <fieldset><legend>What they get</legend>
 <label class="choice"><input type="radio" name="what-${id}" value="whole"${chosen ? "" : " checked"}> The whole nest</label>
 <label class="choice"><input type="radio" name="what-${id}" value="folders" data-field="chosen"${chosen ? " checked" : ""}> Chosen folders</label>
-<label for="folders-${id}">Folder names, separated by commas (top-level folders of the nest)</label>
-<input id="folders-${id}" name="folders" maxlength="2000" autocomplete="off" placeholder="Photos, School" value="${e(open?.folders ? open.folders.join(", ") : "")}">
+<label for="folders-${id}">Folder names, one per line (top-level folders of the nest)</label>
+<textarea id="folders-${id}" name="folders" rows="3" maxlength="6000" autocomplete="off" placeholder="Photos&#10;School">${e(open?.folders ? open.folders.join("\n") : "")}</textarea>
 <p class="muted" data-field="sealed-note" hidden>An encrypted nest can only be shared whole.</p>
 </fieldset>
 <fieldset><legend>What they can do</legend>
@@ -216,9 +217,10 @@ function peopleSection(n: ServerView, invite: AccountView["invite"]): string {
 </div></li>`,
     ),
     ...p.members.map(
-      (m) => `<li class="person" data-person="${e(m.accountId)}" data-access="${e(m.access)}" data-folders="${e(m.folders ? m.folders.join(", ") : "")}">${letter(m.name)}<div class="who">
+      (m) => `<li class="person" data-person="${e(m.accountId)}" data-access="${e(m.access)}" data-folders="${e(m.folders ? JSON.stringify(m.folders) : "")}">${letter(m.name)}<div class="who">
 <div><strong data-field="name">${e(m.name)}</strong> <span class="muted">· ${e(m.email)}</span></div>
 <div class="muted"><span data-field="share">${e(shareWords(m))}</span><span data-field="computers"></span></div>
+${m.applied === false ? `<div class="muted" data-field="not-applied">Not applied on your nest yet. It is tried again every hour while your nest is on.</div>` : ""}
 <div class="actions"><button type="button" class="secondary" data-action="person-change">Change…</button> <button type="button" class="danger" data-action="person-remove">Remove</button></div>
 </div></li>`,
     ),

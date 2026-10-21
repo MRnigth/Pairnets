@@ -44,10 +44,8 @@ public sealed record DeviceAccess(string Level, IReadOnlyList<string>? Folders =
 
     public static bool IsLevel(string? level) => level is Owner or Edit or View;
 
-    /// <summary>A top-level folder name a share can name: 1–255 characters, no "/", "\" or control character, not "." or "..".</summary>
-    public static bool IsFolderName(string? name) =>
-        name is { Length: > 0 and <= MaxFolderLength } && name is not ("." or "..")
-        && !name.Contains('/', StringComparison.Ordinal) && !name.Contains('\\', StringComparison.Ordinal) && !name.Any(char.IsControl);
+    /// <summary>A top-level folder name a share can name: the apps' and the account service's rule (<see cref="Pairnets.Core.Sync.NestAccess.IsFolderName"/>).</summary>
+    public static bool IsFolderName(string? name) => Pairnets.Core.Sync.NestAccess.IsFolderName(name) && name!.Length <= MaxFolderLength;
 
     /// <summary>The Worker's account id of a person ("acc_…"): 1–64 letters, digits, "_" or "-".</summary>
     public static bool IsPersonId(string? id) =>

@@ -286,17 +286,21 @@ public sealed class RelayAuthMiddleware(RequestDelegate next, RelaySignature sig
 {
     public const int MaxBodyBytes = 4096;
 
-    /// <summary>The two calls that carry lists (the people waiting, a friend's folders) may be longer.</summary>
-    public const int MaxListBodyBytes = 32 * 1024;
+    /// <summary>
+    /// The calls that carry folder lists may be longer: the people waiting (20 people, each with 20 folder names of up to
+    /// 255 characters, up to 3 bytes each in UTF-8, is about 310 KiB), a friend's folders, and a friend's computer added.
+    /// </summary>
+    public const int MaxListBodyBytes = 512 * 1024;
 
     private const string BodyItem = "pairnets.relay-body";
 
     public static bool IsRelayPath(PathString path) => path.StartsWithSegments(RelayEndpoints.Prefix, StringComparison.OrdinalIgnoreCase);
 
-    /// <summary>How long a body may be: <see cref="MaxListBodyBytes"/> for /requests and /people/…, else <see cref="MaxBodyBytes"/>.</summary>
+    /// <summary>How long a body may be: <see cref="MaxListBodyBytes"/> for /requests, /people/… and /devices, else <see cref="MaxBodyBytes"/>.</summary>
     public static int MaxBodyFor(PathString path) =>
         path.StartsWithSegments(RelayEndpoints.Prefix + "/requests", StringComparison.OrdinalIgnoreCase)
         || path.StartsWithSegments(RelayEndpoints.Prefix + "/people", StringComparison.OrdinalIgnoreCase)
+        || path.StartsWithSegments(RelayEndpoints.Prefix + "/devices", StringComparison.OrdinalIgnoreCase)
             ? MaxListBodyBytes
             : MaxBodyBytes;
 

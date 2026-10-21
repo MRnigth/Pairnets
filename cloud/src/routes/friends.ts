@@ -181,8 +181,9 @@ export async function pushRequests(ctx: Ctx, n: AdminTarget): Promise<void> {
 
 /**
  * Tells the nest about one member row: a removal (DELETE /api/relay/people/{acc}) or its access and folders (PATCH).
- * Returns true when that is settled: the nest did it, or refused for good (then there is nothing more to tell it; an
- * older nest has no friends' computers, and a sealed nest refuses folders). False when it should be tried again.
+ * Returns true when that is settled: the nest did it, or (a removal only) it is an older nest with no friends' computers
+ * to remove. Anything else, a refusal too, keeps the row at synced = 0: the account page says the change is not on the
+ * nest yet, and the cron asks again (a nest encrypted meanwhile refuses folders until the owner shares it whole).
  */
 export async function syncMember(ctx: Ctx, n: AdminTarget, m: MemberRow): Promise<boolean> {
   const path = `/api/relay/people/${encodeURIComponent(m.account_id)}`;
@@ -195,8 +196,11 @@ export async function syncMember(ctx: Ctx, n: AdminTarget, m: MemberRow): Promis
     if (e instanceof NestOffline) return false;
     throw e;
   }
-  if (r.status >= 500) return false;
-  if (r.status !== 200) await audit(ctx, "friend_sync_refused", null, m.nest_id, { status: r.status, removed: m.removed_at !== null });
+  const olderNest = m.removed_at !== null && (r.status === 404 || r.status === 405);
+  if (r.status !== 200 && !olderNest) {
+    if (r.status < 500) await audit(ctx, "friend_sync_refused", null, m.nest_id, { status: r.status, removed: m.removed_at !== null });
+    return false;
+  }
   const db = ctx.env.DB;
   if (m.removed_at !== null) {
     await db.prepare("DELETE FROM nest_members WHERE nest_id = ?1 AND account_id = ?2 AND removed_at IS NOT NULL").bind(m.nest_id, m.account_id).run();
@@ -210,11 +214,14 @@ export async function syncMember(ctx: Ctx, n: AdminTarget, m: MemberRow): Promis
   return true;
 }
 
-/** The hourly cron: member rows whose nest has not heard of a change or a removal yet. Returns how many were settled. */
+/**
+ * The hourly cron: member rows whose nest has not heard of a change or a removal yet. Returns how many were settled.
+ * Rows the nest keeps refusing stay pending, so they are taken in a random order: they never hold the others back.
+ */
 export async function retryFriends(ctx: Ctx): Promise<number> {
   const rows = await ctx.env.DB.prepare(
     `SELECT m.*, n.key_version FROM nest_members m JOIN nests n ON n.id = m.nest_id AND n.mode = 'relay' AND n.status IN ('pending', 'active')
-       WHERE m.synced = 0 ORDER BY m.added_at, m.account_id LIMIT ?1`,
+       WHERE m.synced = 0 ORDER BY RANDOM() LIMIT ?1`,
   )
     .bind(SYNC_PER_SWEEP)
     .all<MemberRow & { key_version: number }>();
@@ -328,12 +335,22 @@ export async function createInviteRoute(ctx: Ctx, nestId: string): Promise<Respo
   const owner = await accountOf(ctx, s.accountId);
   if (!owner) throw new HttpError(401, "unauthorized");
   if (email === owner.email) throw new HttpError(409, "own_nest", "That is your own address. Type your friend's.");
+  if (email === null) {
+    // "Copy invite link" again: the link still open for the same choices (nobody used it yet), not one more invite.
+    const open = await ctx.env.DB.prepare(
+      `SELECT * FROM nest_invites WHERE nest_id = ?1 AND email IS NULL AND requested_by IS NULL AND cancelled_at IS NULL AND decided_at IS NULL
+         AND expires_at > ?2 AND access = ?3 AND folders IS ?4 ORDER BY created_at DESC, id LIMIT 1`,
+    )
+      .bind(n.id, ctx.now, access, foldersJson(folders))
+      .first<InviteRow>();
+    if (open) return json(200, { id: open.id, link: inviteLink(ctx, open.token), expiresAt: iso(open.expires_at), emailed: false });
+  }
   if ((await friendCount(ctx, n.id)) >= MAX_FRIENDS) throw tooManyFriends();
   await enforce(ctx, "invite-create", s.accountId, INVITES_PER_DAY, DAY);
   const { sealed } = await requireFriends(ctx, n);
   if (sealed && folders) throw new HttpError(400, "sealed_whole_only");
 
-  const emailed = email !== null && (await reserveMail(ctx, "invite"));
+  const emailed = email !== null && (await reserveMail(ctx, "invite", s.accountId));
   const id = newId("inv");
   const token = `pni_${randomBase32(32, B32_LOWER)}`;
   const expires = ctx.now + INVITE_LIFETIME;
@@ -400,7 +417,7 @@ export async function approveInviteRoute(ctx: Ctx, nestId: string, invId: string
   await audit(ctx, "invite_approved", s.accountId, n.id, { friend: friend.id, access: i.access });
   const owner = await accountOf(ctx, s.accountId);
   const share: ShareDetail = { nest: n.label, folders: parseFolders(i.folders), access: i.access };
-  if (await reserveMail(ctx, "invite")) sendLater(ctx, friendInEmail(friend.email, owner ? personName(owner) : "The owner", share));
+  if (await reserveMail(ctx, "invite", s.accountId)) sendLater(ctx, friendInEmail(friend.email, owner ? personName(owner) : "The owner", share));
   else await audit(ctx, "invite_mail_skipped", s.accountId, n.id);
   ctx.defer(pushRequests(ctx, n));
   return json(200, { status: "in", member: member ? memberJson(member, friend) : null });

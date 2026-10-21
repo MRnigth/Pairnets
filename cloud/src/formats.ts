@@ -48,12 +48,15 @@ export function displayUserCode(code: string): string {
 }
 
 const NEXT_RE =
-  /^\/(account(\?invite=nst_[0-9a-hjkmnp-tv-z]{26}(&[A-Za-z0-9%._~,+=&!*'()-]{0,600})?)?|app(\?code=[0-9A-Za-z-]{1,16})?|add(\?code=[0-9A-Za-z-]{1,16})?|invite\?t=pni_[0-9a-hjkmnp-tv-z]{32}|nest-login\?[^#\s]{1,600})$/;
+  /^\/(account(\?invite=nst_[0-9a-hjkmnp-tv-z]{26}(&[A-Za-z0-9%._~,+=&!*'()-]{0,2000})?)?|app(\?code=[0-9A-Za-z-]{1,16})?|add(\?code=[0-9A-Za-z-]{1,16})?|invite\?t=pni_[0-9a-hjkmnp-tv-z]{32}|nest-login\?[^#\s]{1,600})$/;
 
 /**
  * The `next` allow-list (section 6.4, plus RELAY.md's /add?code=, and for friends the invite link /invite?t= and the
  * apps' hand-over to the invite form, /account?invite=nst_…&folders=…&access=…); anything else becomes "/account".
  */
+/** How long the hand-over's own part of `next` may be (its folders, encoded): it rides in the sign-in page's address. */
+export const MAX_NEXT_INVITE = 2000;
+
 export function safeNext(next: unknown): string {
   return typeof next === "string" && NEXT_RE.test(next) ? next : "/account";
 }

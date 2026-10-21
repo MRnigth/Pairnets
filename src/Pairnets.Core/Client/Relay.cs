@@ -62,14 +62,14 @@ public static partial class Relay
 
     /// <summary>
     /// The account page's invite form for a nest, filled in from the app's "Invite a friend…" window:
-    /// <c>/account?invite=nst_…&amp;folders=Photos,School&amp;access=view</c> (no folders: the whole nest). Each folder name is
-    /// escaped on its own, so a comma inside a name stays part of it.
+    /// <c>/account?invite=nst_…&amp;folders=Photos&amp;folders=School&amp;access=view</c> (no folders: the whole nest). Each folder
+    /// is a parameter of its own, so a comma inside a name stays part of it.
     /// </summary>
     public static string InviteUrl(string nestId, IReadOnlyList<string>? folders, bool canChange, Uri? service = null)
     {
         var link = AccountUrl(service) + "?invite=" + Uri.EscapeDataString(nestId);
         if (folders is { Count: > 0 })
-            link += "&folders=" + string.Join(",", folders.Select(Uri.EscapeDataString));
+            link += string.Concat(folders.Select(f => "&folders=" + Uri.EscapeDataString(f)));
         return link + "&access=" + (canChange ? "edit" : "view");
     }
 

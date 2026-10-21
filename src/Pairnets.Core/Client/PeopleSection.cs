@@ -23,6 +23,14 @@ public sealed record PersonRow(string Key, string Letter, string Title, string L
 
     /// <summary>"Anna" for "Anna Berg", the first word of the name.</summary>
     public string FirstName => Title.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? Title;
+
+    // The chips by what they say, not by which list holds them: the pages redraw the People list only when a row really
+    // changed, and every status update reads the list anew (a redraw would take the keyboard focus off a button).
+    public bool Equals(PersonRow? other) =>
+        other is not null && Key == other.Key && Letter == other.Letter && Title == other.Title && Line == other.Line && Pill == other.Pill
+        && ViewOnly == other.ViewOnly && Waiting == other.Waiting && LetInLabel == other.LetInLabel && Chips.SequenceEqual(other.Chips, StringComparer.Ordinal);
+
+    public override int GetHashCode() => HashCode.Combine(Key, Title, Line, Pill, ViewOnly, Waiting, Chips.Count);
 }
 
 /// <summary>
