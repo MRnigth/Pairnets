@@ -1,3 +1,4 @@
+using System.Net.Http;
 using Pairnets.Core.Api;
 using Avalonia;
 using Avalonia.Controls;
@@ -40,6 +41,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
     private readonly ClientEnvironment _env;
     private readonly RollingFileLoggerProvider _fileLog;
     private bool _reportingError;
+    private readonly CrashCatcher _crashes;
     private readonly ILoggerFactory _loggers;
     private readonly ILogger _log;
     private readonly Dictionary<RunnerStatus, WindowIcon> _icons = [];
@@ -58,7 +60,10 @@ public sealed class DesktopController : ITrayActions, IDisposable
     private volatile bool _dirty = true;
     private RunnerStatus? _shownStatus;
     private readonly UpdateService _updates;
+    private readonly UpdatePackage _package;
     private bool _updateDismissed;
+    private double? _updateProgress;
+    private UpdateProblem? _updateError;
     private string? _serverPromptShownFor;
     private bool _lowSpaceNoticed;
     private IDisposable? _activation;
@@ -79,30 +84,50 @@ public sealed class DesktopController : ITrayActions, IDisposable
         _fileLog = new RollingFileLoggerProvider(_env.LogsDir, retentionDays: 14);
         _loggers = LoggerFactory.Create(b => b.AddProvider(_fileLog).SetMinimumLevel(LogLevel.Debug));
         _log = _loggers.CreateLogger("Pairnets.Desktop");
-        _settings = SettingsStore.Load(_env.SettingsPath);
+        _settings = SettingsStore.Load(_env.SettingsPath, problem => _log.LogWarning("Settings: {Problem}", problem));
+        UpgradeSettings();
+        _crashes = new CrashCatcher(_env.CrashesDir, AppName, _log, () => PrivacyCleaner.ThisComputer(_settings));
         Dispatcher.UIThread.UnhandledException += OnUnhandledException;
         _fileLog.Minimum = _settings.DebugMode ? LogLevel.Debug : LogLevel.Information; // Debug mode: more detail in the log
         _refresh = new DispatcherTimer(TimeSpan.FromMilliseconds(250), DispatcherPriority.Background, (_, _) => RefreshIfDirty());
-        _updates = new UpdateService(_env.CreateUpdateChecker(), PairnetsInfo.ProductVersion, UpdateChecker.AssetForThisPlatform());
+        _package = UpdatePackage.ForThisComputer(installedCopy: false); // (no installer looks after the Mac and Linux app)
+        _updates = new UpdateService(_env.CreateUpdateChecker(), PairnetsInfo.ProductVersion, _package.Asset);
         _updates.UpdateAvailable += u =>
         {
             _updateDismissed = false;
+            _updateError = null;
             _dirty = true;
             if (!u.Signed)
                 return; // (the banner says it was not installed; no "update available" notice for it)
-            Notify("update:" + u.Version, "Pairnets update available", $"Version {u.Version} is ready. Open Pairnets to download it.");
+            Notify("update:" + u.Version, "Pairnets update available", $"Version {u.Version} is ready. Open Pairnets to update.");
         };
     }
+
+    /// <summary>How reports and crash cards name this app.</summary>
+    public static string AppName => OperatingSystem.IsMacOS() ? "Mac app" : "Linux app";
+
+    /// <summary>Also catches errors behind the scenes and in background tasks, for the whole app (the app does this; tests do not).</summary>
+    public void WatchForCrashes() => _crashes.Watch();
 
     public void Start(string[] args)
     {
         _log.LogInformation("Pairnets {Version} starting on {Platform}", typeof(DesktopController).Assembly.GetName().Version, _platform.Name);
         // A pairnets:// link (the nest's website after approving this computer) starts a second
-        // Pairnets, which pokes this one through the pipe and quits; come to the front for it.
-        _activation = AppActivation.Listen(() => Dispatcher.UIThread.Post(ComeToFront), _env.ActivationPipeName);
+        // Pairnets, which pokes this one through the pipe and quits; come to the front for it, or do what a
+        // right-click item in the file manager asked. The poke is answered once that is done.
+        _activation = AppActivation.Listen(message => Dispatcher.UIThread.InvokeAsync(() =>
+        {
+            if (FileManagerCommand.FromMessage(message) is { } command)
+                HandleFileCommand(command);
+            else
+                ComeToFront();
+        }).GetTask(), _env.ActivationPipeName);
         CreateTray();
         _refresh.Start();
         _updates.SetEnabled(_settings.CheckForUpdates);
+        // Pairnets had to close after an error since it last ran: say so once (the card is in "Report a bug").
+        if (CrashCards.TakeNewCloses(_env.CrashesDir).Count > 0)
+            Notify("crash", CrashNotice.Title, CrashNotice.Text);
         // Rewrite the login item so it follows the app (Tether.app became Pairnets.app; the app may have moved).
         if (SafeIsAutoStart())
         {
@@ -121,7 +146,11 @@ public sealed class DesktopController : ITrayActions, IDisposable
             return;
         }
         StartSession(null);
-        if (!args.Contains("--autostart"))
+        if (FileManagerCommand.FromArguments(args) is { } command)
+            HandleFileCommand(command); // started by a right-click item in the file manager while Pairnets was not running
+        else if (args.Contains(SelfReplace.AfterUpdateArgument))
+            Notify("updated", UpdateTexts.UpdatedTitle, UpdateTexts.Updated(PairnetsInfo.ProductVersion)); // updated itself: say so, don't pop the window up
+        else if (!args.Contains(AppActivation.AutoStartArgument))
             ShowMainWindow();
     }
 
@@ -199,6 +228,9 @@ public sealed class DesktopController : ITrayActions, IDisposable
 
     public void OpenWindow(MainPage page) => ShowMainWindow(page);
 
+    /// <summary>White reads on every status colour but the yellow of "paused": that one gets a dark brown sign (7:1).</summary>
+    private static readonly IBrush PausedInk = new SolidColorBrush(Color.Parse("#2B1A00"));
+
     private WindowIcon IconFor(RunnerStatus status)
     {
         if (_icons.TryGetValue(status, out var icon))
@@ -216,7 +248,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
                 {
                     // 24-unit icon scaled into the middle 26 px of the circle.
                     using (ctx.PushTransform(Matrix.CreateScale(26 / 24.0, 26 / 24.0) * Matrix.CreateTranslation(9, 9)))
-                        ctx.DrawGeometry(null, new Pen(Brushes.White, 3.2, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round), glyph);
+                        ctx.DrawGeometry(null, new Pen(status == RunnerStatus.Paused ? PausedInk : Brushes.White, 3.2, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round), glyph);
                 }
             }
             using var ms = new MemoryStream();
@@ -266,11 +298,92 @@ public sealed class DesktopController : ITrayActions, IDisposable
         };
         session.ServerInfoChanged += info => Dispatcher.UIThread.Post(() => OnServerInfo(session, info));
         session.AccountChanged += (next, token) => Dispatcher.UIThread.Post(() => OnAccountChanged(session, next, token));
+        session.Files.Opened.NestFullWhileSaving += path => Dispatcher.UIThread.Post(() =>
+        {
+            if (ReferenceEquals(_session, session) && _window is { } w)
+                _ = w.ShowNestFullAsync(); // a file opened from the nest could not be saved back
+        });
         session.JoinRequested += r => Notify("join:" + r.Code, r.Title, $"Code {r.Code}. Review it on your nest (Pairnets → Needs attention).");
         session.CatchUpCompleted += n => Notify("catchup", "Pairnets is up to date", $"Synced {n} change(s) made while this computer was away.");
         _session = session;
         _dirty = true;
         _log.LogInformation("Syncing {Folder} with {Server} as {Device}", _settings.Folder, _settings.ServerUrl, _settings.DeviceName);
+        UpdateFileManagerEntry();
+    }
+
+    // ------------------------------------------------------------------ the file manager
+
+    /// <summary>
+    /// Puts Pairnets in the file manager for the current folder (Linux: sidebar bookmark, right-click items, folder
+    /// icon; Mac: folder icon), or takes it away when switched off in Settings. Runs at every start.
+    /// </summary>
+    private void UpdateFileManagerEntry()
+    {
+        var wanted = _settings.ShowInFileManager || (_settings.ExplorerRightClick && !OperatingSystem.IsMacOS());
+        var folder = wanted && _settings.IsComplete && Directory.Exists(_settings.Folder) ? _settings.Folder : null;
+        try
+        {
+            if (!_platform.SetFileManagerEntry(folder, sidebar: _settings.ShowInFileManager, rightClick: _settings.ExplorerRightClick))
+                _log.LogInformation("Pairnets could not be fully added to the file manager; it tries again at the next start");
+        }
+        catch (Exception ex)
+        {
+            _log.LogWarning(ex, "Could not update Pairnets in the file manager");
+        }
+    }
+
+    /// <summary>A right-click item in the file manager: "Open in Pairnets" or "Show sync status" for a file or folder.</summary>
+    internal async void HandleFileCommand(FileManagerCommand command)
+    {
+        try
+        {
+            await HandleFileCommandAsync(command);
+        }
+        catch (Exception ex)
+        {
+            _log.LogWarning(ex, "Could not answer the file manager about {Path}", command.Path);
+        }
+    }
+
+    private async Task HandleFileCommandAsync(FileManagerCommand command)
+    {
+        if (_session is not { } session || _settings.Folder is not { } folder || FileStatusReader.ToSyncPath(folder, command.Path) is not { } rel)
+        {
+            ShowMainWindow();
+            return;
+        }
+        if (command.Action == FileManagerAction.WhereItLives)
+        {
+            // A folder's own choice; for a file, the folder it is in.
+            var folderPath = rel.Length == 0 || Directory.Exists(command.Path) ? rel : Pairnets.Core.Paths.PathRules.Parent(rel) ?? string.Empty;
+            ShowMainWindow();
+            _window?.ShowFilesAt(folderPath, choosePlacement: true);
+            return;
+        }
+        if (command.Action == FileManagerAction.Open)
+        {
+            if (rel.Length == 0 || Directory.Exists(command.Path))
+            {
+                ShowMainWindow(MainPage.History);
+                if (_window is { } w)
+                    w.SearchHistory(rel);
+            }
+            else
+            {
+                ShowMainWindow();
+                _window?.ShowVersionsFor(rel);
+            }
+            return;
+        }
+        var status = session.GetFileStatus(command.Path);
+        var name = rel.Length == 0 ? "Your Pairnets folder" : Pairnets.Core.Paths.PathRules.FileName(rel);
+        if (status.State == FileSyncState.Problem)
+        {
+            if (await Dialogs.ConfirmAsync(_window, "Pairnets – sync status", $"{name}\n\n{status.Text}\n\nOpen Pairnets to see what needs you?"))
+                ShowMainWindow(MainPage.Attention);
+            return;
+        }
+        await Dialogs.InfoAsync(_window, "Pairnets – sync status", $"{name}\n\n{status.Text}");
     }
 
     /// <summary>Opens the nest's page where a computer asking to join is allowed or turned away.</summary>
@@ -325,6 +438,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
                 _log.LogWarning("Could not remove this computer on the nest: {Error}", ex.Message);
             }
             StopSession();
+            _log.LogInformation("Signed out of this computer by the person (Sign out); the nest was {Told}", removed ? "told" : "not told");
             _settings.ProtectedToken = null;
             _settings.DeviceId = null;
             _settings.FirstRunCompleted = false;
@@ -372,8 +486,20 @@ public sealed class DesktopController : ITrayActions, IDisposable
                 _log.LogWarning("Could not remove this computer on the nest: {Error}", ex.Message);
             }
             StopSession(); // the sync notes are only free to delete once the session is gone
+            var leftFileManager = false;
+            try
+            {
+                leftFileManager = _platform.SetFileManagerEntry(null);
+            }
+            catch (Exception ex)
+            {
+                _log.LogWarning(ex, "Could not take Pairnets out of the file manager");
+            }
+            _log.LogInformation("Reset this app chosen by the person: forgetting the settings, the saved key and the sync notes");
             var result = LocalReset.Run(_settings, _platform.Secrets, _env.SettingsPath, _env.LocalDir);
             var notes = new List<string>(result.Problems);
+            if (!leftFileManager)
+                notes.Add("Pairnets could not be taken out of the file manager completely.");
             try
             {
                 _platform.SetAutoStart(false); // not SetAutoStart(): that would save the settings file again
@@ -389,7 +515,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
             _settings = new ClientSettings();
             _fileLog.Minimum = LogLevel.Information;
             _updates.SetEnabled(true);
-            (_updateDismissed, _serverPromptShownFor, _lowSpaceNoticed) = (false, null, false);
+            (_updateDismissed, _updateProgress, _updateError, _serverPromptShownFor, _lowSpaceNoticed) = (false, null, null, null, false);
             _lastNotice.Clear();
             if (_autoStartItem is not null)
                 _autoStartItem.IsChecked = SafeIsAutoStart();
@@ -419,8 +545,33 @@ public sealed class DesktopController : ITrayActions, IDisposable
             _log.LogWarning("Could not store this computer's new key: {Error}", ex.Message);
             return;
         }
+        next.NameOfferAnswered |= _settings.NameOfferAnswered; // answered after this session started
         _log.LogInformation("Saving this computer's sign-in: {Server} as {Device} ({Kind})", next.ServerUrl, next.DeviceName, next.HasOwnKey ? "own key" : "shared token");
         ApplySettings(next, token);
+    }
+
+    /// <summary>"Use StudyPC" on the name offer: renames this computer on its nest; the session then saves the new name.</summary>
+    private async void UseOwnName(NameOffer offer)
+    {
+        if (_session is not { } session)
+            return;
+        try
+        {
+            await session.RenameAsync(offer.Own);
+            AnswerNameOffer();
+        }
+        catch (Exception ex) when (ex is PairnetsNetworkException or PairnetsAuthException or PairnetsProtocolException)
+        {
+            await Dialogs.InfoAsync(_window, "Pairnets", "Pairnets could not rename this computer. " + FriendlyErrors.Describe(ex));
+        }
+    }
+
+    /// <summary>Either answer to the name offer: it is not offered again.</summary>
+    private void AnswerNameOffer()
+    {
+        _settings.NameOfferAnswered = true;
+        SettingsStore.Save(_env.SettingsPath, _settings);
+        _dirty = true;
     }
 
     private void StopSession()
@@ -481,13 +632,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
         }
         if (_window is { IsVisible: true })
         {
-            if (_updates.Available is { Signed: false } unsigned && !_updateDismissed)
-                _window.ShowUpdate($"Pairnets {unsigned.Version} could not be installed", ReleaseSigning.NotSignedMessage, "Hide");
-            else if (_updates.Available is { } update && !_updateDismissed)
-                _window.ShowUpdate($"Pairnets {update.Version} is available",
-                    $"You have {PairnetsInfo.ProductVersion}. Download it and replace the app (your settings are kept).", "Download");
-            else
-                _window.ShowUpdate(null, string.Empty, string.Empty);
+            DrawUpdateCard(_window);
             _window.ShowMapSpeed = _settings.ShowMapSpeed;
             _window.ShowStatus(status, _settings.Folder, _settings.DeviceName);
             _window.ShowActivity(_session?.Activity.Items ?? []);
@@ -506,9 +651,12 @@ public sealed class DesktopController : ITrayActions, IDisposable
         var items = new List<AttentionItem>();
         if (_session is null)
             return items;
+        if (NameOffer.For(_settings, ComputerName.Default()) is { } offer)
+            items.Add(new AttentionItem(offer.Title, offer.Detail, offer.UseLabel, () => UseOwnName(offer), AttentionKind.Rename,
+                SecondLabel: offer.KeepLabel, Second: AnswerNameOffer));
         foreach (var join in status.JoinRequests)
         {
-            items.Add(new AttentionItem(join.Title, $"Code {join.Code}. Check that it matches the code on that computer, then allow or deny it on your nest.",
+            items.Add(new AttentionItem(join.Title, join.Advice,
                 "Review in browser", () => ReviewJoin(join), AttentionKind.Join, join.Code, join.At));
         }
         if (status.FixLabel is not null)
@@ -582,6 +730,10 @@ public sealed class DesktopController : ITrayActions, IDisposable
 
     public IHistorySource? History => _session;
 
+    public INestFiles? Files => _session?.Files;
+
+    public void OpenFile(string path) => _platform.Open(path);
+
     public bool Notifies(NoticeKind kind) => kind switch
     {
         NoticeKind.JoinRequest => _settings.NotifyJoinRequests,
@@ -645,7 +797,9 @@ public sealed class DesktopController : ITrayActions, IDisposable
         {
             case BlockReason.MassDelete:
             case BlockReason.FolderEmpty:
-                if (_session.PendingDeletes().Count > 0 && await Dialogs.ConfirmAsync(_window, "Pairnets – allow deletions?", _session.DescribePendingDeletes()))
+                if (_session.PendingDeletes().Count is > 0 and var pending
+                    && await Dialogs.ConfirmAsync(_window, "Pairnets – allow deletions?", _session.DescribePendingDeletes(),
+                        OverviewModel.DeleteButtons(pending).Yes, OverviewModel.DeleteButtons(pending).No))
                     _session.ApproveDeletions();
                 break;
             case BlockReason.ForeignMarker:
@@ -708,29 +862,191 @@ public sealed class DesktopController : ITrayActions, IDisposable
         }
         if (_window is not { IsVisible: true })
             ShowMainWindow();
-        var view = new SettingsView(_settings, _platform.Secrets, SafeIsAutoStart(), _updates, _session?.Status.ServerVersionText);
+        var view = new SettingsView(_settings, _platform.Secrets, SafeIsAutoStart(), _updates, _session?.Status.ServerVersionText, _session?.Files);
+        view.OpenFilesRequested += () => _window?.Navigate(MainPage.Files);
         view.Saved += v =>
         {
             ApplySettings(v.Result!, v.PlainToken);
             _window?.Navigate(MainPage.Overview);
         };
-        view.SignOutRequested += SignOut;
-        view.SignInAgainRequested += ShowSignIn;
+        view.SwitchesChanged += ApplySwitches;
         view.ReportBugRequested += ReportBug;
         view.ResetRequested += ResetEverything;
-        view.ManageDevicesRequested += ManageDevices;
+        view.ShowDevicesRequested += () => _window?.Navigate(MainPage.Devices);
         view.OpenLinkRequested += url => _platform.Open(url);
         view.Cancelled += () => _window?.Navigate(MainPage.Overview);
+        view.ChangeStorageRequested += () => ShowNestPlace(view);
+        view.MoveProgramRequested += MoveProgram;
+        if (ProgramPlace() is { } place)
+            view.ShowProgramFolder(place.DisplayDir);
         _window!.ShowSettingsPage(view);
+        _ = FillNestStorageAsync(view);
     }
 
-    /// <summary>The app is unsigned on Mac and Linux, so it does not replace itself: open the download page.</summary>
-    public void UpdateNow()
+    /// <summary>What the nest last said about where it keeps its files (the window shows it at once).</summary>
+    private NestStorage? _nestStorage;
+
+    /// <summary>Settings' "Where your nest keeps files" row, for a nest that can move its files (asks it once).</summary>
+    private async Task FillNestStorageAsync(SettingsView view)
     {
-        if (_updates.Available is { Signed: false })
+        if (_session is not { } session || session.Status.Server is not { CanMoveStorage: true })
+            return;
+        try
+        {
+            _nestStorage = await session.Api.GetStorageAsync(CancellationToken.None);
+            view.ShowNestStorage(_nestStorage);
+        }
+        catch (Exception ex) when (ex is PairnetsNetworkException or PairnetsProtocolException or PairnetsAuthException or HttpRequestException or TaskCanceledException)
+        {
+            _log.LogDebug("The nest's storage could not be read: {Error}", ex.Message);
+        }
+    }
+
+    /// <summary>"Change…" on that row: the nest's drives and the move; the row is read again when it closes.</summary>
+    private void ShowNestPlace(SettingsView view)
+    {
+        var window = new NestPlaceWindow(() => _session, _nestStorage);
+        window.Closed += (_, _) => _ = FillNestStorageAsync(view);
+        window.Show();
+    }
+
+    /// <summary>The Linux app's own folder, when it runs as the Pairnets program (not under dotnet, not on a Mac).</summary>
+    private LinuxAppPlace? ProgramPlace() =>
+        OperatingSystem.IsLinux() && LinuxAppPlace.ForThisApp(_env) is { } place
+            && string.Equals(Path.GetFileNameWithoutExtension(place.AppFile), "Pairnets", StringComparison.OrdinalIgnoreCase)
+            ? place : null;
+
+    /// <summary>
+    /// "Move…" next to the program folder (Linux): asks where to, copies the app there and points the command, the app
+    /// menu and start at login at the copy (<see cref="LinuxAppPlace"/>), then starts the copy and quits. The copy removes
+    /// the old folder when it starts.
+    /// </summary>
+    private async void MoveProgram()
+    {
+        if (ProgramPlace() is not { } place || _window is null)
+            return;
+        if (await Dialogs.PickFolderAsync(_window, "Choose where the Pairnets program goes") is not { } chosen)
+            return;
+        if (place.Check(chosen) is { } problem)
+        {
+            await Dialogs.InfoAsync(_window, "Pairnets", problem);
+            return;
+        }
+        var target = LinuxAppPlace.TargetFor(chosen);
+        if (!await Dialogs.ConfirmAsync(_window, "Move Pairnets",
+                $"Move the Pairnets program to {target}? Pairnets starts again from there. Your synced files and settings stay as they are.", "Move", "Cancel"))
+            return;
+        string newApp;
+        try
+        {
+            newApp = await Task.Run(() => place.Move(chosen));
+        }
+        catch (PlainMessageException ex)
+        {
+            await Dialogs.InfoAsync(_window, "Pairnets", ex.Message);
+            return;
+        }
+        _log.LogInformation("Moved the program from {Old} to {New}", place.AppDir, target);
+        try
+        {
+            _platform.StartUpdatedApp(newApp, SelfReplace.AfterUpdateArgument);
+        }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
+        {
+            _log.LogWarning("Could not start the moved Pairnets: {Error}", ex.Message);
+            await Dialogs.InfoAsync(_window, "Pairnets", $"Pairnets is copied to {target}, but it couldn't be started from there. Quit Pairnets and start it again.");
+            return;
+        }
+        Quit();
+    }
+
+    /// <summary>"Sign in again" on the Account page: the sign-in window.</summary>
+    public void SignInAgain() => ShowSignIn();
+
+    /// <summary>The app is unsigned on Mac and Linux, so it does not replace itself: open the download page.</summary>
+    private void DrawUpdateCard(MainWindow window)
+    {
+        if (_updates.Available is not { } update || _updateDismissed)
+            window.ShowUpdate(null, string.Empty, string.Empty);
+        else if (!update.Signed)
+            window.ShowUpdate($"Pairnets {update.Version} could not be installed", UpdateProblem.NotSigned.Reason, UpdateProblem.NotSigned.ButtonText);
+        else if (_updateError is { } problem)
+            window.ShowUpdate($"Pairnets {update.Version} could not be installed", problem.Reason, problem.ButtonText);
+        else if (_updateProgress is { } p)
+            window.ShowUpdate($"Downloading Pairnets {update.Version}…", "Syncing continues while it downloads.", UpdateTexts.UpdateNow, p, busy: true);
+        else if (_package.Method == UpdateMethod.ByHand)
+            window.ShowUpdate($"Pairnets {update.Version} is available", UpdateTexts.ByHand(PairnetsInfo.ProductVersion), UpdateTexts.OpenDownloadPage);
+        else
+            window.ShowUpdate($"Pairnets {update.Version} is available", UpdateTexts.Ready(PairnetsInfo.ProductVersion), UpdateTexts.UpdateNow);
+    }
+
+    /// <summary>
+    /// The Linux app downloads pairnets-desktop-linux-x64.tar.gz, checks it against the signed SHA256SUMS.txt, swaps its
+    /// own file for the new one (<see cref="SelfReplace"/>), starts it and quits. On a Mac the card has already said why
+    /// Pairnets can't do that yet, and its button opens the download page. When anything fails, the card says why and
+    /// offers to try again; it never sends the person to the browser instead.
+    /// </summary>
+    public async void UpdateNow()
+    {
+        if (_updates.Available is not { } update || _updateProgress is not null)
+            return;
+        if (!update.Signed)
+        {
             DismissUpdate(); // never point people at a release Pairnets did not sign
-        else if (_updates.Available is { } update)
+            return;
+        }
+        if (_package.Method == UpdateMethod.ByHand)
+        {
             _platform.Open(update.ReleasePage.ToString());
+            return;
+        }
+        var download = Path.Combine(Path.GetTempPath(), $"Pairnets-{update.Version}-{update.AssetName}");
+        var app = _env.AppFile;
+        _updateError = null;
+        _updateProgress = 0;
+        _dirty = true;
+        try
+        {
+            var progress = new Progress<(long Done, long? Total)>(p =>
+            {
+                _updateProgress = p.Total is > 0 ? p.Done * 100.0 / p.Total.Value : 0;
+                _dirty = true;
+            });
+            await _env.CreateUpdateChecker().DownloadVerifiedAsync(update, download, progress, CancellationToken.None);
+            if (app is null)
+                throw new IOException("Pairnets could not find its own file.");
+            _log.LogInformation("Replacing {App} with Pairnets {Version}", app, update.Version);
+            try
+            {
+                await Task.Run(() => SelfReplace.Install(download, _package.AppFile!, app));
+            }
+            finally
+            {
+                File.Delete(download);
+            }
+        }
+        catch (Exception ex) when (ex is UpdateVerificationException or HttpRequestException or IOException or UnauthorizedAccessException
+            or InvalidDataException)
+        {
+            _log.LogWarning("Update failed: {Error}", FriendlyErrors.Technical(ex));
+            _updateError = UpdateProblem.From(ex, app);
+            _updateProgress = null;
+            _dirty = true;
+            return;
+        }
+        try
+        {
+            _platform.StartUpdatedApp(app, SelfReplace.AfterUpdateArgument);
+        }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
+        {
+            _log.LogWarning("Could not start the new Pairnets: {Error}", ex.Message);
+            _updateError = new UpdateProblem($"Pairnets {update.Version} is installed, but it couldn't be started. Quit Pairnets and start it again to use the new version.", UpdateNextStep.TryAgain);
+            _updateProgress = null;
+            _dirty = true;
+            return;
+        }
+        Quit();
     }
 
     public void DismissUpdate()
@@ -755,7 +1071,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
         if (session.Status.ServerSpaceLow && !_lowSpaceNoticed)
         {
             _lowSpaceNoticed = true;
-            Notify("disk", "The server is running out of space", $"{session.Status.ServerFreeText}. Free up space on the server or delete old history.");
+            Notify("disk", "Your nest is running out of space", $"{session.Status.ServerFreeText}. Free up space on your nest or delete old history.");
         }
         if (!session.ServerNeedsUpdate(info) || _serverPromptShownFor == info.ServerVersion)
             return;
@@ -831,6 +1147,40 @@ public sealed class DesktopController : ITrayActions, IDisposable
         window.Activate();
     }
 
+    /// <summary>
+    /// A switch on the Settings page changed: it applies at once (no Save). Most only need saving; the speed limits change
+    /// on the running connection, the file manager entry follows its switch, and the engine settings start the session
+    /// again (<see cref="SettingsSwitches"/>).
+    /// </summary>
+    private void ApplySwitches(ClientSettings fromPage)
+    {
+        var before = _settings;
+        var next = SettingsSwitches.WithSwitchesFrom(_settings, fromPage);
+        _settings = next;
+        _fileLog.Minimum = _settings.DebugMode ? LogLevel.Debug : LogLevel.Information;
+        SaveSettings();
+        if (before.StartWithWindows != next.StartWithWindows)
+            SetAutoStart(next.StartWithWindows);
+        if (before.CheckForUpdates != next.CheckForUpdates)
+            _updates.SetEnabled(next.CheckForUpdates);
+        if (_session is { } session)
+        {
+            if (SettingsSwitches.NeedsNewSession(before, next))
+                StartSession(null); // also puts Pairnets in the file manager, or takes it away
+            else
+            {
+                if (SettingsSwitches.LimitsChanged(before, next))
+                {
+                    session.Api.UploadLimit.SetMegabytesPerSecond(next.UploadLimitMBps);
+                    session.Api.DownloadLimit.SetMegabytesPerSecond(next.DownloadLimitMBps);
+                }
+                if (SettingsSwitches.FileManagerChanged(before, next))
+                    UpdateFileManagerEntry();
+            }
+        }
+        _dirty = true;
+    }
+
     private void ApplySettings(ClientSettings settings, string? plainToken)
     {
         _settings = settings;
@@ -842,6 +1192,24 @@ public sealed class DesktopController : ITrayActions, IDisposable
     }
 
     private void SaveSettings() => SettingsStore.Save(_env.SettingsPath, _settings);
+
+    /// <summary>One-time changes for settings an older Pairnets saved (<see cref="SettingsUpgrades"/>), saved at once.</summary>
+    private void UpgradeSettings()
+    {
+        var done = SettingsUpgrades.Apply(_settings);
+        if (done.Count == 0 || !File.Exists(_env.SettingsPath))
+            return; // nothing changed, or nothing set up yet (the first run saves them)
+        foreach (var line in done)
+            _log.LogInformation("Settings: {Change}", line);
+        try
+        {
+            SaveSettings();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _log.LogWarning("Could not save the upgraded settings: {Error}", ex.Message);
+        }
+    }
 
     public void OpenFolder()
     {
@@ -858,8 +1226,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
     {
         var settings = _settings;
         var session = _session;
-        var app = OperatingSystem.IsMacOS() ? "Mac app" : "Linux app";
-        var window = new BugReportWindow(() => BugReport.BuildAsync(settings, session, _fileLog.CurrentFile, error, app), _platform.Open,
+        var window = new BugReportWindow(() => BugReport.BuildAsync(settings, session, _fileLog.CurrentFile, error, AppName, _env.CrashesDir), _platform.Open,
             afterError: error is not null, saveDirectory: _env.LogsDir);
         window.Show();
         window.Activate();
@@ -868,7 +1235,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
     /// <summary>An error nothing else caught: log it, keep running, and offer a bug report with it.</summary>
     private void OnUnhandledException(object? sender, DispatcherUnhandledExceptionEventArgs e)
     {
-        _log.LogError(e.Exception, "Unhandled UI exception");
+        _crashes.Record(e.Exception, CrashPlace.Screen);
         e.Handled = true;
         if (_reportingError)
             return; // the report window itself failed; do not loop
@@ -929,6 +1296,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
     public void Dispose()
     {
         Dispatcher.UIThread.UnhandledException -= OnUnhandledException;
+        _crashes.Dispose();
         _activation?.Dispose();
         _updates.Dispose();
         _refresh.Stop();
@@ -955,6 +1323,9 @@ public sealed class DesktopController : ITrayActions, IDisposable
     internal void ClickTrayIcon() => OnTrayClicked(_tray, EventArgs.Empty);
 
     internal MainWindow? Window => _window;
+
+    /// <summary>"Check now" without the Settings page.</summary>
+    internal Task CheckForUpdateForTestsAsync() => _updates.CheckNowAsync(CancellationToken.None);
 
     internal TrayPanel? Panel => _panel;
 

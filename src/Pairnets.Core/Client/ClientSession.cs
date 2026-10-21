@@ -224,6 +224,17 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
     /// a relay address (signed in with a Pairnets account, the service's address is the only way to the server).</item>
     /// </list>
     /// </summary>
+    /// <summary>
+    /// Renames this computer on its nest (made unique there: "LAPTOP (2)"). The nest tells the other computers at once;
+    /// this one saves the name the nest settled on through <see cref="AccountChanged"/>, like any rename.
+    /// </summary>
+    public async Task RenameAsync(string name, CancellationToken ct = default)
+    {
+        await Api.RenameThisDeviceAsync(name, ct).ConfigureAwait(false);
+        if (Status.Server is { } info)
+            await CheckAccountAsync(info, ct).ConfigureAwait(false);
+    }
+
     public async Task CheckAccountAsync(ServerInfo info, CancellationToken ct = default)
     {
         if (Interlocked.Exchange(ref _accountCheckRunning, 1) == 1)
@@ -326,7 +337,8 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
     private readonly ILogger _log;
     private readonly string _token;
 
-    private ClientSession(ClientSettings settings, string token, StateDb state, PairnetsApiClient api, SyncEngine engine, SyncRunner runner, TimeProvider clock, ILogger log)
+    private ClientSession(ClientSettings settings, string token, StateDb state, PairnetsApiClient api, SyncEngine engine, SyncRunner runner,
+        TimeProvider clock, ILogger log, ILocalTrash trash, ILoggerFactory loggers)
     {
         _log = log;
         _token = token;
@@ -335,8 +347,25 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
         Api = api;
         Engine = engine;
         Runner = runner;
+        Trash = trash;
         _clock = clock;
+        _files = new Lazy<NestFiles>(() => new NestFiles(this,
+            Path.Combine(Path.GetDirectoryName(state.DatabasePath)!, "opened"), loggers.CreateLogger("Pairnets.Files"), clock));
     }
+
+    private readonly Lazy<NestFiles> _files;
+
+    /// <summary>The Files page: what is on the nest, where each folder lives, and changes made there.</summary>
+    public NestFiles Files => _files.Value;
+
+    /// <summary>Where files deleted here go (the Recycle Bin or Trash).</summary>
+    public ILocalTrash Trash { get; }
+
+    /// <summary>
+    /// Asks the app to save these settings and start syncing again with them (a choice made on the Files page, such as
+    /// where a folder's files live), through <see cref="AccountChanged"/>, as for any other settings change.
+    /// </summary>
+    internal void ChangeSettings(ClientSettings next) => AccountChanged?.Invoke(next, _token);
 
     public ClientSettings Settings { get; }
     public StateDb State { get; }
@@ -369,7 +398,7 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
     /// <param name="serviceUrl">The Pairnets service whose relay addresses mean "signed in with an account" (tests; by default sync.pairnets.app).</param>
     public static ClientSession Start(ClientSettings settings, string token, ILocalTrash trash, ILoggerFactory? loggers = null,
         string? stateBaseDir = null, Func<RunnerOptions, RunnerOptions>? runnerOptions = null, TimeProvider? clock = null,
-        EngineHooks? hooks = null, Uri? serviceUrl = null)
+        EngineHooks? hooks = null, Uri? serviceUrl = null, ICloudFiles? cloudFiles = null)
     {
         if (!settings.IsComplete)
             throw new InvalidOperationException("Settings are incomplete.");
@@ -389,14 +418,19 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
             DeviceName = settings.DeviceName!,
             ExtraIgnore = settings.ExtraIgnore,
             MaxParallelTransfers = settings.EffectiveParallelTransfers,
+            CloudFiles = cloudFiles ?? ICloudFiles.None,
+            Placement = settings.PlacementMap(onDemandWorks: cloudFiles?.IsActive == true),
         }, api, state, trash, loggers.CreateLogger("Pairnets.Engine"), clock, hooks);
         var options = new RunnerOptions { ServerUrl = url, Token = token, DeviceId = settings.DeviceName!, WaitForPeerBatches = settings.WaitForPeerBatches };
         if (runnerOptions is not null)
             options = runnerOptions(options);
         var runner = new SyncRunner(engine, options, loggers.CreateLogger("Pairnets.Runner"));
 
-        var session = new ClientSession(settings, token, state, api, engine, runner, clock, loggers.CreateLogger("Pairnets.Session"));
+        var session = new ClientSession(settings, token, state, api, engine, runner, clock, loggers.CreateLogger("Pairnets.Session"), trash, loggers);
+        engine.NestFull = () => session.Status.ServerSpaceLow;
         session.Wire();
+        if (Directory.Exists(Path.Combine(stateDir, "opened")))
+            _ = session.Files; // files opened from the nest before: changes still waiting are saved back
         session._status = session._status with
         {
             LimitText = settings.LimitText,
@@ -425,6 +459,7 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
                 SyncAction.Upload => (ActivityKind.Uploaded, "Uploaded"),
                 SyncAction.Download => (ActivityKind.Downloaded, "Downloaded"),
                 SyncAction.DeleteLocal => (ActivityKind.DeletedHere, "Deleted here (deleted on another PC)"),
+                SyncAction.Evict => (ActivityKind.Info, "Space freed here (kept on the nest)"),
                 _ => (ActivityKind.DeletedOnServer, "Deleted on the server"),
             };
             Activity.Add(kind, path, $"{verb}: {path}", _clock);
@@ -569,6 +604,7 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
                 _ = CheckAccountAsync(info);
             _ = RefreshDevicesAsync();
         };
+        Runner.NestRenamed += name => _ = RefreshServerInfoAsync(); // the name comes back in /api/info
         Runner.RemoteChangeReceived += (device, _) =>
         {
             if (string.Equals(device, Settings.DeviceName, StringComparison.OrdinalIgnoreCase))
@@ -726,6 +762,9 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
         }
     }
 
+    /// <summary>Tests: change the status as if the session had seen it (e.g. a nearly full nest).</summary>
+    internal void UpdateStatusForTests(Func<StatusSnapshot, StatusSnapshot> change) => Update(change);
+
     private void Update(Func<StatusSnapshot, StatusSnapshot> change)
     {
         StatusSnapshot next;
@@ -795,12 +834,91 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
         if (pending.Count > max)
             sb.AppendLine($"  … and {pending.Count - max} more");
         sb.AppendLine();
-        sb.AppendLine("If this is unexpected (wrong folder, unplugged drive), say No and check the folder.");
+        sb.AppendLine("If this is unexpected (wrong folder, unplugged drive), choose Cancel and check the folder.");
         sb.AppendLine("Deleted files stay recoverable from the server history for 30 days.");
         sb.AppendLine();
-        sb.Append("Allow these deletions once?");
+        sb.Append("Delete these files once?");
         return sb.ToString();
     }
+
+    /// <summary>
+    /// The version of a file (by sync path) that is the same here and on the nest, from the notes alone, or null when it
+    /// is not synced (what Explorer's tick stands for).
+    /// </summary>
+    public string? SyncedHash(string syncPath) =>
+        syncPath.Length > 0 && FileStatusReader.IsSynced(Settings.Folder ?? string.Empty, Path.Combine(Settings.Folder ?? string.Empty, PathRules.ToOsRelative(syncPath)), State)
+            ? State.GetFile(syncPath)?.BaseHash
+            : null;
+
+    /// <summary>
+    /// Downloads exactly version <paramref name="hash"/> of a file into <paramref name="destination"/>, for a file whose
+    /// content was left on the nest and is now being opened. Fails when the nest has another version by now (the next
+    /// sync then updates the file in Explorer) or when the bytes do not match.
+    /// </summary>
+    public async Task FetchVersionAsync(string syncPath, string hash, Stream destination, Action<long> progress, CancellationToken ct)
+    {
+        var served = new DownloadResume(hash, 0); // tells which version the nest is sending, before the first byte
+        var check = new VersionCheckStream(destination, () => served.ServedHash is { } h && !string.Equals(h, hash, StringComparison.Ordinal));
+        var result = await Api.DownloadAsync(syncPath, check, progress, ct, served).ConfigureAwait(false);
+        if (!result.Found)
+            throw new IOException($"{syncPath} is no longer on your nest.");
+        if (!string.Equals(result.Hash, hash, StringComparison.Ordinal))
+        {
+            Runner.RequestSync("file changed on the nest while opening it", full: false);
+            throw new IOException($"{syncPath} changed on your nest; Pairnets brings the new version next.");
+        }
+    }
+
+    /// <summary>
+    /// Passes bytes on, but stops before the first one when the nest is sending another version than the one asked for
+    /// (the download checks the whole file's hash at the end as well).
+    /// </summary>
+    private sealed class VersionCheckStream(Stream inner, Func<bool> otherVersion) : Stream
+    {
+        private void CheckVersion()
+        {
+            if (otherVersion())
+                throw new IOException("The file changed on your nest while it was being opened.");
+        }
+
+        public override bool CanRead => false;
+        public override bool CanSeek => false;
+        public override bool CanWrite => true;
+        public override long Length => inner.Length;
+        public override long Position { get => inner.Position; set => throw new NotSupportedException(); }
+        public override void Flush() => inner.Flush();
+        public override Task FlushAsync(CancellationToken cancellationToken) => inner.FlushAsync(cancellationToken);
+        public override void Write(byte[] buffer, int offset, int count)
+        {
+            CheckVersion();
+            inner.Write(buffer, offset, count);
+        }
+
+        public override void Write(ReadOnlySpan<byte> buffer)
+        {
+            CheckVersion();
+            inner.Write(buffer);
+        }
+
+        public override Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
+        {
+            CheckVersion();
+            return inner.WriteAsync(buffer, offset, count, cancellationToken);
+        }
+
+        public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            CheckVersion();
+            return inner.WriteAsync(buffer, cancellationToken);
+        }
+        public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+    }
+
+    /// <summary>Where one file or folder in (or outside) the Pairnets folder stands, for the file manager's "Show sync status".</summary>
+    public FileSyncStatus GetFileStatus(string fullPath) =>
+        FileStatusReader.For(Settings.Folder ?? string.Empty, fullPath, State, Engine.Ignore, Status);
 
     /// <summary>Directory holding this session's state.db.</summary>
     public string StateDirectory => Path.GetDirectoryName(State.DatabasePath)!;
@@ -1048,6 +1166,8 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
             await _devicesTimer.DisposeAsync().ConfigureAwait(false);
         if (_liveTimer is not null)
             await _liveTimer.DisposeAsync().ConfigureAwait(false);
+        if (_files.IsValueCreated)
+            _files.Value.Opened.Dispose();
         await Runner.DisposeAsync().ConfigureAwait(false);
         Api.Dispose();
         State.Dispose();

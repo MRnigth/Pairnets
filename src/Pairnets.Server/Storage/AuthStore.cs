@@ -48,7 +48,9 @@ public sealed partial class AuthStore
 
     public const string SettingAllowSharedToken = "allowSharedToken";
 
-    private const int MaxNameLength = 64;
+    public const string SettingNestName = "nestName";
+
+    public const int MaxNameLength = 64;
 
     private readonly string _connectionString;
     private readonly TimeProvider _clock;
@@ -342,6 +344,16 @@ public sealed partial class AuthStore
     {
         get => GetSetting(SettingAllowSharedToken) is not "false";
         set => SetSetting(SettingAllowSharedToken, value ? "true" : "false");
+    }
+
+    /// <summary>
+    /// The nest's name as its owner gave it on their account page ("soro"); null until the service sends one. The apps
+    /// can read it in /api/info.
+    /// </summary>
+    public string? NestName
+    {
+        get => GetSetting(SettingNestName) is { Length: > 0 } name ? name : null;
+        set => SetSetting(SettingNestName, PlainText.Clean(value, MaxNameLength));
     }
 
     public string? GetSetting(string key)

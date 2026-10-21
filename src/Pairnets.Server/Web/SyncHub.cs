@@ -27,6 +27,7 @@ public sealed class SyncHub(BatchRegistry batches, SyncedRegistry synced, Servic
     public const string DeviceRenamedMethod = "DeviceRenamed";
     public const string PeerTransferMethod = "PeerTransfer";
     public const string PeerSyncedMethod = "PeerSynced";
+    public const string NestRenamedMethod = PushNames.NestRenamed;
 
     /// <summary>The computer behind this connection, from the key or token it connected with.</summary>
     private DeviceIdentity? Identity => DeviceIdentity.Of(Context.User);

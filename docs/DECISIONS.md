@@ -83,6 +83,22 @@ what cannot lose or silently overwrite data.
   unit and `update.sh` watch `/var/lib/pairnets/update`, so DEPLOY.md copies the data, mounts the
   new place onto the old path through `/etc/fstab`, and adds a `RequiresMountsFor=` drop-in so the
   server never starts on an empty folder when the disk is missing.
+* **Choosing the place at install, or later in Settings, does the same with systemd (1.0.60).** `deploy/place.sh`
+  (sourced by `install.sh`, run as root by `pairnets-place.path` when an app asks) writes `var-lib-pairnets.mount` /
+  `opt-pairnets.mount` (bind mounts of the chosen folder onto the fixed paths) and `RequiresMountsFor=` drop-ins. The
+  mount units are the only record of the choice, so `install.sh` without options (every update) keeps them, and
+  nothing in the server, the updater or the tests changes. A `.pairnets-drive` file in the chosen folder plus
+  `AssertPathExists=` stop an empty leftover folder of the same name on the main disk from being mounted as the nest
+  when the drive is missing. A move copies with rsync while the nest runs, stops it for a last `--delete` pass and a
+  check that nothing differs, switches the mount, and goes back if the server does not answer; it never deletes the
+  old copy. Refused before anything changes: FAT/exFAT/NTFS (no owners or modes for the 700 data folder), network
+  drives (SQLite and a dropped connection), tmpfs, folders not empty or reached through a symlink, and less than 1 GB
+  (or the nest's size + 1 GB) free; under 10 GB it warns. The apps only pick from the drive list the root helper wrote
+  (`drives.json`), and the helper checks the folder again, as root, before it moves anything.
+* **The Linux app remembers its program folder through `~/.local/bin/pairnets`.** `install-desktop.sh --program-dir`
+  (or the question in a terminal) installs there; installing again follows the link, so the place is kept without a
+  settings file, and a new place moves it (only Pairnets' own files are removed from the old one). The app's own
+  updates already replace the program where it runs.
 * **Only the newest setup link works.** `owner-link` cancels every older unused link. A link shown
   to someone else (a shared terminal, a chat) would otherwise stay good for 24 hours, and on a nest
   without an owner the first person to open it takes the nest.
@@ -132,6 +148,15 @@ what cannot lose or silently overwrite data.
   (`AllowSetForegroundWindow`), otherwise the window would only flash in the taskbar. A poke can
   land between creating the pipe and waiting on it; Windows then fails the wait instead of
   completing it, and the listener counts that as a knock so no poke is ever lost.
+* **Opening Pairnets again brings the running one forward, like other apps.** Every second start
+  (Start menu, a shortcut, the installer's "Start now", a `pairnets://` link) uses the same poke
+  instead of showing "already running". The running app answers with one byte once its window is
+  really up (within 10 s: a first window on a slow computer can take seconds), so a stuck app gets a
+  clear "isn't responding" message instead of silence; the second start keeps trying to connect for
+  10 s, covering a Pairnets that is still starting up.
+  A start at login (`--autostart`) never pokes, so it never pops a window up. The pipe is
+  `CurrentUserOnly`: another user on the same computer can neither poke nor answer it. On macOS
+  opening the running app again starts no second process; the app's Reopen event does the same.
 
 ## Tooling and tests
 
@@ -1033,6 +1058,289 @@ The owner's answers to the 2026-10-14 audit questions:
   and the others stop waiting as before; the 30-minute limit and "Download now anyway" stay.
 * **The repeat comes from the sync engine, not the app window**, so it works on every computer, with or without its
   window open. Keep `BatchReannounceInterval` well under the others' `PeerQuietTimeout`.
+
+## Every app copy updates itself, and never sends you to the browser without saying why (2026-10-19)
+
+* **Found from a 1.0.52 that opened the release page instead of updating.** The release was fine (an installed 1.0.52
+  still updates itself to the signed releases: it reads `version.json` and `SHA256SUMS.txt` and ignores the `.sig`). The
+  copy was a `Pairnets.exe` run from its own folder, not the install folder, and the Windows app only updated itself when
+  `PairnetsSetup.exe` had put it there; the Mac/Linux app never updated itself. Both opened the download page silently.
+* **A copy no installer looks after now swaps its own file** (`SelfReplace`): Windows from `pairnets-client-win-x64.zip`,
+  Linux from `pairnets-desktop-linux-x64.tar.gz`. The package is checked against the signed `SHA256SUMS.txt` like the
+  installer; the running file is renamed to `.old` (both systems allow that), the new one takes its name, the app starts
+  it with `--after-update` and quits; the new app waits up to 30 s for the old one to let go of the single-instance lock
+  and removes `.old`. Any failure puts the old file back. Installed Windows copies keep using `PairnetsSetup.exe`.
+* **Mac stays by hand for now** (swapping an app bundle can't be tested here), but the card says so before its
+  **Open download page** button. Everywhere else a failure shows the reason on the card with **Try again**; nothing opens
+  the browser on its own.
+* **Old apps must keep updating.** The release keeps every file name and format an older app or server reads
+  (`version.json`, plain `SHA256SUMS.txt`, `PairnetsSetup.exe`, the zip, the Linux and server `.tar.gz`); `OldUpdaterCompatTests`
+  runs a frozen copy of the 1.0.52 updater against a release laid out like the workflow's and checks the workflow still
+  publishes those names. Copies on 1.0.59 or older that ran from the zip or on Linux need one update by hand.
+* **Shipped as a quick fix, 1.0.59.1 (tag `v1.0.59.1`).** A fourth number had never been used: `PairnetsInfo.FormatVersion`
+  dropped it, so a 1.0.59.1 app would have called itself 1.0.59, offered 1.0.59.1 again after every install and kept
+  calling its server out of date. It now keeps a fourth number when there is one. Every comparison (the apps,
+  1.0.52's frozen copy, update.sh's `sort -V`) puts 1.0.59 < 1.0.59.1 < 1.0.60, and the next main build (1.0.<run>,
+  60 or more) is newer. The tag's release job now passes `--latest`, because the apps and update.sh read GitHub's
+  latest release; the next push to main makes "Latest build" the latest again. The website's download links point at
+  the "Latest build" release, so new installs from pairnets.app get the fix only once it is on main.
+
+## Pairnets in File Explorer, like OneDrive (2026-10-19)
+
+* **Left side, right-click items and folder icon: registry only, on by default.** Explorer's left side gets "Pairnets"
+  through Microsoft's per-user recipe for cloud storage apps (a shell folder under HKCU that points at the Pairnets
+  folder); the right-click items ("Open in Pairnets", "Show sync status") are HKCU verbs limited to the folder with
+  `AppliesTo`, so Windows 11 lists them under "Show more options" (its short menu needs a signed package). The folder
+  gets its blue icon from a hidden desktop.ini, which was already never synced. Settings has a switch; the uninstaller
+  (`--unregister-explorer`) and Reset take it all away. Linux gets the GTK/KDE sidebar bookmark, a Dolphin service menu,
+  GNOME Files/Nemo scripts and a gio folder icon; the Mac gets the folder icon (Finder's `Icon\r` file is never synced;
+  Apple has no API to add a Finder sidebar entry).
+* **Ticks and Files On-Demand use Windows' own Cloud Files API, opt-in, marked "Preview".** "Files in Explorer" in Settings: Plain folder
+  (the default), Ticks all here, Files On-Demand. The folder is registered with `StorageProviderSyncRootManager` (the
+  Windows 10 SDK projection, so the Windows app now targets `net8.0-windows10.0.19041.0`) and the rest is P/Invoke into
+  cldapi.dll. It works from the normal per-user install (no package identity): checked on GitHub's Windows computers.
+  Files are marked where they are, never copied or moved. Not possible (stays a plain folder, says why): network or
+  removable drives, non-NTFS drives, a folder inside or around another cloud folder such as OneDrive.
+* **The engine never reads a file whose content is on the nest.** Its content is the version last synced (the notes
+  say which), so scanning, the "did it change?" checks before replacing or deleting, and conflicts use that. The folder
+  is connected with `BLOCK_SELF_IMPLICIT_HYDRATION`, so a mistake fails instead of downloading everything. Cloud
+  placeholders are reparse points: they count as files only while the cloud folder is on (plain folders behave as before).
+* **Opening a file on the nest downloads exactly that version.** The placeholder carries the version's hash; the nest's
+  answer is checked before the first byte is handed to Windows and the whole file is checked at the end. "Always keep on
+  this device" fetches, "Free up space" leaves the content on the nest again (only for files in sync).
+* **Turning it off brings every file home first.** The folder stays a cloud folder (keeping everything here) until
+  every file is downloaded, then the placeholders become plain files and Windows forgets the folder. The uninstaller
+  asks first when files are only on the nest. Reset makes the folder plain without the nest; files only on the nest
+  stay as placeholders that open again once Pairnets is set up.
+* **Tests never touch this PC's Explorer.** The registry tests write below a throwaway key; the cloud folder tests run
+  only with `PAIRNETS_CLOUD_TESTS=1` (CI), and `tools/ExplorerShots` (pictures of real Explorer) refuses to run outside CI.
+* **Placeholders are always ordinary files and folders to the scanner**, also while the cloud folder is off (or after
+  leaving it): skipping them would make their files look deleted. A file whose content is only on the nest is never read;
+  unknown to the notes (new, or renamed/moved here) it is "not known yet", and the version it stands for is never
+  deleted on the nest (`ScanResult.HeldVersions`), so a renamed file left on the nest still opens, then syncs under its
+  new name. Each placeholder carries "hash\npath on the nest" as its identity for exactly that.
+* **Leaving turns files back first, then Windows forgets the folder.** Windows 11 may keep its cloud mark on folders
+  after that (seen on GitHub's runners); such folders are ordinary to everyone and every file in them is here.
+* **Windows' callbacks never let an error escape** (it would end the app), Explorer's keep/free choices go through one
+  worker, Pairnets' own files are never freed, and the whole-tree work (pinning, leaving) runs off the window's thread.
+
+## Computer and nest names (2026-10-19)
+
+* **A new computer's own name.** Windows: its host name as typed when it was set up ("StudyPC"), not the old
+  all-capitals 15-letter name `Environment.MachineName` gives ("STUDYPC"). A Mac: its Computer Name from Sharing
+  settings ("Family MacBook Pro"). Linux: its pretty host name when set, otherwise the host name without its domain.
+  A server linking to an account sends `hostnamectl --pretty` (or its short host name) as the nest's first name. All
+  names are cleaned like the nest cleans them and kept to 64 characters, which also fixes a long accented name being
+  refused at sign-in (the app counted letters, the service code points).
+* **No PC-1 default.** "PC-1" was never a default in the code: it came from the old one-PC test setup. Names that
+  look like a placeholder ("PC-1", "pc 2") or the old all-capitals name get a one-time card on Needs you: "Use
+  StudyPC" or "Keep PC-1". Either answer is final (`NameOfferAnswered`). Only computers with their own key get it.
+* **Renaming on the account page.** The page asks the nest (signed relay call `PATCH /api/relay/devices/{id}`); the
+  nest stays the one place a computer's name lives and pushes `DeviceRenamed` as when an app renames itself. The same
+  name twice gets " (2)", and the page says why. An older nest answers 405 and the page asks to update it.
+* **Nest names in the apps.** The owner's name for a nest lives in D1 (`nests.label`) and is sent to the nest
+  (`PUT /api/relay/name`) on a rename and whenever the account page finds the nest out of date. The nest keeps it,
+  shows it in `/api/info` and pushes `NestRenamed`; the apps then show it where they said "Your nest" (side panel,
+  map, tray panel, Devices page, overview). Until a nest has a name they keep saying "Your nest".
+
+## Crash cards: every crash caught and kept, cleaned, on the computer (2026-10-19)
+
+* **Both apps now catch every error nothing else caught**, in one place (`CrashCatcher` in Core): on the screen side
+  (the app keeps running and offers a bug report, as before), behind the scenes (the app closes) and in background
+  tasks nobody waited for. The Mac/Linux app used to catch only the screen side. Each is logged as before and kept as
+  a crash card in `%LocalAppData%\Pairnets\crashes` (`~/.local/share/Pairnets/crashes`, …).
+* **A card holds no personal data.** It has the app, version, system, the error kind and the Pairnets code it went
+  through, with the message and details passed through `PrivacyCleaner`: quoted text, paths, file names, web
+  addresses, emails, IP addresses, tokens, long ids and the names this computer is known by (user, computer, sync
+  folder, device name, nest address, account email) are replaced. No log lines. Stack frames keep only the source
+  file's name and line. The cleaner removes too much rather than too little.
+* **One card per kind of crash.** The id is the error kind plus the first five Pairnets places in its stack (no line
+  numbers or versions), so the same crash again only counts up. The newest 20 cards are kept.
+* **After a crash that closed the app, the next start says so once** ("Pairnets closed unexpectedly", an Attention
+  notice) and "Report a bug" shows the cards near the top. **Nothing is sent anywhere**: sending crash reports
+  (with the user's yes, and a privacy page change first) is a separate, undecided step.
+
+## Design review fixes: colours, focus, motion, sizes (2026-10-19)
+
+* **The keyboard focus ring is the dark accent ink, not the accent.** `T.AccentInk` (#1F55C9 light, 6.6:1 on a
+  card; #9CC2FF dark) as a 2 px ring 3 px outside the control, the same in both apps (WPF `FocusRing` styles, Avalonia
+  `AdornerLayer.DefaultFocusAdorner`). It shows only after Tab or the arrow keys, never after a click; the old faint
+  in-template rings are gone so there is one ring, not two.
+* **Reduce motion is read once at start** (macOS NSWorkspace, GNOME `enable-animations`, Windows' animation switch
+  when the Mac/Linux app runs there for tests). With it on, `Motion.Apply` takes the animations out of the app's
+  styles, so classes written in XAML (a row's "enter") do nothing too, and bars jump instead of gliding.
+* **Contrast values come from the measured review** (`findings-apps-numbers.md`): switch off track 3:1+, Fix button
+  #B95309, dark hover blue #2560D6, amber/grey dots, soft text. Both palettes keep one hex per key; `PaletteParityTests`
+  holds them together and keeps the fixed pairs above their minimum.
+* **Where the apps differed, the Mac/Linux values won** (bold button words, accent-ink bold links, soft caps and day
+  headings, bold fact values, 1 px field focus, radius 14 strips, 36 px icon squares, pressed colours instead of
+  85 % opacity, sign-in field 50, base text 14), except two: the danger hover is the darker red #A61B25 in both (not
+  88 % opacity, which made white text fainter), and the pop keeps Avalonia's overshoot. WPF still has no letter
+  spacing, so its caps labels stay without the 0.8 tracking.
+* **Windows scroll bars** are thin and rounded with no arrows (thumb `T.Dash`, `T.Off` under the mouse), drawn from
+  existing keys so the palettes stay identical.
+
+## Design review: same words and states in both apps (2026-10-19)
+
+* **Red only for a real problem; switched off is grey.** A computer that is not online is "off since 10:45" (grey,
+  dashed line or ring, no cross) on the nest picture, the left side, the tray and the Computers page. It is red "can’t
+  reach" with a cross only when it vanished in the middle of moving files: its last live report said it was busy and it
+  never sent the closing, empty report, less than an hour ago (`Presences.Of`). A stopped sync always ends with that
+  empty report, so a computer that is shut down normally never turns red. The state is told by the line style and the
+  words too, never by colour alone.
+* **One count, one name.** "3 of 6 online" (this computer included) in the side group, on the page tile and on the
+  page itself; the page is "Computers" (the nest's own web page keeps its name "Devices"). Tile notes are status words
+  ("Up to date", "Stopped", "Offline", "Waiting", a percentage), not commands.
+* **Needs you and History look the same in both apps.** Every Needs-you card: title with its time, the words, then
+  the code (for a computer asking to join) and the button at the bottom right; only the join card's button is blue.
+  The join words live in Core (`JoinRequest.Advice`). History counts "older versions" (the current one not counted),
+  shows the "Restore puts that version back…" note, and Restore has an undo arrow in both apps.
+* **Up and down are named the same everywhere:** "uploading"/"downloading" on the picture, the side and the tray (the
+  tray's live row shows a down arrow while a file comes from the nest).
+
+## Design review, first batch: one blue button, shortcuts, Settings at once (2026-10-19)
+
+* **"Sync now" is blue only when it is the useful thing to do (A1).** `OverviewSyncNow.For(state)` in Core decides it for
+  both apps: blue while up to date or waiting for another computer, resting (greyed, "Pairnets is syncing now") while a
+  sync runs, plain when signed out, offline, paused or stopped, so the card's own button is the only blue one. The
+  motion between the looks is for a later design round.
+* **Stopped to keep files safe: the calm choice is the bright one (A2).** "Keep my files" changes nothing (syncing stays
+  stopped) and opens the folder to check it; there is no "reject" command, and opening the folder is what someone would
+  do next. "Allow these deletions (N)…" became an outlined amber button. The question's buttons say "Delete N files" and
+  "Cancel" (Cancel is the default) in both apps; WPF's message box could not relabel its buttons, so `Dialogs.Confirm`
+  draws a small window of its own.
+* **Keyboard shortcuts in the main window (A4):** Ctrl+F search (Activity, History), Ctrl+R and F5 sync now, Ctrl+,
+  Settings, Ctrl+1…6 the six pages (`Shortcuts` in Core; ⌘ on a Mac). The Mac app gets a menu bar (Pairnets: About,
+  Settings…; File, Sync, View, Window, Help), built only on macOS. Tooltips that exist name the shortcut.
+* **Settings switches apply at once (A11).** Switches, the files-at-a-time choice and the speed limits apply when
+  changed (a limit's number when its box is left); only the text boxes (folder, name, ignore rules, nest address and
+  key) wait for Save, so Save and Cancel stay. Two settings the sync engine reads at its start (wait for big batches,
+  files at a time) start the session again; the limits change on the running connection (`SettingsSwitches`).
+  Signing in again or out now lives only on the Account page, managing computers only on their page (Settings links
+  there). Every switch sits on the right with its words on the left, sign-in step 4 too.
+* **Page tiles under the computers (A12).** The open side panel is top-aligned: the tiles follow the computers and the
+  spare space goes to the bottom; the computers' list still scrolls when the window is short. The dock is unchanged.
+* **A failed update says why (A13).** One reason line under the title (`UpdateProblem`); the button is the next step:
+  "Try again" after a broken download, "Open download page" after a checksum mismatch or an installer that would not
+  start, and none for a release Pairnets did not sign (it is never pointed to). The X alone puts the card away. Moving
+  these into a notification center is for a later design round.
+* **Words (A14):** the nest's version reads "Nest 1.0.58", the advanced link "nest address and key".
+
+## The 1.0.60 branch: how the waiting branches were put together (2026-10-20)
+
+`release/1.0.60` is main (1.0.59.1) with Explorer integration, computer names, crash cards, the second-start fix,
+the version-archive notes and the design review fixes merged in, in that order. Where they met:
+
+* **A second Pairnets talks to the running one in one way.** The Explorer branch sent the right-click item's command
+  through the pipe; the second-start fix made the running app answer once its window is up. Now a poke carries an
+  optional message ended by a zero byte (a plain poke sends just the zero byte, an older Pairnets' poke nothing at
+  all), and the answer comes once the window came forward or the command was done. `SecondStart` sends a right-click
+  item's command itself, so a stuck app is reported for those too.
+* **The update card keeps 1.0.59.1's behaviour, in the design review's look.** The design review (A13) sent a checksum
+  mismatch or an installer that would not start to the download page; 1.0.59.1, released after it was written, says why
+  and offers "Try again" for every failure and never opens the browser by itself. That stays. From the review: the
+  reason line under the title (`UpdateReason`, also used for the Mac's "update by hand" words), no button for a release
+  Pairnets did not sign (only the X, instead of "Hide"), and `UpdateProblem`, which now takes its words from
+  `UpdateTexts.Failed`. The reason line sits under the title row, the whole card wide (as in 1.0.59.1): beside the
+  button it was a narrow column, and the Mac's longer words made the card so tall that the page tiles left the window.
+* **"Show Pairnets in File Explorer" and "Files in Explorer" apply at once**, like the other switches since A11.
+  The switch puts the entry there or takes it away; a new Files-in-Explorer choice starts the session again (the engine
+  connects to the cloud folder at its start). The Mac/Linux page's switch does the same for the file manager.
+* **The Needs-you card for a new computer name** uses the review's single card layout, with "Keep PC-1" as a plain
+  button before the blue "Use StudyPC" (both apps).
+* **The design review fixes are one merge commit** (the last one), so they can be taken out again with one revert
+  if they are not kept.
+
+## Where your files live: folders on this PC, On-Demand, or only on the nest (2026-10-20)
+
+* **Asked for by the owner for 1.0.60** ("all the files stay on the server and not on the device, you can change it in
+  settings"). His answers: three choices, **per folder and per computer**, the default unchanged; chosen in Settings, on
+  the new Files page and by right-clicking a folder; Mac and Linux get "On this PC" and "Only on the nest" (a Finder
+  On-Demand needs the paid Apple account); shipped as a finished feature, so the "Files in Explorer" Preview choice goes.
+* **Kept in this computer's settings only** (`ClientSettings.Placement`, folder → placement). A path takes the choice of
+  the nearest folder above it with one (`PlacementMap`); letter case does not matter, as on the nest. On-Demand counts as
+  "on this PC" where Windows can't make a cloud folder.
+* **Nest only, in the engine:** nothing is downloaded; a file here still syncs up first and is then freed (`Evict`) once
+  local, nest and last agreed are the same, or when it is an untouched older version. A file that was here and is gone was
+  deleted by the person, so that deletion still reaches the nest through the usual guards. Freeing is never a deletion:
+  the mass-delete and empty-folder guards don't count it.
+* **Freeing is the risky part, so:** only after this pass's list from the nest says the nest has that version; the file is
+  held (no one else may read or write it), hashed again, its notes forgotten first and then it is deleted for good. The
+  Recycle Bin would keep its space; the copy is on the nest. A stop half-way leaves an untracked file equal to the nest's,
+  which the next pass records and frees again. Nothing is freed while the nest is (nearly) full (`ServerSpaceLow`).
+* **On-Demand per folder** writes the choice onto the folders as Explorer's own keep choices, only when it changed since it
+  was last written (so choices made in Explorer stay): folders on this PC "Always keep on this device", On-Demand folders
+  no keep choice; their files are freed once (at once when in sync, else when they are), and a file opened later stays.
+  `KeepOnNest` asks the nearest folder with its own choice, so it also works for a folder that isn't here yet.
+* **Files page:** lists the nest from this computer's copy of the nest's list (it shows while the nest is offline). A file
+  only on the nest opens as a copy in the app's own folder (user-only), saved back with the opened version as base; a
+  save that meets a newer version on the nest becomes a conflict copy beside it, as the sync does. Copies go a day after
+  their last change reached the nest, never before. While the nest is nearly full only opening works (a pop-up says so).
+* **Moving and renaming happen on the nest** (`POST /api/move`): the new name gets the file, the old one is deleted into
+  history; other computers see a new file and a deleted one, so nothing in the sync changes. One file per request, so a
+  folder moves file by file. The copy is made before the nest answers even if the app stops waiting (big files). A
+  letter-case-only rename goes through a passing name. An older nest answers a bare 404: "update your nest".
+* **"Help me clean up"** (on the nest-full pop-up): lists the biggest files by kind (by file extension). The owner's
+  rule: "we do not delete anything, we recommend not to delete, only if the user is 1000% sure". So the screen
+  recommends keeping everything and saving copies elsewhere. Deleting needs a tick plus the word DELETE typed, and then
+  deletes for good (`POST /api/purge`: the file and its older versions), because a normal delete keeps the space in
+  History for 30 days. It works while the nest is full, which is what it is for. `/api/info` now also gives
+  `historyBytes`.
+* **The screens (both apps):** the History page button became **Files** (still six page buttons) with two tabs, "All
+  files" (new) and "Deleted" (the History page as it was; its own inner tab "All files" is now "Older versions" so two
+  tabs never say the same). `MainPage.History` stays and means the Deleted tab, so "Show versions…" and "Open in Pairnets"
+  land where they did. Clean up takes the Files page's place until "Done". A change on the Files page (and in Explorer's
+  "Where this folder lives…") is saved at once, as the Core does, and so is the Settings page's "Where your files live"
+  card, like the page's other switches since the design review (A11; it was saved with Save before the two branches met).
+  The right-click and sync-ticks switches apply at once too, and Ctrl+4 opens Files (Ctrl+F searches it). Either way,
+  choices that take files off this computer ask first ("Keep Photos only on your nest?"). The pages talk to `INestFiles`, so the UI tests
+  give them the nest's files in memory (`FakeNestFiles`).
+* **The installer asks first, like VS Code's** (owner's request, with a screenshot of VS Code's "Select Additional
+  Tasks"): Start menu, desktop icon (off), Explorer left side, right-click menu, sync ticks, where files live (three
+  choices for the whole folder), look for updates, update the nest (off), start at log-in; "Open Pairnets now" on the
+  last page. An install by hand leaves the ticks in `HKCU\Software\Pairnets\Setup` (Choices + an Id), and the app takes
+  them into its settings once per Id (`SetupChoices`). A silent update from inside Pairnets writes nothing, so changes
+  made in Settings since are kept. The right-click menu became a setting of its own (`ExplorerRightClick`), and the
+  folder Pairnets is in Explorer for is remembered in `HKCU\Software\Pairnets\Explorer`, so it is known even when there
+  are no right-click items.
+
+## Updates are hidden; the installer is for the first install (2026-10-20)
+
+The owner: "we can't update without all the info/login thing is wiped … the installer is one-time". What was really
+going on, from this PC's own log and settings: no update ever touched the settings (they live in
+`%AppData%\Pairnets\settings.json`, the key DPAPI-protected per Windows user with a fixed entropy, nothing tied to the
+exe's path or version). The computer had been **signed out** four minutes before the update (Sign out wrote no log
+line, so it looked like the update did it), and **"Check for updates" was off** (a leftover test setting), so 1.0.53
+to 1.0.58 were never offered and 1.0.59 was installed by hand through the whole wizard. Even the in-app update showed
+Inno's progress window (`/SILENT`).
+
+* **The in-app update runs the installer `/VERYSILENT`** (`UpdatePackage.InstallerArguments`): nothing shows. The
+  installer starts the new Pairnets with `--after-update`, which shows a small "Pairnets is up to date" note instead of
+  opening the window (both apps). An installed 1.0.59.1 or older still runs it with `/SILENT`, so the step to 1.0.60
+  shows the progress window one last time.
+* **The installer started by hand over an installed Pairnets skips its pages** (it finds its own uninstall entry):
+  same folder, earlier tick boxes (`UsePreviousTasks`, the default), and a finish page that says the sign-in and
+  settings were kept. `WasInstalled` (and `IsFirstInstall()`) guard the Tasks page (feature/nest-files): its
+  `LeaveChoicesForTheApp()` must run only on the first install, or a hand update would write the ticks over the app's
+  settings. A test fails if a call to it is not guarded so.
+* **We kept Inno Setup** rather than MSIX (needs a trusted signing certificate, moves app data into a package folder:
+  a migration risk for the very sign-in this protects, and harder for the Explorer work), ClickOnce (no single-file
+  exe, a new folder each version breaks start-at-login and Explorer) or swapping the exe without the installer (the
+  Windows Apps list would show the old version).
+* **"Check for updates" is switched on once** (`SettingsUpgrades`, `ClientSettings.SettingsVersion` = 1). A settings
+  file without the number reads as version 0; new settings start current, so the first run's own choice is never
+  overruled. Switched off again later, it stays off. Updates still ask: one click on "Update now", no restart by itself
+  (the owner's choice).
+* **Safety copy:** every save also writes `settings.json.bak` (a copy of what was just written, so it never holds a
+  key a Sign out removed). A missing or unreadable settings.json is replaced by it, with a line in the log. Reset deletes
+  it too; deleting settings.json by hand no longer starts over — use Reset.
+* **Logged now:** Sign out, Reset, and a settings file that was missing or unreadable. A computer that knows its nest,
+  folder and name but has no key gets "Sign in again … your settings are kept" instead of the new-computer greeting.
+* **Tests:** `UpdateKeepsSettingsTests` (safety copy, the one-time switch, the sign-in-again words, the installer
+  script never deleting app data and skipping pages on an update), `SavedKeyTests` (real DPAPI, pinned entropy) and
+  `AppUpdate_TheNewVersion_StaysSignedIn_KeepsEverySetting_AndOnlySaysItWasUpdated` (a whole update in the Windows
+  app's harness, then the new version starting on the same files).
+* **Smaller "Start over" card** in Settings (asked the same day): the size of the Report a bug row, both apps.
 
 ## pairnets.app in the apps' new look, "Product first" (2026-10-19)
 

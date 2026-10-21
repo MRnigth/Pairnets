@@ -26,10 +26,10 @@ internal static class Badge
         glyph.Margin = both ? new Thickness(0, 0, size * 0.42, 0) : default;
         second.Margin = both ? new Thickness(size * 0.42, 0, 0, 0) : default;
         glyph.Opacity = motion == SyncMotion.Stalled ? 0.6 : 1;
-        glyph.Classes.Set("spin-slow", motion == SyncMotion.Checking);
-        glyph.Classes.Set("rise", motion is SyncMotion.Up or SyncMotion.Both);
-        glyph.Classes.Set("fall", motion == SyncMotion.Down);
-        second.Classes.Set("fall-late", both);
+        Motion.Set(glyph, "spin-slow", motion == SyncMotion.Checking);
+        Motion.Set(glyph, "rise", motion is SyncMotion.Up or SyncMotion.Both);
+        Motion.Set(glyph, "fall", motion == SyncMotion.Down);
+        Motion.Set(second, "fall-late", both);
         return brush;
     }
 }

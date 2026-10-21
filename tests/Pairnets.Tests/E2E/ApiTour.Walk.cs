@@ -51,6 +51,7 @@ public sealed partial class ApiTour
             await EmailLinksAsync();
             await GoogleAsync();
             await RemovingSignInWaysAsync();
+            await NestStorageAsync();
             await UpdateServerAsync();
             await NoSecretsInTheLogAsync();
         }
@@ -352,6 +353,25 @@ public sealed partial class ApiTour
         Assert.Equal(first, await (await Get(_desktopApi, $"api/file?path={Uri.EscapeDataString(notes)}")).Content.ReadAsByteArrayAsync());
         await _desktopHub.WaitForAsync(SyncHub.ChangedMethod, a => Equals(a[0], _laptop.Name) && Equals(a[1], notes));
 
+        Step("Moving a file on the nest (the Files page)");
+        var moved = $"tour-{_tag}/moved/notes.txt";
+        var move = $"api/move?from={Uri.EscapeDataString(notes)}&to={Uri.EscapeDataString(moved)}&base={restored.Hash}";
+        await Refused(HttpMethod.Post, move);
+        Assert.Equal(moved, (await Read<ManifestEntry>(Post(_laptopApi, move))).Path);
+        Assert.Equal(first, await (await Get(_desktopApi, $"api/file?path={Uri.EscapeDataString(moved)}")).Content.ReadAsByteArrayAsync());
+        await _desktopHub.WaitForAsync(SyncHub.ChangedMethod, a => Equals(a[0], _laptop.Name) && Equals(a[1], moved));
+        Assert.Equal(notes, (await Read<ManifestEntry>(Post(_laptopApi,
+            $"api/move?from={Uri.EscapeDataString(moved)}&to={Uri.EscapeDataString(notes)}&base={restored.Hash}"))).Path); // and back, for what follows
+
+        Step("Deleting a file for good (Clean up)");
+        var forGood = $"tour-{_tag}/delete-for-good.txt";
+        var put = await Read<ManifestEntry>(Call(_laptopApi, HttpMethod.Put, $"api/file?path={Uri.EscapeDataString(forGood)}&base=none&mtime=1700000000000",
+            tweak: r => r.Content = new ByteArrayContent("gone"u8.ToArray())));
+        var purge = $"api/purge?path={Uri.EscapeDataString(forGood)}&base={put.Hash}";
+        await Refused(HttpMethod.Post, purge);
+        Assert.True((await Read<ManifestEntry>(Post(_laptopApi, purge))).Deleted);
+        Assert.Empty(await Read<List<HistoryVersion>>(Get(_laptopApi, $"api/history?path={Uri.EscapeDataString(forGood)}")));
+
         Step("A big file in pieces, and an upload given up half-way");
         var big = $"tour-{_tag}/big.bin";
         var data = new byte[300 * 1024];
@@ -521,7 +541,9 @@ public sealed partial class ApiTour
                      (HttpMethod.Get, "api/relay/status", null),
                      (HttpMethod.Get, "api/relay/devices", null),
                      (HttpMethod.Post, "api/relay/devices", new { name = "LAPTOP", system = "Windows" }),
+                     (HttpMethod.Patch, "api/relay/devices/dev-1", new { name = "Desk" }),
                      (HttpMethod.Delete, "api/relay/devices/dev-1", null),
+                     (HttpMethod.Put, "api/relay/name", new { name = "soro" }),
                  })
         {
             foreach (var who in new[] { anon, shared })
@@ -531,7 +553,7 @@ public sealed partial class ApiTour
             }
         }
 
-        Step("A nest linked to a Pairnets account: the service's signed calls add, list and remove a computer");
+        Step("A nest linked to a Pairnets account: the service's signed calls add, list, rename and remove a computer, and name the nest");
         await using var linked = await TestServer.StartAsync(config: RelayFixtures.Config(), configureBuilder: builder =>
             builder.Services.AddSingleton<IStartupFilter>(new AnsweredRoutesFilter(Record.ServerSaw)));
         using var service = new HttpClient(new RecordingHandler(Record, new SocketsHttpHandler { UseProxy = false })) { BaseAddress = linked.Url };
@@ -552,6 +574,14 @@ public sealed partial class ApiTour
         Assert.Equal(1, (await Signed(HttpMethod.Get, "/api/relay/status")).GetProperty("devices").GetInt32());
         var listed = (await Signed(HttpMethod.Get, "/api/relay/devices")).GetProperty("devices").EnumerateArray().Single();
         Assert.Equal((id, "LAPTOP", "Windows 11"), (listed.GetProperty("id").GetString(), listed.GetProperty("name").GetString(), listed.GetProperty("system").GetString()));
+        Assert.Equal("Laptop", (await Signed(HttpMethod.Patch, $"/api/relay/devices/{Uri.EscapeDataString(id)}", """{"name":"Laptop"}""")).GetProperty("name").GetString());
+        await using (var laptop = await HubProbe.ConnectAsync("the linked nest's LAPTOP", linked.Url, added.GetProperty("key").GetString()!, "Laptop", Record,
+                         HttpTransportType.WebSockets))
+        {
+            Assert.Equal("soro", (await Signed(HttpMethod.Put, "/api/relay/name", """{"name":"soro"}""")).GetProperty("name").GetString());
+            await laptop.WaitForAsync(SyncHub.NestRenamedMethod, args => (string?)args[0] == "soro");
+        }
+        Assert.Equal("soro", (await Signed(HttpMethod.Get, "/api/relay/status")).GetProperty("name").GetString());
         Assert.True((await Signed(HttpMethod.Delete, $"/api/relay/devices/{Uri.EscapeDataString(id)}")).GetProperty("removed").GetBoolean());
         Assert.Equal(0, (await Signed(HttpMethod.Get, "/api/relay/status")).GetProperty("devices").GetInt32());
     }
@@ -744,6 +774,29 @@ public sealed partial class ApiTour
         if ((await Security(_owner)).Methods is { Passkeys: 0, Email: false, Google: false })
             await Delete(_owner, "web/api/password", HttpStatusCode.Conflict); // now the password is the last way in
         await Post(Browser(), "web/api/signin/password", new { password = _password }, HttpStatusCode.NoContent);
+    }
+
+    // ------------------------------------------------------------------ where the nest keeps its files
+
+    /// <summary>
+    /// Settings' "Where your nest keeps files": the drives, and a move. On every target (also the Linux test box, where the
+    /// root helper is real) the tour only ever asks to move to where the files already are, which changes nothing.
+    /// </summary>
+    private async Task NestStorageAsync()
+    {
+        Step("Where the nest keeps its files (a move only to where they already are)");
+        await Refused(HttpMethod.Get, "api/storage");
+        var storage = await Read<NestStorage>(Get(_laptopApi, "api/storage"));
+        Assert.True(storage.CanMove, "The nest says it can't move its files, but the drive mover is installed.");
+        Assert.True((await Read<ServerInfo>(Get(_laptopApi, "api/info"))).CanMoveStorage);
+        Assert.False(string.IsNullOrEmpty(storage.Current));
+        Assert.False(storage.ByHand);
+
+        await Refused(HttpMethod.Post, "api/storage/move", json: new StorageMoveRequest(storage.Current));
+        await Post(_laptopApi, "api/storage/move", new StorageMoveRequest("/etc/not-a-drive"), HttpStatusCode.BadRequest); // only a listed drive
+        var same = await Read<NestStorage>(Post(_laptopApi, "api/storage/move", new StorageMoveRequest(storage.Current))); // already there: nothing to do
+        Assert.Equal(storage.Current, same.Current);
+        Assert.NotEqual(StorageMoveStatus.Requested, same.Status?.State);
     }
 
     // ------------------------------------------------------------------ the last step

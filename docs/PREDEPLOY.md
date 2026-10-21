@@ -116,7 +116,12 @@ website tests (`tests/Pairnets.Browser.Tests`) → the API tour (`tests/Pairnets
 `--filter "FullyQualifiedName~InstalledLinux"`; the runner fails when `PAIRNETS_E2E_REPORT` was not written) →
 `update-check.sh verify`. Phase B, on a fresh box: `upgrade-check.sh --feed feed1` (the
 published release from the real one-liner, files put on it through the API, then its own updater
-installs feed 1), then `lint.sh` (shellcheck).
+installs feed 1), then `lint.sh` (shellcheck). Phase C, on another fresh box (CI: the `choose-a-drive` job):
+`place-check.sh --feed feed1 --feed2 feed2` makes small loop drives and checks choosing where the nest keeps its
+files and program (`deploy/place.sh`): the refusals (too small, not mounted, not empty, a symlink, noexec, FAT when
+`mkfs.vfat` is there), the questions (through `script`), an install onto a chosen drive with get.sh, an update by
+the real updater, a missing drive (the server must not start on the main disk), moves by command and the apps' way
+(`pairnets-place.path`), planted links in the update folder, and back to the main disk.
 
 ### The fake Google (same rules in `Infrastructure/FakeGoogle.cs` and `tests/linux-server/fake-google.py`)
 
@@ -180,5 +185,10 @@ steps=preflight,line-endings,secrets,gate,build,publish,render-screens,tests,lin
 report=<path of report.txt>
 ```
 
-A failed box is kept for a look (`wsl -d pairnets-test`, or `pairnets-test-b` for phase B after a failed
+A failed box is kept for a look (`wsl -d pairnets-test`, or `pairnets-test-b` / `pairnets-test-c` for phase B / C after a failed
 phase A); `-KeepBox` keeps it after a pass too. `scripts\wsl-testbox.ps1 -Remove [-Name ...]` throws it away.
+
+## After the release: archive it
+
+The rolling "Latest build" is replaced on every push to `main`, so after each release run the archive script to
+keep that version on file in `%USERPROFILE%\Pairnets\versions\<version>\`. How: [VERSION-ARCHIVE.md](VERSION-ARCHIVE.md).

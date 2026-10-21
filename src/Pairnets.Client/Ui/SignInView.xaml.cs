@@ -173,7 +173,8 @@ public partial class SignInView : UserControl
             case SignInStep.Account:
                 DrawSteps(1);
                 Picture.ShowIcon(StepIcons.User, PictureTone.Accent);
-                Say("Sign in to Pairnets", "Keep one folder the same on all your computers.");
+                var (title, sub) = SignInTexts.First(_current);
+                Say(title, sub);
                 Foot(null);
                 break;
             case SignInStep.AccountWait:
@@ -329,7 +330,7 @@ public partial class SignInView : UserControl
 
     private static Visibility Shown(bool on) => on ? Visibility.Visible : Visibility.Collapsed;
 
-    private string ThisName() => _current.DeviceName ?? Environment.MachineName;
+    private string ThisName() => _current.DeviceName ?? ComputerName.Default();
 
     // ------------------------------------------------------------------ 1. sign in to Pairnets
 

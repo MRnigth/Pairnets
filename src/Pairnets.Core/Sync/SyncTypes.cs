@@ -101,6 +101,12 @@ public sealed class PassResult
     public int Recorded { get; set; }
     public int Errors { get; set; }
 
+    /// <summary>Copies removed from this computer because their folder lives on the nest only (they are safe there).</summary>
+    public int Freed { get; set; }
+
+    /// <summary>Copies of nest-only files kept here this pass because the nest is (nearly) full.</summary>
+    public int KeptForRoom { get; set; }
+
     /// <summary>Files skipped because they were still being written, locked, or otherwise unknown.</summary>
     public int Unstable { get; set; }
 
@@ -138,7 +144,7 @@ public sealed class PassResult
         PassOutcome.Offline => $"offline: {Message}",
         PassOutcome.AuthFailed => "authentication failed",
         PassOutcome.Failed => $"failed: {Message}",
-        _ => $"up {Uploaded}, down {Downloaded}, del-local {DeletedLocal}, del-remote {DeletedRemote}, conflicts {Conflicts}, recorded {Recorded}, errors {Errors}, unstable {Unstable}, deferred {Deferred}",
+        _ => $"up {Uploaded}, down {Downloaded}, del-local {DeletedLocal}, del-remote {DeletedRemote}, conflicts {Conflicts}, recorded {Recorded}, freed {Freed}, errors {Errors}, unstable {Unstable}, deferred {Deferred}",
     };
 }
 
@@ -169,6 +175,12 @@ public sealed class EngineOptions
     /// link, so they simply start again, as before.
     /// </summary>
     public long ResumeDownloadsFrom { get; init; } = 16L * 1024 * 1024;
+
+    /// <summary>The folder as a Windows cloud folder (ticks in Explorer, Files On-Demand), or a plain folder.</summary>
+    public ICloudFiles CloudFiles { get; init; } = ICloudFiles.None;
+
+    /// <summary>Where each folder's files live on this computer ("Where your files live"); by default all here.</summary>
+    public PlacementMap Placement { get; init; } = PlacementMap.Everywhere;
 }
 
 /// <summary>Test seams. Production code never sets these.</summary>

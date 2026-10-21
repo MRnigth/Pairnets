@@ -14,4 +14,7 @@ public enum AttentionKind
 
     /// <summary>The same name in different capital letters.</summary>
     NameClash,
+
+    /// <summary>A suggestion to use this computer's own name instead of a placeholder (<see cref="NameOffer"/>).</summary>
+    Rename,
 }

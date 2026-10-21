@@ -15,10 +15,13 @@ namespace Pairnets.Tests.Ui;
 
 public static class HeadlessApp
 {
-    public static AppBuilder BuildAvaloniaApp() =>
-        AppBuilder.Configure<Pairnets.Desktop.App>()
+    public static AppBuilder BuildAvaloniaApp()
+    {
+        Motion.Enabled = true; // the tests check which animations run, whatever this computer's motion setting is
+        return AppBuilder.Configure<Pairnets.Desktop.App>()
             .UseSkia()
             .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false });
+    }
 }
 
 /// <summary>Sample files and versions for the History page (screenshots and tests).</summary>
@@ -66,6 +69,13 @@ public sealed class SampleActions : ITrayActions
 
     public IHistorySource? History => HistoryFrom ?? Samples;
 
+    /// <summary>The nest's files for the Files page (null: not connected).</summary>
+    public FakeNestFiles? NestFiles { get; set; } = new();
+
+    public INestFiles? Files => NestFiles;
+
+    public void OpenFile(string path) => Calls.Add("open-file:" + path);
+
     public void FixBlocked() => Calls.Add("fix");
     public void SyncNow() => Calls.Add("sync");
     public void TogglePause() => Calls.Add("pause");
@@ -100,6 +110,8 @@ public sealed class SampleActions : ITrayActions
     }
 
     public void SignOut() => Calls.Add("sign-out");
+
+    public void SignInAgain() => Calls.Add("sign-in-again");
 
     public void OpenAccountSite() => Calls.Add("account-site");
 
@@ -409,7 +421,7 @@ public class DesktopUiTests
         window.ShowActivity(feed.Items);
         var attention = new List<AttentionItem>
         {
-            new("LAPTOP-2 (Windows) wants to join", "Code KQ7M-4PXD. Check that it matches the code on that computer, then allow or deny it on your nest.",
+            new("LAPTOP-2 (Windows) wants to join", new JoinRequest("KQ7M-4PXD", "LAPTOP-2", "Windows", DateTimeOffset.UtcNow).Advice,
                 "Review in browser", () => { }),
             new("Conflict copy: report (conflict LAPTOP 2026-10-02 141509).docx",
                 "Both computers changed this file. Compare the two, keep what you want, delete the other.", "Show in folder", () => { }),
@@ -428,7 +440,7 @@ public class DesktopUiTests
             new("MEDIA-PC", utc.AddDays(-30), utc.AddDays(-2), false, "1.0.58", "Linux"),
             new("OFFICE-PC", utc.AddDays(-30), utc.AddDays(-3), false, "1.0.58", "Windows"),
         ];
-        window.ShowUpdate("Pairnets 1.0.58 is available", "You have 1.0.52. Your settings are kept.", "Download");
+        window.ShowUpdate("Pairnets 1.0.58 is available", "You have 1.0.52. The update takes about 10 seconds and Pairnets restarts by itself.", "Update now");
         window.ShowStatus(StatusSnapshot.Initial with
         {
             Status = RunnerStatus.Syncing, Text = "Syncing", LastSyncAt = now.AddMinutes(-1),
@@ -509,9 +521,15 @@ public class DesktopUiTests
         Save(window, outDir, $"main-window-history-{suffix}.png");
 
         var settingsPage = new SettingsView(new ClientSettings { ServerUrl = "https://sync.example.com/", Folder = "/Users/me/Work", DeviceName = "MacBook", DeviceId = "id" },
-            null, autoStart: true, serverVersionText: "Server 1.0.58");
+            null, autoStart: true, serverVersionText: "Nest 1.0.58");
         window.ShowSettingsPage(settingsPage);
         Save(window, outDir, $"main-window-settings-{suffix}.png");
+        // A Linux nest that can move its files, and the Linux app's program folder.
+        settingsPage.ShowNestStorage(Pairnets.Tests.Unit.NestPlaceFlowTests.Sample(current: "/mnt/data/pairnets"));
+        settingsPage.ShowProgramFolder("~/.local/opt/pairnets");
+        Save(window, outDir, $"main-window-settings-nest-storage-{suffix}.png");
+        settingsPage.ShowNestStorage(null);
+        settingsPage.ShowProgramFolder(null);
         settingsPage.ScrollToEnd();
         Save(window, outDir, $"main-window-settings-start-over-{suffix}.png");
         window.AllowClose = true;
@@ -551,7 +569,7 @@ public class DesktopUiTests
             new("MINI-PC", utc.AddDays(-30), utc.AddSeconds(-3), true, "1.0.58", "Linux"),
             new("MEDIA-PC", utc.AddDays(-30), utc.AddDays(-2), false, "1.0.58", "Linux"),
             new("OFFICE-PC", utc.AddDays(-30), utc.AddDays(-3), false, "1.0.58", "Windows"),
-            new("KITCHEN-PC", utc.AddDays(-30), utc.AddDays(-4), false, "1.0.58", "Windows"),
+            new("KITCHEN-PC", utc.AddDays(-30), utc.AddMinutes(-20), false, "1.0.58", "Windows"),
         ];
         var trayFeed = new ActivityFeed();
         trayFeed.Add(new ActivityItem(now.AddMinutes(-12), ActivityKind.Downloaded, "Photos/holiday-0412.jpg", "Downloaded"));
@@ -571,6 +589,8 @@ public class DesktopUiTests
             {
                 ["LAPTOP"] = new(new Pairnets.Core.TransferReport(0, 4.1 * (1 << 20), 30, 120, 0, 0, Downloading: true), DateTimeOffset.UtcNow, 0, null),
                 ["MINI-PC"] = new(new Pairnets.Core.TransferReport(0, 2.6 * (1 << 20), 12, 120, 0, 0, Downloading: true), DateTimeOffset.UtcNow, 0, null),
+                // Went away 20 minutes ago in the middle of a download: the red row (the others are the grey "off" row).
+                ["KITCHEN-PC"] = new(new Pairnets.Core.TransferReport(0, 2.0 * (1 << 20), 4, 12, 0, 0, Downloading: true), utc.AddMinutes(-20), 0, null),
             },
         }, "DESKTOP");
         Save(panel, outDir, $"tray-syncing-{suffix}.png");
@@ -628,6 +648,31 @@ public class DesktopUiTests
         serverUpdate.ShowResult(new ServerUpdateResult(false, "This nest can't update itself yet.", "1.0.48", CanUpdateItself: false));
         Save(serverUpdate, outDir, $"server-update-manual-{suffix}.png");
         serverUpdate.Close();
+
+        // Settings > Your nest > "Change…": the nest's drives, sure?, moving, moved, not moved.
+        var place = new NestPlaceWindow(null, Pairnets.Tests.Unit.NestPlaceFlowTests.Sample());
+        place.Show();
+        Save(place, outDir, $"nest-place-drives-{suffix}.png");
+        place.Flow.Choose("/mnt/data/pairnets");
+        place.Render();
+        Save(place, outDir, $"nest-place-confirm-{suffix}.png");
+        place.Flow.Asking();
+        place.Flow.Seen(Pairnets.Tests.Unit.NestPlaceFlowTests.Sample(new StorageMoveStatus(StorageMoveStatus.Running, 40, "Copying your files to the new drive")));
+        place.Render();
+        Save(place, outDir, $"nest-place-moving-{suffix}.png");
+        place.Flow.Seen(Pairnets.Tests.Unit.NestPlaceFlowTests.Sample(new StorageMoveStatus(StorageMoveStatus.Succeeded, 100, "Done.",
+            "/var/lib/pairnets-before-move-2026-10-20-120000"), "/mnt/data/pairnets"));
+        place.Render();
+        Save(place, outDir, $"nest-place-done-{suffix}.png");
+        place.Close();
+        var failed = new NestPlaceWindow(null, Pairnets.Tests.Unit.NestPlaceFlowTests.Sample());
+        failed.Show();
+        failed.Flow.Choose("/mnt/data/pairnets");
+        failed.Flow.Asking();
+        failed.Flow.Seen(Pairnets.Tests.Unit.NestPlaceFlowTests.Sample(new StorageMoveStatus(StorageMoveStatus.Failed, 0, "That drive can't be used: /mnt/data is read-only. Nothing was changed.")));
+        failed.Render();
+        Save(failed, outDir, $"nest-place-failed-{suffix}.png");
+        failed.Close();
 
         // The bug report window, with a sample report.
         var bugDir = Path.Combine(Path.GetTempPath(), "pairnets-bug-shots");

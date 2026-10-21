@@ -12,14 +12,17 @@ public enum DeviceCardTone
     /// <summary>Moving files right now (blue speed note).</summary>
     Moving,
 
-    /// <summary>Not reachable: dashed grey icon, "Last seen yesterday".</summary>
+    /// <summary>Switched off or away: dashed grey icon, "Off since yesterday" (<see cref="Presence.Off"/>).</summary>
     Offline,
+
+    /// <summary>A real problem: it vanished while moving files. Dashed red icon, "Can’t reach" (<see cref="Presence.Lost"/>).</summary>
+    Unreachable,
 }
 
 /// <summary>One computer's card on the Devices page, as text ready to show.</summary>
 /// <param name="Name">"DESKTOP".</param>
 /// <param name="SystemLine">"Windows · 1.0.48" (what is known of it).</param>
-/// <param name="StatusText">"Online", or "Last seen yesterday".</param>
+/// <param name="StatusText">"Online", "Off since yesterday" or "Can’t reach".</param>
 /// <param name="StatusNote">"in sync", "↓ 4.10 MB/s" or empty.</param>
 /// <param name="LastChangeText">"Last change today 10:45" or "No changes yet".</param>
 /// <param name="CanChooseIcon">The nest knows icons and this computer has an id: the pencil may show (the pencil shows).</param>
@@ -35,7 +38,10 @@ public sealed record DeviceCard(
     string StatusNote,
     string LastChangeText)
 {
-    public bool Online => Tone != DeviceCardTone.Offline;
+    public bool Online => Tone is DeviceCardTone.Online or DeviceCardTone.Moving;
+
+    /// <summary>Red: it can't be reached and that is a problem (not just switched off).</summary>
+    public bool Problem => Tone == DeviceCardTone.Unreachable;
 
     public string IconLabel => "Change the icon for " + Name;
 
@@ -63,10 +69,18 @@ public sealed record DeviceCard(
                     note = Format.Live(live);
                 else if (online && (x.IsThis ? s.Status == Sync.RunnerStatus.Idle : others.TryGetValue(d.Name, out var other) && other.Kind == OtherKind.Ok))
                     note = "in sync";
-                var tone = !online ? DeviceCardTone.Offline : live is not null ? DeviceCardTone.Moving : DeviceCardTone.Online;
+                var presence = x.IsThis ? Presence.Online : Presences.Of(s, d.Name, online, now);
+                var tone = online ? live is not null ? DeviceCardTone.Moving : DeviceCardTone.Online
+                    : presence == Presence.Lost ? DeviceCardTone.Unreachable : DeviceCardTone.Offline;
+                var status = tone switch
+                {
+                    DeviceCardTone.Unreachable => "Can’t reach",
+                    DeviceCardTone.Offline => "Off since " + Presences.Since(d.LastSeen, now),
+                    _ => "Online",
+                };
                 return new DeviceCard(d.Name, d.Id, x.IsThis, tone,
                     DeviceIcon.For(d, s.DeviceIconsSupported), s.DeviceIconsSupported && d.Id is not null,
-                    DescribeSystem(d), online ? "Online" : "Last seen " + Seen(d.LastSeen, now), note,
+                    DescribeSystem(d), status, note,
                     d.LastChange is { } change ? "Last change " + Format.Moment(change, now) : "No changes yet");
             })
             .ToList();
@@ -105,7 +119,9 @@ public sealed record DeviceCard(
 /// <param name="Address">"nest.example.com", or "Not connected".</param>
 /// <param name="Version">"1.0.48", or a dash.</param>
 /// <param name="VersionNote">"up to date", "update available" or empty.</param>
-public sealed record NestCard(bool Online, string OnlineText, string Address, string Version, string VersionNote, bool VersionOlder, string FreeSpace, bool SpaceLow, string Keeps)
+/// <param name="Title">The nest's name ("soro") once its owner gave it one on their account page, else "Your nest".</param>
+public sealed record NestCard(bool Online, string OnlineText, string Address, string Version, string VersionNote, bool VersionOlder, string FreeSpace, bool SpaceLow, string Keeps,
+    string Title = "Your nest")
 {
     public static NestCard From(StatusSnapshot s, string? serverUrl)
     {
@@ -121,7 +137,8 @@ public sealed record NestCard(bool Online, string OnlineText, string Address, st
             s.ServerIsOlder,
             s.Server?.DiskFreeBytes is { } free ? Format.Bytes(free) : "–",
             s.ServerSpaceLow,
-            HistoryQuery.Retention.Days.ToString(CultureInfo.InvariantCulture) + " days");
+            HistoryQuery.Retention.Days.ToString(CultureInfo.InvariantCulture) + " days",
+            s.NestTitle);
     }
 
     private static string? Host(string? url) =>
@@ -131,10 +148,9 @@ public sealed record NestCard(bool Online, string OnlineText, string Address, st
 /// <summary>The line above the cards and the "is asking to join" chip.</summary>
 public static class DevicesSummary
 {
-    /// <summary>"6 use this nest · 3 online now".</summary>
+    /// <summary>"3 of 6 online", the same words as the left side and its page tile.</summary>
     public static string Line(IReadOnlyList<DeviceCard> cards) =>
-        cards.Count == 0 ? string.Empty
-        : $"{cards.Count} {(cards.Count == 1 ? "uses" : "use")} this nest · {cards.Count(c => c.Online)} online now";
+        cards.Count == 0 ? string.Empty : Presences.OnlineCount(cards.Count(c => c.Online), cards.Count);
 
     /// <summary>"PC-1 is asking to join", "2 computers are asking to join", or null.</summary>
     public static string? JoinText(StatusSnapshot s) => s.JoinRequests.Count switch

@@ -66,6 +66,8 @@ public partial class AccountPageView : UserControl
 
     private void OnSignOut(object? sender, RoutedEventArgs e) => _actions?.SignOut();
 
+    private void OnSignInAgain(object? sender, RoutedEventArgs e) => _actions?.SignInAgain();
+
     // Exposed for the headless UI test.
     internal string TitleValue => TitleText.Text ?? string.Empty;
     internal string SubtitleValue => SubtitleText.Text ?? string.Empty;

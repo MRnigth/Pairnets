@@ -84,8 +84,8 @@ public sealed class OtherPagesTests
     {
         var (window, actions, _) = await OpenAsync();
         await Wpf.Ui(() => window.Navigate(MainPage.Account));
-        Assert.True(await Wpf.Ui(() => new[] { window.NavOverview, window.NavActivity, window.NavAttention, window.NavHistory, window.NavDevices, window.NavSettings }.All(t => t.IsChecked != true)));
-        Assert.True(await Wpf.Ui(() => new[] { window.DockOverview, window.DockActivity, window.DockAttention, window.DockHistory, window.DockDevices, window.DockSettings }.All(t => t.IsChecked != true)));
+        Assert.True(await Wpf.Ui(() => new[] { window.NavOverview, window.NavActivity, window.NavAttention, window.NavFiles, window.NavDevices, window.NavSettings }.All(t => t.IsChecked != true)));
+        Assert.True(await Wpf.Ui(() => new[] { window.DockOverview, window.DockActivity, window.DockAttention, window.DockFiles, window.DockDevices, window.DockSettings }.All(t => t.IsChecked != true)));
         await Wpf.Ui(() => window.NavActivity.IsChecked = true);
         await Wpf.Settle();
         Assert.Equal(MainPage.Activity, window.Page);
@@ -227,7 +227,7 @@ public sealed class OtherPagesTests
         {
             window.ShowAttention(
             [
-                new("PC-1 (Windows) wants to join", "Code RX4K-92TB.", "Review on your nest", () => actions.Calls.Add("join"), AttentionKind.Join, "RX4K-92TB", Now),
+                new("PC-1 (Windows) wants to join", new JoinRequest("RX4K-92TB", "PC-1", "Windows", Now).Advice, "Review in browser", () => actions.Calls.Add("join"), AttentionKind.Join, "RX4K-92TB", Now),
                 new("Conflict copy: budget.xlsx", "Both computers changed this file.", "Show in folder", () => actions.Calls.Add("conflict"), AttentionKind.Conflict, null, Now),
                 new("Docs/Report.TXT", "Same name, other capitals.", "Show in folder", () => actions.Calls.Add("clash"), AttentionKind.NameClash),
             ]);
@@ -241,19 +241,45 @@ public sealed class OtherPagesTests
         Assert.Contains("Code on PC-1", texts);
         Assert.Contains(texts, t => t.Replace("\u2009", string.Empty) == "RX4K-92TB");
         Assert.Contains("Aa", texts);
+        Assert.Contains(texts, t => t.StartsWith("Allow it only if you are setting up PC-1 right now.", StringComparison.Ordinal));
         // No Allow or Deny buttons: the nest decides, the button opens its review page.
         await Wpf.Settle(); // layout of the page just opened
         var labels = await Wpf.Ui(() => Presser.Find(window).Select(t => t.Label).ToList());
         Assert.DoesNotContain("Allow", labels);
         Assert.DoesNotContain("Deny", labels);
         await Wpf.Settle(); // layout of the page just opened
-        await Wpf.Ui(() => Presser.Press(Presser.Find(window).Single(t => t.Label == "Review on your nest")));
+        await Wpf.Ui(() => Presser.Press(Presser.Find(window).Single(t => t.Label == "Review in browser")));
         await Wpf.Settle();
         Assert.Contains("join", actions.Calls.Items);
 
         await Wpf.Ui(() => window.ShowAttention([]));
         Assert.True(await Wpf.Ui(() => page.ShowsCalmState));
         Assert.Equal(0, await Wpf.Ui(() => page.CardCount));
+        await Done(window);
+    }
+
+    [Fact]
+    public async Task NeedsYou_TheOfferOfThisComputersOwnName_HasBothChoices()
+    {
+        var (window, actions, _) = await OpenAsync();
+        var offer = new NameOffer("PC-1", "StudyPC");
+        await Wpf.Ui(() =>
+        {
+            window.ShowAttention([new(offer.Title, offer.Detail, offer.UseLabel, () => actions.Calls.Add("use"), AttentionKind.Rename,
+                SecondLabel: offer.KeepLabel, Second: () => actions.Calls.Add("keep"))]);
+            window.Navigate(MainPage.Attention);
+        });
+        var page = window.NeedsPane;
+        Assert.Equal(1, await Wpf.Ui(() => page.CardCount));
+        await Wpf.Settle(); // layout of the page just opened
+        var texts = await Wpf.Ui(() => Presser.Elements(page).OfType<TextBlock>().Select(t => t.Text).ToList());
+        Assert.Contains("Use this computer's own name?", texts);
+        Assert.Contains(texts, t => t.Contains("called PC-1", StringComparison.Ordinal));
+        await Wpf.Ui(() => Presser.Press(Presser.Find(window).Single(t => t.Label == "Keep PC-1")));
+        await Wpf.Settle();
+        await Wpf.Ui(() => Presser.Press(Presser.Find(window).Single(t => t.Label == "Use StudyPC")));
+        await Wpf.Settle();
+        Assert.Equal(["keep", "use"], actions.Calls.Items.Where(c => c is "keep" or "use"));
         await Done(window);
     }
 
@@ -323,12 +349,12 @@ public sealed class OtherPagesTests
         var page = window.DevicesPane;
         Assert.Equal(6, await Wpf.Ui(() => page.CardCount));
         Assert.Equal("nest.example.com", await Wpf.Ui(() => page.NestAddressText));
-        Assert.Equal("6 use this nest · 3 online now", await Wpf.Ui(() => page.SummaryText));
+        Assert.Equal("3 of 6 online", await Wpf.Ui(() => page.SummaryText));
         Assert.Equal("PC-1 is asking to join", await Wpf.Ui(() => page.JoinChipText));
         var cards = await Wpf.Ui(() => page.Cards.ToList());
         Assert.Equal("DESKTOP", await Wpf.Ui(() => cards[0].NameLabel));
         Assert.True(await Wpf.Ui(() => cards[0].ShowsThisPill));
-        Assert.StartsWith("Last seen", await Wpf.Ui(() => cards[^1].StatusLine), StringComparison.Ordinal);
+        Assert.StartsWith("Off since", await Wpf.Ui(() => cards[^1].StatusLine), StringComparison.Ordinal);
         Assert.False(await Wpf.Ui(() => cards.Any(c => c.PencilShows)), "The pencil stays hidden on a nest that cannot save icons.");
 
         await Wpf.Settle(); // layout of the page just opened

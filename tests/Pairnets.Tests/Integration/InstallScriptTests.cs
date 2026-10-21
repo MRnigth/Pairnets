@@ -5,8 +5,8 @@ namespace Pairnets.Tests.Integration;
 
 /// <summary>
 /// Runs the real deploy/install.sh (Linux only: it installs the Ubuntu server) for what it checks before
-/// it touches anything: its options. The script runs from a copy in an empty folder, so even as root it
-/// stops before changing the machine (there is no pairnets-server next to it).
+/// it touches anything: its options. The script runs from a copy in an empty folder (with place.sh, which it
+/// sources), so even as root it stops before changing the machine (there is no pairnets-server next to it).
 /// </summary>
 public class InstallScriptTests : IDisposable
 {
@@ -18,6 +18,8 @@ public class InstallScriptTests : IDisposable
     [InlineData("--public-url")]
     [InlineData("--bind")]
     [InlineData("--port")]
+    [InlineData("--data-dir")]
+    [InlineData("--program-dir")]
     public async Task AnOptionWithoutItsValueSaysSo(string option)
     {
         if (!OperatingSystem.IsLinux())
@@ -75,6 +77,8 @@ public class InstallScriptTests : IDisposable
     [InlineData("")] // a first install links the server to a Pairnets account
     [InlineData("--link")]
     [InlineData("--link --port 5075")]
+    [InlineData("--data-dir /mnt/data/pairnets --program-dir=/srv/pairnets-program --no-questions")]
+    [InlineData("--data-dir /var/lib/pairnets")] // back to the main disk
     public async Task ValidOptionsGetPastTheChecks(string line)
     {
         if (!OperatingSystem.IsLinux())
@@ -107,10 +111,40 @@ public class InstallScriptTests : IDisposable
         Assert.Contains("unknown option: --link=yes", error);
     }
 
+    [Theory]
+    [InlineData("--data-dir", "pairnets", "the folder must be a full path starting with /")]
+    [InlineData("--data-dir", "/etc/pairnets-files", "/etc/pairnets-files is a system folder")]
+    [InlineData("--data-dir", "/", "the whole disk (/) can't be the folder")]
+    [InlineData("--data-dir", "/mnt", "/mnt is a top folder; choose a folder inside it, for example /mnt/pairnets")]
+    [InlineData("--data-dir", "/mnt/data/../etc", "the folder must not contain . or .. parts")]
+    [InlineData("--program-dir", "/var/lib/pairnets/program", "/var/lib/pairnets/program is inside Pairnets' own folders")]
+    [InlineData("--program-dir", "/usr/local/pairnets", "/usr/local/pairnets is a system folder")]
+    public async Task AFolderThatCanNeverHoldPairnetsIsRefusedFirst(string option, string folder, string message)
+    {
+        if (!OperatingSystem.IsLinux())
+            return;
+        var (exit, _, error) = await RunInstall(option, folder);
+        Assert.Equal(2, exit);
+        Assert.Contains($"error: {option}: {message}", error);
+        Assert.Contains("Usage: sudo ./install.sh", error);
+    }
+
+    [Fact]
+    public async Task HelpNamesThePlaceOptions()
+    {
+        if (!OperatingSystem.IsLinux())
+            return;
+        var (_, output, _) = await RunInstall("--help");
+        Assert.Contains("--data-dir <folder>", output);
+        Assert.Contains("--program-dir <folder>", output);
+        Assert.Contains("--no-questions", output);
+    }
+
     private async Task<(int Exit, string Output, string Error)> RunInstall(params string[] args)
     {
         var script = _dir.Combine("install.sh");
         File.Copy(ScriptPath(), script, overwrite: true);
+        File.Copy(Path.Combine(Path.GetDirectoryName(ScriptPath())!, "place.sh"), _dir.Combine("place.sh"), overwrite: true);
         var start = new ProcessStartInfo("bash") { RedirectStandardOutput = true, RedirectStandardError = true };
         start.ArgumentList.Add(script);
         foreach (var arg in args)

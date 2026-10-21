@@ -27,7 +27,8 @@ public sealed class FakeReleaseFeed : IAsyncDisposable
         _app = app;
         Version = version;
         Asset = asset;
-        AssetBytes = Encoding.UTF8.GetBytes("Pairnets test installer " + version);
+        AppBytes = Encoding.UTF8.GetBytes("Pairnets test app " + version);
+        AssetBytes = asset is null ? [] : TestUpdatePackages.Make(asset, AppBytes);
         Sha256 = Convert.ToHexString(SHA256.HashData(AssetBytes)).ToLowerInvariant();
     }
 
@@ -37,10 +38,16 @@ public sealed class FakeReleaseFeed : IAsyncDisposable
     /// <summary>False: the release has no SHA256SUMS.txt.sig, as if someone other than Pairnets put it up.</summary>
     public bool Signed { get; set; } = true;
 
-    /// <summary>The installer listed for this computer (null where there is none, e.g. ARM Linux).</summary>
+    /// <summary>
+    /// The release file the Mac/Linux app updates from on this computer (null where there is none, e.g. ARM Linux): the
+    /// Linux .tar.gz, the Mac .dmg, or (the app under test on Windows) the zip.
+    /// </summary>
     public string? Asset { get; }
 
     public byte[] AssetBytes { get; }
+
+    /// <summary>The app inside <see cref="AssetBytes"/> when it is a .zip or .tar.gz (what an update puts in place of the app).</summary>
+    public byte[] AppBytes { get; }
 
     public string Sha256 { get; }
 
@@ -62,7 +69,7 @@ public sealed class FakeReleaseFeed : IAsyncDisposable
         builder.WebHost.UseUrls("http://127.0.0.1:0");
         builder.Logging.ClearProviders();
         var app = builder.Build();
-        var feed = new FakeReleaseFeed(app, version, asset ?? UpdateChecker.AssetForThisPlatform());
+        var feed = new FakeReleaseFeed(app, version, asset ?? UpdatePackage.ForThisComputer(installedCopy: false).Asset);
         app.MapGet("/releases/latest/download/version.json", () =>
         {
             Interlocked.Increment(ref feed._versionChecks);

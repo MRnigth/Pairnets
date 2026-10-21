@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.DependencyInjection;
 using Pairnets.Core;
+using Pairnets.Core.Client;
 using Pairnets.Core.Settings;
 using Pairnets.Core.Sync;
 using Pairnets.Desktop.Views;
@@ -72,7 +73,7 @@ public sealed class DesktopControllerTests
         Assert.Equal([false], app.Platform.AutoStartChanges); // "Start Pairnets when I log in" was left off
         await app.WaitUntilIdleAsync();
         File.WriteAllText(Path.Combine(app.Folder, "first.txt"), "synced after signing in");
-        Person.Click(Screen.Find<Button>(app.MainWindow, "Sync now"));
+        PressSyncNow(app, app.MainWindow);
         await app.WaitForNestAsync(f => f.ContainsKey("first.txt"), "the first file to reach the nest");
     }
 
@@ -156,6 +157,32 @@ public sealed class DesktopControllerTests
     // ------------------------------------------------------------------ syncing
 
     [AvaloniaFact]
+    public async Task OpeningPairnetsAgain_BringsTheWindowBackFromTheTrayAndFromMinimised()
+    {
+        await using var app = await AppUnderTest.StartAsync();
+        var window = app.MainWindow;
+        var pipe = app.Env.ActivationPipeName;
+        // The second start waits for its answer while this (the app's UI thread) goes on running the app.
+        Task<AppActivation.SecondStartResult> OpenAgain(params string[] args) =>
+            Task.Run(() => AppActivation.SecondStart(args, pipe));
+
+        window.Hide(); // what closing the window does: it goes to the tray / menu bar
+        // Starting at login while Pairnets already runs: quiet, and the window stays put away.
+        Assert.Equal(AppActivation.SecondStartResult.Quiet, await OpenAgain(AppActivation.AutoStartArgument));
+        await Task.Delay(500);
+        Assert.False(window.IsVisible, "The start at login popped the window up.");
+
+        // Opened again from the app menu or a shortcut: the same window comes back, no message.
+        Assert.Equal(AppActivation.SecondStartResult.Quiet, await OpenAgain());
+        Assert.True(window.IsVisible, "Opening Pairnets again did not bring its window back.");
+        Assert.Same(window, app.App.Window);
+
+        window.WindowState = WindowState.Minimized;
+        Assert.Equal(AppActivation.SecondStartResult.Quiet, await OpenAgain());
+        Assert.Equal(WindowState.Normal, window.WindowState);
+    }
+
+    [AvaloniaFact]
     public async Task SyncNow_UploadsAFile()
     {
         await using var app = await AppUnderTest.StartAsync();
@@ -173,7 +200,7 @@ public sealed class DesktopControllerTests
         }
 
         File.WriteAllText(Path.Combine(app.Folder, "hello.txt"), "hello from the Mac");
-        Person.Click(Screen.Find<Button>(app.MainWindow, "Sync now"));
+        PressSyncNow(app, app.MainWindow);
         await Wait.Until(() => ManualPasses(1), "a sync pass started by \"Sync now\"");
         await app.WaitForNestAsync(f => f.TryGetValue("hello.txt", out var size) && size == 18, "hello.txt to reach the nest");
 
@@ -185,6 +212,21 @@ public sealed class DesktopControllerTests
         Person.Click(Screen.Find<Button>(panel, "More"));
         Person.Click(Screen.Find<MenuItem>(panel, "Sync now"));
         await Wait.Until(() => ManualPasses(3), "a sync pass started from the tray panel");
+    }
+
+    [AvaloniaFact]
+    public async Task WhereThisFolderLives_FromTheFileManager_OpensTheFilesPageOnThatFolderWithItsChoices()
+    {
+        await using var app = await AppUnderTest.StartAsync();
+        Directory.CreateDirectory(Path.Combine(app.Folder, "Photos"));
+        File.WriteAllText(Path.Combine(app.Folder, "Photos", "beach.jpg"), "sand");
+        await app.WaitForNestAsync(f => f.ContainsKey("Photos/beach.jpg"), "the photo to reach the nest");
+        await Wait.Until(() => app.App.Session?.Files.List("Photos").Count == 1, "this computer to know the nest's list");
+
+        app.App.HandleFileCommand(new FileManagerCommand(FileManagerAction.WhereItLives, Path.Combine(app.Folder, "Photos")));
+        await Wait.Until(() => app.App.Window is { Page: MainPage.Files } w && w.FilesView.Folder == "Photos", "the Files page on Photos");
+        await Wait.Until(() => app.MainWindow.FilesView.PlacementMenuOpen, "the choices of where Photos lives");
+        Assert.Equal("On this PC", app.MainWindow.FilesView.PlacementShown);
     }
 
     [AvaloniaFact]
@@ -230,15 +272,16 @@ public sealed class DesktopControllerTests
         var main = app.MainWindow;
         var file = Path.Combine(app.Folder, "notes.txt");
         File.WriteAllText(file, "first version");
-        Person.Click(Screen.Find<Button>(main, "Sync now"));
+        PressSyncNow(app, main);
         await app.WaitForNestAsync(f => f.TryGetValue("notes.txt", out var size) && size == 13, "the first version to reach the nest");
         File.WriteAllText(file, "the second version");
-        Person.Click(Screen.Find<Button>(main, "Sync now"));
+        PressSyncNow(app, main);
         await app.WaitForNestAsync(f => f.TryGetValue("notes.txt", out var size) && size == 18, "the second version to reach the nest");
 
-        app.Open("History");
-        Person.Click(Screen.Find<RadioButton>(main, "All files"));
-        var row = await Wait.For(() => Screen.All<ListBoxItem>(main).FirstOrDefault(r => Screen.Describe(r).StartsWith("notes.txt", StringComparison.Ordinal)),
+        app.Open("Files");
+        Person.Click(Screen.Named<RadioButton>(main, "DeletedFilesTab"));
+        Person.Click(Screen.Find<RadioButton>(main, "Older versions"));
+        var row = await Wait.For(() => Screen.All<ListBoxItem>(main).FirstOrDefault(r => r.IsEffectivelyVisible && Screen.Describe(r).StartsWith("notes.txt", StringComparison.Ordinal)),
             "notes.txt to be listed");
         Person.Click(row);
         await Wait.Until(() => main.VersionRows == 1, "the older version of notes.txt to be listed");
@@ -258,14 +301,14 @@ public sealed class DesktopControllerTests
         var main = app.MainWindow;
         for (var i = 1; i <= 6; i++)
             File.WriteAllText(Path.Combine(app.Folder, $"file{i}.txt"), $"file {i}");
-        Person.Click(Screen.Find<Button>(main, "Sync now"));
+        PressSyncNow(app, main);
         await app.WaitForNestAsync(f => f.Count == 6, "the six files to reach the nest");
         await app.WaitUntilIdleAsync();
 
         // Deleting two of six (more than a fifth) blocks the pass until someone decides.
         File.Delete(Path.Combine(app.Folder, "file1.txt"));
         File.Delete(Path.Combine(app.Folder, "file2.txt"));
-        Person.Click(Screen.Find<Button>(main, "Sync now"));
+        PressSyncNow(app, main);
         await Wait.Until(() => app.App.Session!.Status is { Status: RunnerStatus.Blocked, BlockReason: BlockReason.MassDelete }, "the deletions to be blocked");
         await Wait.Until(() => app.Platform.Notices.Any(n => n.Title == "Deletions blocked"), "a \"Deletions blocked\" notification");
         Assert.Equal(6, (await app.NestFilesAsync()).Count); // nothing was deleted on the nest
@@ -275,7 +318,7 @@ public sealed class DesktopControllerTests
         Person.Click(Screen.Find<Button>(main, "Allow these deletions (2)…"));
         var question = await app.DialogAsync("Pairnets – allow deletions?");
         Assert.Contains("file1.txt", AppUnderTest.TextOf(question));
-        await app.AnswerAsync("Pairnets – allow deletions?", "Yes");
+        await app.AnswerAsync("Pairnets – allow deletions?", "Delete 2 files"); // the buttons say what they do, not Yes/No
         await app.WaitForNestAsync(f => f.Count == 4 && !f.ContainsKey("file1.txt"), "the two deletions to reach the nest");
         await app.WaitUntilIdleAsync();
 
@@ -285,7 +328,7 @@ public sealed class DesktopControllerTests
         Person.Click(app.TrayItem("Sync now"));
         await Wait.Until(() => app.App.Session!.Status.BlockReason == BlockReason.MassDelete, "the second deletions to be blocked");
         Person.Click(app.TrayItem("Allow these deletions (2)…"));
-        await app.AnswerAsync("Pairnets – allow deletions?", "Yes");
+        await app.AnswerAsync("Pairnets – allow deletions?", "Delete 2 files"); // the buttons say what they do, not Yes/No
         await app.WaitForNestAsync(f => f.Count == 2, "the second deletions to reach the nest");
         Assert.Equal("No action needed", app.TrayItem("No action needed").Header);
     }
@@ -330,8 +373,10 @@ public sealed class DesktopControllerTests
         await app.WaitUntilIdleAsync();
         File.WriteAllText(Path.Combine(app.Folder, "mine.txt"), "stays here");
 
-        var page = await app.SettingsPageAsync();
-        Person.Click(Screen.Find<Button>(page, "Sign out"));
+        // Signing out lives on the Account page (Settings no longer repeats it).
+        await app.SettingsPageAsync();
+        Person.Click(Screen.Named<Button>(app.MainWindow, "AccountButton"));
+        Person.Click(Screen.Find<Button>(app.MainWindow, "Sign out"));
         await app.AnswerAsync("Pairnets – sign out", "Sign out");
 
         await app.WindowAsync("Pairnets – sign in");
@@ -365,6 +410,18 @@ public sealed class DesktopControllerTests
         Assert.DoesNotContain(app.Desktop.Windows, w => w.IsVisible && w.Title == "Pairnets – sign out");
     }
 
+    /// <summary>
+    /// Presses the main window's "Sync now". It rests (greyed out) while a sync already runs, which a file just written
+    /// starts by itself: then that sync takes the file and there is nothing to press.
+    /// </summary>
+    private static void PressSyncNow(AppUnderTest app, Avalonia.Controls.Window window)
+    {
+        app.App.RefreshNow();
+        var button = Screen.Find<Button>(window, "Sync now");
+        if (button.IsEnabled)
+            Person.Click(button);
+    }
+
     [AvaloniaFact]
     public async Task Reset_ForgetsEverythingAndShowsSignIn()
     {
@@ -372,7 +429,7 @@ public sealed class DesktopControllerTests
         await app.WaitUntilIdleAsync();
         var key = SettingsStore.Load(app.Env.SettingsPath).ProtectedToken!;
         File.WriteAllText(Path.Combine(app.Folder, "keep-me.txt"), "mine");
-        Person.Click(Screen.Find<Button>(app.MainWindow, "Sync now"));
+        PressSyncNow(app, app.MainWindow);
         await app.WaitForNestAsync(f => f.ContainsKey("keep-me.txt"), "keep-me.txt to reach the nest");
         var notes = app.App.Session!.StateDirectory;
         Assert.StartsWith(app.Env.LocalDir, notes); // the sync notes live in the app's own folder
@@ -506,12 +563,15 @@ public sealed class DesktopControllerTests
     }
 
     [AvaloniaFact]
-    public async Task AppUpdate_Download_OpensReleasePage()
+    public async Task AppUpdate_ReplacesItself_OrOnAMacSaysWhyItOpensTheDownloadPage()
     {
         await using var app = await AppUnderTest.StartAsync(releaseVersion: "99.0.0");
         await app.WaitUntilIdleAsync();
         if (app.Feed.Asset is null)
             return; // no download for this kind of computer (e.g. ARM Linux): there is nothing to offer
+        var exe = app.Env.AppFile!; // a stand-in for the app's own file in the test's folder, never the test runner
+        Directory.CreateDirectory(Path.GetDirectoryName(exe)!);
+        await File.WriteAllTextAsync(exe, "the old Pairnets");
 
         var page = await app.SettingsPageAsync();
         Person.Click(Screen.Find<Button>(page, "Check now"));
@@ -523,12 +583,60 @@ public sealed class DesktopControllerTests
         var main = app.MainWindow;
         app.App.RefreshNow();
         Assert.Equal("Pairnets 99.0.0 is ready", Screen.Named<TextBlock>(main, "UpdateTitle").Text);
-        Person.Click(Screen.Find<Button>(main, "Download"));
-        Assert.Equal(app.Feed.ReleasePage.ToString(), app.Platform.Opened[^1]); // the app is unsigned: download by hand
-        Person.Click(Screen.Find<Button>(main, "Later"));
-        app.App.RefreshNow();
-        Assert.False(Screen.Named<Border>(main, "UpdateCard").IsVisible);
+        if (OperatingSystem.IsMacOS())
+        {
+            // A Mac app bundle is not swapped yet: the card says so before its button opens the download page.
+            Assert.True(Screen.Named<TextBlock>(main, "UpdateReason").IsVisible);
+            Assert.Contains("can't update itself on a Mac", Screen.Named<TextBlock>(main, "UpdateReason").Text);
+            Person.Click(Screen.Find<Button>(main, "Open download page"));
+            Assert.Equal(app.Feed.ReleasePage.ToString(), app.Platform.Opened[^1]);
+            Person.Click(Screen.Find<Button>(main, "Later"));
+            app.App.RefreshNow();
+            Assert.False(Screen.Named<Border>(main, "UpdateCard").IsVisible);
+            return;
+        }
+
+        // Linux (and the app under test on Windows): download, check, swap the app's own file, start the new one, quit.
+        Assert.False(Screen.Named<TextBlock>(main, "UpdateReason").IsVisible);
+        Person.Click(Screen.Find<Button>(main, "Update now"));
+        await Wait.Until(() => app.Platform.UpdatedApps.Count == 1, "the new app to start");
+        Assert.Equal(exe + " --after-update", app.Platform.UpdatedApps[0]);
+        Assert.Equal(app.Feed.AppBytes, await File.ReadAllBytesAsync(exe));
+        Assert.Equal("the old Pairnets", await File.ReadAllTextAsync(exe + ".old")); // (the new app removes it when it starts)
+        await Wait.Until(() => app.Desktop.ShutdownCount == 1, "the old app to quit");
+        Assert.DoesNotContain(app.Feed.ReleasePage.ToString(), app.Platform.Opened);
         Assert.True(app.Feed.VersionChecks >= 1);
+    }
+
+    [AvaloniaFact]
+    public async Task AppUpdate_ThatFails_SaysWhyAndOffersToTryAgain_NeverTheBrowser()
+    {
+        await using var app = await AppUnderTest.StartAsync(releaseVersion: "99.0.0");
+        await app.WaitUntilIdleAsync();
+        if (app.Feed.Asset is null || OperatingSystem.IsMacOS())
+            return; // (no download here / the Mac card opens the download page on purpose, see the test above)
+        // The app's own file is missing (as if moved away while Pairnets ran): nothing can be replaced.
+        Assert.False(File.Exists(app.Env.AppFile));
+
+        await app.App.CheckForUpdateForTestsAsync();
+        var main = app.MainWindow;
+        app.App.RefreshNow();
+        Person.Click(Screen.Find<Button>(main, "Update now"));
+        await Wait.Until(() => { app.App.RefreshNow(); return Screen.Named<TextBlock>(main, "UpdateTitle").Text == "Pairnets 99.0.0 could not be installed"; },
+            "the card to say the update could not be installed");
+        Assert.True(Screen.Named<TextBlock>(main, "UpdateReason").IsVisible);
+        Assert.Contains("couldn't replace its own file", Screen.Named<TextBlock>(main, "UpdateReason").Text);
+        Assert.NotNull(Screen.Find<Button>(main, "Try again"));
+        Assert.Empty(app.Platform.UpdatedApps);
+        Assert.Equal(0, app.Desktop.ShutdownCount);
+        Assert.DoesNotContain(app.Feed.ReleasePage.ToString(), app.Platform.Opened);
+
+        // With the file back, "Try again" does the update.
+        Directory.CreateDirectory(Path.GetDirectoryName(app.Env.AppFile)!);
+        await File.WriteAllTextAsync(app.Env.AppFile!, "the old Pairnets");
+        Person.Click(Screen.Find<Button>(main, "Try again"));
+        await Wait.Until(() => app.Platform.UpdatedApps.Count == 1, "the new app to start");
+        Assert.Equal(app.Feed.AppBytes, await File.ReadAllBytesAsync(app.Env.AppFile!));
     }
 
     [AvaloniaFact]
@@ -550,13 +658,41 @@ public sealed class DesktopControllerTests
         app.App.RefreshNow();
         Assert.Equal("Pairnets 99.0.0 could not be installed", Screen.Named<TextBlock>(main, "UpdateTitle").Text);
         Assert.DoesNotContain(app.Platform.Notices, n => n.Title == "Pairnets update available");
-        Person.Click(Screen.Find<Button>(main, "Hide")); // never the download page of a release Pairnets did not sign
+        Assert.False(Screen.Named<Button>(main, "UpdateButton").IsVisible); // never the download page of a release Pairnets did not sign
+        Assert.Equal(Pairnets.Core.Client.ReleaseSigning.NotSignedMessage, Screen.Named<TextBlock>(main, "UpdateReason").Text); // it says why
+        Person.Click(Screen.Named<Button>(main, "UpdateLater")); // the X puts it away
         app.App.RefreshNow();
         Assert.False(Screen.Named<Border>(main, "UpdateCard").IsVisible);
         Assert.DoesNotContain(app.Feed.ReleasePage.ToString(), app.Platform.Opened);
     }
 
     // ------------------------------------------------------------------ the rest of the buttons
+
+    [AvaloniaFact]
+    public async Task ClosedAfterACrash_SaysSoOnce_ReportABugShowsTheCleanedCard()
+    {
+        CrashCard? card = null;
+        await using var app = await AppUnderTest.StartAsync(beforeStart: env =>
+        {
+            card = CrashCard.From(new IOException("Could not read '/home/me/Work/taxes.pdf'"), CrashPlace.Background, "Linux app");
+            CrashCards.Add(env.CrashesDir, card);
+        });
+        await Wait.Until(() => app.Platform.Notices.Any(n => n.Title == CrashNotice.Title), "the notice that Pairnets closed unexpectedly");
+        Assert.Empty(CrashCards.TakeNewCloses(app.Env.CrashesDir)); // said once, not at every start
+
+        var main = app.MainWindow;
+        app.Open("Overview");
+        Person.Click(Screen.Find<Button>(main, "More"));
+        Person.Click(Screen.Find<MenuItem>(main, "Report a bug…"));
+        var report = await app.WindowAsync("Report a bug");
+        var open = Screen.Find<Button>(report, "Open the saved file");
+        await Wait.Until(() => open.IsEffectivelyEnabled, "the bug report to be ready");
+        Person.Click(open);
+        var text = File.ReadAllText(app.Platform.Opened[^1]);
+        Assert.Contains($"Crash {card!.Id}: System.IO.IOException (Pairnets had to close)", text);
+        Assert.DoesNotContain("taxes.pdf", text);
+        Person.Click(Screen.Find<Button>(report, "Close"));
+    }
 
     [AvaloniaFact]
     public async Task AddComputer_ManageDevices_ViewLog_ReportBug()
@@ -573,7 +709,7 @@ public sealed class DesktopControllerTests
         Assert.Contains("type localhost and press \"Sign in with your browser\"", AppUnderTest.TextOf(steps));
         await app.AnswerAsync("Pairnets – add a computer", "OK");
 
-        Person.Click(Screen.Find<Button>(main, "Manage devices on your nest"));
+        Person.Click(Screen.Find<Button>(main, "Manage computers on your nest"));
         Assert.Equal("https://localhost/devices", app.Platform.Opened[^1]);
 
         app.Open("Overview"); // the "More" menu is in the Overview's header (every other page draws its own)

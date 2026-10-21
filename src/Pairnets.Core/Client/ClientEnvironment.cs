@@ -17,6 +17,9 @@ public sealed record ClientEnvironment
 
     public string LogsDir => Path.Combine(LocalDir, "logs");
 
+    /// <summary>The cleaned crash cards (<see cref="CrashCards"/>).</summary>
+    public string CrashesDir => Path.Combine(LocalDir, "crashes");
+
     /// <summary>The "come to the front" pipe; null is the normal one for this user.</summary>
     public string? ActivationPipeName { get; init; }
 
@@ -32,6 +35,15 @@ public sealed record ClientEnvironment
     /// <summary>The folder the installer puts the app in; null means "where the installer normally puts it".</summary>
     public string? InstallDir { get; init; }
 
+    /// <summary>
+    /// The app's own file, which an update of a copy no installer looks after replaces (<see cref="SelfReplace"/>); null
+    /// is the running program. Tests point it at a file of their own, so an update never touches the test runner.
+    /// </summary>
+    public string? AppPath { get; init; }
+
+    /// <summary>The file an update replaces: <see cref="AppPath"/>, or the running program.</summary>
+    public string? AppFile => AppPath ?? Environment.ProcessPath;
+
     /// <summary>False in tests: no icon appears in the real notification area or menu bar.</summary>
     public bool ShowTrayIcon { get; init; } = true;
 
@@ -46,6 +58,7 @@ public sealed record ClientEnvironment
         ActivationPipeName = "pairnets-t" + Guid.NewGuid().ToString("N")[..12],
         UpdateDownloadBase = updateDownloadBase ?? UpdateChecker.DefaultDownloadBase,
         InstallDir = Path.Combine(root, "install"),
+        AppPath = Path.Combine(root, "app", OperatingSystem.IsWindows() ? "Pairnets.exe" : "Pairnets"),
         ShowTrayIcon = false,
     };
 

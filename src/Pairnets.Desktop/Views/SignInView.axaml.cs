@@ -165,8 +165,8 @@ public partial class SignInView : UserControl
         AccountWaitFooter.IsVisible = AccountWaitStep.IsVisible;
         NoNestFooter.IsVisible = NoNestStep.IsVisible;
         AddressFooter.IsVisible = WelcomeStep.IsVisible;
-        AccountRing.Classes.Set("spin", step == SignInStep.AccountWait);
-        NoNestRing.Classes.Set("spin", step == SignInStep.NoNest);
+        Motion.Set(AccountRing, "spin", step == SignInStep.AccountWait);
+        Motion.Set(NoNestRing, "spin", step == SignInStep.NoNest);
         Frame(step);
     }
 
@@ -182,7 +182,8 @@ public partial class SignInView : UserControl
             case SignInStep.Account:
                 DrawSteps(1);
                 Picture.ShowIcon(Icon("I.User")!, PictureTone.Accent);
-                Say("Sign in to Pairnets", "Keep one folder the same on all your computers.");
+                var (title, sub) = SignInTexts.First(_current);
+                Say(title, sub);
                 Foot(null);
                 break;
             case SignInStep.AccountWait:
@@ -336,7 +337,7 @@ public partial class SignInView : UserControl
         }
     }
 
-    private string ThisName() => _current.DeviceName ?? Environment.MachineName;
+    private string ThisName() => _current.DeviceName ?? ComputerName.Default();
 
     // ------------------------------------------------------------------ 1. sign in to Pairnets
 

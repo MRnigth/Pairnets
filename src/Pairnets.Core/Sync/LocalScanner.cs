@@ -17,6 +17,13 @@ public sealed class ScanResult
     /// <summary>Local files whose names can never be synced (rejected by <see cref="PathRules"/>).</summary>
     public List<(string Path, PathProblem Problem)> InvalidNames { get; } = [];
 
+    /// <summary>
+    /// Versions of files whose content is still on the nest and that Pairnets does not know at their place (a file
+    /// renamed or moved while left on the nest). A file of one of these versions is never deleted on the nest: it is
+    /// the only copy the placeholder can be fetched from.
+    /// </summary>
+    public HashSet<string> HeldVersions { get; } = new(StringComparer.Ordinal);
+
     /// <summary>Folders that could not be listed: everything below them is unknown, never "deleted".</summary>
     public List<string> UnknownPrefixes { get; } = [];
 
@@ -77,6 +84,12 @@ public sealed class LocalScanner
     /// <summary>How often progress is told at most (tests: every step).</summary>
     public TimeSpan ReportEvery { get; init; } = TimeSpan.FromMilliseconds(250);
 
+    /// <summary>
+    /// The folder as a Windows cloud folder: its placeholders (reparse points of the cloud kind) are ordinary files
+    /// here, and one whose content is still on the nest is never read.
+    /// </summary>
+    public ICloudFiles CloudFiles { get; init; } = ICloudFiles.None;
+
     /// <summary>Told how far the scan is (at the start, after the listing, then at most every <see cref="ReportEvery"/>).</summary>
     public Action<ScanProgress>? Progress { get; set; }
 
@@ -106,7 +119,7 @@ public sealed class LocalScanner
             {
                 ct.ThrowIfCancellationRequested();
                 var (info, rel) = candidates[i];
-                result.Files[rel] = await InspectFileAsync(info, rel, known, tally, ct).ConfigureAwait(false);
+                result.Files[rel] = await InspectFileAsync(info, rel, known, tally, result, ct).ConfigureAwait(false);
                 tally.Checked++;
                 tally.Report();
                 var now = _clock.GetTimestamp();
@@ -238,7 +251,11 @@ public sealed class LocalScanner
                     continue;
                 }
 
-                if ((attributes & FileAttributes.ReparsePoint) != 0 || entry.LinkTarget is not null)
+                // A placeholder of a Windows cloud folder is an ordinary file or folder, also while (or after) the cloud
+                // folder is off: skipping it would make its files look deleted.
+                var isLink = entry.LinkTarget is not null
+                    || ((attributes & FileAttributes.ReparsePoint) != 0 && !CloudPlaceholders.IsCloudReparsePoint(entry.FullName));
+                if (isLink)
                 {
                     _log.LogDebug("Skipping reparse point/symlink {Path}", rel);
                     continue;
@@ -272,6 +289,7 @@ public sealed class LocalScanner
         string rel,
         Dictionary<string, FileState> known,
         Tally tally,
+        ScanResult result,
         CancellationToken ct)
     {
         info.Refresh();
@@ -294,6 +312,16 @@ public sealed class LocalScanner
 
         if (known.TryGetValue(rel, out var cached) && cached.CacheValidFor(size, mtime, RacyWindow))
             return new LocalFile(rel, size, mtime, cached.Hash, true, null);
+
+        // A placeholder whose content is on the nest, unknown to the notes here (new, or renamed or moved here): reading
+        // it would download it. It is not deleted or uploaded, and the version it stands for stays on the nest; once it is
+        // opened (downloaded) it is an ordinary file again.
+        if (CloudPlaceholders.IsContentOnline(info.Attributes))
+        {
+            if (CloudFiles.CloudOnlyVersion(info.FullName) is { } version)
+                result.HeldVersions.Add(version);
+            return new LocalFile(rel, size, mtime, null, false, "on the nest only, not read");
+        }
 
         string hash;
         tally.Read++;

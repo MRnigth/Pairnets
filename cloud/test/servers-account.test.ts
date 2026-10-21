@@ -42,8 +42,14 @@ describe("the account's servers", () => {
       "POST /api/relay/devices",
       "GET /api/relay/status",
       "GET /api/relay/devices",
+      // The nest had no name yet, so it is told the label.
+      "PUT /api/relay/name",
     ]);
     expect(soro.refused).toEqual([]);
+    expect(soro.name).toBe("soro");
+    // Once it has it, it is not told again.
+    await b.call("GET", "/v1/servers");
+    expect(soro.requests.filter((q) => q.method === "PUT")).toHaveLength(1);
 
     // Once seen, an offline server still shows its last version and when it was last seen.
     soro.running = false;
@@ -95,6 +101,132 @@ describe("the account's servers", () => {
     expect((await b.call("DELETE", `/v1/servers/${nest.nestId}/devices/${deviceId}`)).status).toBe(404);
   });
 
+  it("renaming a computer: the nest renames it and says what it stored; only the owner, only from the account page", async () => {
+    const { h, b, accountId } = await setup();
+    const nest = await addServer(h, b);
+    const { poll } = await appSignIn(h, b, nest.nestId, "Laptop");
+    await appSignIn(h, b, nest.nestId, "Desktop", "198.51.100.81");
+    const deviceId = poll.json.device.id as string;
+    const path = `/v1/servers/${nest.nestId}/devices/${deviceId}`;
+
+    const r = await b.call("PATCH", path, { body: { name: "  Work laptop " } });
+    expect(r.status, r.text).toBe(200);
+    expect(r.json).toEqual({ id: deviceId, name: "Work laptop", requested: "Work laptop" });
+    expect(nest.devices.get(deviceId)!.name).toBe("Work laptop");
+    expect(nest.requests.at(-1)).toMatchObject({ method: "PATCH", path: `/api/relay/devices/${deviceId}`, body: '{"name":"Work laptop"}' });
+    expect(nest.refused).toEqual([]);
+    const audit = await h.query<{ nest_id: string; detail: string }>("SELECT nest_id, detail FROM audit WHERE event = 'device_renamed' AND account_id = ?1", accountId);
+    expect(audit).toEqual([{ nest_id: nest.nestId, detail: '{"to":"Work laptop"}' }]);
+    expect((await b.call("GET", "/v1/servers")).json[0].devices.map((d: { name: string }) => d.name)).toEqual(["Work laptop", "Desktop"]);
+
+    // Another computer already has the name: the nest adds " (2)" and the page is told both names.
+    const dup = await b.call("PATCH", path, { body: { name: "desktop" } });
+    expect(dup.json).toEqual({ id: deviceId, name: "desktop (2)", requested: "desktop" });
+
+    // Empty (or only invisible characters) and too long are refused before the nest is asked.
+    const asked = nest.requests.length;
+    for (const name of ["", "   ", "\u200b", null]) {
+      const bad = await b.call("PATCH", path, { body: { name } });
+      expect(bad.status).toBe(400);
+      expect(bad.json).toMatchObject({ error: "bad_name", message: "Type a name." });
+    }
+    expect((await b.call("PATCH", path, { body: {} })).json.message).toBe("Type a name.");
+    const long = await b.call("PATCH", path, { body: { name: "x".repeat(65) } });
+    expect(long.json).toMatchObject({ error: "bad_name", message: "A name is at most 64 letters." });
+    expect((await b.call("PATCH", path, { body: { name: 7 } })).json.error).toBe("bad_request");
+    expect(nest.requests.length).toBe(asked);
+    expect((await b.call("PATCH", path, { body: { name: "x".repeat(64) } })).json.name).toBe("x".repeat(64));
+    expect((await b.call("PATCH", path, { body: { name: "invalid" } })).json.name).toBe("invalid");
+    // A name the nest itself refuses.
+    const refused = await b.call("PATCH", path, { body: { name: "Unknown" } });
+    expect(refused.status).toBe(400);
+    expect(refused.json.error).toBe("bad_name");
+
+    // Not the owner, not signed in, no Origin or a foreign one: refused, and the nest is never asked.
+    const other = h.browser("203.0.113.70");
+    await other.signInByEmail("other@example.com");
+    expect((await other.call("PATCH", path, { body: { name: "Mine now" } })).status).toBe(404);
+    expect((await h.browser("203.0.113.71").call("PATCH", path, { body: { name: "Mine now" } })).status).toBe(401);
+    expect((await b.call("PATCH", path, { body: { name: "Mine now" }, origin: null })).json.error).toBe("bad_origin");
+    expect((await b.call("PATCH", path, { body: { name: "Mine now" }, origin: "https://evil.example" })).status).toBe(403);
+    expect(nest.devices.get(deviceId)!.name).toBe("invalid");
+
+    // Unknown computers and servers.
+    expect((await b.call("PATCH", `/v1/servers/${nest.nestId}/devices/no-such-device`, { body: { name: "A" } })).json.error).toBe("not_found");
+    expect((await b.call("PATCH", `/v1/servers/${nest.nestId}/devices/${"x".repeat(65)}`, { body: { name: "A" } })).status).toBe(404);
+    expect((await b.call("PATCH", `/v1/servers/nst_testnest000000000000000001/devices/${deviceId}`, { body: { name: "A" } })).status).toBe(404);
+    // No recent sign-in needed.
+    h.advance(3600);
+    expect((await b.call("PATCH", path, { body: { name: "Later" } })).status).toBe(200);
+  });
+
+  it("renaming a computer on an offline nest is 503, and on a nest from before renames 409 nest_too_old", async () => {
+    const { h, b } = await setup();
+    const nest = await addServer(h, b);
+    const { poll } = await appSignIn(h, b, nest.nestId);
+    const path = `/v1/servers/${nest.nestId}/devices/${poll.json.device.id as string}`;
+
+    nest.running = false;
+    const offline = await b.call("PATCH", path, { body: { name: "Work" } });
+    expect(offline.status).toBe(503);
+    expect(offline.json.error).toBe("nest_offline");
+    h.world.linkFailure = "502";
+    expect((await b.call("PATCH", path, { body: { name: "Work" } })).status).toBe(503);
+    nest.running = true;
+
+    nest.old = true;
+    const old = await b.call("PATCH", path, { body: { name: "Work" } });
+    expect(old.status).toBe(409);
+    expect(old.json).toEqual({ error: "nest_too_old", message: "Update your nest to rename computers here." });
+    expect(nest.devices.get(poll.json.device.id as string)!.name).toBe("Laptop");
+    expect(await h.query("SELECT * FROM audit WHERE event = 'device_renamed'")).toHaveLength(0);
+  });
+
+  it("renaming a nest: the label changes at once and the nest is told; offline or older nests are fine", async () => {
+    const { h, b, accountId } = await setup();
+    const nest = await addServer(h, b, { label: "soro" });
+    const r = await b.call("PATCH", `/v1/servers/${nest.nestId}`, { body: { label: " Basement " } });
+    expect(r.status, r.text).toBe(200);
+    expect(r.json).toEqual({ id: nest.nestId, label: "Basement" });
+    expect(nest.name).toBe("Basement");
+    expect(nest.requests.at(-1)).toMatchObject({ method: "PUT", path: "/api/relay/name", body: '{"name":"Basement"}' });
+    expect((await b.call("GET", "/v1/servers")).json[0].label).toBe("Basement");
+    expect((await b.call("GET", "/account")).text).toContain('<strong data-field="label">Basement</strong>');
+    const audit = await h.query<{ detail: string }>("SELECT detail FROM audit WHERE event = 'nest_renamed' AND account_id = ?1", accountId);
+    expect(audit.map((a) => a.detail)).toEqual(['{"from":"soro","to":"Basement"}']);
+
+    // Offline: saved here all the same; the nest is told when the account page next finds it online.
+    nest.running = false;
+    expect((await b.call("PATCH", `/v1/servers/${nest.nestId}`, { body: { label: "Attic" } })).json.label).toBe("Attic");
+    expect(nest.name).toBe("Basement");
+    nest.running = true;
+    await b.call("GET", "/v1/servers");
+    expect(nest.name).toBe("Attic");
+
+    // A nest from before names: the label still changes, and nothing is sent to it on a list.
+    nest.old = true;
+    expect((await b.call("PATCH", `/v1/servers/${nest.nestId}`, { body: { label: "Cellar" } })).status).toBe(200);
+    const sent = nest.requests.length;
+    await b.call("GET", "/v1/servers");
+    expect(nest.requests.slice(sent).map((q) => `${q.method} ${q.path}`)).toEqual(["GET /api/relay/status", "GET /api/relay/devices"]);
+    expect((await h.query<{ label: string }>("SELECT label FROM nests WHERE id = ?1", nest.nestId))[0].label).toBe("Cellar");
+
+    expect((await b.call("PATCH", `/v1/servers/${nest.nestId}`, { body: { label: "" } })).json).toMatchObject({ error: "bad_name", message: "Type a name." });
+    expect((await b.call("PATCH", `/v1/servers/${nest.nestId}`, { body: { label: "x".repeat(65) } })).status).toBe(400);
+    expect((await b.call("PATCH", `/v1/servers/${nest.nestId}`, { body: { label: "Mine" }, origin: null })).status).toBe(403);
+    const other = h.browser("203.0.113.70");
+    await other.signInByEmail("other@example.com");
+    expect((await other.call("PATCH", `/v1/servers/${nest.nestId}`, { body: { label: "Mine" } })).status).toBe(404);
+    expect((await b.call("PATCH", "/v1/servers/garbage", { body: { label: "Mine" } })).status).toBe(404);
+    // An own-domain nest is not a relayed server.
+    const own = await linkNest(h, b);
+    expect((await b.call("PATCH", `/v1/servers/${own.nestId}`, { body: { label: "Mine" } })).status).toBe(404);
+    // Its own rename (the page's "Rename nest" in that list) is logged too.
+    expect((await b.call("PATCH", `/v1/nests/${own.nestId}`, { body: { label: "Office" } })).json.label).toBe("Office");
+    expect((await h.query<{ detail: string }>("SELECT detail FROM audit WHERE event = 'nest_renamed' AND nest_id = ?1", own.nestId))[0].detail).toContain('"to":"Office"');
+    expect((await h.query<{ label: string }>("SELECT label FROM nests WHERE id = ?1", nest.nestId))[0].label).toBe("Cellar");
+  });
+
   it("removing a server needs a recent sign-in; then its link, tunnel and row go, with a notice", async () => {
     const { h, b, accountId } = await setup();
     const nest = await addServer(h, b, { label: "soro" });
@@ -131,13 +263,33 @@ describe("the account's servers", () => {
     const page = await b.call("GET", "/account");
     expect(page.status).toBe(200);
     expect(page.text).toContain(`<li class="server" data-server="${nest.nestId}">`);
-    expect(page.text).toContain("<strong>Basement &lt;1&gt;</strong>");
+    expect(page.text).toContain('<strong data-field="label">Basement &lt;1&gt;</strong>');
     expect(page.text).toContain('data-action="remove-server">Remove this nest from my account</button>');
     expect(page.text).toContain("Nests on their own address");
     expect(page.text).toContain("https://nest.example.com");
     expect(page.text).toContain(`<script src="${assetUrl("account.js")}" defer></script>`);
     const script = (await b.call("GET", "/assets/account.js")).text;
     for (const piece of ['"/v1/servers"', '"/v1/servers/" + id + "/devices/"', "remove-server", "remove-device"]) expect(script).toContain(piece);
+    // Renaming: a button by each nest's name, one by each computer's Remove, and the note for an offline nest.
+    expect(page.text).toContain(
+      '<strong data-field="label">Basement &lt;1&gt;</strong> <span class="pill" data-field="online">checking</span> <button type="button" class="secondary small" data-action="rename-server">Rename nest</button>',
+    );
+    expect(page.text).toContain(`data-action="rename">Rename nest</button>`);
+    expect(page.text).toContain("Your computers can be renamed when your nest is connected again. The nest's own name can be changed any time.");
+    for (const piece of [
+      '"rename-device"',
+      '"Rename"',
+      '"/v1/servers/" + id, SOON, SAVED',
+      '"/v1/nests/" + id',
+      '"New name for this " + what',
+      "Type a name.",
+      "Saved. Your other computers show the new name within a few seconds.",
+      "Rename it again to pick a different name.",
+      "input.maxLength = MAX_NAME",
+    ]) {
+      expect(script).toContain(piece);
+    }
+    expect(script).not.toContain("innerHTML");
     // A removed server leaves the page at once.
     await b.call("DELETE", `/v1/servers/${nest.nestId}`);
     expect((await b.call("GET", "/account")).text).not.toContain(nest.nestId);

@@ -64,7 +64,8 @@ public sealed class NarrowWindowTests
     {
         var whole = new TextBlock { Text = t.Text, FontFamily = t.FontFamily, FontSize = t.FontSize, FontWeight = t.FontWeight };
         whole.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-        return whole.DesiredSize.Width > t.ActualWidth + 0.5;
+        // Layout rounds to whole device pixels (and fonts differ between computers), so allow a pixel of give.
+        return whole.DesiredSize.Width > t.ActualWidth + 1.5;
     }
 
     private static List<TextBlock> Shown(Window window) => Presser.Elements(window).OfType<TextBlock>().Where(t => t.IsVisible).ToList();
@@ -144,6 +145,29 @@ public sealed class NarrowWindowTests
             Assert.All(pills, p => Assert.Equal(pills[0].Top, p.Top, 1));
             var search = Where((FrameworkElement)page.FindName("Search"), window);
             Assert.All(pills, p => Assert.False(p.IntersectsWith(search), "a filter button is under the search box"));
+        });
+        await Done();
+    }
+
+    [Fact]
+    public async Task TheFilesPageKeepsItsToolsApartAndItsNamesReadable()
+    {
+        var window = await OpenAsync(Synced());
+        await Wpf.Ui(() => window.Navigate(MainPage.Files));
+        await Wpf.Settle();
+        await Wpf.Ui(() =>
+        {
+            var page = window.FilesPane;
+            var search = Where(page.FilesSearch, window);
+            var add = Where(page.AddFilesButton, window);
+            Assert.False(search.IntersectsWith(add), "Add files is drawn over the search box");
+            Assert.True(add.Right <= Where(page, window).Right + 0.5, "Add files is cut off at the right");
+            var card = Where(page.ListCard, window);
+            foreach (var more in Presser.Elements(page.EntryList).OfType<Button>().Where(b => b.ToolTip as string == "More" && b.IsVisible))
+                Assert.True(Where(more, window).Right <= card.Right + 0.5, "a row's … button is cut off");
+            var name = Presser.Elements(page.EntryList).OfType<TextBlock>().First(t => t.Text == "Documents");
+            var column = ((FrameworkElement)name.Parent).ActualWidth;
+            Assert.True(column >= 100, $"the names get only {column:0} px");
         });
         await Done();
     }

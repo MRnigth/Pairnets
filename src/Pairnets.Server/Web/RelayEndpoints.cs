@@ -20,7 +20,7 @@ public static class RelayEndpoints
 {
     public const string Prefix = "/api/relay";
 
-    public sealed record Status(string? ServerVersion, int Devices, long? FreeBytes, long DataBytes);
+    public sealed record Status(string? ServerVersion, int Devices, long? FreeBytes, long DataBytes, string? Name);
 
     public sealed record Device(string Id, string Name, string? System, string CreatedAt, string? LastSeen);
 
@@ -31,6 +31,10 @@ public static class RelayEndpoints
     public sealed record AddedDevice(string Id, string Name, string Key);
 
     public sealed record RemoveResult(bool Removed);
+
+    public sealed record NameRequest(string? Name);
+
+    public sealed record RenamedDevice(string Id, string Name);
 
     public sealed record RelayError(string Error);
 
@@ -44,7 +48,37 @@ public static class RelayEndpoints
         relay.MapGet("/status", (SyncStore store, DeviceKeys keys) =>
         {
             var (free, _) = ServerUpdater.DiskSpace(store.Paths.DataDir);
-            return Json(new Status(PairnetsInfo.ProductVersion, keys.Store.ListDevices().Count, free, store.Manifest.LiveBytes()));
+            return Json(new Status(PairnetsInfo.ProductVersion, keys.Store.ListDevices().Count, free, store.Manifest.LiveBytes(), keys.Store.NestName));
+        });
+
+        // The nest's name as the owner gave it on the account page; kept so the apps can show it (/api/info).
+        relay.MapPut("/name", async (HttpContext ctx, DeviceKeys keys, IHubContext<SyncHub> hub) =>
+        {
+            NameRequest? body;
+            try
+            {
+                body = JsonSerializer.Deserialize<NameRequest>(RelayAuthMiddleware.VerifiedBody(ctx)!, PairnetsJson.Options);
+            }
+            catch (JsonException)
+            {
+                body = null;
+            }
+            var name = PlainText.Clean(body?.Name, AuthStore.MaxNameLength);
+            if (name.Length == 0)
+                return Error(StatusCodes.Status400BadRequest, "bad_name");
+            if (!string.Equals(keys.Store.NestName, name, StringComparison.Ordinal))
+            {
+                keys.Store.NestName = name;
+                try
+                {
+                    await hub.Clients.All.SendAsync(SyncHub.NestRenamedMethod, name, CancellationToken.None);
+                }
+                catch (Exception)
+                {
+                    // The apps also read it every few minutes (/api/info).
+                }
+            }
+            return Json(new { name });
         });
 
         relay.MapGet("/devices", (DeviceKeys keys, DeviceRegistry devices) =>
@@ -82,6 +116,31 @@ public static class RelayEndpoints
             devices.Adopt(device.Name, new DeviceIdentity(device.Id, device.Name, DeviceAuthKind.DeviceKey).RegistryKey, device.Name);
             log.LogInformation("{Name} joined the nest ({By})", device.Name, device.ApprovedBy);
             return Json(new AddedDevice(device.Id, device.Name, key));
+        });
+
+        // Renamed on the account page: the same as renaming it in the apps (made unique, the other apps told at once).
+        // Answers the name the nest settled on ("LAPTOP (2)" when another computer already has the name).
+        relay.MapPatch("/devices/{id}", async (string id, HttpContext ctx, DeviceKeys keys, DeviceRegistry devices, IHubContext<SyncHub> hub,
+            ILogger<DeviceKeys> log) =>
+        {
+            NameRequest? body;
+            try
+            {
+                body = JsonSerializer.Deserialize<NameRequest>(RelayAuthMiddleware.VerifiedBody(ctx)!, PairnetsJson.Options);
+            }
+            catch (JsonException)
+            {
+                body = null;
+            }
+            if (AuthStore.CleanName(body?.Name) is not { } name)
+                return Error(StatusCodes.Status400BadRequest, "bad_name");
+            if (keys.Store.GetDevice(id) is not { IsActive: true })
+                return Error(StatusCodes.Status404NotFound, "not_found");
+            var renamed = await Endpoints.RenameDeviceAsync(id, name, keys, devices, hub);
+            if (renamed is null)
+                return Error(StatusCodes.Status404NotFound, "not_found");
+            log.LogInformation("A computer was renamed to {Name} on the account page", renamed.Name);
+            return Json(new RenamedDevice(renamed.Id, renamed.Name));
         });
 
         // Removed on the account page: the same as removing it in the apps (key, push connections, the other apps told).

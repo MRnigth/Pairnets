@@ -6,6 +6,7 @@ using Pairnets.Core;
 using Pairnets.Core.Client;
 using Pairnets.Core.Settings;
 using Pairnets.Core.Sync;
+using Pairnets.Tests.Infrastructure;
 
 namespace Pairnets.Client.Tests;
 
@@ -92,6 +93,44 @@ public sealed class FakeWindowsPlatform : IWindowsPlatform
 
     public void RunInstaller(string path, string arguments) => Installers.Add((path, arguments));
 
+    /// <summary>The new Pairnets.exe a copy from the zip started after replacing itself (nothing is started).</summary>
+    public Log<(string Path, string Arguments)> UpdatedApps { get; } = new();
+
+    public void StartUpdatedApp(string path, string arguments) => UpdatedApps.Add((path, arguments));
+
+    /// <summary>Every change to Pairnets' place in File Explorer, in order (null: taken away).</summary>
+    public Log<string?> ExplorerEntries { get; } = new();
+
+    /// <summary>What the installer's Tasks page left for the app (null: nothing).</summary>
+    public (string Id, string Choices)? SetupChoices { get; set; }
+
+    public (string Id, string Choices)? ReadSetupChoices() => SetupChoices;
+
+    /// <summary>Which parts each of those asked for: the left side, the right-click items.</summary>
+    public Log<(bool LeftSide, bool RightClick)> ExplorerParts { get; } = new();
+
+    public bool SetExplorerEntry(string? folder, bool leftSide = true, bool rightClick = true, bool folderIcon = true)
+    {
+        ExplorerParts.Add((leftSide, rightClick));
+        ExplorerEntries.Add(folder);
+        return true;
+    }
+
+    /// <summary>What "make it a cloud folder" was asked for, in order; the stand-in never touches Windows' cloud files.</summary>
+    public Log<CloudFolderMode> CloudFolderStarts { get; } = new();
+
+    public Client.Platform.CloudFiles.ICloudFolder? StartCloudFolder(string folder, CloudFolderMode mode, ILogger log, out string? problem,
+        IReadOnlyDictionary<string, Core.Sync.FilePlacement>? placement = null)
+    {
+        CloudFolderStarts.Add(mode);
+        problem = "Tests leave Windows' cloud files alone.";
+        return null;
+    }
+
+    public bool HasCloudFolder() => false;
+
+    public int ForgetCloudFolders() => 0;
+
     private sealed class RecordingTrash(FakeWindowsPlatform platform) : ILocalTrash
     {
         public void Delete(string fullPath)
@@ -122,6 +161,60 @@ internal sealed class DialogScript : Dialogs.IResponder
 
     /// <summary>True acts like another program holding the clipboard.</summary>
     public bool ClipboardBusy { get; set; }
+
+    /// <summary>The Files page's pop-ups that opened, by title.</summary>
+    public Log<string> Popups { get; } = new();
+
+    /// <summary>The button pressed in a pop-up with buttons of its own, by the start of its label; unset closes it.</summary>
+    public Func<Dialogs.Choice, string?> Chooses { get; set; } = _ => null;
+
+    /// <summary>What the rename box answers (null: Cancel).</summary>
+    public string? Typed { get; set; }
+
+    /// <summary>What the strong delete question answers (null: Keep it).</summary>
+    public string? DeleteWord { get; set; }
+
+    /// <summary>Where "Save a copy…" saves (null: Cancel).</summary>
+    public string? SaveTo { get; set; }
+
+    /// <summary>The files "Add files" adds (null: Cancel).</summary>
+    public IReadOnlyList<string>? AddFiles { get; set; }
+
+    public string? Choose(Dialogs.Choice choice)
+    {
+        Popups.Add(choice.Title);
+        return Chooses(choice);
+    }
+
+    public string? Prompt(string title, string initial)
+    {
+        Popups.Add(title);
+        return Typed;
+    }
+
+    public string? PickOne(string title, IReadOnlyList<string> items)
+    {
+        Popups.Add(title);
+        return items.Count > 0 ? items[0] : null;
+    }
+
+    public string? DeleteForGood(string title)
+    {
+        Popups.Add(title);
+        return DeleteWord;
+    }
+
+    public string? SaveFile(string title, string fileName)
+    {
+        Popups.Add(title);
+        return SaveTo;
+    }
+
+    public IReadOnlyList<string>? OpenFiles(string title)
+    {
+        Popups.Add(title);
+        return AddFiles;
+    }
 
     /// <summary>Answers questions whose text contains <paramref name="contains"/> with <paramref name="answer"/>.</summary>
     public DialogScript When(string contains, MessageBoxResult answer)
@@ -185,6 +278,13 @@ public sealed class RecordingActions(IHistorySource? history = null) : ITrayActi
 
     public IHistorySource? History { get; } = history;
 
+    /// <summary>The nest's files for the Files page (null: not connected).</summary>
+    public FakeNestFiles? NestFiles { get; set; } = new();
+
+    public INestFiles? Files => NestFiles;
+
+    public void OpenFile(string path) => Calls.Add($"{nameof(OpenFile)}({path})");
+
     public void FixBlocked() => Calls.Add(nameof(FixBlocked));
     public void SyncNow() => Calls.Add(nameof(SyncNow));
     public void TogglePause() => Calls.Add(nameof(TogglePause));
@@ -222,6 +322,8 @@ public sealed class RecordingActions(IHistorySource? history = null) : ITrayActi
     }
 
     public void SignOut() => Calls.Add(nameof(SignOut));
+
+    public void SignInAgain() => Calls.Add(nameof(SignInAgain));
 
     public void OpenAccountSite() => Calls.Add(nameof(OpenAccountSite));
 }

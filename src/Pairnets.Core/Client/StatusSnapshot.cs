@@ -57,6 +57,9 @@ public sealed record JoinRequest(string Code, string Name, string System, DateTi
     /// </summary>
     public string Title => (System.Length > 0 ? $"{Name} ({System}) wants to join" : $"{Name} wants to join")
         + (Address is { Length: > 0 } ? $" from {Address}" : string.Empty);
+
+    /// <summary>The words on its card in Needs you, the same in both apps.</summary>
+    public string Advice => $"Allow it only if you are setting up {Name} right now. Its screen should show this same code. You allow or deny it on your nest.";
 }
 
 /// <summary>Everything a UI needs to draw the current state, as one immutable value.</summary>
@@ -409,7 +412,10 @@ public sealed record StatusSnapshot(
     /// <summary>Last known server info (version, free space, updater), or null before the first answer.</summary>
     public ServerInfo? Server { get; init; }
 
-    /// <summary>"412 GB free on server" or null when the server does not say.</summary>
+    /// <summary>What the apps call the nest: the name its owner gave it on their account page ("soro"), else "Your nest".</summary>
+    public string NestTitle => Server?.NestName is { } name && ComputerName.Clean(name) is { Length: > 0 } clean ? clean : "Your nest";
+
+    /// <summary>"412 GB free on your nest" or null when the nest does not say.</summary>
     /// <summary>True once the server has answered and the connection is not currently down.</summary>
     public bool IsConnected => Status != RunnerStatus.Offline && (Server is not null || LastSyncAt is not null);
 
@@ -419,21 +425,21 @@ public sealed record StatusSnapshot(
         : null;
 
     /// <summary>
-    /// "Server 1.0.58"; "Server: old version" for a server too old to say which version it runs;
-    /// null before the server has answered.
+    /// "Nest 1.0.58"; "Nest: old version" for a nest too old to say which version it runs;
+    /// null before the nest has answered.
     /// </summary>
     public string? ServerVersionText => Server is null ? null
-        : Server.ServerVersion is { Length: > 0 } v ? "Server " + v
-        : "Server: old version";
+        : Server.ServerVersion is { Length: > 0 } v ? "Nest " + v
+        : "Nest: old version";
 
     /// <summary>True when the server runs an older release than this app (or is too old to say).</summary>
     public bool ServerIsOlder => Server is not null
         && (Server.ServerVersion is not { Length: > 0 } v || UpdateChecker.ServerIsOlder(v, PairnetsInfo.ProductVersion));
 
     /// <summary>The label of the button next to the server version.</summary>
-    public string ServerUpdateButtonText => ServerIsOlder ? "Update server…" : "Check for update";
+    public string ServerUpdateButtonText => ServerIsOlder ? "Update nest…" : "Check for update";
 
-    public string? ServerFreeText => Server?.DiskFreeBytes is { } free ? Format.Bytes(free) + " free on server" : null;
+    public string? ServerFreeText => Server?.DiskFreeBytes is { } free ? Format.Bytes(free) + " free on your nest" : null;
 
     /// <summary>Less than 5 GB or 5 % left on the server's disk.</summary>
     public bool ServerSpaceLow => Server is { DiskFreeBytes: { } free, DiskTotalBytes: { } total }

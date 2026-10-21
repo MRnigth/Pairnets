@@ -168,6 +168,62 @@ public sealed class RelayModeTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task AComputerRenamedOnTheAccountPageIsRenamedEverywhere()
+    {
+        var laptop = await JsonOf(await SendAsync(Signed(HttpMethod.Post, "/api/relay/devices", """{"name":"PC-1","system":"Windows 11"}""")));
+        var desk = await JsonOf(await SendAsync(Signed(HttpMethod.Post, "/api/relay/devices", """{"name":"Desk","system":"Linux"}""")));
+        var id = laptop.GetProperty("id").GetString()!;
+        var key = laptop.GetProperty("key").GetString()!;
+
+        // Every app hears it at once (the renamed one then saves its new name).
+        var renamedMessage = new TaskCompletionSource<(string Id, string Name)>(TaskCreationOptions.RunContinuationsAsynchronously);
+        await using var hub = new HubConnectionBuilder()
+            .WithUrl(new Uri(_server.Url, "hub"), o => o.AccessTokenProvider = () => Task.FromResult<string?>(desk.GetProperty("key").GetString()))
+            .Build();
+        hub.On<string, string>(SyncHub.DeviceRenamedMethod, (renamedId, name) => renamedMessage.TrySetResult((renamedId, name)));
+        await hub.StartAsync();
+
+        var renamed = await SendAsync(Signed(HttpMethod.Patch, "/api/relay/devices/" + id, """{"name":"  StudyPC​ "}"""));
+        Assert.Equal(HttpStatusCode.OK, renamed.StatusCode);
+        Assert.Equal($$"""{"id":"{{id}}","name":"StudyPC"}""", await renamed.Content.ReadAsStringAsync());
+        Assert.Equal((id, "StudyPC"), await renamedMessage.Task.WaitAsync(TimeSpan.FromSeconds(10)));
+        using var app = _server.Client("whatever", key);
+        Assert.Equal("StudyPC", (await app.GetMeAsync(CancellationToken.None))!.Name);
+        Assert.Contains((await JsonOf(await SendAsync(Signed(HttpMethod.Get, "/api/relay/devices")))).GetProperty("devices").EnumerateArray(),
+            d => d.GetProperty("id").GetString() == id && d.GetProperty("name").GetString() == "StudyPC");
+
+        // A name another computer has is made unique, like everywhere else.
+        var taken = await JsonOf(await SendAsync(Signed(HttpMethod.Patch, "/api/relay/devices/" + id, """{"name":"desk"}""")));
+        Assert.Equal("desk (2)", taken.GetProperty("name").GetString());
+
+        // Nothing usable, or nobody to rename.
+        var empty = await SendAsync(Signed(HttpMethod.Patch, "/api/relay/devices/" + id, """{"name":" ​ "}"""));
+        Assert.Equal(HttpStatusCode.BadRequest, empty.StatusCode);
+        Assert.Equal("""{"error":"bad_name"}""", await empty.Content.ReadAsStringAsync());
+        Assert.Equal(HttpStatusCode.BadRequest, (await SendAsync(Signed(HttpMethod.Patch, "/api/relay/devices/" + id, "not json"))).StatusCode);
+        var nobody = await SendAsync(Signed(HttpMethod.Patch, "/api/relay/devices/nobody", """{"name":"Laptop"}"""));
+        Assert.Equal(HttpStatusCode.NotFound, nobody.StatusCode);
+        Assert.Equal("""{"error":"not_found"}""", await nobody.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
+    public async Task TheNestKeepsTheNameItsOwnerGaveItForTheApps()
+    {
+        Assert.Equal(JsonValueKind.Null, (await JsonOf(await SendAsync(Signed(HttpMethod.Get, "/api/relay/status")))).GetProperty("name").ValueKind);
+        using var app = _server.Client("LAPTOP", _server.MintKey("LAPTOP").Key);
+        Assert.Null((await app.GetInfoAsync(CancellationToken.None)).NestName);
+
+        var named = await SendAsync(Signed(HttpMethod.Put, "/api/relay/name", """{"name":" soro‮ "}"""));
+        Assert.Equal(HttpStatusCode.OK, named.StatusCode);
+        Assert.Equal("""{"name":"soro"}""", await named.Content.ReadAsStringAsync());
+        Assert.Equal("soro", (await JsonOf(await SendAsync(Signed(HttpMethod.Get, "/api/relay/status")))).GetProperty("name").GetString());
+        Assert.Equal("soro", (await app.GetInfoAsync(CancellationToken.None)).NestName);
+
+        Assert.Equal(HttpStatusCode.BadRequest, (await SendAsync(Signed(HttpMethod.Put, "/api/relay/name", """{"name":""}"""))).StatusCode);
+        Assert.Equal("soro", (await app.GetInfoAsync(CancellationToken.None)).NestName);
+    }
+
+    [Fact]
     public async Task AnAddRequestThatIsNotJsonIsRefused()
     {
         var response = await SendAsync(Signed(HttpMethod.Post, "/api/relay/devices", "not json"));

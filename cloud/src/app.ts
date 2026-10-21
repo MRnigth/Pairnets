@@ -42,6 +42,8 @@ import {
   listServersRoute,
   removeDeviceRoute,
   removeServerRoute,
+  renameDeviceRoute,
+  renameServerRoute,
   serverApproveRoute,
   serverPollRoute,
   serverRequestRoute,
@@ -109,7 +111,9 @@ const API_ROUTES: Route[] = [
   { method: "POST", pattern: /^\/v1\/servers\/approve$/, handler: serverApproveRoute },
   { method: "POST", pattern: /^\/v1\/servers\/poll$/, handler: serverPollRoute },
   { method: "GET", pattern: /^\/v1\/servers$/, handler: listServersRoute },
+  { method: "PATCH", pattern: /^\/v1\/servers\/([^/]+)\/devices\/([^/]+)$/, handler: renameDeviceRoute },
   { method: "DELETE", pattern: /^\/v1\/servers\/([^/]+)\/devices\/([^/]+)$/, handler: removeDeviceRoute },
+  { method: "PATCH", pattern: /^\/v1\/servers\/([^/]+)$/, handler: renameServerRoute },
   { method: "DELETE", pattern: /^\/v1\/servers\/([^/]+)$/, handler: removeServerRoute },
 ];
 

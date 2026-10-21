@@ -134,7 +134,7 @@
 <tr><td><strong>Signed-in browsers and apps</strong>: the browser type, the computer's name, when it signed in and when it was last used</td><td>So you can see them on your account page and sign them out.</td></tr>
 <tr><td><strong>Computers asking to join</strong>: the computer's name, its system (for example Windows) and its Pairnets version</td><td>So you can recognise the computer before you press Allow. When you allow it, your nest gets the same details.</td></tr>
 <tr><td><strong>Your nests</strong> (up to 3 per account): the name you gave each one, its address, Pairnets version, whether it's online and when it was last seen</td><td>To connect your computers to it and show you how it's doing.</td></tr>
-<tr><td>An <strong>activity log</strong>: sign-ins, computers allowed or removed, nests added or removed, with the time</td><td>To keep your account safe and to look into problems.</td></tr>
+<tr><td>An <strong>activity log</strong>: sign-ins, computers allowed, renamed or removed, and nests added, renamed or removed, with the time. It also keeps a computer's name when it is allowed or renamed, and a nest's name when it is added or renamed</td><td>To keep your account safe and to look into problems.</td></tr>
 <tr><td><strong>Server logs</strong>: sign-ins and errors</td><td>To find and fix problems, and to spot abuse.</td></tr>
 <tr><td><strong>IP addresses</strong>: not stored</td><td>Used for a moment to stop abuse. To count requests we keep only a scrambled form, for 2 days. The address is also passed to Cloudflare's bot check on the sign-in page, and to your nest, so it can slow down anyone guessing keys.</td></tr>
 </tbody>
@@ -162,8 +162,9 @@
 <h2 id="nest">6. Your nest</h2>
 <p>Your nest is your own server. You decide what it keeps and who gets in, and you are responsible for the data on it. We can't see it.</p>
 <ul>
-<li>The nest software keeps your files and their old versions (for 30 days), the list of computers (name, system, Pairnets version, when last seen), sign-in sessions for its website, and logs. The logs include IP addresses of failed sign-ins and of new computers.</li>
+<li>The nest software keeps your files and their old versions (for 30 days), the list of computers (name, system, Pairnets version, when last seen), the nest's own name, sign-in sessions for its website, and logs. The logs include IP addresses of failed sign-ins and of new computers.</li>
 <li>A nest linked to your Pairnets account gets its requests through sync.pairnets.app. When you allow a computer, the service tells your nest the computer's name and a masked form of your email address (like <code>m***@example.com</code>), so the nest can show who allowed it.</li>
+<li>When you rename a computer or your nest on your account page, the service passes the new name to your nest. The service keeps your nest's name (see the table above), and a computer's new name only in the activity log.</li>
 <li>The one-line installer sends the server's name and Pairnets version to sync.pairnets.app, to link the nest to your account.</li>
 <li>If you let other people use your nest, you are responsible for their data on it.</li>
 </ul>

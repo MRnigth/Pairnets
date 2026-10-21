@@ -10,15 +10,21 @@ using Pairnets.Core.Client;
 
 namespace Pairnets.Desktop.Views;
 
-/// <summary>An item in the "Needs attention" list with one action button.</summary>
+/// <summary>An item in the "Needs attention" list with one action button (and sometimes a second, quieter one).</summary>
 public sealed record AttentionItem(string Title, string Detail, string ActionLabel, Action Action,
-    AttentionKind Kind = AttentionKind.Warning, string? Code = null, DateTimeOffset? At = null);
+    AttentionKind Kind = AttentionKind.Warning, string? Code = null, DateTimeOffset? At = null,
+    string? SecondLabel = null, Action? Second = null);
 
 /// <summary>The pages in the main window's sidebar.</summary>
 public enum MainPage
 {
     Overview,
     Activity,
+
+    /// <summary>The Files page on "All files": the nest's files and where each folder lives.</summary>
+    Files,
+
+    /// <summary>The Files page on "Deleted" (what was the History page).</summary>
     History,
     Devices,
     Attention,
@@ -63,6 +69,14 @@ public interface IMainActions
     /// <summary>Where the History page reads from; null while not connected.</summary>
     IHistorySource? History { get; }
 
+    /// <summary>The nest's files for the Files page; null while not connected.</summary>
+    INestFiles? Files => null;
+
+    /// <summary>Opens a file in the program the system uses for it (a file opened on the Files page).</summary>
+    void OpenFile(string path)
+    {
+    }
+
     /// <summary>Whether this kind of notification is switched on (the Account page's switches).</summary>
     bool Notifies(NoticeKind kind) => true;
 
@@ -73,6 +87,11 @@ public interface IMainActions
 
     /// <summary>"Sign out" on the Account page (the controller asks first).</summary>
     void SignOut()
+    {
+    }
+
+    /// <summary>"Sign in again" on the Account page (the sign-in window opens).</summary>
+    void SignInAgain()
     {
     }
 
@@ -103,6 +122,8 @@ public partial class MainWindow : Window
     private int _attentionCount;
     private bool _deletedMode = true;
     private string? _filteredSearch;
+    private bool _cleanup;
+    private bool _fullShowing;
 
     private static readonly TimeSpan HistoryFreshFor = TimeSpan.FromMinutes(1);
 
@@ -133,7 +154,9 @@ public partial class MainWindow : Window
         };
         DeletedList.ItemsSource = _shownFiles;
         AccountPage.Attach(actions);
+        NestFilesPage.Host = CleanupPage.Host = this;
         WirePages();
+        WireShortcuts();
         AttentionSubtitle.Text = AttentionSubtitleText(0);
         RefreshSide();
         UpdatePanels();
@@ -141,6 +164,19 @@ public partial class MainWindow : Window
 
     /// <summary>The longer words behind the update card's title (its tooltip), for the tests.</summary>
     internal string UpdateDetailText => ToolTip.GetTip(UpdateTitle) as string ?? string.Empty;
+
+    /// <summary>What the pages ask of the app.</summary>
+    public IMainActions? Actions => _actions;
+
+    /// <summary>The last status shown.</summary>
+    public StatusSnapshot Status => _status;
+
+    /// <summary>The Files page's "All files" and "Clean up your nest" (for the checks and the screenshots).</summary>
+    public NestFilesView FilesView => NestFilesPage;
+    public CleanupView Cleanup => CleanupPage;
+
+    /// <summary>True while the Files page shows "Clean up your nest".</summary>
+    public bool CleanupShown => _cleanup && Page == MainPage.Files;
 
     /// <summary>Set when the app exits, so closing really closes instead of hiding.</summary>
     public bool AllowClose { get; set; }
@@ -184,8 +220,8 @@ public partial class MainWindow : Window
     {
         if (page == MainPage.Account)
         {
-            foreach (var tile in new[] { NavOverview, NavActivity, NavAttention, NavHistory, NavDevices, NavSettings,
-                         DockOverview, DockActivity, DockAttention, DockHistory, DockDevices, DockSettings })
+            foreach (var tile in new[] { NavOverview, NavActivity, NavAttention, NavFiles, NavDevices, NavSettings,
+                         DockOverview, DockActivity, DockAttention, DockFiles, DockDevices, DockSettings })
                 tile.IsChecked = false;
             return;
         }
@@ -196,7 +232,7 @@ public partial class MainWindow : Window
     private RadioButton DockFor(MainPage page) => page switch
     {
         MainPage.Activity => DockActivity,
-        MainPage.History => DockHistory,
+        MainPage.Files or MainPage.History => DockFiles,
         MainPage.Devices => DockDevices,
         MainPage.Attention => DockAttention,
         MainPage.Settings => DockSettings,
@@ -206,7 +242,7 @@ public partial class MainWindow : Window
     private RadioButton NavFor(MainPage page) => page switch
     {
         MainPage.Activity => NavActivity,
-        MainPage.History => NavHistory,
+        MainPage.Files or MainPage.History => NavFiles,
         MainPage.Devices => NavDevices,
         MainPage.Attention => NavAttention,
         MainPage.Settings => NavSettings,
@@ -218,7 +254,7 @@ public partial class MainWindow : Window
         if (sender is not RadioButton { IsChecked: true } nav || _navigating)
             return;
         var page = nav == NavActivity || nav == DockActivity ? MainPage.Activity
-            : nav == NavHistory || nav == DockHistory ? MainPage.History
+            : nav == NavFiles || nav == DockFiles ? MainPage.Files
             : nav == NavDevices || nav == DockDevices ? MainPage.Devices
             : nav == NavAttention || nav == DockAttention ? MainPage.Attention
             : nav == NavSettings || nav == DockSettings ? MainPage.Settings
@@ -245,14 +281,16 @@ public partial class MainWindow : Window
     {
         if (Page == MainPage.Settings && page != MainPage.Settings)
             SettingsPage.Content = null; // next time the form starts again from the saved settings
+        var wasFiles = Page is MainPage.Files or MainPage.History && FilesPage.IsVisible;
         Page = page;
+        _cleanup = false;
         (PageTitle.Text, PageSubtitle.Text) = page switch
         {
             MainPage.Activity => ("Activity", "What synced recently, newest first. Right-click a file for more."),
-            MainPage.History => ("History", "Get back deleted files and older versions. The server keeps them for 30 days."),
-            MainPage.Devices => ("Devices", "Every computer that uses your server: online now, or when it was last seen."),
-            MainPage.Attention => ("Needs attention", "Things Pairnets can't decide for you."),
-            MainPage.Settings => ("Settings", "Your server, the folder, and how Pairnets behaves."),
+            MainPage.Files or MainPage.History => (FilesPageText.Title, FilesPageText.Subtitle),
+            MainPage.Devices => ("Computers", "Every computer on your nest, and the nest itself."),
+            MainPage.Attention => ("Needs you", "Things only you can decide."),
+            MainPage.Settings => ("Settings", "Your nest, the folder, and how Pairnets behaves on this computer."),
             MainPage.Account => ("Account", "Who is signed in on this computer, and when Pairnets should tell you things."),
             _ => ("Overview", string.Empty),
         };
@@ -260,16 +298,18 @@ public partial class MainWindow : Window
         HeaderRow.IsVisible = page == MainPage.Overview; // every other page draws its own header
         OverviewPage.IsVisible = page == MainPage.Overview;
         ActivityPage.IsVisible = page == MainPage.Activity;
-        HistoryPage.IsVisible = page == MainPage.History;
+        FilesPage.IsVisible = page is MainPage.Files or MainPage.History;
+        ShowFilesPane();
         DevicesPage.IsVisible = page == MainPage.Devices;
         AttentionPage.IsVisible = page == MainPage.Attention;
         SettingsPage.IsVisible = page == MainPage.Settings;
         AccountPage.IsVisible = page == MainPage.Account;
-        foreach (var shown in new Control[] { OverviewPage, ActivityPage, HistoryPage, DevicesPage, AttentionPage, SettingsPage, AccountPage })
+        foreach (var shown in new Control[] { OverviewPage, ActivityPage, FilesPage, DevicesPage, AttentionPage, SettingsPage, AccountPage })
         {
+            if (shown == FilesPage && wasFiles)
+                continue; // another tab of the same page: it stays where it is
             shown.Classes.Remove("enter");
-            if (shown.IsVisible)
-                shown.Classes.Add("enter");
+            Motion.Set(shown, "enter", shown.IsVisible);
         }
         if (page == MainPage.Activity)
             RebuildActivity();
@@ -277,9 +317,75 @@ public partial class MainWindow : Window
             AccountPage.Show(_status, ThisDevice);
         if (page == MainPage.Devices)
             _actions?.RefreshDevices();
-        if (page == MainPage.History && (_serverFiles is null || DateTimeOffset.Now - _serverFilesAt > HistoryFreshFor))
-            _ = LoadHistoryAsync();
+        if (page is MainPage.Files or MainPage.History && (_serverFiles is null || DateTimeOffset.Now - _serverFilesAt > HistoryFreshFor))
+            _ = LoadHistoryAsync(); // also for the Deleted tab's count
+        if (page == MainPage.Files)
+            NestFilesPage.Refresh();
         UpdatePanels();
+    }
+
+    /// <summary>The Files page's two tabs and Clean up: which one shows.</summary>
+    private void ShowFilesPane()
+    {
+        var was = _navigating;
+        _navigating = true;
+        try
+        {
+            AllFilesTab.IsChecked = Page == MainPage.Files;
+            DeletedFilesTab.IsChecked = Page == MainPage.History;
+        }
+        finally
+        {
+            _navigating = was;
+        }
+        FilesHeader.IsVisible = !_cleanup;
+        NestFilesPage.IsVisible = !_cleanup && Page == MainPage.Files;
+        HistoryPage.IsVisible = !_cleanup && Page == MainPage.History;
+        CleanupPage.IsVisible = _cleanup;
+    }
+
+    private void OnFilesTab(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not RadioButton { IsChecked: true } tab || _navigating)
+            return;
+        Navigate(tab == DeletedFilesTab ? MainPage.History : MainPage.Files);
+    }
+
+    /// <summary>Opens the Files page on <paramref name="folder"/>; with <paramref name="choosePlacement"/> its "where it lives" menu opens.</summary>
+    public void ShowFilesAt(string folder, bool choosePlacement = false)
+    {
+        Navigate(MainPage.Files);
+        NestFilesPage.ShowFolder(folder, choosePlacement);
+    }
+
+    /// <summary>Opens "Clean up your nest" on the Files page.</summary>
+    public void ShowCleanup()
+    {
+        Navigate(MainPage.Files);
+        _cleanup = true;
+        ShowFilesPane();
+        CleanupPage.Classes.Remove("enter");
+        CleanupPage.Classes.Add("enter");
+        CleanupPage.Refresh(_status.Server);
+    }
+
+    /// <summary>"Your nest is full", with "Help me clean up" (a change could not be made, or a file could not be saved back).</summary>
+    public async Task ShowNestFullAsync()
+    {
+        if (_fullShowing)
+            return; // one at a time
+        _fullShowing = true;
+        try
+        {
+            var room = (FilesPageText.FreeLine(_status.Server) + " " + FilesPageText.FullSaving).Trim();
+            if (await Dialogs.ChooseAsync(IsVisible ? this : null, FilesPageText.FullTitle, FilesPageText.FullText, [room], FilesPageText.HelpMeCleanUp, "OK")
+                == FilesPageText.HelpMeCleanUp)
+                ShowCleanup();
+        }
+        finally
+        {
+            _fullShowing = false;
+        }
     }
 
     /// <summary>Shows the settings form as a page (the controller builds it from the current settings).</summary>
@@ -303,11 +409,13 @@ public partial class MainWindow : Window
         _status = s;
         RefreshSide();
         ShowDevices(s);
+        NestFilesPage.ShowStatus(s);
         if (Page == MainPage.Account)
             AccountPage.Show(s, ThisDevice);
         ActivityEmptyText.Text = EmptyFolderText();
         PauseText.Text = s.Paused ? "Resume" : "Pause";
         PauseGlyph.Data = Visuals.Resource<Geometry>(s.Paused ? "I.Play" : "I.Pause");
+        RefreshMacMenu();
         RefreshOverview();
     }
 
@@ -320,7 +428,26 @@ public partial class MainWindow : Window
         Overview.ShowSpeed = ShowMapSpeed;
         _overview = OverviewModel.Build(_status, ThisDevice, _folder, _attentionCount, _activityItems, now);
         Overview.Show(_overview, NestMapModel.Build(_status, ThisDevice, now), ThisDevice);
+        DrawSyncNow(_overview.SyncNow);
     }
+
+    /// <summary>
+    /// The header's "Sync now": the blue main button only when syncing is the useful thing to do; plain when the card has its
+    /// own action (so that one is the only blue button), and resting while a sync runs.
+    /// </summary>
+    private void DrawSyncNow(OverviewSyncNow look)
+    {
+        SyncNowButton.Classes.Set("accent", look.IsPrimary);
+        SyncNowButton.Classes.Set("subtle", !look.IsPrimary);
+        SyncNowIcon.Classes.Set("white", look.IsPrimary);
+        SyncNowButton.IsEnabled = look.IsEnabled;
+        ToolTip.SetTip(SyncNowButton, look.ToolTip(OperatingSystem.IsMacOS()));
+    }
+
+    /// <summary>Whether the header's "Sync now" is the blue main button right now (the checks).</summary>
+    internal bool SyncNowIsPrimary => SyncNowButton.Classes.Contains("accent");
+
+    internal bool SyncNowEnabled => SyncNowButton.IsEnabled;
 
     private void OnOverviewAction(OverviewAction action)
     {
@@ -361,6 +488,7 @@ public partial class MainWindow : Window
     private void ShowDevices(StatusSnapshot s)
     {
         var nest = NestCard.From(s, null);
+        NestHeading.Text = nest.Title;
         NestAddress.Text = nest.Address;
         NestVersion.Text = nest.Version;
         NestVersionNote.Text = nest.VersionNote;
@@ -418,13 +546,15 @@ public partial class MainWindow : Window
     {
         _update = SideUpdate.From(title, detail, button, progress, busy);
         UpdateCard.IsVisible = _update.Visible;
-        UpdateIcon.Classes.Set("bob", _update.Visible && !busy);
+        Motion.Set(UpdateIcon, "bob", _update.Visible && !busy);
         if (!_update.Visible)
             return;
         UpdateTitle.Text = _update.Title;
         ToolTip.SetTip(UpdateTitle, detail.Length > 0 ? detail : null);
+        UpdateReason.Text = _update.ShowsReason ? detail : string.Empty;
+        UpdateReason.IsVisible = _update.ShowsReason;
         UpdateButton.Content = button;
-        UpdateButton.IsVisible = !busy;
+        UpdateButton.IsVisible = _update.HasButton;
         UpdateLater.IsVisible = !busy;
         UpdatePercent.IsVisible = busy;
         UpdatePercent.Text = _update.PercentText;
@@ -602,6 +732,7 @@ public partial class MainWindow : Window
             _serverFiles = await source.GetServerFilesAsync(CancellationToken.None);
             _serverFilesAt = DateTimeOffset.Now;
             DeletedCount.Text = HistoryQuery.Filter(_serverFiles, true, null, DateTimeOffset.UtcNow).Total.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            DeletedTabCount.Text = DeletedCount.Text;
             if (_selectAfterLoad is { } path && _serverFiles.FirstOrDefault(f => f.Path == path) is { } target)
             {
                 _navigating = true;
@@ -743,8 +874,7 @@ public partial class MainWindow : Window
                 return;
             foreach (var row in VersionRow.For(file, versions, DateTimeOffset.UtcNow))
                 _versions.Add(row);
-            var total = _versions.Count + (file.Deleted ? 0 : 1);
-            VersionCount.Text = total == 1 ? "1 version" : total + " versions";
+            VersionCount.Text = VersionRow.CountText(_versions.Count);
             VersionsMessage.IsVisible = _versions.Count == 0;
             VersionsMessage.Text = file.Deleted
                 ? "Your nest no longer has a copy: it was deleted more than 30 days ago."
@@ -918,5 +1048,11 @@ public partial class MainWindow : Window
     {
         if (sender is Control { Tag: AttentionItem item })
             item.Action();
+    }
+
+    private void OnAttentionSecond(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Control { Tag: AttentionItem item })
+            item.Second?.Invoke();
     }
 }

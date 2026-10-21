@@ -5,7 +5,9 @@
     It builds everywhere (so the Linux build checks it compiles) but only runs on Windows.
   -->
   <PropertyGroup>
-    <TargetFramework>net8.0-windows</TargetFramework>
+    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
+    <!-- Windows 10 2004 SDK: Windows.Storage.Provider, to register the Pairnets folder as a cloud folder (Explorer ticks). -->
+    <SupportedOSPlatformVersion>10.0.17763.0</SupportedOSPlatformVersion>
     <UseWPF>true</UseWPF>
     <UseWindowsForms>true</UseWindowsForms>
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
@@ -40,10 +42,12 @@
   <ItemGroup>
     <Compile Include="..\Pairnets.Tests\Infrastructure\TestServer.cs" Link="Infrastructure\TestServer.cs" />
     <Compile Include="..\Pairnets.Tests\Infrastructure\TempDir.cs" Link="Infrastructure\TempDir.cs" />
+    <Compile Include="..\Pairnets.Tests\Infrastructure\FakeNestFiles.cs" Link="Infrastructure\FakeNestFiles.cs" />
     <Compile Include="..\Pairnets.Tests\Infrastructure\TestCertificates.cs" Link="Infrastructure\TestCertificates.cs" />
     <Compile Include="..\Pairnets.Tests\Infrastructure\RepoPaths.cs" Link="Infrastructure\RepoPaths.cs" />
     <Compile Include="..\Pairnets.Tests\Infrastructure\FakeSyncService.cs" Link="Infrastructure\FakeSyncService.cs" />
     <Compile Include="..\Pairnets.Tests\Infrastructure\TestReleaseKey.cs" Link="Infrastructure\TestReleaseKey.cs" />
+    <Compile Include="..\Pairnets.Tests\Infrastructure\TestUpdatePackages.cs" Link="Infrastructure\TestUpdatePackages.cs" />
   </ItemGroup>
 
 </Project>

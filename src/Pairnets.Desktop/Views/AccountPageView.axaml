@@ -34,12 +34,21 @@
                   <v:LineIcon Classes="icon white" Width="15" Height="15" Data="{StaticResource I.External}" />
                 </StackPanel>
               </Button>
-              <Button x:Name="SignOutButton" Classes="chipbtn redtext" Click="OnSignOut" Height="38" Padding="14,0" CornerRadius="12" HorizontalAlignment="Right">
-                <StackPanel Orientation="Horizontal" Spacing="8">
-                  <v:LineIcon Classes="icon ink-bad" Width="16" Height="16" Data="{StaticResource I.Logout}" />
-                  <TextBlock Text="Sign out" VerticalAlignment="Center" />
-                </StackPanel>
-              </Button>
+              <!-- Signing in again and out live here only (Settings no longer repeats them) -->
+              <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+                <Button x:Name="SignInAgainButton" Classes="chipbtn" Click="OnSignInAgain" Height="38" Padding="14,0" CornerRadius="12">
+                  <StackPanel Orientation="Horizontal" Spacing="8">
+                    <v:LineIcon Classes="icon" Width="16" Height="16" Data="{StaticResource I.Retry}" />
+                    <TextBlock Text="Sign in again" VerticalAlignment="Center" />
+                  </StackPanel>
+                </Button>
+                <Button x:Name="SignOutButton" Classes="chipbtn redtext" Click="OnSignOut" Height="38" Padding="14,0" CornerRadius="12">
+                  <StackPanel Orientation="Horizontal" Spacing="8">
+                    <v:LineIcon Classes="icon ink-bad" Width="16" Height="16" Data="{StaticResource I.Logout}" />
+                    <TextBlock Text="Sign out" VerticalAlignment="Center" />
+                  </StackPanel>
+                </Button>
+              </StackPanel>
             </StackPanel>
           </Grid>
           <Border Classes="hair" />

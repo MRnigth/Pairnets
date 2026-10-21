@@ -236,6 +236,75 @@ public class ServerApiTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task MoveGivesTheNewNameTheFileAndKeepsTheOldVersionInHistory()
+    {
+        await Put("Photos/a.jpg", "none", "picture");
+        using var api = _server.Client();
+        var moved = await api.MoveAsync("Photos/a.jpg", "Album/b.jpg", H("picture"), default);
+        Assert.Equal(ApiOutcome.Ok, moved.Outcome);
+        Assert.Equal("Album/b.jpg", moved.Entry!.Path);
+        Assert.Equal(H("picture"), moved.Entry.Hash);
+        Assert.Equal("picture", await File.ReadAllTextAsync(Path.Combine(_server.Paths.Files, "Album", "b.jpg")));
+        Assert.False(File.Exists(Path.Combine(_server.Paths.Files, "Photos", "a.jpg")));
+        var manifest = await api.GetManifestAsync(null, default);
+        Assert.Contains(manifest.Entries, e => e.Path == "Photos/a.jpg" && e.Deleted);
+        Assert.Single(await api.GetHistoryAsync("Photos/a.jpg", default));
+    }
+
+    [Fact]
+    public async Task MoveChangesNothingWhenTheFileChangedOrTheNewNameIsTaken()
+    {
+        await Put("a.txt", "none", "a");
+        await Put("b.txt", "none", "b");
+        using var api = _server.Client();
+        Assert.Equal(ApiOutcome.Conflict, (await api.MoveAsync("a.txt", "c.txt", H("older"), default)).Outcome);
+        Assert.Equal(ApiOutcome.Conflict, (await api.MoveAsync("a.txt", "b.txt", H("a"), default)).Outcome);
+        Assert.Equal(ApiOutcome.CaseCollision, (await api.MoveAsync("a.txt", "B.txt", H("a"), default)).Outcome);
+        Assert.Equal(ApiOutcome.NotFound, (await api.MoveAsync("gone.txt", "c.txt", H("a"), default)).Outcome);
+        Assert.Equal(ApiOutcome.InvalidName, (await api.MoveAsync("a.txt", "../c.txt", H("a"), default)).Outcome);
+        var live = (await api.GetManifestAsync(null, default)).Entries.Where(e => !e.Deleted).Select(e => e.Path).Order().ToList();
+        Assert.Equal(["a.txt", "b.txt"], live);
+        Assert.Equal("b", await File.ReadAllTextAsync(Path.Combine(_server.Paths.Files, "b.txt")));
+    }
+
+    [Fact]
+    public async Task ARenameReachesTheOtherComputerAsANewFileAndADeletedOne()
+    {
+        await using var desktop = new Device("desktop", _server);
+        await using var laptop = new Device("laptop", _server);
+        desktop.Write("old.txt", "text");
+        for (var i = 0; i < 9; i++)
+            desktop.Write($"other{i}.txt", "keeps one deletion under the mass-delete guard");
+        await desktop.SyncAsync();
+        await laptop.SyncAsync();
+        Assert.Equal(ApiOutcome.Ok, (await desktop.Api.MoveAsync("old.txt", "new.txt", H("text"), default)).Outcome);
+        await desktop.SyncAsync();
+        await laptop.SyncAsync();
+        Assert.Contains("new.txt", laptop.Files());
+        Assert.DoesNotContain("old.txt", laptop.Files());
+        Assert.Equal(desktop.Snapshot(), laptop.Snapshot());
+    }
+
+    [Fact]
+    public async Task PurgeDeletesTheFileAndItsOlderVersionsForGood()
+    {
+        await Put("Videos/big.mp4", "none", "v1");
+        await Put("Videos/big.mp4", H("v1"), "v2");
+        using var api = _server.Client();
+        Assert.Single(await api.GetHistoryAsync("Videos/big.mp4", default));
+        Assert.True((await api.GetInfoAsync(default)).HistoryBytes > 0);
+
+        Assert.Equal(ApiOutcome.Conflict, (await api.PurgeAsync("Videos/big.mp4", H("v1"), default)).Outcome);
+        var purged = await api.PurgeAsync("Videos/big.mp4", H("v2"), default);
+        Assert.Equal(ApiOutcome.Ok, purged.Outcome);
+        Assert.True(purged.Entry!.Deleted);
+        Assert.Empty(await api.GetHistoryAsync("Videos/big.mp4", default));
+        Assert.False(File.Exists(Path.Combine(_server.Paths.Files, "Videos", "big.mp4")));
+        Assert.Empty(Directory.EnumerateFiles(_server.Paths.History, "*", SearchOption.AllDirectories));
+        Assert.Equal(ApiOutcome.NotFound, (await api.PurgeAsync("never.txt", H("x"), default)).Outcome);
+    }
+
+    [Fact]
     public async Task ARestoreThatTakesLongAnswersWithinTheProxyLimitAndIsAskedAgain()
     {
         // A big version: copying and hashing it takes a while, longer than the server waits here (not at all).

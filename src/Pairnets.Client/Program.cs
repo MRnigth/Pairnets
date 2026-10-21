@@ -7,29 +7,88 @@ namespace Pairnets.Client;
 
 internal static class Program
 {
+    /// <summary>Takes Pairnets out of File Explorer and quits (the uninstaller runs it).</summary>
+    public const string UnregisterExplorerArgument = "--unregister-explorer";
+
+    /// <summary>Asks before uninstalling when files are only on the nest; exit code 1 means "do not uninstall".</summary>
+    public const string CheckBeforeUninstallArgument = "--check-before-uninstall";
+
+    /// <summary>
+    /// With Files On-Demand some files may be only on the nest: without Pairnets they could not open. The person
+    /// chooses: stop (and switch Files On-Demand off in Pairnets first, which brings every file here), or go on.
+    /// </summary>
+    private static int CheckBeforeUninstall()
+    {
+        int online;
+        try
+        {
+            online = Platform.CloudFiles.WindowsCloudFolder.CountCloudOnly();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Runtime.InteropServices.COMException)
+        {
+            return 0;
+        }
+        if (online == 0)
+            return 0;
+        return MessageBox.Show($"{online} file(s) in your Pairnets folder are only on your nest (Files On-Demand). Without Pairnets they cannot open.\n\n" +
+            "To keep them on this PC: choose No, open Pairnets, and set Settings → Files in Explorer to \"Plain folder\". Pairnets downloads them, then you can uninstall.\n\n" +
+            "Uninstall anyway? (They stay safe on your nest.)", "Uninstall Pairnets", MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.Yes ? 0 : 1;
+    }
+
     [STAThread]
     private static int Main(string[] args)
     {
+        // The uninstaller first asks whether files would be left behind, then takes Pairnets out of File Explorer
+        // (left side, right-click items, folder icon, the cloud folder).
+        if (args.Contains(CheckBeforeUninstallArgument))
+            return CheckBeforeUninstall();
+        if (args.Contains(UnregisterExplorerArgument))
+        {
+            try
+            {
+                Platform.CloudFiles.WindowsCloudFolder.ForgetAll();
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Runtime.InteropServices.COMException)
+            {
+                // The rest still goes.
+            }
+            return Platform.WindowsPlatform.SetExplorerEntry(null, null, Pairnets.Core.Settings.PairnetsPaths.LocalDir) ? 0 : 1;
+        }
+
         using var mutex = new Mutex(initiallyOwned: true, PairnetsInfo.WindowsMutex, out var createdNew);
+        // Started by the Pairnets this one just replaced (a copy from the zip updating itself): wait for it to quit.
+        if (!createdNew && args.Contains(SelfReplace.AfterUpdateArgument))
+            createdNew = WaitForOldApp(mutex);
         if (!createdNew)
         {
-            // Started for a pairnets:// link (the nest's website sending you back after approving
-            // this computer): poke the running Pairnets to the front and leave quietly.
-            if (args.Any(AppActivation.IsActivationUrl))
-            {
-                AppActivation.TrySignalRunning();
+            // Opened again (Start menu, a shortcut, the installer, a pairnets:// link from the nest's website):
+            // bring the running Pairnets to the front and leave quietly, like other apps do. A right-click item in
+            // Explorer ("Open in Pairnets", "Show sync status") is handed to the running Pairnets the same way.
+            if (AppActivation.SecondStart(args) == AppActivation.SecondStartResult.Quiet)
                 return 0;
-            }
-            MessageBox.Show("Pairnets is already running. Look for its icon in the notification area.", "Pairnets",
-                MessageBoxButton.OK, MessageBoxImage.Information);
+            MessageBox.Show(AppActivation.NotAnsweringMessage + " If it stays stuck, end Pairnets in Task Manager and start it again.",
+                "Pairnets", MessageBoxButton.OK, MessageBoxImage.Information);
             return 1;
         }
 
+        SelfReplace.CleanUp(Environment.ProcessPath);
         if (!TakeOverTether())
             return 1;
 
         var app = new App();
         return app.Run();
+    }
+
+    private static bool WaitForOldApp(Mutex mutex)
+    {
+        try
+        {
+            return mutex.WaitOne(SelfReplace.WaitForOldApp);
+        }
+        catch (AbandonedMutexException)
+        {
+            return true; // the old Pairnets ended without letting go: the mutex is ours now
+        }
     }
 
     /// <summary>

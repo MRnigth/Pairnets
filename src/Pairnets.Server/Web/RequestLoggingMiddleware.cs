@@ -19,8 +19,9 @@ public sealed class RequestLoggingMiddleware(RequestDelegate next, ILogger<Reque
         {
             var elapsed = Stopwatch.GetElapsedTime(started).TotalMilliseconds;
             var route = context.Request.Path.Value ?? "/";
-            // The apps poll these two; one line each every few seconds would drown the useful ones.
+            // The apps poll these; one line each every few seconds would drown the useful ones (the storage window asks every second).
             var level = route.Equals("/api/health", StringComparison.OrdinalIgnoreCase) || route.Equals("/api/devices", StringComparison.OrdinalIgnoreCase)
+                || (route.Equals("/api/storage", StringComparison.OrdinalIgnoreCase) && HttpMethods.IsGet(context.Request.Method))
                 ? LogLevel.Debug : LogLevel.Information;
             if (log.IsEnabled(level))
             {

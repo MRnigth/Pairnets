@@ -91,12 +91,13 @@
     <Setter Property="BorderThickness" Value="1" />
     <Setter Property="Foreground" Value="{DynamicResource T.Text}" />
     <Setter Property="Tag" Value="{DynamicResource T.Hover}" />
+    <Setter Property="ui:Pg.Pressed" Value="{DynamicResource T.SubtleHover}" />
     <Setter Property="Height" Value="38" />
     <Setter Property="Padding" Value="14,0" />
     <Setter Property="FontSize" Value="13" />
     <Setter Property="FontWeight" Value="SemiBold" />
     <Setter Property="Cursor" Value="Hand" />
-    <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+    <Setter Property="FocusVisualStyle" Value="{DynamicResource FocusRing}" />
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="Button">
@@ -110,13 +111,10 @@
               <Setter TargetName="bd" Property="Background" Value="{Binding Tag, RelativeSource={RelativeSource TemplatedParent}}" />
             </Trigger>
             <Trigger Property="IsPressed" Value="True">
-              <Setter TargetName="bd" Property="Opacity" Value="0.85" />
+              <Setter TargetName="bd" Property="Background" Value="{Binding (ui:Pg.Pressed), RelativeSource={RelativeSource TemplatedParent}}" />
             </Trigger>
             <Trigger Property="IsEnabled" Value="False">
               <Setter TargetName="bd" Property="Opacity" Value="0.5" />
-            </Trigger>
-            <Trigger Property="IsKeyboardFocused" Value="True">
-              <Setter TargetName="bd" Property="BorderBrush" Value="{DynamicResource T.Accent}" />
             </Trigger>
           </ControlTemplate.Triggers>
         </ControlTemplate>
@@ -129,13 +127,15 @@
     <Setter Property="Foreground" Value="White" />
     <Setter Property="FontWeight" Value="Bold" />
     <Setter Property="Tag" Value="{DynamicResource T.AccentButtonHover}" />
+    <Setter Property="ui:Pg.Pressed" Value="#1F55C9" />
   </Style>
   <Style x:Key="PgDanger" TargetType="Button" BasedOn="{StaticResource PgButton}">
     <Setter Property="Background" Value="{DynamicResource T.DangerBtn}" />
     <Setter Property="BorderThickness" Value="0" />
     <Setter Property="Foreground" Value="White" />
     <Setter Property="FontWeight" Value="Bold" />
-    <Setter Property="Tag" Value="#A61B25" />
+    <Setter Property="Tag" Value="{StaticResource S.RedHover}" />
+    <Setter Property="ui:Pg.Pressed" Value="{StaticResource S.RedHover}" />
   </Style>
   <!-- Grey chip fill, round 11 (Sign in again, Sign out, Change...) -->
   <Style x:Key="PgChipButton" TargetType="Button" BasedOn="{StaticResource PgButton}">
@@ -158,7 +158,7 @@
     <Setter Property="FontWeight" Value="Bold" />
     <Setter Property="Cursor" Value="Hand" />
     <Setter Property="Background" Value="Transparent" />
-    <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+    <Setter Property="FocusVisualStyle" Value="{DynamicResource FocusRing}" />
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="Button">
@@ -187,7 +187,7 @@
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="Cursor" Value="Hand" />
     <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-    <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+    <Setter Property="FocusVisualStyle" Value="{DynamicResource FocusRing}" />
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="Button">
@@ -196,9 +196,6 @@
           </Border>
           <ControlTemplate.Triggers>
             <Trigger Property="IsMouseOver" Value="True">
-              <Setter TargetName="bd" Property="Background" Value="{DynamicResource T.Hover}" />
-            </Trigger>
-            <Trigger Property="IsKeyboardFocused" Value="True">
               <Setter TargetName="bd" Property="Background" Value="{DynamicResource T.Hover}" />
             </Trigger>
           </ControlTemplate.Triggers>
@@ -214,7 +211,7 @@
     <Setter Property="FontWeight" Value="SemiBold" />
     <Setter Property="Cursor" Value="Hand" />
     <Setter Property="Margin" Value="0,0,6,0" />
-    <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+    <Setter Property="FocusVisualStyle" Value="{DynamicResource FocusRingRound}" />
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="RadioButton">
@@ -238,6 +235,16 @@
     </Setter>
   </Style>
 
+  <!-- The count in a filter pill: soft, and accent ink in the chosen pill (no see-through text) -->
+  <Style x:Key="PgCount" TargetType="TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource T.TextSoft}" />
+    <Style.Triggers>
+      <DataTrigger Binding="{Binding IsChecked, RelativeSource={RelativeSource AncestorType=RadioButton}}" Value="True">
+        <Setter Property="Foreground" Value="{DynamicResource T.AccentInk}" />
+      </DataTrigger>
+    </Style.Triggers>
+  </Style>
+
   <!-- History's two tabs -->
   <Style x:Key="PgTabs" TargetType="Border" BasedOn="{StaticResource PgCard}">
     <Setter Property="CornerRadius" Value="14" />
@@ -249,7 +256,7 @@
     <Setter Property="FontWeight" Value="SemiBold" />
     <Setter Property="Cursor" Value="Hand" />
     <Setter Property="Margin" Value="0,0,4,0" />
-    <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+    <Setter Property="FocusVisualStyle" Value="{DynamicResource FocusRing}" />
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="RadioButton">
@@ -280,7 +287,7 @@
     <Setter Property="Width" Value="32" />
     <Setter Property="Height" Value="28" />
     <Setter Property="Margin" Value="1,0" />
-    <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+    <Setter Property="FocusVisualStyle" Value="{DynamicResource FocusRing}" />
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="RadioButton">
@@ -359,7 +366,7 @@
   <Style x:Key="PgSwitch" TargetType="CheckBox">
     <Setter Property="Foreground" Value="{DynamicResource T.Text}" />
     <Setter Property="Cursor" Value="Hand" />
-    <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+    <Setter Property="FocusVisualStyle" Value="{DynamicResource FocusRing}" />
     <Setter Property="VerticalAlignment" Value="Center" />
     <Setter Property="Template">
       <Setter.Value>
@@ -391,7 +398,7 @@
   <Style x:Key="PgFileItem" TargetType="ListBoxItem">
     <Setter Property="Cursor" Value="Hand" />
     <Setter Property="Margin" Value="0,1" />
-    <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+    <Setter Property="FocusVisualStyle" Value="{DynamicResource FocusRing}" />
     <Setter Property="HorizontalContentAlignment" Value="Stretch" />
     <Setter Property="Template">
       <Setter.Value>

@@ -37,14 +37,15 @@ if [[ -d "$SOURCE" ]]; then
   cp -R "$SOURCE"/. "$PKG"/
   cp "$REPO"/deploy/install.sh "$REPO"/deploy/update.sh "$REPO"/deploy/pairnets-server.service "$REPO"/deploy/pairnets-update.service \
      "$REPO"/deploy/pairnets-update.path "$REPO"/deploy/pairnets-update.timer "$REPO"/deploy/pairnets-tunnel.service \
-     "$REPO"/deploy/pairnets.env.example "$REPO"/deploy/pairnets-link.sh "$PKG"/
+     "$REPO"/deploy/pairnets.env.example "$REPO"/deploy/pairnets-link.sh "$REPO"/deploy/place.sh \
+     "$REPO"/deploy/pairnets-place.service "$REPO"/deploy/pairnets-place.path "$PKG"/
   cp "$REPO"/docs/DEPLOY.md "$PKG"/DEPLOY.md
 else
   tar -xzf "$SOURCE" -C "$STAGE"
   [[ -f "$PKG/pairnets-server" && -f "$PKG/install.sh" ]] || die "$SOURCE is not a server package"
 fi
 echo "$VERSION" > "$PKG"/VERSION
-chmod +x "$PKG"/install.sh "$PKG"/update.sh "$PKG"/pairnets-link.sh "$PKG"/pairnets-server
+chmod +x "$PKG"/install.sh "$PKG"/update.sh "$PKG"/pairnets-link.sh "$PKG"/place.sh "$PKG"/pairnets-server
 
 TARBALL="$OUT_DIR/$NAME.tar.gz"
 case "$(uname -s)" in
@@ -63,10 +64,10 @@ esac
 
 # The installer refuses a server it cannot run, and get.sh and update.sh run install.sh directly.
 listing="$(tar -tvzf "$TARBALL")"
-for f in pairnets-server install.sh update.sh pairnets-link.sh; do
+for f in pairnets-server install.sh update.sh pairnets-link.sh place.sh; do
   grep -Eq "^-rwx.* $NAME/$f\$" <<<"$listing" || die "$f is not executable in $TARBALL"
 done
-for f in VERSION DEPLOY.md pairnets-server.service pairnets-update.service pairnets-update.path pairnets-update.timer pairnets-tunnel.service pairnets.env.example; do
+for f in VERSION DEPLOY.md pairnets-server.service pairnets-update.service pairnets-update.path pairnets-update.timer pairnets-tunnel.service pairnets-place.service pairnets-place.path pairnets.env.example; do
   grep -Eq " $NAME/$f\$" <<<"$listing" || die "$f is missing from $TARBALL"
 done
 echo "$TARBALL"

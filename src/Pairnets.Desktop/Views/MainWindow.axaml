@@ -8,6 +8,9 @@
   <Window.Resources>
     <v:ActivityBrushConverter x:Key="KindBrush" />
     <v:ActivityIconConverter x:Key="KindIcon" />
+    <!-- The same pictures as the Windows app: a computer with a plus (asking to join), an undo arrow (Restore). -->
+    <StreamGeometry x:Key="I.JoinPc">M4,5 L15,5 A2,2 0 0 1 17,7 L17,14 A2,2 0 0 1 15,16 L4,16 A2,2 0 0 1 2,14 L2,7 A2,2 0 0 1 4,5 Z M6 20h7M9.5 16v4 M20 3v6M17 6h6</StreamGeometry>
+    <StreamGeometry x:Key="I.Undo">M9 14 4 9l5-5 M4 9h10.5a5.5 5.5 0 0 1 0 11H11</StreamGeometry>
   </Window.Resources>
 
   <Window.DataTemplates>
@@ -43,9 +46,11 @@
     <!-- ======================= Left side, open ======================= -->
     <Grid x:Name="SideOpen" Margin="12,12,0,12">
       <Border Classes="sidepanel">
-        <DockPanel Margin="14,16,14,14">
+        <!-- Top-aligned, so the page tiles sit right under the computers and the spare space goes to the bottom; the
+             computers' row is the one that shrinks (and scrolls) when the window is short. -->
+        <Grid Margin="14,16,14,14" RowDefinitions="Auto,*,Auto" VerticalAlignment="Top">
           <!-- Top: logo, fold, account -->
-          <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,*,Auto,Auto" Margin="4,0,0,0">
+          <Grid ColumnDefinitions="Auto,*,Auto,Auto" Margin="4,0,0,0">
             <Image x:Name="AppIcon" Source="avares://Pairnets/Assets/pairnets-icon-256.png" Width="30" Height="30" Margin="0,0,8,0" />
             <TextBlock Grid.Column="1" Text="Pairnets" FontSize="16" FontWeight="ExtraBold" VerticalAlignment="Center" />
             <Button x:Name="FoldButton" Grid.Column="2" Classes="RoundIconButton" Width="32" Height="32" Margin="0,0,8,0"
@@ -58,73 +63,8 @@
             </Button>
           </Grid>
 
-          <!-- Bottom: the app update, then the page tiles -->
-          <StackPanel DockPanel.Dock="Bottom">
-            <Border x:Name="UpdateCard" Background="{DynamicResource T.AccentSoft}" CornerRadius="14" Padding="12,8,8,8" Margin="0,10,0,0" IsVisible="False">
-              <StackPanel>
-                <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto">
-                  <v:LineIcon x:Name="UpdateIcon" Classes="icon bob" Width="16" Height="16" StrokeThickness="2.2" Margin="0,0,8,0" VerticalAlignment="Center"
-                              Stroke="{DynamicResource T.AccentInk}" Data="{StaticResource I.Download}" />
-                  <TextBlock x:Name="UpdateTitle" Grid.Column="1" FontWeight="ExtraBold" FontSize="13" TextWrapping="Wrap" VerticalAlignment="Center" />
-                  <TextBlock x:Name="UpdatePercent" Grid.Column="2" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource T.AccentInk}"
-                             VerticalAlignment="Center" Margin="8,0,4,0" IsVisible="False" />
-                  <Button x:Name="UpdateButton" Grid.Column="3" Classes="accent small" Content="Update" Margin="8,0,0,0" Click="OnUpdateNow" />
-                  <Button x:Name="UpdateLater" Grid.Column="4" Classes="RoundIconButton" Width="26" Height="26" Margin="4,0,0,0" Background="Transparent"
-                          ToolTip.Tip="Later" AutomationProperties.Name="Later" Click="OnUpdateLater">
-                    <v:LineIcon Classes="icon" Width="12" Height="12" StrokeThickness="2.4" Stroke="{DynamicResource T.Muted}" Data="{StaticResource I.Close}" />
-                  </Button>
-                </Grid>
-                <ProgressBar x:Name="UpdateProgress" Classes="thin" Minimum="0" Maximum="100" Margin="0,8,4,2" IsVisible="False" />
-              </StackPanel>
-            </Border>
-
-            <TextBlock Classes="SmallLabel" Text="PAGES" Margin="4,16,0,4" />
-            <UniformGrid Columns="2" Margin="-4,0,-4,0">
-              <RadioButton x:Name="NavOverview" Classes="sidetile" GroupName="page" IsChecked="True" IsCheckedChanged="OnNav">
-                <Grid>
-                  <TextBlock Text="Overview" VerticalAlignment="Bottom" FontSize="14" />
-                  <v:LineIcon Data="{StaticResource I.Home}" />
-                  <TextBlock x:Name="OverviewNote" HorizontalAlignment="Right" VerticalAlignment="Top" FontSize="14" />
-                </Grid>
-              </RadioButton>
-              <RadioButton x:Name="NavActivity" Classes="sidetile" GroupName="page" IsCheckedChanged="OnNav">
-                <Grid>
-                  <TextBlock Text="Activity" VerticalAlignment="Bottom" FontSize="14" />
-                  <v:LineIcon Data="{StaticResource I.Activity}" />
-                  <TextBlock x:Name="ActivityNote" HorizontalAlignment="Right" VerticalAlignment="Top" FontSize="14" />
-                </Grid>
-              </RadioButton>
-              <RadioButton x:Name="NavAttention" Classes="sidetile" GroupName="page" IsCheckedChanged="OnNav">
-                <Grid>
-                  <TextBlock Text="Needs you" VerticalAlignment="Bottom" FontSize="14" />
-                  <v:LineIcon Data="{StaticResource I.Warning}" />
-                  <TextBlock x:Name="AttentionCount" HorizontalAlignment="Right" VerticalAlignment="Top" FontSize="20" />
-                </Grid>
-              </RadioButton>
-              <RadioButton x:Name="NavHistory" Classes="sidetile" GroupName="page" IsCheckedChanged="OnNav">
-                <Grid>
-                  <TextBlock Text="History" VerticalAlignment="Bottom" FontSize="14" />
-                  <v:LineIcon Data="{StaticResource I.History}" />
-                </Grid>
-              </RadioButton>
-              <RadioButton x:Name="NavDevices" Classes="sidetile" GroupName="page" IsCheckedChanged="OnNav">
-                <Grid>
-                  <TextBlock Text="Devices" VerticalAlignment="Bottom" FontSize="14" />
-                  <v:LineIcon Data="{StaticResource I.Desktop}" />
-                  <TextBlock x:Name="DevicesNote" HorizontalAlignment="Right" VerticalAlignment="Top" FontSize="13" />
-                </Grid>
-              </RadioButton>
-              <RadioButton x:Name="NavSettings" Classes="sidetile" GroupName="page" IsCheckedChanged="OnNav">
-                <Grid>
-                  <TextBlock Text="Settings" VerticalAlignment="Bottom" FontSize="14" />
-                  <v:LineIcon Data="{StaticResource I.Gear}" StrokeThickness="1.8" />
-                </Grid>
-              </RadioButton>
-            </UniformGrid>
-          </StackPanel>
-
           <!-- Your computers (scrolls when the window is short) -->
-          <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+          <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
             <StackPanel>
               <TextBlock Classes="SmallLabel" Text="YOUR COMPUTERS" Margin="4,16,0,8" />
 
@@ -157,7 +97,7 @@
                              HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,-2,-2" />
                   </Grid>
                   <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                    <TextBlock FontWeight="ExtraBold" Text="Your nest" />
+                    <TextBlock x:Name="NestTitle" FontWeight="ExtraBold" Text="Your nest" TextTrimming="CharacterEllipsis" />
                     <TextBlock x:Name="NestSub" FontSize="12" FontWeight="Medium" TextTrimming="CharacterEllipsis" />
                   </StackPanel>
                 </Grid>
@@ -170,7 +110,7 @@
                   <Grid ColumnDefinitions="Auto,*,Auto">
                     <TextBlock x:Name="GroupTitle" Text="Other computers" FontWeight="ExtraBold" VerticalAlignment="Center" Margin="0,0,8,0" />
                     <TextBlock x:Name="GroupNote" Grid.Column="1" Classes="SoftText" VerticalAlignment="Center" HorizontalAlignment="Right" TextTrimming="CharacterEllipsis" Margin="0,0,8,0" />
-                    <Button x:Name="GroupFold" Grid.Column="2" Classes="RoundIconButton" Width="24" Height="24" Background="Transparent"
+                    <Button x:Name="GroupFold" Grid.Column="2" Classes="RoundIconButton" Width="28" Height="28" Background="Transparent"
                             ToolTip.Tip="Fold the group" AutomationProperties.Name="Fold the group" Click="OnFoldGroup">
                       <v:LineIcon x:Name="GroupFoldIcon" Classes="icon" Width="14" Height="14" StrokeThickness="2.4" Stroke="{DynamicResource T.Muted}" Data="{StaticResource I.ChevronUp}" />
                     </Button>
@@ -180,7 +120,76 @@
               </Border>
             </StackPanel>
           </ScrollViewer>
-        </DockPanel>
+
+          <!-- Under the computers: the app update, then the page tiles -->
+          <StackPanel Grid.Row="2">
+            <Border x:Name="UpdateCard" Background="{DynamicResource T.AccentSoft}" CornerRadius="14" Padding="12,8,8,8" Margin="0,10,0,0" IsVisible="False">
+              <StackPanel>
+                <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto">
+                  <v:LineIcon x:Name="UpdateIcon" Classes="icon bob" Width="16" Height="16" StrokeThickness="2.2" Margin="0,0,8,0" VerticalAlignment="Center"
+                              Stroke="{DynamicResource T.AccentInk}" Data="{StaticResource I.Download}" />
+                  <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                    <TextBlock x:Name="UpdateTitle" FontWeight="ExtraBold" FontSize="13" TextWrapping="Wrap" />
+                  </StackPanel>
+                  <TextBlock x:Name="UpdatePercent" Grid.Column="2" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource T.AccentInk}"
+                             VerticalAlignment="Center" Margin="8,0,4,0" IsVisible="False" />
+                  <Button x:Name="UpdateButton" Grid.Column="3" Classes="accent small" Content="Update" Margin="8,0,0,0" Click="OnUpdateNow" />
+                  <Button x:Name="UpdateLater" Grid.Column="4" Classes="RoundIconButton" Width="28" Height="28" Margin="8,0,0,0" Background="Transparent"
+                          ToolTip.Tip="Later" AutomationProperties.Name="Later" Click="OnUpdateLater">
+                    <v:LineIcon Classes="icon" Width="12" Height="12" StrokeThickness="2.4" Stroke="{DynamicResource T.Muted}" Data="{StaticResource I.Close}" />
+                  </Button>
+                </Grid>
+                <!-- Why the update was not installed, or why it is done by hand (a Mac), the whole card wide -->
+                <TextBlock x:Name="UpdateReason" FontSize="12" Foreground="{DynamicResource T.Muted}" TextWrapping="Wrap" Margin="24,4,4,2" IsVisible="False" />
+                <ProgressBar x:Name="UpdateProgress" Classes="thin" Minimum="0" Maximum="100" Margin="0,8,4,2" IsVisible="False" />
+              </StackPanel>
+            </Border>
+
+            <TextBlock Classes="SmallLabel" Text="PAGES" Margin="4,16,0,4" />
+            <UniformGrid Columns="2" Margin="-4,0,-4,0">
+              <RadioButton x:Name="NavOverview" Classes="sidetile" GroupName="page" IsChecked="True" IsCheckedChanged="OnNav">
+                <Grid>
+                  <TextBlock Text="Overview" VerticalAlignment="Bottom" FontSize="14" />
+                  <v:LineIcon Data="{StaticResource I.Home}" />
+                  <TextBlock x:Name="OverviewNote" HorizontalAlignment="Right" VerticalAlignment="Top" FontSize="14" />
+                </Grid>
+              </RadioButton>
+              <RadioButton x:Name="NavActivity" Classes="sidetile" GroupName="page" IsCheckedChanged="OnNav">
+                <Grid>
+                  <TextBlock Text="Activity" VerticalAlignment="Bottom" FontSize="14" />
+                  <v:LineIcon Data="{StaticResource I.Activity}" />
+                  <TextBlock x:Name="ActivityNote" HorizontalAlignment="Right" VerticalAlignment="Top" FontSize="14" />
+                </Grid>
+              </RadioButton>
+              <RadioButton x:Name="NavAttention" Classes="sidetile" GroupName="page" IsCheckedChanged="OnNav">
+                <Grid>
+                  <TextBlock Text="Needs you" VerticalAlignment="Bottom" FontSize="14" />
+                  <v:LineIcon Data="{StaticResource I.Warning}" />
+                  <TextBlock x:Name="AttentionCount" HorizontalAlignment="Right" VerticalAlignment="Top" FontSize="20" />
+                </Grid>
+              </RadioButton>
+              <RadioButton x:Name="NavFiles" Classes="sidetile" GroupName="page" IsCheckedChanged="OnNav">
+                <Grid>
+                  <TextBlock Text="Files" VerticalAlignment="Bottom" FontSize="14" />
+                  <v:LineIcon Data="{StaticResource I.Folder}" />
+                </Grid>
+              </RadioButton>
+              <RadioButton x:Name="NavDevices" Classes="sidetile" GroupName="page" IsCheckedChanged="OnNav">
+                <Grid>
+                  <TextBlock Text="Computers" VerticalAlignment="Bottom" FontSize="14" />
+                  <v:LineIcon Data="{StaticResource I.Desktop}" />
+                  <TextBlock x:Name="DevicesNote" HorizontalAlignment="Right" VerticalAlignment="Top" FontSize="13" />
+                </Grid>
+              </RadioButton>
+              <RadioButton x:Name="NavSettings" Classes="sidetile" GroupName="page" IsCheckedChanged="OnNav">
+                <Grid>
+                  <TextBlock Text="Settings" VerticalAlignment="Bottom" FontSize="14" />
+                  <v:LineIcon Data="{StaticResource I.Gear}" StrokeThickness="1.8" />
+                </Grid>
+              </RadioButton>
+            </UniformGrid>
+          </StackPanel>
+        </Grid>
       </Border>
     </Grid>
 
@@ -211,13 +220,13 @@
                 </RadioButton>
                 <Border x:Name="DockBadge" Width="20" Height="20" CornerRadius="10" BorderThickness="2" BorderBrush="{DynamicResource T.Card}" Background="{DynamicResource T.NeedsActive}"
                         HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-2,-2,0" IsHitTestVisible="False" IsVisible="False">
-                  <TextBlock x:Name="DockBadgeText" Foreground="{DynamicResource T.NeedsActiveText}" FontSize="10" FontWeight="ExtraBold" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                  <TextBlock x:Name="DockBadgeText" Foreground="{DynamicResource T.NeedsActiveText}" FontSize="11" FontWeight="ExtraBold" HorizontalAlignment="Center" VerticalAlignment="Center" />
                 </Border>
               </Grid>
-              <RadioButton x:Name="DockHistory" Classes="dockpage" GroupName="dock" ToolTip.Tip="History" AutomationProperties.Name="History" IsCheckedChanged="OnNav">
-                <v:LineIcon Data="{StaticResource I.History}" />
+              <RadioButton x:Name="DockFiles" Classes="dockpage" GroupName="dock" ToolTip.Tip="Files" AutomationProperties.Name="Files" IsCheckedChanged="OnNav">
+                <v:LineIcon Data="{StaticResource I.Folder}" />
               </RadioButton>
-              <RadioButton x:Name="DockDevices" Classes="dockpage" GroupName="dock" ToolTip.Tip="Devices" AutomationProperties.Name="Devices" IsCheckedChanged="OnNav">
+              <RadioButton x:Name="DockDevices" Classes="dockpage" GroupName="dock" ToolTip.Tip="Computers" AutomationProperties.Name="Computers" IsCheckedChanged="OnNav">
                 <v:LineIcon Data="{StaticResource I.Desktop}" />
               </RadioButton>
               <Border Classes="divider" Width="24" Margin="0,4" />
@@ -295,9 +304,9 @@
               <TextBlock x:Name="PauseText" Text="Pause" />
             </StackPanel>
           </Button>
-          <Button Classes="accent" Click="OnSyncNow">
+          <Button x:Name="SyncNowButton" Classes="accent" Click="OnSyncNow">
             <StackPanel Orientation="Horizontal" Spacing="7">
-              <v:LineIcon Classes="icon white" Width="17" Height="17" Data="{StaticResource I.Sync}" />
+              <v:LineIcon x:Name="SyncNowIcon" Classes="icon white" Width="17" Height="17" Data="{StaticResource I.Sync}" />
               <TextBlock Text="Sync now" />
             </StackPanel>
           </Button>
@@ -497,12 +506,34 @@
           </Border>
         </Grid>
 
-        <!-- ============ History ============ -->
-        <Grid x:Name="HistoryPage" RowDefinitions="Auto,Auto,*" Margin="28,40,28,24" IsVisible="False">
-          <StackPanel>
-            <TextBlock Classes="PageTitle" Text="History" />
-            <TextBlock Classes="t2" Margin="0,2,0,0" TextWrapping="Wrap" Text="Get back deleted files and older versions. Your nest keeps them for 30 days." />
+        <!-- ============ Files: all files on the nest, and the deleted ones (History); Clean up in its place ============ -->
+        <Grid x:Name="FilesPage" RowDefinitions="Auto,*" IsVisible="False">
+          <StackPanel x:Name="FilesHeader" Margin="28,40,28,0">
+            <TextBlock Classes="PageTitle" Text="Files" />
+            <TextBlock Classes="t2" Margin="0,2,0,0" TextWrapping="Wrap" Text="Everything on your nest, and what was deleted in the last 30 days." />
+            <Border Classes="tabs" HorizontalAlignment="Left" Margin="0,16,0,0">
+              <StackPanel Orientation="Horizontal" Spacing="4">
+                <RadioButton x:Name="AllFilesTab" Classes="tab" GroupName="files" IsChecked="True" IsCheckedChanged="OnFilesTab">
+                  <StackPanel Orientation="Horizontal" Spacing="7">
+                    <v:LineIcon Classes="icon" Width="14" Height="14" Stroke="{Binding $parent[RadioButton].Foreground}" Data="{StaticResource I.Folder}" />
+                    <TextBlock Text="All files" />
+                  </StackPanel>
+                </RadioButton>
+                <RadioButton x:Name="DeletedFilesTab" Classes="tab" GroupName="files" IsCheckedChanged="OnFilesTab">
+                  <StackPanel Orientation="Horizontal" Spacing="7">
+                    <v:LineIcon Classes="icon" Width="14" Height="14" Stroke="{Binding $parent[RadioButton].Foreground}" Data="{StaticResource I.Trash}" />
+                    <TextBlock Text="Deleted" />
+                    <TextBlock x:Name="DeletedTabCount" FontWeight="Bold" Foreground="{DynamicResource T.AccentInk}" />
+                  </StackPanel>
+                </RadioButton>
+              </StackPanel>
+            </Border>
           </StackPanel>
+          <v:NestFilesView x:Name="NestFilesPage" Grid.Row="1" />
+          <v:CleanupView x:Name="CleanupPage" Grid.RowSpan="2" IsVisible="False" />
+
+        <!-- ============ History: the Files page's Deleted tab ============ -->
+        <Grid x:Name="HistoryPage" Grid.Row="1" RowDefinitions="Auto,Auto,*" Margin="28,0,28,24" IsVisible="False">
           <Grid Grid.Row="1" ColumnDefinitions="Auto,*,Auto" Margin="0,16,0,0">
             <Border Classes="tabs" VerticalAlignment="Center">
               <StackPanel Orientation="Horizontal" Spacing="4">
@@ -516,7 +547,7 @@
                 <RadioButton x:Name="FilesTab" Classes="tab" GroupName="history" IsCheckedChanged="OnHistoryModeChanged">
                   <StackPanel Orientation="Horizontal" Spacing="7">
                     <v:LineIcon Classes="icon" Width="14" Height="14" Stroke="{Binding $parent[RadioButton].Foreground}" Data="{StaticResource I.File}" />
-                    <TextBlock Text="All files" />
+                    <TextBlock Text="Older versions" />
                   </StackPanel>
                 </RadioButton>
               </StackPanel>
@@ -563,7 +594,7 @@
                               </StackPanel>
                               <Button Grid.Column="3" Classes="small" HorizontalAlignment="Right" VerticalAlignment="Center" FontWeight="Bold" Click="OnRestoreFile" Tag="{Binding}">
                                 <StackPanel Orientation="Horizontal" Spacing="6">
-                                  <v:LineIcon Classes="icon" Width="14" Height="14" Data="{StaticResource I.Restore}" />
+                                  <v:LineIcon Classes="icon" Width="14" Height="14" Data="{StaticResource I.Undo}" />
                                   <TextBlock Text="Restore" />
                                 </StackPanel>
                               </Button>
@@ -609,7 +640,7 @@
                     <TextBlock Classes="t2" TextWrapping="Wrap" TextAlignment="Center" MaxWidth="260"
                                Text="Choose a file to see the versions your nest keeps, and get one back." />
                   </StackPanel>
-                  <Grid x:Name="DetailPanel" RowDefinitions="Auto,Auto,Auto,Auto,*" IsVisible="False">
+                  <Grid x:Name="DetailPanel" RowDefinitions="Auto,Auto,Auto,Auto,*,Auto" IsVisible="False">
                     <Grid ColumnDefinitions="Auto,*,Auto">
                       <Border Width="48" Height="48" CornerRadius="14" Classes="tint-ok" Margin="0,0,14,0">
                         <v:LineIcon Classes="icon ink-ok" Width="22" Height="22" StrokeThickness="1.9" Data="{StaticResource I.File}" />
@@ -661,7 +692,7 @@
                                   </StackPanel>
                                   <Button Grid.Column="2" Classes="small" FontWeight="Bold" VerticalAlignment="Center" Margin="10,0,0,0" Click="OnRestore" Tag="{Binding}">
                                     <StackPanel Orientation="Horizontal" Spacing="6">
-                                      <v:LineIcon Classes="icon" Width="14" Height="14" Data="{StaticResource I.Restore}" />
+                                      <v:LineIcon Classes="icon" Width="14" Height="14" Data="{StaticResource I.Undo}" />
                                       <TextBlock Text="Restore" />
                                     </StackPanel>
                                   </Button>
@@ -673,6 +704,13 @@
                         </StackPanel>
                       </Grid>
                     </ScrollViewer>
+                    <Border x:Name="RestoreNote" Grid.Row="5" CornerRadius="14" Padding="14,12" Margin="0,12,0,0" Background="{DynamicResource T.Chip}">
+                      <Grid ColumnDefinitions="Auto,*">
+                        <v:LineIcon Classes="icon ink-soft" Width="16" Height="16" StrokeThickness="1.9" Margin="0,1,10,0" VerticalAlignment="Top" Data="{StaticResource I.InfoCircle}" />
+                        <TextBlock Grid.Column="1" Classes="t2" FontSize="13" TextWrapping="Wrap"
+                                   Text="Restore puts that version back in your folder. The one you have now stays here as a version, so nothing is lost." />
+                      </Grid>
+                    </Border>
                   </Grid>
                 </Grid>
               </Border>
@@ -688,18 +726,19 @@
             </Border>
           </Panel>
         </Grid>
+        </Grid>
 
         <!-- ============ Devices: the nest and every computer that uses it ============ -->
         <Grid x:Name="DevicesPage" RowDefinitions="Auto,*" Margin="28,40,28,24" IsVisible="False">
           <Grid ColumnDefinitions="*,Auto,Auto">
             <StackPanel VerticalAlignment="Center">
-              <TextBlock Classes="PageTitle" Text="Devices" />
+              <TextBlock Classes="PageTitle" Text="Computers" />
               <TextBlock Classes="t2" Margin="0,2,0,0" TextWrapping="Wrap" Text="Every computer on your nest, and the nest itself." />
             </StackPanel>
             <Button Grid.Column="1" Classes="SecondaryButton" Height="38" Padding="14,0" Margin="8,0" VerticalAlignment="Center" Click="OnManageDevices">
               <StackPanel Orientation="Horizontal" Spacing="8">
                 <v:LineIcon Classes="icon" Width="16" Height="16" Data="{StaticResource I.External}" />
-                <TextBlock Text="Manage devices on your nest" VerticalAlignment="Center" />
+                <TextBlock Text="Manage computers on your nest" VerticalAlignment="Center" />
               </StackPanel>
             </Button>
             <Button Grid.Column="2" Classes="accent" Height="38" Padding="16,0" VerticalAlignment="Center" Click="OnAddComputer">
@@ -720,7 +759,7 @@
                       <v:LineIcon Classes="icon ink-accent" Width="24" Height="24" StrokeThickness="1.8" Data="{StaticResource I.Nest}" />
                     </Border>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                      <TextBlock Text="Your nest" FontSize="20" FontWeight="ExtraBold" />
+                      <TextBlock x:Name="NestHeading" Text="Your nest" FontSize="20" FontWeight="ExtraBold" TextTrimming="CharacterEllipsis" />
                       <TextBlock Classes="t2" Text="The home server that keeps your files and their history." TextTrimming="CharacterEllipsis" />
                     </StackPanel>
                     <Border x:Name="NestOnlinePill" Grid.Column="2" Classes="pillok" Height="28" VerticalAlignment="Center" Margin="12,0,0,0">
@@ -799,7 +838,7 @@
               <Grid ColumnDefinitions="Auto,*" Margin="4,0,0,0">
                 <v:LineIcon Classes="icon ink-soft" Width="16" Height="16" StrokeThickness="2" Data="{StaticResource I.InfoCircle}" VerticalAlignment="Top" Margin="0,1,8,0" />
                 <TextBlock Grid.Column="1" Classes="t2" FontSize="13" VerticalAlignment="Center" TextWrapping="Wrap"
-                           Text="To remove a computer or turn off its access, use Manage devices on your nest. Its files stay where they are." />
+                           Text="To remove a computer or turn off its access, use Manage computers on your nest. Its files stay where they are." />
               </Grid>
             </StackPanel>
           </ScrollViewer>
@@ -824,13 +863,18 @@
                     <Border Classes="pcard enter" Padding="22,18">
                       <Grid ColumnDefinitions="Auto,*">
                         <Border Classes="sq44" Margin="0,0,16,0" VerticalAlignment="Top"
-                                Classes.tint-accent="{Binding Kind, Converter={x:Static v:KindIs.Instance}, ConverterParameter='Join'}"
+                                Classes.tint-accent="{Binding Kind, Converter={x:Static v:KindIs.Instance}, ConverterParameter='Join,Rename'}"
                                 Classes.tint-warn="{Binding Kind, Converter={x:Static v:KindIs.Instance}, ConverterParameter='Conflict,Warning'}">
                           <Panel>
-                            <v:LineIcon Classes="icon ink-accent" Width="22" Height="22" StrokeThickness="1.9" Data="{StaticResource I.UserPlus}"
+                            <v:LineIcon Classes="icon ink-accent" Width="22" Height="22" StrokeThickness="1.9" Data="{StaticResource I.JoinPc}"
                                         IsVisible="{Binding Kind, Converter={x:Static v:KindIs.Instance}, ConverterParameter='Join'}" />
+                            <v:LineIcon Classes="icon ink-accent" Width="22" Height="22" StrokeThickness="1.9" Data="{StaticResource I.Pencil}"
+                                        IsVisible="{Binding Kind, Converter={x:Static v:KindIs.Instance}, ConverterParameter='Rename'}" />
+
+                            <v:LineIcon Classes="icon ink-warn" Width="22" Height="22" StrokeThickness="1.9" Data="{StaticResource I.Copy}"
+                                        IsVisible="{Binding Kind, Converter={x:Static v:KindIs.Instance}, ConverterParameter='Conflict'}" />
                             <v:LineIcon Classes="icon ink-warn" Width="22" Height="22" StrokeThickness="1.9" Data="{StaticResource I.Warning}"
-                                        IsVisible="{Binding Kind, Converter={x:Static v:KindIs.Instance}, ConverterParameter='Conflict,Warning'}" />
+                                        IsVisible="{Binding Kind, Converter={x:Static v:KindIs.Instance}, ConverterParameter='Warning'}" />
                             <TextBlock Text="Aa" FontSize="16" FontWeight="ExtraBold" HorizontalAlignment="Center" VerticalAlignment="Center"
                                        IsVisible="{Binding Kind, Converter={x:Static v:KindIs.Instance}, ConverterParameter='NameClash'}" />
                           </Panel>
@@ -841,20 +885,19 @@
                               <TextBlock Text="{Binding Title}" FontSize="16" FontWeight="ExtraBold" TextWrapping="Wrap" />
                               <TextBlock Grid.Column="1" Classes="t3" VerticalAlignment="Top" Margin="12,3,0,0" Text="{Binding At, Converter={x:Static v:MomentText.Instance}}" />
                             </Grid>
-                            <TextBlock Classes="t2" TextWrapping="Wrap" Text="{Binding Detail}"
-                                       IsVisible="{Binding Kind, Converter={x:Static v:KindIs.Instance}, ConverterParameter='Conflict,Warning,NameClash'}" />
-                            <TextBlock Classes="t2" TextWrapping="Wrap" Text="Allow it only if you are setting that computer up right now. Its screen should show this same code. You allow or deny it on your nest."
-                                       IsVisible="{Binding Kind, Converter={x:Static v:KindIs.Instance}, ConverterParameter='Join'}" />
+                            <TextBlock Classes="t2" TextWrapping="Wrap" Text="{Binding Detail}" />
                           </StackPanel>
-                          <Grid ColumnDefinitions="Auto,*,Auto">
+                          <Grid ColumnDefinitions="Auto,*,Auto,Auto">
                             <Border Classes="codechip" IsVisible="{Binding Code, Converter={x:Static v:HasText.Instance}}">
                               <StackPanel Orientation="Horizontal" Spacing="14">
                                 <TextBlock Text="{Binding Title, Converter={x:Static v:JoinComputer.Instance}}" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource T.Muted}" VerticalAlignment="Center" />
                                 <TextBlock Text="{Binding Code}" FontSize="20" FontWeight="ExtraBold" LetterSpacing="2.4" VerticalAlignment="Center" />
                               </StackPanel>
                             </Border>
-                            <Button Grid.Column="2" Content="{Binding ActionLabel}" Height="38" Padding="16,0" FontWeight="Bold" VerticalAlignment="Center" HorizontalAlignment="Right"
-                                    Classes.accent="{Binding Kind, Converter={x:Static v:KindIs.Instance}, ConverterParameter='Join'}"
+                            <Button Grid.Column="2" Content="{Binding SecondLabel}" Height="38" Padding="16,0" Margin="0,0,8,0" FontWeight="Bold" VerticalAlignment="Center"
+                                    IsVisible="{Binding SecondLabel, Converter={x:Static v:HasText.Instance}}" Click="OnAttentionSecond" Tag="{Binding}" />
+                            <Button Grid.Column="3" Content="{Binding ActionLabel}" Height="38" Padding="16,0" FontWeight="Bold" VerticalAlignment="Center" HorizontalAlignment="Right"
+                                    Classes.accent="{Binding Kind, Converter={x:Static v:KindIs.Instance}, ConverterParameter='Join,Rename'}"
                                     Click="OnAttentionAction" Tag="{Binding}" />
                           </Grid>
                         </StackPanel>

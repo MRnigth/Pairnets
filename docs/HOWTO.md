@@ -98,6 +98,27 @@ Once you pressed **Add this nest**, `install.sh` does the rest:
 * makes the old shared **token**, which only older Pairnets apps use;
 * installs and starts the background service `pairnets-server`; both services also start at boot.
 
+**Where your files go.** First it asks where the nest should keep your files, with a list of the
+drives and their free space. Press **Enter** to keep them on the main disk, or pick a bigger drive:
+
+```text
+Where should Pairnets keep your files?
+
+  1) Main disk    /var/lib/pairnets            412.0GB free  (default)
+  2) data         /mnt/data/pairnets           3.6TB free
+  3) Type a folder...
+
+Pick 1-3 [1]: 2
+Put the program somewhere else too? (it is small; most people keep /opt/pairnets) [y/N]
+```
+
+Or give it on the command line (then it doesn't ask): `... | sudo bash -s -- --data-dir /mnt/data/pairnets`
+(and `--program-dir <folder>` for the program). It refuses a drive it can't use and says why, before
+anything changes: a USB stick formatted FAT or NTFS (no Linux permissions), a network drive, a drive that
+isn't plugged in, a folder that isn't empty, or too little space. You can change the place later, in
+the app's **Settings > Your nest > Where your nest keeps files**, or with the same option on an installed
+server; see [Moving the nest's data to another disk](DEPLOY.md#moving-the-nests-data-to-another-disk).
+
 At the end it waits until Pairnets can reach your server (usually about 30 seconds, at most 3
 minutes) and prints the next step: **on each computer, install Pairnets and choose Continue with
 email, with the same account** ([section 5](#5-set-up-the-first-computer-for-example-the-desktop)).
@@ -315,7 +336,11 @@ and click **Open Anyway**. The Terminal command above avoids this. On a Mac, Pai
 curl -fsSL https://raw.githubusercontent.com/MRnigth/Pairnets/main/deploy/get.sh | bash -s -- --desktop
 ```
 
-It installs into your home folder, adds Pairnets to the app menu and starts it. For the best
+It installs into your home folder (`~/.local/opt/pairnets`), adds Pairnets to the app menu and starts it.
+To put the program on another drive, add `--program-dir <folder>` (for example
+`... | bash -s -- --desktop --program-dir /media/me/data/pairnets`); a first install in a terminal asks,
+with a list of the drives you can write to. Installing again keeps the place, and
+**Settings > This computer > Program folder > Move…** moves it later. For the best
 experience also run `sudo apt install libsecret-tools libnotify-bin`. Pairnets then keeps its
 sign-in key in your keyring and can show notifications. On GNOME the tray icon needs the *AppIndicator*
 extension, which Ubuntu enables by default.
@@ -477,7 +502,7 @@ the server address and token under **Advanced**), the folder, this computer's na
 **Updates and speed** and **Start over**. **Save** applies it at once.
 
 **When an update is out**, a small card at the bottom of the left side says so, with **Update now**
-(Windows) or **Download** (Mac and Linux). See [Updates](#updates) below.
+(Windows and Linux) or **Open download page** (Mac). See [Updates](#updates) below.
 
 **Waiting for the other computer.** When your other computer uploads a big batch (more than 100
 files), this one waits and then downloads everything in one go instead of a few files at a time, so
@@ -564,6 +589,28 @@ You do not have to do anything. Just work in the folder on whichever PC you are 
 
 > Good habit: before shutting down a PC, glance at the icon. Green means everything reached the
 > server. Blue means wait a moment.
+
+### Keep files on your nest (free space on this PC)
+
+Each folder can live in one of three ways on this PC. Your other computers choose for themselves.
+
+| Choice | What it means |
+|---|---|
+| **On this PC** (the default) | every file is here and on your nest; works without internet |
+| **On-Demand** (Windows) | files show in File Explorer with a cloud; each downloads when you open it and stays. Right-click › *Free up space* sends one back, *Always keep on this device* keeps one here |
+| **Only on the nest** | nothing is kept on this PC and nothing shows in Explorer; open the files in Pairnets › **Files** |
+
+Choose in **Settings › Where your files live**, next to a folder on the **Files** page, or by right-clicking the folder in
+Explorer › *Show more options* › **Where this folder lives…** (on Linux: the Pairnets item of your file manager).
+
+* **Switching a folder away from this PC** removes a file here only once Pairnets has checked it is safely on your nest.
+  A file still being uploaded stays until the nest has it. Switching back downloads everything again.
+* **Opening a file that is only on the nest** gives a copy in Pairnets' own app folder. When you save it, the change goes
+  to your nest (the old version stays in History). If someone changed it meanwhile, both versions are kept. The copy is
+  removed a day after your last change reached the nest.
+* **Nest offline?** The Files page still shows the last list, but files only on the nest can't be opened until it's back.
+* **Nest full?** You can still open files, but adding, changing, moving and deleting stop with a message, and no space
+  is freed on this PC (new files stay here) until the nest has room.
 
 ### The icon menu (right-click on Windows, click on Mac)
 
@@ -781,11 +828,31 @@ repository to be public.
 and you get a notification.
 
 * **Windows** (installed with `PairnetsSetup.exe`): click **Update now**. Pairnets downloads the new
-  installer, checks it against `SHA256SUMS.txt`, installs it and starts again by itself, in about
-  10 seconds. If the check fails, nothing is installed and you keep your current version. A copy
-  run from the zip opens the download page instead.
-* **Mac and Linux**: click **Download**; the download page opens. Replace the app (Mac) or run the
-  one-line `--desktop` command again (Linux). The app is not signed, so it does not replace itself.
+  installer, checks it against the signed `SHA256SUMS.txt`, installs it hidden (no installer window) and starts
+  again by itself, in about 10 seconds; a note says "Pairnets is up to date". You stay signed in and every setting
+  is kept. A copy run from the zip does the same with `pairnets-client-win-x64.zip`: it swaps its own
+  `Pairnets.exe` for the new one and starts it.
+* **The installer is for the first install.** You never need to run `PairnetsSetup.exe` again to update. If you
+  do, over an installed Pairnets, it skips its pages, updates in place and keeps your sign-in and settings.
+* **Linux**: click **Update now**. Pairnets downloads `pairnets-desktop-linux-x64.tar.gz`, checks it, swaps
+  its own file for the new one and starts again by itself.
+* **Mac**: the card says Pairnets can't update itself on a Mac yet; click **Open download page**, get the
+  new `.dmg` and drag Pairnets to Applications (your settings are kept).
+
+If anything goes wrong (no internet, the check fails, Pairnets may not change its own folder), nothing is
+installed, you keep your current version, and the card says why, with **Try again**.
+
+**Never got an update?** Check that **Settings → Updates and speed → Check for updates** is on. Pairnets 1.0.60
+switches it on once on every computer (some test set-ups had it off); if you turn it off again, it stays off.
+
+**Signed out after an update?** An update never signs you out. If the sign-in window says **Sign in again**, this
+computer was signed out (Sign out, or Reset) — the log says when. Your folder, computer name and settings are kept;
+signing in again carries on where you were.
+
+**Pairnets 1.0.59 and older** opened the download page instead of updating when it ran from the zip
+(Windows) or on Linux. Update those once by hand: replace `Pairnets.exe` with the one in
+`pairnets-client-win-x64.zip`, or run the one-line `--desktop` command again (Linux). From then on they
+update themselves. Windows copies installed with `PairnetsSetup.exe` always updated themselves.
 
 **Update the server.** When the server runs an older version than your app, Pairnets asks:
 
@@ -937,7 +1004,8 @@ had it on, then delete **Pairnets** from Applications. The sign-in key is in the
 app under "Pairnets" (Reset removes it).
 
 **Uninstall from Linux**: quit Pairnets, then
-`rm -rf ~/.local/opt/pairnets ~/.local/bin/pairnets ~/.local/share/applications/pairnets.desktop ~/.config/autostart/pairnets.desktop`.
+`rm -rf "$(dirname "$(readlink -f ~/.local/bin/pairnets)")" ~/.local/bin/pairnets ~/.local/share/applications/pairnets.desktop ~/.config/autostart/pairnets.desktop`
+(the first part is the program's folder: `~/.local/opt/pairnets`, or the one you chose).
 
 **Uninstall from Windows**: right-click → **Exit**. Untick "Start with Windows" first if you had it
 on. Then delete `Pairnets.exe`, or uninstall through *Settings → Apps* if you used the installer.
@@ -949,14 +1017,21 @@ state, use **Reset this app…** before uninstalling (or delete `%AppData%\Pairn
 
 ```bash
 sudo systemctl disable --now pairnets-server
-sudo systemctl disable --now pairnets-update.path pairnets-update.timer 2>/dev/null
+sudo /opt/pairnets/place.sh show   # where your files are (to delete them later yourself)
+sudo systemctl disable --now pairnets-update.path pairnets-update.timer pairnets-place.path 2>/dev/null
 sudo systemctl disable --now pairnets-tunnel 2>/dev/null   # only with a Cloudflare Tunnel
+sudo rm -rf /opt/pairnets/*                                 # the program, wherever you put it
+sudo systemctl disable --now var-lib-pairnets.mount opt-pairnets.mount 2>/dev/null   # only with a chosen place
 sudo rm -f /etc/systemd/system/pairnets-server.service /etc/systemd/system/pairnets-tunnel.service \
            /etc/systemd/system/pairnets-update.service /etc/systemd/system/pairnets-update.path \
-           /etc/systemd/system/pairnets-update.timer
+           /etc/systemd/system/pairnets-update.timer /etc/systemd/system/pairnets-place.service \
+           /etc/systemd/system/pairnets-place.path /etc/systemd/system/var-lib-pairnets.mount \
+           /etc/systemd/system/opt-pairnets.mount
+sudo rm -rf /etc/systemd/system/pairnets-server.service.d /etc/systemd/system/pairnets-update.service.d \
+            /etc/systemd/system/pairnets-tunnel.service.d
 sudo systemctl daemon-reload
 sudo rm -rf /opt/pairnets /etc/pairnets
-# your files remain in /var/lib/pairnets until you delete that folder yourself
+# your files remain in /var/lib/pairnets (or the folder place.sh showed) until you delete it yourself
 ```
 This also removes the self-updater, which the server installer added. If the server was linked to
 your Pairnets account, also press **Remove this nest from my account** at <https://sync.pairnets.app/account>

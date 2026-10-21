@@ -38,6 +38,8 @@ public sealed partial class ApiTour : IAsyncDisposable
         new("POST", "/api/update"),
         new("GET", "/api/devices"),
         new("GET", "/api/update/diagnostics"),
+        new("GET", "/api/storage"),
+        new("POST", "/api/storage/move"),
         new("GET", "/api/manifest"),
         new("GET", "/api/file"),
         new("PUT", "/api/file"),
@@ -49,6 +51,8 @@ public sealed partial class ApiTour : IAsyncDisposable
         new("DELETE", "/api/file"),
         new("GET", "/api/history"),
         new("POST", "/api/history/restore"),
+        new("POST", "/api/move"),
+        new("POST", "/api/purge"),
         new(Route.AnyMethod, "/hub/negotiate"),
         new(Route.AnyMethod, "/hub"),
 
@@ -60,7 +64,9 @@ public sealed partial class ApiTour : IAsyncDisposable
         new("GET", "/api/relay/status"),
         new("GET", "/api/relay/devices"),
         new("POST", "/api/relay/devices"),
+        new("PATCH", "/api/relay/devices/{id}"),
         new("DELETE", "/api/relay/devices/{id}"),
+        new("PUT", "/api/relay/name"),
 
         // The website's pages (Web/WebUi.cs).
         new("GET", "/"),
@@ -121,6 +127,7 @@ public sealed partial class ApiTour : IAsyncDisposable
         SyncHub.DeviceRenamedMethod,
         SyncHub.PeerTransferMethod,
         SyncHub.PeerSyncedMethod,
+        SyncHub.NestRenamedMethod,
         PairingEndpoints.PairRequestedMethod,
         PairingEndpoints.PairRequestedFromMethod,
         PairingEndpoints.PairDecidedMethod,

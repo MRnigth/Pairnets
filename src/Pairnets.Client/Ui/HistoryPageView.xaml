@@ -7,19 +7,14 @@
     <ui:FileIconConverter x:Key="FileIcon" />
     <BooleanToVisibilityConverter x:Key="Visible" />
   </UserControl.Resources>
-  <Grid Margin="28,40,28,24">
+  <!-- The Files page's Deleted tab (the Files page draws the title above it). -->
+  <Grid Margin="28,0,28,24">
     <Grid.RowDefinitions>
       <RowDefinition Height="Auto" />
       <RowDefinition Height="Auto" />
       <RowDefinition Height="Auto" />
       <RowDefinition Height="*" />
     </Grid.RowDefinitions>
-
-    <!-- Header -->
-    <StackPanel>
-      <TextBlock Style="{StaticResource PgTitle}" Text="History" />
-      <TextBlock Style="{StaticResource PgSub}" Text="Get back deleted files and older versions. Your nest keeps them for 30 days." />
-    </StackPanel>
 
     <!-- Tabs, search, reload -->
     <Grid Grid.Row="1" Margin="0,16,0,0">
@@ -35,14 +30,14 @@
               <ui:LineIcon Width="15" Height="15" Margin="0,0,7,0" StrokeThickness="2" Data="{StaticResource I.Trash}"
                            Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}" />
               <TextBlock Text="Deleted files" />
-              <TextBlock x:Name="DeletedCount" Margin="7,0,0,0" FontWeight="SemiBold" Opacity="0.65" />
+              <TextBlock x:Name="DeletedCount" Margin="7,0,0,0" FontWeight="SemiBold" />
             </StackPanel>
           </RadioButton>
           <RadioButton x:Name="FilesTab" Style="{StaticResource PgTab}" GroupName="history" Margin="0" Checked="OnHistoryModeChanged">
             <StackPanel Orientation="Horizontal">
               <ui:LineIcon Width="15" Height="15" Margin="0,0,7,0" StrokeThickness="2" Data="{StaticResource I.File}"
                            Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}" />
-              <TextBlock Text="All files" />
+              <TextBlock Text="Older versions" />
             </StackPanel>
           </RadioButton>
         </StackPanel>
@@ -215,11 +210,15 @@
                 </Grid>
               </StackPanel>
               <Border DockPanel.Dock="Bottom" CornerRadius="14" Padding="14,12" Margin="0,12,0,0" Background="{DynamicResource T.Chip}">
-                <StackPanel Orientation="Horizontal">
+                <Grid>
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                  </Grid.ColumnDefinitions>
                   <ui:LineIcon Width="16" Height="16" Margin="0,1,10,0" VerticalAlignment="Top" StrokeThickness="1.9" Stroke="{DynamicResource T.Muted}" Data="{StaticResource I.InfoCircle}" />
-                  <TextBlock Style="{StaticResource PgSub}" Margin="0" FontSize="13" MaxWidth="360"
+                  <TextBlock Grid.Column="1" Style="{StaticResource PgSub}" Margin="0" FontSize="13" TextWrapping="Wrap"
                              Text="Restore puts that version back in your folder. The one you have now stays here as a version, so nothing is lost." />
-                </StackPanel>
+                </Grid>
               </Border>
               <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                 <StackPanel x:Name="VersionList" />

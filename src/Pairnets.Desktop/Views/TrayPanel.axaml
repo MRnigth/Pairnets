@@ -42,7 +42,7 @@
             </Grid>
             <StackPanel Grid.Column="1" VerticalAlignment="Center">
               <TextBlock x:Name="Headline" FontSize="17" FontWeight="ExtraBold" TextTrimming="CharacterEllipsis" Text="Starting…" />
-              <TextBlock x:Name="Detail" FontSize="12" Foreground="{DynamicResource T.Muted}" TextTrimming="CharacterEllipsis" />
+              <TextBlock x:Name="Detail" FontSize="12" Foreground="{DynamicResource T.Muted}" TextWrapping="Wrap" TextTrimming="CharacterEllipsis" MaxLines="2" />
             </StackPanel>
             <TextBlock x:Name="PercentText" Grid.Column="2" FontSize="24" FontWeight="ExtraBold" VerticalAlignment="Center" Margin="10,0,0,0" IsVisible="False" />
           </Grid>
@@ -70,7 +70,7 @@
               <Ellipse x:Name="NestDotShape" Width="10" Height="10" StrokeThickness="2" Stroke="{DynamicResource T.Card}" Fill="{DynamicResource T.Ok}"
                        HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,-2,-2" />
             </Grid>
-            <TextBlock Grid.Column="1" Text="Your nest" FontSize="13" FontWeight="ExtraBold" VerticalAlignment="Center" />
+            <TextBlock x:Name="NestTitle" Grid.Column="1" Text="Your nest" FontSize="13" FontWeight="ExtraBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
             <TextBlock x:Name="NestSub" Grid.Column="2" FontSize="11.5" Foreground="{DynamicResource T.TextSoft}" VerticalAlignment="Center" />
           </Grid>
           <Border Width="2" Height="4" Margin="13,0,0,0" HorizontalAlignment="Left" Background="{DynamicResource T.Line}" />
@@ -82,8 +82,8 @@
       <Button x:Name="FixButton" Classes="warn" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Margin="0,10,0,0" IsVisible="False" Click="OnFix" />
 
       <!-- Something needs a decision -->
-      <Button x:Name="AttentionButton" Classes="flat" Padding="0" Margin="0,10,0,0" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" MinHeight="44" IsVisible="False" Click="OnAttention">
-        <Border Height="44" CornerRadius="16" Background="{DynamicResource T.WarnPill}" BorderBrush="{DynamicResource T.WarnBorder}" BorderThickness="1">
+      <Button x:Name="AttentionButton" Classes="flat strip" Padding="0" Margin="0,10,0,0" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" MinHeight="44" IsVisible="False" Click="OnAttention">
+        <Border Height="44" CornerRadius="16" BorderBrush="{DynamicResource T.WarnBorder}" BorderThickness="1">
           <Grid Margin="14,0,12,0" ColumnDefinitions="Auto,*,Auto,Auto">
             <v:LineIcon Classes="icon" Width="18" Height="18" StrokeThickness="2" Stroke="{DynamicResource T.WarnText}" Data="{StaticResource I.Warning}" Margin="0,0,10,0" />
             <TextBlock x:Name="AttentionText" Grid.Column="1" FontSize="13" FontWeight="Bold" Foreground="{DynamicResource T.WarnText}" VerticalAlignment="Center" />

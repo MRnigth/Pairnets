@@ -3,7 +3,9 @@
   <!-- Renders the real Windows windows to PNG in CI (windows-latest) for docs and review. Not shipped. -->
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net8.0-windows</TargetFramework>
+    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
+    <!-- Windows 10 2004 SDK: Windows.Storage.Provider, to register the Pairnets folder as a cloud folder (Explorer ticks). -->
+    <SupportedOSPlatformVersion>10.0.17763.0</SupportedOSPlatformVersion>
     <UseWPF>true</UseWPF>
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
     <IsPackable>false</IsPackable>
@@ -16,6 +18,8 @@
   <ItemGroup>
     <!-- The windows open on a hidden desktop, as in the Windows app's tests. -->
     <Compile Include="..\..\tests\Pairnets.Client.Tests\HiddenDesktop.cs" Link="HiddenDesktop.cs" />
+    <!-- The sample files on the nest the Files page, Clean up and Settings' "Where your files live" draw. -->
+    <Compile Include="..\..\tests\Pairnets.Tests\Infrastructure\FakeNestFiles.cs" Link="FakeNestFiles.cs" />
   </ItemGroup>
 
 </Project>

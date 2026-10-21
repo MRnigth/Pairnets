@@ -20,6 +20,9 @@ public sealed record ErrorBody(string Code, string? Message = null);
 /// <see cref="ServerVersion"/> is the installed Pairnets release. The fields after
 /// <see cref="ApiVersion"/> are missing on older servers. <see cref="PiecesInFlight"/>: how many pieces of one upload
 /// the server takes at once (2: the next one may be sent while the one before is still arriving; missing: one).
+/// <see cref="NestName"/>: the name the owner gave the nest on their account page (missing until they did, and on
+/// nests that are not linked to an account). <see cref="CanMoveStorage"/>: the nest can move its files to another drive
+/// when an app asks (<c>GET /api/storage</c>); missing on older nests, so false.
 /// </summary>
 public sealed record ServerInfo(
     string ServerId,
@@ -29,7 +32,10 @@ public sealed record ServerInfo(
     long? DiskFreeBytes = null,
     long? DiskTotalBytes = null,
     UpdaterStatus? Updater = null,
-    int? PiecesInFlight = null);
+    int? PiecesInFlight = null,
+    string? NestName = null,
+    long? HistoryBytes = null,
+    bool? CanMoveStorage = null);
 
 /// <summary>The server's self-updater. <see cref="State"/>: missing, idle, requested, running, succeeded or failed.</summary>
 public sealed record UpdaterStatus(bool Installed, string State, string? Message = null, DateTimeOffset? At = null);
@@ -283,6 +289,9 @@ public static class PushNames
 
     /// <summary>Server → the other apps: <c>PeerTransfer(device name, TransferReport)</c>.</summary>
     public const string PeerTransfer = "PeerTransfer";
+
+    /// <summary>Server → every app: <c>NestRenamed(name)</c>, the owner renamed the nest on their account page.</summary>
+    public const string NestRenamed = "NestRenamed";
 }
 
 /// <summary>HTTP header names used by Pairnets.</summary>

@@ -185,7 +185,7 @@ Upgrades keep every line.
 | `Sync__RelayNestId`, `Sync__RelayKey` | – (set by `install.sh` when it links the server to your Pairnets account) | the server's id at Pairnets (`nst_` and 26 characters) and its key (base64url of 32 bytes; root only, never logged). Both or neither: with one missing or malformed the server does not start. Together they turn on relay mode: no website of its own, `/api/hello` says `relay`, and Pairnets' signed calls under `/api/relay/` are accepted. |
 | `Sync__RelayServiceUrl` | `https://sync.pairnets.app` | the Pairnets service a linked server is reached through |
 | `Sync__PasskeyRpId` | the nest's host name | the domain passkeys are tied to. Set a parent domain (`example.com`) only if other sites on it should share the passkeys; it must be the nest's host or a parent of it. |
-| `Sync__DataDir` | `/var/lib/pairnets` | data directory. Keep it there: the hardened service and the updater expect that path (to use another disk, see [Moving the nest's data to another disk](#moving-the-nests-data-to-another-disk)). |
+| `Sync__DataDir` | `/var/lib/pairnets` | data directory. Keep it there: the hardened service and the updater expect that path (to use another disk, `install.sh --data-dir` or Settings in the apps; see [Moving the nest's data to another disk](#moving-the-nests-data-to-another-disk)). |
 | `Sync__UpdateDir` | `/var/lib/pairnets/update` (set by install.sh) | where update requests go; must be the folder the root updater watches |
 | `Sync__HistoryRetentionDays` | 30 | delete history versions older than this... |
 | `Sync__HistoryMinVersions` | 5 | ...but always keep this many per file |
@@ -295,9 +295,36 @@ added after the backup was made is not in the restored `auth.db`: sign it in aga
 
 ### Moving the nest's data to another disk
 
-The hardened service may only write to `/var/lib/pairnets`, and the updater expects that exact path.
-So keep the path and mount the new place onto it. The new disk must use a Linux file system (ext4,
-for example) and already be mounted at boot, here at `/mnt/data`:
+**The easy way:** choose the place when you install, or move it later. A first install in a terminal
+asks where to keep the files, with a numbered list of drives and their free space (Enter keeps the main
+disk). Or say it on the command line, which also moves an installed nest:
+
+```bash
+sudo ./install.sh --data-dir /mnt/data/pairnets        # the files (the big part)
+sudo ./install.sh --program-dir /mnt/data/pairnets-program   # the program, rarely needed
+sudo ./install.sh --data-dir /var/lib/pairnets          # back to the main disk
+# through the one-liner: ... | sudo bash -s -- --data-dir /mnt/data/pairnets
+```
+
+In the apps: **Settings > Your nest > Where your nest keeps files > Change…** lists the nest's drives
+and moves the files the same way. A move copies everything while the nest keeps running, pauses it
+for a moment to copy the last changes, checks the copy, and switches over; if the nest does not
+start from the new place it goes back. The old copy is kept (the end of the move says where, and the
+command to delete it). `sudo /opt/pairnets/place.sh list` shows the drives, `place.sh show` where
+the files and the program are now.
+
+It refuses a place it can't use, before changing anything: a drive without Linux permissions (FAT,
+exFAT, NTFS), a network drive, one that isn't mounted, a folder that isn't empty, one reached through a
+symbolic link, under 1 GB free (or less than the nest needs plus 1 GB); the program also not on a drive
+mounted `noexec`. Under 10 GB free it warns and asks. It uses the same method as the manual way below,
+with systemd mount units (`var-lib-pairnets.mount`, `opt-pairnets.mount`) instead of `/etc/fstab`,
+and a `.pairnets-drive` file in the chosen folder: if the drive is missing at boot, the nest does not
+start (rather than starting empty on the main disk). Updates keep the place.
+
+**By hand** (or when you want `/etc/fstab`; the installer then leaves the place alone). The hardened
+service may only write to `/var/lib/pairnets`, and the updater expects that exact path. So keep the
+path and mount the new place onto it. The new disk must use a Linux file system (ext4, for example) and
+already be mounted at boot, here at `/mnt/data`:
 
 ```bash
 sudo systemctl stop pairnets-server
@@ -399,15 +426,21 @@ self-update itself is broken, update by hand once with the command above.
 
 ```bash
 sudo systemctl disable --now pairnets-server
-sudo systemctl disable --now pairnets-update.path pairnets-update.timer 2>/dev/null
+sudo systemctl disable --now pairnets-update.path pairnets-update.timer pairnets-place.path 2>/dev/null
 sudo systemctl disable --now pairnets-tunnel 2>/dev/null   # only with a Cloudflare Tunnel
+sudo rm -rf /opt/pairnets/*                                 # the program (also in a folder you chose for it)
+sudo systemctl disable --now var-lib-pairnets.mount opt-pairnets.mount 2>/dev/null   # only with a chosen place
 sudo rm -f /etc/systemd/system/pairnets-server.service /etc/systemd/system/pairnets-tunnel.service \
            /etc/systemd/system/pairnets-update.service /etc/systemd/system/pairnets-update.path \
-           /etc/systemd/system/pairnets-update.timer
-sudo rm -rf /etc/systemd/system/pairnets-server.service.d   # only there if you moved the data
+           /etc/systemd/system/pairnets-update.timer /etc/systemd/system/pairnets-place.service \
+           /etc/systemd/system/pairnets-place.path /etc/systemd/system/var-lib-pairnets.mount \
+           /etc/systemd/system/opt-pairnets.mount
+sudo rm -rf /etc/systemd/system/pairnets-server.service.d /etc/systemd/system/pairnets-update.service.d \
+            /etc/systemd/system/pairnets-tunnel.service.d   # only there if you moved the data
 sudo systemctl daemon-reload
 sudo rm -rf /opt/pairnets /etc/pairnets
-# Your data stays in /var/lib/pairnets until you delete it yourself.
+# Your data stays in /var/lib/pairnets (or the folder you chose: sudo /opt/pairnets/place.sh show, before
+# the lines above) until you delete it yourself.
 # cloudflared stays installed (sudo apt remove cloudflared); delete the tunnel in the Cloudflare dashboard.
 ```
 

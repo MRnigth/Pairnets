@@ -148,7 +148,7 @@ public sealed class TrayControllerTests
         await app.Press(signIn, "Continue with Google");
         var google = await app.Opened(l => l.Contains("method=google", StringComparison.Ordinal), "the nest's Google sign-in in the browser");
         Assert.Equal($"https://localhost/link?code={TrayHarness.CodeIn(google)}&method=google", google);
-        Assert.Equal(Environment.MachineName, Auth(nest).FindPairRequestByCode(TrayHarness.CodeIn(google))!.Name);
+        Assert.Equal(ComputerName.Default(), Auth(nest).FindPairRequestByCode(TrayHarness.CodeIn(google))!.Name);
         Assert.Equal(HttpStatusCode.OK, (await site.GetAsync(new Uri(google).PathAndQuery.TrimStart('/'))).StatusCode); // the nest has that page
 
         await app.Press(signIn, "Cancel");
@@ -163,6 +163,32 @@ public sealed class TrayControllerTests
         await started.WaitAsync(TimeSpan.FromSeconds(15));
         Assert.False(app.SavedSettings.FirstRunCompleted);
         Assert.Empty(Auth(nest).ListDevices());
+    }
+
+    [Fact]
+    public async Task OpeningPairnetsAgain_BringsTheWindowBackFromTheTrayAndFromMinimised()
+    {
+        await using var nest = await TestServer.StartWithWebsiteAsync();
+        await using var app = await TrayHarness.CreateAsync(nest, watchFolder: false);
+        await app.StartAsync();
+        var window = app.Tray.Window!;
+        var pipe = app.Env.ActivationPipeName;
+
+        await app.Wpf.Ui(window.Close); // closing only puts it away in the tray
+        await app.WaitUntil(() => !window.IsVisible, "the main window to go to the tray");
+        // Starting with Windows while Pairnets already runs: quiet, and the window stays in the tray.
+        Assert.Equal(AppActivation.SecondStartResult.Quiet, AppActivation.SecondStart([AppActivation.AutoStartArgument], pipe));
+        await Task.Delay(500);
+        Assert.False(await app.Wpf.Ui(() => window.IsVisible), "The start with Windows popped the window up.");
+
+        // Opened again from the Start menu: the same window comes back, no message.
+        Assert.Equal(AppActivation.SecondStartResult.Quiet, AppActivation.SecondStart([], pipe));
+        Assert.True(await app.Wpf.Ui(() => window.IsVisible), "Opening Pairnets again did not bring its window back from the tray.");
+        Assert.Same(window, app.Tray.Window);
+
+        await app.Wpf.Ui(() => window.WindowState = WindowState.Minimized);
+        Assert.Equal(AppActivation.SecondStartResult.Quiet, AppActivation.SecondStart([], pipe));
+        Assert.Equal(WindowState.Normal, await app.Wpf.Ui(() => window.WindowState));
     }
 
     [Fact]
@@ -239,8 +265,9 @@ public sealed class TrayControllerTests
         await app.WaitUntil(() => nest.Store.ReadManifest(null).Entries.Single(e => e.Path == "notes.txt").Hash != first, "the second version to reach the nest");
 
         var main = app.Tray.Window!;
-        await app.Press(main, "History");
-        await app.Press(main, "All files");
+        await app.Press(main, "Files");
+        await app.Press(main, "Deleted");
+        await app.Press(main, "Older versions");
         var history = main.HistoryPane;
         await app.WaitUntil(() => history.FileRows.Any(f => f.Path == "notes.txt"), "notes.txt in History");
         await app.Wpf.Ui(() => history.FileList.SelectedItem = history.FileRows.Single(f => f.Path == "notes.txt"));
@@ -332,6 +359,7 @@ public sealed class TrayControllerTests
         await app.Menu("Settings…");
         var main = app.Tray.Window!;
         app.Dialogs.When("Sign out of this computer?", MessageBoxResult.OK);
+        await app.Wpf.Ui(() => main.Navigate(MainPage.Account)); // signing out lives on the Account page
         await app.Press(main, "Sign out");
 
         await app.Showing<SettingsWindow>("the sign-in window after signing out");
@@ -414,9 +442,9 @@ public sealed class TrayControllerTests
         Assert.False(await app.Wpf.Ui(() => ask.IsVisible));
         Assert.Equal((null, false), (app.SavedSettings.SkippedServerVersion, app.SavedSettings.AutoUpdateServer));
 
-        // "Update server…" on the overview asks again; this test nest has no updater, so it needs the one-time setup.
+        // "Update nest…" on the overview asks again; this test nest has no updater, so it needs the one-time setup.
         var main = app.Tray.Window!;
-        await app.Press(main, "Update server…");
+        await app.Press(main, "Update nest…");
         var update = await app.Showing<ServerUpdateWindow>("the server update window");
         await app.Press(update, "Update the nest");
         await app.WaitUntil(() => update.CommandPanel.IsVisible, "the one-time setup the nest needs");
@@ -425,12 +453,12 @@ public sealed class TrayControllerTests
         Assert.Contains("get.sh | sudo bash", Assert.Single(app.Dialogs.Copied.Items));
         await app.Press(update, "Close");
 
-        await app.Press(main, "Update server…");
+        await app.Press(main, "Update nest…");
         var skip = await app.Showing<ServerUpdateWindow>("the server update window");
         await app.Press(skip, "Don’t ask for this version");
         await app.WaitUntil(() => app.SavedSettings.SkippedServerVersion == "0.9.0", "the skipped version to be saved");
 
-        await app.Press(main, "Update server…");
+        await app.Press(main, "Update nest…");
         var always = await app.Showing<ServerUpdateWindow>("the server update window");
         await app.Press(always, "From now on, update the nest by itself");
         await app.Press(always, "Not now");
@@ -438,7 +466,35 @@ public sealed class TrayControllerTests
     }
 
     [Fact]
-    public async Task AppUpdate_Download_OpensReleasePage()
+    public async Task ClosedAfterACrash_SaysSoOnce_ReportABugShowsTheCleanedCard()
+    {
+        await using var nest = await TestServer.StartWithWebsiteAsync();
+        var card = CrashCard.From(new IOException(@"Could not read 'D:\Home\me\Work\taxes.pdf'"), CrashPlace.Background, "Windows app");
+        await using var app = await TrayHarness.CreateAsync(nest, environment: e =>
+        {
+            CrashCards.Add(e.CrashesDir, card);
+            return e;
+        });
+        await app.StartAsync();
+
+        await app.WaitUntil(() => app.Notifications.Items.Any(n => n.Title == CrashNotice.Title), "the notice that Pairnets closed unexpectedly");
+        Assert.Empty(CrashCards.TakeNewCloses(app.Env.CrashesDir)); // said once, not at every start
+
+        await app.Menu("Settings…");
+        var main = app.Tray.Window!;
+        await app.Press(main, "Overview");
+        await app.Press(main, "More");
+        await app.Press(main, "Report a bug…");
+        var report = await app.Showing<BugReportWindow>("the bug report window");
+        await app.WaitUntil(() => report.OpenButton.IsEnabled, "the bug report to be built");
+        var copied = Assert.Single(app.Dialogs.Copied.Items);
+        Assert.Contains($"Crash {card.Id}: System.IO.IOException (Pairnets had to close)", copied);
+        Assert.DoesNotContain("taxes.pdf", copied);
+        await app.Press(report, "Close");
+    }
+
+    [Fact]
+    public async Task AppUpdate_CopyFromTheZip_ReplacesItselfAndStartsTheNewOne()
     {
         await using var nest = await TestServer.StartWithWebsiteAsync();
         await using var feed = await FakeReleaseFeed.StartAsync("99.0.0");
@@ -447,7 +503,10 @@ public sealed class TrayControllerTests
             UpdateDownloadBase = feed.DownloadBase,
             UpdateSigningKey = FakeReleaseFeed.SigningKey,
             UpdateReleasePage = feed.ReleasePage,
-        }); // not installed by the installer (a copy from the zip): it cannot update itself
+        }); // not installed by the installer (a copy from the zip): it replaces its own Pairnets.exe
+        var exe = app.Env.AppFile!; // a stand-in for this Pairnets.exe in the test's own folder, never the test runner
+        Directory.CreateDirectory(Path.GetDirectoryName(exe)!);
+        await File.WriteAllTextAsync(exe, "the old Pairnets.exe");
         await app.StartAsync();
 
         await app.Menu("Settings…");
@@ -455,15 +514,85 @@ public sealed class TrayControllerTests
         await app.Press(main, "Check now");
         await app.WaitUntil(() => main.UpdateCard.IsVisible, "the update card");
         Assert.Equal("Pairnets 99.0.0 is ready", await app.Wpf.Ui(() => main.UpdateTitle.Text));
+        Assert.Equal("Update now", await app.Wpf.Ui(() => main.UpdateButton.Content));
         Assert.Contains(app.Notifications.Items, n => n.Title == "Pairnets update available");
 
-        await app.Press(main, "Download");
-        Assert.Equal(feed.ReleasePage.ToString(), Assert.Single(app.Platform.Opened.Items));
-        Assert.Empty(app.Platform.Installers.Items);
-        Assert.DoesNotContain("/download/" + FakeReleaseFeed.AssetName, feed.Requests.Items);
+        // Pairnets.exe can't be moved (another program holds it): nothing changes, and the card says why and offers to
+        // try again. It never sends the person to the browser instead.
+        using (File.Open(exe, FileMode.Open, FileAccess.Read, FileShare.None))
+        {
+            await app.Press(main, "Update now");
+            await app.WaitUntil(() => main.UpdateTitle.Text == "Pairnets 99.0.0 could not be installed", "the app to say it could not replace itself");
+        }
+        Assert.Contains("couldn't replace its own file", await app.Wpf.Ui(() => main.UpdateDetailText));
+        Assert.True(await app.Wpf.Ui(() => main.UpdateReason.Visibility == System.Windows.Visibility.Visible), "The reason is written on the card, not only in a tooltip.");
+        Assert.Equal("Try again", await app.Wpf.Ui(() => main.UpdateButton.Content));
+        Assert.Equal("the old Pairnets.exe", await File.ReadAllTextAsync(exe));
+        Assert.False(File.Exists(exe + ".new"), "The unpacked update was left behind.");
+        Assert.Empty(app.Platform.Opened.Items);
+        Assert.Equal(0, app.Shutdowns);
 
-        await app.Press(main, "Later");
-        await app.WaitUntil(() => !main.UpdateCard.IsVisible, "the update card to go away");
+        await app.Press(main, "Try again");
+        await app.WaitUntil(() => app.Platform.UpdatedApps.Count == 1, "the new Pairnets.exe to start");
+        Assert.Equal((exe, "--after-update"), app.Platform.UpdatedApps.Items[0]);
+        Assert.Equal(feed.App, await File.ReadAllBytesAsync(exe));
+        Assert.Equal("the old Pairnets.exe", await File.ReadAllTextAsync(exe + ".old")); // (the new one removes it when it starts)
+        Assert.Equal(1, app.Shutdowns);
+        Assert.Empty(app.Platform.Installers.Items);
+        Assert.Empty(app.Platform.Opened.Items);
+        Assert.Contains("/download/" + FakeReleaseFeed.ZipName, feed.Requests.Items);
+        Assert.DoesNotContain("/download/" + FakeReleaseFeed.AssetName, feed.Requests.Items);
+    }
+
+    [Fact]
+    public async Task AppUpdate_TheNewVersion_StaysSignedIn_KeepsEverySetting_AndOnlySaysItWasUpdated()
+    {
+        await using var nest = await TestServer.StartWithWebsiteAsync();
+        await using var feed = await FakeReleaseFeed.StartAsync("99.0.0");
+        await using var app = await TrayHarness.CreateAsync(nest, name: "OFFICE", environment: e => e with
+        {
+            UpdateDownloadBase = feed.DownloadBase,
+            UpdateSigningKey = FakeReleaseFeed.SigningKey,
+            UpdateReleasePage = feed.ReleasePage,
+        }, settings: s =>
+        {
+            s.AccountEmail = "you@example.com";
+            s.StartWithWindows = true;
+            s.ParallelTransfers = 3;
+            s.NotifyJoinRequests = false;
+        });
+        var exe = app.Env.AppFile!;
+        Directory.CreateDirectory(Path.GetDirectoryName(exe)!);
+        await File.WriteAllTextAsync(exe, "the old Pairnets.exe");
+        await app.StartAsync();
+        await app.SyncedOnce();
+        var before = app.SavedSettings;
+
+        await app.Menu("Settings…");
+        var main = app.Tray.Window!;
+        await app.Press(main, "Check now");
+        await app.WaitUntil(() => main.UpdateCard.IsVisible, "the update card");
+        Assert.Contains("You stay signed in", await app.Wpf.Ui(() => main.UpdateDetailText));
+        await app.Press(main, "Update now");
+        await app.WaitUntil(() => app.Platform.UpdatedApps.Count == 1, "the new Pairnets.exe to start");
+        Assert.Equal((exe, SelfReplace.AfterUpdateArgument), app.Platform.UpdatedApps.Items[0]);
+
+        // The new version starts the way the update starts it: no sign-in window, no main window popping up, only a note.
+        await app.RestartAsNewVersionAsync(SelfReplace.AfterUpdateArgument);
+        await app.WaitUntil(() => app.Notifications.Items.Any(n => n.Title == UpdateTexts.UpdatedTitle), "the 'updated' note");
+        await app.SyncedOnce();
+        Assert.NotNull(app.Tray.Session);
+        Assert.False(await app.Wpf.Ui(() => System.Windows.Application.Current.Windows.OfType<System.Windows.Window>().Any(w => w.IsVisible)),
+            "After an update nothing pops up: no sign-in window and no main window.");
+
+        var after = app.SavedSettings;
+        Assert.True(after.IsComplete && after.FirstRunCompleted);
+        Assert.Equal(
+            (before.ServerUrl, before.ProtectedToken, before.DeviceId, before.DeviceName, before.Folder, before.AccountEmail),
+            (after.ServerUrl, after.ProtectedToken, after.DeviceId, after.DeviceName, after.Folder, after.AccountEmail));
+        Assert.Equal((true, 3, false), (after.StartWithWindows, after.ParallelTransfers, after.NotifyJoinRequests));
+        Assert.Equal(app.Grant!.Key, app.Platform.Secrets.Unprotect(after.ProtectedToken!));
+        Assert.Empty(app.Platform.Opened.Items); // never the browser
     }
 
     [Fact]
@@ -489,19 +618,26 @@ public sealed class TrayControllerTests
         await app.Press(main, "Update now");
         await app.WaitUntil(() => main.UpdateTitle.Text == "Pairnets 99.0.0 could not be installed", "the app to refuse the tampered download");
         Assert.Contains("didn't match its checksum", await app.Wpf.Ui(() => main.UpdateDetailText));
-        Assert.Equal("Open download page", await app.Wpf.Ui(() => main.UpdateButton.Content));
+        Assert.Equal("Try again", await app.Wpf.Ui(() => main.UpdateButton.Content));
+        Assert.Contains("didn't match its checksum", await app.Wpf.Ui(() => main.UpdateReason.Text)); // the reason shows on the card
         Assert.Empty(app.Platform.Installers.Items);
         Assert.Equal(0, app.Shutdowns);
+        await app.Press(main, "Try again"); // still the same tampered file: refused again, and never the browser instead
+        await app.WaitUntil(() => main.UpdateTitle.Text == "Pairnets 99.0.0 could not be installed"
+            && feed.Requests.Items.Count(r => r == "/download/" + FakeReleaseFeed.AssetName) == 2, "the second try to be refused");
+        Assert.Empty(app.Platform.Opened.Items);
+        Assert.Empty(app.Platform.Installers.Items);
 
-        // A release Pairnets did not sign is never downloaded, and its card only offers to hide it.
+        // A release Pairnets did not sign is never downloaded: its card says why, offers no button, and the X puts it away.
         feed.Publish("99.0.1", signed: false);
         var downloadsBefore = feed.Requests.Items.Count(r => r == "/download/" + FakeReleaseFeed.AssetName);
         await app.Press(main, "Check now");
         await app.WaitUntil(() => main.UpdateTitle.Text == "Pairnets 99.0.1 could not be installed", "the app to refuse the unsigned release");
         Assert.Contains("isn't signed by Pairnets", await app.Wpf.Ui(() => main.UpdateDetailText));
-        Assert.Equal("Hide", await app.Wpf.Ui(() => main.UpdateButton.Content));
+        Assert.Contains("isn't signed by Pairnets", await app.Wpf.Ui(() => main.UpdateReason.Text));
+        Assert.False(await app.Wpf.Ui(() => main.UpdateButton.IsVisible));
         Assert.DoesNotContain(app.Notifications.Items, n => n.Title == "Pairnets update available" && n.Text.Contains("99.0.1"));
-        await app.Press(main, "Hide");
+        await app.Press(main, "Later");
         await app.WaitUntil(() => !main.UpdateCard.IsVisible, "the card to go away");
         Assert.Equal(downloadsBefore, feed.Requests.Items.Count(r => r == "/download/" + FakeReleaseFeed.AssetName));
         Assert.Empty(app.Platform.Installers.Items);
@@ -515,7 +651,7 @@ public sealed class TrayControllerTests
         var (setup, arguments) = app.Platform.Installers.Items[0];
         try
         {
-            Assert.Equal("/SILENT /SUPPRESSMSGBOXES /NORESTART /CLOSEAPPLICATIONS", arguments);
+            Assert.Equal("/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /CLOSEAPPLICATIONS", arguments); // hidden: no installer window
             Assert.Equal(feed.Asset, await File.ReadAllBytesAsync(setup));
             Assert.Equal(1, app.Shutdowns);
             Assert.Contains("/download/" + FakeReleaseFeed.AssetName, feed.Requests.Items);
@@ -536,12 +672,12 @@ public sealed class TrayControllerTests
         await app.WaitUntil(() => app.Tray.Session!.Status.NestUrl == "https://localhost", "the app to learn the nest's own name");
         var main = app.Tray.Window!;
 
-        await app.Press(main, "Devices");
+        await app.Press(main, "Computers");
         await app.WaitUntil(() => main.DevicesPane.Cards.Any(c => c.NameLabel.Contains("DESKTOP", StringComparison.Ordinal)), "this computer in the Devices grid");
         await app.Press(main, "Add a computer…");
         var steps = Assert.Single(app.Dialogs.Asked.Items);
         Assert.Contains("type localhost and press \"Sign in with your browser\"", steps.Text);
-        await app.Press(main, "Manage devices on your nest");
+        await app.Press(main, "Manage computers on your nest");
         Assert.Equal("https://localhost/devices", app.Platform.Opened.Items[^1]);
 
         await app.Press(main, "Overview"); // the "…" menu belongs to the Overview's header

@@ -1,0 +1,11 @@
+[Unit]
+Description=Watch for a request from the Pairnets server to list the drives or move its files
+StartLimitIntervalSec=0
+
+[Path]
+PathExists=/var/lib/pairnets/update/place-request
+Unit=pairnets-place.service
+TriggerLimitIntervalSec=0
+
+[Install]
+WantedBy=multi-user.target

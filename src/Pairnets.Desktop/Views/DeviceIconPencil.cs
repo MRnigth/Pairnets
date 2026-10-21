@@ -44,17 +44,17 @@ public sealed class DeviceIconPencil : Button
 
     public DeviceIconPencil()
     {
-        Width = 20;
-        Height = 20;
+        Width = 24;
+        Height = 24;
         HorizontalAlignment = HorizontalAlignment.Left;
         VerticalAlignment = VerticalAlignment.Top;
-        Margin = new Thickness(-6, -6, 0, 0);
+        Margin = new Thickness(-8, -8, 0, 0); // the same middle as the old 20 px disc
         Padding = new Thickness(0);
         Cursor = new Cursor(StandardCursorType.Hand);
         Template = IconChooser.BareTemplate();
         var pencil = new LineIcon { Width = 10, Height = 10, StrokeThickness = 2.6, Data = StreamGeometry.Parse("M4,20 L8,20 L19,9 L15,5 L4,16 Z"), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
         IconChooser.Paint(pencil, LineIcon.StrokeProperty, "T.Muted");
-        var disc = new Border { CornerRadius = new CornerRadius(10), BorderThickness = new Thickness(1), Child = pencil };
+        var disc = new Border { CornerRadius = new CornerRadius(12), BorderThickness = new Thickness(1), Child = pencil };
         IconChooser.Paint(disc, BackgroundProperty, "T.Card");
         IconChooser.Paint(disc, BorderBrushProperty, "T.Border");
         Content = disc;

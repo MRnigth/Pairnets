@@ -30,13 +30,13 @@ public enum NestLineKind
     Ok,
     /// <summary>Grey, solid: online and quiet.</summary>
     Idle,
-    /// <summary>Grey, dashed: next in line, paused, or last seen.</summary>
+    /// <summary>Grey, dashed: next in line, paused, switched off ("off since 10:45"), or last seen.</summary>
     Next,
     /// <summary>Amber, dashed.</summary>
     Warn,
     /// <summary>Red, dashed.</summary>
     Bad,
-    /// <summary>Red, dashed, with a red cross in the middle: can't reach.</summary>
+    /// <summary>Red, dashed, with a red cross in the middle: can't reach (a real problem, <see cref="Presence.Lost"/>).</summary>
     Unreachable,
 }
 
@@ -64,8 +64,8 @@ public sealed record NestMapOther(string Name, DeviceIconKind Icon, NestLineKind
 {
     public bool HasPill => Kind == NestLineKind.Active && !string.IsNullOrEmpty(Speed);
 
-    /// <summary>True while this computer sends to the nest (its status says "sending").</summary>
-    public bool GoesUp => Kind == NestLineKind.Active && Status.StartsWith("sending", StringComparison.Ordinal);
+    /// <summary>True while this computer sends to the nest (its status says "uploading").</summary>
+    public bool GoesUp => Kind == NestLineKind.Active && Status.StartsWith("uploading", StringComparison.Ordinal);
     public bool HasCross => Kind == NestLineKind.Unreachable;
 }
 
@@ -79,7 +79,8 @@ public sealed record NestMapModel(
     NestDot NestDot,
     string NestSub,
     IReadOnlyList<NestMapOther> Others,
-    int MoreCount)
+    int MoreCount,
+    string NestTitle = "Your nest")
 {
     /// <summary>At most this many other computers are drawn; the rest are "+N more".</summary>
     public const int MaxOthers = 5;
@@ -151,8 +152,8 @@ public sealed record NestMapModel(
             .ThenByDescending(x => x.Device.LastSeen)
             .ToList();
 
-        var others = candidates.Take(MaxOthers).Select(x => Other(state, x.Device, x.Report, supportsIcons)).ToList();
-        return new NestMapModel(state, new NestMapThis(kind, label, thisDot, ownIcon), nestDot, sub, others, Math.Max(0, candidates.Count - MaxOthers));
+        var others = candidates.Take(MaxOthers).Select(x => Other(s, state, x.Device, x.Report, supportsIcons, now)).ToList();
+        return new NestMapModel(state, new NestMapThis(kind, label, thisDot, ownIcon), nestDot, sub, others, Math.Max(0, candidates.Count - MaxOthers), s.NestTitle);
     }
 
     /// <summary>"↑ 4.90 MB/s" from this computer's own speed, or "syncing" / "checking" while nothing moves yet.</summary>
@@ -179,17 +180,22 @@ public sealed record NestMapModel(
         return null;
     }
 
-    private static NestMapOther Other(NestMapState state, DeviceInfo d, TransferReport? live, bool supportsIcons)
+    private static NestMapOther Other(StatusSnapshot s, NestMapState state, DeviceInfo d, TransferReport? live, bool supportsIcons, DateTimeOffset now)
     {
         var icon = DeviceIcon.For(d, supportsIcons);
         var online = d.Online || live is not null;
-        var seen = "seen " + d.LastSeen.ToLocalTime().ToString("HH:mm", CultureInfo.InvariantCulture);
+        var seen = "last seen " + Presences.Since(d.LastSeen, now);
 
         // This computer cannot reach the nest: it knows nothing newer about the others than when they were last seen.
         if (state is NestMapState.Offline or NestMapState.SignedOutByYou)
             return new NestMapOther(d.Name, icon, NestLineKind.Next, null, seen, NestDot.Off, false);
+        // Red only for a real problem (it vanished while moving files); switched off is grey and dashed.
         if (!online)
-            return new NestMapOther(d.Name, icon, NestLineKind.Unreachable, null, "can’t reach", NestDot.Bad, false);
+        {
+            return Presences.Of(s, d.Name, online, now) == Presence.Lost
+                ? new NestMapOther(d.Name, icon, NestLineKind.Unreachable, null, "can’t reach", NestDot.Bad, false)
+                : new NestMapOther(d.Name, icon, NestLineKind.Next, null, Presences.OffSince(d.LastSeen, now), NestDot.Off, false);
+        }
 
         if (live is not null)
         {
@@ -199,12 +205,12 @@ public sealed record NestMapModel(
             {
                 var files = live.FilesLeft > 0 ? live.FilesLeft : live.FilesTotal;
                 return new NestMapOther(d.Name, icon, NestLineKind.Active, "↑ " + Format.Speed(live.UpBytesPerSecond),
-                    files > 0 ? "sending " + Format.Count(files) + (files == 1 ? " file" : " files") : "sending", NestDot.Ok, true);
+                    files > 0 ? "uploading " + Format.Count(files) + (files == 1 ? " file" : " files") : "uploading", NestDot.Ok, true);
             }
             if (down)
-                return new NestMapOther(d.Name, icon, NestLineKind.Active, "↓ " + Format.Speed(live.DownBytesPerSecond), "getting them", NestDot.Ok, true);
+                return new NestMapOther(d.Name, icon, NestLineKind.Active, "↓ " + Format.Speed(live.DownBytesPerSecond), "downloading", NestDot.Ok, true);
             // Moving, but no byte yet (or stalled): the line is blue without a speed.
-            return new NestMapOther(d.Name, icon, NestLineKind.Active, null, live.Uploading ? "sending" : "getting them", NestDot.Ok, true);
+            return new NestMapOther(d.Name, icon, NestLineKind.Active, null, live.Uploading ? "uploading" : "downloading", NestDot.Ok, true);
         }
 
         return state switch

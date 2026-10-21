@@ -166,7 +166,7 @@ public static class Motion
         if (!Enabled)
             return;
         var s = Transforms(e).Scale;
-        var pop = new DoubleAnimation(0.82, 1, TimeSpan.FromSeconds(0.38)) { EasingFunction = new BackEase { EasingMode = EasingMode.EaseOut, Amplitude = 0.6 } };
+        var pop = new DoubleAnimation(0.82, 1, TimeSpan.FromSeconds(0.38)) { EasingFunction = new BackEase { EasingMode = EasingMode.EaseOut, Amplitude = 1 } };
         s.BeginAnimation(ScaleTransform.ScaleXProperty, pop);
         s.BeginAnimation(ScaleTransform.ScaleYProperty, pop);
     }

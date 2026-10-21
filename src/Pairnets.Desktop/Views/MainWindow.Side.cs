@@ -137,6 +137,7 @@ public partial class MainWindow
         else
             Paint(NestRow, BackgroundProperty, PillKey(n.Tone));
         Paint(NestDot, Shape.FillProperty, DotKey(n.Dot));
+        NestTitle.Text = n.Title;
         NestSub.Text = n.Text;
         Paint(NestSub, TextBlock.ForegroundProperty, InkKey(n.Tone));
         ToolTip.SetTip(NestRow, n.Tooltip);
@@ -222,7 +223,7 @@ public partial class MainWindow
             case OtherKind.CantReach:
                 Paint(circle, Shape.StrokeProperty, "T.Bad");
                 break;
-            case OtherKind.LastSeen:
+            case OtherKind.LastSeen or OtherKind.Off:
                 Paint(circle, Shape.StrokeProperty, "T.Dash");
                 break;
             default:
@@ -241,7 +242,7 @@ public partial class MainWindow
 
         var name = new TextBlock { Text = o.Name, FontSize = 11, FontWeight = FontWeight.ExtraBold, MaxWidth = 82, TextTrimming = TextTrimming.CharacterEllipsis, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 3, 0, 0) };
         Paint(name, TextBlock.ForegroundProperty, reachable ? "T.Text" : "T.Muted");
-        var sub = new TextBlock { Text = o.Text, FontSize = 10, FontWeight = FontWeight.Bold, MaxWidth = 82, TextTrimming = TextTrimming.CharacterEllipsis, HorizontalAlignment = HorizontalAlignment.Center };
+        var sub = new TextBlock { Text = o.Text, FontSize = 11, FontWeight = FontWeight.Bold, MaxWidth = 82, TextTrimming = TextTrimming.CharacterEllipsis, HorizontalAlignment = HorizontalAlignment.Center };
         Paint(sub, TextBlock.ForegroundProperty, o.Kind switch
         {
             OtherKind.Live => "T.AccentInk",

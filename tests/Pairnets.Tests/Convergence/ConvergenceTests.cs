@@ -26,7 +26,20 @@ public class ConvergenceTests(ITestOutputHelper output)
 
     [Theory]
     [MemberData(nameof(Seeds))]
-    public async Task DevicesConvergeAndNothingIsLost(int seed)
+    public Task DevicesConvergeAndNothingIsLost(int seed) => RunAsync(seed, nestOnly: false);
+
+    /// <summary>
+    /// The same, while each computer now and then switches a folder (or everything) to "only on the nest", or back to
+    /// keeping everything here: at the end each computer has exactly the nest's files of the folders it keeps here and
+    /// none of the others, and still nothing is lost.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(Seeds))]
+    public Task WithFoldersOnTheNestOnlyNothingIsLost(int seed) => RunAsync(seed, nestOnly: true);
+
+    private static readonly string[] PlacementFolders = ["d1", "d1/s", "d2", ""];
+
+    private async Task RunAsync(int seed, bool nestOnly)
     {
         // Stalls have their own tests. The 2 s of the other tests is too short for a busy machine (the deep run with 250
         // seeds next to the whole suite): a small upload then comes back as a 408 and the pass fails for no fault of sync.
@@ -50,7 +63,7 @@ public class ConvergenceTests(ITestOutputHelper output)
                 r = await d.SyncAsync();
             }
             log.AppendLine($"  sync {d.Name}: {r}");
-            Assert.True(r.Outcome == PassOutcome.Completed, $"seed {seed}: {d.Name} pass {r}\n{log}");
+            Assert.True(r.Outcome == PassOutcome.Completed, $"seed {seed}: {d.Name} pass {r}\n{log}\nserver:\n{server.Logs.Problems()}");
         }
 
         var ops = 40 + rnd.Next(40);
@@ -59,6 +72,18 @@ public class ConvergenceTests(ITestOutputHelper output)
             var d = devices[rnd.Next(2)];
             var files = d.Files();
             var roll = rnd.Next(100);
+            if (nestOnly && rnd.Next(10) == 0)
+            {
+                // This computer changes where a folder lives, or goes back to keeping everything here.
+                var folder = PlacementFolders[rnd.Next(PlacementFolders.Length)];
+                var allHere = rnd.Next(3) == 0;
+                if (allHere)
+                    d.Place();
+                else
+                    d.Place((folder, FilePlacement.NestOnly));
+                log.AppendLine(allHere ? $"{d.Name} keeps everything here" : $"{d.Name} keeps '{folder}' on the nest only");
+                continue;
+            }
             if (roll < 35)
             {
                 var path = Dirs[rnd.Next(Dirs.Length)] + Names[rnd.Next(Names.Length)];
@@ -104,7 +129,7 @@ public class ConvergenceTests(ITestOutputHelper output)
                     d.Engine.ApproveBlockedDeletions();
                     r = await d.SyncAsync();
                 }
-                Assert.True(r.Outcome == PassOutcome.Completed, $"seed {seed}: settle {d.Name} {r}\n{log}");
+                Assert.True(r.Outcome == PassOutcome.Completed, $"seed {seed}: settle {d.Name} {r}\n{log}\nserver:\n{server.Logs.Problems()}");
                 if (r.Changes > 0 || r.WantsRetry)
                     quiet = false;
             }
@@ -114,10 +139,23 @@ public class ConvergenceTests(ITestOutputHelper output)
         var a = desktop.Snapshot();
         var b = laptop.Snapshot();
         var serverLive = server.Store.ReadManifest(null).Entries.Where(e => !e.Deleted).ToDictionary(e => e.Path, e => e.Hash!);
-        Assert.True(a.OrderBy(k => k.Key).SequenceEqual(b.OrderBy(k => k.Key)), $"seed {seed}: folders differ\n{Dump(a)}\nvs\n{Dump(b)}\n{log}");
-        Assert.True(a.OrderBy(k => k.Key).SequenceEqual(serverLive.OrderBy(k => k.Key)), $"seed {seed}: server differs\n{log}");
+        if (nestOnly)
+        {
+            foreach (var d in devices)
+            {
+                var here = d.Snapshot();
+                var wanted = serverLive.Where(e => d.Placement.For(e.Key) == FilePlacement.OnThisPc).ToDictionary();
+                Assert.True(here.OrderBy(k => k.Key, StringComparer.Ordinal).SequenceEqual(wanted.OrderBy(k => k.Key, StringComparer.Ordinal)),
+                    $"seed {seed}: {d.Name} differs from the nest\n{Dump(here)}\nvs\n{Dump(wanted)}\n{log}");
+            }
+        }
+        else
+        {
+            Assert.True(a.OrderBy(k => k.Key).SequenceEqual(b.OrderBy(k => k.Key)), $"seed {seed}: folders differ\n{Dump(a)}\nvs\n{Dump(b)}\n{log}");
+            Assert.True(a.OrderBy(k => k.Key).SequenceEqual(serverLive.OrderBy(k => k.Key)), $"seed {seed}: server differs\n{log}");
+        }
 
-        var everywhere = new HashSet<string>(a.Values, StringComparer.Ordinal);
+        var everywhere = new HashSet<string>(a.Values.Concat(b.Values), StringComparer.Ordinal);
         foreach (var f in Directory.EnumerateFiles(server.Paths.Files, "*", SearchOption.AllDirectories))
             everywhere.Add(ContentHash.Of(File.ReadAllBytes(f)));
         foreach (var f in Directory.EnumerateFiles(server.Paths.History, "*", SearchOption.AllDirectories))

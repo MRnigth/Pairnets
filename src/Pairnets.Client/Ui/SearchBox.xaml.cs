@@ -35,6 +35,17 @@ public partial class SearchBox : UserControl
     /// <summary>Whether the hint is showing (the box is empty).</summary>
     public bool HintVisible => Hint.Visibility == Visibility.Visible;
 
+    /// <summary>Puts the cursor in the box with its words chosen (Ctrl+F).</summary>
+    public void FocusInput()
+    {
+        SearchInput.Focus();
+        System.Windows.Input.Keyboard.Focus(SearchInput);
+        SearchInput.SelectAll();
+    }
+
+    /// <summary>True while the cursor is in the box.</summary>
+    public bool HasFocus => SearchInput.IsKeyboardFocused;
+
     private void OnTextChanged(object sender, TextChangedEventArgs e)
     {
         Hint.Visibility = SearchInput.Text.Length == 0 ? Visibility.Visible : Visibility.Collapsed;

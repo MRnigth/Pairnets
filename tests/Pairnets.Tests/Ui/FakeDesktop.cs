@@ -116,6 +116,8 @@ public sealed class FakePlatform : IPlatformServices
 
     public string Name => "Test desktop";
 
+    public bool ReduceMotion => false;
+
     public MemorySecrets SecretStore { get; } = new();
 
     public ISecretProtector Secrets => SecretStore;
@@ -145,6 +147,25 @@ public sealed class FakePlatform : IPlatformServices
 
     public bool RemoveLegacyAutoStart() => false;
 
+    private readonly List<string?> _fileManagerEntries = [];
+
+    /// <summary>Every change to Pairnets' place in the file manager, in order (null: taken away).</summary>
+    public IReadOnlyList<string?> FileManagerEntries
+    {
+        get
+        {
+            lock (_gate)
+                return [.. _fileManagerEntries];
+        }
+    }
+
+    public bool SetFileManagerEntry(string? folder, bool sidebar = true, bool rightClick = true)
+    {
+        lock (_gate)
+            _fileManagerEntries.Add(folder);
+        return true;
+    }
+
     public void Open(string path)
     {
         lock (_gate)
@@ -155,6 +176,25 @@ public sealed class FakePlatform : IPlatformServices
     {
         lock (_gate)
             _revealed.Add(path);
+    }
+
+    private readonly List<string> _updatedApps = [];
+
+    /// <summary>Writes down the new app an update started (nothing is started).</summary>
+    public void StartUpdatedApp(string path, string argument)
+    {
+        lock (_gate)
+            _updatedApps.Add(path + " " + argument);
+    }
+
+    /// <summary>"&lt;app file&gt; --after-update" for every new app an update started.</summary>
+    public IReadOnlyList<string> UpdatedApps
+    {
+        get
+        {
+            lock (_gate)
+                return _updatedApps.ToList();
+        }
     }
 
     /// <summary>Files, folders and web pages the app opened, in order.</summary>

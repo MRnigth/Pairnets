@@ -169,6 +169,7 @@ public partial class TrayPanel : Window
         PausedNoteText.Text = m.PausedNote ?? string.Empty;
 
         // The nest and its branches
+        NestTitle.Text = m.NestTitle;
         NestSub.Text = m.NestSub;
         NestDotShape.SetResourceReference(Shape.FillProperty, m.NestDot switch
         {
@@ -239,7 +240,7 @@ public partial class TrayPanel : Window
     private void OnOpenFolder(object sender, RoutedEventArgs e) => Run(a => a.OpenFolder());
     private void OnOpenApp(object sender, RoutedEventArgs e) => Run(a => a.OpenWindow(MainPage.Overview));
     private void OnSeeAll(object sender, RoutedEventArgs e) => Run(a => a.OpenWindow(MainPage.Activity));
-    private void OnAttention(object sender, MouseButtonEventArgs e) => Run(a => a.OpenWindow(MainPage.Attention));
+    private void OnAttention(object sender, RoutedEventArgs e) => Run(a => a.OpenWindow(MainPage.Attention));
     private void OnSettings(object sender, RoutedEventArgs e) => Run(a => a.OpenWindow(MainPage.Settings));
     private void OnHistory(object sender, RoutedEventArgs e) => Run(a => a.OpenWindow(MainPage.History));
     private void OnViewLog(object sender, RoutedEventArgs e) => Run(a => a.ViewLog());

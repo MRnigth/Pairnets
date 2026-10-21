@@ -18,23 +18,47 @@ internal static class Program
         FileStream instanceLock;
         try
         {
-            instanceLock = new FileStream(Path.Combine(PairnetsPaths.LocalDir, "app.lock"), FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
+            instanceLock = TakeInstanceLock(Path.Combine(PairnetsPaths.LocalDir, "app.lock"),
+                args.Contains(SelfReplace.AfterUpdateArgument) ? SelfReplace.WaitForOldApp : TimeSpan.Zero);
         }
         catch (IOException)
         {
-            // Started for a pairnets:// link (the nest's website sending you back after approving
-            // this computer): poke the running Pairnets to the front and leave quietly.
-            if (args.Any(AppActivation.IsActivationUrl))
-            {
-                AppActivation.TrySignalRunning();
+            // Opened again (the app menu, a shortcut, a pairnets:// link from the nest's website): bring the
+            // running Pairnets to the front and leave quietly, like other apps do. A right-click item in the file
+            // manager ("Open in Pairnets", "Show sync status") is handed to the running Pairnets the same way.
+            if (AppActivation.SecondStart(args) == AppActivation.SecondStartResult.Quiet)
                 return 0;
-            }
-            Console.Error.WriteLine("Pairnets is already running (look for its icon in the menu bar / system tray).");
+            const string message = AppActivation.NotAnsweringMessage + " If it stays stuck, quit Pairnets (Force Quit on a Mac) and start it again.";
+            Console.Error.WriteLine(message);
+            Platform.IPlatformServices.Current.Notify("Pairnets", message);
             return 1;
         }
 
+        SelfReplace.CleanUp(Environment.ProcessPath);
+        if (OperatingSystem.IsLinux())
+            LinuxAppPlace.CleanUpOldCopy(PairnetsPaths.LocalDir, Environment.ProcessPath); // after "Program folder: Move…"
         using (instanceLock)
             return BuildAvaloniaApp().StartWithClassicDesktopLifetime(args, Avalonia.Controls.ShutdownMode.OnExplicitShutdown);
+    }
+
+    /// <summary>
+    /// The exclusive lock on app.lock. <paramref name="wait"/>: how long to keep trying (started by the Pairnets this one
+    /// just replaced, which is still quitting).
+    /// </summary>
+    private static FileStream TakeInstanceLock(string path, TimeSpan wait)
+    {
+        var until = DateTime.UtcNow + wait;
+        while (true)
+        {
+            try
+            {
+                return new FileStream(path, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
+            }
+            catch (IOException) when (DateTime.UtcNow < until)
+            {
+                Thread.Sleep(250);
+            }
+        }
     }
 
     /// <summary>

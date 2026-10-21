@@ -56,7 +56,7 @@ public sealed class IconChooser : Border
         foreach (var kind in DeviceIcon.Choices)
         {
             var icon = new LineIcon { Width = 22, Height = 22, StrokeThickness = 1.8, Data = DeviceIconArt.For(kind), HorizontalAlignment = HorizontalAlignment.Center };
-            var label = new TextBlock { Text = DeviceIcon.Label(kind), FontSize = 10.5, FontWeight = FontWeight.ExtraBold, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 6, 0, 0) };
+            var label = new TextBlock { Text = DeviceIcon.Label(kind), FontSize = 11, FontWeight = FontWeight.ExtraBold, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 6, 0, 0) };
             var inner = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0) };
             inner.Children.Add(icon);
             inner.Children.Add(label);

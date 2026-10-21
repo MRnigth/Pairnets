@@ -17,6 +17,9 @@ public class Stage4PagesTests
 {
     private static ActivityFeed SampleFeed(DateTimeOffset now)
     {
+        // Keep all five files on one day: just after midnight "an hour ago" is yesterday.
+        if (now.TimeOfDay < TimeSpan.FromMinutes(61))
+            now = new DateTimeOffset(now.Date, now.Offset).AddMinutes(61);
         var feed = new ActivityFeed();
         feed.Add(new ActivityItem(now.AddMinutes(-60), ActivityKind.Uploaded, "Reports/q3.xlsx", "Uploaded"));
         feed.Add(new ActivityItem(now.AddMinutes(-50), ActivityKind.Downloaded, "Notes/ideas.md", "Downloaded"));
@@ -170,6 +173,32 @@ public class Stage4PagesTests
     }
 
     [AvaloniaFact]
+    public void NeedsYouOffersThisComputersOwnNameWithBothChoices()
+    {
+        var window = Open();
+        window.Navigate(MainPage.Attention);
+        var ran = new List<string>();
+        var offer = new NameOffer("PC-1", "StudyPC");
+        window.ShowAttention([new AttentionItem(offer.Title, offer.Detail, offer.UseLabel, () => ran.Add("use"), AttentionKind.Rename,
+            SecondLabel: offer.KeepLabel, Second: () => ran.Add("keep"))]);
+        Layout(window);
+        Assert.Equal(1, window.AttentionCards);
+        var texts = Screen.All<TextBlock>(window).Where(t => t.IsEffectivelyVisible).Select(t => t.Text).ToList();
+        Assert.Contains("Use this computer's own name?", texts);
+        Assert.Contains(texts, t => t?.Contains("called PC-1", StringComparison.Ordinal) == true);
+        var buttons = Screen.All<Button>(window).Where(b => b.IsEffectivelyVisible).ToList();
+        Person.Click(buttons.Single(b => Screen.Describe(b) == "Keep PC-1"));
+        Person.Click(buttons.Single(b => Screen.Describe(b) == "Use StudyPC"));
+        Assert.Equal(["keep", "use"], ran);
+
+        // Other cards have no second button.
+        window.ShowAttention([new AttentionItem("x", "y", "Show in folder", () => { })]);
+        Layout(window);
+        Assert.DoesNotContain(Screen.All<Button>(window).Where(b => b.IsEffectivelyVisible), b => Screen.Describe(b) == "Keep PC-1");
+        Close(window);
+    }
+
+    [AvaloniaFact]
     public async Task RestoreOnTheDeletedTabBringsTheNewestVersionBack()
     {
         var actions = new SampleActions();
@@ -236,7 +265,7 @@ public class Stage4PagesTests
         window.Navigate(MainPage.Devices);
         Layout(window);
         Assert.Equal(6, window.DeviceRows);
-        Assert.Equal("6 use this nest · 3 online now", window.DevicesSummaryValue);
+        Assert.Equal("3 of 6 online", window.DevicesSummaryValue);
         Assert.True(window.JoinChipShown);
         Assert.Equal("PC-1 is asking to join", window.JoinChipValue);
         var cards = Screen.All<DeviceCardView>(window).ToList();
@@ -290,7 +319,7 @@ public class Stage4PagesTests
         Layout(window);
         Assert.Equal(MainPage.Account, window.Page);
         Assert.True(window.AccountShown);
-        Assert.All(new[] { "NavOverview", "NavActivity", "NavAttention", "NavHistory", "NavDevices", "NavSettings" },
+        Assert.All(new[] { "NavOverview", "NavActivity", "NavAttention", "NavFiles", "NavDevices", "NavSettings" },
             name => Assert.False(Screen.Named<RadioButton>(window, name).IsChecked));
         var page = window.Account;
         Assert.Equal("alex@example.com", page.TitleValue);
@@ -356,7 +385,7 @@ public class Stage4PagesTests
         var view = new SettingsView(new ClientSettings
         {
             ServerUrl = "https://nest.example.com/", Folder = "/home/me/Work", DeviceName = "DESKTOP", DeviceId = "id", AccountEmail = "alex@example.com", ExtraIgnore = ["*.bak", "tmp/"],
-        }, null, autoStart: true, serverVersionText: "Server 1.0.48");
+        }, null, autoStart: true, serverVersionText: "Nest 1.0.48");
         var window = new Window { Content = view, Width = 1000, Height = 800 };
         window.Show();
         var texts = Screen.All<TextBlock>(view).Where(t => t.IsEffectivelyVisible).Select(t => t.Text).ToList();

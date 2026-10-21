@@ -47,9 +47,18 @@ public partial class SettingsView : UserControl
         e.Handled = true;
     }
 
-    public SettingsView(ClientSettings current, ISecretProtector? protector, bool autoStart, UpdateService? updates = null, string? serverVersionText = null)
+    /// <summary>"Where your files live" as chosen on this page (saved with the rest).</summary>
+    private readonly Dictionary<string, FilePlacement> _placement;
+
+    /// <summary>The nest's files (the folders to choose for); null when not connected.</summary>
+    private readonly INestFiles? _files;
+
+    public SettingsView(ClientSettings current, ISecretProtector? protector, bool autoStart, UpdateService? updates = null, string? serverVersionText = null,
+        INestFiles? files = null)
     {
         _updates = updates;
+        _files = files;
+        _placement = new Dictionary<string, FilePlacement>(current.Placement, StringComparer.Ordinal);
         InitializeComponent();
         _original = current;
         _protector = protector;
@@ -69,16 +78,28 @@ public partial class SettingsView : UserControl
         ServerUrlBox.Text = current.ServerUrl ?? string.Empty;
         TokenBox.Watermark = current.ProtectedToken is null ? "printed by install.sh" : "(saved – leave empty to keep)";
         FolderBox.Text = current.Folder ?? string.Empty;
-        DeviceBox.Text = current.DeviceName ?? Environment.MachineName;
+        DeviceBox.Text = current.DeviceName ?? ComputerName.Default();
         IgnoreBox.Text = string.Join(Environment.NewLine, current.ExtraIgnore);
         AutoStartBox.IsChecked = autoStart;
+        FileManagerBox.IsChecked = current.ShowInFileManager;
+        RightClickBox.IsChecked = current.ExplorerRightClick;
+        RightClickRow.IsVisible = !OperatingSystem.IsMacOS(); // Finder has no right-click items from Pairnets
+        TicksBox.IsChecked = current.CloudFolder != CloudFolderMode.Off;
+        TicksRow.IsVisible = OperatingSystem.IsWindows(); // ticks are Windows' cloud files
+        DrawPlacement();
+        if (OperatingSystem.IsMacOS())
+        {
+            // Apple lets an app give its folder an icon, but not add it to Finder's sidebar: that stays a drag.
+            FileManagerTitle.Text = "Give the Pairnets folder its icon";
+            FileManagerText.Text = "The blue Pairnets folder icon in Finder. To keep the folder in Finder's sidebar, drag it there once.";
+        }
         UpdateBox.IsChecked = current.CheckForUpdates;
         WaitBox.IsChecked = current.WaitForPeerBatches;
         MapSpeedBox.IsChecked = current.ShowMapSpeed;
         AutoServerBox.IsChecked = current.AutoUpdateServer;
         DebugBox.IsChecked = current.DebugMode;
         ServerVersionText.Text = $"Pairnets {PairnetsInfo.ProductVersion} for {SystemName()}"
-            + (serverVersionText is { } v ? " · your nest runs " + (v.StartsWith("Server ", StringComparison.Ordinal) ? v["Server ".Length..] : v) : " · not connected to your nest yet");
+            + (serverVersionText is { } v ? " · your nest runs " + (v.StartsWith("Nest ", StringComparison.Ordinal) ? v["Nest ".Length..] : v) : " · not connected to your nest yet");
         AppVersionText.Text = "Pairnets " + PairnetsInfo.ProductVersion;
         StartOverNote.Text = $"Your files in {(string.IsNullOrWhiteSpace(current.Folder) ? "your sync folder" : current.Folder)} stay where they are.";
         (current.EffectiveParallelTransfers switch { 1 => Par1, 2 => Par2, 8 => Par8, _ => Par4 }).IsChecked = true;
@@ -90,12 +111,98 @@ public partial class SettingsView : UserControl
         ShowVersion(null);
 
         // Pieces that are wired here rather than in the XAML.
-        SignInAgainButton.Click += OnSignInAgain;
         IgnoreHeader.Click += OnToggleIgnore;
         IgnoreBox.TextChanged += OnIgnoreChanged;
         Scroller.SizeChanged += OnPageSized;
         ShowIgnoreCount();
+        _applied = current.Clone();
+        _applied.StartWithWindows = autoStart;
+        WireSwitches();
     }
+
+    // ------------------------------------------------------------------ switches apply at once
+
+    /// <summary>The settings as the switches last applied them (the text boxes wait for Save).</summary>
+    private ClientSettings? _applied;
+
+    /// <summary>
+    /// A switch (or the files-at-a-time choice, or a speed limit) changed: the settings with it, to apply at once. Only the
+    /// switch-like values differ from the saved settings (<see cref="SettingsSwitches.WithSwitchesFrom"/>).
+    /// </summary>
+    public event Action<ClientSettings>? SwitchesChanged;
+
+    private void WireSwitches()
+    {
+        foreach (var box in new[] { AutoStartBox, UpdateBox, WaitBox, MapSpeedBox, AutoServerBox, DebugBox, UpLimitBox, DownLimitBox, FileManagerBox, RightClickBox, TicksBox })
+            box.IsCheckedChanged += OnSwitchChanged;
+        foreach (var par in new[] { Par1, Par2, Par4, Par8 })
+            par.IsCheckedChanged += OnParChanged;
+        // A speed limit's number applies when it is left (or Enter): a number it cannot read waits for Save.
+        foreach (var value in new[] { UpLimitValue, DownLimitValue })
+        {
+            value.LostFocus += OnLimitLeft;
+            value.KeyDown += OnLimitKey;
+        }
+    }
+
+    private void OnSwitchChanged(object? sender, RoutedEventArgs e) => ApplySwitches();
+
+    private void OnParChanged(object? sender, RoutedEventArgs e) => ApplySwitches();
+
+    private void OnLimitLeft(object? sender, RoutedEventArgs e) => ApplySwitches();
+
+    private void OnLimitKey(object? sender, Avalonia.Input.KeyEventArgs e)
+    {
+        if (e.Key == Avalonia.Input.Key.Enter)
+            ApplySwitches();
+    }
+
+    /// <summary>True when what the switches show has been applied (the checks).</summary>
+    internal bool SwitchesApplied => _applied is { } a && a.StartWithWindows == (AutoStartBox.IsChecked == true) && a.CheckForUpdates == (UpdateBox.IsChecked == true)
+        && a.WaitForPeerBatches == (WaitBox.IsChecked == true) && a.ShowMapSpeed == (MapSpeedBox.IsChecked == true) && a.AutoUpdateServer == (AutoServerBox.IsChecked == true)
+        && a.DebugMode == (DebugBox.IsChecked == true) && a.EffectiveParallelTransfers == ParallelChoice()
+        && (a.UploadLimitMBps is not null) == (UpLimitBox.IsChecked == true) && (a.DownloadLimitMBps is not null) == (DownLimitBox.IsChecked == true)
+        && a.ShowInFileManager == (FileManagerBox.IsChecked == true) && a.ExplorerRightClick == (RightClickBox.IsChecked == true)
+        && a.CloudFolder == CloudChoice(a) && !SettingsSwitches.PlacementChanged(a, new ClientSettings { Placement = _placement });
+
+    private void ApplySwitches()
+    {
+        if (_applied is null)
+            return;
+        if (!LimitReadable(UpLimitBox, UpLimitValue) || !LimitReadable(DownLimitBox, DownLimitValue))
+            return;
+        var next = _applied.Clone();
+        next.StartWithWindows = AutoStartBox.IsChecked == true;
+        next.CheckForUpdates = UpdateBox.IsChecked == true;
+        next.WaitForPeerBatches = WaitBox.IsChecked == true;
+        next.ShowMapSpeed = MapSpeedBox.IsChecked == true;
+        next.AutoUpdateServer = AutoServerBox.IsChecked == true;
+        next.DebugMode = DebugBox.IsChecked == true;
+        next.ParallelTransfers = ParallelChoice();
+        next.UploadLimitMBps = Limit(UpLimitBox, UpLimitValue);
+        next.DownloadLimitMBps = Limit(DownLimitBox, DownLimitValue);
+        next.ShowInFileManager = FileManagerBox.IsChecked == true;
+        next.ExplorerRightClick = RightClickBox.IsChecked == true;
+        next.CloudFolder = CloudChoice(_applied);
+        next.Placement = new Dictionary<string, FilePlacement>(_placement, StringComparer.Ordinal);
+        if (Same(next, _applied))
+            return;
+        _applied = next;
+        SwitchesChanged?.Invoke(next);
+    }
+
+    /// <summary>False while a limit is on but its number cannot be read (that waits for Save).</summary>
+    private static bool LimitReadable(ToggleSwitch box, TextBox value) => box.IsChecked != true || Limit(box, value) is not null;
+
+    private static bool Same(ClientSettings a, ClientSettings b) =>
+        a.StartWithWindows == b.StartWithWindows && a.CheckForUpdates == b.CheckForUpdates && a.WaitForPeerBatches == b.WaitForPeerBatches
+        && a.ShowMapSpeed == b.ShowMapSpeed && a.AutoUpdateServer == b.AutoUpdateServer && a.DebugMode == b.DebugMode
+        && a.EffectiveParallelTransfers == b.EffectiveParallelTransfers && !SettingsSwitches.LimitsChanged(a, b)
+        && !SettingsSwitches.FileManagerChanged(a, b) && a.CloudFolder == b.CloudFolder && !SettingsSwitches.PlacementChanged(a, b);
+
+    /// <summary>The sync ticks switch (Windows only: elsewhere the earlier value stays).</summary>
+    private CloudFolderMode CloudChoice(ClientSettings earlier) => !OperatingSystem.IsWindows() ? earlier.CloudFolder
+        : TicksBox.IsChecked == true ? CloudFolderMode.KeepAllHere : CloudFolderMode.Off;
 
     private static string AvatarLetter(string? text)
     {
@@ -106,6 +213,88 @@ public partial class SettingsView : UserControl
         }
         return "?";
     }
+
+    // ------------------------------------------------------------------ where your files live
+
+    /// <summary>The folders the card lists: "" (everything else), each top folder, and any folder with a choice of its own.</summary>
+    public IReadOnlyList<string> PlacementFolders =>
+        [string.Empty, .. (_files?.Folders() ?? []).Concat(_placement.Keys.Select(PlacementMap.NormalizeFolder).Where(k => k.Length > 0))
+            .Distinct(StringComparer.OrdinalIgnoreCase).Order(StringComparer.CurrentCultureIgnoreCase)];
+
+    /// <summary>Where <paramref name="folder"/>'s files live as chosen on this page so far.</summary>
+    public FilePlacement PlacementChosen(string folder) => new PlacementMap(_placement).For(folder);
+
+    /// <summary>The choices as Save will save them.</summary>
+    public IReadOnlyDictionary<string, FilePlacement> PlacementToSave => _placement;
+
+    private void DrawPlacement()
+    {
+        PlacementRows.Children.Clear();
+        PlacementRows.IsEnabled = _files is not null;
+        PlacementRows.Opacity = _files is null ? 0.55 : 1;
+        PlacementNote.Text = _files is null ? FilesPageText.SettingsOff : FilesPageText.SettingsText.Replace("this PC", "this computer", StringComparison.Ordinal);
+        var tops = _files?.List(string.Empty) ?? [];
+        foreach (var folder in PlacementFolders)
+        {
+            var name = folder.Length == 0 ? FilesPageText.EverythingElse : folder;
+            var row = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+            var size = folder.Length == 0 ? FilesPageText.EverythingElseNote
+                : _files is null ? string.Empty
+                : FilesPageText.SizeLine(tops.FirstOrDefault(e => e.IsFolder && e.Path == folder)?.Size ?? 0, _files.BytesHere(folder));
+            row.Children.Add(new StackPanel
+            {
+                VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
+                Margin = new Thickness(0, 0, 12, 0),
+                Children =
+                {
+                    new TextBlock { Text = name, FontWeight = FontWeight.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis },
+                    new TextBlock { Text = size, Classes = { "t3" } },
+                },
+            });
+            var segments = new StackPanel { Orientation = Avalonia.Layout.Orientation.Horizontal };
+            var now = PlacementChosen(folder);
+            foreach (var choice in NestFiles.Choices)
+            {
+                var button = new RadioButton
+                {
+                    Content = NestFiles.PlacementText(choice),
+                    Classes = { "seg" },
+                    GroupName = "placement:" + folder,
+                    IsChecked = choice == now,
+                };
+                Avalonia.Automation.AutomationProperties.SetName(button, $"{name}: {NestFiles.PlacementText(choice)}");
+                button.IsCheckedChanged += (_, _) =>
+                {
+                    if (button.IsChecked == true)
+                        Avalonia.Threading.Dispatcher.UIThread.Post(() => _ = ChoosePlacementAsync(folder, choice));
+                };
+                segments.Children.Add(button);
+            }
+            var frame = new Border { Classes = { "segments" }, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center, Child = segments };
+            Grid.SetColumn(frame, 1);
+            row.Children.Add(frame);
+            PlacementRows.Children.Add(row);
+        }
+    }
+
+    /// <summary>A choice in the card: asked first when files leave this computer, then applied at once like the switches.</summary>
+    public async Task ChoosePlacementAsync(string folder, FilePlacement choice)
+    {
+        var now = PlacementChosen(folder);
+        if (now == choice)
+            return;
+        if (await Dialogs.ConfirmAwayAsync(Owner, folder, now, choice, _files?.BytesHere(folder) ?? 0))
+        {
+            PlacementMap.Choose(_placement, folder, choice);
+            ApplySwitches();
+        }
+        DrawPlacement(); // also puts the choice back when the person said no
+    }
+
+    /// <summary>"Choose for a folder inside these…": the Files page.</summary>
+    public event Action? OpenFilesRequested;
+
+    private void OnPlacementLink(object? sender, RoutedEventArgs e) => OpenFilesRequested?.Invoke();
 
     private static string SystemName() => OperatingSystem.IsMacOS() ? "macOS" : OperatingSystem.IsWindows() ? "Windows" : "Linux";
 
@@ -134,11 +323,6 @@ public partial class SettingsView : UserControl
         var n = Patterns().Count;
         IgnoreCount.Text = n == 1 ? "1 rule" : n + " rules";
     }
-
-    /// <summary>"Sign in again" in the Your nest card (the app opens the sign-in window).</summary>
-    public event Action? SignInAgainRequested;
-
-    private void OnSignInAgain(object? sender, RoutedEventArgs e) => SignInAgainRequested?.Invoke();
 
     /// <summary>"Report a bug…" in the Help row (the app opens the bug report window).</summary>
     public event Action? ReportBugRequested;
@@ -199,7 +383,7 @@ public partial class SettingsView : UserControl
         }
     }
 
-    private string DeviceName() => string.IsNullOrWhiteSpace(DeviceBox.Text) ? Environment.MachineName : DeviceBox.Text.Trim();
+    private string DeviceName() => string.IsNullOrWhiteSpace(DeviceBox.Text) ? ComputerName.Default() : DeviceBox.Text.Trim();
 
     private List<string> Patterns() =>
         (IgnoreBox.Text ?? string.Empty).Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
@@ -243,11 +427,8 @@ public partial class SettingsView : UserControl
 
     private void OnCancel(object? sender, RoutedEventArgs e) => Cancelled?.Invoke();
 
-    /// <summary>"Sign out of this computer" (the controller asks first).</summary>
-    public event Action? SignOutRequested;
-
-    /// <summary>"Manage devices on the web".</summary>
-    public event Action? ManageDevicesRequested;
+    /// <summary>"Manage on the Computers page": the main window's page of computers (managing them lives there only).</summary>
+    public event Action? ShowDevicesRequested;
 
     /// <summary>Scrolls to the bottom of the page (screenshot test).</summary>
     internal void ScrollToEnd() => Scroller.ScrollToEnd();
@@ -257,9 +438,7 @@ public partial class SettingsView : UserControl
 
     private void OnReset(object? sender, RoutedEventArgs e) => ResetRequested?.Invoke();
 
-    private void OnSignOut(object? sender, RoutedEventArgs e) => SignOutRequested?.Invoke();
-
-    private void OnManageDevices(object? sender, RoutedEventArgs e) => ManageDevicesRequested?.Invoke();
+    private void OnShowDevices(object? sender, RoutedEventArgs e) => ShowDevicesRequested?.Invoke();
 
     /// <summary>A link under "About Pairnets": the address of one of the website's pages (<see cref="PairnetsLinks"/>).</summary>
     public event Action<string>? OpenLinkRequested;
@@ -269,6 +448,40 @@ public partial class SettingsView : UserControl
         if (sender is Button { CommandParameter: string url })
             OpenLinkRequested?.Invoke(url);
     }
+
+    /// <summary>"Change…" next to where the nest keeps its files: the controller opens the window with the nest's drives.</summary>
+    public event Action? ChangeStorageRequested;
+
+    private void OnChangeStorage(object? sender, RoutedEventArgs e) => ChangeStorageRequested?.Invoke();
+
+    /// <summary>
+    /// The "Where your nest keeps files" row: "/mnt/data/pairnets · 3.60 TB free" with "Change…", shown only when the nest
+    /// can move its files (null or an older nest: hidden).
+    /// </summary>
+    public void ShowNestStorage(NestStorage? storage)
+    {
+        var shown = storage is { CanMove: true };
+        StoragePanel.IsVisible = shown;
+        StorageText.Text = shown ? NestPlaceFlow.PlaceLine(storage!) : string.Empty;
+    }
+
+    /// <summary>The row's line as shown (tests), or null while it is hidden.</summary>
+    internal string? StorageLine => StoragePanel.IsVisible ? StorageText.Text : null;
+
+    /// <summary>"Move…" next to the program folder (Linux): the controller asks where to and moves the app.</summary>
+    public event Action? MoveProgramRequested;
+
+    private void OnMoveProgram(object? sender, RoutedEventArgs e) => MoveProgramRequested?.Invoke();
+
+    /// <summary>The Linux app's "Program folder" row ("~/.local/opt/pairnets"); null hides it.</summary>
+    public void ShowProgramFolder(string? folder)
+    {
+        ProgramPanel.IsVisible = folder is not null;
+        ProgramText.Text = folder ?? string.Empty;
+    }
+
+    /// <summary>The program folder as shown (tests), or null while the row is hidden.</summary>
+    internal string? ProgramLine => ProgramPanel.IsVisible ? ProgramText.Text : null;
 
     private void OnShowAddress(object? sender, RoutedEventArgs e)
     {
@@ -336,6 +549,10 @@ public partial class SettingsView : UserControl
                 AccountEmail = OwnKey.AccountEmailAfterSave(_original, url, deviceId),
                 ExtraIgnore = Patterns(),
                 StartWithWindows = AutoStartBox.IsChecked == true,
+                ShowInFileManager = FileManagerBox.IsChecked == true,
+                ExplorerRightClick = RightClickBox.IsChecked == true,
+                CloudFolder = CloudChoice(_original),
+                Placement = new Dictionary<string, FilePlacement>(_placement, StringComparer.Ordinal),
                 FirstRunCompleted = true,
                 Paused = _original.Paused,
                 SideFolded = _original.SideFolded,
@@ -351,7 +568,10 @@ public partial class SettingsView : UserControl
                 NotifyJoinRequests = _original.NotifyJoinRequests,
                 NotifyAttention = _original.NotifyAttention,
                 NotifyUpdates = _original.NotifyUpdates,
+                NameOfferAnswered = _original.NameOfferAnswered,
             };
+            if (OwnKey.NameNotSaved(_original, deviceId, DeviceName(), deviceName) is { } note)
+                await Dialogs.InfoAsync(Owner, "Pairnets", note);
             PlainToken = token;
             Saved?.Invoke(this);
         }

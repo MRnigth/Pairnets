@@ -120,7 +120,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        check: [install-and-update, upgrade-from-release]
+        check: [install-and-update, upgrade-from-release, choose-a-drive]
     steps:
       - uses: actions/checkout@v4
 
@@ -199,6 +199,18 @@ jobs:
         if: matrix.check == 'upgrade-from-release'
         run: sudo bash tests/linux-server/upgrade-check.sh --feed dist/feed1
 
+      - name: Choose a drive, update, move the files (phase C)
+        if: matrix.check == 'choose-a-drive'
+        run: |
+          # The runner's /etc/fstab names a /mnt disk (ephemeral0) that is not there; systemd ties the test drives under
+          # /mnt to that failed mount, so drop the stale line first (a real server with such a line has the same problem).
+          if ! findmnt -rn --mountpoint /mnt >/dev/null && grep -qE '^[^#[:space:]]+[[:space:]]+/mnt[[:space:]]' /etc/fstab; then
+            sudo sed -i -E 's|^([^#[:space:]]+[[:space:]]+/mnt[[:space:]].*)$|# \1|' /etc/fstab
+            sudo systemctl daemon-reload
+            sudo systemctl reset-failed mnt.mount 2>/dev/null || true
+          fi
+          sudo bash tests/linux-server/place-check.sh --feed dist/feed1 --feed2 dist/feed2
+
       - name: Server logs
         if: always()
         run: |
@@ -263,6 +275,8 @@ jobs:
       - name: Test
         env:
           PAIRNETS_CONVERGENCE_SEEDS: 50
+          # This computer is thrown away after the run: the Windows cloud folder tests may register one here.
+          PAIRNETS_CLOUD_TESTS: 1
         run: >
           dotnet test Pairnets.sln -c Release --no-build
           --logger "trx;LogFileName=windows.trx"

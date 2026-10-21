@@ -155,7 +155,23 @@ public class UpdateScriptTests : IDisposable
         Assert.Contains("WARNING: the service did not answer", File.ReadAllText(_dir.Combine("update", "update.log")));
     }
 
-    private void MakeRelease(string version, bool corrupt, string installScript = "#!/bin/sh\necho installed\n")
+    [Theory]
+    [InlineData("1.0.59", "1.0.59.1", true)]   // the quick fix after 1.0.59
+    [InlineData("1.0.59.1", "1.0.60", true)]   // the next normal release after it
+    [InlineData("1.0.59.1", "1.0.59.1", false)]
+    [InlineData("1.0.59.1", "1.0.59", false)]  // never back down
+    [InlineData("1.0.9", "1.0.10", true)]      // numbers, not letters
+    public void FourPartVersions_AreComparedAsNumbers(string installed, string release, bool installs)
+    {
+        if (!OperatingSystem.IsLinux())
+            return;
+        MakeRelease(release, corrupt: false, installed: installed);
+        var (state, message) = Run();
+        Assert.Equal("succeeded", state);
+        Assert.Equal(installs ? $"Would install {release} (dry run)." : $"Already up to date ({installed}).", message);
+    }
+
+    private void MakeRelease(string version, bool corrupt, string installScript = "#!/bin/sh\necho installed\n", string installed = "1.0.29")
     {
         var release = _dir.Combine("release");
         var payload = Path.Combine(release, "pairnets-server-linux-x64");
@@ -164,7 +180,7 @@ public class UpdateScriptTests : IDisposable
         File.WriteAllText(Path.Combine(payload, "install.sh"), installScript);
         Bash($"chmod +x '{Path.Combine(payload, "install.sh")}'");
         Directory.CreateDirectory(_dir.Combine("install"));
-        File.WriteAllText(_dir.Combine("install", "VERSION"), "1.0.29\n");
+        File.WriteAllText(_dir.Combine("install", "VERSION"), installed + "\n");
         var archive = Path.Combine(release, "pairnets-server-linux-x64.tar.gz");
         if (corrupt)
             File.WriteAllText(archive, "not an archive");

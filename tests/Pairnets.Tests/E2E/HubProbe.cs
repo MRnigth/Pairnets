@@ -28,6 +28,7 @@ public sealed class HubProbe : IAsyncDisposable
         hub.On<string, string>(SyncHub.DeviceRenamedMethod, (id, who) => Heard(SyncHub.DeviceRenamedMethod, id, who));
         hub.On<string, TransferReport>(SyncHub.PeerTransferMethod, (who, report) => Heard(SyncHub.PeerTransferMethod, who, report));
         hub.On<string, long>(SyncHub.PeerSyncedMethod, (who, version) => Heard(SyncHub.PeerSyncedMethod, who, version));
+        hub.On<string>(SyncHub.NestRenamedMethod, name => Heard(SyncHub.NestRenamedMethod, name));
         hub.On<string, string, string>(PairingEndpoints.PairRequestedMethod, (code, who, system) => Heard(PairingEndpoints.PairRequestedMethod, code, who, system));
         hub.On<string, string, string, string>(PairingEndpoints.PairRequestedFromMethod, (code, who, system, address) => Heard(PairingEndpoints.PairRequestedFromMethod, code, who, system, address));
         hub.On<string, bool>(PairingEndpoints.PairDecidedMethod, (code, approved) => Heard(PairingEndpoints.PairDecidedMethod, code, approved));

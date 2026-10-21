@@ -1,0 +1,97 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:v="using:Pairnets.Desktop.Views"
+             xmlns:c="using:Pairnets.Core.Client"
+             x:Class="Pairnets.Desktop.Views.CleanupView">
+  <!-- "Clean up your nest": the biggest files on the nest, to save elsewhere or (only when completely sure) delete for good. -->
+  <Grid RowDefinitions="Auto,Auto,Auto,Auto,*,Auto" Margin="28,40,28,24">
+    <!-- Header -->
+    <Grid ColumnDefinitions="*,Auto">
+      <StackPanel>
+        <TextBlock Classes="PageTitle" Text="Clean up your nest" />
+        <TextBlock x:Name="CleanupSubtitle" Classes="t2" Margin="0,2,0,0" TextWrapping="Wrap" />
+      </StackPanel>
+      <Button Grid.Column="1" Classes="SecondaryButton" Height="38" Padding="18,0" VerticalAlignment="Center" Content="Done" Click="OnCleanupDone" />
+    </Grid>
+
+    <!-- We recommend not deleting -->
+    <Border Grid.Row="1" Classes="tint-accent" Margin="0,16,0,0" Padding="16,12" CornerRadius="14">
+      <Grid ColumnDefinitions="Auto,*">
+        <v:LineIcon Width="18" Height="18" Margin="0,1,12,0" VerticalAlignment="Top" StrokeThickness="2" Stroke="{DynamicResource T.AccentInk}" Data="{StaticResource I.InfoCircle}" />
+        <TextBlock Grid.Column="1" TextWrapping="Wrap" FontSize="14" Foreground="{DynamicResource T.AccentInk}">
+          <Run FontWeight="Bold" Text="We recommend you don't delete anything." />
+          <Run Text="Better ways to make room: save big files you rarely need to an external drive with Save a copy, or give your nest a bigger disk. Delete only if you are completely sure." />
+        </TextBlock>
+      </Grid>
+    </Border>
+
+    <!-- Kinds of file, biggest first -->
+    <Grid Grid.Row="2" ColumnDefinitions="*,Auto" Margin="0,16,0,0">
+      <WrapPanel x:Name="KindChips" />
+      <TextBlock Grid.Column="1" Classes="t3" FontSize="13" VerticalAlignment="Center" Text="Sort: biggest first" />
+    </Grid>
+
+    <!-- How the last change went -->
+    <Border x:Name="CleanupMessage" Grid.Row="3" Classes="msg" Margin="0,12,0,0" HorizontalAlignment="Left" IsVisible="False">
+      <TextBlock x:Name="CleanupMessageText" TextWrapping="Wrap" FontSize="12.5" />
+    </Border>
+
+    <!-- The biggest files, then older versions and deleted files -->
+    <Border Grid.Row="4" Classes="pcard" Margin="0,12,0,0" Padding="8,4,8,6">
+      <Grid RowDefinitions="Auto,*">
+        <Grid ColumnDefinitions="48,2*,0.8*,1.2*,220" Margin="10,10,10,6">
+          <TextBlock Grid.Column="1" Classes="heading" Text="FILE" />
+          <TextBlock Grid.Column="2" Classes="heading" Text="TYPE" />
+          <TextBlock Grid.Column="3" Classes="heading" Text="SIZE" />
+        </Grid>
+        <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Disabled">
+          <StackPanel>
+            <ItemsControl x:Name="BigList">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate DataType="c:CleanupRow">
+                  <Border BorderThickness="0,1,0,0" BorderBrush="{DynamicResource T.Border}" Padding="10,9">
+                    <Grid ColumnDefinitions="48,2*,0.8*,1.2*,220">
+                      <Border Classes="sq34" Margin="0,0,14,0" VerticalAlignment="Center">
+                        <v:LineIcon Classes="icon ink-soft" Width="17" Height="17" StrokeThickness="2" Data="{StaticResource I.File}" />
+                      </Border>
+                      <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                        <TextBlock Text="{Binding Detail}" Classes="t3" TextTrimming="CharacterEllipsis" />
+                      </StackPanel>
+                      <TextBlock Grid.Column="2" Text="{Binding KindText}" Classes="t3" FontSize="13" VerticalAlignment="Center" />
+                      <StackPanel Grid.Column="3" VerticalAlignment="Center" Margin="0,0,16,0" Spacing="5">
+                        <TextBlock Text="{Binding SizeText}" FontWeight="Bold" FontSize="13" />
+                        <ProgressBar Classes="thin" Minimum="0" Maximum="100" Value="{Binding Percent, Mode=OneWay}" />
+                      </StackPanel>
+                      <StackPanel Grid.Column="4" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right" VerticalAlignment="Center">
+                        <Button Classes="small" FontWeight="Bold" Content="Save a copy…" Click="OnCleanupSave" />
+                        <Button Classes="ghost" FontWeight="Bold" Content="Delete…" Click="OnCleanupDelete" />
+                      </StackPanel>
+                    </Grid>
+                  </Border>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <Border x:Name="HistoryRow" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource T.Border}" Padding="10,9">
+              <Grid ColumnDefinitions="48,2*,0.8*,1.2*,220">
+                <Border Classes="sq34" Margin="0,0,14,0" VerticalAlignment="Center">
+                  <v:LineIcon Classes="icon ink-soft" Width="17" Height="17" StrokeThickness="2" Data="{StaticResource I.History}" />
+                </Border>
+                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                  <TextBlock Text="Older versions and deleted files" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                  <TextBlock Text="Kept 30 days in History, then removed by your nest by itself" Classes="t3" TextTrimming="CharacterEllipsis" />
+                </StackPanel>
+                <TextBlock Grid.Column="2" Text="History" Classes="t3" FontSize="13" VerticalAlignment="Center" />
+                <TextBlock x:Name="HistorySize" Grid.Column="3" FontWeight="Bold" FontSize="13" VerticalAlignment="Center" />
+                <Button Grid.Column="4" Classes="small" FontWeight="Bold" HorizontalAlignment="Right" VerticalAlignment="Center" Content="Open History" Click="OnOpenHistory" />
+              </Grid>
+            </Border>
+            <TextBlock x:Name="CleanupEmpty" Classes="t2" Margin="10,16" TextWrapping="Wrap" IsVisible="False" />
+          </StackPanel>
+        </ScrollViewer>
+      </Grid>
+    </Border>
+
+    <TextBlock x:Name="CleanupFooter" Grid.Row="5" Classes="t3" FontSize="13" Margin="4,12,0,0" />
+  </Grid>
+</UserControl>

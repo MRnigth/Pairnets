@@ -40,6 +40,7 @@ public sealed class HubView : UserControl
     private readonly Border _nestBox = new();
     private readonly LineIcon _nestGlyph = Icon(24, 1.7);
     private readonly Ellipse _nestDot = Dot(12);
+    private readonly TextBlock _nestTitle = new() { Text = "Your nest" };
     private readonly TextBlock _nestSub = new();
     private readonly Canvas _right = new() { Width = RightWidth, Height = Height168 };
     private readonly LayoutTransformControl _scaler = new();
@@ -208,7 +209,10 @@ public sealed class HubView : UserControl
         host.Children.Add(_nestBox);
 
         var label = new StackPanel { Width = 150 };
-        var title = new TextBlock { Text = "Your nest", FontWeight = FontWeight.Bold, HorizontalAlignment = HorizontalAlignment.Center };
+        var title = _nestTitle;
+        title.FontWeight = FontWeight.Bold;
+        title.HorizontalAlignment = HorizontalAlignment.Center;
+        title.TextTrimming = TextTrimming.CharacterEllipsis;
         Paint(title, TextBlock.ForegroundProperty, "T.Text");
         _nestSub.FontSize = 12;
         _nestSub.HorizontalAlignment = HorizontalAlignment.Center;
@@ -281,6 +285,7 @@ public sealed class HubView : UserControl
         Paint(_nestBox, Border.BackgroundProperty, bg);
         Paint(_nestGlyph, LineIcon.StrokeProperty, ink);
         Paint(_nestDot, Shape.FillProperty, DotKey(m.NestDot));
+        _nestTitle.Text = m.NestTitle;
         _nestSub.Text = m.NestSub;
         Paint(_nestSub, TextBlock.ForegroundProperty, m.NestDot switch { NestDot.Bad => "T.BadText", NestDot.Warn => "T.WarnText", _ => "T.TextSoft" });
 
@@ -350,7 +355,7 @@ public sealed class HubView : UserControl
 
     private void UpdateTimer()
     {
-        var animate = IsEffectivelyVisible && this.GetVisualRoot() is not null && AnyFlowing;
+        var animate = IsEffectivelyVisible && this.GetVisualRoot() is not null && Motion.Enabled && AnyFlowing;
         if (animate && !_timer.IsEnabled)
         {
             _last = DateTime.UtcNow;
