@@ -25,6 +25,13 @@ public sealed record NestRow(string Id, string Title, string? Folder, string Tex
 /// <param name="Worst">The tray icon's colour: the nest in the worst state wins.</param>
 public sealed record NestListModel(IReadOnlyList<NestRow> Rows, string AllSub, bool AllSelected, RunnerStatus Worst)
 {
+    /// <summary>
+    /// The line under "Add a nest" on the All nests page. An account may have 4 nests of its own (the service's
+    /// MAX_NESTS_PER_ACCOUNT); nests friends share don't count. The app keeps no sign-in to the service, so the website and
+    /// the browser step say how many are used.
+    /// </summary>
+    public const string AddNestHint = "Your own (up to 4 per account), a friend's or one from work. It gets its own folder.";
+
     /// <summary>The list shows once there are two nests or more; with one, the left side looks as it always did.</summary>
     public bool Visible => Rows.Count > 1;
 
