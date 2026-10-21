@@ -1398,8 +1398,9 @@ nest" canvas (a copy is in `Pairnets\designs\invite-friends-2026-10-21`). The ow
 ## 4 nests per account, and linked nests (1.0.61.3, 2026-10-21)
 
 The owner asked: "make it so you can add up to 4 nests on one account.. and invite nests that are linked to accounts to
-join". The pictures (claude.ai canvas "4 nests per account + linked nests") showed three readings. The owner picked A,
-a nest that joins another nest, with the recommended answers.
+join". The pictures (claude.ai canvas "4 nests per account + linked nests") showed three readings. The owner picked both
+A (a nest joins another nest) and B (invite an account), with the recommended answers. Both reuse the friend invite of
+1.0.61.2: a link or email only lets someone ask to join, and they get in when the owner presses Let in (or Decline).
 
 * **4 nests of your own per account** (`MAX_NESTS_PER_ACCOUNT`, was 3). Nests friends share with you, and nests linked
   to yours, never count. `GET /v1/me` returns `nests: {used, max}`. The account page says "2 of 4 used". At the limit,
@@ -1421,3 +1422,10 @@ a nest that joins another nest, with the recommended answers.
   * A nest must be on this version to invite or join ("Update your nest first").
 * **Unlinking** from either side deletes the key at once. The copy on the joining nest stays, stops changing and is
   marked "Unlinked".
+* **B: invite an account.** It's the friend invite, but the access belongs to the account, not to the computers it had
+  when it accepted.
+  * After Let in, every computer that account signs in on is offered the shared nest by itself. It shows as "Shared by
+    Oskar" in the nest list, with its own folder `Pairnets\<nest name>`, and needs no "Add a nest".
+  * A computer added later gets it too.
+  * Removing the account deletes the keys of all its computers at once.
+  * An encrypted nest can be shared this way, whole only (as for friends).
