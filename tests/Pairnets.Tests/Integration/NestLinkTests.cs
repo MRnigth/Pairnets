@@ -188,13 +188,72 @@ public sealed class NestLinkTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task AKeyRemovedOnTheOtherNestShowsAProblem()
+    public async Task AKeyRemovedOnTheOtherNestEndsTheLinkHere()
     {
         // Set before linking: adding a link wakes the worker, and its own pass must not use the good key either.
         Worker.Connect = _ => _oskar.Client(_linkKey.Id, "pn_test");
         await LinkAsync();
         await PassAsync();
-        Assert.Equal(LinkState.Problem, Links.Get(LinkId)!.State);
+        var link = Links.Get(LinkId)!;
+        Assert.Equal(LinkState.Unlinked, link.State);
+        Assert.Null(link.Key); // no longer counts toward the nest's links
+        Assert.Contains("link ended", link.LastError, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task SharingMoreFoldersBringsTheirOlderFiles()
+    {
+        await PutAsync(_oskarPc, "Photos/beach.jpg", "sand");
+        await PutAsync(_oskarPc, "Work/report.txt", "old news");
+        await LinkAsync(folders: ["Photos"]);
+        await PassAsync();
+        Assert.Null(await ReadAsync(_anna.Store, Folder + "/Work/report.txt"));
+
+        Assert.Equal(HttpStatusCode.OK, (await RelayAsync(HttpMethod.Patch, "/api/relay/links/" + LinkId, new { access = "view", folders = new[] { "Photos", "Work" } })).StatusCode);
+        await PassAsync();
+        Assert.Equal("old news", await ReadAsync(_anna.Store, Folder + "/Work/report.txt"));
+        Assert.Equal("sand", await ReadAsync(_anna.Store, Folder + "/Photos/beach.jpg"));
+    }
+
+    [Fact]
+    public async Task ViewThenEditSendsWhatChangedHereMeanwhile()
+    {
+        await PutAsync(_oskarPc, "Photos/beach.jpg", "sand");
+        await LinkAsync("view");
+        await PassAsync();
+        await PutLocalAsync(_anna.Store, Folder + "/Photos/mine.jpg", "anna's");
+        await PassAsync();
+
+        Assert.Equal(HttpStatusCode.OK, (await RelayAsync(HttpMethod.Patch, "/api/relay/links/" + LinkId, new { access = "edit" })).StatusCode);
+        await PassAsync();
+        var there = (await _oskarPc.GetManifestAsync(null, CancellationToken.None)).Entries;
+        Assert.Contains(there, e => e.Path == "Photos/mine.jpg" && !e.Deleted);
+        Assert.Single(there, e => e.Path == "Photos/beach.jpg" && !e.Deleted); // in step already: left alone
+        Assert.Equal(LinkState.InStep, Links.Get(LinkId)!.State);
+    }
+
+    [Fact]
+    public async Task AFileTheOtherNestTurnsDownIsNamedAndTriedAgain()
+    {
+        await LinkAsync("edit");
+        await PassAsync();
+        // The same name in other capitals on both sides before the next pass: neither nest can take the other's.
+        await PutAsync(_oskarPc, "School/Plan.txt", "oskar");
+        await PutLocalAsync(_anna.Store, Folder + "/School/PLAN.txt", "anna");
+        await PassAsync();
+        var link = Links.Get(LinkId)!;
+        Assert.Equal(LinkState.Problem, link.State);
+        Assert.Contains("PLAN.txt couldn't be sent", link.LastError, StringComparison.Ordinal);
+
+        // Renamed here: the next pass sends it, and the link is in step again.
+        var mine = _anna.Store.Manifest.Get(Folder + "/School/PLAN.txt")!;
+        Assert.Equal(ChangeStatus.Ok, (await _anna.Store.DeleteAsync(Folder + "/School/PLAN.txt", mine.Hash!)).Status);
+        await PutLocalAsync(_anna.Store, Folder + "/School/Plan (Anna).txt", "anna");
+        await PassAsync();
+        await PassAsync();
+        Assert.Contains((await _oskarPc.GetManifestAsync(null, CancellationToken.None)).Entries, e => e.Path == "School/Plan (Anna).txt" && !e.Deleted);
+        Assert.Equal("oskar", await ReadAsync(_anna.Store, Folder + "/School/Plan.txt"));
+        Assert.Equal(LinkState.InStep, Links.Get(LinkId)!.State);
     }
 
     [Fact]

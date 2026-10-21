@@ -228,6 +228,13 @@ public sealed class LinkStore
             ("$rc", (object?)remoteCursor ?? DBNull.Value), ("$lc", (object?)localCursor ?? DBNull.Value));
     }
 
+    /// <summary>
+    /// The link now shares more (more folders, or edit instead of view): both sides are read from the start again, so the
+    /// files that were left out before come in and what changed here meanwhile is sent. What both sides last had is kept,
+    /// so files already in step are not touched.
+    /// </summary>
+    public void Rewind(string id) => Update(id, "remoteCursor = 0, localCursor = 0");
+
     /// <summary>The other nest is a new one (another server id): start over, comparing every file.</summary>
     public void Restart(string id)
     {

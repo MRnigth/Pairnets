@@ -75,8 +75,10 @@ public static partial class LinkEndpoints
             var body = Read<ChangeLinkRequest>(ctx);
             if (body is null || ParseAccess(body.Access) is not { } access || CleanFolders(body.Folders, out var folders) is false)
                 return RelayEndpoints.Error(StatusCodes.Status400BadRequest, "bad_request");
-            if (links.Get(id) is not { IsActive: true } || !links.Change(id, access, folders))
+            if (links.Get(id) is not { IsActive: true } before || !links.Change(id, access, folders))
                 return RelayEndpoints.Error(StatusCodes.Status404NotFound, "not_found");
+            if (SharesMore(before, access, folders))
+                links.Rewind(id);
             worker.Kick();
             return Json(View(links.Get(id)!));
         });
@@ -120,6 +122,11 @@ public static partial class LinkEndpoints
             : Json(new AppLinkList(links.List().Select(l => new AppLink(l.Folder, l.OwnerName, l.NestName, l.Access == LinkAccess.Edit ? "edit" : "view",
                 StateName(l.State), Iso(l.LastInStep), l.State is LinkState.InStep or LinkState.New ? null : l.LastError)).ToList())));
     }
+
+    /// <summary>Edit where it was view, or a folder (or the whole nest) that was not shared before.</summary>
+    internal static bool SharesMore(NestLink before, LinkAccess access, IReadOnlyList<string>? folders) =>
+        (before.Access == LinkAccess.View && access == LinkAccess.Edit)
+        || (before.Folders is { } old && (folders is null || folders.Any(f => !old.Contains(f, StringComparer.OrdinalIgnoreCase))));
 
     private static LinkView View(NestLink l) =>
         new(l.Id, l.RemoteNestId, l.Folder, l.Access == LinkAccess.Edit ? "edit" : "view", l.Folders, l.OwnerName, l.NestName, StateName(l.State),

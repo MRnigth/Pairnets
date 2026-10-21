@@ -49,7 +49,17 @@ public sealed class LinkSync(SyncStore store, LinkStore links, IHubContext<SyncH
             var (done, settledAll) = await PullAsync(link, api, manifest, ct).ConfigureAwait(false);
             pulled = done;
             var localVersion = store.CurrentVersion;
-            pushed = link.Access == LinkAccess.Edit ? await PushAsync(link, api, ct).ConfigureAwait(false) : 0;
+            string? refused = null;
+            if (link.Access == LinkAccess.Edit)
+                (pushed, refused) = await PushAsync(link, api, ct).ConfigureAwait(false);
+            else
+                pushed = 0;
+            if (refused is not null)
+            {
+                // Not "in step": the file is tried again at every pass (the local cursor stays), and the folder says why.
+                links.Record(link.Id, LinkState.Problem, refused, manifest.ServerId, settledAll ? manifest.Version : null);
+                return new LinkPassResult(LinkState.Problem, pulled, pushed, refused);
+            }
             links.Record(link.Id, LinkState.InStep, null, manifest.ServerId, settledAll ? manifest.Version : null, localVersion);
             return new LinkPassResult(LinkState.InStep, pulled, pushed);
         }
@@ -59,7 +69,10 @@ public sealed class LinkSync(SyncStore store, LinkStore links, IHubContext<SyncH
         }
         catch (PairnetsAuthException)
         {
-            return Stop(link, LinkState.Problem, "The other nest no longer lets this nest in. It may have been unlinked there.");
+            // Its key was taken back there (unlinked, or the person removed): the link ends here too, so it no longer
+            // counts toward this nest's links. The folder and its files stay.
+            links.Unlink(link.Id);
+            return Stop(link, LinkState.Unlinked, "The other nest no longer lets this nest in, so the link ended. The folder and its files stay here.");
         }
         catch (Exception ex) when (ex is PairnetsNetworkException or PairnetsSlowDownException or HttpRequestException or TimeoutException
                                    or OperationCanceledException or IOException)
@@ -189,10 +202,14 @@ public sealed class LinkSync(SyncStore store, LinkStore links, IHubContext<SyncH
         }
     }
 
-    /// <summary>What this nest's computers changed in the link's folder, sent to the other nest (edit access only).</summary>
-    private async Task<int> PushAsync(NestLink link, IPairnetsApi api, CancellationToken ct)
+    /// <summary>
+    /// What this nest's computers changed in the link's folder, sent to the other nest (edit access only). Refused: why the
+    /// first file the other nest turned down (a name it can't take) was not sent, else null.
+    /// </summary>
+    private async Task<(int Done, string? Refused)> PushAsync(NestLink link, IPairnetsApi api, CancellationToken ct)
     {
         var done = 0;
+        string? refused = null;
         var (entries, _) = store.ReadManifest(link.LocalCursor);
         foreach (var e in entries)
         {
@@ -229,9 +246,14 @@ public sealed class LinkSync(SyncStore store, LinkStore links, IHubContext<SyncH
                     links.SetFile(link.Id, remotePath, result.Entry?.Hash ?? sentHash, opened.Entry.Hash);
                     done++;
                 }
+                else if (result.Outcome is ApiOutcome.CaseCollision or ApiOutcome.InvalidName)
+                    refused ??= $"{e.Path.Split('/')[^1]} couldn't be sent to {DeviceName(link)}: "
+                        + (result.Outcome == ApiOutcome.CaseCollision ? "a file there has the same name in other capitals." : "that name can't be used there.")
+                        + " Rename it here.";
+                // A conflict: the other nest's change comes back with the next pull.
             }
         }
-        return done;
+        return (done, refused);
     }
 
     /// <summary>Like any computer's change: the Devices page's "last change" and the "Changed" message to every app.</summary>
