@@ -80,6 +80,15 @@ public sealed partial class ApiTour : IAsyncDisposable
         new("DELETE", "/api/relay/devices/{id}"),
         new("PUT", "/api/relay/name"),
 
+        // Linked nests and the nests shared with the owner's account (Web/LinkEndpoints.cs).
+        new("GET", "/api/relay/links/"),
+        new("POST", "/api/relay/links/"),
+        new("PATCH", "/api/relay/links/{id}"),
+        new("DELETE", "/api/relay/links/{id}"),
+        new("PUT", "/api/relay/offers/"),
+        new("GET", "/api/links"),
+        new("GET", "/api/offers"),
+
         // The website's pages (Web/WebUi.cs).
         new("GET", "/"),
         new("GET", "/setup"),
