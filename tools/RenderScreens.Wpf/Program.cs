@@ -544,6 +544,24 @@ public static partial class Program
         Save(bugReport, outDir, $"windows-bug-report-{suffix}.png", print);
         bugReport.Close();
 
+        // "Send crash report to Pairnets": the Report a bug window with a crash card not sent yet, and the send window.
+        var crashDir = Path.Combine(Path.GetTempPath(), "pairnets-crash-shots-" + suffix);
+        if (Directory.Exists(crashDir))
+            Directory.Delete(crashDir, true);
+        var crash = SampleCrash();
+        CrashCards.Add(crashDir, crash);
+        var crashText = bugText + "\n\n## Crash cards (cleaned, kept on this computer; 1)\n" + crash.ToText();
+        var withCrash = new BugReportWindow(() => Task.FromResult(crashText), _ => { }, logsDir: Path.Combine(Path.GetTempPath(), "pairnets-bug-shots"),
+            crashesDir: crashDir, sendCrashes: (_, _) => Task.FromResult<string?>(null));
+        Place(withCrash);
+        Save(withCrash, outDir, $"windows-bug-report-crash-{suffix}.png", print);
+        withCrash.Close();
+        var send = new SendCrashWindow([crash], _ => Task.FromResult<string?>(null));
+        Place(send);
+        send.Note = "I renamed a folder while it was syncing.";
+        Save(send, outDir, $"windows-send-crash-{suffix}.png", print);
+        send.Close();
+
         Stage6.Render(outDir, suffix, print);
     }
 
@@ -592,6 +610,21 @@ public static partial class Program
             }),
             ("paused", basis with { Status = RunnerStatus.Paused, Text = "Paused", Paused = true }),
         ];
+    }
+
+    /// <summary>A cleaned crash card as Report a bug shows it.</summary>
+    private static CrashCard SampleCrash()
+    {
+        var when = new DateTimeOffset(2026, 10, 21, 9, 42, 0, TimeSpan.Zero);
+        return new CrashCard
+        {
+            Id = "3f9a1c0e72b4", App = "Windows app", Version = "1.0.60", System = "Microsoft Windows 10.0.26100 (X64), .NET 10.0.0",
+            Place = CrashPlace.Background, Error = "System.NullReferenceException", Message = "Object reference not set to an instance of an object.",
+            Details = string.Join("\n", "System.NullReferenceException: Object reference not set to an instance of an object.",
+                "   at Pairnets.Core.Sync.SyncRunner.ApplyRenameAsync(RemoteChange change)",
+                "   at Pairnets.Core.Sync.SyncRunner.RunPassAsync(CancellationToken ct)"),
+            FirstSeen = when.AddDays(-1), LastSeen = when, Count = 2, Closed = true, Noticed = true,
+        };
     }
 
     /// <summary>A Linux nest's drives as its root helper lists them: the main disk, a data drive, and a stick it can't use.</summary>

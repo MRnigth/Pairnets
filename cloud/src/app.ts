@@ -26,6 +26,7 @@ import {
 } from "./routes/account";
 import { appApproveRoute, appLogoutRoute, appPageRoute, appPollRoute, appRequestRoute, appStartRoute } from "./routes/apps";
 import { claimRoute } from "./routes/claim";
+import { crashListRoute, crashRoute, MAX_CRASH_BODY } from "./routes/crash";
 import {
   emailLandingRoute,
   googleCallbackRoute,
@@ -66,6 +67,7 @@ export const ORIGIN_EXEMPT = new Set([
   "/v1/app/logout",
   "/v1/servers/start",
   "/v1/servers/poll",
+  "/v1/crash",
 ]);
 
 const MUTATING = new Set(["POST", "PATCH", "PUT", "DELETE"]);
@@ -115,6 +117,7 @@ const API_ROUTES: Route[] = [
   { method: "DELETE", pattern: /^\/v1\/servers\/([^/]+)\/devices\/([^/]+)$/, handler: removeDeviceRoute },
   { method: "PATCH", pattern: /^\/v1\/servers\/([^/]+)$/, handler: renameServerRoute },
   { method: "DELETE", pattern: /^\/v1\/servers\/([^/]+)$/, handler: removeServerRoute },
+  { method: "POST", pattern: /^\/v1\/crash$/, handler: crashRoute },
 ];
 
 const PAGE_ROUTES: Route[] = [
@@ -127,6 +130,7 @@ const PAGE_ROUTES: Route[] = [
   { method: "GET", pattern: /^\/app$/, handler: appPageRoute },
   { method: "GET", pattern: /^\/add$/, handler: addPageRoute },
   { method: "GET", pattern: /^\/nest-login$/, handler: nestLoginRoute },
+  { method: "GET", pattern: /^\/admin\/crashes$/, handler: crashListRoute },
   ...WEBSITE_PAGES.map((page): Route => ({
     method: "GET",
     pattern: new RegExp(`^/${page}/?$`),
@@ -152,9 +156,9 @@ function isJsonType(ct: string | null): boolean {
   return !!ct && ct.split(";")[0].trim().toLowerCase() === "application/json";
 }
 
-async function readBody(req: Request): Promise<Uint8Array> {
+async function readBody(req: Request, max = MAX_BODY): Promise<Uint8Array> {
   const declared = req.headers.get("Content-Length");
-  if (declared !== null && Number(declared) > MAX_BODY) throw new HttpError(413, "bad_request", "The request body is too large.");
+  if (declared !== null && Number(declared) > max) throw new HttpError(413, "bad_request", "The request body is too large.");
   if (!req.body) return new Uint8Array(0);
   const reader = req.body.getReader();
   const chunks: Uint8Array[] = [];
@@ -163,7 +167,7 @@ async function readBody(req: Request): Promise<Uint8Array> {
     const { done, value } = await reader.read();
     if (done) break;
     total += value.length;
-    if (total > MAX_BODY) {
+    if (total > max) {
       await reader.cancel().catch(() => undefined);
       throw new HttpError(413, "bad_request", "The request body is too large.");
     }
@@ -201,7 +205,8 @@ async function route(ctx: Ctx, isApi: boolean): Promise<Response> {
 
   if (isApi) {
     if (MUTATING.has(method)) {
-      ctx.body = await readBody(req);
+      // A crash report carries stack traces, so it may be larger than the other requests.
+      ctx.body = await readBody(req, path === "/v1/crash" ? MAX_CRASH_BODY : MAX_BODY);
       if (ctx.body.length > 0 && !isJsonType(req.headers.get("Content-Type"))) {
         throw new HttpError(415, "bad_request", "Send JSON (Content-Type: application/json).");
       }

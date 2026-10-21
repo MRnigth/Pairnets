@@ -1219,15 +1219,17 @@ public sealed class DesktopController : ITrayActions, IDisposable
 
     public void ViewLog() => _platform.Open(_fileLog.CurrentFile);
 
-    /// <summary>"Report a bug": a report to paste to whoever helps (copied and saved; nothing is sent).</summary>
+    /// <summary>"Report a bug": a report to paste to whoever helps (copied and saved; only crash cards are sent, and only on "Send").</summary>
     public void ReportBug() => ShowBugReport(null);
 
     private void ShowBugReport(Exception? error)
     {
         var settings = _settings;
         var session = _session;
-        var window = new BugReportWindow(() => BugReport.BuildAsync(settings, session, _fileLog.CurrentFile, error, AppName, _env.CrashesDir), _platform.Open,
-            afterError: error is not null, saveDirectory: _env.LogsDir);
+        var crashes = _env.CrashesDir;
+        var window = new BugReportWindow(() => BugReport.BuildAsync(settings, session, _fileLog.CurrentFile, error, AppName, crashes), _platform.Open,
+            afterError: error is not null, saveDirectory: _env.LogsDir, crashesDir: crashes,
+            sendCrashes: (cards, note) => CrashSender.SendAsync(crashes, cards, note, PrivacyCleaner.ThisComputer(settings)));
         window.Show();
         window.Activate();
     }

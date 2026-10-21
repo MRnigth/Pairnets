@@ -7,6 +7,7 @@
 
 import type { Ctx } from "./context";
 import { sweepInactive } from "./inactive";
+import { crashSweep } from "./routes/crash";
 import { DAY, HOUR } from "./ratelimit";
 import { runRouter } from "./router";
 
@@ -28,8 +29,9 @@ export async function sweep(ctx: Ctx): Promise<Record<string, number | string | 
     db.prepare("DELETE FROM audit WHERE at < ?1").bind(now - AUDIT_DAYS * DAY),
     db.prepare("DELETE FROM server_links WHERE expires_at <= ?1").bind(now),
     db.prepare("UPDATE nests SET status = 'broken' WHERE mode = 'relay' AND status = 'pending' AND created_at <= ?1").bind(now - HOUR),
+    crashSweep(db, now),
   ]);
-  const names = ["sessions", "loginChallenges", "deviceLogins", "claimCodes", "pendingNests", "rateCounters", "audit", "serverLinks", "stalePendingServers"];
+  const names = ["sessions", "loginChallenges", "deviceLogins", "claimCodes", "pendingNests", "rateCounters", "audit", "serverLinks", "stalePendingServers", "crashReports"];
   const counts: Record<string, number | string | null> = {};
   results.forEach((r, i) => (counts[names[i]] = r.meta.changes ?? 0));
 

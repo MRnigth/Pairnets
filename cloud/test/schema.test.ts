@@ -6,6 +6,7 @@ import migration2 from "../migrations/0002_relay.sql?raw";
 import migration3 from "../migrations/0003_username.sql?raw";
 import migration4 from "../migrations/0004_request_place.sql?raw";
 import migration5 from "../migrations/0005_inactive.sql?raw";
+import migration6 from "../migrations/0006_crash_reports.sql?raw";
 import { b64urlEncode } from "../src/b64";
 import { FakeGoogle } from "./fake-google";
 import { claim, Harness, lastEmailCode, startServer } from "./helpers";
@@ -91,6 +92,7 @@ describe("schema", () => {
     await runSql(db, migration3);
     await runSql(db, migration4);
     await runSql(db, migration5);
+    await runSql(db, migration6);
   });
 
   it("migration 0004 adds the nullable place columns to device_logins and keeps its rows", async () => {
@@ -111,6 +113,7 @@ describe("schema", () => {
       request_country: null,
       request_city: null,
     });
+    for (const m of [migration5, migration6]) await runSql(db, m);
   });
 
   it("migration 0005 adds the nullable inactive_warned_at to accounts and keeps its rows", async () => {
@@ -120,6 +123,18 @@ describe("schema", () => {
     await db.prepare("INSERT INTO accounts (id, email, created_at, updated_at) VALUES ('acc_testacct000000000000000001', 'you@example.com', 1, 2)").run();
     await runSql(db, migration5);
     expect(await db.prepare("SELECT email, inactive_warned_at FROM accounts").first()).toEqual({ email: "you@example.com", inactive_warned_at: null });
+    await runSql(db, migration6);
+  });
+
+  it("migration 0006 adds crash_reports, with no column for who sent a report, and keeps the accounts", async () => {
+    const db = env.DB;
+    for (const t of TABLES) await db.prepare(`DROP TABLE IF EXISTS ${t}`).run();
+    for (const m of [migration, migration2, migration3, migration4, migration5]) await runSql(db, m);
+    await db.prepare("INSERT INTO accounts (id, email, created_at, updated_at) VALUES ('acc_testacct000000000000000001', 'you@example.com', 1, 2)").run();
+    await runSql(db, migration6);
+    const columns = (await db.prepare("PRAGMA table_info(crash_reports)").all<{ name: string }>()).results.map((c) => c.name);
+    expect(columns.filter((c) => /ip|account|device|nest|email/.test(c))).toEqual([]);
+    expect(await db.prepare("SELECT COUNT(*) AS n FROM accounts").first()).toEqual({ n: 1 });
   });
 
   it("no secret is stored in clear", async () => {
@@ -176,6 +191,14 @@ describe("schema", () => {
     h.advance(3);
     const done = (await app.call("POST", "/v1/app/poll", { body: { deviceCode: s.json.deviceCode } })).json;
     secrets.push(s.json.deviceCode, done.appToken, done.device.key);
+
+    // A crash report (it holds no secret, but every table must have a row to look at).
+    await app.call("POST", "/v1/crash", {
+      body: {
+        cards: [{ id: "3f9a1c0e72b4", app: "Windows app", version: "1.0.60", system: "Windows", place: "Task", error: "System.Exception",
+          message: "x", details: "at Pairnets.X()", count: 1, closed: false }],
+      },
+    });
 
     // The server's own secrets.
     secrets.push(h.env.HB_MASTER, h.env.COOKIE_KEY, h.signing.privateJwk.d!, h.env.CF_API_TOKEN);

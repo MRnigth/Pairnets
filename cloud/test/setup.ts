@@ -8,6 +8,7 @@ import { resetRelayState } from "../src/relay";
 
 export const TABLES = [
   "audit",
+  "crash_reports",
   "rate_counters",
   "sessions",
   "identities",

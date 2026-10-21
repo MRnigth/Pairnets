@@ -33,7 +33,7 @@
     <div class="hero tight">
       <h1>Privacy policy</h1>
       <p class="lead">What Pairnets knows about you, why, and for how long. As little as it can, and never your files.</p>
-      <p class="updated">Last updated 19 October 2026</p>
+      <p class="updated">Last updated 21 October 2026</p>
     </div>
     <div class="doc">
 <div class="callout">
@@ -41,7 +41,7 @@
 <ul>
 <li>Your files are stored only on your nest, your own server. They pass through sync.pairnets.app on the way and are never kept there.</li>
 <li>Your Pairnets account stores your email address, your username if you set one, how you sign in, and which computers and nests you have linked.</li>
-<li>No ads, no tracking, no analytics. We never sell your data or share it for marketing.</li>
+<li>No ads, no tracking, no analytics. We never sell your data or share it for marketing. The apps send a crash report only when you press <strong>Send</strong>, after showing you exactly what it holds.</li>
 <li>This website, pairnets.app, sets no cookies. Its pages ask sync.pairnets.app whether you are signed in, and Cloudflare, which delivers the site, handles visitors' IP addresses. It collects nothing else.</li>
 <li>You can see most of it on your account page, and delete all of it with one button. An account nobody uses for a year is deleted, after a warning email.</li>
 </ul>
@@ -111,9 +111,9 @@
 
 <h2 id="apps">5. The apps</h2>
 <ul>
-<li>No telemetry, no analytics, no crash reports sent anywhere.</li>
+<li>No telemetry and no analytics. When the app crashes it keeps a short note about it on your computer. It is sent to us only if you press <strong>Send crash report</strong>, and the app shows you exactly what will be sent first. A crash report holds the error, the Pairnets code it went through, the app version and the system (for example "Windows 11, 64-bit"), how often it happened, and anything you type in the optional note. It never holds your files, folder or computer names, logs, settings, email address or account, and we don't store your IP address with it. We use crash reports only to fix bugs and delete them 90 days after that crash was last sent.</li>
 <li>The apps talk to your nest (directly, or through sync.pairnets.app), to sync.pairnets.app to sign in (sending the computer's name, its system and the Pairnets version), and to GitHub to check for updates at start-up and once a day. GitHub sees your IP address when the app checks. You can turn the check off in <strong>Settings → Updates and speed</strong>.</li>
-<li>On your computer, the app keeps its settings, the computer's key (encrypted by Windows, or kept in the Mac Keychain or the Linux keyring), your account's email address to show you which account you're using, and a log. <strong>Report a bug</strong> saves the report on your computer and sends nothing.</li>
+<li>On your computer, the app keeps its settings, the computer's key (encrypted by Windows, or kept in the Mac Keychain or the Linux keyring), your account's email address to show you which account you're using, and a log. <strong>Report a bug</strong> saves the report on your computer and sends nothing; only the crash report, and only when you press Send, goes to us.</li>
 <li><strong>Settings → Start over → Reset this app</strong> removes all of it.</li>
 </ul>
 
@@ -163,6 +163,7 @@
 <ul>
 <li><strong>To give you what you asked for</strong>: your account, signing in, linking computers and nests, and passing traffic to your nest. Basis: our agreement with you (Article 6(1)(b)).</li>
 <li><strong>To keep Pairnets safe</strong>: limits on requests, the bot check, the activity log and technical logs. Basis: our legitimate interest in protecting your account and the service from abuse (Article 6(1)(f)).</li>
+<li><strong>To fix bugs</strong>: crash reports you chose to send. Basis: your consent, given by pressing Send (Article 6(1)(a)). Because a report holds nothing that says who sent it, we can't find or delete one person's report afterwards.</li>
 <li><strong>To follow the law</strong>, where a law requires it (Article 6(1)(c)).</li>
 </ul>
 <p>We don't make automated decisions about you, and we don't build profiles.</p>
@@ -179,6 +180,7 @@
 <tr><td>Computers waiting for you to allow them</td><td>10 minutes (30 minutes while waiting for a new nest)</td></tr>
 <tr><td>Activity log</td><td>90 days</td></tr>
 <tr><td>Server logs (sign-ins, errors)</td><td>30 days, then deleted</td></tr>
+<tr><td>Crash reports you sent</td><td>90 days after the same crash was last sent</td></tr>
 <tr><td>Scrambled request counters</td><td>2 days</td></tr>
 <tr><td>Database backups</td><td>Roll over within 30 days</td></tr>
 <tr><td>What Ko-fi shows us about a donation</td><td>As long as tax rules require, then deleted</td></tr>

@@ -442,6 +442,8 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
         ["bug report"] =
         [
             new("the bug report window", BugReportStage),
+            new("the bug report window with a crash not sent yet", BugReportWithCrashStage),
+            new("the send crash report window", SendCrashStage),
         ],
         ["questions"] =
         [
@@ -870,6 +872,35 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
         s.Expect["OnCopy"] = All(Clipboard(window, () => "Pairnets bug report\nline two"), That(() => Screen.Named<TextBlock>(window, "Heading").Text == "Bug report copied", "it say it was copied"));
         s.Expect["OnClose"] = That(() => !window.IsVisible, "the window close");
     }
+
+    private async Task BugReportWithCrashStage(Stage s)
+    {
+        var crashes = Path.Combine(fixture.Reports, "crashes-" + Guid.NewGuid().ToString("N")[..8]);
+        CrashCards.Add(crashes, SampleCrash());
+        var window = s.Show(new BugReportWindow(() => Task.FromResult("Pairnets bug report\nline two"), s.Opened.Add, saveDirectory: fixture.Reports,
+            crashesDir: crashes, sendCrashes: (_, note) => Task.FromResult<string?>(null)));
+        await Wait.Until(() => window.CrashBannerShown, "the crash banner to show");
+        s.Expect["OnSendCrash"] = That(() => s.Windows.OfType<SendCrashWindow>().Any(w => w.IsVisible), "the send crash report window open");
+    }
+
+    private static Task SendCrashStage(Stage s)
+    {
+        var window = s.Show(new SendCrashWindow([SampleCrash()], note =>
+        {
+            s.Events.Add("sent: " + note);
+            return Task.FromResult<string?>(null);
+        }) { Note = "renamed a folder" });
+        s.Expect["OnSend"] = That(() => s.Events.SequenceEqual(["sent: renamed a folder"]) && !window.IsVisible, "the report go with the note and the window close");
+        s.Expect["OnCancel"] = That(() => s.Events.Count == 0 && !window.IsVisible, "the window close without sending");
+        return Task.CompletedTask;
+    }
+
+    private static CrashCard SampleCrash() => new()
+    {
+        Id = "3f9a1c0e72b4", App = "Linux app", Version = "1.0.60", System = "Ubuntu 24.04 (X64)", Place = CrashPlace.Background,
+        Error = "System.NullReferenceException", Message = "Object reference not set to an instance of an object.",
+        Details = "   at Pairnets.Core.Sync.SyncRunner.RunPassAsync(CancellationToken ct)", Count = 2, Closed = true,
+    };
 
     private static async Task QuestionStage(Stage s, bool confirm)
     {

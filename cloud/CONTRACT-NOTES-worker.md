@@ -264,3 +264,13 @@ fold into `RELAY.md` or reverse.
   server is missing from the router or a `broken` one exists (that deploy deletes their tunnels and rows), and finally a
   **reconcile (choice):** any tunnel named `pairnets-nst_<26>` whose nest row no longer exists is deleted (left behind by
   an account deletion whose follow-up failed, or a request that died). Other tunnels in the account are never touched.
+
+### Crash reports (not in the contract)
+- `POST /v1/crash` (Origin-exempt, no sign-in): `{"cards":[…], "note": string|null}` from the apps' "Send crash report"
+  (`CrashSender`). 1-5 cards; body up to 64 KiB (the one route allowed more than 16 KiB). Bad shape → `400 bad_request`;
+  10 per hour per address and 500 a day in all → `429 rate_limited`; kept → `204`.
+- Stored in `crash_reports` (migration 0006), one row per crash id and app version; nothing about the sender. Rows not
+  seen for 90 days go in the hourly sweep.
+- `GET /admin/crashes`: the list, for signed-in accounts whose email is in the `ADMIN_EMAILS` secret (comma separated);
+  anyone else gets 404. Those addresses also get an email for each new kind of crash, at most 5 a day.
+- Deploying it: apply migration 0006, then `npx wrangler secret put ADMIN_EMAILS`, then deploy the Worker.

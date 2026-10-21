@@ -24,7 +24,7 @@ public enum CrashPlace
 /// One kind of crash, as kept on this computer: the error and the Pairnets code it went through, cleaned of
 /// anything personal (<see cref="PrivacyCleaner"/>). No log lines, file or folder names, computer name, account
 /// or device id. The same crash again adds to <see cref="Count"/> instead of making a new card.
-/// Nothing is sent anywhere.
+/// It is sent only when the user presses "Send crash report to Pairnets" (<see cref="CrashSender"/>).
 /// </summary>
 public sealed record CrashCard
 {
@@ -49,6 +49,9 @@ public sealed record CrashCard
 
     /// <summary>The "Pairnets closed after an unexpected error" notice was shown for the last close.</summary>
     public bool Noticed { get; init; }
+
+    /// <summary>When the user sent it to Pairnets; null when not sent since it last happened.</summary>
+    public DateTimeOffset? SentAt { get; init; }
 
     private static readonly Regex Frame = new(@"^\s*at\s+(?<method>[^(\r\n]+)", RegexOptions.Multiline | RegexOptions.CultureInvariant);
 
@@ -107,7 +110,7 @@ public static class CrashNotice
 {
     public const string Title = "Pairnets closed unexpectedly";
     public const string Text = "Pairnets had to close after an unexpected error. A note about it, without your files or names, " +
-        "is kept on this computer and shows in Report a bug. Nothing was sent.";
+        "is kept on this computer and shows in Report a bug, where you can send it to us. Nothing was sent.";
 }
 
 /// <summary>
@@ -137,6 +140,7 @@ public static class CrashCards
                     Count = kept.Count + 1,
                     Closed = kept.Closed || card.Closed,
                     Noticed = card.Closed ? false : kept.Noticed,
+                    SentAt = null, // it happened again: offer it again
                 };
                 Write(path, merged);
                 Trim(directory);
@@ -183,6 +187,26 @@ public static class CrashCards
                 }
             }
             return fresh;
+        }
+    }
+
+    /// <summary>Marks the cards with these ids as sent (<see cref="CrashCard.SentAt"/>).</summary>
+    public static void MarkSent(string directory, IEnumerable<string> ids, DateTimeOffset when)
+    {
+        lock (Gate)
+        {
+            foreach (var id in ids)
+            {
+                try
+                {
+                    var path = PathFor(directory, id);
+                    if (Read(path) is { } card)
+                        Write(path, card with { SentAt = when });
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                }
+            }
         }
     }
 

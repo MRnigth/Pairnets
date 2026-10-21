@@ -266,6 +266,27 @@ public class DesktopUiTests
         Assert.Equal("Pairnets bug report\nline two", bug.ReportValue);
         Assert.NotNull(bug.SavedPath);
         Assert.Equal("Pairnets bug report\nline two", File.ReadAllText(bug.SavedPath!));
+        Assert.False(bug.CrashBannerShown);
+
+        // A crash not sent yet: the banner offers to send it; after sending, the chip says so.
+        using var crashes = new TempDir("crash-send");
+        CrashCards.Add(crashes.Path, SampleCrash());
+        var withCrash = new BugReportWindow(() => Task.FromResult("report"), _ => { }, saveDirectory: reports.Path, crashesDir: crashes.Path,
+            sendCrashes: (_, _) => Task.FromResult<string?>(null));
+        Assert.True(withCrash.BuildAsync().IsCompleted);
+        Assert.True(withCrash.CrashBannerShown);
+        withCrash.AfterSend(true, 1);
+        Assert.Equal("Crash report sent to Pairnets", withCrash.SentChipValue);
+
+        // The send window shows exactly the card, and a failed send says why and keeps the window open.
+        var send = new SendCrashWindow([SampleCrash()], _ => Task.FromResult<string?>("Couldn't reach Pairnets."));
+        send.Show();
+        Assert.Equal(SampleCrash().ToText(), send.PreviewValue);
+        Assert.True(send.SendAsync().IsCompleted);
+        Assert.False(send.Sent);
+        Assert.Equal("Couldn't reach Pairnets.", send.ProblemValue);
+        Assert.True(send.IsVisible);
+        send.Close();
 
         var dialog = new ServerUpdateWindow(null, "1.0.52", "1.0.58");
         dialog.Show();
@@ -686,6 +707,22 @@ public class DesktopUiTests
         bug.BuildAsync().GetAwaiter().GetResult();
         Save(bug, outDir, $"bug-report-{suffix}.png");
         bug.Close();
+
+        // "Send crash report…": the banner in Report a bug, and the window that shows what will be sent.
+        var crashDir = Path.Combine(Path.GetTempPath(), "pairnets-crash-shots-" + suffix);
+        if (Directory.Exists(crashDir))
+            Directory.Delete(crashDir, true);
+        CrashCards.Add(crashDir, SampleCrash());
+        var withCrash = new BugReportWindow(() => Task.FromResult("Pairnets bug report\n\n## Crash cards (cleaned, kept on this computer; 1)\n" + SampleCrash().ToText()),
+            _ => { }, saveDirectory: bugDir, crashesDir: crashDir, sendCrashes: (_, _) => Task.FromResult<string?>(null));
+        withCrash.Show();
+        withCrash.BuildAsync().GetAwaiter().GetResult();
+        Save(withCrash, outDir, $"bug-report-crash-{suffix}.png");
+        withCrash.Close();
+        var sendCrash = new SendCrashWindow([SampleCrash()], _ => Task.FromResult<string?>(null)) { Note = "I renamed a folder while it was syncing." };
+        sendCrash.Show();
+        Save(sendCrash, outDir, $"send-crash-{suffix}.png");
+        sendCrash.Close();
     }
 
     /// <summary>
@@ -748,6 +785,16 @@ public class DesktopUiTests
         const string nestId = "nst_7f3k9q2m8v4c6x1t5r0p2n9b3d";
         return new AccountSignInResult(Relay.AddressOf(nestId), nestId, "soro", new DeviceKeyGrant("id", name, "unused"), "maria@example.com");
     }
+
+    /// <summary>A cleaned crash card as Report a bug shows it.</summary>
+    private static CrashCard SampleCrash() => new()
+    {
+        Id = "3f9a1c0e72b4", App = "Linux app", Version = "1.0.60", System = "Ubuntu 24.04.1 LTS (X64), .NET 8.0.10", Place = CrashPlace.Background,
+        Error = "System.NullReferenceException", Message = "Object reference not set to an instance of an object.",
+        Details = "System.NullReferenceException: Object reference not set to an instance of an object.\n   at Pairnets.Core.Sync.SyncRunner.ApplyRenameAsync(RemoteChange change)\n   at Pairnets.Core.Sync.SyncRunner.RunPassAsync(CancellationToken ct)",
+        FirstSeen = new DateTimeOffset(2026, 10, 20, 9, 42, 0, TimeSpan.Zero), LastSeen = new DateTimeOffset(2026, 10, 21, 9, 42, 0, TimeSpan.Zero),
+        Count = 2, Closed = true, Noticed = true,
+    };
 
     internal static void Save(Avalonia.Controls.Window window, string? outDir, string name)
     {

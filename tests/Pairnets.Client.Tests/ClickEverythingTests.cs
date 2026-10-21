@@ -1158,7 +1158,17 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
         yield return new Screen("the bug report window", "the report is ready",
             b => new BugReportWindow(() => Task.FromResult("Pairnets bug report" + Environment.NewLine + "(sample)"), b.Opened.Add, logsDir: b.Dir),
             (_, w) => Wpf.WaitUntil(() => ((BugReportWindow)w).CopyButton.IsEnabled, "the report"));
+        // "Send crash report…": what goes out is shown first; Send hands the note to the sender (here: Opened).
+        yield return new Screen("the send crash report window", "a crash card not sent yet",
+            b => new SendCrashWindow([SampleCrash()], note => { b.Opened.Add("sent: " + note); return Task.FromResult<string?>(null); }) { Note = "renamed a folder" });
     }
+
+    private static CrashCard SampleCrash() => new()
+    {
+        Id = "3f9a1c0e72b4", App = "Windows app", Version = "1.0.60", System = "Windows", Place = CrashPlace.Background,
+        Error = "System.NullReferenceException", Message = "Object reference not set to an instance of an object.",
+        Details = "   at Pairnets.Core.Sync.SyncRunner.RunPassAsync(CancellationToken ct)", Closed = true,
+    };
 
     private static readonly IReadOnlyList<Rule> BugReportRules =
     [
@@ -1166,6 +1176,8 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
         On(["Open file", "Open the saved file"], "open the saved report",
             c => c.Bench.Opened.Items is [var file] && file.StartsWith(c.Bench.Dir, StringComparison.OrdinalIgnoreCase) && File.Exists(file)),
         On("Copy again", "copy the report again", c => c.Bench.Script.Copied.Items.Any(t => t.StartsWith("Pairnets bug report", StringComparison.Ordinal))),
+        On("Send", "send the crash report with the note and close", c => c.Bench.Opened.Items is ["sent: renamed a folder"] && c.Bench.Closed),
+        On("Don't send", "close without sending", c => c.Bench.Opened.Items.Count == 0 && c.Bench.Closed),
     ];
 
     // ------------------------------------------------------------------ the tray menu and icon (the real tray controller)
