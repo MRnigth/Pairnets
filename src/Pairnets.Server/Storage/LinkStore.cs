@@ -186,7 +186,7 @@ public sealed class LinkStore
         cmd.Parameters.AddWithValue("$key", key);
         cmd.Parameters.AddWithValue("$folder", folder);
         cmd.Parameters.AddWithValue("$access", access.ToString());
-        cmd.Parameters.AddWithValue("$folders", folders is null ? DBNull.Value : JsonSerializer.Serialize(folders));
+        cmd.Parameters.AddWithValue("$folders", folders is null ? (object)DBNull.Value : JsonSerializer.Serialize(folders));
         cmd.Parameters.AddWithValue("$owner", ownerName);
         cmd.Parameters.AddWithValue("$name", nestName);
         cmd.Parameters.AddWithValue("$now", _clock.GetUtcNow().ToUnixTimeMilliseconds());
@@ -196,7 +196,7 @@ public sealed class LinkStore
 
     /// <summary>The owner changed what the link may do or which folders it shares.</summary>
     public bool Change(string id, LinkAccess access, IReadOnlyList<string>? folders) =>
-        Update(id, "access = $a, folders = $f", ("$a", access.ToString()), ("$f", folders is null ? DBNull.Value : JsonSerializer.Serialize(folders)));
+        Update(id, "access = $a, folders = $f", ("$a", access.ToString()), ("$f", folders is null ? (object)DBNull.Value : JsonSerializer.Serialize(folders)));
 
     /// <summary>Ends a link: the key is forgotten at once; the folder and its files stay.</summary>
     public bool Unlink(string id) => Update(id, "key = NULL, state = 'Unlinked'");
