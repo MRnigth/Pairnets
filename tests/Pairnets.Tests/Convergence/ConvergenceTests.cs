@@ -63,7 +63,7 @@ public class ConvergenceTests(ITestOutputHelper output)
                 r = await d.SyncAsync();
             }
             log.AppendLine($"  sync {d.Name}: {r}");
-            Assert.True(r.Outcome == PassOutcome.Completed, $"seed {seed}: {d.Name} pass {r}\n{log}");
+            Assert.True(r.Outcome == PassOutcome.Completed, $"seed {seed}: {d.Name} pass {r}\n{log}\nserver:\n{server.Logs.Problems()}");
         }
 
         var ops = 40 + rnd.Next(40);
@@ -129,7 +129,7 @@ public class ConvergenceTests(ITestOutputHelper output)
                     d.Engine.ApproveBlockedDeletions();
                     r = await d.SyncAsync();
                 }
-                Assert.True(r.Outcome == PassOutcome.Completed, $"seed {seed}: settle {d.Name} {r}\n{log}");
+                Assert.True(r.Outcome == PassOutcome.Completed, $"seed {seed}: settle {d.Name} {r}\n{log}\nserver:\n{server.Logs.Problems()}");
                 if (r.Changes > 0 || r.WantsRetry)
                     quiet = false;
             }
