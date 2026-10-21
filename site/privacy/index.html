@@ -42,6 +42,7 @@
 <li>Your files are stored only on your nest, your own server. They pass through sync.pairnets.app on the way and are never kept there.</li>
 <li>Your Pairnets account stores your email address, your username if you set one, how you sign in, and which computers and nests you have linked.</li>
 <li>If you share a nest with a friend, we keep who may use which nest and what they may do there. Nobody gets in from an invite until the nest's owner lets them in.</li>
+<li>If you link your nest with a friend's nest, we keep which nests are linked and which folders they share. The files go straight between the two nests through sync.pairnets.app and are not kept by us.</li>
 <li>No ads, no tracking, no analytics. We never sell your data or share it for marketing.</li>
 <li>This website, pairnets.app, sets no cookies. Its pages ask sync.pairnets.app whether you are signed in, and Cloudflare, which delivers the site, handles visitors' IP addresses. It collects nothing else.</li>
 <li>You can see most of it on your account page, and delete all of it with one button. An account nobody uses for a year is deleted, after a warning email.</li>
@@ -94,6 +95,7 @@
 <tr><td><strong>Computers asking to join</strong>: the computer's name, its system (for example Windows) and its Pairnets version</td><td>So you can recognise the computer before you press Allow. When you allow it, your nest gets the same details.</td></tr>
 <tr><td><strong>Your nests</strong> (up to 3 per account): the name you gave each one, its address, Pairnets version, whether it's online and when it was last seen</td><td>To connect your computers to it and show you how it's doing.</td></tr>
 <tr><td><strong>People you share a nest with</strong>: who may use which of your nests, whether they can change files or only view them, and the names of the folders you share with them</td><td>So they can sync your nest, and so you can see, change and remove them on your account page and in the app. The person you invite sees your username (or the part of your email address before the @) and your email address in masked form; you see their username and email address.</td></tr>
+<tr><td><strong>Linked nests</strong>: which of your nests is linked with which nest of another account, whether the link can change files or only view them, and the names of the folders it shares</td><td>So the two nests can keep those folders in step, and so both owners can see and end the link on the account page and in the app. Each owner sees the other's username and the name of the other nest, never the other nest's other folders.</td></tr>
 <tr><td><strong>Invites</strong>: the invite link, what it offers, and the email address you sent it to (only if Pairnets emailed it for you)</td><td>So the person can ask to join, and so you can let them in, decline, copy the link again or cancel it. Using the link only asks: the person gets in when you let them in.</td></tr>
 <tr><td>An <strong>activity log</strong>: sign-ins, computers allowed, renamed or removed, and nests added, renamed or removed, with the time. It also keeps a computer's name when it is allowed or renamed, and a nest's name when it is added or renamed</td><td>To keep your account safe and to look into problems.</td></tr>
 <tr><td><strong>Server logs</strong>: sign-ins and errors</td><td>To find and fix problems, and to spot abuse.</td></tr>
@@ -129,6 +131,7 @@
 <li>The one-line installer sends the server's name and Pairnets version to sync.pairnets.app, to link the nest to your account.</li>
 <li>When you let a friend in, the service tells your nest their username, a masked form of their email address, what they may do and which folders they get, so the nest can hold them to it and show you who they are. Changing or removing a friend is passed on the same way, and the people waiting for your OK are passed to your nest so the app can show them to you.</li>
 <li>In an encrypted nest you can only share the whole nest, so the service never learns the names of folders in it.</li>
+<li>When you link two nests, the service gives the joining nest one key to the other nest, like the key of a computer, and tells the other nest which folders that key may use. An encrypted nest can't be linked, because the nest itself can't read the files it keeps.</li>
 <li>If you let other people use your nest, you are responsible for their data on it. Files a friend already has stay on their computers after you remove them.</li>
 </ul>
 
@@ -183,6 +186,7 @@
 <tr><td>Email sign-in links</td><td>15 minutes</td></tr>
 <tr><td>Invites</td><td>Until used, declined or cancelled, and at most 7 days. The email address you sent one to goes with it.</td></tr>
 <tr><td>People you share a nest with</td><td>Until you remove them, they leave, or either of you deletes the account</td></tr>
+<tr><td>Linked nests</td><td>Until either owner unlinks, removes the nest, or deletes the account. The copy already on the other nest stays there.</td></tr>
 <tr><td>Computers waiting for you to allow them</td><td>10 minutes (30 minutes while waiting for a new nest)</td></tr>
 <tr><td>Activity log</td><td>90 days</td></tr>
 <tr><td>Server logs (sign-ins, errors)</td><td>30 days, then deleted</td></tr>
