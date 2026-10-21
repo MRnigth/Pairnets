@@ -117,6 +117,12 @@ public sealed record StatusSnapshot(
     /// <summary>Who this computer belongs to on the nest (email, how they signed in), or null when not known.</summary>
     public AccountInfo? Account { get; init; }
 
+    /// <summary>The nest's folders linked with another account's nest (empty for most nests, and for older ones).</summary>
+    public IReadOnlyList<LinkedFolder> LinkedFolders { get; init; } = [];
+
+    /// <summary>Nests shared with the owner's account that this computer could add (<see cref="LinkNotices"/>).</summary>
+    public IReadOnlyList<SharedNestOffer> SharedOffers { get; init; } = [];
+
     /// <summary>Bytes moved and planned in this sync (several passes in a row count as one).</summary>
     public long PassBytesDone { get; init; }
 

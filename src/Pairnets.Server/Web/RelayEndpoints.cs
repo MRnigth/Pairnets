@@ -266,7 +266,7 @@ public static class RelayEndpoints
     /// <summary>ISO 8601 in UTC with whole seconds, as the service's JSON uses (2026-10-09T00:00:00Z).</summary>
     private static string Iso(DateTimeOffset time) => time.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", CultureInfo.InvariantCulture);
 
-    private static string? Clean(string? text, int max)
+    internal static string? Clean(string? text, int max)
     {
         if (text is null)
             return null;
@@ -288,7 +288,8 @@ public sealed class RelayAuthMiddleware(RequestDelegate next, RelaySignature sig
 
     /// <summary>
     /// The calls that carry folder lists may be longer: the people waiting (20 people, each with 20 folder names of up to
-    /// 255 characters, up to 3 bytes each in UTF-8, is about 310 KiB), a friend's folders, and a friend's computer added.
+    /// 255 characters, up to 3 bytes each in UTF-8, is about 310 KiB), a friend's folders, a friend's computer added, a
+    /// link set up or changed, and the nests shared with the owner's account (offers).
     /// </summary>
     public const int MaxListBodyBytes = 512 * 1024;
 
@@ -296,11 +297,13 @@ public sealed class RelayAuthMiddleware(RequestDelegate next, RelaySignature sig
 
     public static bool IsRelayPath(PathString path) => path.StartsWithSegments(RelayEndpoints.Prefix, StringComparison.OrdinalIgnoreCase);
 
-    /// <summary>How long a body may be: <see cref="MaxListBodyBytes"/> for /requests, /people/… and /devices, else <see cref="MaxBodyBytes"/>.</summary>
+    /// <summary>How long a body may be: <see cref="MaxListBodyBytes"/> for /requests, /people/…, /devices, /links and /offers, else <see cref="MaxBodyBytes"/>.</summary>
     public static int MaxBodyFor(PathString path) =>
         path.StartsWithSegments(RelayEndpoints.Prefix + "/requests", StringComparison.OrdinalIgnoreCase)
         || path.StartsWithSegments(RelayEndpoints.Prefix + "/people", StringComparison.OrdinalIgnoreCase)
         || path.StartsWithSegments(RelayEndpoints.Prefix + "/devices", StringComparison.OrdinalIgnoreCase)
+        || path.StartsWithSegments(RelayEndpoints.Prefix + "/links", StringComparison.OrdinalIgnoreCase)
+        || path.StartsWithSegments(RelayEndpoints.Prefix + "/offers", StringComparison.OrdinalIgnoreCase)
             ? MaxListBodyBytes
             : MaxBodyBytes;
 

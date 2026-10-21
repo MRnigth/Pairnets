@@ -143,7 +143,7 @@ public sealed class SyncHub(BatchRegistry batches, SyncedRegistry synced, Servic
 /// inside its share. The owner's connections are never in here (they are in <see cref="SyncHub.EveryChangeGroup"/>).
 /// Changing a friend's access (PATCH /api/relay/people) updates its live connections at once.
 /// </summary>
-public sealed class FriendConnections
+public sealed class FriendConnections(Storage.LinkStore links)
 {
     private readonly ConcurrentDictionary<string, (string DeviceId, Storage.DeviceAccess Access)> _byConnection = new(StringComparer.Ordinal);
 
@@ -165,9 +165,23 @@ public sealed class FriendConnections
         }
     }
 
-    /// <summary>The friends' connections that may hear about <paramref name="path"/>.</summary>
-    public IReadOnlyList<string> Sharing(string path) =>
-        _byConnection.Where(c => c.Value.Access.Allows(path)).Select(c => c.Key).ToList();
+    /// <summary>The friends' connections that may hear about <paramref name="path"/> (<see cref="AccessGate.Sees"/>).</summary>
+    public IReadOnlyList<string> Sharing(string path)
+    {
+        if (_byConnection.IsEmpty)
+            return [];
+        var linkedIn = links.LinkedInFolders();
+        return _byConnection.Where(c => AccessGate.Sees(c.Value.Access, path, linkedIn)).Select(c => c.Key).ToList();
+    }
+
+    /// <summary>"Changed" for <paramref name="path"/>: to every owner's connection, and to the friends' that may see it.</summary>
+    public async Task SendChangedAsync(IHubContext<SyncHub> hub, string device, string path)
+    {
+        await hub.Clients.Group(SyncHub.EveryChangeGroup).SendAsync(SyncHub.ChangedMethod, device, path, CancellationToken.None).ConfigureAwait(false);
+        var friends = Sharing(path);
+        if (friends.Count > 0)
+            await hub.Clients.Clients(friends).SendAsync(SyncHub.ChangedMethod, device, path, CancellationToken.None).ConfigureAwait(false);
+    }
 }
 
 /// <summary>Big batches currently being uploaded, by hub connection.</summary>

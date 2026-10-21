@@ -40,6 +40,7 @@ import {
   listSharedRoute,
   removePersonRoute,
 } from "./routes/friends";
+import { listLinksRoute, unlinkRoute } from "./routes/links";
 import {
   emailLandingRoute,
   googleCallbackRoute,
@@ -138,6 +139,8 @@ const API_ROUTES: Route[] = [
   { method: "GET", pattern: /^\/v1\/shared$/, handler: listSharedRoute },
   { method: "DELETE", pattern: /^\/v1\/shared\/([^/]+)$/, handler: leaveSharedRoute },
   { method: "POST", pattern: /^\/v1\/invite\/request$/, handler: inviteRequestRoute },
+  { method: "GET", pattern: /^\/v1\/links$/, handler: listLinksRoute },
+  { method: "DELETE", pattern: /^\/v1\/links\/([^/]+)$/, handler: unlinkRoute },
   { method: "PATCH", pattern: /^\/v1\/servers\/([^/]+)$/, handler: renameServerRoute },
   { method: "DELETE", pattern: /^\/v1\/servers\/([^/]+)$/, handler: removeServerRoute },
   { method: "POST", pattern: /^\/v1\/crash$/, handler: crashRoute },

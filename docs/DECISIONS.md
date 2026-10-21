@@ -1597,3 +1597,45 @@ and no app does yet), then `feature/crash-send`, then `release/1.0.61.3` (4 nest
   weight, or one weight range), IBM Plex Mono as Google Fonts serves it, unchanged (its licence reserves the name
   "Plex" for changed copies). About 160 KB on the home page, less elsewhere. The strict CSP (`font-src 'self'`) stays.
 * **The design-review fixes stay:** text sizes in rem, taller tap areas on phones, commands that wrap on phones.
+
+## 4 nests per account, and linked nests (1.0.61.3, 2026-10-21)
+
+The owner asked: "make it so you can add up to 4 nests on one account.. and invite nests that are linked to accounts to
+join". The pictures (claude.ai canvas "4 nests per account + linked nests") showed three readings. The owner picked both
+A (a nest joins another nest) and B (invite an account), with the recommended answers. Both reuse the friend invite of
+1.0.61.2: a link or email only lets someone ask to join, and they get in when the owner presses Let in (or Decline).
+
+* **4 nests of your own per account** (`MAX_NESTS_PER_ACCOUNT`, was 3). Nests friends share with you, and nests linked
+  to yours, never count. `GET /v1/me` returns `nests: {used, max}`. The account page says "2 of 4 used". At the limit,
+  the add page (`/add?code=`) offers only "Not mine" and says why. The apps keep no sign-in to the service after
+  setup, so they can't count. The All nests page's "Add a nest" line says "up to 4 per account", and the count stays on
+  the website.
+* **A linked nest is one more member of the inviting nest.** It gets the same invite (link or email, 7 days, used once,
+  cancellable) as a friend, with `kind = 'nest'`. On the accept page the friend picks which of their own nests joins.
+  The owner then lets it in, like a friend. The joining nest gets one key on the inviting nest, with the same access
+  ('view' by default, or 'edit') and folder list as a friend, so the nest's access gate needs nothing new.
+* **The joining nest does the syncing.** A link worker on the joining nest keeps the shared folders in step with a
+  top-level folder of its own, "From <owner> – <nest name>". The joining nest's computers see an ordinary folder and
+  need no extra sign-in.
+  * Changes only go across while both nests are on, and the folder says "waiting" when the other is off.
+  * View only: the joining nest only takes changes in, and what its own computers change in that folder stays on it.
+* **Limits and refusals.** At most 4 links per nest.
+  * An encrypted nest can't be linked, either way, because the nest itself can't read the files.
+  * A folder that came in through a link can't be passed on to a third nest, so there are no A→B→A loops.
+  * A nest must be on this version to invite or join ("Update your nest first").
+* **Unlinking** from either side deletes the key at once. The copy on the joining nest stays, stops changing and is
+  marked "Unlinked".
+* **B: invite an account.** It's the friend invite, but the access belongs to the account, not to the computers it had
+  when it accepted.
+  * After Let in, every computer that account signs in on is offered the shared nest by itself. It shows as "Shared by
+    Oskar" in the nest list, with its own folder `Pairnets\<nest name>`, and needs no "Add a nest".
+  * A computer added later gets it too.
+  * Removing the account deletes the keys of all its computers at once.
+  * An encrypted nest can be shared this way, whole only (as for friends).
+* **Friends and links together (merged into 1.0.61).** A folder that came in through a link is never shared on, not
+  even with a friend who has the whole nest, and not with another linked nest: the nest leaves it out of a friend's
+  listings and push messages and refuses it (403 `not_shared`). The service also checks again when a link is let in, so
+  two people who invite each other's whole nest can't copy each other round. The owner's linked folders and the nests
+  shared with the account (`/api/links`, `/api/offers`) are for the owner's computers only.
+* **The Files page and storage for friends.** Moving is a write (both ends must be in the share), and deleting for
+  good and "Where your files live" (`/api/purge`, `/api/storage`) are the owner's only.

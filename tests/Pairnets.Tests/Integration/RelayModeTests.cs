@@ -288,17 +288,18 @@ public sealed class RelayModeTests : IAsyncLifetime
     [Fact]
     public async Task ABodyOver4KiBIsRefusedBeforeAnythingElse()
     {
+        // On a call without a folder list (those may be longer: RelayAuthMiddleware.MaxListBodyBytes).
         var big = "{\"name\":\"Laptop\",\"pad\":\"" + new string('a', 4096) + "\"}";
-        var response = await SendAsync(Signed(HttpMethod.Post, "/api/relay/devices", big));
+        var response = await SendAsync(Signed(HttpMethod.Put, "/api/relay/name", big));
         Assert.Equal(HttpStatusCode.RequestEntityTooLarge, response.StatusCode);
         Assert.Equal("""{"error":"too_large"}""", await response.Content.ReadAsStringAsync());
-        Assert.Empty(Auth.ListDevices());
+        Assert.NotEqual("Laptop", Auth.NestName);
 
         // Exactly 4 KiB is fine.
         var name = "{\"name\":\"Laptop\",\"pad\":\"";
         var exact = name + new string('a', RelayAuthMiddleware.MaxBodyBytes - name.Length - 2) + "\"}";
         Assert.Equal(RelayAuthMiddleware.MaxBodyBytes, exact.Length);
-        Assert.Equal(HttpStatusCode.OK, (await SendAsync(Signed(HttpMethod.Post, "/api/relay/devices", exact))).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await SendAsync(Signed(HttpMethod.Put, "/api/relay/name", exact))).StatusCode);
     }
 
     [Fact]

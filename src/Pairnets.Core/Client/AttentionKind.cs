@@ -17,4 +17,10 @@ public enum AttentionKind
 
     /// <summary>A suggestion to use this computer's own name instead of a placeholder (<see cref="NameOffer"/>).</summary>
     Rename,
+
+    /// <summary>A nest someone shared with this account, which this computer can add (<see cref="LinkNotices"/>).</summary>
+    Shared,
+
+    /// <summary>A folder linked with another nest that is waiting, has a problem or was unlinked (<see cref="LinkNotices"/>).</summary>
+    Linked,
 }

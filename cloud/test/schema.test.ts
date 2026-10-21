@@ -7,6 +7,7 @@ import migration3 from "../migrations/0003_username.sql?raw";
 import migration4 from "../migrations/0004_request_place.sql?raw";
 import migration5 from "../migrations/0005_inactive.sql?raw";
 import migration6 from "../migrations/0006_friends.sql?raw";
+import migration7 from "../migrations/0007_links.sql?raw";
 import migration8 from "../migrations/0008_crash_reports.sql?raw";
 import { b64urlEncode } from "../src/b64";
 import { FakeGoogle } from "./fake-google";
@@ -94,6 +95,7 @@ describe("schema", () => {
     await runSql(db, migration4);
     await runSql(db, migration5);
     await runSql(db, migration6);
+    await runSql(db, migration7);
     await runSql(db, migration8);
   });
 
@@ -115,7 +117,7 @@ describe("schema", () => {
       request_country: null,
       request_city: null,
     });
-    for (const m of [migration5, migration6, migration8]) await runSql(db, m);
+    for (const m of [migration5, migration6, migration7, migration8]) await runSql(db, m);
   });
 
   it("migration 0005 adds the nullable inactive_warned_at to accounts and keeps its rows", async () => {
@@ -125,7 +127,7 @@ describe("schema", () => {
     await db.prepare("INSERT INTO accounts (id, email, created_at, updated_at) VALUES ('acc_testacct000000000000000001', 'you@example.com', 1, 2)").run();
     await runSql(db, migration5);
     expect(await db.prepare("SELECT email, inactive_warned_at FROM accounts").first()).toEqual({ email: "you@example.com", inactive_warned_at: null });
-    for (const m of [migration6, migration8]) await runSql(db, m);
+    for (const m of [migration6, migration7, migration8]) await runSql(db, m);
   });
 
   it("migration 0006 adds the friends' tables and keeps every row of 0005", async () => {
@@ -173,18 +175,49 @@ describe("schema", () => {
     await db.prepare("UPDATE nest_invites SET decision = 'declined', decided_at = 3").run();
     const indexes = (await db.prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name IN ('nest_members', 'nest_invites') AND name NOT LIKE 'sqlite_%' ORDER BY name").all<{ name: string }>()).results;
     expect(indexes.map((i) => i.name)).toEqual(["nest_invites_expires", "nest_invites_nest", "nest_members_account", "nest_members_synced"]);
-    await runSql(db, migration8); // the full schema again, for the tests after this one
+    for (const m of [migration7, migration8]) await runSql(db, m); // the full schema again, for the tests after this one
   });
 
   it("migration 0008 adds crash_reports, with no column for who sent a report, and keeps the accounts", async () => {
     const db = env.DB;
     for (const t of TABLES) await db.prepare(`DROP TABLE IF EXISTS ${t}`).run();
     for (const m of [migration, migration2, migration3, migration4, migration5, migration6]) await runSql(db, m);
+    await runSql(db, migration7);
     await db.prepare("INSERT INTO accounts (id, email, created_at, updated_at) VALUES ('acc_testacct000000000000000001', 'you@example.com', 1, 2)").run();
     await runSql(db, migration8);
     const columns = (await db.prepare("PRAGMA table_info(crash_reports)").all<{ name: string }>()).results.map((c) => c.name);
     expect(columns.filter((c) => /ip|account|device|nest|email/.test(c))).toEqual([]);
     expect(await db.prepare("SELECT COUNT(*) AS n FROM accounts").first()).toEqual({ n: 1 });
+  });
+
+  it("migration 0007 adds an invite's kind (old invites are for a person) and the links table, and keeps every row of 0006", async () => {
+    const db = env.DB;
+    for (const t of TABLES) await db.prepare(`DROP TABLE IF EXISTS ${t}`).run();
+    for (const m of [migration, migration2, migration3, migration4, migration5, migration6]) await runSql(db, m);
+    await db
+      .prepare(
+        `INSERT INTO nest_invites (id, nest_id, token, access, created_by, created_at, expires_at)
+           VALUES ('inv_testinvite0000000000000001', 'nst_testnest000000000000000001', 'pni_${"a".repeat(32)}', 'view', 'acc_testacct000000000000000001', 1, 2)`,
+      )
+      .run();
+    await runSql(db, migration7);
+    expect(await db.prepare("SELECT id, kind, joining_nest FROM nest_invites").first()).toEqual({ id: "inv_testinvite0000000000000001", kind: "person", joining_nest: null });
+    await expect(db.prepare("UPDATE nest_invites SET kind = 'robot'").run()).rejects.toThrow();
+    await db.prepare("UPDATE nest_invites SET kind = 'nest', joining_nest = 'nst_testnest000000000000000002'").run();
+
+    const add = (id: string, to: string, status = "pending") =>
+      db
+        .prepare("INSERT INTO nest_links (id, from_nest, to_nest, account_id, device_id, status, created_at) VALUES (?1, 'nst_testnest000000000000000001', ?2, 'acc_testacct000000000000000002', NULL, ?3, 1)")
+        .bind(id, to, status)
+        .run();
+    await add("lnk_testlink00000000000000001", "nst_testnest000000000000000002");
+    await expect(add("lnk_testlink00000000000000002", "nst_testnest000000000000000002")).rejects.toThrow(); // one link per pair
+    await expect(add("lnk_testlink00000000000000003", "nst_testnest000000000000000003", "broken")).rejects.toThrow();
+    const indexes = (await db.prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'nest_links' AND name NOT LIKE 'sqlite_%' ORDER BY name").all<{ name: string }>()).results;
+    expect(indexes.map((i) => i.name)).toEqual(["nest_links_account", "nest_links_to"]);
+    await db.prepare("INSERT INTO link_ends (link_id, to_nest, created_at) VALUES ('lnk_testlink00000000000000001', 'nst_testnest000000000000000002', 1)").run();
+    await expect(db.prepare("INSERT INTO link_ends (link_id, to_nest, created_at) VALUES ('lnk_testlink00000000000000001', 'nst_testnest000000000000000003', 2)").run()).rejects.toThrow();
+    await runSql(db, migration8); // the full schema again, for the tests after this one
   });
 
   it("no secret is stored in clear", async () => {
@@ -254,6 +287,18 @@ describe("schema", () => {
     expect((await b.call("POST", `/v1/servers/${server.nestId}/invites`, { body: {} })).status).toBe(201);
     const friendApp = await appSignIn(h, friend, server.nestId, "Anna-Laptop", "198.51.100.90");
     secrets.push(friendApp.deviceCode, friendApp.poll.json.appToken, friendApp.poll.json.device.key);
+    // A linked nest (RELAY.md 11): the key handed from the friend's nest to the joining one is never kept here.
+    const ida = h.browser("203.0.113.31");
+    await ida.signInByEmail("ida@example.com");
+    const joining = await addServer(h, ida, { label: "Ida's Home", ip: "198.51.100.61" });
+    const nestInv = await b.call("POST", `/v1/servers/${server.nestId}/invites`, { body: { kind: "nest", access: "view", folders: ["School"] } });
+    expect(nestInv.status, nestInv.text).toBe(201);
+    const asked = await ida.call("POST", "/v1/invite/request", { body: { t: new URL(nestInv.json.link).searchParams.get("t"), nestId: joining.nestId } });
+    expect(asked.status, asked.text).toBe(200);
+    expect((await b.call("POST", `/v1/servers/${server.nestId}/invites/${nestInv.json.id}/approve`)).json.link.status).toBe("active");
+    secrets.push([...joining.links.values()][0].key!);
+    // A link end still to be told holds only ids, but every table must have a row to look at.
+    await h.env.DB.prepare("INSERT INTO link_ends (link_id, to_nest, created_at) VALUES ('lnk_testlink00000000000000009', ?1, 1)").bind(joining.nestId).run();
     // A crash report (it holds no secret, but every table must have a row to look at).
     await app.call("POST", "/v1/crash", {
       body: {

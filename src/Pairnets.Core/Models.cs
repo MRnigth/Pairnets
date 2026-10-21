@@ -164,6 +164,20 @@ public sealed record DeviceMe(string? Id, string Name, string Kind, string? Emai
     public const string KindSharedToken = "shared-token";
 }
 
+/// <summary>
+/// A folder of this nest kept in step with another account's nest (GET /api/links; docs/DECISIONS.md, "4 nests per
+/// account, and linked nests"). <see cref="State"/>: "new", "in_step", "waiting", "problem" or "unlinked".
+/// </summary>
+public sealed record LinkedFolder(string Folder, string OwnerName, string NestName, string Access, string State, DateTimeOffset? LastInStep = null,
+    string? Message = null);
+
+public sealed record LinkedFolderList(IReadOnlyList<LinkedFolder> Links);
+
+/// <summary>A nest someone shared with this nest's owner's account (GET /api/offers), which this computer can add.</summary>
+public sealed record SharedNestOffer(string NestId, string NestName, string OwnerName, string Access, IReadOnlyList<string>? Folders = null);
+
+public sealed record SharedNestOfferList(IReadOnlyList<SharedNestOffer> Offers);
+
 /// <summary>A computer's own key, handed out exactly once when its sign-in is approved.</summary>
 public sealed record DeviceKeyGrant(string Id, string Name, string Key);
 

@@ -546,6 +546,11 @@ public sealed partial class ApiTour
                      (HttpMethod.Patch, "api/relay/devices/dev-1", new { name = "Desk" }),
                      (HttpMethod.Delete, "api/relay/devices/dev-1", null),
                      (HttpMethod.Put, "api/relay/name", new { name = "soro" }),
+                     (HttpMethod.Get, "api/relay/links", null),
+                     (HttpMethod.Post, "api/relay/links", new { id = "lnk_tour00000001" }),
+                     (HttpMethod.Patch, "api/relay/links/lnk_tour00000001", new { access = "edit" }),
+                     (HttpMethod.Delete, "api/relay/links/lnk_tour00000001", null),
+                     (HttpMethod.Put, "api/relay/offers", new { offers = Array.Empty<object>() }),
                  })
         {
             foreach (var who in new[] { anon, shared })
@@ -584,6 +589,36 @@ public sealed partial class ApiTour
             await laptop.WaitForAsync(SyncHub.NestRenamedMethod, args => (string?)args[0] == "soro");
         }
         Assert.Equal("soro", (await Signed(HttpMethod.Get, "/api/relay/status")).GetProperty("name").GetString());
+
+        Step("The linked nest joins another nest: the service sets the link up, changes it, ends it and says which nests are shared with the account; its computers see both");
+        using var computer = new HttpClient(new RecordingHandler(Record, new SocketsHttpHandler { UseProxy = false })) { BaseAddress = linked.Url };
+        computer.DefaultRequestHeaders.Add(PairnetsHeaders.Token, added.GetProperty("key").GetString());
+        computer.DefaultRequestHeaders.Add(PairnetsHeaders.Client, PairnetsInfo.ClientDescription);
+        var linkKey = AuthStore.KeyPrefix + Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(16)).ToLowerInvariant();
+        _secrets.Add(linkKey);
+        Assert.Equal(0, (await Signed(HttpMethod.Get, "/api/relay/links")).GetProperty("links").GetArrayLength());
+        var link = await Signed(HttpMethod.Post, "/api/relay/links", JsonSerializer.Serialize(new
+        {
+            id = "lnk_tour00000001", remoteNestId = RelayFixtures.OtherNestId, deviceId = "dev-tour", key = linkKey, access = "view",
+            ownerName = "Oskar", nestName = "Home nest",
+        }));
+        const string linkFolder = "From Oskar – Home nest";
+        Assert.Equal((linkFolder, "view"), (link.GetProperty("folder").GetString(), link.GetProperty("access").GetString()));
+        Assert.False(link.TryGetProperty("key", out _)); // the service never reads the key back
+        var relayLinks = await Signed(HttpMethod.Get, "/api/relay/links");
+        Assert.Equal(linkFolder, relayLinks.GetProperty("linkedIn").EnumerateArray().Single().GetString());
+        Assert.Equal("edit", (await Signed(HttpMethod.Patch, "/api/relay/links/lnk_tour00000001", """{"access":"edit","folders":["Photos"]}"""))
+            .GetProperty("access").GetString());
+        var appLink = (await Read<JsonElement>(Get(computer, "api/links"))).GetProperty("links").EnumerateArray().Single();
+        Assert.Equal((linkFolder, "edit"), (appLink.GetProperty("folder").GetString(), appLink.GetProperty("access").GetString()));
+        var offers = await Signed(HttpMethod.Put, "/api/relay/offers",
+            $$"""{"offers":[{"nestId":"{{RelayFixtures.OtherNestId}}","nestName":"Cabin","ownerName":"Anna","access":"view"}]}""");
+        Assert.Equal("Cabin", offers.GetProperty("offers").EnumerateArray().Single().GetProperty("nestName").GetString());
+        var appOffer = (await Read<JsonElement>(Get(computer, "api/offers"))).GetProperty("offers").EnumerateArray().Single();
+        Assert.Equal(("Cabin", "Anna"), (appOffer.GetProperty("nestName").GetString(), appOffer.GetProperty("ownerName").GetString()));
+        Assert.True((await Signed(HttpMethod.Delete, "/api/relay/links/lnk_tour00000001")).GetProperty("removed").GetBoolean());
+        Assert.Equal("unlinked", (await Signed(HttpMethod.Get, "/api/relay/links")).GetProperty("links").EnumerateArray().Single().GetProperty("state").GetString());
+
         Assert.True((await Signed(HttpMethod.Delete, $"/api/relay/devices/{Uri.EscapeDataString(id)}")).GetProperty("removed").GetBoolean());
         Assert.Equal(0, (await Signed(HttpMethod.Get, "/api/relay/status")).GetProperty("devices").GetInt32());
     }

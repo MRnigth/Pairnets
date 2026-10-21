@@ -29,7 +29,9 @@ import { enforce, HOUR } from "../ratelimit";
 import { jsonBody } from "../request";
 import { runRouterLogged } from "../router";
 import { isRecent, loadBrowserSession, requireBrowser, requireRecent, secretHash } from "../sessions";
-import { maxNestsPerAccount, nestLimitError, type NestRow } from "./account";
+import { maxNestsPerAccount, nestCount, nestLimitError, type NestRow } from "./account";
+import { removeMemberOf } from "./friends";
+import { type LinkRow, noteLinkEnds, tellLinkEnds } from "./links";
 
 export const SERVER_LINK_LIFETIME = 900;
 export const SERVER_POLL_INTERVAL = 3;
@@ -135,7 +137,8 @@ export async function addPageRoute(ctx: Ctx): Promise<Response> {
   const view = row
     ? { userCode: row.user_code, hostname: row.hostname, serverVersion: row.server_version, createdAt: row.created_at, status: row.status }
     : null;
-  return htmlResponse(typed && !row ? 404 : 200, addPage(view, typed));
+  const count = row && row.status === "pending" ? await nestCount(ctx, s.accountId) : null;
+  return htmlResponse(typed && !row ? 404 : 200, addPage(view, typed, count));
 }
 
 // POST /v1/servers/approve
@@ -180,7 +183,7 @@ export async function serverApproveRoute(ctx: Ctx): Promise<Response> {
 
 /**
  * The nest row ('relay', 'pending', no address) and the link's 'approving' state, in one batch (one transaction): the
- * row is made only while the link is still pending, the account has fewer than 3 nests and the service has room.
+ * row is made only while the link is still pending, the account is under its nest limit and the service has room.
  */
 async function createNestRow(ctx: Ctx, accountId: string, link: ServerLinkRow, label: string): Promise<string> {
   const db = ctx.env.DB;
@@ -464,11 +467,21 @@ export async function removeServerRoute(ctx: Ctx, nestId: string): Promise<Respo
   // the row (or the hourly cron does, if a deploy is busy or Cloudflare is down).
   // Its friends and invites go with it (their computers lose the nest with the link).
   const db = ctx.env.DB;
+  // Where this nest joined a friend's nest, its key there is taken back first, as if it were removed there (the
+  // friend's nest drops it now or, if it is off, when the friends' sync tries again).
+  const joined = await db.prepare("SELECT * FROM nest_links WHERE to_nest = ?1").bind(n.id).all<LinkRow>();
+  for (const l of joined.results) {
+    const from = await ctx.env.DB.prepare("SELECT * FROM nests WHERE id = ?1 AND mode = 'relay' AND status IN ('pending', 'active')").bind(l.from_nest).first<NestRow>();
+    if (from) await removeMemberOf(ctx, from, l.account_id);
+  }
   await db.batch([
     db.prepare("UPDATE nests SET status = 'broken' WHERE id = ?1 AND account_id = ?2").bind(n.id, s.accountId),
     db.prepare("DELETE FROM nest_members WHERE nest_id = ?1").bind(n.id),
     db.prepare("DELETE FROM nest_invites WHERE nest_id = ?1").bind(n.id),
+    noteLinkEnds(ctx, "from_nest = ?1 AND to_nest <> ?1", n.id), // the nests that joined this one are told
+    db.prepare("DELETE FROM nest_links WHERE from_nest = ?1 OR to_nest = ?1").bind(n.id),
   ]);
+  ctx.defer(tellLinkEnds(ctx));
   await audit(ctx, "server_removed", s.accountId, n.id);
   const account = await ctx.env.DB.prepare("SELECT email FROM accounts WHERE id = ?1").bind(s.accountId).first<{ email: string }>();
   if (account) await sendNotice(ctx, s.accountId, account.email, "server_removed", n.label);

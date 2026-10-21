@@ -29,6 +29,10 @@ export type ErrorCode =
   | "wrong_browser"
   | "bad_url"
   | "nest_limit"
+  | "sealed_cant_link"
+  | "too_many_links"
+  | "linked_in"
+  | "bad_nest"
   | "too_many_codes"
   | "already_decided"
   | "slow_down"
@@ -64,7 +68,11 @@ export const MESSAGES: Record<ErrorCode, string> = {
   used: "That code was already used.",
   wrong_browser: "Open the link in the browser where you asked for it.",
   bad_url: "That is not a public https address for a nest (like https://nest.example.com).",
-  nest_limit: "This account already has 3 servers. Remove one first.",
+  nest_limit: "This account already has 4 nests. Remove one first.",
+  sealed_cant_link: "An encrypted nest can't be linked with another nest.",
+  too_many_links: "A nest can be linked with up to 4 nests.",
+  linked_in: "Folders that came from another nest can't be shared on.",
+  bad_nest: "Choose which of your nests should join.",
   too_many_codes: "Too many link codes. Use or cancel the ones you have, or try again tomorrow.",
   already_decided: "This sign-in was already answered.",
   slow_down: "Asking too often. Wait a few seconds.",

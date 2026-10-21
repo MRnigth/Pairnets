@@ -140,9 +140,13 @@ public static class Endpoints
                 since = parsed;
             }
             var (entries, version) = store.ReadManifest(since);
-            // A friend shared some folders only hears of what is in them (the version still counts every change).
-            if (DeviceIdentity.Of(ctx)?.AccessOrOwner is { Folders: not null } access)
-                entries = entries.Where(e => access.Allows(e.Path)).ToList();
+            // A friend only hears of what is in its share, never of a folder that came in through a link (the version
+            // still counts every change).
+            if (DeviceIdentity.Of(ctx)?.AccessOrOwner is { IsOwner: false } access)
+            {
+                var linkedIn = ctx.RequestServices.GetRequiredService<LinkStore>().LinkedInFolders();
+                entries = entries.Where(e => AccessGate.Sees(access, e.Path, linkedIn)).ToList();
+            }
             ctx.Response.Headers[PairnetsHeaders.ServerId] = ctx.Response.Headers[TetherNames.ServerIdHeader] = store.ServerId;
             ctx.Response.Headers[PairnetsHeaders.Version] = ctx.Response.Headers[TetherNames.VersionHeader] = version.ToString(CultureInfo.InvariantCulture);
             return Json(entries);
@@ -411,10 +415,7 @@ public static class Endpoints
         try
         {
             // Every connection but friends' hears it; a friend's computer only when the path is in its share (see FriendConnections).
-            await hub.Clients.Group(SyncHub.EveryChangeGroup).SendAsync(SyncHub.ChangedMethod, device, path, CancellationToken.None);
-            var friends = ctx.RequestServices.GetRequiredService<FriendConnections>().Sharing(path);
-            if (friends.Count > 0)
-                await hub.Clients.Clients(friends).SendAsync(SyncHub.ChangedMethod, device, path, CancellationToken.None);
+            await ctx.RequestServices.GetRequiredService<FriendConnections>().SendChangedAsync(hub, device, path);
         }
         catch (Exception ex)
         {

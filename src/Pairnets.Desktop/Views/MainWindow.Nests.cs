@@ -124,7 +124,7 @@ public partial class MainWindow
         var plus = new LineIcon { Width = 16, Height = 16, StrokeThickness = 2.2, Data = Visuals.Resource<Geometry>("I.Plus") };
         Paint(plus, LineIcon.StrokeProperty, "T.AccentInk");
         var addTitle = new TextBlock { Text = "Add a nest", FontWeight = FontWeight.ExtraBold };
-        var addSub = new TextBlock { Text = "Your own, a friend's or one from work. It gets its own folder.", FontSize = 12 };
+        var addSub = new TextBlock { Text = NestListModel.AddNestHint, FontSize = 12 };
         Paint(addSub, TextBlock.ForegroundProperty, "T.Muted");
         var addText = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 0, 0), Children = { addTitle, addSub } };
         var addBox = new Border { BorderThickness = new Thickness(1.5), CornerRadius = new CornerRadius(20), Padding = new Thickness(12, 8, 12, 8) };

@@ -40,6 +40,7 @@ import { HttpError, htmlResponse, json, noContent, redirect } from "../http";
 import { friendInEmail, inviteEmail, joinRequestEmail, reserveMail, sendLater, type ShareDetail } from "../mail";
 import { type AdminTarget, adminCall, markReached, NestOffline } from "../nestadmin";
 import { invitePage, type InvitePageView } from "../pages";
+import { changeLinks, checkNestInvite, endLinks, joinableNests, pushOffers, requireJoinable, startLink } from "./links";
 import { DAY, enforce, HOUR } from "../ratelimit";
 import { jsonBody } from "../request";
 import { loadBrowserSession, requireBrowser, requireBrowserOrApp, requireRecent } from "../sessions";
@@ -84,6 +85,10 @@ export interface InviteRow {
   decided_at: number | null;
   decision: "in" | "declined" | null;
   cancelled_at: number | null;
+  /** 'nest': the friend joins with one of their nests (links.ts, migration 0007). */
+  kind: "person" | "nest";
+  /** For kind 'nest': the friend's nest that asked to join. */
+  joining_nest: string | null;
 }
 
 interface AccountRow {
@@ -236,14 +241,19 @@ export async function retryFriends(ctx: Ctx): Promise<number> {
   return settled;
 }
 
-/** Marks a member removed and tells the nest at once; the cron retries when the nest is offline. */
-async function removeMember(ctx: Ctx, n: AdminTarget, accountId: string): Promise<MemberRow | null> {
+/**
+ * Marks a member removed and tells the nest at once (the cron retries when the nest is offline). Their links from this
+ * nest end too, and their own nests hear that it is no longer shared (links.ts).
+ */
+export async function removeMemberOf(ctx: Ctx, n: AdminTarget, accountId: string): Promise<MemberRow | null> {
   const db = ctx.env.DB;
   const row = await db
     .prepare("UPDATE nest_members SET removed_at = COALESCE(removed_at, ?3), synced = 0 WHERE nest_id = ?1 AND account_id = ?2 RETURNING *")
     .bind(n.id, accountId, ctx.now)
     .first<MemberRow>();
   if (row) await syncMember(ctx, n, row);
+  await endLinks(ctx, n.id, accountId);
+  ctx.defer(pushOffers(ctx, accountId));
   return row;
 }
 
@@ -327,6 +337,8 @@ export async function createInviteRoute(ctx: Ctx, nestId: string): Promise<Respo
   const n = await ownServer(ctx, s.accountId, nestId);
   const b = jsonBody(ctx);
   const { access, folders } = shareFrom(b);
+  const kind = b.kind === undefined || b.kind === "person" ? "person" : b.kind === "nest" ? "nest" : null;
+  if (kind === null) throw new HttpError(400, "bad_request");
   let email: string | null = null;
   if (b.email !== undefined && b.email !== null && b.email !== "") {
     email = normaliseEmail(b.email);
@@ -336,19 +348,26 @@ export async function createInviteRoute(ctx: Ctx, nestId: string): Promise<Respo
   if (!owner) throw new HttpError(401, "unauthorized");
   if (email === owner.email) throw new HttpError(409, "own_nest", "That is your own address. Type your friend's.");
   if (email === null) {
-    // "Copy invite link" again: the link still open for the same choices (nobody used it yet), not one more invite.
+    // "Copy invite link" again: the link still open for the same choices (nobody used it yet), not one more invite. Only
+    // one of the same kind: a person's link never stands in for a nest's, and a nest's is checked again (a link may
+    // have come in, or the nest may be full of links, since it was made).
     const open = await ctx.env.DB.prepare(
       `SELECT * FROM nest_invites WHERE nest_id = ?1 AND email IS NULL AND requested_by IS NULL AND cancelled_at IS NULL AND decided_at IS NULL
-         AND expires_at > ?2 AND access = ?3 AND folders IS ?4 ORDER BY created_at DESC, id LIMIT 1`,
+         AND expires_at > ?2 AND access = ?3 AND folders IS ?4 AND kind = ?5 ORDER BY created_at DESC, id LIMIT 1`,
     )
-      .bind(n.id, ctx.now, access, foldersJson(folders))
+      .bind(n.id, ctx.now, access, foldersJson(folders), kind)
       .first<InviteRow>();
-    if (open) return json(200, { id: open.id, link: inviteLink(ctx, open.token), expiresAt: iso(open.expires_at), emailed: false });
+    if (open) {
+      if (kind === "nest") await checkNestInvite(ctx, n, folders, (await requireFriends(ctx, n)).sealed);
+      const link = inviteLink(ctx, open.token);
+      return json(200, kind === "nest" ? { id: open.id, kind, link, expiresAt: iso(open.expires_at), emailed: false } : { id: open.id, link, expiresAt: iso(open.expires_at), emailed: false });
+    }
   }
   if ((await friendCount(ctx, n.id)) >= MAX_FRIENDS) throw tooManyFriends();
   await enforce(ctx, "invite-create", s.accountId, INVITES_PER_DAY, DAY);
   const { sealed } = await requireFriends(ctx, n);
   if (sealed && folders) throw new HttpError(400, "sealed_whole_only");
+  if (kind === "nest") await checkNestInvite(ctx, n, folders, sealed);
 
   const emailed = email !== null && (await reserveMail(ctx, "invite", s.accountId));
   const id = newId("inv");
@@ -356,16 +375,22 @@ export async function createInviteRoute(ctx: Ctx, nestId: string): Promise<Respo
   const expires = ctx.now + INVITE_LIFETIME;
   // The limit is checked again in the insert itself, so two invites made at once cannot both take the last place.
   const r = await ctx.env.DB.prepare(
-    `INSERT INTO nest_invites (id, nest_id, token, email, access, folders, created_by, created_at, expires_at)
-       SELECT ?4, ?1, ?5, ?6, ?7, ?8, ?9, ?2, ?10 WHERE (${FRIEND_COUNT}) < ?11`,
+    `INSERT INTO nest_invites (id, nest_id, token, email, access, folders, created_by, created_at, expires_at, kind)
+       SELECT ?4, ?1, ?5, ?6, ?7, ?8, ?9, ?2, ?10, ?12 WHERE (${FRIEND_COUNT}) < ?11`,
   )
-    .bind(n.id, ctx.now, ctx.now - REQUEST_KEEP, id, token, emailed ? email : null, access, foldersJson(folders), s.accountId, expires, MAX_FRIENDS)
+    .bind(n.id, ctx.now, ctx.now - REQUEST_KEEP, id, token, emailed ? email : null, access, foldersJson(folders), s.accountId, expires, MAX_FRIENDS, kind)
     .run();
   if (r.meta.changes !== 1) throw tooManyFriends();
-  await audit(ctx, "invite_created", s.accountId, n.id, { access, folders: folders?.length ?? null, emailed, mailSkipped: email !== null && !emailed });
+  await audit(ctx, "invite_created", s.accountId, n.id, {
+    ...(kind === "nest" ? { kind } : {}),
+    access,
+    folders: folders?.length ?? null,
+    emailed,
+    mailSkipped: email !== null && !emailed,
+  });
   const link = inviteLink(ctx, token);
   if (emailed) sendLater(ctx, inviteEmail(email!, { name: personName(owner), email: owner.email }, { nest: n.label, folders, access }, link, expires));
-  return json(201, { id, link, expiresAt: iso(expires), emailed });
+  return json(201, kind === "nest" ? { id, kind, link, expiresAt: iso(expires), emailed } : { id, link, expiresAt: iso(expires), emailed });
 }
 
 async function ownInvite(ctx: Ctx, nestId: string, invId: string): Promise<InviteRow> {
@@ -414,13 +439,17 @@ export async function approveInviteRoute(ctx: Ctx, nestId: string, invId: string
   if (flip.meta.changes !== 1) throw new HttpError(409, "already_decided", "This request was already answered.");
   const member = await db.prepare("SELECT * FROM nest_members WHERE nest_id = ?1 AND account_id = ?2").bind(n.id, friend.id).first<MemberRow>();
   if (before && member) await syncMember(ctx, n, member);
-  await audit(ctx, "invite_approved", s.accountId, n.id, { friend: friend.id, access: i.access });
+  await audit(ctx, "invite_approved", s.accountId, n.id, { friend: friend.id, access: i.access, kind: i.kind });
+  const link = i.kind === "nest" ? await startLink(ctx, i) : null;
+  ctx.defer(pushOffers(ctx, friend.id));
   const owner = await accountOf(ctx, s.accountId);
   const share: ShareDetail = { nest: n.label, folders: parseFolders(i.folders), access: i.access };
   if (await reserveMail(ctx, "invite", s.accountId)) sendLater(ctx, friendInEmail(friend.email, owner ? personName(owner) : "The owner", share));
   else await audit(ctx, "invite_mail_skipped", s.accountId, n.id);
   ctx.defer(pushRequests(ctx, n));
-  return json(200, { status: "in", member: member ? memberJson(member, friend) : null });
+  const answer: Record<string, unknown> = { status: "in", member: member ? memberJson(member, friend) : null };
+  if (i.kind === "nest") answer.link = link ? { id: link.id, status: link.status } : null;
+  return json(200, answer);
 }
 
 // POST /v1/servers/{id}/invites/{inv}/decline
@@ -490,6 +519,8 @@ export async function changePersonRoute(ctx: Ctx, nestId: string, accountId: str
     .bind(n.id, m.account_id, access, foldersJson(folders), synced)
     .run();
   await audit(ctx, "friend_changed", s.accountId, n.id, { friend: m.account_id, access, folders: folders?.length ?? null, synced: synced === 1 });
+  await changeLinks(ctx, n.id, m.account_id, access, folders);
+  ctx.defer(pushOffers(ctx, m.account_id));
   const friend = await accountOf(ctx, m.account_id);
   return json(200, memberJson({ ...m, access, folders: foldersJson(folders), synced }, friend));
 }
@@ -499,7 +530,7 @@ export async function removePersonRoute(ctx: Ctx, nestId: string, accountId: str
   const s = await requireBrowser(ctx);
   const n = await ownServer(ctx, s.accountId, nestId);
   if (!ACCOUNT_ID_RE.test(accountId)) throw new HttpError(404, "not_found");
-  const removed = await removeMember(ctx, n, accountId);
+  const removed = await removeMemberOf(ctx, n, accountId);
   if (!removed) throw new HttpError(404, "not_found");
   await audit(ctx, "friend_removed", s.accountId, n.id, { friend: accountId });
   return noContent();
@@ -562,7 +593,7 @@ export async function leaveSharedRoute(ctx: Ctx, nestId: string): Promise<Respon
   const n = await ctx.env.DB.prepare("SELECT id, key_version FROM nests WHERE id = ?1 AND mode = 'relay'").bind(nestId).first<AdminTarget>();
   const m = n ? await memberOf(ctx, n.id, s.accountId) : null;
   if (!n || !m) throw new HttpError(404, "not_found");
-  await removeMember(ctx, n, s.accountId);
+  await removeMemberOf(ctx, n, s.accountId);
   await audit(ctx, "friend_left", s.accountId, n.id);
   return noContent();
 }
@@ -623,6 +654,8 @@ export async function invitePageRoute(ctx: Ctx): Promise<Response> {
     access: v.invite?.access ?? "view",
     me: personName(me),
     myEmail: me.email,
+    kind: v.invite?.kind ?? "person",
+    myNests: v.invite?.kind === "nest" && v.nest ? await joinableNests(ctx, s.accountId, v.nest.id) : [],
   };
   return htmlResponse(v.state === "unknown" ? 404 : 200, invitePage(view));
 }
@@ -635,12 +668,14 @@ export async function inviteRequestRoute(ctx: Ctx): Promise<Response> {
   await enforce(ctx, "invite-request", s.accountId, REQUESTS_PER_HOUR, HOUR);
   let v = await lookUpInvite(ctx, b.t, s.accountId);
   if (v.state === "open") {
+    // An invite for a nest: which of the requester's own nests joins (links.ts).
+    const joining = v.invite!.kind === "nest" ? await requireJoinable(ctx, s.accountId, v.nest!.id, b.nestId) : null;
     // Once, by one account: whoever asks first holds it.
     const r = await ctx.env.DB.prepare(
-      `UPDATE nest_invites SET requested_by = ?2, requested_at = ?3
+      `UPDATE nest_invites SET requested_by = ?2, requested_at = ?3, joining_nest = ?4
          WHERE id = ?1 AND requested_by IS NULL AND cancelled_at IS NULL AND decided_at IS NULL AND expires_at > ?3`,
     )
-      .bind(v.invite!.id, s.accountId, ctx.now)
+      .bind(v.invite!.id, s.accountId, ctx.now, joining)
       .run();
     if (r.meta.changes === 1) {
       const nest = v.nest!;

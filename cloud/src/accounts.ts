@@ -4,6 +4,7 @@ import { audit } from "./audit";
 import type { Ctx } from "./context";
 import { newId } from "./crypto";
 import { sendNotice } from "./mail";
+import { noteLinkEnds } from "./routes/links";
 
 export type Provider = "google" | "email";
 
@@ -24,6 +25,9 @@ export async function deleteAccountRows(ctx: Ctx, id: string, email: string): Pr
     db.prepare("DELETE FROM nest_invites WHERE created_by = ?1 OR requested_by = ?1 OR nest_id IN (SELECT id FROM nests WHERE account_id = ?1)").bind(id),
     db.prepare("DELETE FROM nest_members WHERE nest_id IN (SELECT id FROM nests WHERE account_id = ?1)").bind(id),
     db.prepare("UPDATE nest_members SET removed_at = COALESCE(removed_at, ?2), synced = 0 WHERE account_id = ?1").bind(id, ctx.now),
+    // Friends' nests that joined one of its nests are told (by the hourly cron); its own joining nests go with it.
+    noteLinkEnds(ctx, "from_nest IN (SELECT id FROM nests WHERE account_id = ?1) AND account_id <> ?1", id),
+    db.prepare("DELETE FROM nest_links WHERE account_id = ?1 OR from_nest IN (SELECT id FROM nests WHERE account_id = ?1)").bind(id),
     db.prepare("DELETE FROM sessions WHERE account_id = ?1").bind(id),
     db.prepare("DELETE FROM identities WHERE account_id = ?1").bind(id),
     db.prepare("DELETE FROM nests WHERE account_id = ?1").bind(id),

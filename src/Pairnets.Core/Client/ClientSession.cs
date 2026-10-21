@@ -347,7 +347,12 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
             {
                 // Who let this computer in (the account button); older servers do not say.
                 var account = me.Email is null && me.Method is null && me.Added is null ? null : new AccountInfo(me.Email, me.Method, me.Added);
-                Update(s => s with { Account = account });
+                // Linked folders and nests shared with the account (Needs you cards), on the owner's computers only (a
+                // friend's would get 403); nests from before them say nothing.
+                var owner = Engine.Access.IsOwner;
+                var links = owner ? await Api.GetLinkedFoldersAsync(ct).ConfigureAwait(false) ?? [] : [];
+                var offers = owner ? await Api.GetSharedNestOffersAsync(ct).ConfigureAwait(false) ?? [] : [];
+                Update(s => s with { Account = account, LinkedFolders = links, SharedOffers = offers });
                 if (!string.Equals(me.Name, Settings.DeviceName, StringComparison.Ordinal))
                 {
                     (next.DeviceName, changed) = (me.Name, true);

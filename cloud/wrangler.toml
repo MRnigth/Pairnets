@@ -23,7 +23,7 @@ EMAIL_DAILY_LIMIT = "80"
 # Relayed servers in all. Cloudflare allows 1,000 tunnels per account; stay well under it.
 MAX_NESTS = "900"
 # Nests one account may have, both kinds together (the owner's choice); a removed one frees its place at once.
-MAX_NESTS_PER_ACCOUNT = "3"
+MAX_NESTS_PER_ACCOUNT = "4"
 # "1" = emergency switch: /nest-login refuses and heartbeats answer disableHostedLogin: true.
 HOSTED_LOGIN_DISABLED = "0"
 # Optional test seams (Google's real URLs are the defaults when these are not set):

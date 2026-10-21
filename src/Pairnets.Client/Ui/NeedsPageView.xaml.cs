@@ -72,6 +72,8 @@ public partial class NeedsPageView : UserControl
             AttentionKind.Conflict => ("T.WarnPill", "T.WarnText", "I.Copy"),
             AttentionKind.NameClash => ("T.Chip", "T.Text", string.Empty),
             AttentionKind.Rename => ("T.AccentSoft", "T.AccentInk", "I.Rename"),
+            AttentionKind.Shared => ("T.AccentSoft", "T.AccentInk", "I.Nest"),
+            AttentionKind.Linked => ("T.WarnPill", "T.WarnText", "I.Nest"),
             _ => ("T.WarnPill", "T.WarnText", "I.Warning"),
         };
 
@@ -152,7 +154,7 @@ public partial class NeedsPageView : UserControl
             row.Children.Add(second);
         }
         // A computer asking to join and a name to choose are the decisions with a main (blue) button; the others open the folder.
-        var action = ActionButton(item, primary: item.Kind is AttentionKind.Join or AttentionKind.Rename);
+        var action = ActionButton(item, primary: item.Kind is AttentionKind.Join or AttentionKind.Rename or AttentionKind.Shared);
         action.Height = 38;
         Grid.SetColumn(action, 3);
         row.Children.Add(action);

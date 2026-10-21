@@ -63,7 +63,7 @@ anything into the terminal: approving happens in a browser on any device.
    - `GET /v1/servers/requests/{userCode}` (session) → 200 `{userCode, hostname, serverVersion, createdAt, expiresAt, status}` / 404.
    - `POST /v1/servers/approve` (session + Origin) `{userCode, approve: true|false, label?}` →
      200 `{status:"approved", nestId}` · 200 `{status:"denied"}` · 404 `not_found` · 409 `already_decided` ·
-     400 `expired` · 409 `nest_limit` (an account has at most 3 nests) · 503 `full` (MAX_NESTS reached) ·
+     400 `expired` · 409 `nest_limit` (an account has at most 4 nests) · 503 `full` (MAX_NESTS reached) ·
      502 `cloudflare_failed`.
    On approve the service, in this order: creates the nest row (`mode='relay'`, `status='pending'`,
    `label` = given label or hostname or "My server", `public_url=''`); creates the tunnel
@@ -284,7 +284,7 @@ The hourly cron also: deletes expired server links; redeploys the router when ne
 ## 8. Limits and configuration
 
 - `MAX_NESTS` (default 900): relay nests in all, under Cloudflare's 1,000 tunnels per account.
-- At most 3 nests per account (`MAX_NESTS_PER_ACCOUNT`, both kinds together; lowering it never removes a nest an account
+- At most 4 nests per account (`MAX_NESTS_PER_ACCOUNT`, both kinds together; lowering it never removes a nest an account
   has); 10 server starts an hour per IP; 20 approvals an hour per account.
 - The relay's four limits (§5 step 6) are Workers Rate Limiting bindings in `wrangler.toml` (`[[ratelimits]]`):
   `RELAY_LIMIT` (`namespace_id = "1001"`, 20,000 a minute per address), `RELAY_DEVICE_LIMIT` (`"1002"`, 6,000 a
