@@ -44,6 +44,22 @@ public sealed partial class ClientSettings
     /// </summary>
     public string? AccountEmail { get; set; }
 
+    /// <summary>
+    /// What this computer may do on the nest (friend invites, 1.0.61.2): "edit" or "view" on a nest someone shared with
+    /// it, null (or "owner") on its own. From the sign-in, and kept up to date from the nest (<c>GET /api/access</c>). A
+    /// settings file from before friends has none: the owner's.
+    /// </summary>
+    public string? Access { get; set; }
+
+    /// <summary>The top-level folders of a shared nest this computer gets; null for the whole nest (and on its own nest).</summary>
+    public List<string>? SharedFolders { get; set; }
+
+    /// <summary>Whose nest it is ("Oskar"), on a nest shared with this computer; null on its own.</summary>
+    public string? SharedBy { get; set; }
+
+    /// <summary>The nest's access as the sync engine and the windows use it (see <see cref="Access"/>).</summary>
+    public Sync.NestAccess ShareAccess() => Sync.NestAccess.Read(Access, SharedFolders, SharedBy, NestLabel);
+
     public List<string> ExtraIgnore { get; set; } = [];
 
     public bool StartWithWindows { get; set; }
@@ -135,6 +151,7 @@ public sealed partial class ClientSettings
     {
         var copy = (ClientSettings)MemberwiseClone();
         copy.ExtraIgnore = [.. ExtraIgnore];
+        copy.SharedFolders = SharedFolders is null ? null : [.. SharedFolders];
         copy.OtherNests = [.. OtherNests.Select(n => n.Clone())];
         return copy;
     }

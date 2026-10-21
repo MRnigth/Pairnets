@@ -25,6 +25,14 @@ public static class FriendlyErrors
     public const string FileProblem = "Pairnets could not read or write a file on this computer. Check that the folder is still there and not full or locked, then try again.";
     public const string Generic = "Something unexpected went wrong. Try again. If it keeps happening, choose \"Report a bug\" in the Pairnets menu.";
 
+    /// <summary>Words for a nest's 403 about what this computer may do there (<see cref="PairnetsShareRefusedException"/>).</summary>
+    public static string ShareRefused(string code) => code switch
+    {
+        PairnetsShareRefusedException.ViewOnly => "This nest is shared with you to view, so changes made here stay on this computer.",
+        PairnetsShareRefusedException.NotShared => "This file is not in the folders shared with you, so it stays on this computer.",
+        _ => "Only the nest's owner can do this.",
+    };
+
     /// <summary>
     /// Words for <paramref name="ex"/>. Exceptions of Pairnets itself carry sentences written for people and keep them;
     /// everything else (the framework's, the system's, a parser's) is mapped by what kind of trouble it is.

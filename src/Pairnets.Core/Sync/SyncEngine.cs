@@ -38,6 +38,7 @@ public sealed class SyncEngine
         Root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(options.Folder));
         Ignore = new IgnoreList(options.ExtraIgnore);
         _cloud = options.CloudFiles;
+        _access = options.Access;
         _scanner = new LocalScanner(Root, Ignore, state, _clock, _log)
         {
             StabilityWindow = options.StabilityWindow,
@@ -74,6 +75,72 @@ public sealed class SyncEngine
     }
 
     public string TempDirectory => Path.Combine(Root, PathRules.TempFolderName);
+
+    private volatile NestAccess _access;
+    private volatile bool _putBackRequested;
+
+    /// <summary>
+    /// What this computer may do on the nest (friend invites). On a nest shared "View only" nothing is sent: changes made
+    /// here are held back (<see cref="PassResult.HeldBack"/>); with chosen folders, files outside them stay this
+    /// computer's own. The app sets it from its settings and from the nest (<c>GET /api/access</c>); a pass that reads the
+    /// whole list of a shared nest asks the nest first (<see cref="AccessChanged"/>).
+    /// </summary>
+    public NestAccess Access
+    {
+        get => _access;
+        set => _access = value;
+    }
+
+    /// <summary>Raised when a pass learned from the nest that this computer may now do something else (on a background thread).</summary>
+    public event Action<NestAccess>? AccessChanged;
+
+    /// <summary>
+    /// Raised when the nest refused a change because of what this computer may do there (403 view_only or not_shared):
+    /// the access the app knows is out of date. The change is held back, not counted as an error.
+    /// </summary>
+    public event Action<string>? AccessRefused;
+
+    /// <summary>
+    /// "Put back &lt;owner&gt;'s version": the next pass undoes every held-back change (see <see cref="PassResult.HeldBack"/>):
+    /// an edited or deleted file gets the nest's version again, a file made here goes to the Recycle Bin or Trash.
+    /// </summary>
+    public void RequestPutBack()
+    {
+        _putBackRequested = true;
+        _log.LogWarning("The held-back changes are put back on the next pass");
+    }
+
+    /// <summary>
+    /// "Keep mine here": the changes held back now stay on this computer without asking again (a later change to one of
+    /// them asks again). They still never reach the nest. Returns how many.
+    /// </summary>
+    public int KeepHeldBack()
+    {
+        var held = _lastHeld;
+        _state.SetMeta(MetaHeldBackKept, held.Count == 0 ? null : System.Text.Json.JsonSerializer.Serialize(held));
+        _log.LogInformation("Keeping {Count} held-back change(s) on this computer", held.Count);
+        return held.Count;
+    }
+
+    /// <summary>The held-back changes the person chose to keep (path → the content kept, "" for a deletion), in state.db.</summary>
+    private const string MetaHeldBackKept = "heldBackKept";
+
+    /// <summary>The changes the last pass held back (path → content here, "" for a deletion).</summary>
+    private volatile IReadOnlyDictionary<string, string> _lastHeld = new Dictionary<string, string>();
+
+    private Dictionary<string, string> LoadKept()
+    {
+        try
+        {
+            return _state.GetMeta(MetaHeldBackKept) is { } json
+                ? System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(json) ?? new Dictionary<string, string>()
+                : new Dictionary<string, string>();
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return new Dictionary<string, string>();
+        }
+    }
 
     public event Action<SyncProgress>? Progress;
 
@@ -187,7 +254,10 @@ public sealed class SyncEngine
             // Not a typo in Settings: the nest no longer lets this computer in. Nothing is retried until it signs in again.
             result.Outcome = PassOutcome.Blocked;
             result.BlockReason = BlockReason.SignedOut;
-            result.Message = FriendlyErrors.Describe(ex);
+            // On a nest someone shared with this computer, being removed means they stopped sharing it.
+            result.Message = Access.IsShared && ex.Code is ErrorCodes.DeviceRemoved or ServiceErrors.NestUnknown
+                ? Client.ShareText.StoppedSharing(Access)
+                : FriendlyErrors.Describe(ex);
             _log.LogWarning("Pass stopped: {Error}", ex.Message);
         }
         catch (PairnetsAuthException ex)
@@ -226,6 +296,34 @@ public sealed class SyncEngine
 
         _log.LogInformation("Pass ({Reason}) finished: {Result}", options.Reason, result);
         return result;
+    }
+
+    /// <summary>
+    /// Remembers what this pass held back (for "Keep mine here"), forgets kept changes that are gone or were changed
+    /// again (they ask again), and uses up a "Put back" this pass carried out.
+    /// </summary>
+    private void NoteHeldBack(Dictionary<string, string> held, Dictionary<string, string> kept, bool putBack)
+    {
+        if (putBack)
+            _putBackRequested = false;
+        _lastHeld = held;
+        var stillKept = kept.Where(k => held.TryGetValue(k.Key, out var now) && now == k.Value).ToDictionary(k => k.Key, k => k.Value, StringComparer.Ordinal);
+        if (stillKept.Count != kept.Count)
+            _state.SetMeta(MetaHeldBackKept, stillKept.Count == 0 ? null : System.Text.Json.JsonSerializer.Serialize(stillKept));
+    }
+
+    /// <summary>Asks the nest what this computer may do now; keeps what it knew when the nest does not say.</summary>
+    private async Task RefreshAccessAsync(CancellationToken ct)
+    {
+        if (await _api.GetAccessAsync(ct).ConfigureAwait(false) is not { } answer)
+            return;
+        var known = Access;
+        var now = NestAccess.Read(answer.Access, answer.Folders, known.SharedBy, known.NestName);
+        if (now.Equals(known))
+            return;
+        Access = now;
+        _log.LogWarning("This computer's access to the nest changed: {Level}, {Folders}", now.Level, now.Folders is null ? "whole nest" : string.Join(", ", now.Folders));
+        AccessChanged?.Invoke(now);
     }
 
     private PassResult Block(PassResult result, BlockReason reason, string message)
@@ -287,6 +385,8 @@ public sealed class SyncEngine
         var cursor = _state.Cursor;
         var knownServer = _state.ServerId;
         var full = options.FullManifest || cursor == 0 || knownServer is null;
+        if (full && Access.IsShared)
+            await RefreshAccessAsync(ct).ConfigureAwait(false); // the whole list leaves out what is no longer shared: never read that as deleted
         var manifest = await _api.GetManifestAsync(full ? null : cursor, ct).ConfigureAwait(false);
         if (knownServer is not null && !string.Equals(manifest.ServerId, knownServer, StringComparison.Ordinal))
         {
@@ -324,6 +424,10 @@ public sealed class SyncEngine
         }
 
         var plan = new List<PlannedAction>();
+        var access = Access;
+        var putBack = _putBackRequested;
+        var kept = access.IsViewOnly ? LoadKept() : new Dictionary<string, string>();
+        var held = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var path in paths)
         {
             if (Ignore.IsIgnored(path) || !PathRules.IsValid(path) || scan.IsUnderUnknownPrefix(path))
@@ -339,6 +443,24 @@ public sealed class SyncEngine
             var action = SyncDecision.Decide(l, s, b);
             if (action == SyncAction.None)
                 continue;
+            // A nest shared with this computer: what it may not send stays here (see NestAccess.StepFor).
+            switch (access.StepFor(path, action, l, s, b, putBack))
+            {
+                case ShareStep.HeldBack:
+                    held[path] = l ?? string.Empty;
+                    if (!(kept.TryGetValue(path, out var keptAs) && keptAs == (l ?? string.Empty)))
+                        result.HeldBack.Add(path);
+                    continue;
+                case ShareStep.LocalOnly:
+                    result.LocalOnly++;
+                    continue;
+                case ShareStep.Forget:
+                    action = SyncAction.ClearBase; // the file stays; it is just no longer synced
+                    break;
+                case ShareStep.PutBack:
+                    plan.Add(new PlannedAction(path, s is null ? SyncAction.DeleteLocal : SyncAction.Download, l, s, b, PutBack: true));
+                    continue;
+            }
             if (action == SyncAction.DeleteRemote && b is not null && scan.HeldVersions.Contains(b))
             {
                 result.Deferred++;
@@ -354,10 +476,11 @@ public sealed class SyncEngine
             plan.Add(new PlannedAction(path, action, l, s, b));
         }
         ClearResolvedWarnings(warnings, scan);
+        NoteHeldBack(held, kept, putBack);
 
-        // ---- 5. Mass-delete guard (before anything is executed).
+        // ---- 5. Mass-delete guard (before anything is executed). "Put back" was asked for by the person: not counted.
         var wanted = plan
-            .Where(p => p.Action is SyncAction.DeleteLocal or SyncAction.DeleteRemote)
+            .Where(p => !p.PutBack && p.Action is SyncAction.DeleteLocal or SyncAction.DeleteRemote)
             .Select(p => (Side: p.Action == SyncAction.DeleteLocal ? DeleteSide.Local : DeleteSide.Remote, p.Path))
             .ToHashSet();
         var deleteLocal = wanted.Count(w => w.Side == DeleteSide.Local);
@@ -458,6 +581,19 @@ public sealed class SyncEngine
                     _log.LogDebug("{Action} of {Path} waits: {Error}", item.Action, item.Path, ex.Message);
                 }
             }
+        }
+        catch (PairnetsShareRefusedException ex) when (ex.Code is PairnetsShareRefusedException.ViewOnly or PairnetsShareRefusedException.NotShared)
+        {
+            // The nest is shared with this computer for less than the app knew: the change stays here, never as an error.
+            lock (ctx.Gate)
+            {
+                if (ex.Code == PairnetsShareRefusedException.ViewOnly)
+                    ctx.Result.HeldBack.Add(item.Path);
+                else
+                    ctx.Result.LocalOnly++;
+            }
+            _log.LogInformation("{Action} of {Path} stays on this computer: the nest said {Code}", item.Action, item.Path, ex.Code);
+            AccessRefused?.Invoke(ex.Code);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or PairnetsProtocolException)
         {
@@ -560,6 +696,8 @@ public sealed class SyncEngine
                 return Task.CompletedTask;
             case SyncAction.Upload:
                 return UploadAsync(item.Path, item.Server ?? ContentHash.NoneBase, item.Local, ctx, ct);
+            case SyncAction.Download when item.PutBack:
+                return PutBackAsync(item, ctx, ct);
             case SyncAction.Download:
                 return DownloadAsync(item.Path, item.Local, item.Server, ctx, ct);
             case SyncAction.Conflict:
@@ -946,6 +1084,31 @@ public sealed class SyncEngine
         await DownloadAsync(item.Path, expectedLocalHash: null, item.Server, ctx, ct).ConfigureAwait(false);
     }
 
+    // ------------------------------------------------------------------ "Put back" on a nest shared to view
+
+    /// <summary>
+    /// A held-back edit or deletion the person chose to undo: the file made here goes to the Recycle Bin or Trash (so it
+    /// is never lost), then the nest's version comes down. A file changed again since the pass looked is left for later.
+    /// </summary>
+    private async Task PutBackAsync(PlannedAction item, PassContext ctx, CancellationToken ct)
+    {
+        var full = ResolveLocal(item.Path);
+        if (File.Exists(full))
+        {
+            if (!string.Equals(await LocalHashAsync(item.Path, full, ct).ConfigureAwait(false), item.Local, StringComparison.Ordinal))
+            {
+                lock (ctx.Gate)
+                    ctx.Result.Deferred++;
+                _log.LogWarning("{Path} changed during the pass; not putting it back", item.Path);
+                return;
+            }
+            _trash.Delete(full);
+            MarkTouched(item.Path);
+            _log.LogInformation("Put {Path} made here in the bin to bring back the nest's version", item.Path);
+        }
+        await DownloadAsync(item.Path, expectedLocalHash: null, item.Server, ctx, ct).ConfigureAwait(false);
+    }
+
     // ------------------------------------------------------------------ deletes
 
     private async Task DeleteLocalAsync(PlannedAction item, PassContext ctx, CancellationToken ct)
@@ -1195,7 +1358,8 @@ public sealed class SyncEngine
         Progress?.Invoke(new SyncProgress(path, op, bytes,
             total > 0 ? total : ctx.Sizes.GetValueOrDefault(path), ctx.FilesDone, ctx.FilesTotal));
 
-    private sealed record PlannedAction(string Path, SyncAction Action, string? Local, string? Server, string? Base);
+    /// <param name="PutBack">Undoes a held-back change ("Put back", see <see cref="RequestPutBack"/>), asked for by the person.</param>
+    private sealed record PlannedAction(string Path, SyncAction Action, string? Local, string? Server, string? Base, bool PutBack = false);
 
     private sealed class PassContext(PassResult result, long cursor, HashSet<string> taken, int filesTotal)
     {

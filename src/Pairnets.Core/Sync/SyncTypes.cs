@@ -126,6 +126,15 @@ public sealed class PassResult
     public List<ConflictInfo> ConflictCopies { get; } = [];
     public List<string> ErrorMessages { get; } = [];
 
+    /// <summary>
+    /// On a nest shared "View only": the changes made here that stay here (edited, new or deleted files), except those
+    /// the person already chose to keep. Not errors, and not retried: the Needs you card asks what to do with them.
+    /// </summary>
+    public List<string> HeldBack { get; } = [];
+
+    /// <summary>On a nest shared with chosen folders: files outside them, which stay this computer's own.</summary>
+    public int LocalOnly { get; set; }
+
     /// <summary>Number of transfers and deletions that changed something.</summary>
     public int Changes => Uploaded + Downloaded + DeletedLocal + DeletedRemote + Conflicts;
 
@@ -172,6 +181,9 @@ public sealed class EngineOptions
 
     /// <summary>The folder as a Windows cloud folder (ticks in Explorer, Files On-Demand), or a plain folder.</summary>
     public ICloudFiles CloudFiles { get; init; } = ICloudFiles.None;
+
+    /// <summary>What this computer may do on the nest at start (see <see cref="SyncEngine.Access"/>); the owner's by default.</summary>
+    public NestAccess Access { get; init; } = NestAccess.Full;
 }
 
 /// <summary>Test seams. Production code never sets these.</summary>

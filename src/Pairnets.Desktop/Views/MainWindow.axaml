@@ -826,6 +826,76 @@
                 <TextBlock x:Name="DevicesEmptyText" Classes="t2" TextWrapping="Wrap" TextAlignment="Center" MaxWidth="340"
                            Text="Loading the computers that use your nest…" />
               </StackPanel>
+
+              <!-- People: the friends the nest is shared with, and those waiting to be let in (the owner's computers, nests
+                   reached through Pairnets). Every button but "Invite a friend…" opens the account page at this nest's People. -->
+              <StackPanel x:Name="PeoplePanel" Spacing="10" IsVisible="False">
+                <Grid ColumnDefinitions="Auto,*,Auto" Height="38" Margin="4,6,0,0">
+                  <TextBlock Classes="ctitle" Text="People" VerticalAlignment="Center" />
+                  <TextBlock x:Name="PeopleSummary" Grid.Column="1" Classes="t3" VerticalAlignment="Center" Margin="12,0" TextTrimming="CharacterEllipsis" />
+                  <Button Grid.Column="2" Classes="SecondaryButton" Height="38" Padding="14,0" VerticalAlignment="Center" Foreground="{DynamicResource T.AccentInk}" Click="OnInviteFriend">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                      <v:LineIcon Classes="icon ink-accent" Width="16" Height="16" Data="{StaticResource I.UserPlus}" />
+                      <TextBlock Text="Invite a friend…" VerticalAlignment="Center" />
+                    </StackPanel>
+                  </Button>
+                </Grid>
+                <Border x:Name="PeopleCard" Classes="pcard" ClipToBounds="True">
+                  <ItemsControl x:Name="PeopleList">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate DataType="c:PersonRow">
+                        <Border BorderThickness="0,0,0,1" BorderBrush="{DynamicResource T.Border}" Padding="20,14"
+                                Background="{Binding Waiting, Converter={x:Static v:BrushWhen.Instance}, ConverterParameter=T.WarnPill}">
+                          <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto">
+                            <Border Width="40" Height="40" CornerRadius="20" Margin="0,0,14,0" Background="{DynamicResource T.WarnPill}">
+                              <TextBlock Text="{Binding Letter}" FontWeight="ExtraBold" FontSize="15" Foreground="{DynamicResource T.WarnText}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Border>
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                              <TextBlock Text="{Binding Title}" FontSize="15" FontWeight="ExtraBold" TextTrimming="CharacterEllipsis" />
+                              <TextBlock Text="{Binding Line}" Classes="t3" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Line}" />
+                            </StackPanel>
+                            <ItemsControl Grid.Column="2" ItemsSource="{Binding Chips}" VerticalAlignment="Center" Margin="10,0,0,0">
+                              <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                  <StackPanel Orientation="Horizontal" Spacing="6" />
+                                </ItemsPanelTemplate>
+                              </ItemsControl.ItemsPanel>
+                              <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                  <Border Background="{DynamicResource T.Chip}" CornerRadius="13" Padding="10,4">
+                                    <TextBlock Text="{Binding}" FontSize="12" FontWeight="Bold" />
+                                  </Border>
+                                </DataTemplate>
+                              </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <Border Grid.Column="3" CornerRadius="13" Padding="10,4" MinWidth="92" Margin="10,0" VerticalAlignment="Center" IsVisible="{Binding !Waiting}"
+                                    Background="{Binding ViewOnly, Converter={x:Static v:BrushWhen.Instance}, ConverterParameter=T.Chip|T.OkPill}">
+                              <TextBlock Text="{Binding Pill}" FontSize="12" FontWeight="Bold" HorizontalAlignment="Center" Foreground="{Binding ViewOnly, Converter={x:Static v:BrushWhen.Instance}, ConverterParameter=T.Muted|T.OkText}" />
+                            </Border>
+                            <StackPanel Grid.Column="4" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center" IsVisible="{Binding !Waiting}">
+                              <Button Classes="small" Content="Change…" AutomationProperties.Name="{Binding ChangeLabel}" Click="OnPersonChange" />
+                              <Button Classes="link" Content="Remove" Foreground="{DynamicResource T.BadText}" AutomationProperties.Name="{Binding RemoveLabel}" Click="OnPersonRemove" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="4" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center" IsVisible="{Binding Waiting}">
+                              <Button Classes="SecondaryButton" Height="34" Padding="12,0" Content="Decline" Foreground="{DynamicResource T.BadText}"
+                                      AutomationProperties.Name="{Binding DeclineLabel}" Click="OnPersonDecline" />
+                              <Button Classes="accent" Height="34" Padding="14,0" Content="{Binding LetInLabel}" AutomationProperties.Name="{Binding LetInLabel}" Click="OnPersonLetIn" />
+                            </StackPanel>
+                          </Grid>
+                        </Border>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </Border>
+                <TextBlock x:Name="PeopleEmpty" Classes="t2" FontSize="13" Margin="4,0,0,0" TextWrapping="Wrap"
+                           Text="Nobody else uses this nest yet. Invite a friend to share all of it, or just some folders." />
+                <Grid ColumnDefinitions="Auto,*" Margin="4,0,0,0">
+                  <v:LineIcon Classes="icon ink-soft" Width="16" Height="16" StrokeThickness="2" Data="{StaticResource I.InfoCircle}" VerticalAlignment="Top" Margin="0,1,8,0" />
+                  <TextBlock Grid.Column="1" Classes="t2" FontSize="13" TextWrapping="Wrap"
+                             Text="Nobody gets in from a link alone: you let each person in. Friends only see the folders you share with them, and can't invite others, remove computers or update your nest. Change…, Remove and Let in open your account page." />
+                </Grid>
+              </StackPanel>
+
               <Grid ColumnDefinitions="Auto,*" Margin="4,0,0,0">
                 <v:LineIcon Classes="icon ink-soft" Width="16" Height="16" StrokeThickness="2" Data="{StaticResource I.InfoCircle}" VerticalAlignment="Top" Margin="0,1,8,0" />
                 <TextBlock Grid.Column="1" Classes="t2" FontSize="13" VerticalAlignment="Center" TextWrapping="Wrap"

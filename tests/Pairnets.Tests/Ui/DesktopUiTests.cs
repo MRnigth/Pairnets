@@ -92,6 +92,10 @@ public sealed class SampleActions : ITrayActions
 
     public void ManageDevices() => Calls.Add("manage-devices");
 
+    public void InviteFriend() => Calls.Add("invite-friend");
+
+    public void OpenPeople() => Calls.Add("people");
+
     public Dictionary<NoticeKind, bool> Notify { get; } = [];
 
     public bool Notifies(NoticeKind kind) => Notify.GetValueOrDefault(kind, true);

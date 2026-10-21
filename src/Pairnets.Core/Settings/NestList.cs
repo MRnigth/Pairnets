@@ -35,10 +35,20 @@ public sealed class NestProfile
 
     public string? SkippedServerVersion { get; set; }
 
+    /// <inheritdoc cref="ClientSettings.Access"/>
+    public string? Access { get; set; }
+
+    /// <inheritdoc cref="ClientSettings.SharedFolders"/>
+    public List<string>? SharedFolders { get; set; }
+
+    /// <inheritdoc cref="ClientSettings.SharedBy"/>
+    public string? SharedBy { get; set; }
+
     public NestProfile Clone()
     {
         var copy = (NestProfile)MemberwiseClone();
         copy.ExtraIgnore = [.. ExtraIgnore];
+        copy.SharedFolders = SharedFolders is null ? null : [.. SharedFolders];
         return copy;
     }
 }
@@ -173,6 +183,9 @@ public sealed partial class ClientSettings
         ExtraIgnore = [.. s.ExtraIgnore],
         AutoUpdateServer = s.AutoUpdateServer,
         SkippedServerVersion = s.SkippedServerVersion,
+        Access = s.Access,
+        SharedFolders = s.SharedFolders is null ? null : [.. s.SharedFolders],
+        SharedBy = s.SharedBy,
     };
 
     private static void Write(NestProfile n, ClientSettings s)
@@ -189,6 +202,9 @@ public sealed partial class ClientSettings
         s.ExtraIgnore = [.. n.ExtraIgnore];
         s.AutoUpdateServer = n.AutoUpdateServer;
         s.SkippedServerVersion = n.SkippedServerVersion;
+        s.Access = n.Access;
+        s.SharedFolders = n.SharedFolders is null ? null : [.. n.SharedFolders];
+        s.SharedBy = n.SharedBy;
     }
 
     /// <summary>

@@ -98,6 +98,9 @@ public sealed record UpdaterDiagnostics(
 /// <summary>
 /// A computer that uses this server (<c>GET /api/devices</c>, the apps' Devices tab). <see cref="Id"/> is set
 /// for computers with their own key (they can be removed); computers still on the shared token have none.
+/// <see cref="Access"/> ("owner", "edit" or "view") and <see cref="Person"/> ("Anna Berg · a•••@gmail.com") say whose
+/// computer it is on a nest that knows friends (1.0.61.2): a friend's computer is listed under People, not with the
+/// owner's computers. Older nests leave both out.
 /// </summary>
 public sealed record DeviceInfo(
     string Name,
@@ -108,7 +111,13 @@ public sealed record DeviceInfo(
     string? System = null,
     DateTimeOffset? LastChange = null,
     string? Id = null,
-    string? Icon = null);
+    string? Icon = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Access = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Person = null)
+{
+    /// <summary>A friend's computer (someone the nest is shared with), not one of the owner's.</summary>
+    public bool IsFriends => Access is Sync.NestAccess.Edit or Sync.NestAccess.View;
+}
 
 /// <summary>The icons a computer can be given on the nest (<c>PATCH /api/devices/{id}/icon</c>).</summary>
 public static class DeviceIcons
@@ -354,3 +363,25 @@ public sealed record KeyRequestMessage(byte[]? Data);
 /// <summary>An unlock request as the nest passes it on; the messages are opaque to it.</summary>
 public sealed record KeyRequestView(string Id, string Name, DateTimeOffset Created, byte[] Commitment,
     byte[]? Offer = null, byte[]? Reveal = null, byte[]? Ring = null);
+
+/// <summary>
+/// <c>GET /api/access</c> (friend invites, 1.0.61.2): what this computer may do on the nest: "owner", "edit" or "view",
+/// the shared top-level folders (null: the whole nest), the line about this computer's person, and the nest's name.
+/// </summary>
+public sealed record AccessAnswer(string? Access, IReadOnlyList<string>? Folders = null, string? Person = null, string? NestName = null);
+
+/// <summary>
+/// <c>GET /api/people</c> (the owner's computers only): the friends with computers on the nest, and the people who used
+/// an invite link and wait for the owner to let them in.
+/// </summary>
+public sealed record PeopleAnswer(IReadOnlyList<FriendPerson>? People, IReadOnlyList<FriendRequestEntry>? Requests);
+
+/// <summary>One friend: their account id at the service, the line about them ("Anna Berg · a•••@gmail.com"), what they may do, their computers.</summary>
+public sealed record FriendPerson(string? PersonId, string? Person, string? Access, IReadOnlyList<string>? Folders, IReadOnlyList<FriendDevice>? Devices);
+
+/// <summary>One of a friend's computers.</summary>
+public sealed record FriendDevice(string? Id, string? Name, string? System, DateTimeOffset? LastSeen);
+
+/// <summary>Someone who asked to join with an invite link, waiting for the owner's OK (the service sends the list to the nest).</summary>
+/// <param name="At">When they asked, as the service sent it (a time or a number).</param>
+public sealed record FriendRequestEntry(string? Id, string? Name, string? Email, string? Access, IReadOnlyList<string>? Folders, JsonElement? At = null);

@@ -212,6 +212,25 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
         return feed.Items;
     }
 
+    private const string HeldBackTitle = "3 changes stay on this computer";
+
+    /// <summary>
+    /// The owner's computer on a nest reached through Pairnets, shared with two friends (one with a computer in the list)
+    /// and with someone waiting to be let in.
+    /// </summary>
+    private static StatusSnapshot OwnersNestWithFriends => StatusSnapshot.Initial with
+    {
+        Status = RunnerStatus.Idle, Text = "Up to date", Server = CurrentServer, IsRelay = true,
+        ServerUrl = "https://sync.pairnets.app/n/nst_0123456789abcdefghjkmnpqrs/",
+        Devices = [.. Devices, new DeviceInfo("ANNA-LAPTOP", Utc.AddDays(-3), Utc, true, "1.0.61", "Windows", Id: "dev_anna", Access: "edit", Person: "Anna Berg · a•••@gmail.com")],
+        People = new PeopleAnswer(
+        [
+            new FriendPerson("acc_anna", "Anna Berg · a•••@gmail.com", "edit", ["Photos", "School"], [new FriendDevice("dev_anna", "ANNA-LAPTOP", "Windows", Utc)]),
+            new FriendPerson("acc_jonas", "Jonas · j•••@outlook.com", "view", null, [new FriendDevice("dev_jonas", "JONAS-PC", "Windows", Utc)]),
+        ],
+        [new FriendRequestEntry("inv_oskar", "Oskar Nilsson", "oskar.n@example.com", "view", ["Music"])]),
+    };
+
     private const string ConflictTitle = "Conflict copy: report (conflict LAPTOP).docx";
     private const string JoinTitle = "LAPTOP-2 (Windows) wants to join";
 
@@ -242,6 +261,9 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
     public Task BugReportWindow_EveryButtonWorks() => Expect(fixture.Run("bug report", () => PressEverything(BugReportScreens(), BugReportRules)));
 
     [Fact]
+    public Task InviteWindow_EveryButtonWorks() => Expect(fixture.Run("invite", () => PressEverything(InviteScreens(), InviteRules)));
+
+    [Fact]
     public Task TrayMenu_EveryItemWorks() => Expect(fixture.Run("tray menu", PressTheTrayMenu));
 
     /// <summary>The guard: nothing in the XAML, and nothing in the tray menu, goes unpressed.</summary>
@@ -250,7 +272,7 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
     {
         // Run every window first (each runs once, whichever test asks first).
         foreach (var run in new Func<Task>[] { TrayPanel_EveryButtonWorks, MainWindow_EveryButtonWorks, Settings_EveryButtonWorks, SignIn_EveryButtonWorks,
-                     ServerUpdateWindow_EveryButtonWorks, BugReportWindow_EveryButtonWorks, TrayMenu_EveryItemWorks })
+                     ServerUpdateWindow_EveryButtonWorks, BugReportWindow_EveryButtonWorks, InviteWindow_EveryButtonWorks, TrayMenu_EveryItemWorks })
         {
             try
             {
@@ -635,6 +657,19 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
             }, FolderPath, "DESKTOP");
             main.Navigate(MainPage.Devices);
         }));
+        yield return new Screen(name, "the Devices page with People (two friends and one waiting)", NewMainWindow, (b, w) => Wpf.Ui(() =>
+        {
+            var main = (MainWindow)w;
+            main.ShowStatus(OwnersNestWithFriends, FolderPath, "DESKTOP");
+            main.Navigate(MainPage.Devices);
+        }));
+        yield return new Screen(name, "the Needs you page with changes held back on a nest shared to view", NewMainWindow, (b, w) => Wpf.Ui(() =>
+        {
+            var main = (MainWindow)w;
+            main.ShowAttention([new(HeldBackTitle, "Your edits to trip.jpg aren't sent.", "Put back Anna's version", () => b.Actions.Calls.Add("attention:" + HeldBackTitle),
+                SecondLabel: ShareText.KeepMine, Second: () => b.Actions.Calls.Add("attention second:" + HeldBackTitle))]);
+            main.Navigate(MainPage.Attention);
+        }));
         yield return new Screen(name, "the Account page", NewMainWindow, (b, w) => Wpf.Ui(() =>
         {
             var main = (MainWindow)w;
@@ -709,6 +744,9 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
         On("Open your folder", "open the synced folder", Called("OpenFolder")),
 
         // Needs you and the Devices page.
+        new(t => t.Handlers.Contains("DevicesPageView.OnInviteFriend"), "open the invite window", Called("InviteFriend")),
+        new(t => t.Handlers.Any(h => h.StartsWith("DevicesPageView.OnPerson", StringComparison.Ordinal)), "open the account page at this nest's People",
+            Called("OpenPeople")),
         new(t => t.Element.Name == "JoinChip", "show the Needs you page", OnPage(MainPage.Attention)),
         new(t => t.Element.Name == "CardMoreButton", "open the nest's Devices page", Called("ManageDevices")),
 
@@ -1002,6 +1040,41 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
         On(["Open file", "Open the saved file"], "open the saved report",
             c => c.Bench.Opened.Items is [var file] && file.StartsWith(c.Bench.Dir, StringComparison.OrdinalIgnoreCase) && File.Exists(file)),
         On("Copy again", "copy the report again", c => c.Bench.Script.Copied.Items.Any(t => t.StartsWith("Pairnets bug report", StringComparison.Ordinal))),
+    ];
+
+    // ------------------------------------------------------------------ the invite window (friend invites)
+
+    private const string FriendsNest = "nst_0123456789abcdefghjkmnpqrs";
+
+    private static IEnumerable<Screen> InviteScreens()
+    {
+        const string name = "the invite window";
+        static Window Build(Bench b)
+        {
+            Directory.CreateDirectory(Path.Combine(b.Dir, "Photos"));
+            File.WriteAllText(Path.Combine(b.Dir, "Photos", "trip.jpg"), "photo");
+            Directory.CreateDirectory(Path.Combine(b.Dir, "School"));
+            return new InviteWindow("Home nest", FriendsNest, b.Dir, sealedNest: false, b.Opened.Add);
+        }
+        yield return new Screen(name, "the whole nest, view only", Build, (_, w) => Wpf.WaitUntil(() => ((InviteWindow)w).FoldersLoaded, "the folders"));
+        yield return new Screen(name, "chosen folders", Build, async (_, w) =>
+        {
+            await Wpf.WaitUntil(() => ((InviteWindow)w).FoldersLoaded, "the folders");
+            await Wpf.Ui(() => ((InviteWindow)w).FoldersChoice.IsChecked = true);
+        });
+    }
+
+    private static readonly IReadOnlyList<Rule> InviteRules =
+    [
+        Switch, // a folder's tick box
+        new(t => t.Element.Name == "FoldersChoice", "show this computer's folders to tick",
+            c => ((InviteWindow)c.Window).FolderBox.IsVisible && ((InviteWindow)c.Window).FolderList.Children.Count == 2),
+        new(t => t.Element.Name == "WholeChoice", "share the whole nest (no folders to tick)",
+            c => ((InviteWindow)c.Window).WholeChoice.IsChecked == true && !((InviteWindow)c.Window).FolderBox.IsVisible),
+        new(t => t.Element.Name is "ViewChoice" or "EditChoice", "pick what they can do", c => ((RadioButton)c.Target.Element).IsChecked == true),
+        On("Cancel", "close the window without opening anything", c => c.Bench.Closed && c.Bench.Opened.Items.Count == 0),
+        On("Continue in your browser", "open the account page's invite form for the whole nest, view only, and close",
+            c => c.Bench.Opened.Items is [var link] && link == $"https://sync.pairnets.app/account?invite={FriendsNest}&access=view" && c.Bench.Closed),
     ];
 
     // ------------------------------------------------------------------ the tray menu and icon (the real tray controller)

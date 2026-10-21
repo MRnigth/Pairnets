@@ -153,6 +153,10 @@ public static class Nest
         next.DeviceId = grant.Id;
         next.DeviceName = grant.Name;
         next.AccountEmail = string.IsNullOrWhiteSpace(accountEmail) ? null : accountEmail.Trim();
+        // Signed in on the nest itself: its own computer (a friend only ever comes in through the account sign-in).
+        next.Access = null;
+        next.SharedFolders = null;
+        next.SharedBy = null;
         next.Folder = folder;
         next.StartWithWindows = startAtLogin;
         next.FirstRunCompleted = true;
