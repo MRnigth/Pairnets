@@ -86,6 +86,21 @@ public interface IMainActions
     void OpenAccountSite()
     {
     }
+
+    /// <summary>A nest was picked in the nest list (null: "All nests").</summary>
+    void SelectNest(string? id)
+    {
+    }
+
+    /// <summary>"Add a nest": the sign-in window for one more nest.</summary>
+    void AddNest()
+    {
+    }
+
+    /// <summary>"Sync all now" on the All nests page.</summary>
+    void SyncAll()
+    {
+    }
 }
 
 public partial class MainWindow : Window
@@ -265,14 +280,19 @@ public partial class MainWindow : Window
         };
         PageSubtitle.IsVisible = PageSubtitle.Text.Length > 0;
         HeaderRow.IsVisible = page == MainPage.Overview; // every other page draws its own header
-        OverviewPage.IsVisible = page == MainPage.Overview;
+        DrawPageNest();
+        var allNests = page == MainPage.Overview && ShowsAllNests;
+        if (allNests)
+            PageTitle.Text = "All nests";
+        AllNestsPage.IsVisible = allNests;
+        OverviewPage.IsVisible = page == MainPage.Overview && !allNests;
         ActivityPage.IsVisible = page == MainPage.Activity;
         HistoryPage.IsVisible = page == MainPage.History;
         DevicesPage.IsVisible = page == MainPage.Devices;
         AttentionPage.IsVisible = page == MainPage.Attention;
         SettingsPage.IsVisible = page == MainPage.Settings;
         AccountPage.IsVisible = page == MainPage.Account;
-        foreach (var shown in new Control[] { OverviewPage, ActivityPage, HistoryPage, DevicesPage, AttentionPage, SettingsPage, AccountPage })
+        foreach (var shown in new Control[] { OverviewPage, AllNestsPage, ActivityPage, HistoryPage, DevicesPage, AttentionPage, SettingsPage, AccountPage })
         {
             shown.Classes.Remove("enter");
             Motion.Set(shown, "enter", shown.IsVisible);
@@ -312,7 +332,7 @@ public partial class MainWindow : Window
         if (Page == MainPage.Account)
             AccountPage.Show(s, ThisDevice);
         ActivityEmptyText.Text = EmptyFolderText();
-        PauseText.Text = s.Paused ? "Resume" : "Pause";
+        PauseText.Text = _nests is { Visible: true } ? (s.Paused ? "Resume all" : "Pause all") : s.Paused ? "Resume" : "Pause"; // pausing is for every nest
         PauseGlyph.Data = Visuals.Resource<Geometry>(s.Paused ? "I.Play" : "I.Pause");
         RefreshMacMenu();
         RefreshOverview();

@@ -387,14 +387,24 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
 
     // ------------------------------------------------------------------ download
 
-    /// <summary>Speed limit shared by all uploads of this client (no limit by default).</summary>
-    public Throttle UploadLimit { get; } = new();
+    /// <summary>Speed limit shared by all uploads of this client (no limit by default); see <see cref="ShareLimits"/>.</summary>
+    public Throttle UploadLimit { get; private set; } = new();
 
     /// <summary>"Too many requests" handling shared by every request of this client (see <see cref="BackPressure"/>).</summary>
     public BackPressure Pressure { get; }
 
-    /// <summary>Speed limit shared by all downloads of this client (no limit by default).</summary>
-    public Throttle DownloadLimit { get; } = new();
+    /// <summary>Speed limit shared by all downloads of this client (no limit by default); see <see cref="ShareLimits"/>.</summary>
+    public Throttle DownloadLimit { get; private set; } = new();
+
+    /// <summary>
+    /// Uses speed limits shared with other clients, so several nests synced by one app stay under one limit together
+    /// (the limits are app-wide). Call before any transfer starts.
+    /// </summary>
+    public void ShareLimits(Throttle upload, Throttle download)
+    {
+        UploadLimit = upload;
+        DownloadLimit = download;
+    }
 
     public string ServerKey => BaseAddress.ToString();
 

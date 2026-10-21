@@ -503,6 +503,8 @@ const APP_STYLE = String.raw`
 .q-choices { border: 1px solid var(--q-line); border-radius: 12px; overflow: hidden; background: var(--q-card); }
 .q-page label.q-choice { display: flex; align-items: center; gap: 12px; margin: 0; padding: 12px 14px; font-size: 14px; cursor: pointer; overflow-wrap: anywhere; }
 .q-choice + .q-choice { border-top: 1px solid var(--q-line); }
+.q-page label.q-choice.q-have { cursor: default; color: var(--q-muted); }
+.q-have-note { font-size: 13px; }
 .q-page .q-choice input { flex-shrink: 0; width: 16px; height: 16px; margin: 0; padding: 0; accent-color: var(--q-primary); }
 .q-note { margin: 14px 0 0; padding: 12px 14px; border-radius: 12px; background: var(--q-warn-soft); color: var(--q-warn); font-size: 13.5px; }
 .q-note b { font-weight: 600; }

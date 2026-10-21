@@ -130,7 +130,7 @@ internal static class Proc
 /// Fallback secret store: a file readable only by the current user (mode 600). Used on Linux
 /// when no keyring (libsecret) is available.
 /// </summary>
-internal sealed class PrivateFileSecrets(string path) : ISecretProtector
+internal sealed class PrivateFileSecrets(string path, string? slot = null) : ISecretProtector
 {
     public const string Marker = "file:v1";
 
@@ -150,19 +150,19 @@ internal sealed class PrivateFileSecrets(string path) : ISecretProtector
             w.Write(plainText);
         File.SetUnixFileMode(tmp, UnixFileMode.UserRead | UnixFileMode.UserWrite);
         File.Move(tmp, path, overwrite: true);
-        return Marker;
+        return SecretSlots.Marker(Marker, slot);
     }
 
     public string Unprotect(string protectedText)
     {
-        if (protectedText != Marker)
+        if (!SecretSlots.TryRead(Marker, protectedText, out _))
             throw new InvalidOperationException("Unknown token storage.");
         return File.ReadAllText(path).Trim();
     }
 
     public void Forget(string protectedText)
     {
-        if (protectedText == Marker)
+        if (SecretSlots.TryRead(Marker, protectedText, out _))
             File.Delete(path); // no error when it is already gone
     }
 }

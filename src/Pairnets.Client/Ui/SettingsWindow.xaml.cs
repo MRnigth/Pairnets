@@ -11,13 +11,14 @@ namespace Pairnets.Client.Ui;
 /// </summary>
 public partial class SettingsWindow : Window
 {
-    public SettingsWindow(ClientSettings current, ISecretProtector protector, Action<string>? openUrl = null, string? nestHint = null)
+    /// <param name="adding">Set for "Add a nest": signing in to one more nest (see <see cref="NestAdding"/>).</param>
+    public SettingsWindow(ClientSettings current, ISecretProtector protector, Action<string>? openUrl = null, string? nestHint = null, NestAdding? adding = null)
     {
         ThemeManager.Attach(this);
         InitializeComponent();
         Icon = AppIcons.WindowIcon;
-        Title = "Pairnets – sign in";
-        SignIn = new SignInView(current, protector, openUrl ?? (_ => { }), nestHint);
+        Title = adding is null ? "Pairnets – sign in" : "Pairnets – add a nest";
+        SignIn = new SignInView(current, protector, openUrl ?? (_ => { }), nestHint, adding);
         SignIn.SignedIn += (settings, key) =>
         {
             Result = settings;

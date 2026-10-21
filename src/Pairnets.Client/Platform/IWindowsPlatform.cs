@@ -41,6 +41,12 @@ public interface IWindowsPlatform
     bool SetExplorerEntry(string? folder, bool leftSide = true);
 
     /// <summary>
+    /// <see cref="SetExplorerEntry"/> for every nest's folder (the first is "Pairnets", the others "Pairnets – Work nest");
+    /// none takes Pairnets out of File Explorer.
+    /// </summary>
+    bool SetExplorerEntries(IReadOnlyList<ExplorerNest> nests, bool leftSide = true) => SetExplorerEntry(nests.FirstOrDefault()?.Folder, leftSide);
+
+    /// <summary>
     /// Makes the folder a Windows cloud folder in <paramref name="mode"/> (ticks in Explorer; Files On-Demand) and
     /// connects to it, or returns null with <paramref name="problem"/> saying why it stays a plain folder.
     /// </summary>
@@ -55,3 +61,6 @@ public interface IWindowsPlatform
     /// </summary>
     int ForgetCloudFolders();
 }
+
+/// <summary>One nest's folder for File Explorer: where it is, the nest's name and the app's id for it.</summary>
+public sealed record ExplorerNest(string Folder, string Name, string Key);

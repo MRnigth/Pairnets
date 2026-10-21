@@ -1319,3 +1319,47 @@ The core is in `src/Pairnets.Core/Crypto`. Where it differs from ENCRYPTION.md:
 * **The key mailbox** (`/api/keys/requests`) lives in memory for 15 minutes, holds at most 20 requests, and lets each
   message be written once. Envelopes are files in `keys/`.
 * **The nest no longer logs the Google account's email** when one is connected.
+
+## Several nests at once (1.0.61, 2026-10-20)
+
+One Pairnets app can sync two nests or more, each into its own folder. The owner's answers, and what follows from them:
+
+* **Any account per nest.** Each nest is signed in to on its own (your own nest, a friend's, one from work); the app
+  keeps only each nest's own computer key, so nothing about accounts had to change.
+* **The settings file stays readable by older versions.** The first nest keeps the top-level fields it always had
+  (`serverUrl`, `folder`, `deviceName`, ...); more nests are in `otherNests`, each with the same per-nest fields
+  (`NestProfile`). An older Pairnets that reads the file (a rollback) simply syncs the first nest. Each nest has a local
+  id (`nestId`, "n4f2a9c1e") that keys its saved key and its notices; a file from before gets one on first start.
+  Per nest: address, key, device id, folder, this computer's name there, account email, ignore rules, the nest's name,
+  "update the nest by itself" and the skipped nest version. **Everything else is app-wide**: pause, speed
+  limits, notifications, start with Windows, Files in Explorer, files at a time.
+* **Pause and the speed limits are one for all nests.** "Pause all" pauses every nest together; the upload and download
+  limits are one shared limiter (`SpeedLimits`) that every nest's connection draws from, so two nests together stay
+  under the limit.
+* **Each nest's key has its own place** where keys live outside the settings file (Mac Keychain, Linux keyring or key
+  file): the first nest's stays at "sync-token" (nothing moves on update), another nest's is "sync-token-<id>", and the
+  saved marker says which ("keychain:v1:n4f2a9c1e"), so a nest moving up to first place still finds its key. Windows
+  keeps the key inside the settings file (DPAPI), as before.
+* **Folders:** a new nest's folder is `Pairnets\<nest name>` in the home folder unless another is picked. Two nests
+  can't share a folder, and one nest's folder can't be inside another's or hold one (`NestFolders`), in the sign-in
+  window, Settings and "locate a moved folder" alike.
+* **This computer's name is chosen per nest.** The folder step of the sign-in shows the name the nest gave this
+  computer (its own name to start with); a new name is set on the nest right there. Each nest keeps its own list of
+  computers, so the same name in two nests never clashes.
+* **Adding and leaving.** "Add a nest" in the nest list (and in Settings and the tray menu) runs the usual sign-in for
+  one more nest. The account's nests are chosen on the browser page as before; the app tells the page which nests it
+  already syncs (`?have=nst_…`), which shows them greyed out as "already on this computer" (only a hint: it is not
+  stored). "Leave <nest> on this PC" in that nest's Settings signs this computer out of that nest and forgets it; the
+  files stay. With one nest left it is the plain sign-out, as before.
+* **The window.** With two nests or more, the left side starts with "YOUR NESTS": All nests, one row per nest (its dot,
+  name, folder and state) and Add a nest. Picking a nest makes every page show that nest ("IN WORK NEST" over its
+  computers, the nest's name over the page title); All nests is a page of one card per nest. With one nest the window
+  looks exactly as before: there is no list, and "Add a nest" is in Settings and the tray menu.
+* **The tray icon shows the nest in the worst state**: an error, then blocked, then can't reach, then paused, then
+  syncing, then up to date. Its hover text lists each nest; the menu has a row per nest (its colour and state; a click
+  opens the app on it), "Sync all now", "Open folder ›" with each nest's folder, "Add a nest…" and "Pause all".
+* **Notices say which nest** ("Work nest: Conflict…") when there are several, and two nests' notices never hide each
+  other (the ten-minute repeat guard is per nest).
+* **File Explorer:** the first nest's folder is "Pairnets" in the left side as before; each other nest gets its own
+  entry, "Pairnets – Work nest", with an id made from the nest's id; the right-click items work in every nest's folder.
+* **Reset this app** signs out of and forgets every nest. The bug report and crash cards take every nest's names out.

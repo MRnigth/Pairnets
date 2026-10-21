@@ -8,7 +8,7 @@
     <Grid ColumnDefinitions="*,Auto,Auto">
       <StackPanel VerticalAlignment="Center">
         <TextBlock Classes="PageTitle" Text="Settings" />
-        <TextBlock Classes="t2" Margin="0,2,0,0" TextWrapping="Wrap" FontSize="13" Text="Your nest, the folder, and how Pairnets behaves on this computer. Switches apply at once." />
+        <TextBlock x:Name="PageSub" Classes="t2" Margin="0,2,0,0" TextWrapping="Wrap" FontSize="13" Text="Your nest, the folder, and how Pairnets behaves on this computer. Switches apply at once." />
       </StackPanel>
       <Button Grid.Column="1" Classes="SecondaryButton" Height="38" Padding="16,0" Margin="8,0" VerticalAlignment="Center" Content="Cancel" IsCancel="True" Click="OnCancel" />
       <Button x:Name="SaveButton" Grid.Column="2" Classes="accent" Height="38" Padding="18,0" VerticalAlignment="Center" IsDefault="True" Click="OnSave">
@@ -261,6 +261,33 @@
               </Grid>
             </Border>
           </Grid>
+        </Border>
+
+        <!-- Nests: one more nest, each in a folder of its own; with several, leave this one on this PC -->
+        <Border Classes="pcard" Padding="20,18">
+          <StackPanel>
+            <Grid ColumnDefinitions="Auto,*,Auto">
+              <Border Classes="sq44 tint-accent" Margin="0,0,16,0" VerticalAlignment="Center">
+                <v:LineIcon Classes="icon ink-accent" Width="22" Height="22" StrokeThickness="2.1" Data="{StaticResource I.Plus}" />
+              </Border>
+              <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                <TextBlock Classes="stitle" Text="Add a nest" />
+                <TextBlock Classes="t2" FontSize="13" TextWrapping="Wrap"
+                           Text="Sync one more nest on this computer: yours, a friend's or one from work. Its files get a folder of their own." />
+              </StackPanel>
+              <Button x:Name="AddNestButton" Grid.Column="2" Classes="SecondaryButton" Height="38" Padding="16,0" Margin="16,0,0,0" VerticalAlignment="Center" Content="Add a nest…" Click="OnAddNest" />
+            </Grid>
+            <Grid x:Name="LeaveRow" ColumnDefinitions="Auto,*,Auto" Margin="0,14,0,0" IsVisible="False">
+              <Border Classes="sq44 tint-bad" Margin="0,0,16,0" VerticalAlignment="Center">
+                <v:LineIcon Classes="icon ink-bad" Width="22" Height="22" StrokeThickness="2.1" Data="{StaticResource I.Nest}" />
+              </Border>
+              <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                <TextBlock x:Name="LeaveTitle" Classes="stitle" Foreground="{DynamicResource T.BadText}" Text="Leave this nest on this PC" />
+                <TextBlock x:Name="LeaveText" Classes="t2" FontSize="13" TextWrapping="Wrap" />
+              </StackPanel>
+              <Button x:Name="LeaveButton" Grid.Column="2" Classes="reset" Height="38" Padding="16,0" Margin="16,0,0,0" VerticalAlignment="Center" Content="Leave…" Click="OnLeaveNest" />
+            </Grid>
+          </StackPanel>
         </Border>
 
         <!-- Start over -->

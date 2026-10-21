@@ -4,8 +4,12 @@ using System.Text.Json;
 
 namespace Pairnets.Core.Settings;
 
-/// <summary>Persisted client settings (%AppData%\Pairnets\settings.json). The token is stored only protected.</summary>
-public sealed class ClientSettings
+/// <summary>
+/// Persisted client settings (%AppData%\Pairnets\settings.json). The token is stored only protected. The nest fields at
+/// the top level (<see cref="ServerUrl"/>, <see cref="Folder"/>, ...) are the first nest; more nests are in
+/// <see cref="OtherNests"/> (see NestList.cs).
+/// </summary>
+public sealed partial class ClientSettings
 {
     public string? ServerUrl { get; set; }
 
@@ -131,6 +135,7 @@ public sealed class ClientSettings
     {
         var copy = (ClientSettings)MemberwiseClone();
         copy.ExtraIgnore = [.. ExtraIgnore];
+        copy.OtherNests = [.. OtherNests.Select(n => n.Clone())];
         return copy;
     }
 }
@@ -152,6 +157,14 @@ public enum CloudFolderMode
 public interface ISecretProtector
 {
     string Protect(string plainText);
+
+    /// <summary>
+    /// Like <see cref="Protect(string)"/>, but kept apart from the first nest's key under <paramref name="slot"/> (a short
+    /// name of letters and digits) where secrets live outside the settings file (Keychain, keyring, private file), so
+    /// several nests' keys don't overwrite each other. The answer says which slot, so <see cref="Unprotect"/> and
+    /// <see cref="Forget"/> need no slot. Null = the first nest's usual place.
+    /// </summary>
+    string Protect(string plainText, string? slot) => Protect(plainText);
 
     string Unprotect(string protectedText);
 

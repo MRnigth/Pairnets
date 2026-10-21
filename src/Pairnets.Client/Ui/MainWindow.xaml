@@ -67,7 +67,13 @@
           <!-- Your computers (scrolls when the window is short) -->
           <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False">
             <StackPanel>
-              <TextBlock Style="{StaticResource SmallLabel}" Foreground="{DynamicResource T.TextSoft}" Text="YOUR COMPUTERS" Margin="4,16,0,8" />
+              <!-- Your nests: shown once this computer syncs two nests or more (MainWindow.Nests.cs) -->
+              <StackPanel x:Name="NestListPanel" Visibility="Collapsed">
+                <TextBlock Style="{StaticResource SmallLabel}" Foreground="{DynamicResource T.TextSoft}" Text="YOUR NESTS" Margin="4,16,0,8" />
+                <StackPanel x:Name="NestRows" />
+                <Border Height="1" Background="{DynamicResource T.Border}" Margin="4,10,4,0" />
+              </StackPanel>
+              <TextBlock x:Name="ComputersLabel" Style="{StaticResource SmallLabel}" Foreground="{DynamicResource T.TextSoft}" Text="YOUR COMPUTERS" Margin="4,16,0,8" />
 
               <!-- This computer -->
               <Button x:Name="ThisCard" Style="{StaticResource SideRow}" Click="OnThisComputer">
@@ -326,7 +332,10 @@
           <RowDefinition Height="Auto" />
           <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
-        <TextBlock x:Name="PageTitle" Style="{StaticResource Title}" Text="Overview" VerticalAlignment="Center" />
+        <StackPanel VerticalAlignment="Center">
+          <TextBlock x:Name="PageNest" FontSize="12" FontWeight="ExtraBold" Foreground="{DynamicResource T.AccentInk}" Margin="1,0,0,1" Visibility="Collapsed" />
+          <TextBlock x:Name="PageTitle" Style="{StaticResource Title}" Text="Overview" />
+        </StackPanel>
         <TextBlock x:Name="PageSubtitle" Grid.Row="1" Grid.ColumnSpan="2" Style="{StaticResource Muted}" Margin="0,4,0,0" TextWrapping="Wrap" Visibility="Collapsed" />
         <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
           <Button Style="{StaticResource SubtleButton}" Margin="0,0,8,0" Click="OnOpenFolder" ToolTip="Open the synced folder">
@@ -363,6 +372,11 @@
         <!-- ============ Overview ============ -->
         <ScrollViewer x:Name="OverviewPage" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
           <ui:OverviewView x:Name="Overview" />
+        </ScrollViewer>
+
+        <!-- ============ All nests: one card per nest (several nests, none picked) ============ -->
+        <ScrollViewer x:Name="AllNestsPage" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Visibility="Collapsed">
+          <StackPanel x:Name="AllNestsCards" Margin="28,16,28,24" />
         </ScrollViewer>
 
         <!-- ============ Activity, Needs you, History, Devices, Account: pages of their own (each draws its own header) ============ -->

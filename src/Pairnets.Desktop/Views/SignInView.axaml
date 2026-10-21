@@ -354,6 +354,20 @@
 
         <!-- 6. Signed in: which folder to keep in sync -->
         <StackPanel x:Name="FolderStep" Margin="0,22,0,0" IsVisible="False">
+          <!-- This computer's name in this nest (each nest keeps its own) -->
+          <Border Classes="rowcard" Padding="14,12,12,12" Margin="0,0,0,10">
+            <Grid ColumnDefinitions="Auto,*">
+              <Border Classes="IconSquare" Width="40" Height="40" CornerRadius="12" Margin="0,0,12,0">
+                <v:LineIcon Width="20" Height="20" StrokeThickness="1.8" Stroke="{DynamicResource T.Muted}" Data="{StaticResource I.Computer}" />
+              </Border>
+              <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                <TextBlock x:Name="NameLabel" Classes="SoftText" FontSize="12" Text="This computer's name in your nest" />
+                <TextBox x:Name="NameBox" BorderThickness="0" Background="Transparent" MinHeight="0" MaxLength="64"
+                         FontSize="15" FontWeight="ExtraBold" Padding="0" Margin="0,1,0,0"
+                         AutomationProperties.Name="This computer's name in your nest" />
+              </StackPanel>
+            </Grid>
+          </Border>
           <Border Classes="rowcard" Padding="14,12,12,12">
             <Grid ColumnDefinitions="Auto,*,Auto">
               <Border Classes="IconSquare" Width="40" Height="40" CornerRadius="12" Margin="0,0,12,0">
@@ -366,6 +380,13 @@
               </StackPanel>
               <Button Grid.Column="2" Classes="SecondaryButton" Content="Choose…" MinHeight="36" Margin="10,0,0,0" Click="OnBrowse" />
             </Grid>
+          </Border>
+          <!-- Several nests: this folder is another nest's, or inside or around one -->
+          <Border x:Name="FolderProblemBox" Background="{DynamicResource T.BadPill}" CornerRadius="11" Padding="12,10" Margin="0,8,0,0" IsVisible="False">
+            <StackPanel Orientation="Horizontal">
+              <v:LineIcon Width="15" Height="15" StrokeThickness="2" Stroke="{DynamicResource T.BadText}" Margin="0,1,8,0" VerticalAlignment="Top" Data="{StaticResource I.Info}" />
+              <TextBlock x:Name="FolderProblemText" Foreground="{DynamicResource T.BadText}" FontSize="12.5" TextWrapping="Wrap" MaxWidth="340" LineHeight="17" />
+            </StackPanel>
           </Border>
           <Border Classes="rowcard" Margin="0,10,0,0">
             <Grid ColumnDefinitions="Auto,*,Auto">

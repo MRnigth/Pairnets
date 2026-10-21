@@ -251,6 +251,8 @@ export interface AppRequestView {
 export interface ServerChoice {
   id: string;
   label: string;
+  /** The computer asking already syncs this nest (the app says so when it adds one more nest): shown, not offered. */
+  have?: boolean;
 }
 
 // ------------------------------------------------------------------ "Sign in an app?" (/app)
@@ -310,10 +312,14 @@ function askScreen(req: AppRequestView, servers: ServerChoice[]): string {
   } else if (servers.length === 1) {
     nest = `<p class="q-syncwith">${icon("server")}<span>It will sync with <b>${e(servers[0].label)}</b></span></p>`;
   } else {
-    const options = servers
-      .map(
-        (n, i) =>
-          `<label class="q-choice"><input type="radio" name="nest" value="${e(n.id)}" data-label="${e(n.label)}"${i === 0 ? " checked" : ""}> ${e(n.label)}</label>`,
+    // Nests this computer already syncs stay in the list, greyed out, unless that would leave nothing to pick.
+    const offered = servers.some((n) => !n.have) ? servers : servers.map((n) => ({ ...n, have: false }));
+    const first = offered.findIndex((n) => !n.have);
+    const options = offered
+      .map((n, i) =>
+        n.have
+          ? `<label class="q-choice q-have"><input type="radio" name="nest" value="${e(n.id)}" data-label="${e(n.label)}" disabled> ${e(n.label)} <span class="q-have-note">· already on this computer</span></label>`
+          : `<label class="q-choice"><input type="radio" name="nest" value="${e(n.id)}" data-label="${e(n.label)}"${i === first ? " checked" : ""}> ${e(n.label)}</label>`,
       )
       .join("\n");
     nest = `<fieldset class="q-nests"><legend>Sync ${name} with</legend>

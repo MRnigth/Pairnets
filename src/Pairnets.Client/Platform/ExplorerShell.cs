@@ -9,7 +9,9 @@ namespace Pairnets.Client.Platform;
 /// <param name="ExePath">Pairnets.exe, which the right-click items start.</param>
 /// <param name="AppIcon">The Pairnets icon (.ico) for the left side and the right-click items.</param>
 /// <param name="FolderIcon">The blue Pairnets folder icon (.ico) for the folder itself.</param>
-public sealed record ExplorerEntry(string Folder, string ExePath, string AppIcon, string FolderIcon);
+/// <param name="Name">The nest's name ("Work nest"): a second nest's folder shows as "Pairnets – Work nest".</param>
+/// <param name="Key">The app's id for the nest, which keeps a second nest's left-side entry the same from start to start.</param>
+public sealed record ExplorerEntry(string Folder, string ExePath, string AppIcon, string FolderIcon, string? Name = null, string? Key = null);
 
 /// <summary>
 /// Pairnets in File Explorer, the way Microsoft describes for cloud storage apps
@@ -29,8 +31,6 @@ public static class ExplorerShell
     public const string FolderClsid = "{6A3F1C52-8E0B-4D57-9C2E-5B7D1F04A9E3}";
 
     private const string FileSystemFolderClsid = "{0E5AAE11-A475-4c5b-AB00-C66DE400274E}";
-    private const string ClsidKey = @"Classes\CLSID\" + FolderClsid;
-    private const string NameSpaceKey = @"Microsoft\Windows\CurrentVersion\Explorer\Desktop\NameSpace\" + FolderClsid;
     private const string HideOnDesktopKey = @"Microsoft\Windows\CurrentVersion\Explorer\HideDesktopIcons\NewStartPanel";
 
     /// <summary>The right-click items: on files (*) and on folders (Directory).</summary>
@@ -50,32 +50,86 @@ public static class ExplorerShell
     /// False while the folder is a Windows cloud folder: Windows then shows it in the left side by itself, and a second
     /// "Pairnets" there would be one too many.
     /// </param>
-    public static bool Apply(RegistryKey software, ExplorerEntry entry, bool leftSide = true)
+    public static bool Apply(RegistryKey software, ExplorerEntry entry, bool leftSide = true) => Apply(software, [entry], leftSide);
+
+    /// <summary>
+    /// <see cref="Apply(RegistryKey, ExplorerEntry, bool)"/> for every nest's folder (docs/DECISIONS.md, "Several nests at
+    /// once"): the first is "Pairnets" in the left side, each other one "Pairnets – Work nest" just under it, the right-click
+    /// items work inside all of them, and every folder gets the blue icon. Entries of nests that left go away.
+    /// </summary>
+    public static bool Apply(RegistryKey software, IReadOnlyList<ExplorerEntry> entries, bool leftSide = true)
     {
-        var folder = Path.TrimEndingDirectorySeparator(Path.GetFullPath(entry.Folder));
+        if (entries.Count == 0)
+        {
+            Remove(software, RegisteredFolder(software));
+            return true;
+        }
+        var folders = entries.Select(e => Path.TrimEndingDirectorySeparator(Path.GetFullPath(e.Folder))).ToList();
+        var extras = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         if (leftSide)
-            AddLeftSide(software, entry, folder);
+        {
+            AddLeftSide(software, entries[0], folders[0], FolderClsid, "Pairnets", 0x43);
+            for (var i = 1; i < entries.Count; i++)
+            {
+                var clsid = ExtraClsid(entries[i].Key ?? folders[i]);
+                AddLeftSide(software, entries[i], folders[i], clsid, "Pairnets – " + (entries[i].Name ?? Path.GetFileName(folders[i])), 0x43 + i);
+                extras[clsid] = folders[i];
+            }
+        }
         else
-            RemoveLeftSide(software);
+        {
+            RemoveLeftSide(software, FolderClsid);
+        }
+        foreach (var gone in ExtraEntries(software).Keys.Where(k => !extras.ContainsKey(k)).ToList())
+            RemoveLeftSide(software, gone);
+        using (var list = software.CreateSubKey(ExtrasKey))
+        {
+            foreach (var name in list.GetValueNames())
+                list.DeleteValue(name, throwOnMissingValue: false);
+            foreach (var (clsid, folder) in extras)
+                list.SetValue(clsid, folder);
+        }
 
         foreach (var parent in VerbParents)
         {
-            AddVerb(software, parent + BS + OpenVerb, "Open in Pairnets", entry, folder, FileManagerCommand.OpenArgument);
-            AddVerb(software, parent + BS + StatusVerb, "Show sync status", entry, folder, FileManagerCommand.StatusArgument);
+            AddVerb(software, parent + BS + OpenVerb, "Open in Pairnets", entries[0], folders, FileManagerCommand.OpenArgument);
+            AddVerb(software, parent + BS + StatusVerb, "Show sync status", entries[0], folders, FileManagerCommand.StatusArgument);
         }
-        return SetFolderIcon(folder, entry.FolderIcon);
+        var ok = true;
+        for (var i = 0; i < entries.Count; i++)
+            ok &= SetFolderIcon(folders[i], entries[i].FolderIcon);
+        return ok;
+    }
+
+    /// <summary>The left-side entries of the second and later nests (id → folder), as kept next to the right-click items.</summary>
+    private const string ExtrasKey = @"Pairnets\ExplorerNests";
+
+    private static Dictionary<string, string> ExtraEntries(RegistryKey software)
+    {
+        using var list = software.OpenSubKey(ExtrasKey);
+        return list?.GetValueNames().ToDictionary(n => n, n => list.GetValue(n) as string ?? "", StringComparer.OrdinalIgnoreCase)
+            ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+    }
+
+    /// <summary>A second nest's own shell folder id, the same every time for the same nest.</summary>
+    public static string ExtraClsid(string key)
+    {
+        var hash = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes("Pairnets nest folder " + key));
+        hash[7] = (byte)((hash[7] & 0x0F) | 0x50); // a name-based GUID's version and variant bits
+        hash[8] = (byte)((hash[8] & 0x3F) | 0x80);
+        return new Guid(hash.AsSpan(0, 16)).ToString("B").ToUpperInvariant();
     }
 
     private const string BS = @"\";
 
-    private static void AddLeftSide(RegistryKey software, ExplorerEntry entry, string folder)
+    private static void AddLeftSide(RegistryKey software, ExplorerEntry entry, string folder, string id, string title, int order)
     {
-        using (var clsid = software.CreateSubKey(ClsidKey))
+        using (var clsid = software.CreateSubKey(@"Classes\CLSID\" + id))
         {
-            clsid.SetValue(string.Empty, "Pairnets");
+            clsid.SetValue(string.Empty, title);
             clsid.SetValue("InfoTip", "Your Pairnets folder: the files synced with your other computers.");
             clsid.SetValue("System.IsPinnedToNameSpaceTree", 1, RegistryValueKind.DWord);
-            clsid.SetValue("SortOrderIndex", 0x43, RegistryValueKind.DWord); // just after OneDrive (0x42)
+            clsid.SetValue("SortOrderIndex", order, RegistryValueKind.DWord); // just after OneDrive (0x42)
             using (var icon = clsid.CreateSubKey("DefaultIcon"))
                 icon.SetValue(string.Empty, entry.AppIcon + ",0");
             using (var server = clsid.CreateSubKey("InProcServer32"))
@@ -94,32 +148,38 @@ public static class ExplorerShell
                 shellFolder.SetValue("Attributes", unchecked((int)0xF080004D), RegistryValueKind.DWord);
             }
         }
-        using (var nameSpace = software.CreateSubKey(NameSpaceKey))
-            nameSpace.SetValue(string.Empty, "Pairnets");
+        using (var nameSpace = software.CreateSubKey(NameSpaceRoot + id))
+            nameSpace.SetValue(string.Empty, title);
         using (var hide = software.CreateSubKey(HideOnDesktopKey))
-            hide.SetValue(FolderClsid, 1, RegistryValueKind.DWord); // in Explorer's left side only, not as a desktop icon
+            hide.SetValue(id, 1, RegistryValueKind.DWord); // in Explorer's left side only, not as a desktop icon
     }
 
-    private static void RemoveLeftSide(RegistryKey software)
+    private const string NameSpaceRoot = @"Microsoft\Windows\CurrentVersion\Explorer\Desktop\NameSpace\";
+
+    private static void RemoveLeftSide(RegistryKey software, string id)
     {
-        software.DeleteSubKeyTree(ClsidKey, throwOnMissingSubKey: false);
-        software.DeleteSubKeyTree(NameSpaceKey, throwOnMissingSubKey: false);
+        software.DeleteSubKeyTree(@"Classes\CLSID\" + id, throwOnMissingSubKey: false);
+        software.DeleteSubKeyTree(NameSpaceRoot + id, throwOnMissingSubKey: false);
         using (var hide = software.OpenSubKey(HideOnDesktopKey, writable: true))
-            hide?.DeleteValue(FolderClsid, throwOnMissingValue: false);
+            hide?.DeleteValue(id, throwOnMissingValue: false);
     }
 
     /// <summary>
     /// One right-click item. AppliesTo limits it to paths inside the Pairnets folder, so it never shows anywhere else.
     /// </summary>
-    private static void AddVerb(RegistryKey software, string key, string text, ExplorerEntry entry, string folder, string argument)
+    private static void AddVerb(RegistryKey software, string key, string text, ExplorerEntry entry, IReadOnlyList<string> folders, string argument)
     {
         using var verb = software.CreateSubKey(key);
         verb.SetValue("MUIVerb", text);
         verb.SetValue("Icon", entry.AppIcon);
-        var inside = folder.EndsWith(BS, StringComparison.Ordinal) ? folder : folder + BS; // a drive root ("D:\\") ends in one already
-        verb.SetValue("AppliesTo", $"System.ItemPathDisplay:~<\"{inside}\" OR System.ItemPathDisplay:=\"{folder}\"");
+        verb.SetValue("AppliesTo", string.Join(" OR ", folders.Select(folder =>
+        {
+            var inside = folder.EndsWith(BS, StringComparison.Ordinal) ? folder : folder + BS; // a drive root ("D:\\") ends in one already
+            return $"System.ItemPathDisplay:~<\"{inside}\" OR System.ItemPathDisplay:=\"{folder}\"";
+        })));
         verb.SetValue("MultiSelectModel", "Single");
-        verb.SetValue(FolderValue, folder);
+        verb.SetValue(FolderValue, folders[0]);
+        verb.SetValue(FoldersValue, string.Join("|", folders));
         using var command = verb.CreateSubKey("command");
         command.SetValue(string.Empty, $"\"{entry.ExePath}\" {argument} \"%1\"");
     }
@@ -130,7 +190,13 @@ public static class ExplorerShell
     /// </summary>
     public static void Remove(RegistryKey software, string? folder)
     {
-        RemoveLeftSide(software);
+        var others = RegisteredFolders(software);
+        RemoveLeftSide(software, FolderClsid);
+        foreach (var extra in ExtraEntries(software).Keys)
+            RemoveLeftSide(software, extra);
+        software.DeleteSubKeyTree(ExtrasKey, throwOnMissingSubKey: false);
+        foreach (var other in others.Where(o => !string.Equals(o, folder, StringComparison.OrdinalIgnoreCase)))
+            RemoveFolderIcon(other);
         foreach (var parent in VerbParents)
         {
             software.DeleteSubKeyTree(parent + @"\" + OpenVerb, throwOnMissingSubKey: false);
@@ -147,8 +213,20 @@ public static class ExplorerShell
         return verb?.GetValue(FolderValue) as string;
     }
 
+    /// <summary>Every folder Pairnets is in Explorer for (all nests'); empty when Pairnets is not in Explorer.</summary>
+    public static IReadOnlyList<string> RegisteredFolders(RegistryKey software)
+    {
+        using var verb = software.OpenSubKey(VerbParents[0] + BS + OpenVerb);
+        if (verb?.GetValue(FoldersValue) is string all && all.Length > 0)
+            return all.Split('|', StringSplitOptions.RemoveEmptyEntries);
+        return verb?.GetValue(FolderValue) is string one ? [one] : [];
+    }
+
     /// <summary>The folder the right-click items are for, kept next to them (AppliesTo is a search and hard to read back).</summary>
     private const string FolderValue = "PairnetsFolder";
+
+    /// <summary>All the nests' folders the right-click items are for, separated by "|" (a character no Windows path has).</summary>
+    private const string FoldersValue = "PairnetsFolders";
 
     /// <summary>
     /// The blue folder icon: a hidden desktop.ini in the folder (Pairnets never syncs desktop.ini) and the folder's
