@@ -2,15 +2,17 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>FAQ · Pairnets</title>
 <meta name="description" content="Questions and answers about Pairnets: what it is, what it costs, which computers it runs on, and where your files go.">
 <meta name="referrer" content="no-referrer">
 <meta name="color-scheme" content="light dark">
-<meta name="theme-color" content="#FFFFFF" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#1D2026" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#F7F8FA" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0F1218" media="(prefers-color-scheme: dark)">
 <link rel="icon" href="/assets/logo.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/assets/icon-256.png">
+<link rel="preload" href="/assets/fonts/Newsreader.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/assets/fonts/SchibstedGrotesk.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/assets/site.css">
 <script src="/assets/site.js" defer></script>
 </head>
@@ -29,12 +31,10 @@
   </div>
 </header>
 <main id="main" tabindex="-1">
-  <div class="wrap narrow">
-    <div class="hero tight">
+  <div class="wrap">
+    <article class="read">
       <h1>Questions and answers</h1>
       <p class="lead">What Pairnets is, what it costs, and where your files go. Having trouble instead? See <a href="/help/">Help</a>.</p>
-    </div>
-    <div class="doc">
 <details>
 <summary>What is Pairnets?</summary>
 <p>Pairnets keeps one folder the same on all your computers. Instead of a cloud drive, the files live on a small server you own, called your nest. The app on each computer keeps its folder in sync with the nest.</p>
@@ -96,7 +96,7 @@
 <p>Bugs: open an issue on GitHub or email us (see <a href="/contact/">Contact</a>). Security problems: please report them privately, as the <a href="/security/">Security</a> page explains.</p>
 </details>
 <p class="gap-lg muted">Still stuck? Try <a href="/help/">Help</a>, <a href="/docs">the guide</a>, or <a href="/contact/">get in touch</a>.</p>
-    </div>
+    </article>
   </div>
 </main>
 <footer>

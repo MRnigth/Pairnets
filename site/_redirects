@@ -1,12 +1,13 @@
-# The apps' download files on GitHub (the names the apps update themselves with, so they always exist).
+# The apps' download files from the newest tagged release (GitHub's "Latest"), never the main "Latest build": since 1.0.61
+# main builds carry higher numbers than releases, so an install from them would never take a release update.
 # /get.sh is piped into "sudo bash": it points at the copy in the latest release (listed in SHA256SUMS.txt), not at main.
-/download/windows            https://github.com/MRnigth/Pairnets/releases/download/latest/PairnetsSetup.exe                302
-/download/windows-portable   https://github.com/MRnigth/Pairnets/releases/download/latest/pairnets-client-win-x64.zip      302
-/download/mac-apple-silicon  https://github.com/MRnigth/Pairnets/releases/download/latest/Pairnets-macos-arm64.dmg         302
-/download/mac-intel          https://github.com/MRnigth/Pairnets/releases/download/latest/Pairnets-macos-x64.dmg           302
-/download/linux              https://github.com/MRnigth/Pairnets/releases/download/latest/pairnets-desktop-linux-x64.tar.gz 302
-/download/server             https://github.com/MRnigth/Pairnets/releases/download/latest/pairnets-server-linux-x64.tar.gz  302
-/get.sh                      https://github.com/MRnigth/Pairnets/releases/download/latest/get.sh                  302
+/download/windows            https://github.com/MRnigth/Pairnets/releases/latest/download/PairnetsSetup.exe                302
+/download/windows-portable   https://github.com/MRnigth/Pairnets/releases/latest/download/pairnets-client-win-x64.zip      302
+/download/mac-apple-silicon  https://github.com/MRnigth/Pairnets/releases/latest/download/Pairnets-macos-arm64.dmg         302
+/download/mac-intel          https://github.com/MRnigth/Pairnets/releases/latest/download/Pairnets-macos-x64.dmg           302
+/download/linux              https://github.com/MRnigth/Pairnets/releases/latest/download/pairnets-desktop-linux-x64.tar.gz 302
+/download/server             https://github.com/MRnigth/Pairnets/releases/latest/download/pairnets-server-linux-x64.tar.gz  302
+/get.sh                      https://github.com/MRnigth/Pairnets/releases/latest/download/get.sh                  302
 /docs                        https://github.com/MRnigth/Pairnets/blob/main/docs/HOWTO.md                                  302
 /source                      https://github.com/MRnigth/Pairnets                                                          302
 /donate                      https://ko-fi.com/mrdiablo                                                                   302

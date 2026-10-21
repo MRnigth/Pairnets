@@ -2,15 +2,17 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Open-source licences · Pairnets</title>
 <meta name="description" content="Pairnets is open source under the MIT licence. These are the open-source projects it is built on, and their licences.">
 <meta name="referrer" content="no-referrer">
 <meta name="color-scheme" content="light dark">
-<meta name="theme-color" content="#FFFFFF" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#1D2026" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#F7F8FA" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0F1218" media="(prefers-color-scheme: dark)">
 <link rel="icon" href="/assets/logo.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/assets/icon-256.png">
+<link rel="preload" href="/assets/fonts/Newsreader.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/assets/fonts/SchibstedGrotesk.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/assets/site.css">
 <script src="/assets/site.js" defer></script>
 </head>
@@ -29,12 +31,17 @@
   </div>
 </header>
 <main id="main" tabindex="-1">
-  <div class="wrap narrow">
-    <div class="hero tight">
+  <div class="wrap">
+    <article class="read">
       <h1>Open-source licences</h1>
       <p class="lead">Pairnets is open source, and built on other people's open-source work. Thank you to all of them.</p>
-    </div>
-    <div class="doc">
+      <nav class="contents" aria-labelledby="contents-h">
+        <h2 id="contents-h">On this page</h2>
+        <ol>
+          <li><a href="#pairnets">Pairnets</a></li>
+          <li><a href="#built-on">What Pairnets is built on</a></li>
+        </ol>
+      </nav>
 <h2 id="pairnets">Pairnets</h2>
 <p>The apps, the nest software and this website are released under the MIT licence. The <a href="/source">source code</a> is on GitHub.</p>
 <pre><code>MIT License
@@ -79,11 +86,14 @@ SOFTWARE.</code></pre>
 <tr><td><a href="https://github.com/kekekeks/MicroCom">MicroCom</a></td><td>The Mac app</td><td>MIT</td></tr>
 <tr><td><a href="https://jrsoftware.org/isinfo.php">Inno Setup</a></td><td>The Windows installer</td><td>Inno Setup License</td></tr>
 <tr><td><a href="https://github.com/tokotype/PlusJakartaSans">Plus Jakarta Sans</a></td><td>The font in the apps</td><td>SIL Open Font License 1.1</td></tr>
+<tr><td><a href="https://github.com/productiontype/Newsreader">Newsreader</a></td><td>The headings on this website</td><td>SIL Open Font License 1.1</td></tr>
+<tr><td><a href="https://github.com/schibsted/schibsted-grotesk">Schibsted Grotesk</a></td><td>The text on this website</td><td>SIL Open Font License 1.1</td></tr>
+<tr><td><a href="https://github.com/IBM/plex">IBM Plex Mono</a></td><td>Commands on this website</td><td>SIL Open Font License 1.1</td></tr>
 <tr><td><a href="https://github.com/cloudflare/cloudflared">cloudflared</a></td><td>Installed on your nest for its tunnel</td><td>Apache 2.0</td></tr>
 </tbody>
 </table></div>
 <p>Each project's full licence text comes with it: follow the links above.</p>
-    </div>
+    </article>
   </div>
 </main>
 <footer>

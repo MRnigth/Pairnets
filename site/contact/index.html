@@ -2,15 +2,17 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Contact · Pairnets</title>
 <meta name="description" content="How to reach the person behind Pairnets: email for help, privacy and abuse, GitHub for bugs, and private security reports.">
 <meta name="referrer" content="no-referrer">
 <meta name="color-scheme" content="light dark">
-<meta name="theme-color" content="#FFFFFF" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#1D2026" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#F7F8FA" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0F1218" media="(prefers-color-scheme: dark)">
 <link rel="icon" href="/assets/logo.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/assets/icon-256.png">
+<link rel="preload" href="/assets/fonts/Newsreader.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/assets/fonts/SchibstedGrotesk.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/assets/site.css">
 <script src="/assets/site.js" defer></script>
 </head>
@@ -29,12 +31,20 @@
   </div>
 </header>
 <main id="main" tabindex="-1">
-  <div class="wrap narrow">
-    <div class="hero tight">
+  <div class="wrap">
+    <article class="read">
       <h1>Contact</h1>
       <p class="lead">Pairnets is made by one person. Every email is read.</p>
-    </div>
-    <div class="doc">
+      <nav class="contents" aria-labelledby="contents-h">
+        <h2 id="contents-h">On this page</h2>
+        <ol>
+          <li><a href="#first">Before you write</a></li>
+          <li><a href="#bugs">Found a bug?</a></li>
+          <li><a href="#security">Security problem?</a></li>
+          <li><a href="#privacy">Privacy request?</a></li>
+          <li><a href="#who">Who runs Pairnets</a></li>
+        </ol>
+      </nav>
 <div class="callout spaced">
 <h2><a href="mailto:support@pairnets.app">support@pairnets.app</a></h2>
 <p>For help, questions about your account or your data, abuse reports, or anything else. Usually answered within a few days.</p>
@@ -59,7 +69,7 @@
 
 <h2 id="who">Who runs Pairnets</h2>
 <p>MRnigth, a private person in Denmark. There's no company, office or phone line: email is the way to reach us.</p>
-    </div>
+    </article>
   </div>
 </main>
 <footer>

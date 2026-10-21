@@ -1525,9 +1525,11 @@ to that main build. The owner decided:
   `OldUpdaterCompatTests` holds both flags.
 * **This means an app update is a tag** (`v1.0.61`, `v1.0.61.1`, ...). A push to main alone no longer reaches anyone's
   app; it only refreshes the "Latest build" downloads.
-* **Links that want the main build use its tag name**, `releases/download/latest/<file>`: the site's `/download/...`
-  and `/get.sh` redirects, the README and HOWTO download links (a pre-release can still be downloaded by tag). Those
-  already did; nothing else changes. `get.sh` without `PAIRNETS_VERSION` installs the Latest release, now always a tag.
+* **The website's downloads and `/get.sh` go to the tagged release** (`releases/latest/download/<file>`, from
+  `feature/new-site` 751383b): a main build's number (1.0.<run>, already 68) is higher than every release, so an install
+  from it would never take a release update. Only what really wants the main build names its tag,
+  `releases/download/latest/<file>` (README and HOWTO's "Latest build" links). `get.sh` without `PAIRNETS_VERSION`
+  installs the Latest release, now always a tag.
 * **Apps that took 1.0.68 stay on it until a version above 1.0.68 is released**: the update check only moves to a
   higher number, so 1.0.61 (and 1.0.61.x) is never offered to them. They update again at the first tag above 1.0.68.
 
@@ -1577,3 +1579,21 @@ and no app does yet), then `feature/crash-send`, then `release/1.0.61.3` (4 nest
   apps): "Update the nest by itself" and "Where your files live" go to that nest; the first nest keeps its own. The
   switches still apply to every nest. (Found in review: Save on a second nest copied its "Update the nest by itself"
   onto the first.)
+
+## pairnets.app looks "made by one person" (2026-10-21)
+
+* **Picked over "Product first"**, which read as a stock template (dark hero with a glow, pill badges, a drawn app
+  window, cards everywhere). The site now looks like paper and ink: serif headings (Newsreader), plain text (Schibsted
+  Grotesk), typed commands in IBM Plex Mono, hairlines instead of cards, and blue only for links and the one main
+  button on a page (the download on the home page; Sign in and the coffee keep their `accent` class for `site.js` and
+  the tests, but are drawn quiet).
+* **Real pictures of the app, not drawings.** The Overview, History, Devices and tray, light and dark (`<picture>`
+  follows the system), as WebP in `site/assets/shots`. Captions say only what the picture shows. On the home page the
+  big pictures run off the right edge on purpose; `.opening` and `.chapter` clip them, so the page never scrolls
+  sideways. Swap the pictures when the app changes a lot.
+* **Every other page is one reading column** with "On this page" as a short numbered list under the title. The side
+  list of pages is gone (the footer has every page). The words did not change.
+* **Fonts served by pairnets.app itself**, Latin only: Newsreader and Schibsted Grotesk cut down with fonttools (one
+  weight, or one weight range), IBM Plex Mono as Google Fonts serves it, unchanged (its licence reserves the name
+  "Plex" for changed copies). About 160 KB on the home page, less elsewhere. The strict CSP (`font-src 'self'`) stays.
+* **The design-review fixes stay:** text sizes in rem, taller tap areas on phones, commands that wrap on phones.

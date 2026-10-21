@@ -220,9 +220,10 @@ public class OldUpdaterCompatTests
         Assert.Contains("--prerelease", create);
         Assert.Contains("--latest=false", create);
         Assert.DoesNotMatch(new Regex(@"--latest(\s|\\|$)"), create);
-        // Links that want the main build name its tag (download/latest/), not GitHub's latest release.
+        // The website's downloads are the tagged release too: a main build's number is higher than every release, so an
+        // install from it would never take a release update.
         foreach (var line in RepoPaths.Read("site", "_redirects").Split('\n').Where(l => l.Contains("/releases/", StringComparison.Ordinal)))
-            Assert.Contains("/releases/download/latest/", line);
+            Assert.Contains("/releases/latest/download/", line);
     }
 
     /// <summary>

@@ -2,15 +2,17 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Add a computer · Pairnets</title>
 <meta name="description" content="Add a computer to your Pairnets nest in three steps, without copying any token.">
 <meta name="referrer" content="no-referrer">
 <meta name="color-scheme" content="light dark">
-<meta name="theme-color" content="#FFFFFF" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#1D2026" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#F7F8FA" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0F1218" media="(prefers-color-scheme: dark)">
 <link rel="icon" href="/assets/logo.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/assets/icon-256.png">
+<link rel="preload" href="/assets/fonts/Newsreader.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/assets/fonts/SchibstedGrotesk.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/assets/site.css">
 <script src="/assets/site.js" defer></script>
 </head>
@@ -29,11 +31,10 @@
   </div>
 </header>
 <main id="main" tabindex="-1">
-  <div class="wrap narrow">
-    <div class="hero tight">
+  <div class="wrap">
+    <article class="read">
       <h1>Add a computer</h1>
       <p class="lead">Three steps, on the computer you want to add. No server address or token to type.</p>
-    </div>
     <ol class="steps">
       <li>
         <h2>Install Pairnets</h2>
@@ -55,6 +56,7 @@
     </div>
     <p class="muted small gap-lg">No nest yet? On an always-on Ubuntu computer, run this and open the link it shows. <a href="/docs">The guide</a> has the details.</p>
     <pre><code>curl -fsSL https://pairnets.app/get.sh | sudo bash</code></pre>
+    </article>
   </div>
 </main>
 <footer>

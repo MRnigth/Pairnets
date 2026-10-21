@@ -2,15 +2,17 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Delete my account · Pairnets</title>
 <meta name="description" content="How to delete your Pairnets account and everything stored about you, and what stays on your own computers.">
 <meta name="referrer" content="no-referrer">
 <meta name="color-scheme" content="light dark">
-<meta name="theme-color" content="#FFFFFF" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#1D2026" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#F7F8FA" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0F1218" media="(prefers-color-scheme: dark)">
 <link rel="icon" href="/assets/logo.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/assets/icon-256.png">
+<link rel="preload" href="/assets/fonts/Newsreader.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/assets/fonts/SchibstedGrotesk.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/assets/site.css">
 <script src="/assets/site.js" defer></script>
 </head>
@@ -29,12 +31,19 @@
   </div>
 </header>
 <main id="main" tabindex="-1">
-  <div class="wrap narrow">
-    <div class="hero tight">
+  <div class="wrap">
+    <article class="read">
       <h1>Delete your account</h1>
       <p class="lead">How to remove your Pairnets account and everything stored about you, and what stays on your own computers.</p>
-    </div>
-    <div class="doc">
+      <nav class="contents" aria-labelledby="contents-h">
+        <h2 id="contents-h">On this page</h2>
+        <ol>
+          <li><a href="#deleted">What gets deleted, straight away</a></li>
+          <li><a href="#stays">What stays, because it's on your own computers</a></li>
+          <li><a href="#computers">Remove Pairnets from your computers too</a></li>
+          <li><a href="#cant-sign-in">Can't sign in any more?</a></li>
+        </ol>
+      </nav>
 <ol class="steps">
 <li><h2>Open your account</h2><p>Go to <a href="https://sync.pairnets.app/account">sync.pairnets.app/account</a> and sign in.</p></li>
 <li><h2>Press “Delete my account”</h2><p>It's at the bottom of the page, under <strong>Delete account</strong>.</p></li>
@@ -67,7 +76,7 @@
 <h2 id="cant-sign-in">Can't sign in any more?</h2>
 <p>Email <a href="mailto:support@pairnets.app">support@pairnets.app</a> from the address on the account, and ask us to delete it. A reply from that address is enough to show it's yours. We delete it within one month, usually much sooner.</p>
 <p class="muted small">More about what we keep, and why: <a href="/privacy/">Privacy Policy</a>.</p>
-    </div>
+    </article>
   </div>
 </main>
 <footer>
