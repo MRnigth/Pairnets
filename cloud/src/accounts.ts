@@ -17,8 +17,13 @@ export async function deleteAccountRows(ctx: Ctx, id: string, email: string): Pr
   const tunnels = (
     await db.prepare("SELECT tunnel_id FROM nests WHERE account_id = ?1 AND mode = 'relay' AND tunnel_id IS NOT NULL").bind(id).all<{ tunnel_id: string }>()
   ).results.map((r) => r.tunnel_id);
-  // Foreign keys cascade from accounts; the explicit deletes make the result independent of that setting.
+  // Foreign keys cascade from accounts; the explicit deletes make the result independent of that setting. Friends
+  // (RELAY.md 10): the people and invites of its own nests go with them; where it was a friend, it is removed as if
+  // the owner had done it (the cron tells those nests, which then drop its computers).
   await db.batch([
+    db.prepare("DELETE FROM nest_invites WHERE created_by = ?1 OR requested_by = ?1 OR nest_id IN (SELECT id FROM nests WHERE account_id = ?1)").bind(id),
+    db.prepare("DELETE FROM nest_members WHERE nest_id IN (SELECT id FROM nests WHERE account_id = ?1)").bind(id),
+    db.prepare("UPDATE nest_members SET removed_at = COALESCE(removed_at, ?2), synced = 0 WHERE account_id = ?1").bind(id, ctx.now),
     db.prepare("DELETE FROM sessions WHERE account_id = ?1").bind(id),
     db.prepare("DELETE FROM identities WHERE account_id = ?1").bind(id),
     db.prepare("DELETE FROM nests WHERE account_id = ?1").bind(id),

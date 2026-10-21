@@ -9,6 +9,9 @@ export const KID_RE = /^[A-Za-z0-9._-]{1,64}$/;
 export const SERVER_DEVICE_CODE_RE = /^psd_[A-Za-z0-9_-]{43}$/;
 /** A device id as the nest hands it out (checked loosely: it only ever goes back to that nest in a path). */
 export const DEVICE_ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
+/** An invite (RELAY.md 10): its id, and the token in its link (pni_ + 32 base32-lower, 160 bits). */
+export const INVITE_ID_RE = /^inv_[0-9a-hjkmnp-tv-z]{26}$/;
+export const INVITE_TOKEN_RE = /^pni_[0-9a-hjkmnp-tv-z]{32}$/;
 
 const B32_UPPER_RE = /^[0-9ABCDEFGHJKMNPQRSTVWXYZ]+$/;
 
@@ -44,9 +47,13 @@ export function displayUserCode(code: string): string {
   return `${code.slice(0, 4)}-${code.slice(4, 8)}`;
 }
 
-const NEXT_RE = /^\/(account|app(\?code=[0-9A-Za-z-]{1,16})?|add(\?code=[0-9A-Za-z-]{1,16})?|nest-login\?[^#\s]{1,600})$/;
+const NEXT_RE =
+  /^\/(account(\?invite=nst_[0-9a-hjkmnp-tv-z]{26}(&[A-Za-z0-9%._~,+=&!*'()-]{0,600})?)?|app(\?code=[0-9A-Za-z-]{1,16})?|add(\?code=[0-9A-Za-z-]{1,16})?|invite\?t=pni_[0-9a-hjkmnp-tv-z]{32}|nest-login\?[^#\s]{1,600})$/;
 
-/** The `next` allow-list (section 6.4, plus RELAY.md's /add?code=); anything else becomes "/account". */
+/**
+ * The `next` allow-list (section 6.4, plus RELAY.md's /add?code=, and for friends the invite link /invite?t= and the
+ * apps' hand-over to the invite form, /account?invite=nst_…&folders=…&access=…); anything else becomes "/account".
+ */
 export function safeNext(next: unknown): string {
   return typeof next === "string" && NEXT_RE.test(next) ? next : "/account";
 }
@@ -76,6 +83,11 @@ export function checkPublicUrl(input: unknown): { url: string; host: string } | 
   if (host.endsWith(".")) return null;
   if (REFUSED_HOSTS.has(host) || host.endsWith(".localhost")) return null;
   return { url: u.origin, host: u.host };
+}
+
+/** "y•••@gmail.com": maskEmail with dots, for the lines people read (a friend's name on the nest, an invite). */
+export function dottedEmail(email: string): string {
+  return maskEmail(email).replace("***@", "•••@");
 }
 
 /** "y***@gmail.com": first character, "***", "@", the domain; ASCII only (section 4.2). */
@@ -158,6 +170,56 @@ export const MAX_USERNAME = 32;
 /** The part of an email address before the @: what an account without a username is called. */
 export function emailName(email: string): string {
   return email.slice(0, email.lastIndexOf("@"));
+}
+
+/** What an account is called on screen and in emails: its username, or else the part of its email before the @. */
+export function personName(account: { username: string | null; email: string }): string {
+  return account.username ?? emailName(account.email);
+}
+
+/** What a friend may do on a nest (RELAY.md 10): "view" (View only) or "edit" (Can change). The owner is "owner". */
+export type FriendAccess = "view" | "edit";
+
+/** `access` from a request: "view" or "edit"; missing means "view" (the default); anything else is null (400). */
+export function cleanAccess(input: unknown): FriendAccess | null {
+  if (input === undefined || input === null) return "view";
+  return input === "view" || input === "edit" ? input : null;
+}
+
+export const MAX_SHARED_FOLDERS = 20;
+const MAX_FOLDER_NAME = 255;
+
+/**
+ * `folders` from a request (RELAY.md 10): null or missing = the whole nest; else 1-20 top-level folder names, exact
+ * case, each 1-255 characters with no "/", "\", control or invisible character, and not "." or "..". Repeats are
+ * dropped. Returns "invalid" for anything else (400 bad_access).
+ */
+export function cleanFolders(input: unknown): string[] | null | "invalid" {
+  if (input === undefined || input === null) return null;
+  if (!Array.isArray(input) || input.length === 0 || input.length > MAX_SHARED_FOLDERS) return "invalid";
+  const out: string[] = [];
+  for (const f of input) {
+    if (typeof f !== "string" || f.length === 0 || f.length > MAX_FOLDER_NAME) return "invalid";
+    if (f === "." || f === ".." || /[/\\]/.test(f) || stripHidden(f) !== f || f.trim() !== f) return "invalid";
+    if (!out.includes(f)) out.push(f);
+  }
+  return out;
+}
+
+/** The folders as stored (a JSON array, or NULL for the whole nest) and back. A bad stored value reads as no folders. */
+export function foldersJson(folders: string[] | null): string | null {
+  return folders === null ? null : JSON.stringify(folders);
+}
+
+export function parseFolders(stored: string | null): string[] | null {
+  if (stored === null) return null;
+  try {
+    const v: unknown = JSON.parse(stored);
+    if (Array.isArray(v) && v.every((x) => typeof x === "string")) return v as string[];
+  } catch {
+    // fall through
+  }
+  return [];
 }
 
 /** A short free-text field from an app or nest (name, system, version): same cleaning as labels, max length given. */

@@ -42,6 +42,12 @@ export type ErrorCode =
   | "bad_name"
   | "full"
   | "cloudflare_failed"
+  | "bad_access"
+  | "sealed_whole_only"
+  | "too_many_friends"
+  | "own_nest"
+  | "already_member"
+  | "cancelled"
   | "server_error";
 
 export const MESSAGES: Record<ErrorCode, string> = {
@@ -72,6 +78,12 @@ export const MESSAGES: Record<ErrorCode, string> = {
   bad_name: "Type a name.",
   full: "Pairnets cannot take more servers right now. Try again later.",
   cloudflare_failed: "Cloudflare did not finish setting up the server, so nothing was kept. Try again in a few minutes.",
+  bad_access: "Choose View only or Can change, and the whole nest or 1 to 20 of its top-level folders.",
+  sealed_whole_only: "An encrypted nest can only be shared whole.",
+  too_many_friends: "A nest can have at most 10 friends, open invites included. Remove someone or cancel an invite first.",
+  own_nest: "This is your own nest.",
+  already_member: "You already have this nest.",
+  cancelled: "This invite was cancelled.",
   server_error: "Something went wrong on our side.",
 };
 

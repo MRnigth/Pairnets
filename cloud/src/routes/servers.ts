@@ -11,6 +11,8 @@
 //   DELETE /v1/servers/{id}/devices/{d}  session + Origin            -> the nest revokes that computer
 //   PATCH  /v1/servers/{id}              session + Origin            -> new label, passed on to the nest
 //   DELETE /v1/servers/{id}              session + Origin, recent    -> router binding, tunnel and row go
+//
+// Friends on a server (its People, RELAY.md section 10) have their own routes in friends.ts.
 
 import { b64urlEncode } from "../b64";
 import { audit } from "../audit";
@@ -18,7 +20,7 @@ import { CloudflareApi, CloudflareError, teardown } from "../cloudflare";
 import type { Ctx } from "../context";
 import { B32_UPPER, newId, randomBase32, randomToken } from "../crypto";
 import { intVar } from "../env";
-import { cleanLabel, cleanText, DEVICE_ID_RE, stripHidden, displayUserCode, iso, NEST_ID_RE, normaliseUserCode, SERVER_DEVICE_CODE_RE } from "../formats";
+import { ACCOUNT_ID_RE, cleanLabel, cleanText, DEVICE_ID_RE, stripHidden, displayUserCode, iso, NEST_ID_RE, normaliseUserCode, SERVER_DEVICE_CODE_RE } from "../formats";
 import { HttpError, htmlResponse, json, noContent, redirect } from "../http";
 import { sendNotice } from "../mail";
 import { type AdminAnswer, type AdminTarget, adminCall, markReached, nestKey, NestOffline } from "../nestadmin";
@@ -298,7 +300,8 @@ export async function serversOf(ctx: Ctx, accountId: string): Promise<NestRow[]>
   return r.results;
 }
 
-async function ownServer(ctx: Ctx, accountId: string, nestId: string): Promise<NestRow> {
+/** One of the account's relayed servers in use, or 404 not_found (another account's answers like an unknown one). */
+export async function ownServer(ctx: Ctx, accountId: string, nestId: string): Promise<NestRow> {
   if (!NEST_ID_RE.test(nestId)) throw new HttpError(404, "not_found");
   const n = await ctx.env.DB.prepare(
     "SELECT * FROM nests WHERE id = ?1 AND account_id = ?2 AND mode = 'relay' AND status IN ('pending', 'active')",
@@ -309,7 +312,7 @@ async function ownServer(ctx: Ctx, accountId: string, nestId: string): Promise<N
   return n;
 }
 
-function obj(v: unknown): Record<string, unknown> | null {
+export function obj(v: unknown): Record<string, unknown> | null {
   return v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : null;
 }
 
@@ -321,11 +324,21 @@ function count(v: unknown): number | null {
   return typeof v === "number" && Number.isSafeInteger(v) && v >= 0 ? v : null;
 }
 
-/** A computer as the nest lists it, with only the documented fields (and only of the documented types). */
+/**
+ * A computer as the nest lists it, with only the documented fields (and only of the documented types). A friend's
+ * computer (RELAY.md 10) has its person's account id, so the page lists it under that person, not with the owner's.
+ */
 function deviceJson(v: unknown): Record<string, unknown> | null {
   const d = obj(v);
   if (!d || typeof d.id !== "string" || !DEVICE_ID_RE.test(d.id)) return null;
-  return { id: d.id, name: str(d.name) ?? "", system: str(d.system), createdAt: str(d.createdAt, 64), lastSeen: str(d.lastSeen, 64) };
+  const access = d.access === "view" || d.access === "edit" ? d.access : "owner";
+  const personId = access !== "owner" && typeof d.personId === "string" && ACCOUNT_ID_RE.test(d.personId) ? d.personId : null;
+  return { id: d.id, name: str(d.name) ?? "", system: str(d.system), createdAt: str(d.createdAt, 64), lastSeen: str(d.lastSeen, 64), access, personId };
+}
+
+/** What a nest's status says about friends (RELAY.md 10): whether it can have them, and whether it is encrypted. */
+export function friendFeatures(st: Record<string, unknown>): { friends: boolean; sealed: boolean } {
+  return { friends: Array.isArray(st.features) && st.features.includes("friends"), sealed: st.sealed === true };
 }
 
 /** One server for the account page: a live status call and the computers list (5 s each, in parallel). */
@@ -343,6 +356,7 @@ async function serverJson(ctx: Ctx, n: NestRow): Promise<Record<string, unknown>
   // older nest has no "name" in its status and no way to keep one.
   if (st && "name" in st && st.name !== n.label) ctx.defer(tellName(ctx, n, n.label));
   const list = devices && devices.status === 200 ? obj(devices.json)?.devices : null;
+  const features = st ? friendFeatures(st) : null;
   return {
     id: n.id,
     label: n.label,
@@ -352,6 +366,9 @@ async function serverJson(ctx: Ctx, n: NestRow): Promise<Record<string, unknown>
     freeBytes: st ? count(st.freeBytes) : null,
     devices: Array.isArray(list) ? list.map(deviceJson).filter((d) => d !== null) : [],
     lastSeenAt: iso(online ? ctx.now : n.last_seen_at),
+    // Unknown (null) while the nest is offline.
+    friends: features ? features.friends : null,
+    sealed: features ? features.sealed : null,
   };
 }
 
@@ -445,7 +462,13 @@ export async function removeServerRoute(ctx: Ctx, nestId: string): Promise<Respo
   const n = await ownServer(ctx, s.accountId, nestId);
   // 'broken' takes it out of the relay and of the next router deploy at once; that deploy then deletes the tunnel and
   // the row (or the hourly cron does, if a deploy is busy or Cloudflare is down).
-  await ctx.env.DB.prepare("UPDATE nests SET status = 'broken' WHERE id = ?1 AND account_id = ?2").bind(n.id, s.accountId).run();
+  // Its friends and invites go with it (their computers lose the nest with the link).
+  const db = ctx.env.DB;
+  await db.batch([
+    db.prepare("UPDATE nests SET status = 'broken' WHERE id = ?1 AND account_id = ?2").bind(n.id, s.accountId),
+    db.prepare("DELETE FROM nest_members WHERE nest_id = ?1").bind(n.id),
+    db.prepare("DELETE FROM nest_invites WHERE nest_id = ?1").bind(n.id),
+  ]);
   await audit(ctx, "server_removed", s.accountId, n.id);
   const account = await ctx.env.DB.prepare("SELECT email FROM accounts WHERE id = ?1").bind(s.accountId).first<{ email: string }>();
   if (account) await sendNotice(ctx, s.accountId, account.email, "server_removed", n.label);

@@ -2,6 +2,7 @@
 
 import { audit } from "./audit";
 import type { Ctx } from "./context";
+import { dottedEmail } from "./formats";
 import { escapeHtml } from "./http";
 import { DAY, hit, peek } from "./ratelimit";
 
@@ -135,11 +136,18 @@ export async function loginMailAvailable(ctx: Ctx): Promise<boolean> {
 }
 
 /**
- * Takes one email from today's budget. Sign-in emails also count against EMAIL_DAILY_LIMIT and may only use the
- * total up to LOGIN_MAIL_CEILING; notices may use all of it. Returns false when the budget is used up (the caller then
- * does not send).
+ * Invites a friend gets by email (RELAY.md 10) have a small budget of their own, outside the day's total, so they can
+ * never use up the emails that sign-ins and security notices need. 95 + 5 is Resend's free 100 a day.
  */
-export async function reserveMail(ctx: Ctx, kind: "login" | "notice"): Promise<boolean> {
+export const INVITE_MAIL_DAILY_LIMIT = 5;
+
+/**
+ * Takes one email from today's budget. Sign-in emails also count against EMAIL_DAILY_LIMIT and may only use the
+ * total up to LOGIN_MAIL_CEILING; notices may use all of it; invites only their own INVITE_MAIL_DAILY_LIMIT. Returns
+ * false when the budget is used up (the caller then does not send).
+ */
+export async function reserveMail(ctx: Ctx, kind: "login" | "notice" | "invite"): Promise<boolean> {
+  if (kind === "invite") return !(await hit(ctx, "mail-invite", "service", INVITE_MAIL_DAILY_LIMIT, DAY)).limited;
   if (kind === "login") {
     const login = await hit(ctx, "mail-login", "service", loginMailLimit(ctx), DAY);
     if (login.limited) return false;
@@ -298,6 +306,79 @@ export function inactiveDeletedEmail(to: string): MailMessage {
   const lines = [
     "Your Pairnets account wasn't used for a year, so it and everything stored about it were deleted, as we wrote to you 30 days ago. Your nests and computers keep their files.",
     "You can make a new account any time at https://pairnets.app.",
+  ];
+  return { to, subject, text: `${lines.join("\n\n")}\n${textFooter(REASON_ACCOUNT)}`, html: layout(REASON_ACCOUNT, subject, lines) };
+}
+
+/** What a friend gets (RELAY.md 10), as the emails say it. */
+export interface ShareDetail {
+  /** The nest's name. */
+  nest: string;
+  /** The top-level folders shared, or null for the whole nest. */
+  folders: string[] | null;
+  access: "view" | "edit";
+}
+
+/** "Photos", "Photos and School", "Photos, School and Music". */
+function listed(names: string[]): string {
+  return names.length < 2 ? (names[0] ?? "") : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+}
+
+/** "the folders Photos and School, and you can view them" / "the whole nest, and you can add, change and delete in it". */
+function shareText(d: ShareDetail): string {
+  const what = d.folders ? `the folder${d.folders.length > 1 ? "s" : ""} ${listed(d.folders)}` : "the whole nest";
+  const them = d.folders && d.folders.length > 1 ? "them" : "it";
+  return `${what}, and you can ${d.access === "view" ? `view ${them}` : `add, change and delete files in ${them}`}`;
+}
+
+/** "28 October": the day an invite ends. */
+function dayOf(at: number): string {
+  return new Date(at * 1000).toLocaleDateString("en-GB", { day: "numeric", month: "long", timeZone: "UTC" });
+}
+
+/** The invite Pairnets sends for an owner who typed a friend's address (sent within the "invite" budget). */
+export function inviteEmail(to: string, owner: { name: string; email: string }, share: ShareDetail, link: string, expiresAt: number): MailMessage {
+  const subject = `${owner.name} invited you to ${share.nest} on Pairnets`;
+  const title = `${owner.name} wants to share files with you`;
+  const reason = `Sent because ${owner.name} (${dottedEmail(owner.email)}) typed your address in Pairnets. We don't keep it after the invite ends.`;
+  const before = [`${owner.name} invited you to their nest, ${share.nest}. You'll get ${shareText(share)}. Pairnets keeps it all in sync on your computer.`];
+  const after = [
+    `The link works once and ends on ${dayOf(expiresAt)}. You'll sign in with Google or your email; it's free.`,
+    `If you don't know ${owner.name}, ignore this email and nothing happens.`,
+  ];
+  return {
+    to,
+    subject,
+    text: `${title}\n\n${before[0]}\n\nSee the invite: ${link}\n\n${after.join("\n")}\n${textFooter(reason)}`,
+    html: layout(reason, title, before, { href: link, text: "See the invite" }, after),
+  };
+}
+
+/** To the owner: someone used an invite link and asks to join (a security notice: it uses the notice budget). */
+export function joinRequestEmail(to: string, friend: { name: string; email: string }, share: ShareDetail, nestId: string): MailMessage {
+  const subject = `${friend.name} wants to join ${share.nest}`;
+  const page = `${ACCOUNT_URL}#people-${nestId}`;
+  const what = share.folders ? listed(share.folders) : "the whole nest";
+  const before = [
+    `${friend.name} (${friend.email}) used your invite link and asks to join your nest ${share.nest}: ${what}, ${share.access === "view" ? "view only" : "can change"}.`,
+    "Nothing is shared until you let them in. You can let them in or decline on your account page.",
+  ];
+  const after = [`If you don't know ${friend.name}, decline. Nothing else happens.`];
+  return {
+    to,
+    subject,
+    text: `${before.join("\n\n")}\n\n${page}\n\n${after[0]}\n${textFooter(REASON_ACCOUNT)}`,
+    html: layout(REASON_ACCOUNT, subject, before, { href: page, text: "Let in or decline" }, after),
+  };
+}
+
+/** To the friend, once the owner let them in (sent within the "invite" budget). */
+export function friendInEmail(to: string, owner: string, share: ShareDetail): MailMessage {
+  const subject = `You're in ${share.nest}`;
+  const lines = [
+    `${owner} let you in to ${share.nest}. You get ${shareText(share)}.`,
+    `To add it on a computer: open Pairnets and choose Add a nest, sign in as ${to} and pick ${share.nest} · shared by ${owner}.`,
+    "No Pairnets yet? Get it at https://pairnets.app.",
   ];
   return { to, subject, text: `${lines.join("\n\n")}\n${textFooter(REASON_ACCOUNT)}`, html: layout(REASON_ACCOUNT, subject, lines) };
 }

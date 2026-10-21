@@ -157,6 +157,17 @@ Endpoints (JSON; bodies at most 4 KiB):
 <approvedBy> on sync.pairnets.app"`); names are made unique by the nest. `DELETE` does what `DELETE /api/devices/{id}`
 does (revoke, forget the cached key, `DeviceRemoved` on the hub, close the device's connections).
 
+Friends (§10) add to this list, on nests whose status says `"features":["friends"]`:
+
+| Endpoint | Body | 200 answer |
+|---|---|---|
+| `GET /api/relay/status` | | adds `"features":["friends"]` and `"sealed":true|false` (an encrypted nest) |
+| `GET /api/relay/devices` | | each device adds `"access":"owner"|"view"|"edit"`, `"folders":[…]|null`, `"person":"Anna Berg · a•••@gmail.com"|null`, `"personId":"acc_…"|null` |
+| `POST /api/relay/devices` | adds optional `"access"`, `"folders"`, `"person"`, `"personId"` (missing = an owner's computer) | as above; folders on a sealed nest → 400 `{"error":"sealed_whole_only"}`; bad values → 400 `{"error":"bad_access"}` |
+| `PATCH /api/relay/people/{personId}` | `{"access":"view"|"edit","folders":[…]|null}` | `{"devices":n}`: every computer of that person changes (0 is fine); sealed + folders → 400 `sealed_whole_only` |
+| `DELETE /api/relay/people/{personId}` | | `{"devices":n}`: every computer of that person is removed like `DELETE …/devices/{id}` (0 is fine) |
+| `PUT /api/relay/requests` | `{"requests":[{"id":"inv_…","name":"Oskar","email":"oskar@…","access":"view","folders":null,"at":"…"}]}` (at most 20) | replaces the list of people waiting for the owner's answer; only the owner's computers read it |
+
 ## 5. The relay and the router
 
 **Relay** (`pairnets-sync`): `ANY /n/{nestId}/{rest}`.
@@ -227,9 +238,13 @@ account's relay nest). The first successful `POST /v1/app/poll` after approval a
 
 ```json
 {"status":"approved","appToken":"pca_…","expiresIn":3600,"email":"you@example.com",
- "nest":{"id":"nst_…","label":"soro","serverUrl":"https://sync.pairnets.app/n/nst_…/"},
+ "nest":{"id":"nst_…","label":"soro","serverUrl":"https://sync.pairnets.app/n/nst_…/",
+         "sharedBy":null,"access":"owner","folders":null},
  "device":{"id":"…","name":"Laptop","key":"pn_…"}}
 ```
+
+For a nest shared with the account (§10), `sharedBy` is the owner's name (username, or the part of the email before
+the @), `access` is `"view"` or `"edit"` and `folders` the shared top-level folders (`null` = the whole nest).
 
 If the nest cannot be reached at that moment the poll answers **503** `nest_offline` and the login stays `approved`
 (the app keeps polling; the key is asked for again on the next poll). The service never stores the device key.
@@ -285,6 +300,8 @@ The hourly cron also: deletes expired server links; redeploys the router when ne
   Directory permission needed to bind VPC networks), `CF_ACCOUNT_ID`. Existing: `HB_MASTER`, `COOKIE_KEY`,
   `SIGNING_KEY`, `RESEND_API_KEY`, `TURNSTILE_SECRET`, `GOOGLE_CLIENT_SECRET`.
 - Plan: Workers Paid ($5/month) for request volume. Workers VPC is free during its beta.
+- Friends (§10): at most 10 per nest (members and open invites); 20 invites a day and 20 join requests an hour per
+  account; invite emails 5 a day for the whole service, outside the 95 that sign-ins and notices share.
 
 ## 9. Threats (additions to CONTRACT §9)
 
@@ -297,3 +314,79 @@ The hourly cron also: deletes expired server links; redeploys the router when ne
 | Guessing a nest id to reach someone's server | Ids have 130 bits; even then every sync call needs a device key. |
 | A spoofed client address for the nest's throttles | The relay overwrites `X-Pairnets-Client-IP` with Cloudflare's view of the caller. |
 | The service is compromised | It could issue device keys for any nest: the same trust as version 1's login assertions. Files still never stay on the service. |
+| An invite link is forwarded or leaks | Using it only makes a request; the owner sees the person's name and email and decides. It works once and for 7 days. |
+| A friend's computer reaches more than was shared | The nest gates every call by the key's access and folders; the service never asks a nest without `friends` for a friend's key. |
+
+## 10. Friends on a nest (1.0.61.2)
+
+An owner can let other people (friends, each with their own Pairnets account) use a nest: the whole nest or chosen
+top-level folders, **view only** (the default) or **can change**. At most **10 friends per nest**, members and open
+invites together. An encrypted ("sealed") nest is shared **whole only**. **A link alone never lets anyone in**: the
+person asks to join, and the owner lets them in or declines. Words on screen: friend, People, View only, Can change,
+Whole nest, "Shared by <name>", "wants to join", Let in, Decline, Ask to join (never member, role or ACL).
+
+**Formats.** Invite id `inv_` + 26 base32-lower. Invite token `pni_` + 32 base32-lower (160 bits), the link
+`https://sync.pairnets.app/invite?t=pni_…`; it is stored as it is, so the owner can copy the link again (using it only
+makes a request). `access`: `"owner"` (only on the nest), `"view"`, `"edit"`. `folders`: `null` (the whole nest) or
+1-20 top-level folder names, exact case, 1-255 characters each, no `/`, `\`, control or invisible characters, not `.`
+or `..`, no leading or trailing space; repeats are dropped. Bad values → 400 `bad_access`.
+
+**Tables** (migration `0006_friends.sql`): `nest_members(nest_id, account_id, access, folders, added_at, synced,
+removed_at)` and `nest_invites(id, nest_id, token, email, access, folders, created_by, created_at, expires_at,
+requested_by, requested_at, decided_at, decision 'in'|'declined', cancelled_at)`. `synced = 0` means the nest still
+has to hear about a change, or (with `removed_at`) a removal.
+
+**The owner's routes** (browser session; mutations carry the Origin; another account's nest is 404):
+
+| Method and path | Request | Success | Errors |
+|---|---|---|---|
+| `POST /v1/servers/{id}/invites` | `{access?, folders?, email?}` | 201 `{id, link, expiresAt, emailed}`; the link lasts 7 days; with `email` Pairnets sends it (the `invite` mail budget; when that is used up, `emailed:false` and no address is kept) | 400 `bad_access`, `bad_request` (not an address), `sealed_whole_only`; 409 `own_nest` (the owner's own address), `too_many_friends`, `nest_offline`, `nest_too_old` (no `friends` in the nest's live status); 429 `rate_limited` (20 a day per account) |
+| `GET /v1/servers/{id}/people` | — | 200 `{members:[{accountId, name, email, access, folders, addedAt, synced}], invites:[{id, link, email, access, folders, createdAt, expiresAt, status:"open"|"requested", requester:{accountId, name, email, at}|null}], max:10}` | 404 |
+| `POST /v1/servers/{id}/invites/{inv}/approve` | — (**recent sign-in**) | 200 `{status:"in", member}`; writes the member row, emails the friend ("You're in Home nest", `invite` budget), sends the nest the waiting list | 401 `reauth_required`; 400 `bad_request` (nobody asked yet); 409 `already_decided`, `cancelled`; 404 |
+| `POST /v1/servers/{id}/invites/{inv}/decline` | — | 200 `{status:"declined"}`; the waiting list is sent again | as approve, no recent sign-in needed |
+| `DELETE /v1/servers/{id}/invites/{inv}` | — | 204 (also when already cancelled); the link stops working | 409 `already_decided`; 404 |
+| `PATCH /v1/servers/{id}/people/{accountId}` | `{access?, folders?}` (a field left out keeps its value; `folders:null` = whole) | 200 the member; the nest is told first (`PATCH /api/relay/people/{acc}`); offline → kept with `synced:false`, the cron tells it | 400 `bad_access`, `sealed_whole_only` (nothing changes); 409 `nest_too_old`; 404 |
+| `DELETE /v1/servers/{id}/people/{accountId}` | — | 204; `DELETE /api/relay/people/{acc}` now, or by the cron when the nest is off; the person is gone from every list at once | 404 |
+
+A request still waiting for an answer when its link ends keeps its place for 30 more days, then goes. Removing a nest
+from the account (`DELETE /v1/servers/{id}`) removes its friends and invites with it.
+
+**The friend's routes:**
+
+| Method and path | Request | Success | Errors |
+|---|---|---|---|
+| `GET /invite?t=pni_…` | page | sign-in first (`/login?next=/invite?t=…`); then "Join Home nest?" with **Ask to join** / **No thanks**, or a page saying where the invite stands: waiting ("Asked to join"), let in, declined, cancelled, run out, used by someone else, already yours, your own invite; unknown → 404 page | — |
+| `POST /v1/invite/request` | `{t}` | 200 `{status:"requested", nest, owner}` (once per invite; asking again answers the same) or `{status:"in", …}`; emails the owner "Anna wants to join Home nest" (notice budget) and sends the nest the waiting list (`PUT /api/relay/requests`, best effort) | 404 `not_found`; 400 `expired`; 409 `used`, `cancelled`, `own_nest`, `already_member`, `already_decided`; 429 (20 an hour per account) |
+| `GET /v1/shared` | — (session **or** app token) | 200 `{nests:[{id, label, sharedBy, access, folders, addedAt, serverUrl}]}` | 401 |
+| `DELETE /v1/shared/{nestId}` | — (session + Origin) | 204: leaving is the owner removing you | 404 |
+
+**App sign-in (§6).** `/app?code=` offers the nests shared with the account after its own, under "Shared with you",
+each as "Shared by <owner> · <folders or whole nest> · <view only|can change>" (only once let in, never while
+waiting). `POST /v1/app/approve` accepts such a nest. The first poll then checks the nest's status: without `friends`
+→ **409 `nest_too_old`** (no key is asked for; an older nest would give a friend everything). Otherwise
+`POST /api/relay/devices` carries `access`, `folders`, `person` ("Anna Berg · a•••@gmail.com") and `personId` (the
+friend's `acc_…`); a sealed nest refusing folders → 409 `sealed_whole_only`. A friend removed before the key was
+collected → 400 `expired`.
+
+**Account page.** Under each nest, **People**: its friends (letter, name, email, folders or Whole nest, view only or
+can change, how many computers; **Change…** / **Remove**), people waiting (**Decline** / **Let <name> in**), open links
+(**Copy link** / **Cancel**) and **Invite a friend…** (whole nest or chosen folders as a text list, view only or can
+change, their email or Copy invite link). Friends' computers are counted under their person, not listed with the
+owner's (`GET /v1/servers` adds `access` and `personId` to each computer, and `friends` / `sealed` to each server,
+`null` while it is offline). `#people-<nstId>` is that section. `/account?invite=<nstId>&folders=Photos,School&access=view`
+opens that nest's form filled in: the apps' Invite window hands over to it, because only a signed-in browser makes
+invites (it is in the `next` allow-list, so a sign-in comes back to it). **Shared with you** lists the nests shared
+with the account, each with **Leave**.
+
+**Mail.** Invite emails (the friend's invite, and "You're in") use a budget of their own, 5 a day for the whole
+service, outside the day's total of 95 that sign-ins and notices share (95 + 5 is Resend's free 100). The owner's
+"wants to join" email is a notice.
+
+**Cron.** Invites that ended go (with the email they went to), except ones someone asked with, which wait 30 more days
+for an answer; members and invites of a nest that is gone go; up to 50 member rows with `synced = 0` are sent to their
+nest again (`PATCH` or `DELETE /api/relay/people/{acc}`): a 200 settles them (a removed row is then deleted), and so
+does a refusal for good (4xx: an older nest, a sealed nest and folders), which is audited; offline or 5xx waits for
+the next hour.
+
+**Deleting an account** deletes its own nests' members and invites and every invite it made or asked with; where it
+was a friend, it is marked removed and the cron tells those nests to drop its computers.

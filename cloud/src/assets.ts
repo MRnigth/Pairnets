@@ -66,6 +66,16 @@ details.card[open] > summary { margin-bottom: 12px; }
 form.rename label { margin-top: 0; font-size: 0.9rem; }
 form.rename p, .rename-done { margin: 6px 0 0; font-size: 0.9rem; }
 .saved { color: var(--ok); }
+.people { margin-top: 14px; padding-top: 12px; border-top: 1px dashed var(--line); }
+.people h3 { display: inline; font-size: 1rem; margin: 0; }
+.people-list > li.person { display: flex; gap: 12px; align-items: flex-start; }
+.person .who { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.letter { flex: 0 0 auto; width: 30px; height: 30px; border-radius: 15px; display: inline-grid; place-items: center;
+  background: var(--bg); border: 1px solid var(--line); color: var(--accent); font-weight: 700; }
+.person.waiting .letter { color: var(--warn); border-color: var(--warn); }
+.invite-form, form.change { margin-top: 10px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 8px; }
+.invite-form h3 { display: block; margin: 0 0 4px; font-size: 1rem; }
+label.choice span .muted { display: block; }
 .cookie-notice { position: fixed; left: 24px; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); z-index: 20;
   width: 400px; max-width: calc(100% - 48px); background: var(--card); color: var(--text); border: 1px solid var(--line);
   border-radius: 10px; padding: 16px 18px; font-size: 15px; line-height: 1.5;
@@ -205,13 +215,16 @@ const ACCOUNT_JS = String.raw`(function () {
     if (s.online) parts.push(bytes(s.freeBytes) + " free");
     else parts.push("Not connected right now" + (s.lastSeenAt ? " (last seen " + new Date(s.lastSeenAt).toLocaleString() + ")" : ""));
     details.textContent = parts.join(" \u00b7 ");
+    fillPeople(li, s);
     var list = li.querySelector("[data-field=devices]");
     while (list.firstChild) list.removeChild(list.firstChild);
     // A nest that never connected has no computers to rename yet.
     li.querySelector("[data-field=rename-offline]").hidden = s.online || s.status === "pending";
     if (!s.online) { list.appendChild(el("li", "muted", "Shown when the nest is connected.")); return; }
-    if (!s.devices.length) { list.appendChild(el("li", "muted", "None yet.")); return; }
-    s.devices.forEach(function (d) {
+    // Friends' computers are counted under their person in People, not listed here.
+    var own = s.devices.filter(function (d) { return !d.personId; });
+    if (!own.length) { list.appendChild(el("li", "muted", "None yet.")); return; }
+    own.forEach(function (d) {
       var item = el("li");
       item.setAttribute("data-device", d.id);
       var line = el("div");
@@ -345,6 +358,178 @@ const ACCOUNT_JS = String.raw`(function () {
       });
     });
   }
+  // ---- People (friends on a nest): computers per person, what the nest allows, inviting, answering, changing.
+  function fillPeople(li, s) {
+    var counts = {};
+    (s.devices || []).forEach(function (d) { if (d.personId) counts[d.personId] = (counts[d.personId] || 0) + 1; });
+    Array.prototype.forEach.call(li.querySelectorAll("[data-person]"), function (p) {
+      var n = counts[p.getAttribute("data-person")] || 0;
+      var field = p.querySelector("[data-field=computers]");
+      if (field && s.online) field.textContent = " · " + (n === 1 ? "1 computer" : n + " computers");
+    });
+    var note = li.querySelector("[data-field=friends-note]");
+    var open = li.querySelector("button[data-action=invite-open]");
+    if (s.online && s.friends === false) {
+      note.textContent = "Update your nest first to invite friends. Friends need its newest version.";
+      note.hidden = false;
+      if (open) open.disabled = true;
+    }
+    if (s.sealed) {
+      var chosen = li.querySelector("[data-field=chosen]");
+      if (chosen) chosen.disabled = true;
+      li.querySelector("[data-field=sealed-note]").hidden = false;
+    }
+  }
+  function copy(text, button) {
+    function copied() {
+      var was = button.textContent;
+      button.textContent = "Copied";
+      setTimeout(function () { button.textContent = was; }, 2000);
+    }
+    function fallback() { window.prompt("Copy this link:", text); }
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(copied, fallback);
+    else fallback();
+  }
+  function folderList(text) {
+    return text.split(",").map(function (f) { return f.trim(); }).filter(function (f) { return f.length > 0; });
+  }
+  // What a form says: {access, folders?}, or the problem to show.
+  function shareOf(form, whatName, accessName) {
+    var what = form.querySelector("input[name='" + whatName + "']:checked");
+    var access = form.querySelector("input[name='" + accessName + "']:checked");
+    var body = { access: access ? access.value : "view", folders: null };
+    if (what && what.value === "folders") {
+      var list = folderList(form.querySelector("input[name=folders]").value);
+      if (!list.length) return "Type at least one folder name, or choose The whole nest.";
+      body.folders = list;
+    }
+    return body;
+  }
+  function sendInvite(li, id, form, withEmail, button) {
+    var error = form.querySelector("[data-field=invite-error]");
+    error.hidden = true;
+    var body = shareOf(form, "what-" + id, "access-" + id);
+    if (typeof body === "string") { error.textContent = body; error.hidden = false; return; }
+    var email = form.querySelector("input[name=email]").value.trim();
+    if (withEmail) {
+      if (!email) { error.textContent = "Type their email, or use Copy invite link."; error.hidden = false; return; }
+      body.email = email;
+    }
+    button.disabled = true;
+    pnApi("POST", "/v1/servers/" + id + "/invites", body).then(function (res) {
+      button.disabled = false;
+      if (!res.ok) {
+        if (res.body && (res.body.error === "reauth_required" || res.body.error === "unauthorized")) { ok(res); return; }
+        error.textContent = res.body.message || "That did not work. Try again.";
+        error.hidden = false;
+        return;
+      }
+      var said = res.body.emailed ? "Invite sent to " + email + ". You can copy the link too:" :
+        withEmail ? "The email can't go out today. Copy the link and send it yourself:" : "Copied. Send the link however you like; it works for 7 days:";
+      form.querySelector("[data-field=invite-said]").textContent = said;
+      form.querySelector("[data-field=invite-url]").value = res.body.link;
+      form.querySelector("[data-field=invite-done]").hidden = false;
+      if (!withEmail) copy(res.body.link, form.querySelector("button[data-action=invite-copy-new]"));
+    });
+  }
+  var changes = 0;
+  function radio(name, value, text, checked) {
+    var label = el("label", "choice");
+    var input = el("input");
+    input.type = "radio";
+    input.name = name;
+    input.value = value;
+    input.checked = checked;
+    label.appendChild(input);
+    label.appendChild(document.createTextNode(" " + text));
+    return label;
+  }
+  // Change… opens a small form in the person's row: whole nest or folders, view only or can change.
+  function changePerson(id, row, opener) {
+    if (row.querySelector("form.change")) return;
+    var n = ++changes;
+    var form = el("form", "change");
+    var folders = row.getAttribute("data-folders") || "";
+    var access = row.getAttribute("data-access");
+    form.appendChild(radio("change-what-" + n, "whole", "The whole nest", !folders));
+    form.appendChild(radio("change-what-" + n, "folders", "Chosen folders", !!folders));
+    var label = el("label", "", "Folder names, separated by commas");
+    label.htmlFor = "change-folders-" + n;
+    var input = el("input");
+    input.id = "change-folders-" + n;
+    input.name = "folders";
+    input.value = folders;
+    input.autocomplete = "off";
+    form.appendChild(label);
+    form.appendChild(input);
+    form.appendChild(radio("change-access-" + n, "view", "View only", access !== "edit"));
+    form.appendChild(radio("change-access-" + n, "edit", "Can change", access === "edit"));
+    var error = el("p", "error");
+    error.setAttribute("role", "alert");
+    error.hidden = true;
+    var actions = el("div", "actions");
+    var save = el("button", "", "Save");
+    save.type = "submit";
+    var cancel = el("button", "secondary", "Cancel");
+    cancel.type = "button";
+    actions.appendChild(save);
+    actions.appendChild(cancel);
+    form.appendChild(actions);
+    form.appendChild(error);
+    row.querySelector(".who").appendChild(form);
+    cancel.addEventListener("click", function () { form.parentNode.removeChild(form); if (opener) opener.focus(); });
+    form.addEventListener("submit", function (ev) {
+      ev.preventDefault();
+      var body = shareOf(form, "change-what-" + n, "change-access-" + n);
+      if (typeof body === "string") { error.textContent = body; error.hidden = false; return; }
+      save.disabled = true;
+      pnApi("PATCH", "/v1/servers/" + id + "/people/" + row.getAttribute("data-person"), body).then(function (res) {
+        save.disabled = false;
+        if (!res.ok) {
+          if (res.body && (res.body.error === "reauth_required" || res.body.error === "unauthorized")) { ok(res); return; }
+          error.textContent = res.body.message || "That did not work. Try again.";
+          error.hidden = false;
+          return;
+        }
+        location.reload();
+      });
+    });
+  }
+  // The answers to People's buttons; true when the click was one of them.
+  function peopleAction(b, li, id) {
+    var action = b.getAttribute("data-action");
+    var form = li.querySelector("[data-field=invite-form]");
+    var invite = b.closest("[data-invite]");
+    var person = b.closest("[data-person]");
+    var inv = invite && invite.getAttribute("data-invite");
+    if (action === "invite-open") { form.hidden = false; form.querySelector("input").focus(); }
+    else if (action === "invite-close") { form.hidden = true; }
+    else if (action === "invite-link") { sendInvite(li, id, form, false, b); }
+    else if (action === "invite-copy-new") { copy(form.querySelector("[data-field=invite-url]").value, b); }
+    else if (action === "invite-finish") { location.hash = "people-" + id; location.reload(); }
+    else if (action === "invite-copy") { copy(invite.getAttribute("data-link"), b); }
+    else if (action === "invite-approve" || action === "invite-decline") {
+      b.disabled = true;
+      pnApi("POST", "/v1/servers/" + id + "/invites/" + inv + "/" + (action === "invite-approve" ? "approve" : "decline")).then(function (res) {
+        b.disabled = false;
+        if (ok(res)) location.reload();
+      });
+    } else if (action === "invite-cancel") {
+      if (!confirm("Cancel this invite? The link stops working.")) return true;
+      pnApi("DELETE", "/v1/servers/" + id + "/invites/" + inv).then(function (res) { if (ok(res)) location.reload(); });
+    } else if (action === "person-change") { changePerson(id, person, b); }
+    else if (action === "person-remove") {
+      var name = person.querySelector("[data-field=name]").textContent;
+      var nest = li.querySelector("[data-field=label]").textContent;
+      if (!confirm("Remove " + name + " from " + nest + "? Their computers stop syncing with your nest right away. Copies already on their computers stay there; nothing in your nest is deleted.")) return true;
+      b.disabled = true;
+      pnApi("DELETE", "/v1/servers/" + id + "/people/" + person.getAttribute("data-person")).then(function (res) {
+        b.disabled = false;
+        if (ok(res)) location.reload();
+      });
+    } else return false;
+    return true;
+  }
   function loadServers() {
     if (!servers || !servers.querySelector("[data-server]")) return;
     pnApi("GET", "/v1/servers").then(function (res) {
@@ -361,6 +546,7 @@ const ACCOUNT_JS = String.raw`(function () {
     var li = b.closest("[data-server]");
     var id = li && li.getAttribute("data-server");
     if (!id) return;
+    if (peopleAction(b, li, id)) return;
     if (b.getAttribute("data-action") === "rename-device") {
       var renamed = b.closest("[data-device]");
       if (renamed) renameDevice(li, id, renamed, b);
@@ -379,7 +565,30 @@ const ACCOUNT_JS = String.raw`(function () {
       pnApi("DELETE", "/v1/servers/" + id).then(function (res) { if (ok(res)) location.reload(); });
     }
   });
+  if (servers) servers.addEventListener("submit", function (ev) {
+    var form = ev.target.closest("form.invite-form");
+    if (!form) return;
+    ev.preventDefault();
+    var li = form.closest("[data-server]");
+    sendInvite(li, li.getAttribute("data-server"), form, true, form.querySelector("button[type=submit]"));
+  });
   loadServers();
+  // Opened from an app's "Invite a friend" (/account?invite=…): that nest's form is open; bring it into view.
+  var asked = document.querySelector("form.invite-form[data-open]");
+  if (asked) asked.scrollIntoView({ block: "center" });
+  var shared = document.getElementById("shared-list");
+  if (shared) shared.addEventListener("click", function (ev) {
+    var b = ev.target.closest("button[data-action=leave]");
+    if (!b) return;
+    var li = b.closest("[data-shared]");
+    var label = li.querySelector("strong").textContent;
+    if (!confirm("Leave " + label + "? It stops syncing on your computers. Files already on them stay there.")) return;
+    b.disabled = true;
+    pnApi("DELETE", "/v1/shared/" + li.getAttribute("data-shared")).then(function (res) {
+      b.disabled = false;
+      if (ok(res)) location.reload();
+    });
+  });
   var nests = document.getElementById("nests");
   if (nests) nests.addEventListener("click", function (ev) {
     var b = ev.target.closest("button[data-action]");
@@ -542,6 +751,27 @@ const APP_STYLE = String.raw`
 .q-next-title { margin: 0; font-size: 14.5px; font-weight: 600; overflow-wrap: anywhere; }
 .q-next-text { margin: 2px 0 0; font-size: 13.5px; color: var(--q-muted); }
 
+/* Nests shared with you, in the nest choice (a heading, then each with who shares it and what). */
+.q-group { margin: 0; padding: 10px 14px 6px; border-top: 1px solid var(--q-line); background: var(--q-bg); color: var(--q-muted);
+  font-size: 11.5px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+.q-choice-text { display: flex; flex-direction: column; min-width: 0; }
+.q-choice-sub { font-size: 13px; color: var(--q-muted); }
+
+/* The invite page (/invite): who it is from, what is shared, and the steps after asking. */
+.q-from { margin: 0; text-align: center; font-size: 14px; color: var(--q-muted); overflow-wrap: anywhere; }
+.q-facts { margin: 22px 0 0; display: block; border: 1px solid var(--q-line); border-radius: 12px; background: var(--q-card); }
+.q-facts > div { display: flex; gap: 12px; padding: 12px 16px; font-size: 14.5px; }
+.q-facts > div + div { border-top: 1px solid var(--q-line); }
+.q-facts dt { flex: 0 0 120px; color: var(--q-muted); }
+.q-facts dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.q-facts b { font-weight: 600; }
+.q-fact-sub { display: block; margin-top: 2px; font-size: 13px; color: var(--q-muted); }
+.q-page button.q-link { display: inline; margin: 0; padding: 0; border: 0; background: none; color: var(--q-accent); font: inherit; text-decoration: underline; cursor: pointer; }
+.q-note.q-info { background: var(--q-subtle); color: var(--q-text); }
+.q-steps { margin: 18px 0 0; padding: 16px 18px 16px 36px; border: 1px solid var(--q-line); border-radius: 14px; background: var(--q-card); font-size: 14px; }
+.q-steps li + li { margin-top: 8px; }
+.q-steps b { font-weight: 600; }
+
 .q-field { margin-top: 26px; display: flex; flex-direction: column; gap: 6px; }
 .q-page .q-field label { margin: 0; font-size: 13px; font-weight: 600; }
 .q-row { display: flex; gap: 10px; }
@@ -666,6 +896,58 @@ const APP_JS = String.raw`(function () {
 })();
 `;
 
+// The invite page (pages.ts invitePage). "Ask to join" sends the request and swaps to the waiting screen; an invite
+// that changed meanwhile (run out, cancelled, used by someone else) reloads, and the page then says where it stands.
+const INVITE_JS = String.raw`(function () {
+  "use strict";
+  var box = document.getElementById("invite-request");
+  var ask = document.getElementById("ask");
+  if (!box || !ask) return;
+  var token = box.getAttribute("data-token");
+  var no = document.getElementById("no-thanks");
+  var notYou = document.getElementById("not-you");
+  var error = document.getElementById("invite-error");
+  var busy = false;
+  var RELOAD = ["expired", "cancelled", "used", "own_nest", "already_member", "already_decided", "not_found"];
+  function show(name) {
+    ["ask", "no", "waiting"].forEach(function (s) {
+      var el = document.getElementById("screen-" + s);
+      if (el) el.hidden = s !== name;
+    });
+    var title = document.getElementById("screen-" + name + "-title");
+    if (title) title.focus();
+  }
+  function here() {
+    return "/invite?t=" + token;
+  }
+  ask.addEventListener("click", function () {
+    if (busy) return;
+    busy = true;
+    ask.disabled = true;
+    no.disabled = true;
+    error.hidden = true;
+    pnApi("POST", "/v1/invite/request", { t: token }).then(function (res) {
+      var err = res.body && res.body.error;
+      if (err === "unauthorized") { location.href = "/login?next=" + encodeURIComponent(here()); return; }
+      // Let in already (asked from another tab, and the owner was quick): the page says so.
+      if (res.ok && res.body.status === "in") { location.reload(); return; }
+      if (res.ok) { show("waiting"); return; }
+      if (RELOAD.indexOf(err) >= 0) { location.reload(); return; }
+      busy = false;
+      ask.disabled = false;
+      no.disabled = false;
+      error.textContent = err === "rate_limited" ? "That was a lot of tries in a short time. Wait a minute, then try again." :
+        (res.body && res.body.message) || "That did not work. Try again.";
+      error.hidden = false;
+    });
+  });
+  no.addEventListener("click", function () { if (!busy) show("no"); });
+  if (notYou) notYou.addEventListener("click", function () {
+    pnApi("POST", "/v1/logout").then(function () { location.href = "/login?next=" + encodeURIComponent(here()); });
+  });
+})();
+`;
+
 const ADD_JS = String.raw`(function () {
   "use strict";
   var box = document.getElementById("server-request");
@@ -747,6 +1029,7 @@ export const ASSETS: Record<string, { type: string; body: string | Uint8Array }>
   "account.js": { type: "text/javascript; charset=utf-8", body: SHARED_JS + ACCOUNT_JS },
   "app.js": { type: "text/javascript; charset=utf-8", body: SHARED_JS + APP_JS },
   "add.js": { type: "text/javascript; charset=utf-8", body: SHARED_JS + ADD_JS },
+  "invite.js": { type: "text/javascript; charset=utf-8", body: SHARED_JS + INVITE_JS },
   "app.css": { type: "text/css; charset=utf-8", body: APP_STYLE },
   "logo.svg": { type: "image/svg+xml", body: LOGO_SVG },
   ...FONT_ASSETS,

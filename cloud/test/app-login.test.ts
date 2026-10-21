@@ -58,7 +58,7 @@ describe("app-login", () => {
       appToken: expect.stringMatching(/^pca_[A-Za-z0-9_-]{43}$/),
       expiresIn: 3600,
       email: "you@example.com",
-      nest: { id: nest.nestId, label: "soro", serverUrl: `https://sync.pairnets.app/n/${nest.nestId}/` },
+      nest: { id: nest.nestId, label: "soro", serverUrl: `https://sync.pairnets.app/n/${nest.nestId}/`, sharedBy: null, access: "owner", folders: null },
       device: { id: expect.any(String), name: "Alex's laptop", key: expect.stringMatching(/^pn_/) },
     });
     // The nest made exactly that device, approved by the masked account address; the service kept no key.

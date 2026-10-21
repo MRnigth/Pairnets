@@ -5,10 +5,10 @@ import { audit } from "../audit";
 import type { Ctx } from "../context";
 import { type Env, intVar } from "../env";
 import { B32_UPPER, randomBase32, sha256 } from "../crypto";
-import { cleanLabel, cleanText, emailName, iso, MAX_USERNAME, NEST_ID_RE, SESSION_ID_RE } from "../formats";
+import { cleanAccess, cleanFolders, cleanLabel, cleanText, iso, MAX_USERNAME, NEST_ID_RE, parseFolders, personName, safeNext, SESSION_ID_RE } from "../formats";
 import { HttpError, htmlResponse, json, noContent, redirect } from "../http";
 import { sendNotice } from "../mail";
-import { accountPage, type NestView } from "../pages";
+import { accountPage, type AccountView, type NestView, type PeopleView } from "../pages";
 import { runRouterLogged } from "../router";
 import { DAY, hit } from "../ratelimit";
 import { jsonBody } from "../request";
@@ -23,6 +23,7 @@ import {
   type Session,
 } from "../sessions";
 import { deleteAccountRows } from "../accounts";
+import { inviteLink, peopleOf, sharedNestsOf } from "./friends";
 import { serversOf } from "./servers";
 
 /** Nests per account, both kinds together (pending ones count), unless wrangler.toml's MAX_NESTS_PER_ACCOUNT says otherwise. */
@@ -102,10 +103,6 @@ async function accountRow(ctx: Ctx, accountId: string): Promise<AccountRow | nul
   return ctx.env.DB.prepare("SELECT id, email, username, created_at FROM accounts WHERE id = ?1").bind(accountId).first();
 }
 
-/** What the account is called: its username, or else the part of its email before the @. */
-function shownName(account: AccountRow): string {
-  return account.username ?? emailName(account.email);
-}
 
 function addressWarning(n: NestRow): string | null {
   if (!n.last_public_host) return null;
@@ -114,14 +111,62 @@ function addressWarning(n: NestRow): string | null {
   return `This nest now reports the address ${n.last_public_host}. Link it again (hosted unlink, then hosted link with a new code) to use the new address.`;
 }
 
+/**
+ * /account?invite=nst_…&folders=Photos,School&access=view: the apps' "Invite a friend" hands over to the website (only
+ * a signed-in browser makes invites). Folders that would not be accepted fall back to the whole nest.
+ */
+function inviteAsked(ctx: Ctx): { nestId: string; folders: string[] | null; access: "view" | "edit"; next: string } | null {
+  const q = ctx.url.searchParams;
+  const nestId = q.get("invite");
+  if (!nestId || !NEST_ID_RE.test(nestId)) return null;
+  const typed = (q.get("folders") ?? "").split(",").map((f) => f.trim()).filter((f) => f.length > 0);
+  const folders = typed.length ? cleanFolders(typed) : null;
+  const access = cleanAccess(q.get("access")) ?? "view";
+  const kept = folders && folders !== "invalid" ? folders : null;
+  const next = `/account?invite=${nestId}${kept ? `&folders=${encodeURIComponent(kept.join(","))}` : ""}&access=${access}`;
+  return { nestId, folders: kept, access, next };
+}
+
+async function peopleView(ctx: Ctx, nestId: string): Promise<PeopleView> {
+  const p = await peopleOf(ctx, nestId);
+  const name = (a: { email: string; username: string | null } | null) => (a ? personName(a) : "Someone");
+  return {
+    members: p.members.map((m) => ({
+      accountId: m.row.account_id,
+      name: name(m.account),
+      email: m.account?.email ?? "",
+      access: m.row.access,
+      folders: parseFolders(m.row.folders),
+    })),
+    waiting: p.invites
+      .filter((i) => i.row.requested_by !== null)
+      .map((i) => ({ id: i.row.id, name: name(i.requester), email: i.requester?.email ?? "", access: i.row.access, folders: parseFolders(i.row.folders) })),
+    links: p.invites
+      .filter((i) => i.row.requested_by === null)
+      .map((i) => ({
+        id: i.row.id,
+        link: inviteLink(ctx, i.row.token),
+        email: i.row.email,
+        expiresAt: i.row.expires_at,
+        access: i.row.access,
+        folders: parseFolders(i.row.folders),
+      })),
+  };
+}
+
 // GET /account
 export async function accountPageRoute(ctx: Ctx): Promise<Response> {
+  const asked = inviteAsked(ctx);
+  const back = asked ? `/login?next=${encodeURIComponent(safeNext(asked.next))}` : "/login?next=/account";
   const s = await loadBrowserSession(ctx);
-  if (!s) return redirect("/login?next=/account");
+  if (!s) return redirect(back);
   const account = await accountRow(ctx, s.accountId);
-  if (!account) return redirect("/login?next=/account");
+  if (!account) return redirect(back);
   const nests = await nestsOf(ctx, s.accountId);
   const servers = await serversOf(ctx, s.accountId);
+  const people = await Promise.all(servers.map((n) => peopleView(ctx, n.id)));
+  const shared = await sharedNestsOf(ctx, s.accountId);
+  const invite: AccountView["invite"] = asked && servers.some((n) => n.id === asked.nestId) ? { nestId: asked.nestId, folders: asked.folders, access: asked.access } : null;
   const sessions = await sessionRows(ctx, s.accountId);
   const view: NestView[] = nests.map((n) => ({
     nestId: n.id,
@@ -140,8 +185,16 @@ export async function accountPageRoute(ctx: Ctx): Promise<Response> {
       accountId: account.id,
       email: account.email,
       username: account.username,
-      servers: servers.map((n) => ({ id: n.id, label: n.label, status: n.status === "active" ? "active" : "pending" })),
+      servers: servers.map((n, i) => ({ id: n.id, label: n.label, status: n.status === "active" ? "active" : "pending", people: people[i] })),
       nests: view,
+      shared: shared.map((x) => ({
+        nestId: x.nest.id,
+        label: x.nest.label,
+        sharedBy: x.sharedBy,
+        access: x.member.access,
+        folders: parseFolders(x.member.folders),
+      })),
+      invite,
       sessions: sessions.map((r) => ({
         id: r.id,
         kind: r.kind,
@@ -181,7 +234,7 @@ export async function patchMeRoute(ctx: Ctx): Promise<Response> {
 export async function signedInRoute(ctx: Ctx): Promise<Response> {
   const s = await loadBrowserSession(ctx);
   const account = s ? await accountRow(ctx, s.accountId) : null;
-  return json(200, account ? { signedIn: true, name: shownName(account) } : { signedIn: false });
+  return json(200, account ? { signedIn: true, name: personName(account) } : { signedIn: false });
 }
 
 async function meJson(ctx: Ctx, s: Session, account: AccountRow): Promise<Record<string, unknown>> {
