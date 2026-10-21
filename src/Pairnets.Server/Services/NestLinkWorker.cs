@@ -12,6 +12,7 @@ namespace Pairnets.Server.Services;
 public sealed class NestLinkWorker(LinkStore links, LinkSync sync, SyncOptions options, ILogger<NestLinkWorker> log) : BackgroundService
 {
     private readonly SemaphoreSlim _kick = new(0, 1);
+    private readonly SemaphoreSlim _pass = new(1, 1);
 
     /// <summary>Makes the worker run a pass soon instead of waiting for <see cref="SyncOptions.LinkInterval"/>.</summary>
     public void Kick()
@@ -48,8 +49,21 @@ public sealed class NestLinkWorker(LinkStore links, LinkSync sync, SyncOptions o
         }
     }
 
-    /// <summary>One pass of every active link (also what tests call).</summary>
+    /// <summary>One pass of every active link (also what tests call). Passes take turns, so one link never runs twice at once.</summary>
     public async Task RunAllAsync(CancellationToken ct)
+    {
+        await _pass.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            await RunEachAsync(ct).ConfigureAwait(false);
+        }
+        finally
+        {
+            _pass.Release();
+        }
+    }
+
+    private async Task RunEachAsync(CancellationToken ct)
     {
         foreach (var link in links.List().Where(l => l.IsActive))
         {

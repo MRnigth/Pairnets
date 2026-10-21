@@ -190,8 +190,9 @@ public sealed class NestLinkTests : IAsyncLifetime
     [Fact]
     public async Task AKeyRemovedOnTheOtherNestShowsAProblem()
     {
-        await LinkAsync();
+        // Set before linking: adding a link wakes the worker, and its own pass must not use the good key either.
         Worker.Connect = _ => _oskar.Client(_linkKey.Id, "pn_test");
+        await LinkAsync();
         await PassAsync();
         Assert.Equal(LinkState.Problem, Links.Get(LinkId)!.State);
     }
