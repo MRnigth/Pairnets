@@ -13,6 +13,7 @@ using Pairnets.Core.Sync;
 using Pairnets.Desktop.Views;
 using Pairnets.Server.Storage;
 using Pairnets.Tests.Infrastructure;
+using Pairnets.Tests.Unit;
 using Xunit.Abstractions;
 
 namespace Pairnets.Tests.Ui;
@@ -187,6 +188,9 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
     public async Task TheServerUpdateWindow_EveryButtonDoesWhatItSays() => Pass(await RunAsync("server update"));
 
     [AvaloniaFact]
+    public async Task TheNestPlaceWindow_EveryButtonDoesWhatItSays() => Pass(await RunAsync("nest place"));
+
+    [AvaloniaFact]
     public async Task TheBugReportWindow_EveryButtonDoesWhatItSays() => Pass(await RunAsync("bug report"));
 
     [AvaloniaFact]
@@ -304,6 +308,27 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
                 s.Actions.HistoryFrom = new CountingHistory(null);
                 return MainStage(s, w => w.Navigate(MainPage.History), async w => await w.LoadHistoryAsync());
             }),
+            new("the main window (Files page)", s => MainStage(s, w =>
+            {
+                w.ShowStatus(Idle, "/Users/me/Work", "MacBook");
+                w.Navigate(MainPage.Files);
+            })),
+            new("the main window (Files page, a folder opened)", s => MainStage(s, w =>
+            {
+                w.ShowStatus(Idle, "/Users/me/Work", "MacBook");
+                w.ShowFilesAt("Documents");
+            })),
+            new("the main window (Files page, searching)", s => MainStage(s, w =>
+            {
+                w.ShowStatus(Idle, "/Users/me/Work", "MacBook");
+                w.Navigate(MainPage.Files);
+                w.FilesView.SearchText = "report"; // one file, so its row's menu is the one of a file
+            })),
+            new("the main window (Clean up your nest)", s => MainStage(s, w =>
+            {
+                w.ShowStatus(Idle, "/Users/me/Work", "MacBook");
+                w.ShowCleanup();
+            })),
             new("the main window (Devices page)", s => MainStage(s, w =>
             {
                 w.ShowStatus(Idle with { JoinRequests = [new JoinRequest("RX4K-92TB", "PC-1", "Windows", DateTimeOffset.UtcNow)] }, "/Users/me/Work", "MacBook");
@@ -343,6 +368,7 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
         [
             new("the Settings page (signed in with its own key)", s => SettingsStage(s, ownKey: true)),
             new("the Settings page (on the shared token)", s => SettingsStage(s, ownKey: false)),
+            new("the Settings page (a nest that can move its files, the Linux program folder)", s => SettingsStage(s, ownKey: true, canMove: true)),
         ],
         ["sign-in"] =
         [
@@ -389,6 +415,29 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
                 w => w.ShowResult(new ServerUpdateResult(false, "The download did not match its checksum.", "1.0.52", CanUpdateItself: true)))),
             new("the server update window (Debug mode)", s => ServerUpdateStage(s, new ServerUpdateWindow(() => null, "1.0.52", "1.0.58", debug: () => true),
                 w => w.AppendDetail("[  0s] Asking the server to update"))),
+        ],
+        ["nest place"] =
+        [
+            new("the nest's drives", s => NestPlaceStage(s, _ => { })),
+            new("the nest's drives (sure?)", s => NestPlaceStage(s, f => f.Choose("/mnt/data/pairnets"))),
+            new("the nest's drives (moving)", s => NestPlaceStage(s, f =>
+            {
+                f.Choose("/mnt/data/pairnets");
+                f.Asking();
+                f.Seen(NestPlaceFlowTests.Sample(new StorageMoveStatus(StorageMoveStatus.Running, 40, "Copying your files to the new drive")));
+            })),
+            new("the nest's drives (moved)", s => NestPlaceStage(s, f =>
+            {
+                f.Choose("/mnt/data/pairnets");
+                f.Asking();
+                f.Seen(NestPlaceFlowTests.Sample(new StorageMoveStatus(StorageMoveStatus.Succeeded, 100, "Done.", "/var/lib/pairnets-before-move-x"), "/mnt/data/pairnets"));
+            })),
+            new("the nest's drives (not moved)", s => NestPlaceStage(s, f =>
+            {
+                f.Choose("/mnt/data/pairnets");
+                f.Asking();
+                f.Seen(NestPlaceFlowTests.Sample(new StorageMoveStatus(StorageMoveStatus.Failed, 0, "That drive can't be used: it is read-only. Nothing was changed.")));
+            })),
         ],
         ["bug report"] =
         [
@@ -442,6 +491,14 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
     {
         var a = s.Actions;
         var history = (CountingHistory)(a.HistoryFrom ??= new CountingHistory(a.Samples));
+        var (savePicker, openPicker) = (Dialogs.SaveFilePicker, Dialogs.OpenFilesPicker);
+        Dialogs.SaveFilePicker = (_, _, name) => Task.FromResult<string?>(Path.Combine(Path.GetTempPath(), "pairnets-copy-" + name));
+        Dialogs.OpenFilesPicker = (_, _) => Task.FromResult<IReadOnlyList<string>?>([FileToAdd.Value]);
+        s.Cleanup.Add(() =>
+        {
+            (Dialogs.SaveFilePicker, Dialogs.OpenFilesPicker) = (savePicker, openPicker);
+            return Task.CompletedTask;
+        });
         var w = s.Show(new MainWindow(a) { Width = 980, Height = 700 });
         arrange(w);
         if (settle is not null)
@@ -469,7 +526,8 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
         s.Expect["OnSeeAllActivity"] = OnPage(w, MainPage.Activity);
         s.Expect["OnNav:Overview*"] = OnPage(w, MainPage.Overview);
         s.Expect["OnNav:Activity*"] = OnPage(w, MainPage.Activity);
-        s.Expect["OnNav:History*"] = All(OnPage(w, MainPage.History), That(() => w.HistoryRows == 4, "the deleted files show"));
+        s.Expect["OnNav:Files*"] = All(OnPage(w, MainPage.Files), That(() => w.FilesView.Rows.Count > 0, "the nest's files show"));
+        FilesExpectations(s, w);
         s.Expect["OnNav:Computers*"] = All(OnPage(w, MainPage.Devices), Calls(a, "devices"));
         s.Expect["OnNav:Needs you*"] = OnPage(w, MainPage.Attention);
         s.Expect["OnFoldSide"] = That(() => w.SideFolded, "the left side fold into the dock");
@@ -482,7 +540,7 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
         s.Expect["OnNav:Settings*"] = Calls(a, "settings"); // the controller hands over a fresh form
         s.Expect["OnRevealActivity"] = That(() => a.Calls.Count == 1 && a.Calls[0].StartsWith("reveal:", StringComparison.Ordinal), "the app show the file in its folder");
         s.Expect["OnActivityVersions"] = That(() => w.Page == MainPage.History && w.HistoryRows == 1 && w.VersionRows == 3, "History open on that file with its versions");
-        s.Expect["OnHistoryModeChanged:All files"] = That(() => w.HistoryRows == 3 && w.FilesPaneShown, "the current files show");
+        s.Expect["OnHistoryModeChanged:Older versions"] = That(() => w.HistoryRows == 3 && w.FilesPaneShown, "the current files show");
         s.Expect["OnHistoryModeChanged:Deleted files*"] = That(() => history.Unreachable || w.HistoryRows == 4 && w.DeletedPaneShown, "the deleted files show");
         s.Expect["OnTextChanged"] = That(() => w.HistoryRows == 1, "only the matching file show");
         s.Expect["OnHistoryReload"] = That(() => history.Reads == reads + 1 && (history.Unreachable || w.HistoryRows == 4), "the files be read again",
@@ -510,6 +568,58 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
             () => $"{a.Samples.Restored.Count} restored, it says \"{w.RestoreText}\"");
         s.Expect["OnAttentionAction"] = That(() => s.Events.SequenceEqual(["attention"]), "the item's action run");
         s.Expect["OnAttentionSecond"] = That(() => s.Events.SequenceEqual(["attention second"]), "the item's second choice run");
+    }
+
+    /// <summary>A file "Add files" adds (it has to be there).</summary>
+    private static readonly Lazy<string> FileToAdd = new(() =>
+    {
+        var path = Path.Combine(Path.GetTempPath(), "pairnets-click-add-mac.txt");
+        File.WriteAllText(path, "added from the Files page");
+        return path;
+    });
+
+    /// <summary>A question the Files page or Clean up opened, by the start of its title.</summary>
+    private static bool Asked(Stage s, params string[] titles) =>
+        s.Windows.Any(x => x != s.Window && x.IsVisible && titles.Any(t => x.Title?.StartsWith(t, StringComparison.Ordinal) == true));
+
+    /// <summary>What the Files page, its rows' menus and Clean up should do.</summary>
+    private static void FilesExpectations(Stage s, MainWindow w)
+    {
+        var nest = s.Actions.NestFiles!;
+        var startFolder = w.FilesView.Folder;
+        bool NestCalled(string start) => nest.Calls.Any(c => c.StartsWith(start, StringComparison.Ordinal));
+        s.Expect["OnFilesTab:All files"] = That(() => w.Page == MainPage.Files && w.FilesView.IsEffectivelyVisible && w.FilesView.Rows.Count > 0, "the nest's files show");
+        var unreachable = s.Actions.HistoryFrom is CountingHistory { Unreachable: true };
+        s.Expect["OnFilesTab:Deleted*"] = That(() => w.Page == MainPage.History && (unreachable || w.HistoryRows == 4) && !w.FilesView.IsEffectivelyVisible,
+            "the deleted files show");
+        s.Expect["OnFilesRefresh"] = That(() => w.FilesView.Rows.Count > 0, "the nest's list be read again");
+        s.Expect["OnCleanUp"] = That(() => w.CleanupShown, "Clean up your nest show");
+        s.Expect["OnAddFiles"] = That(() => NestCalled("add:"), "the chosen file be added");
+        s.Expect["OnPlacementMenu"] = That(() => w.FilesView.PlacementMenuOpen, "the choices of where the folder lives show");
+        s.Expect["OnPickPlacement:On this PC*"] = That(() => nest.Calls.Count == 0 && nest.PlacementOf(startFolder) == FilePlacement.OnThisPc, "the folder stay on this computer");
+        s.Expect["OnPickPlacement:On-Demand*"] = That(() => Asked(s, "Make "), "the question before files leave this computer show");
+        s.Expect["OnPickPlacement:Only on the nest*"] = That(() => Asked(s, "Keep "), "the question before files leave this computer show");
+        s.Expect["OnRowMore"] = That(() => w.FilesView.RowMenuOpen, "the row's menu open");
+        s.Expect["OnRowOpen"] = That(() => w.FilesView.Folder != startFolder || s.Actions.Calls.Any(c => c.StartsWith("open-file:", StringComparison.Ordinal)),
+            "the folder open in the list, or the file in its program");
+        s.Expect["OnRowSaveCopy"] = That(() => NestCalled("save:"), "a copy be saved where the person chose");
+        s.Expect["OnRowRename"] = That(() => Asked(s, "Rename "), "the new name be asked for");
+        s.Expect["OnRowMove"] = That(() => Asked(s, "Move "), "the folder to move it to be asked for");
+        s.Expect["OnRowDelete"] = That(() => Asked(s, "Pairnets – delete"), "the question before deleting show");
+        s.Expect[":Where this folder lives"] = That(() => true, "its three choices show");
+        s.Expect["OnRowPlace:On this PC"] = That(() => nest.Calls.All(c => c.StartsWith("place:", StringComparison.Ordinal) && c.EndsWith(":OnThisPc", StringComparison.Ordinal)),
+            "the folder come back to this computer (nothing to ask)");
+        s.Expect["OnRowPlace:On-Demand"] = That(() => Asked(s, "Make ") || nest.Calls.Count == 0, "the question before files leave this computer show");
+        s.Expect["OnRowPlace:Only on the nest"] = That(() => Asked(s, "Keep ") || nest.Calls.Count == 0, "the question before files leave this computer show");
+        s.Expect[":" + FilesPageText.Top] = That(() => w.FilesView.Folder.Length == 0, "the top of the nest show");
+        s.Expect[":Documents"] = That(() => w.FilesView.Folder == "Documents", "the Documents folder show");
+        s.Expect["OnCleanupDone"] = That(() => w.Page == MainPage.Files && !w.CleanupShown, "the Files page show again");
+        s.Expect["OnOpenHistory"] = OnPage(w, MainPage.History);
+        s.Expect["OnCleanupSave"] = That(() => NestCalled("save:"), "a copy be saved where the person chose");
+        s.Expect["OnCleanupDelete"] = That(() => Asked(s, "Delete \u201c"), "the strong question before deleting for good show");
+        s.Expect[":" + FilesPageText.AllKinds] = That(() => w.Cleanup.Kind is null, "every kind of file show");
+        foreach (var (kind, bytes) in nest.KindTotals())
+            s.Expect[":" + FilesPageText.KindChip(kind, bytes)] = That(() => w.Cleanup.Kind == kind, $"only {NestFiles.KindText(kind)} show");
     }
 
     /// <summary>Counts how often the file list is read; with no <paramref name="inner"/> source the server cannot be reached.</summary>
@@ -560,7 +670,7 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
 
     // ------------------------------------------------------------------ settings
 
-    private Task<SettingsView> SettingsStage(Stage s, bool ownKey)
+    private Task<SettingsView> SettingsStage(Stage s, bool ownKey, bool canMove = false)
     {
         var secrets = new MemorySecrets();
         var key = ownKey ? fixture.Nest.MintKey("MACBOOK-" + Guid.NewGuid().ToString("N")[..6]) : null;
@@ -579,7 +689,8 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
             updates.Dispose();
             return Task.CompletedTask;
         });
-        var view = new SettingsView(settings, secrets, autoStart: false, updates, "Nest 1.0.0");
+        var view = new SettingsView(settings, secrets, autoStart: false, updates, "Nest 1.0.0", new FakeNestFiles());
+        view.OpenFilesRequested += () => s.Events.Add("open-files");
         view.Saved += _ => s.Events.Add("saved");
         view.Cancelled += () => s.Events.Add("cancelled");
         view.ResetRequested += () => s.Events.Add("reset");
@@ -587,16 +698,29 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
         view.OpenLinkRequested += s.Opened.Add;
         view.ReportBugRequested += () => s.Events.Add("report-bug");
         view.SwitchesChanged += _ => s.Events.Add("switches");
+        view.ChangeStorageRequested += () => s.Events.Add("change-storage");
+        view.MoveProgramRequested += () => s.Events.Add("move-program");
+        if (canMove)
+        {
+            view.ShowNestStorage(NestPlaceFlowTests.Sample());
+            view.ShowProgramFolder("~/.local/opt/pairnets");
+        }
         s.Show(new Window { Content = view, Width = 900, Height = 780 });
 
         var expected = fixture.Feed.Asset is null ? "up to date" : "version 99.0.0 is available";
         s.Expect["OnShowDevices"] = Raised(s, "show-devices");
+        s.Expect["OnChangeStorage"] = Raised(s, "change-storage");
+        s.Expect["OnMoveProgram"] = Raised(s, "move-program");
         // Switches apply at once, without Save (A11); a choice that was already made changes nothing.
         s.Expect["OnSwitchChanged"] = All(Raised(s, "switches"), That(() => view.SwitchesApplied, "the switch apply at once"));
         s.Expect["OnParChanged"] = That(() => view.SwitchesApplied, "the choice apply at once");
         s.Expect["OnReset"] = Raised(s, "reset");
         s.Expect["OnCancel"] = Raised(s, "cancelled");
         s.Expect["OnReportBug"] = Raised(s, "report-bug");
+        s.Expect["OnPlacementLink"] = Raised(s, "open-files");
+        s.Expect[":On this PC"] = That(() => view.PlacementChosen(string.Empty) == FilePlacement.OnThisPc, "everything stay on this computer");
+        s.Expect[":On-Demand"] = That(() => Asked(s, "Make "), "the question before files leave this computer show");
+        s.Expect[":Only on the nest"] = That(() => Asked(s, "Keep "), "the question before files leave this computer show");
         s.Expect["OnToggleIgnore"] = That(() => Screen.Named<TextBox>(view, "IgnoreBox").IsEffectivelyVisible, "the rules box show");
         s.Expect["OnIgnoreChanged"] = That(() => Screen.Named<TextBlock>(view, "IgnoreCount").Text == "1 rule", "the rule count change to 1 rule");
         s.Expect["OnSave"] = All(Raised(s, "saved"), That(() => view.Result is { } r && r.Folder == fixture.Folder && r.DeviceId == key?.Id && r.FirstRunCompleted,
@@ -698,6 +822,25 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
         var auth = fixture.Website.Services.GetRequiredService<AuthStore>();
         foreach (var request in auth.ListPendingPairRequests())
             auth.DecidePairRequest(request.Id, approve: false, "test");
+    }
+
+    // ------------------------------------------------------------------ where the nest keeps its files
+
+    /// <summary>The "Where your nest keeps files" window with the sample drives, in the state <paramref name="arrange"/> puts it in (no nest: nothing is asked).</summary>
+    private static Task NestPlaceStage(Stage s, Action<NestPlaceFlow> arrange)
+    {
+        var window = s.Show(new NestPlaceWindow(null, NestPlaceFlowTests.Sample()));
+        arrange(window.Flow);
+        window.Render();
+        Dispatcher.UIThread.RunJobs();
+        s.Expect["OnClose"] = That(() => !window.IsVisible, "the window close");
+        s.Expect["OnPick"] = That(() => window.ConfirmShown && window.ExplanationText.Contains("/mnt/data/pairnets", StringComparison.Ordinal), "the move to that drive be asked about");
+        s.Expect["OnBack"] = That(() => window.ListShown, "the drives show again");
+        s.Expect["OnRetry"] = That(() => window.ListShown, "the drives show again");
+        s.Expect["OnMove"] = That(() => window.HeadingText == "Not moved" && window.ExplanationText.Contains("Not connected", StringComparison.Ordinal),
+            "the window explain that it is not connected");
+        s.Expect["OnCopy"] = Clipboard(window, () => "sudo rm -rf '/var/lib/pairnets-before-move-x'");
+        return Task.CompletedTask;
     }
 
     // ------------------------------------------------------------------ server update, bug report, questions

@@ -83,6 +83,22 @@ what cannot lose or silently overwrite data.
   unit and `update.sh` watch `/var/lib/pairnets/update`, so DEPLOY.md copies the data, mounts the
   new place onto the old path through `/etc/fstab`, and adds a `RequiresMountsFor=` drop-in so the
   server never starts on an empty folder when the disk is missing.
+* **Choosing the place at install, or later in Settings, does the same with systemd (1.0.60).** `deploy/place.sh`
+  (sourced by `install.sh`, run as root by `pairnets-place.path` when an app asks) writes `var-lib-pairnets.mount` /
+  `opt-pairnets.mount` (bind mounts of the chosen folder onto the fixed paths) and `RequiresMountsFor=` drop-ins. The
+  mount units are the only record of the choice, so `install.sh` without options (every update) keeps them, and
+  nothing in the server, the updater or the tests changes. A `.pairnets-drive` file in the chosen folder plus
+  `AssertPathExists=` stop an empty leftover folder of the same name on the main disk from being mounted as the nest
+  when the drive is missing. A move copies with rsync while the nest runs, stops it for a last `--delete` pass and a
+  check that nothing differs, switches the mount, and goes back if the server does not answer; it never deletes the
+  old copy. Refused before anything changes: FAT/exFAT/NTFS (no owners or modes for the 700 data folder), network
+  drives (SQLite and a dropped connection), tmpfs, folders not empty or reached through a symlink, and less than 1 GB
+  (or the nest's size + 1 GB) free; under 10 GB it warns. The apps only pick from the drive list the root helper wrote
+  (`drives.json`), and the helper checks the folder again, as root, before it moves anything.
+* **The Linux app remembers its program folder through `~/.local/bin/pairnets`.** `install-desktop.sh --program-dir`
+  (or the question in a terminal) installs there; installing again follows the link, so the place is kept without a
+  settings file, and a new place moves it (only Pairnets' own files are removed from the old one). The app's own
+  updates already replace the program where it runs.
 * **Only the newest setup link works.** `owner-link` cancels every older unused link. A link shown
   to someone else (a shared terminal, a chat) would otherwise stay good for 24 hours, and on a nest
   without an owner the first person to open it takes the nest.
@@ -1234,13 +1250,109 @@ the version-archive notes and the design review fixes merged in, in that order. 
   button before the blue "Use StudyPC" (both apps).
 * **The design review fixes are one merge commit** (the last one), so they can be taken out again with one revert
   if they are not kept.
-* **1.0.60.1: the Overview map is balanced.** This computer's line and each other computer's line are the same length
+
+## Where your files live: folders on this PC, On-Demand, or only on the nest (2026-10-20)
+
+* **Asked for by the owner for 1.0.60** ("all the files stay on the server and not on the device, you can change it in
+  settings"). His answers: three choices, **per folder and per computer**, the default unchanged; chosen in Settings, on
+  the new Files page and by right-clicking a folder; Mac and Linux get "On this PC" and "Only on the nest" (a Finder
+  On-Demand needs the paid Apple account); shipped as a finished feature, so the "Files in Explorer" Preview choice goes.
+* **Kept in this computer's settings only** (`ClientSettings.Placement`, folder → placement). A path takes the choice of
+  the nearest folder above it with one (`PlacementMap`); letter case does not matter, as on the nest. On-Demand counts as
+  "on this PC" where Windows can't make a cloud folder.
+* **Nest only, in the engine:** nothing is downloaded; a file here still syncs up first and is then freed (`Evict`) once
+  local, nest and last agreed are the same, or when it is an untouched older version. A file that was here and is gone was
+  deleted by the person, so that deletion still reaches the nest through the usual guards. Freeing is never a deletion:
+  the mass-delete and empty-folder guards don't count it.
+* **Freeing is the risky part, so:** only after this pass's list from the nest says the nest has that version; the file is
+  held (no one else may read or write it), hashed again, its notes forgotten first and then it is deleted for good. The
+  Recycle Bin would keep its space; the copy is on the nest. A stop half-way leaves an untracked file equal to the nest's,
+  which the next pass records and frees again. Nothing is freed while the nest is (nearly) full (`ServerSpaceLow`).
+* **On-Demand per folder** writes the choice onto the folders as Explorer's own keep choices, only when it changed since it
+  was last written (so choices made in Explorer stay): folders on this PC "Always keep on this device", On-Demand folders
+  no keep choice; their files are freed once (at once when in sync, else when they are), and a file opened later stays.
+  `KeepOnNest` asks the nearest folder with its own choice, so it also works for a folder that isn't here yet.
+* **Files page:** lists the nest from this computer's copy of the nest's list (it shows while the nest is offline). A file
+  only on the nest opens as a copy in the app's own folder (user-only), saved back with the opened version as base; a
+  save that meets a newer version on the nest becomes a conflict copy beside it, as the sync does. Copies go a day after
+  their last change reached the nest, never before. While the nest is nearly full only opening works (a pop-up says so).
+* **Moving and renaming happen on the nest** (`POST /api/move`): the new name gets the file, the old one is deleted into
+  history; other computers see a new file and a deleted one, so nothing in the sync changes. One file per request, so a
+  folder moves file by file. The copy is made before the nest answers even if the app stops waiting (big files). A
+  letter-case-only rename goes through a passing name. An older nest answers a bare 404: "update your nest".
+* **"Help me clean up"** (on the nest-full pop-up): lists the biggest files by kind (by file extension). The owner's
+  rule: "we do not delete anything, we recommend not to delete, only if the user is 1000% sure". So the screen
+  recommends keeping everything and saving copies elsewhere. Deleting needs a tick plus the word DELETE typed, and then
+  deletes for good (`POST /api/purge`: the file and its older versions), because a normal delete keeps the space in
+  History for 30 days. It works while the nest is full, which is what it is for. `/api/info` now also gives
+  `historyBytes`.
+* **The screens (both apps):** the History page button became **Files** (still six page buttons) with two tabs, "All
+  files" (new) and "Deleted" (the History page as it was; its own inner tab "All files" is now "Older versions" so two
+  tabs never say the same). `MainPage.History` stays and means the Deleted tab, so "Show versions…" and "Open in Pairnets"
+  land where they did. Clean up takes the Files page's place until "Done". A change on the Files page (and in Explorer's
+  "Where this folder lives…") is saved at once, as the Core does, and so is the Settings page's "Where your files live"
+  card, like the page's other switches since the design review (A11; it was saved with Save before the two branches met).
+  The right-click and sync-ticks switches apply at once too, and Ctrl+4 opens Files (Ctrl+F searches it). Either way,
+  choices that take files off this computer ask first ("Keep Photos only on your nest?"). The pages talk to `INestFiles`, so the UI tests
+  give them the nest's files in memory (`FakeNestFiles`).
+* **The installer asks first, like VS Code's** (owner's request, with a screenshot of VS Code's "Select Additional
+  Tasks"): Start menu, desktop icon (off), Explorer left side, right-click menu, sync ticks, where files live (three
+  choices for the whole folder), look for updates, update the nest (off), start at log-in; "Open Pairnets now" on the
+  last page. An install by hand leaves the ticks in `HKCU\Software\Pairnets\Setup` (Choices + an Id), and the app takes
+  them into its settings once per Id (`SetupChoices`). A silent update from inside Pairnets writes nothing, so changes
+  made in Settings since are kept. The right-click menu became a setting of its own (`ExplorerRightClick`), and the
+  folder Pairnets is in Explorer for is remembered in `HKCU\Software\Pairnets\Explorer`, so it is known even when there
+  are no right-click items.
+
+## Updates are hidden; the installer is for the first install (2026-10-20)
+
+The owner: "we can't update without all the info/login thing is wiped … the installer is one-time". What was really
+going on, from this PC's own log and settings: no update ever touched the settings (they live in
+`%AppData%\Pairnets\settings.json`, the key DPAPI-protected per Windows user with a fixed entropy, nothing tied to the
+exe's path or version). The computer had been **signed out** four minutes before the update (Sign out wrote no log
+line, so it looked like the update did it), and **"Check for updates" was off** (a leftover test setting), so 1.0.53
+to 1.0.58 were never offered and 1.0.59 was installed by hand through the whole wizard. Even the in-app update showed
+Inno's progress window (`/SILENT`).
+
+* **The in-app update runs the installer `/VERYSILENT`** (`UpdatePackage.InstallerArguments`): nothing shows. The
+  installer starts the new Pairnets with `--after-update`, which shows a small "Pairnets is up to date" note instead of
+  opening the window (both apps). An installed 1.0.59.1 or older still runs it with `/SILENT`, so the step to 1.0.60
+  shows the progress window one last time.
+* **The installer started by hand over an installed Pairnets skips its pages** (it finds its own uninstall entry):
+  same folder, earlier tick boxes (`UsePreviousTasks`, the default), and a finish page that says the sign-in and
+  settings were kept. `WasInstalled` (and `IsFirstInstall()`) guard the Tasks page (feature/nest-files): its
+  `LeaveChoicesForTheApp()` must run only on the first install, or a hand update would write the ticks over the app's
+  settings. A test fails if a call to it is not guarded so.
+* **We kept Inno Setup** rather than MSIX (needs a trusted signing certificate, moves app data into a package folder:
+  a migration risk for the very sign-in this protects, and harder for the Explorer work), ClickOnce (no single-file
+  exe, a new folder each version breaks start-at-login and Explorer) or swapping the exe without the installer (the
+  Windows Apps list would show the old version).
+* **"Check for updates" is switched on once** (`SettingsUpgrades`, `ClientSettings.SettingsVersion` = 1). A settings
+  file without the number reads as version 0; new settings start current, so the first run's own choice is never
+  overruled. Switched off again later, it stays off. Updates still ask: one click on "Update now", no restart by itself
+  (the owner's choice).
+* **Safety copy:** every save also writes `settings.json.bak` (a copy of what was just written, so it never holds a
+  key a Sign out removed). A missing or unreadable settings.json is replaced by it, with a line in the log. Reset deletes
+  it too; deleting settings.json by hand no longer starts over — use Reset.
+* **Logged now:** Sign out, Reset, and a settings file that was missing or unreadable. A computer that knows its nest,
+  folder and name but has no key gets "Sign in again … your settings are kept" instead of the new-computer greeting.
+* **Tests:** `UpdateKeepsSettingsTests` (safety copy, the one-time switch, the sign-in-again words, the installer
+  script never deleting app data and skipping pages on an update), `SavedKeyTests` (real DPAPI, pinned entropy) and
+  `AppUpdate_TheNewVersion_StaysSignedIn_KeepsEverySetting_AndOnlySaysItWasUpdated` (a whole update in the Windows
+  app's harness, then the new version starting on the same files).
+* **Smaller "Start over" card** in Settings (asked the same day): the size of the Report a bug row, both apps.
+
+## 1.0.60.1: a quick fix after 1.0.60 (2026-10-21)
+
+`release/1.0.60.1` is the released 1.0.60 (d42a4b4) with two display fixes merged in.
+
+* **The Overview map is balanced.** This computer's line and each other computer's line are the same length
   (110-230 px, or what their pill or word needs), and the picture sits in the middle of its card. A name shows up to
   150 px before it ends in "…" (84 px, as before, when the window is narrow), with the full name in its tooltip. The other
   computers' word ("in sync", "next", "off since …") sits on their line like this computer's; with a speed pill or a ✕ on
   the line, it follows the name instead. In a narrow window the curve from the nest gets shorter (down to 32 px) before
   the whole picture is shrunk.
-* **1.0.60.1: the sign-in boxes count their padding once (Windows).** A WPF text box keeps its own Padding around its
+* **The sign-in boxes count their padding once (Windows).** A WPF text box keeps its own Padding around its
   text, so the shared `Input` frame (which also sets the content's margin from Padding) put the email 92 px in, far
-  right of the envelope. Only the sign-in boxes (`BigInput`) got their own frame; the shared `Input` style is used by
-  Settings and other pages and was left alone for this small release.
+  right of the envelope. The sign-in boxes (`BigInput`) got their own frame. No other box has the gap: the search box and
+  the Settings boxes use `PgInput`, whose frame does not add the padding again, and nothing else uses `Input` itself.

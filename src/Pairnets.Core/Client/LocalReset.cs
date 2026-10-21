@@ -71,7 +71,7 @@ public static partial class LocalReset
         }
 
         var settingsRemoved = true;
-        foreach (var suffix in new[] { string.Empty, ".tmp", ".corrupt" })
+        foreach (var suffix in new[] { string.Empty, ".tmp", ".corrupt", SettingsStore.BackupSuffix })
             settingsRemoved &= TryDelete(settingsPath + suffix, problems, missingIsFine: true);
 
         return new LocalResetResult(settingsRemoved, stateFolders, markerRemoved, keyForgotten, problems);

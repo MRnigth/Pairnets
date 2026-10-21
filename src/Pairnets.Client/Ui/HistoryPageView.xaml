@@ -7,19 +7,14 @@
     <ui:FileIconConverter x:Key="FileIcon" />
     <BooleanToVisibilityConverter x:Key="Visible" />
   </UserControl.Resources>
-  <Grid Margin="28,40,28,24">
+  <!-- The Files page's Deleted tab (the Files page draws the title above it). -->
+  <Grid Margin="28,0,28,24">
     <Grid.RowDefinitions>
       <RowDefinition Height="Auto" />
       <RowDefinition Height="Auto" />
       <RowDefinition Height="Auto" />
       <RowDefinition Height="*" />
     </Grid.RowDefinitions>
-
-    <!-- Header -->
-    <StackPanel>
-      <TextBlock Style="{StaticResource PgTitle}" Text="History" />
-      <TextBlock Style="{StaticResource PgSub}" Text="Get back deleted files and older versions. Your nest keeps them for 30 days." />
-    </StackPanel>
 
     <!-- Tabs, search, reload -->
     <Grid Grid.Row="1" Margin="0,16,0,0">
@@ -42,7 +37,7 @@
             <StackPanel Orientation="Horizontal">
               <ui:LineIcon Width="15" Height="15" Margin="0,0,7,0" StrokeThickness="2" Data="{StaticResource I.File}"
                            Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}" />
-              <TextBlock Text="All files" />
+              <TextBlock Text="Older versions" />
             </StackPanel>
           </RadioButton>
         </StackPanel>

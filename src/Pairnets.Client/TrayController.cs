@@ -80,7 +80,9 @@ public sealed class TrayController : ITrayActions, IDisposable
         _ui = ui;
         _shutdown = shutdown;
         _log = loggers.CreateLogger("Pairnets.Tray");
-        _settings = SettingsStore.Load(env.SettingsPath);
+        _settings = SettingsStore.Load(env.SettingsPath, problem => _log.LogWarning("Settings: {Problem}", problem));
+        UpgradeSettings();
+        TakeSetupChoices();
         _package = UpdatePackage.ForThisComputer(IsInstalledCopy);
         _updates = new UpdateService(env.CreateUpdateChecker(), PairnetsInfo.ProductVersion, _package.Asset);
         _fileLog.Minimum = _settings.DebugMode ? LogLevel.Debug : LogLevel.Information; // Debug mode: more detail in the log
@@ -132,6 +134,9 @@ public sealed class TrayController : ITrayActions, IDisposable
 
     /// <summary>Test hook: other sync timings (null in the app).</summary>
     internal Func<RunnerOptions, RunnerOptions>? RunnerOptionsForTests { get; init; }
+
+    /// <summary>What Pairnets was started with (--after-update, the start-at-login flag, an Explorer command); tests set their own.</summary>
+    internal string[] Arguments { get; init; } = Environment.GetCommandLineArgs();
 
     /// <summary>Raised with the title and text of every notification shown (tests read it; the icon is hidden there).</summary>
     internal event Action<string, string>? Notified;
@@ -188,9 +193,11 @@ public sealed class TrayController : ITrayActions, IDisposable
             return;
         }
         StartSession(null);
-        if (FileManagerCommand.FromArguments(Environment.GetCommandLineArgs()) is { } command)
+        if (FileManagerCommand.FromArguments(Arguments) is { } command)
             HandleFileCommand(command); // started by a right-click item in Explorer while Pairnets was not running
-        else if (!Environment.GetCommandLineArgs().Contains(AppActivation.AutoStartArgument))
+        else if (Arguments.Contains(SelfReplace.AfterUpdateArgument))
+            Toast("updated", UpdateTexts.UpdatedTitle, UpdateTexts.Updated(PairnetsInfo.ProductVersion), Forms.ToolTipIcon.Info, ShowMainWindow);
+        else if (!Arguments.Contains(AppActivation.AutoStartArgument))
             ShowMainWindow();
     }
 
@@ -235,7 +242,7 @@ public sealed class TrayController : ITrayActions, IDisposable
             cloud.Fetch = session.FetchVersionAsync;
             session.PassCompleted += _ => cloud.Reconcile(session.SyncedHash);
             cloud.Reconcile(session.SyncedHash);
-            if (_settings.CloudFolder == CloudFolderMode.Off)
+            if (_settings.CloudFolderWanted == CloudFolderMode.Off)
                 _leaveTask = LeaveCloudFolderAsync(cloud);
         }
         session.StatusChanged += _ => _dirty = true;
@@ -249,6 +256,11 @@ public sealed class TrayController : ITrayActions, IDisposable
             $"Synced {n} change(s) made while this computer was away.", Forms.ToolTipIcon.Info, ShowMainWindow));
         session.ServerInfoChanged += info => RunOnUi(() => OnServerInfo(session, info));
         session.AccountChanged += (next, token) => RunOnUi(() => OnAccountChanged(session, next, token));
+        session.Files.Opened.NestFullWhileSaving += _ => RunOnUi(() =>
+        {
+            if (ReferenceEquals(_session, session))
+                _window?.ShowNestFull(); // a file opened from the nest could not be saved back
+        });
         session.JoinRequested += r => RunOnUi(() => Toast("join:" + r.Code, r.Title, $"Code {r.Code} · click to review it on your nest.",
             Forms.ToolTipIcon.Info, () => ReviewJoin(r)));
         _session = session;
@@ -265,11 +277,13 @@ public sealed class TrayController : ITrayActions, IDisposable
     /// </summary>
     private void UpdateExplorerEntry()
     {
-        var folder = _settings.ShowInFileManager && _settings.IsComplete && Directory.Exists(_settings.Folder) ? _settings.Folder : null;
+        var wanted = _settings.ShowInFileManager || _settings.ExplorerRightClick;
+        var folder = wanted && _settings.IsComplete && Directory.Exists(_settings.Folder) ? _settings.Folder : null;
         try
         {
             // A Windows cloud folder is in the left side by itself (with Pairnets' icon), so only one "Pairnets" shows.
-            if (!_platform.SetExplorerEntry(folder, leftSide: _cloud is not { IsActive: true }))
+            if (!_platform.SetExplorerEntry(folder, leftSide: _settings.ShowInFileManager && _cloud is not { IsActive: true },
+                    rightClick: _settings.ExplorerRightClick, folderIcon: _settings.ShowInFileManager))
                 _log.LogInformation("Pairnets could not be fully added to File Explorer; it tries again at the next start");
         }
         catch (Exception ex)
@@ -285,7 +299,7 @@ public sealed class TrayController : ITrayActions, IDisposable
     /// </summary>
     private Platform.CloudFiles.ICloudFolder? StartCloudFolder()
     {
-        var wanted = _settings.CloudFolder;
+        var wanted = _settings.CloudFolderWanted;
         if (wanted == CloudFolderMode.Off && !SafeHasCloudFolder())
             return null;
         var mode = wanted == CloudFolderMode.Off ? CloudFolderMode.KeepAllHere : wanted;
@@ -293,7 +307,7 @@ public sealed class TrayController : ITrayActions, IDisposable
         string? problem;
         try
         {
-            cloud = _platform.StartCloudFolder(_settings.Folder!, mode, _loggers.CreateLogger("Pairnets.CloudFolder"), out problem);
+            cloud = _platform.StartCloudFolder(_settings.Folder!, mode, _loggers.CreateLogger("Pairnets.CloudFolder"), out problem, _settings.Placement);
         }
         catch (Exception ex)
         {
@@ -302,7 +316,9 @@ public sealed class TrayController : ITrayActions, IDisposable
         if (cloud is null && wanted != CloudFolderMode.Off)
         {
             _log.LogWarning("The Pairnets folder stays a plain folder: {Problem}", problem);
-            Toast("cloudfolder", "No ticks in Explorer for now", (problem ?? "Windows did not allow it.") + " Pairnets keeps syncing as before.",
+            var onDemand = wanted == CloudFolderMode.OnDemand;
+            Toast("cloudfolder", onDemand ? "Files On-Demand can't be used here" : "No ticks in Explorer for now",
+                (problem ?? "Windows did not allow it.") + (onDemand ? " Your On-Demand folders are kept on this PC instead." : " Pairnets keeps syncing as before."),
                 Forms.ToolTipIcon.Warning, () => ShowMainWindow(MainPage.Settings));
         }
         return cloud;
@@ -363,6 +379,14 @@ public sealed class TrayController : ITrayActions, IDisposable
         if (_session is not { } session || _settings.Folder is not { } folder || FileStatusReader.ToSyncPath(folder, command.Path) is not { } rel)
         {
             ShowMainWindow();
+            return;
+        }
+        if (command.Action == FileManagerAction.WhereItLives)
+        {
+            // A folder's own choice; for a file, the folder it is in.
+            var folderPath = rel.Length == 0 || Directory.Exists(command.Path) ? rel : PathRules.Parent(rel) ?? string.Empty;
+            ShowMainWindow();
+            _window?.ShowFilesAt(folderPath, choosePlacement: true);
             return;
         }
         if (command.Action == FileManagerAction.Open)
@@ -446,6 +470,7 @@ public sealed class TrayController : ITrayActions, IDisposable
                 _log.LogWarning("Could not remove this computer on the nest: {Error}", ex.Message);
             }
             StopSession();
+            _log.LogInformation("Signed out of this computer by the person (Sign out); the nest was {Told}", removed ? "told" : "not told");
             _settings.ProtectedToken = null;
             _settings.DeviceId = null;
             _settings.FirstRunCompleted = false;
@@ -464,6 +489,24 @@ public sealed class TrayController : ITrayActions, IDisposable
     }
 
     private bool _signingOut;
+
+    /// <summary>One-time changes for settings an older Pairnets saved (<see cref="SettingsUpgrades"/>), saved at once.</summary>
+    private void UpgradeSettings()
+    {
+        var done = SettingsUpgrades.Apply(_settings);
+        if (done.Count == 0 || !File.Exists(_env.SettingsPath))
+            return; // nothing changed, or nothing set up yet (the first run saves them)
+        foreach (var line in done)
+            _log.LogInformation("Settings: {Change}", line);
+        try
+        {
+            SettingsStore.Save(_env.SettingsPath, _settings);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _log.LogWarning("Could not save the upgraded settings: {Error}", ex.Message);
+        }
+    }
 
     private bool _resetting;
 
@@ -506,6 +549,7 @@ public sealed class TrayController : ITrayActions, IDisposable
             {
                 _log.LogWarning(ex, "Could not take Pairnets out of File Explorer");
             }
+            _log.LogInformation("Reset this app chosen by the person: forgetting the settings, the saved key and the sync notes");
             var result = LocalReset.Run(_settings, _platform.Secrets, _env.SettingsPath, _env.LocalDir);
             var notes = new List<string>(result.Problems);
             if (stayedOnNest > 0)
@@ -771,6 +815,10 @@ public sealed class TrayController : ITrayActions, IDisposable
 
     public IHistorySource? History => _session;
 
+    public INestFiles? Files => _session?.Files;
+
+    public void OpenFile(string path) => Shell(path);
+
     public bool Notifies(NoticeKind kind) => kind switch
     {
         NoticeKind.JoinRequest => _settings.NotifyJoinRequests,
@@ -953,7 +1001,8 @@ public sealed class TrayController : ITrayActions, IDisposable
     {
         if (_window is null)
             return;
-        var view = new SettingsView(_settings, _platform.Secrets, _updates, _session?.Status.ServerVersionText);
+        var view = new SettingsView(_settings, _platform.Secrets, _updates, _session?.Status.ServerVersionText, _session?.Files);
+        view.OpenFilesRequested += () => _window?.Navigate(MainPage.Files);
         view.Saved += v =>
         {
             ApplySettings(v.Result!, v.PlainToken);
@@ -965,7 +1014,36 @@ public sealed class TrayController : ITrayActions, IDisposable
         view.ReportBugRequested += () => ReportBug();
         view.OpenLinkRequested += Shell;
         view.Cancelled += () => _window?.Navigate(MainPage.Overview);
+        view.ChangeStorageRequested += () => ShowNestPlace(view);
         _window.ShowSettingsPage(view);
+        _ = FillNestStorageAsync(view);
+    }
+
+    /// <summary>What the nest last said about where it keeps its files (the window shows it at once).</summary>
+    private NestStorage? _nestStorage;
+
+    /// <summary>Settings' "Where your nest keeps files" row, for a nest that can move its files (asks it once).</summary>
+    private async Task FillNestStorageAsync(SettingsView view)
+    {
+        if (_session is not { } session || session.Status.Server is not { CanMoveStorage: true })
+            return;
+        try
+        {
+            _nestStorage = await session.Api.GetStorageAsync(CancellationToken.None);
+            view.ShowNestStorage(_nestStorage);
+        }
+        catch (Exception ex) when (ex is PairnetsNetworkException or PairnetsProtocolException or PairnetsAuthException or HttpRequestException or TaskCanceledException)
+        {
+            _log.LogDebug("The nest's storage could not be read: {Error}", ex.Message);
+        }
+    }
+
+    /// <summary>"Change…" on that row: the nest's drives and the move; the row is read again when it closes.</summary>
+    private void ShowNestPlace(SettingsView view)
+    {
+        var window = new NestPlaceWindow(() => _session, _nestStorage);
+        window.Closed += (_, _) => _ = FillNestStorageAsync(view);
+        window.Show();
     }
 
     /// <summary>
@@ -1000,6 +1078,28 @@ public sealed class TrayController : ITrayActions, IDisposable
             }
         }
         _dirty = true;
+    }
+
+    /// <summary>
+    /// What was ticked on the installer's "Select Additional Tasks" page, taken into the settings once (a later silent
+    /// update leaves nothing, so changes made in Settings since are kept).
+    /// </summary>
+    private void TakeSetupChoices()
+    {
+        if (_platform.ReadSetupChoices() is not { } setup || setup.Id == _settings.SetupChoicesApplied)
+            return;
+        SetupChoices.Apply(_settings, setup.Choices);
+        _settings.SetupChoicesApplied = setup.Id;
+        try
+        {
+            SettingsStore.Save(_env.SettingsPath, _settings);
+            _platform.SetAutoStart(_settings.StartWithWindows);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
+        {
+            _log.LogWarning("Could not keep the installer's choices: {Error}", ex.Message);
+        }
+        _log.LogInformation("Took the installer's choices: {Choices}", setup.Choices);
     }
 
     private void ApplySettings(ClientSettings settings, string? plainToken)
@@ -1048,7 +1148,7 @@ public sealed class TrayController : ITrayActions, IDisposable
 
     /// <summary>
     /// Downloads the update and checks it against the signed SHA256SUMS.txt. An installed copy runs PairnetsSetup.exe
-    /// silently (it closes this Pairnets, replaces it and starts the new one). A copy started from the zip swaps its own
+    /// hidden (it closes this Pairnets, replaces it and starts the new one; no installer window shows). A copy started from the zip swaps its own
     /// Pairnets.exe for the one in pairnets-client-win-x64.zip and starts it (<see cref="SelfReplace"/>). When anything
     /// fails, the card says why and offers to try again; it never sends the person to the browser instead.
     /// </summary>
@@ -1078,7 +1178,7 @@ public sealed class TrayController : ITrayActions, IDisposable
             if (_package.Method == UpdateMethod.Installer)
             {
                 _log.LogInformation("Installing Pairnets {Version}", update.Version);
-                _platform.RunInstaller(download, "/SILENT /SUPPRESSMSGBOXES /NORESTART /CLOSEAPPLICATIONS");
+                _platform.RunInstaller(download, UpdatePackage.InstallerArguments);
             }
             else
             {

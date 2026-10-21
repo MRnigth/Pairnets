@@ -337,7 +337,8 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
     private readonly ILogger _log;
     private readonly string _token;
 
-    private ClientSession(ClientSettings settings, string token, StateDb state, PairnetsApiClient api, SyncEngine engine, SyncRunner runner, TimeProvider clock, ILogger log)
+    private ClientSession(ClientSettings settings, string token, StateDb state, PairnetsApiClient api, SyncEngine engine, SyncRunner runner,
+        TimeProvider clock, ILogger log, ILocalTrash trash, ILoggerFactory loggers)
     {
         _log = log;
         _token = token;
@@ -346,8 +347,25 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
         Api = api;
         Engine = engine;
         Runner = runner;
+        Trash = trash;
         _clock = clock;
+        _files = new Lazy<NestFiles>(() => new NestFiles(this,
+            Path.Combine(Path.GetDirectoryName(state.DatabasePath)!, "opened"), loggers.CreateLogger("Pairnets.Files"), clock));
     }
+
+    private readonly Lazy<NestFiles> _files;
+
+    /// <summary>The Files page: what is on the nest, where each folder lives, and changes made there.</summary>
+    public NestFiles Files => _files.Value;
+
+    /// <summary>Where files deleted here go (the Recycle Bin or Trash).</summary>
+    public ILocalTrash Trash { get; }
+
+    /// <summary>
+    /// Asks the app to save these settings and start syncing again with them (a choice made on the Files page, such as
+    /// where a folder's files live), through <see cref="AccountChanged"/>, as for any other settings change.
+    /// </summary>
+    internal void ChangeSettings(ClientSettings next) => AccountChanged?.Invoke(next, _token);
 
     public ClientSettings Settings { get; }
     public StateDb State { get; }
@@ -401,14 +419,18 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
             ExtraIgnore = settings.ExtraIgnore,
             MaxParallelTransfers = settings.EffectiveParallelTransfers,
             CloudFiles = cloudFiles ?? ICloudFiles.None,
+            Placement = settings.PlacementMap(onDemandWorks: cloudFiles?.IsActive == true),
         }, api, state, trash, loggers.CreateLogger("Pairnets.Engine"), clock, hooks);
         var options = new RunnerOptions { ServerUrl = url, Token = token, DeviceId = settings.DeviceName!, WaitForPeerBatches = settings.WaitForPeerBatches };
         if (runnerOptions is not null)
             options = runnerOptions(options);
         var runner = new SyncRunner(engine, options, loggers.CreateLogger("Pairnets.Runner"));
 
-        var session = new ClientSession(settings, token, state, api, engine, runner, clock, loggers.CreateLogger("Pairnets.Session"));
+        var session = new ClientSession(settings, token, state, api, engine, runner, clock, loggers.CreateLogger("Pairnets.Session"), trash, loggers);
+        engine.NestFull = () => session.Status.ServerSpaceLow;
         session.Wire();
+        if (Directory.Exists(Path.Combine(stateDir, "opened")))
+            _ = session.Files; // files opened from the nest before: changes still waiting are saved back
         session._status = session._status with
         {
             LimitText = settings.LimitText,
@@ -437,6 +459,7 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
                 SyncAction.Upload => (ActivityKind.Uploaded, "Uploaded"),
                 SyncAction.Download => (ActivityKind.Downloaded, "Downloaded"),
                 SyncAction.DeleteLocal => (ActivityKind.DeletedHere, "Deleted here (deleted on another PC)"),
+                SyncAction.Evict => (ActivityKind.Info, "Space freed here (kept on the nest)"),
                 _ => (ActivityKind.DeletedOnServer, "Deleted on the server"),
             };
             Activity.Add(kind, path, $"{verb}: {path}", _clock);
@@ -738,6 +761,9 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
             return 0;
         }
     }
+
+    /// <summary>Tests: change the status as if the session had seen it (e.g. a nearly full nest).</summary>
+    internal void UpdateStatusForTests(Func<StatusSnapshot, StatusSnapshot> change) => Update(change);
 
     private void Update(Func<StatusSnapshot, StatusSnapshot> change)
     {
@@ -1140,6 +1166,8 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
             await _devicesTimer.DisposeAsync().ConfigureAwait(false);
         if (_liveTimer is not null)
             await _liveTimer.DisposeAsync().ConfigureAwait(false);
+        if (_files.IsValueCreated)
+            _files.Value.Opened.Dispose();
         await Runner.DisposeAsync().ConfigureAwait(false);
         Api.Dispose();
         State.Dispose();

@@ -13,7 +13,7 @@ public class UiShortcutsTests
     [InlineData("D1", true, ShortcutAction.PageOverview)]
     [InlineData("D2", true, ShortcutAction.PageActivity)]
     [InlineData("D3", true, ShortcutAction.PageNeedsYou)]
-    [InlineData("D4", true, ShortcutAction.PageHistory)]
+    [InlineData("D4", true, ShortcutAction.PageFiles)]
     [InlineData("NumPad5", true, ShortcutAction.PageDevices)]
     [InlineData("D6", true, ShortcutAction.PageSettings)]
     public void KeysMapToActions(string key, bool command, ShortcutAction action) => Assert.Equal(action, Shortcuts.For(key, command));

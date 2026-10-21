@@ -17,6 +17,9 @@ public class Stage4PagesTests
 {
     private static ActivityFeed SampleFeed(DateTimeOffset now)
     {
+        // Keep all five files on one day: just after midnight "an hour ago" is yesterday.
+        if (now.TimeOfDay < TimeSpan.FromMinutes(61))
+            now = new DateTimeOffset(now.Date, now.Offset).AddMinutes(61);
         var feed = new ActivityFeed();
         feed.Add(new ActivityItem(now.AddMinutes(-60), ActivityKind.Uploaded, "Reports/q3.xlsx", "Uploaded"));
         feed.Add(new ActivityItem(now.AddMinutes(-50), ActivityKind.Downloaded, "Notes/ideas.md", "Downloaded"));
@@ -316,7 +319,7 @@ public class Stage4PagesTests
         Layout(window);
         Assert.Equal(MainPage.Account, window.Page);
         Assert.True(window.AccountShown);
-        Assert.All(new[] { "NavOverview", "NavActivity", "NavAttention", "NavHistory", "NavDevices", "NavSettings" },
+        Assert.All(new[] { "NavOverview", "NavActivity", "NavAttention", "NavFiles", "NavDevices", "NavSettings" },
             name => Assert.False(Screen.Named<RadioButton>(window, name).IsChecked));
         var page = window.Account;
         Assert.Equal("alex@example.com", page.TitleValue);

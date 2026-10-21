@@ -54,6 +54,9 @@ public partial class HistoryPageView : UserControl
         UpdateTabs();
     }
 
+    /// <summary>Raised with the number of deleted files each time the list is drawn (the Files page's Deleted tab shows it).</summary>
+    public event Action<int>? DeletedCounted;
+
     /// <summary>What the page asks of the main window.</summary>
     public IPageHost? Host { get; set; }
 
@@ -167,6 +170,7 @@ public partial class HistoryPageView : UserControl
         var (rows, total) = HistoryQuery.Filter(_serverFiles, _deletedMode, search, now);
         var deletedTotal = HistoryQuery.Filter(_serverFiles, deleted: true, null, now).Total;
         DeletedCount.Text = Format.Count(deletedTotal);
+        DeletedCounted?.Invoke(deletedTotal);
         var summary = HistoryQuery.Summary(rows.Count, total, _deletedMode, !string.IsNullOrWhiteSpace(search));
         var selected = (FileList.SelectedItem as ServerFile)?.Path;
 

@@ -33,8 +33,11 @@ public class ClientSupportTests
         Assert.Equal(["*.bak"], loaded.ExtraIgnore);
 
         File.WriteAllText(path, "{ not json");
-        Assert.False(SettingsStore.Load(path).IsComplete);
+        Assert.True(SettingsStore.Load(path).IsComplete); // the safety copy of the last save takes over
         Assert.True(File.Exists(path + ".corrupt"));
+        File.Delete(path + SettingsStore.BackupSuffix);
+        File.WriteAllText(path, "{ not json");
+        Assert.False(SettingsStore.Load(path).IsComplete);
         Assert.False(SettingsStore.Load(dir.Combine("missing.json")).IsComplete);
     }
 

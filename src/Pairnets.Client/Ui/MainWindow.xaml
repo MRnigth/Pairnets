@@ -187,10 +187,10 @@
                   <TextBlock x:Name="AttentionCount" HorizontalAlignment="Right" VerticalAlignment="Top" FontSize="20" />
                 </Grid>
               </RadioButton>
-              <RadioButton x:Name="NavHistory" Style="{StaticResource SideTile}" GroupName="page" Checked="OnNav">
+              <RadioButton x:Name="NavFiles" Style="{StaticResource SideTile}" GroupName="page" Checked="OnNav">
                 <Grid>
-                  <TextBlock Text="History" VerticalAlignment="Bottom" FontSize="14" />
-                  <ui:LineIcon Data="{StaticResource I.History}" />
+                  <TextBlock Text="Files" VerticalAlignment="Bottom" FontSize="14" />
+                  <ui:LineIcon Data="{StaticResource I.Folder}" />
                 </Grid>
               </RadioButton>
               <RadioButton x:Name="NavDevices" Style="{StaticResource SideTile}" GroupName="page" Checked="OnNav">
@@ -247,8 +247,8 @@
                   <TextBlock x:Name="DockBadgeText" Foreground="{DynamicResource T.NeedsActiveText}" FontSize="11" FontWeight="ExtraBold" HorizontalAlignment="Center" VerticalAlignment="Center" />
                 </Border>
               </Grid>
-              <RadioButton x:Name="DockHistory" Style="{StaticResource DockPage}" GroupName="dock" ToolTip="History" AutomationProperties.Name="History" Checked="OnNav">
-                <ui:LineIcon Data="{StaticResource I.History}" />
+              <RadioButton x:Name="DockFiles" Style="{StaticResource DockPage}" GroupName="dock" ToolTip="Files" AutomationProperties.Name="Files" Checked="OnNav">
+                <ui:LineIcon Data="{StaticResource I.Folder}" />
               </RadioButton>
               <RadioButton x:Name="DockDevices" Style="{StaticResource DockPage}" GroupName="dock" ToolTip="Computers" AutomationProperties.Name="Computers" Checked="OnNav">
                 <ui:LineIcon Data="{StaticResource I.Desktop}" />
@@ -365,9 +365,43 @@
           <ui:OverviewView x:Name="Overview" />
         </ScrollViewer>
 
-        <!-- ============ Activity, Needs you, History, Devices, Account: pages of their own (each draws its own header) ============ -->
+        <!-- ============ Activity, Needs you, Devices, Account: pages of their own (each draws its own header) ============ -->
         <ui:ActivityPageView x:Name="ActivityPage" Visibility="Collapsed" />
-        <ui:HistoryPageView x:Name="HistoryPage" Visibility="Collapsed" />
+
+        <!-- ============ Files: all files on the nest, and the deleted ones (History); Clean up in its place ============ -->
+        <Grid x:Name="FilesPage" Visibility="Collapsed">
+          <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+          </Grid.RowDefinitions>
+          <StackPanel x:Name="FilesHeader" Margin="28,40,28,0">
+            <TextBlock Style="{StaticResource PgTitle}" Text="Files" />
+            <TextBlock Style="{StaticResource PgSub}" Text="Everything on your nest, and what was deleted in the last 30 days." />
+            <Border Style="{StaticResource PgTabs}" HorizontalAlignment="Left" Margin="0,16,0,0">
+              <StackPanel Orientation="Horizontal">
+                <RadioButton x:Name="AllFilesTab" Style="{StaticResource PgTab}" GroupName="files" IsChecked="True" Checked="OnFilesTab">
+                  <StackPanel Orientation="Horizontal">
+                    <ui:LineIcon Width="15" Height="15" Margin="0,0,7,0" StrokeThickness="2" Data="{StaticResource I.Folder}"
+                                 Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}" />
+                    <TextBlock Text="All files" />
+                  </StackPanel>
+                </RadioButton>
+                <RadioButton x:Name="DeletedFilesTab" Style="{StaticResource PgTab}" GroupName="files" Margin="0" Checked="OnFilesTab">
+                  <StackPanel Orientation="Horizontal">
+                    <ui:LineIcon Width="15" Height="15" Margin="0,0,7,0" StrokeThickness="2" Data="{StaticResource I.Trash}"
+                                 Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}" />
+                    <TextBlock Text="Deleted" />
+                    <TextBlock x:Name="DeletedTabCount" Margin="7,0,0,0" FontWeight="Bold" Foreground="{DynamicResource T.AccentInk}" />
+                  </StackPanel>
+                </RadioButton>
+              </StackPanel>
+            </Border>
+          </StackPanel>
+          <ui:NestFilesView x:Name="NestFilesPage" Grid.Row="1" />
+          <ui:HistoryPageView x:Name="HistoryPage" Grid.Row="1" Visibility="Collapsed" />
+          <ui:CleanupView x:Name="CleanupPage" Grid.RowSpan="2" Visibility="Collapsed" />
+        </Grid>
+
         <ui:DevicesPageView x:Name="DevicesPage" Visibility="Collapsed" />
         <ui:NeedsPageView x:Name="AttentionPage" Visibility="Collapsed" />
         <ui:AccountPageView x:Name="AccountPage" Visibility="Collapsed" />

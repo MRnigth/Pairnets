@@ -43,6 +43,12 @@ public sealed partial class SyncOptions
     public string? UpdateDir { get; set; }
 
     /// <summary>
+    /// The systemd path unit install.sh sets up for moving the nest's files to another drive (see StorageMover). Moving is
+    /// offered only when it is there (and place.sh is next to update.sh). Tests point it at a file of their own.
+    /// </summary>
+    public string PlacePathUnit { get; set; } = "/etc/systemd/system/pairnets-place.path";
+
+    /// <summary>
     /// The server sits behind a tunnel or reverse proxy on this machine (install.sh --public-url
     /// sets it): take the client's address from CF-Connecting-IP / X-Forwarded-For on loopback
     /// connections. Leave it off when clients connect directly. In relay mode the client's address is always taken

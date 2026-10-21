@@ -78,6 +78,14 @@ internal static class Stage4Screens
         Avalonia.Threading.Dispatcher.UIThread.RunJobs();
         Save(window, outDir, "history-all", suffix);
 
+        // Files: all files, a folder, and Clean up
+        window.Navigate(MainPage.Files);
+        Save(window, outDir, "files", suffix);
+        window.ShowFilesAt("Documents");
+        Save(window, outDir, "files-folder", suffix);
+        window.ShowCleanup();
+        Save(window, outDir, "files-cleanup", suffix);
+
         // Devices
         window.Navigate(MainPage.Devices);
         Save(window, outDir, "devices", suffix);
@@ -87,7 +95,7 @@ internal static class Stage4Screens
         {
             ServerUrl = "https://nest.example.com/", Folder = Folder, DeviceName = "DESKTOP", DeviceId = "id", AccountEmail = "alex@example.com",
             ExtraIgnore = ["*.bak", "node_modules/", "build/"],
-        }, null, autoStart: true, serverVersionText: "Nest 1.0.48");
+        }, null, autoStart: true, serverVersionText: "Nest 1.0.48", files: actions.NestFiles);
         window.ShowSettingsPage(settings);
         Save(window, outDir, "settings", suffix);
         settings.ScrollToEnd();

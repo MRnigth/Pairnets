@@ -5,7 +5,7 @@ public enum ShortcutAction
 {
     None,
 
-    /// <summary>Puts the cursor in the page's search box (Activity, History).</summary>
+    /// <summary>Puts the cursor in the page's search box (Activity, Files, Deleted).</summary>
     Search,
     SyncNow,
 
@@ -16,7 +16,7 @@ public enum ShortcutAction
     PageOverview,
     PageActivity,
     PageNeedsYou,
-    PageHistory,
+    PageFiles,
     PageDevices,
     PageSettings,
 }
@@ -43,7 +43,7 @@ public static class Shortcuts
             "D1" or "NumPad1" => ShortcutAction.PageOverview,
             "D2" or "NumPad2" => ShortcutAction.PageActivity,
             "D3" or "NumPad3" => ShortcutAction.PageNeedsYou,
-            "D4" or "NumPad4" => ShortcutAction.PageHistory,
+            "D4" or "NumPad4" => ShortcutAction.PageFiles,
             "D5" or "NumPad5" => ShortcutAction.PageDevices,
             "D6" or "NumPad6" => ShortcutAction.PageSettings,
             _ => ShortcutAction.None,
@@ -61,7 +61,7 @@ public static class Shortcuts
             ShortcutAction.PageOverview => "1",
             ShortcutAction.PageActivity => "2",
             ShortcutAction.PageNeedsYou => "3",
-            ShortcutAction.PageHistory => "4",
+            ShortcutAction.PageFiles => "4",
             ShortcutAction.PageDevices => "5",
             ShortcutAction.PageSettings => "6",
             _ => null,

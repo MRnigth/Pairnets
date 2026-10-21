@@ -18,6 +18,8 @@
   <ItemGroup>
     <!-- The windows open on a hidden desktop, as in the Windows app's tests. -->
     <Compile Include="..\..\tests\Pairnets.Client.Tests\HiddenDesktop.cs" Link="HiddenDesktop.cs" />
+    <!-- The sample files on the nest the Files page, Clean up and Settings' "Where your files live" draw. -->
+    <Compile Include="..\..\tests\Pairnets.Tests\Infrastructure\FakeNestFiles.cs" Link="FakeNestFiles.cs" />
   </ItemGroup>
 
 </Project>

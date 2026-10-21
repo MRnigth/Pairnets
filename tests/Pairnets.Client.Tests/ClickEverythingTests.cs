@@ -239,6 +239,9 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
     public Task ServerUpdateWindow_EveryButtonWorks() => Expect(fixture.Run("server update", () => PressEverything(ServerUpdateScreens(), ServerUpdateRules)));
 
     [Fact]
+    public Task NestPlaceWindow_EveryButtonWorks() => Expect(fixture.Run("nest place", () => PressEverything(NestPlaceScreens(), NestPlaceRules)));
+
+    [Fact]
     public Task BugReportWindow_EveryButtonWorks() => Expect(fixture.Run("bug report", () => PressEverything(BugReportScreens(), BugReportRules)));
 
     [Fact]
@@ -250,7 +253,7 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
     {
         // Run every window first (each runs once, whichever test asks first).
         foreach (var run in new Func<Task>[] { TrayPanel_EveryButtonWorks, MainWindow_EveryButtonWorks, Settings_EveryButtonWorks, SignIn_EveryButtonWorks,
-                     ServerUpdateWindow_EveryButtonWorks, BugReportWindow_EveryButtonWorks, TrayMenu_EveryItemWorks })
+                     ServerUpdateWindow_EveryButtonWorks, NestPlaceWindow_EveryButtonWorks, BugReportWindow_EveryButtonWorks, TrayMenu_EveryItemWorks })
         {
             try
             {
@@ -559,6 +562,24 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
             await Wpf.Ui(() => main.Navigate(MainPage.History));
             await Wpf.WaitUntil(() => main.HistoryPane.HistoryRetry.IsVisible, "the History page's Try again");
         }, BrokenHistory: true);
+        yield return new Screen(name, "the Files page, all files", NewMainWindow, (b, w) => Wpf.Ui(() =>
+        {
+            var main = (MainWindow)w;
+            main.ShowStatus(StatusSnapshot.Initial with { Status = RunnerStatus.Idle, Text = "Up to date", Server = CurrentServer, Devices = Devices }, FolderPath, "DESKTOP");
+            main.Navigate(MainPage.Files);
+        }), Answers: AnswerTheFilesPage);
+        yield return new Screen(name, "the Files page, a folder opened", NewMainWindow, (b, w) => Wpf.Ui(() =>
+        {
+            var main = (MainWindow)w;
+            main.ShowStatus(StatusSnapshot.Initial with { Status = RunnerStatus.Idle, Text = "Up to date", Server = CurrentServer, Devices = Devices }, FolderPath, "DESKTOP");
+            main.ShowFilesAt("Documents");
+        }), Answers: AnswerTheFilesPage);
+        yield return new Screen(name, "Clean up your nest", NewMainWindow, (b, w) => Wpf.Ui(() =>
+        {
+            var main = (MainWindow)w;
+            main.ShowStatus(StatusSnapshot.Initial with { Status = RunnerStatus.Idle, Text = "Up to date", Server = CurrentServer, Devices = Devices }, FolderPath, "DESKTOP");
+            main.ShowCleanup();
+        }), Answers: AnswerTheFilesPage);
         yield return new Screen(name, "the Devices page", NewMainWindow, (b, w) => Wpf.Ui(() =>
         {
             var main = (MainWindow)w;
@@ -649,6 +670,52 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
 
     private static Func<Check, bool> OnPage(MainPage page) => c => ((MainWindow)c.Window).Page == page;
 
+    /// <summary>A file "Add files" adds (it has to be there).</summary>
+    private static readonly Lazy<string> FileToAdd = new(() =>
+    {
+        var path = Path.Combine(Path.GetTempPath(), "pairnets-click-add.txt");
+        File.WriteAllText(path, "added from the Files page");
+        return path;
+    });
+
+    /// <summary>The person agrees to everything the Files page and Clean up ask.</summary>
+    private static void AnswerTheFilesPage(DialogScript s)
+    {
+        s.AgreeToEverything();
+        s.Chooses = choice => choice.Buttons[^1];
+        s.Typed = "plans.docx";
+        s.SaveTo = Path.Combine(Path.GetTempPath(), "pairnets-click-copy.bin");
+        s.AddFiles = [FileToAdd.Value];
+        s.DeleteWord = NestFiles.DeleteWord;
+    }
+
+    private static MainWindow MainOf(Check c) => (MainWindow)c.Window;
+
+    private static FakeNestFiles Nest(Check c) => c.Bench.Actions.NestFiles!;
+
+    private static bool NestCalled(Check c, string start) => Nest(c).Calls.ToList().Any(x => x.StartsWith(start, StringComparison.Ordinal));
+
+    /// <summary>True when <paramref name="element"/> is drawn inside a <typeparamref name="T"/>.</summary>
+    private static bool Within<T>(DependencyObject element) where T : DependencyObject
+    {
+        for (var e = element; e is not null; e = System.Windows.Media.VisualTreeHelper.GetParent(e) ?? LogicalTreeHelper.GetParent(e))
+        {
+            if (e is T)
+                return true;
+        }
+        return false;
+    }
+
+    /// <summary>"On this PC" → On this PC, and so on (the placement menus' items).</summary>
+    private static FilePlacement PlacementNamed(string label) => label switch
+    {
+        "On-Demand" or "PickOnDemand" => FilePlacement.OnDemand,
+        "Only on the nest" or "PickNestOnly" => FilePlacement.NestOnly,
+        _ => FilePlacement.OnThisPc,
+    };
+
+    private static bool IsRowItem(Target t, string label) => t.Kind == PressKind.MenuItem && t.Label == label && t.MenuOwner?.DataContext is NestRow;
+
     private static bool ListShows(MainWindow main, Func<ServerFile, bool> match) =>
         (main.HistoryPane.IsDeletedMode ? main.HistoryPane.DeletedRows : main.HistoryPane.FileRows).All(match);
 
@@ -680,6 +747,44 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
 
     private static readonly IReadOnlyList<Rule> MainWindowRules =
     [
+        // The Files page: its tabs, its list and each row's "…" menu.
+        new(t => t.Element is RadioButton { GroupName: "files" } && t.Label == "All files", "show the nest's files",
+            c => MainOf(c).Page == MainPage.Files && MainOf(c).FilesPane.IsVisible && MainOf(c).FilesPane.Rows.Count > 0),
+        new(t => t.Element is RadioButton { GroupName: "files" }, "show the deleted files (what was History)",
+            c => MainOf(c).Page == MainPage.History && MainOf(c).HistoryPane.IsVisible && !MainOf(c).FilesPane.IsVisible),
+        new(t => t.Element is Button { DataContext: NestRow } && t.Kind == PressKind.Button, "open that row's menu",
+            c => ((Button)c.Target.Element).ContextMenu!.IsOpen),
+        new(t => IsRowItem(t, "Open"), "open the folder in the list, or the file in its program",
+            c => c.Item is NestRow { IsFolder: true } row ? MainOf(c).FilesPane.Folder == row.Entry.Path
+                : c.Bench.Actions.Calls.Items.Any(x => x.StartsWith("OpenFile(", StringComparison.Ordinal)) && NestCalled(c, "open:")),
+        new(t => IsRowItem(t, "Save a copy…"), "save a copy where the person chose", c => NestCalled(c, "save:")),
+        new(t => IsRowItem(t, "Rename…"), "rename it to what was typed", c => NestCalled(c, "rename:") && Nest(c).Calls.ToList().Any(x => x.EndsWith(":plans.docx", StringComparison.Ordinal))),
+        new(t => IsRowItem(t, "Move to…"), "move it to the folder chosen", c => NestCalled(c, "move:")),
+        new(t => IsRowItem(t, "Delete…"), "ask, then delete it on the nest", c => NestCalled(c, "delete:")),
+        new(t => IsRowItem(t, "Where this folder lives"), "show the three choices", c => true),
+        new(t => t.Kind == PressKind.MenuItem && t.MenuOwner?.DataContext is NestRow && t.Element is MenuItem { Tag: string }, "ask first, then choose where that folder lives",
+            c => Nest(c).PlacementOf(((NestRow)c.Item!).Entry.Path) == PlacementNamed(c.Target.Label)),
+        new(t => t.Element.Name == "PlacementButton", "open the choices of where this folder lives", c => ((Button)c.Target.Element).ContextMenu!.IsOpen),
+        new(t => t.Element.Name.StartsWith("Pick", StringComparison.Ordinal), "ask first, then choose where this folder lives",
+            c => Nest(c).PlacementOf(MainOf(c).FilesPane.Folder) == PlacementNamed(c.Target.Element.Name)),
+        new(t => t.Element.Name == "SearchInput" && Within<NestFilesView>(t.Element), $"list the files whose name or folder has \"{Presser.TypedText}\"",
+            c => MainOf(c).FilesPane.Rows.Count > 0 && MainOf(c).FilesPane.Rows.All(r => r.Entry.Path.Contains(Presser.TypedText, StringComparison.OrdinalIgnoreCase))),
+        new(t => t.Label == "Refresh" && Within<NestFilesView>(t.Element), "read the nest's list again", c => MainOf(c).FilesPane.Rows.Count > 0),
+        On("Clean up…", "show Clean up your nest", c => MainOf(c).CleanupShown),
+        On("Add files", "add the chosen files to this folder", c => NestCalled(c, "add:")),
+        new(t => t.Element is Button && Within<WrapPanel>(t.Element) && Within<NestFilesView>(t.Element), "go to that folder",
+            c => MainOf(c).FilesPane.Folder == (((Button)c.Target.Element).ToolTip as string is { } tip && tip != "The top of your nest" ? tip : string.Empty)),
+
+        // Clean up your nest.
+        new(t => t.Label == "Done" && Within<CleanupView>(t.Element), "go back to the Files page", c => MainOf(c).Page == MainPage.Files && !MainOf(c).CleanupShown),
+        new(t => t.Element is RadioButton { GroupName: "kind" }, "show only that kind of file",
+            c => c.Target.Label == FilesPageText.AllKinds ? MainOf(c).CleanupPane.Kind is null
+                : MainOf(c).CleanupPane.Kind is { } kind && c.Target.Label.StartsWith(NestFiles.KindText(kind), StringComparison.Ordinal)),
+        new(t => t.Element is Button { DataContext: CleanupRow } && t.Label == "Save a copy…", "save a copy where the person chose", c => NestCalled(c, "save:")),
+        new(t => t.Element is Button { DataContext: CleanupRow } && t.Label == "Delete…", "ask strongly, then delete it for good",
+            c => NestCalled(c, "purge:") && !Nest(c).Has(((CleanupRow)c.Item!).Entry.Path)),
+        On("Open History", "show the deleted files", c => MainOf(c).Page == MainPage.History),
+
         // Rows of lists: what each row's own button does.
         new(t => t.Element is Button { CommandParameter: AttentionItem }, "run that item's action",
             c => c.Bench.Actions.Calls.Items.Contains("attention:" + ((AttentionItem)((Button)c.Target.Element).CommandParameter).Title)),
@@ -722,8 +827,9 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
         // The sidebar.
         On(["Overview", "Overview (Ctrl+1)"], "show the Overview page", OnPage(MainPage.Overview)),
         On(["Activity", "Activity (Ctrl+2)"], "show the Activity page", OnPage(MainPage.Activity)),
-        On(["History", "History (Ctrl+4)"], "show the History page and read the server's files",
-            c => OnPage(MainPage.History)(c) && (c.WasChecked == true || c.Bench.History.Reads.Items.Contains("files"))),
+        On(["Files", "Files (Ctrl+4)"], "show the Files page with the nest's files and read the deleted ones",
+            c => c.WasChecked == true ? MainOf(c).Page is MainPage.Files or MainPage.History // already on it (maybe on its Deleted tab)
+                : OnPage(MainPage.Files)(c) && MainOf(c).FilesPane.Rows.Count > 0 && c.Bench.History.Reads.Items.Contains("files")),
         On(["Computers", "Computers (Ctrl+5)"], "show the Computers page and ask the server for its computers",
             c => OnPage(MainPage.Devices)(c) && (c.WasChecked == true || Called("RefreshDevices")(c))),
         new(t => t.Label.StartsWith("Needs you", StringComparison.Ordinal), "show the Needs attention page", OnPage(MainPage.Attention)),
@@ -759,7 +865,7 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
 
         // History.
         On("Deleted files", "list the deleted files", c => ((MainWindow)c.Window).HistoryPane.DeletedTab.IsChecked == true && ListShows((MainWindow)c.Window, f => f.Deleted)),
-        On("All files", "list the current files", c => ((MainWindow)c.Window).HistoryPane.FilesTab.IsChecked == true && ListShows((MainWindow)c.Window, f => !f.Deleted)),
+        On("Older versions", "list the current files", c => ((MainWindow)c.Window).HistoryPane.FilesTab.IsChecked == true && ListShows((MainWindow)c.Window, f => !f.Deleted)),
         new(t => t.Element.Name == "SearchInput", $"list only what matches \"{Presser.TypedText}\"",
             c => c.Window is MainWindow { Page: MainPage.Activity } activity
                 ? ShownItems(activity).Any() && ShownItems(activity).All(i => ActivityView.Matches(i, Presser.TypedText))
@@ -776,7 +882,7 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
 
     // ------------------------------------------------------------------ Settings
 
-    private Window SettingsHost(Bench b, bool ownKey)
+    private Window SettingsHost(Bench b, bool ownKey, bool canMove = false)
     {
         b.Updates = new UpdateService(new UpdateChecker(new HttpClient(), fixture.Feed.DownloadBase, fixture.Feed.ReleasePage, FakeReleaseFeed.SigningKey),
             PairnetsInfo.ProductVersion, UpdateChecker.AssetForThisPlatform());
@@ -789,7 +895,8 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
             Folder = b.Dir,
             FirstRunCompleted = true,
         };
-        var view = new SettingsView(settings, b.Secrets, b.Updates, "Nest " + PairnetsInfo.ProductVersion);
+        var view = new SettingsView(settings, b.Secrets, b.Updates, "Nest " + PairnetsInfo.ProductVersion, new FakeNestFiles());
+        view.OpenFilesRequested += () => b.Events.Add("OpenFilesRequested");
         view.Saved += _ => b.Events.Add("Saved");
         view.Cancelled += () => b.Events.Add("Cancelled");
         view.ResetRequested += () => b.Events.Add("ResetRequested");
@@ -797,6 +904,9 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
         view.SwitchesChanged += _ => b.Events.Add("SwitchesChanged");
         view.ReportBugRequested += () => b.Events.Add("ReportBugRequested");
         view.OpenLinkRequested += b.Opened.Add;
+        view.ChangeStorageRequested += () => b.Events.Add("ChangeStorageRequested");
+        if (canMove)
+            view.ShowNestStorage(SampleStorage());
         var host = new Window { Title = "Settings", Width = 700, Height = 560, Content = view };
         ThemeManager.Attach(host);
         return host;
@@ -805,8 +915,9 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
     private IEnumerable<Screen> SettingsScreens()
     {
         // "Save anyway" when the connection test does not like the shared token.
-        yield return new Screen("Settings", "signed in with this computer's own key", b => SettingsHost(b, ownKey: true), Answers: s => s.AgreeToEverything());
+        yield return new Screen("Settings", "signed in with this computer's own key", b => SettingsHost(b, ownKey: true), Answers: AnswerTheFilesPage);
         yield return new Screen("Settings", "on the shared token (address and token shown)", b => SettingsHost(b, ownKey: false), Answers: s => s.AgreeToEverything());
+        yield return new Screen("Settings", "a nest that can move its files", b => SettingsHost(b, ownKey: true, canMove: true), Answers: s => s.AgreeToEverything());
     }
 
     private static SettingsView View(Check c) => (SettingsView)c.Window.Content;
@@ -819,11 +930,15 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
         On("Advanced: nest address and key", "show the nest address and key", c => View(c).AddressFields.IsVisible),
         On("Test connection", "test the connection and show the result",
             c => View(c).TestResult.Text is { Length: > 0 } text && !text.StartsWith("Testing", StringComparison.Ordinal), seconds: 20),
+        new(t => t.Handlers.Contains("SettingsView.OnChangeStorage"), "ask the app to show where the nest keeps its files",
+            c => c.Bench.Events.Items.Contains("ChangeStorageRequested")),
         On("Change…", "let you choose the folder and show it", c => View(c).FolderBox.Text == c.Bench.Script.Folder),
         new(t => t.Element is Expander, "open the files-to-ignore section", c => ((Expander)c.Target.Element).IsExpanded != c.WasChecked),
         On("Check now", "look for an app update and say what it found", c => View(c).VersionText.Text.Contains("is available", StringComparison.Ordinal), seconds: 20),
         new(t => t.Element is RadioButton { GroupName: "par" }, "choose that many files at the same time", c => ((RadioButton)c.Target.Element).IsChecked == true),
-        new(t => t.Element is RadioButton { GroupName: "cloud" }, "choose how the folder works in Explorer (saved with Save)", c => ((RadioButton)c.Target.Element).IsChecked == true),
+        new(t => t.Element is RadioButton { GroupName: { } g } && g.StartsWith("placement:", StringComparison.Ordinal), "ask first, then choose where that folder lives (applied at once)",
+            c => View(c).PlacementChosen(((RadioButton)c.Target.Element).GroupName["placement:".Length..]) == PlacementNamed(c.Target.Label)),
+        On("Choose for a folder inside these… (opens Files)", "ask the app for the Files page", c => c.Bench.Events.Items.Contains("OpenFilesRequested")),
         On("Reset this app…", "ask the app to reset everything", c => c.Bench.Events.Items.Contains("ResetRequested")),
         new(t => t.Handlers.Contains("SettingsView.OnAboutLink"),"ask the app to open that page of pairnets.app in the browser",
             c => c.Target.Element is Button { CommandParameter: string url } && url.StartsWith(PairnetsLinks.Website, StringComparison.Ordinal)
@@ -980,6 +1095,60 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
             c => ((ServerUpdateWindow)c.Window) is { ResultPanel.IsVisible: true } u && u.Explanation.Text.Contains("Not connected", StringComparison.Ordinal)),
         On(["Copy command", "Copy"], "copy the install command", c => c.Bench.Script.Copied.Items.Contains(((ServerUpdateWindow)c.Window).CommandText.Text)),
         On("Copy details", "copy the details", c => c.Bench.Script.Copied.Count == 1),
+    ];
+
+    // ------------------------------------------------------------------ where the nest keeps its files
+
+    /// <summary>The nest's drives as its root helper lists them: the main disk (in use), a data drive, and a stick it can't use.</summary>
+    private static NestStorage SampleStorage(StorageMoveStatus? status = null, string current = "/var/lib/pairnets") =>
+        new(true, current, "/var/lib/pairnets", current == "/var/lib/pairnets", false, 3_960_000_000_000, 4_400_000_000_000,
+        [
+            new("/", "Main disk", "ext4", 120_000_000_000, 250_000_000_000, "/var/lib/pairnets", null, true),
+            new("/mnt/data", "data", "ext4", 4_000_000_000_000, 4_400_000_000_000, "/mnt/data/pairnets"),
+            new("/media/stick", "STICK", "vfat", 1_000_000_000, 2_000_000_000, "/media/stick/pairnets", "this drive has no Linux file permissions (vfat); format it as ext4 to use it"),
+        ], DateTimeOffset.UtcNow, status);
+
+    private static Screen NestPlace(string state, Action<NestPlaceFlow> arrange) =>
+        new("the nest's drives window", state, _ => new NestPlaceWindow(null, SampleStorage()), (_, w) => Wpf.Ui(() =>
+        {
+            var window = (NestPlaceWindow)w;
+            arrange(window.Flow);
+            window.Render();
+        }));
+
+    private static IEnumerable<Screen> NestPlaceScreens()
+    {
+        yield return NestPlace("the drives", _ => { });
+        yield return NestPlace("sure?", f => f.Choose("/mnt/data/pairnets"));
+        yield return NestPlace("moving", f =>
+        {
+            f.Choose("/mnt/data/pairnets");
+            f.Asking();
+            f.Seen(SampleStorage(new StorageMoveStatus(StorageMoveStatus.Running, 40, "Copying your files to the new drive")));
+        });
+        yield return NestPlace("moved", f =>
+        {
+            f.Choose("/mnt/data/pairnets");
+            f.Asking();
+            f.Seen(SampleStorage(new StorageMoveStatus(StorageMoveStatus.Succeeded, 100, "Done.", "/var/lib/pairnets-before-move-x"), "/mnt/data/pairnets"));
+        });
+        yield return NestPlace("not moved", f =>
+        {
+            f.Choose("/mnt/data/pairnets");
+            f.Asking();
+            f.Seen(SampleStorage(new StorageMoveStatus(StorageMoveStatus.Failed, 0, "That drive can't be used: it is read-only. Nothing was changed.")));
+        });
+    }
+
+    private static readonly IReadOnlyList<Rule> NestPlaceRules =
+    [
+        Closes,
+        new(t => t.Handlers.Contains("NestPlaceWindow.OnPick"), "ask about moving the files to that drive",
+            c => ((NestPlaceWindow)c.Window) is { ConfirmPanel.IsVisible: true } p && p.Explanation.Text.Contains("/mnt/data/pairnets", StringComparison.Ordinal)),
+        On(["Back", "Try again"], "show the drives again", c => ((NestPlaceWindow)c.Window).ListPanel.IsVisible),
+        On("Move the files", "ask the nest to move the files and show how it went",
+            c => ((NestPlaceWindow)c.Window) is { ResultPanel.IsVisible: true } p && p.Explanation.Text.Contains("Not connected", StringComparison.Ordinal)),
+        On("Copy", "copy the command that deletes the old copy", c => c.Bench.Script.Copied.Items.Contains("sudo rm -rf '/var/lib/pairnets-before-move-x'")),
     ];
 
     // ------------------------------------------------------------------ the bug report window

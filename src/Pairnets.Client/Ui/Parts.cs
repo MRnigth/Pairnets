@@ -14,6 +14,12 @@ public interface IPageHost
     void Navigate(MainPage page);
 
     void ShowVersionsFor(string path);
+
+    /// <summary>Opens "Clean up your nest" on the Files page.</summary>
+    void ShowCleanup();
+
+    /// <summary>The "Your nest is full" pop-up.</summary>
+    void ShowNestFull();
 }
 
 /// <summary>

@@ -7,6 +7,9 @@ public enum ApiOutcome
     CaseCollision,
     InvalidName,
     NotFound,
+
+    /// <summary>The nest is too old for this (it has no such address): update the nest.</summary>
+    NotSupported,
 }
 
 /// <summary>Outcome of an upload or delete.</summary>

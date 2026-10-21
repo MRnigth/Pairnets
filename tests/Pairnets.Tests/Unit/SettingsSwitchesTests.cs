@@ -1,5 +1,6 @@
 using Pairnets.Core.Client;
 using Pairnets.Core.Settings;
+using Pairnets.Core.Sync;
 
 namespace Pairnets.Tests.Unit;
 
@@ -94,5 +95,36 @@ public class SettingsSwitchesTests
         next = SettingsSwitches.WithSwitchesFrom(before, page);
         Assert.Equal(CloudFolderMode.OnDemand, next.CloudFolder);
         Assert.True(SettingsSwitches.NeedsNewSession(before, next)); // the engine connects to the cloud folder at its start
+    }
+
+    [Fact]
+    public void TheRightClickSwitchAndWhereFilesLiveApplyAtOnce()
+    {
+        var before = Saved();
+        var page = Saved();
+        page.ExplorerRightClick = false;
+        var next = SettingsSwitches.WithSwitchesFrom(before, page);
+        Assert.False(next.ExplorerRightClick);
+        Assert.True(SettingsSwitches.FileManagerChanged(before, next));
+        Assert.False(SettingsSwitches.NeedsNewSession(before, next));
+
+        page.Placement["Photos"] = FilePlacement.NestOnly;
+        next = SettingsSwitches.WithSwitchesFrom(before, page);
+        Assert.Equal(FilePlacement.NestOnly, next.Placement["Photos"]);
+        Assert.NotSame(page.Placement, next.Placement);
+        Assert.True(SettingsSwitches.PlacementChanged(before, next));
+        Assert.True(SettingsSwitches.NeedsNewSession(before, next)); // the engine reads the placement at its start
+
+        var same = WithPlacement(("Photos", FilePlacement.NestOnly));
+        Assert.False(SettingsSwitches.PlacementChanged(next, same));
+        Assert.True(SettingsSwitches.PlacementChanged(next, WithPlacement(("Photos", FilePlacement.OnThisPc))));
+        Assert.True(SettingsSwitches.PlacementChanged(next, WithPlacement(("Videos", FilePlacement.NestOnly))));
+    }
+
+    private static ClientSettings WithPlacement((string Folder, FilePlacement Choice) choice)
+    {
+        var settings = Saved();
+        settings.Placement[choice.Folder] = choice.Choice;
+        return settings;
     }
 }

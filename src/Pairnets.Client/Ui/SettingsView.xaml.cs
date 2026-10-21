@@ -42,9 +42,17 @@ public partial class SettingsView : UserControl
     /// <summary>The window this form is in, as the owner of its dialogs.</summary>
     private Window? Owner => Window.GetWindow(this);
 
-    public SettingsView(ClientSettings current, ISecretProtector protector, UpdateService? updates = null, string? serverVersionText = null)
+    /// <summary>"Where your files live" as chosen on this page (saved with the rest).</summary>
+    private readonly Dictionary<string, FilePlacement> _placement;
+
+    /// <summary>The nest's files (the folders to choose for); null when not connected.</summary>
+    private readonly INestFiles? _files;
+
+    public SettingsView(ClientSettings current, ISecretProtector protector, UpdateService? updates = null, string? serverVersionText = null, INestFiles? files = null)
     {
         _updates = updates;
+        _files = files;
+        _placement = new Dictionary<string, FilePlacement>(current.Placement, StringComparer.Ordinal);
         InitializeComponent();
         _original = current;
         _protector = protector;
@@ -71,7 +79,9 @@ public partial class SettingsView : UserControl
         IgnoreBox.Text = string.Join(Environment.NewLine, current.ExtraIgnore);
         AutoStartBox.IsChecked = current.StartWithWindows;
         ExplorerBox.IsChecked = current.ShowInFileManager;
-        (current.CloudFolder switch { CloudFolderMode.KeepAllHere => CloudKeep, CloudFolderMode.OnDemand => CloudOnDemand, _ => CloudOff }).IsChecked = true;
+        RightClickBox.IsChecked = current.ExplorerRightClick;
+        TicksBox.IsChecked = current.CloudFolder != CloudFolderMode.Off;
+        DrawPlacement();
         UpdateBox.IsChecked = current.CheckForUpdates;
         WaitBox.IsChecked = current.WaitForPeerBatches;
         MapSpeedBox.IsChecked = current.ShowMapSpeed;
@@ -109,12 +119,12 @@ public partial class SettingsView : UserControl
 
     private void WireSwitches()
     {
-        foreach (var box in new[] { AutoStartBox, UpdateBox, WaitBox, MapSpeedBox, AutoServerBox, DebugBox, UpLimitBox, DownLimitBox, ExplorerBox })
+        foreach (var box in new[] { AutoStartBox, UpdateBox, WaitBox, MapSpeedBox, AutoServerBox, DebugBox, UpLimitBox, DownLimitBox, ExplorerBox, RightClickBox, TicksBox })
         {
             box.Checked += OnSwitchChanged;
             box.Unchecked += OnSwitchChanged;
         }
-        foreach (var choice in new[] { Par1, Par2, Par4, Par8, CloudOff, CloudKeep, CloudOnDemand })
+        foreach (var choice in new[] { Par1, Par2, Par4, Par8 })
             choice.Checked += OnSwitchChanged;
         // A speed limit's number applies when it is left (or Enter): a number it cannot read waits for Save, which says why.
         foreach (var value in new[] { UpLimitValue, DownLimitValue })
@@ -139,7 +149,8 @@ public partial class SettingsView : UserControl
         && a.WaitForPeerBatches == (WaitBox.IsChecked == true) && a.ShowMapSpeed == (MapSpeedBox.IsChecked == true) && a.AutoUpdateServer == (AutoServerBox.IsChecked == true)
         && a.DebugMode == (DebugBox.IsChecked == true) && a.EffectiveParallelTransfers == ParallelChoice()
         && (a.UploadLimitMBps is not null) == (UpLimitBox.IsChecked == true) && (a.DownloadLimitMBps is not null) == (DownLimitBox.IsChecked == true)
-        && a.ShowInFileManager == (ExplorerBox.IsChecked == true) && a.CloudFolder == CloudChoice();
+        && a.ShowInFileManager == (ExplorerBox.IsChecked == true) && a.ExplorerRightClick == (RightClickBox.IsChecked == true)
+        && a.CloudFolder == CloudChoice() && !SettingsSwitches.PlacementChanged(a, new ClientSettings { Placement = _placement });
 
     private void ApplySwitches()
     {
@@ -158,7 +169,9 @@ public partial class SettingsView : UserControl
         next.UploadLimitMBps = upLimit;
         next.DownloadLimitMBps = downLimit;
         next.ShowInFileManager = ExplorerBox.IsChecked == true;
+        next.ExplorerRightClick = RightClickBox.IsChecked == true;
         next.CloudFolder = CloudChoice();
+        next.Placement = new Dictionary<string, FilePlacement>(_placement, StringComparer.Ordinal);
         if (Same(next, _applied))
             return;
         _applied = next;
@@ -169,7 +182,7 @@ public partial class SettingsView : UserControl
         a.StartWithWindows == b.StartWithWindows && a.CheckForUpdates == b.CheckForUpdates && a.WaitForPeerBatches == b.WaitForPeerBatches
         && a.ShowMapSpeed == b.ShowMapSpeed && a.AutoUpdateServer == b.AutoUpdateServer && a.DebugMode == b.DebugMode
         && a.EffectiveParallelTransfers == b.EffectiveParallelTransfers && !SettingsSwitches.LimitsChanged(a, b)
-        && a.ShowInFileManager == b.ShowInFileManager && a.CloudFolder == b.CloudFolder;
+        && !SettingsSwitches.FileManagerChanged(a, b) && a.CloudFolder == b.CloudFolder && !SettingsSwitches.PlacementChanged(a, b);
 
     private static string FirstLetter(string text)
     {
@@ -212,8 +225,94 @@ public partial class SettingsView : UserControl
         CheckNowButton.IsEnabled = true;
     }
 
-    private CloudFolderMode CloudChoice() =>
-        CloudKeep.IsChecked == true ? CloudFolderMode.KeepAllHere : CloudOnDemand.IsChecked == true ? CloudFolderMode.OnDemand : CloudFolderMode.Off;
+    private CloudFolderMode CloudChoice() => TicksBox.IsChecked == true ? CloudFolderMode.KeepAllHere : CloudFolderMode.Off;
+
+    // ------------------------------------------------------------------ where your files live
+
+    /// <summary>The folders the card lists: "" (everything else), each top folder, and any folder with a choice of its own.</summary>
+    public IReadOnlyList<string> PlacementFolders =>
+        [string.Empty, .. (_files?.Folders() ?? []).Concat(_placement.Keys.Select(PlacementMap.NormalizeFolder).Where(k => k.Length > 0))
+            .Distinct(StringComparer.OrdinalIgnoreCase).Order(StringComparer.CurrentCultureIgnoreCase)];
+
+    /// <summary>Where <paramref name="folder"/>'s files live as chosen on this page so far.</summary>
+    public FilePlacement PlacementChosen(string folder) => new PlacementMap(_placement).For(folder);
+
+    /// <summary>The choices as Save will save them.</summary>
+    public IReadOnlyDictionary<string, FilePlacement> PlacementToSave => _placement;
+
+    private void DrawPlacement()
+    {
+        PlacementRows.Children.Clear();
+        PlacementRows.IsEnabled = _files is not null;
+        PlacementRows.Opacity = _files is null ? 0.55 : 1;
+        PlacementNote.Text = _files is null ? FilesPageText.SettingsOff : FilesPageText.SettingsText;
+        var tops = _files?.List(string.Empty) ?? [];
+        foreach (var folder in PlacementFolders)
+        {
+            var row = new Grid { Margin = new Thickness(0, 12, 0, 0) };
+            row.ColumnDefinitions.Add(new ColumnDefinition());
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            var words = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 12, 0) };
+            words.Children.Add(Parts.Text(folder.Length == 0 ? FilesPageText.EverythingElse : folder, 14, "T.Text", FontWeights.SemiBold));
+            var size = folder.Length == 0 ? FilesPageText.EverythingElseNote
+                : _files is null ? string.Empty
+                : FilesPageText.SizeLine(SizeOf(folder, tops), _files.BytesHere(folder));
+            words.Children.Add(Parts.Text(size, 12, "T.Muted"));
+            row.Children.Add(words);
+            var segments = new StackPanel { Orientation = Orientation.Horizontal };
+            var now = PlacementChosen(folder);
+            foreach (var choice in NestFiles.Choices)
+            {
+                var button = new RadioButton
+                {
+                    Content = new TextBlock { Text = NestFiles.PlacementText(choice), Margin = new Thickness(12, 0, 12, 0) },
+                    Style = (Style)FindResource("PgSeg"),
+                    GroupName = "placement:" + folder,
+                    Width = double.NaN,
+                    IsChecked = choice == now,
+                };
+                System.Windows.Automation.AutomationProperties.SetName(button, $"{(folder.Length == 0 ? FilesPageText.EverythingElse : folder)}: {NestFiles.PlacementText(choice)}");
+                button.Checked += (_, _) => Dispatcher.BeginInvoke(() => ChoosePlacement(folder, choice));
+                segments.Children.Add(button);
+            }
+            var frame = new Border
+            {
+                CornerRadius = new CornerRadius(11), Padding = new Thickness(2), BorderThickness = new Thickness(1),
+                VerticalAlignment = VerticalAlignment.Center, Child = segments,
+            };
+            frame.SetResourceReference(Border.BackgroundProperty, "T.Chip");
+            frame.SetResourceReference(Border.BorderBrushProperty, "T.Border");
+            Grid.SetColumn(frame, 1);
+            row.Children.Add(frame);
+            PlacementRows.Children.Add(row);
+        }
+    }
+
+    private static long SizeOf(string folder, IReadOnlyList<NestEntry> tops)
+    {
+        if (tops.FirstOrDefault(e => e.IsFolder && e.Path == folder) is { } top)
+            return top.Size;
+        return 0;
+    }
+
+    /// <summary>A choice in the card: asked first when files leave this PC, then applied at once like the switches.</summary>
+    public void ChoosePlacement(string folder, FilePlacement choice)
+    {
+        var now = PlacementChosen(folder);
+        if (now == choice)
+            return;
+        if (Dialogs.ConfirmAway(Owner, folder, now, choice, _files?.BytesHere(folder) ?? 0))
+        {
+            PlacementMap.Choose(_placement, folder, choice);
+            ApplySwitches();
+        }
+        DrawPlacement(); // also puts the choice back when the person said no
+    }
+
+    /// <summary>"Choose for a folder inside these…": the Files page.</summary>
+    public event Action? OpenFilesRequested;
+
+    private void OnPlacementLink(object sender, RoutedEventArgs e) => OpenFilesRequested?.Invoke();
 
     private int ParallelChoice() => Par1.IsChecked == true ? 1 : Par2.IsChecked == true ? 2 : Par8.IsChecked == true ? 8 : 4;
 
@@ -364,7 +463,9 @@ public partial class SettingsView : UserControl
                 ExtraIgnore = SplitPatterns(),
                 StartWithWindows = AutoStartBox.IsChecked == true,
                 ShowInFileManager = ExplorerBox.IsChecked == true,
+                ExplorerRightClick = RightClickBox.IsChecked == true,
                 CloudFolder = CloudChoice(),
+                Placement = new Dictionary<string, FilePlacement>(_placement, StringComparer.Ordinal),
                 FirstRunCompleted = true,
                 Paused = _original.Paused,
                 SideFolded = _original.SideFolded,
@@ -433,6 +534,25 @@ public partial class SettingsView : UserControl
         if (sender is Button { CommandParameter: string url })
             OpenLinkRequested?.Invoke(url);
     }
+
+    /// <summary>"Change…" next to where the nest keeps its files: the controller opens the window with the nest's drives.</summary>
+    public event Action? ChangeStorageRequested;
+
+    private void OnChangeStorage(object sender, RoutedEventArgs e) => ChangeStorageRequested?.Invoke();
+
+    /// <summary>
+    /// The "Where your nest keeps files" row: "/mnt/data/pairnets · 3.60 TB free" with "Change…", shown only when the nest
+    /// can move its files (null or an older nest: hidden).
+    /// </summary>
+    public void ShowNestStorage(NestStorage? storage)
+    {
+        var shown = storage is { CanMove: true };
+        StoragePanel.Visibility = shown ? Visibility.Visible : Visibility.Collapsed;
+        StorageText.Text = shown ? NestPlaceFlow.PlaceLine(storage!) : string.Empty;
+    }
+
+    /// <summary>The row's line as shown (tests), or null while it is hidden.</summary>
+    internal string? StorageLine => StoragePanel.Visibility == Visibility.Visible ? StorageText.Text : null;
 
     private void OnShowAddress(object sender, RoutedEventArgs e)
     {

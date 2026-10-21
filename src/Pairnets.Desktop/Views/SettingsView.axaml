@@ -70,6 +70,18 @@
                     </Border>
                   </Grid>
                 </StackPanel>
+                <!-- Where the nest keeps its files (only when the nest can move them: a Linux nest with the helper) -->
+                <StackPanel x:Name="StoragePanel" IsVisible="False" Spacing="14">
+                  <Border Classes="hair" />
+                  <Grid ColumnDefinitions="*,Auto">
+                    <StackPanel Spacing="2" VerticalAlignment="Center">
+                      <TextBlock Text="Where your nest keeps files" FontWeight="SemiBold" TextWrapping="Wrap" />
+                      <TextBlock x:Name="StorageText" Classes="t3" TextTrimming="CharacterEllipsis" />
+                    </StackPanel>
+                    <Button x:Name="StorageButton" Grid.Column="1" Classes="chipbtn" Margin="12,0,0,0" VerticalAlignment="Center" Content="Change…"
+                            Click="OnChangeStorage" AutomationProperties.Name="Change where your nest keeps files" />
+                  </Grid>
+                </StackPanel>
               </StackPanel>
             </Border>
 
@@ -96,6 +108,20 @@
                   <TextBox x:Name="DeviceBox" Classes="field" Height="38" MinHeight="38" CornerRadius="11" FontWeight="SemiBold" MaxLength="64" />
                   <TextBlock Classes="t3" TextWrapping="Wrap" Text="Shown on your other computers, in conflict file names and on your account page at pairnets.app, where you can change it too." />
                 </StackPanel>
+                <!-- Linux only: where the app itself is (install-desktop.sh puts it in ~/.local/opt/pairnets) -->
+                <StackPanel x:Name="ProgramPanel" IsVisible="False" Spacing="6">
+                  <TextBlock FontSize="13" FontWeight="Bold" Text="Program folder" />
+                  <Grid ColumnDefinitions="*,Auto">
+                    <TextBox x:Name="ProgramText" Classes="field" Height="38" MinHeight="38" CornerRadius="11" IsReadOnly="True">
+                      <TextBox.InnerLeftContent>
+                        <v:LineIcon Classes="icon" Stroke="{DynamicResource T.Folder}" Width="16" Height="16" Margin="12,0,0,0" Data="{StaticResource I.Folder}" />
+                      </TextBox.InnerLeftContent>
+                    </TextBox>
+                    <Button x:Name="ProgramButton" Grid.Column="1" Classes="chipbtn" Height="38" Margin="8,0,0,0" Content="Move…" Click="OnMoveProgram"
+                            AutomationProperties.Name="Move the Pairnets program folder" />
+                  </Grid>
+                  <TextBlock Classes="t3" TextWrapping="Wrap" Text="Where the Pairnets app itself is. Your synced files are not in it." />
+                </StackPanel>
                 <Border Classes="hair" />
                 <Grid ColumnDefinitions="*,Auto">
                   <TextBlock Text="Start Pairnets when I log in" FontWeight="SemiBold" VerticalAlignment="Center" />
@@ -105,9 +131,24 @@
                   <StackPanel Spacing="2" VerticalAlignment="Center">
                     <TextBlock x:Name="FileManagerTitle" Text="Show Pairnets in the file manager" FontWeight="SemiBold" />
                     <TextBlock x:Name="FileManagerText" Classes="t3" TextWrapping="Wrap"
-                               Text="In the sidebar, with right-click items and a Pairnets folder icon. Your files are not changed." />
+                               Text="In the sidebar, with a Pairnets folder icon. Your files are not changed." />
                   </StackPanel>
                   <ToggleSwitch x:Name="FileManagerBox" Grid.Column="1" Classes="bare" OnContent="Show Pairnets in the file manager" OffContent="Show Pairnets in the file manager" />
+                </Grid>
+                <Grid x:Name="RightClickRow" ColumnDefinitions="*,Auto">
+                  <StackPanel Spacing="2" VerticalAlignment="Center">
+                    <TextBlock Text="Add Pairnets to the right-click menu" FontWeight="SemiBold" />
+                    <TextBlock Classes="t3" TextWrapping="Wrap"
+                               Text="Open in Pairnets, Show sync status and Where this folder lives…, only inside your Pairnets folder." />
+                  </StackPanel>
+                  <ToggleSwitch x:Name="RightClickBox" Grid.Column="1" Classes="bare" OnContent="Add Pairnets to the right-click menu" OffContent="Add Pairnets to the right-click menu" />
+                </Grid>
+                <Grid x:Name="TicksRow" ColumnDefinitions="*,Auto">
+                  <StackPanel Spacing="2" VerticalAlignment="Center">
+                    <TextBlock Text="Show sync ticks in File Explorer" FontWeight="SemiBold" />
+                    <TextBlock Classes="t3" TextWrapping="Wrap" Text="A tick, sync arrows or a cloud on every file, like OneDrive. Windows only." />
+                  </StackPanel>
+                  <ToggleSwitch x:Name="TicksBox" Grid.Column="1" Classes="bare" OnContent="Show sync ticks in File Explorer" OffContent="Show sync ticks in File Explorer" />
                 </Grid>
               </StackPanel>
             </Border>
@@ -237,6 +278,21 @@
           </StackPanel>
         </Grid>
 
+        <!-- Where your files live: each top folder on this computer or only on the nest (applied at once, like the switches) -->
+        <Border x:Name="PlacementCard" Classes="pcard" Padding="20,16">
+          <StackPanel Spacing="8">
+            <Grid ColumnDefinitions="Auto,*,Auto">
+              <v:LineIcon Classes="icon ink-soft" Width="17" Height="17" Margin="0,0,8,0" Data="{StaticResource I.Cloud}" VerticalAlignment="Center" />
+              <TextBlock Grid.Column="1" Classes="stitle" Text="Where your files live" VerticalAlignment="Center" />
+              <TextBlock Grid.Column="2" Classes="t3" VerticalAlignment="Center" TextWrapping="Wrap" Text="This computer only · your other computers choose for themselves" />
+            </Grid>
+            <TextBlock x:Name="PlacementNote" Classes="t3" FontSize="13" TextWrapping="Wrap"
+                       Text="Keep big folders on your nest to free space here. Pairnets only removes a file from this computer once it is safely on your nest." />
+            <StackPanel x:Name="PlacementRows" Spacing="12" />
+            <Button Classes="link" HorizontalAlignment="Left" Margin="0,4,0,0" Content="Choose for a folder inside these… (opens Files)" Click="OnPlacementLink" />
+          </StackPanel>
+        </Border>
+
         <!-- Help -->
         <Border Classes="pcard">
           <Grid x:Name="HelpGrid" ColumnDefinitions="*,*">
@@ -264,21 +320,21 @@
         </Border>
 
         <!-- Start over -->
-        <Border x:Name="StartOverCard" Classes="pcard dangercard" Padding="20,18">
+        <Border x:Name="StartOverCard" Classes="pcard dangercard" Padding="20,12">
           <Grid ColumnDefinitions="Auto,*,Auto">
-            <Border Classes="sq44 tint-bad" Margin="0,0,16,0" VerticalAlignment="Center">
-              <v:LineIcon Classes="icon ink-bad" Width="22" Height="22" StrokeThickness="1.9" Data="{StaticResource I.Restore}" />
+            <Border Classes="sq34 tint-bad" Margin="0,0,12,0" VerticalAlignment="Center">
+              <v:LineIcon Classes="icon ink-bad" Width="17" Height="17" StrokeThickness="2" Data="{StaticResource I.Restore}" />
             </Border>
-            <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
-              <TextBlock Classes="stitle" Text="Start over" />
-              <TextBlock Classes="t2" FontSize="13" TextWrapping="Wrap"
-                         Text="Forgets every setting and signs this computer out of your nest, then opens the sign-in screen so you can set it up again." />
-              <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,4,0,0">
-                <v:LineIcon Classes="icon ink-ok" Width="13" Height="13" StrokeThickness="2.6" Data="{StaticResource I.Check}" VerticalAlignment="Center" />
-                <TextBlock x:Name="StartOverNote" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource T.OkText}" TextWrapping="Wrap" />
+            <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
+              <TextBlock Text="Start over" FontWeight="Bold" />
+              <TextBlock Classes="t3" TextTrimming="CharacterEllipsis"
+                         Text="Forgets every setting and signs this computer out, then opens the sign-in screen." />
+              <StackPanel Orientation="Horizontal" Spacing="5" Margin="0,2,0,0">
+                <v:LineIcon Classes="icon ink-ok" Width="11" Height="11" StrokeThickness="2.6" Data="{StaticResource I.Check}" VerticalAlignment="Center" />
+                <TextBlock x:Name="StartOverNote" FontSize="11.5" FontWeight="SemiBold" Foreground="{DynamicResource T.OkText}" TextTrimming="CharacterEllipsis" />
               </StackPanel>
             </StackPanel>
-            <Button x:Name="ResetButton" Grid.Column="2" Classes="reset" Height="38" Padding="16,0" Margin="16,0,0,0" VerticalAlignment="Center" Content="Reset this app…" Click="OnReset" />
+            <Button x:Name="ResetButton" Grid.Column="2" Classes="reset" Height="32" FontSize="12.5" Padding="12,0" Margin="12,0,0,0" VerticalAlignment="Center" Content="Reset this app…" Click="OnReset" />
           </Grid>
         </Border>
 

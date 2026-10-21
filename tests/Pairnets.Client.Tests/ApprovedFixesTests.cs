@@ -72,8 +72,8 @@ public sealed class ApprovedFixesTests
         {
             window.ShowStatus(Status(RunnerStatus.Idle), @"D:\Sync");
             window.ShowActivity([new ActivityItem(DateTimeOffset.Now.AddMinutes(-3), ActivityKind.Uploaded, "Notes/a.md", "Uploaded")]); // the search box shows once something synced
-            Assert.True(window.Run(ShortcutAction.PageHistory));
-            Assert.Equal(MainPage.History, window.Page);
+            Assert.True(window.Run(ShortcutAction.PageFiles));
+            Assert.Equal(MainPage.Files, window.Page);
             Assert.True(window.Run(ShortcutAction.PageActivity));
             Assert.Equal(MainPage.Activity, window.Page);
             Assert.True(window.Run(ShortcutAction.Search)); // Activity has a search box
