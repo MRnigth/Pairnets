@@ -24,6 +24,7 @@ import {
 } from "../sessions";
 import { deleteAccountRows } from "../accounts";
 import { inviteLink, peopleOf, sharedNestsOf } from "./friends";
+import { linksOfAccount } from "./links";
 import { serversOf } from "./servers";
 
 /** Nests per account, both kinds together (pending ones count), unless wrangler.toml's MAX_NESTS_PER_ACCOUNT says otherwise. */
@@ -193,6 +194,7 @@ export async function accountPageRoute(ctx: Ctx): Promise<Response> {
       email: account.email,
       username: account.username,
       nestCount: await nestCount(ctx, s.accountId),
+      links: await linksOfAccount(ctx, s.accountId),
       servers: servers.map((n, i) => ({ id: n.id, label: n.label, status: n.status === "active" ? "active" : "pending", people: people[i] })),
       nests: view,
       shared: shared.map((x) => ({

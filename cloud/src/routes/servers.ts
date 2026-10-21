@@ -469,6 +469,7 @@ export async function removeServerRoute(ctx: Ctx, nestId: string): Promise<Respo
     db.prepare("UPDATE nests SET status = 'broken' WHERE id = ?1 AND account_id = ?2").bind(n.id, s.accountId),
     db.prepare("DELETE FROM nest_members WHERE nest_id = ?1").bind(n.id),
     db.prepare("DELETE FROM nest_invites WHERE nest_id = ?1").bind(n.id),
+    db.prepare("DELETE FROM nest_links WHERE from_nest = ?1 OR to_nest = ?1").bind(n.id),
   ]);
   await audit(ctx, "server_removed", s.accountId, n.id);
   const account = await ctx.env.DB.prepare("SELECT email FROM accounts WHERE id = ?1").bind(s.accountId).first<{ email: string }>();

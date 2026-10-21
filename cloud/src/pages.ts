@@ -100,6 +100,8 @@ export interface AccountView {
   email: string;
   /** The username the owner chose, or null (then the part of the email before the @ is shown). */
   username: string | null;
+  /** Linked nests from and to this account's nests (links.ts). */
+  links?: { outgoing: LinkView[]; incoming: LinkView[] };
   /** The account's own nests (both kinds, pending included) and how many it may have. */
   nestCount: { used: number; max: number };
   servers: ServerView[];
@@ -184,8 +186,12 @@ function inviteForm(n: ServerView, open: { folders: string[] | null; access: "vi
   const chosen = !!open?.folders;
   const edit = open?.access === "edit";
   return `<form class="invite-form" data-field="invite-form"${open ? " data-open" : " hidden"}>
-<h3>Invite a friend to ${e(n.label)}</h3>
+<h3>Invite to ${e(n.label)}</h3>
 <p class="muted">They sign in with their own Pairnets account. You can change or take back access any time.</p>
+<fieldset><legend>Who are you inviting?</legend>
+<label class="choice"><input type="radio" name="kind-${id}" value="person" checked> <span><strong>A person</strong> <span class="muted">They add your nest on the computers they choose.</span></span></label>
+<label class="choice"><input type="radio" name="kind-${id}" value="nest"> <span><strong>A friend's nest</strong> <span class="muted">Their nest keeps a copy and hands it to all of their computers. Not for an encrypted nest.</span></span></label>
+</fieldset>
 <fieldset><legend>What they get</legend>
 <label class="choice"><input type="radio" name="what-${id}" value="whole"${chosen ? "" : " checked"}> The whole nest</label>
 <label class="choice"><input type="radio" name="what-${id}" value="folders" data-field="chosen"${chosen ? " checked" : ""}> Chosen folders</label>
@@ -243,6 +249,41 @@ function peopleSection(n: ServerView, invite: AccountView["invite"]): string {
 <p class="notice" data-field="friends-note" hidden></p>
 ${rows.length ? `<ul class="list people-list">\n${rows.join("\n")}\n</ul>` : ""}
 ${inviteForm(n, open)}
+</section>`;
+}
+
+export interface LinkView {
+  id: string;
+  status: "pending" | "active";
+  from: { nestId: string; nest: string; owner: string };
+  to: { nestId: string; nest: string; owner: string };
+  access: "view" | "edit";
+  folders: string[] | null;
+  createdAt: string;
+}
+
+/** "Linked nests": links from this account's nests to friends' nests, and from friends' nests to its own; each can be ended. */
+function linksSection(links: { outgoing: LinkView[]; incoming: LinkView[] } | undefined): string {
+  const all = [...(links?.outgoing ?? []).map((l) => ({ l, out: true })), ...(links?.incoming ?? []).map((l) => ({ l, out: false }))];
+  if (!all.length) return "";
+  const rows = all
+    .map(({ l, out }) => {
+      const what = `${l.folders ? l.folders.join(", ") : "Whole nest"} · ${l.access === "view" ? "view only" : "can change"}`;
+      const title = out ? `${l.from.nest} → ${l.to.owner}'s ${l.to.nest}` : `${l.from.owner}'s ${l.from.nest} → your ${l.to.nest}`;
+      const state = l.status === "pending" ? " · waiting for both nests to be on" : "";
+      return `<li data-link="${e(l.id)}">
+<div class="row"><strong>${e(title)}</strong></div>
+<div class="muted">${e(what + state)}${out ? "" : ` · in the folder "From ${e(l.from.owner)} – ${e(l.from.nest)}"`}</div>
+<div class="actions"><button type="button" class="danger" data-action="unlink">Unlink</button></div>
+</li>`;
+    })
+    .join("\n");
+  return `<section class="card" id="links">
+<h2>Linked nests</h2>
+<ul class="list" id="links-list">
+${rows}
+</ul>
+<p class="muted">A linked nest keeps a copy of the shared folders and hands it to its own computers. If either of you unlinks, the copy stays where it is and stops changing.</p>
 </section>`;
 }
 
@@ -336,6 +377,7 @@ ${
 }
 <p class="muted">To add a nest: on the Linux computer that will keep your files, run <code>curl -fsSL https://pairnets.app/get.sh | sudo bash</code>. It shows a link and a code: open the link and choose Add this nest. Then, on each computer, install Pairnets and choose Continue with email (or Google) with this account.</p>
 </section>
+${linksSection(v.links)}
 ${sharedSection(v.shared ?? [])}
 <details class="card"${v.nests.length ? " open" : ""}>
 <summary>Nests on their own address</summary>
@@ -631,10 +673,17 @@ export interface InvitePageView {
   /** Who is signed in: their name (what the owner will see) and email. */
   me: string;
   myEmail: string;
+  /** 'nest': the invite is for one of the friend's nests (links.ts), which they pick from `myNests`. */
+  kind: "person" | "nest";
+  myNests: { id: string; label: string }[];
 }
 
 /** How to add a shared nest on a computer: the steps on the waiting and "You're in" screens. */
 function addNestSteps(v: InvitePageView): string {
+  if (v.kind === "nest") {
+    return `<p class="q-lead">Nothing to do on your computers: the folder <b>From ${e(v.owner)} – ${e(v.nest)}</b> shows up on your nest by itself, and from there on all of its computers.</p>
+<div class="q-actions"><a class="q-btn q-ghost" href="/account">Go to your account</a></div>`;
+  }
   return `<ol class="q-steps">
 <li>Open Pairnets and choose <b>Add a nest</b> (in Settings, or the list on the left).</li>
 <li>Sign in as <b>${e(v.myEmail)}</b> and pick <b>${e(v.nest)} · shared by ${e(v.owner)}</b>.</li>
@@ -644,7 +693,36 @@ function addNestSteps(v: InvitePageView): string {
 <p class="q-close">No Pairnets yet? <a href="https://pairnets.app/">Download it</a></p>`;
 }
 
+/** An invite for a nest: "Which of your nests should join?" (links.ts). */
+function nestAskScreen(v: InvitePageView): string {
+  const owner = e(v.owner);
+  const what = v.folders ? `<b>${e(v.folders.join(", "))}</b>` : "<b>the whole nest</b>";
+  const can = v.access === "view" ? "view only" : "can change";
+  const choices = v.myNests.length
+    ? `<fieldset class="q-nests"><legend>Which of your nests should join?</legend>
+<div class="q-choices">
+${v.myNests.map((n, i) => `<label class="q-choice"><input type="radio" name="joining" value="${e(n.id)}"${i === 0 ? " checked" : ""}> ${e(n.label)}</label>`).join("\n")}
+</div>
+</fieldset>`
+    : `<p class="q-note"><b>You don't have a nest of your own yet.</b> Set one up first, then open this link again. Or ask ${owner} to invite you as a person instead.</p>`;
+  return screen(
+    "ask",
+    true,
+    `<p class="q-from">An invite from ${owner} · ${e(v.ownerEmail)}</p>
+<h1 id="screen-ask-title" tabindex="-1">Link one of your nests with ${e(v.nest)}?</h1>
+<p class="q-lead">You get ${what} · ${can}. It shows up as a folder on the nest you pick, called <b>From ${owner} – ${e(v.nest)}</b>, and on all of its computers.</p>
+${choices}
+<p class="q-error" id="invite-error" role="alert" hidden></p>
+<div class="q-actions">
+<button type="button" class="q-btn q-primary" id="ask"${v.myNests.length ? "" : " disabled"}>Ask to link</button>
+<button type="button" class="q-btn q-ghost" id="no-thanks">No thanks</button>
+</div>
+<p class="q-fine">${owner} sees your name (${e(v.me)}), your email and the name of the nest you pick, never its other folders. An encrypted nest can't be linked. Either of you can unlink any time; the copy stays.</p>`,
+  );
+}
+
 function inviteAskScreen(v: InvitePageView): string {
+  if (v.kind === "nest") return nestAskScreen(v);
   const owner = e(v.owner);
   const what = v.folders ? `these folders from their nest` : `their whole nest`;
   const them = v.folders && v.folders.length === 1 ? "it" : "them";

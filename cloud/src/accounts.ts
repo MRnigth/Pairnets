@@ -24,6 +24,7 @@ export async function deleteAccountRows(ctx: Ctx, id: string, email: string): Pr
     db.prepare("DELETE FROM nest_invites WHERE created_by = ?1 OR requested_by = ?1 OR nest_id IN (SELECT id FROM nests WHERE account_id = ?1)").bind(id),
     db.prepare("DELETE FROM nest_members WHERE nest_id IN (SELECT id FROM nests WHERE account_id = ?1)").bind(id),
     db.prepare("UPDATE nest_members SET removed_at = COALESCE(removed_at, ?2), synced = 0 WHERE account_id = ?1").bind(id, ctx.now),
+    db.prepare("DELETE FROM nest_links WHERE account_id = ?1 OR from_nest IN (SELECT id FROM nests WHERE account_id = ?1)").bind(id),
     db.prepare("DELETE FROM sessions WHERE account_id = ?1").bind(id),
     db.prepare("DELETE FROM identities WHERE account_id = ?1").bind(id),
     db.prepare("DELETE FROM nests WHERE account_id = ?1").bind(id),

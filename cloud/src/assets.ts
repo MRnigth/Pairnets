@@ -410,6 +410,8 @@ const ACCOUNT_JS = String.raw`(function () {
     error.hidden = true;
     var body = shareOf(form, "what-" + id, "access-" + id);
     if (typeof body === "string") { error.textContent = body; error.hidden = false; return; }
+    var kind = form.querySelector("input[name='kind-" + id + "']:checked");
+    if (kind) body.kind = kind.value;
     var email = form.querySelector("input[name=email]").value.trim();
     if (withEmail) {
       if (!email) { error.textContent = "Type their email, or use Copy invite link."; error.hidden = false; return; }
@@ -576,6 +578,18 @@ const ACCOUNT_JS = String.raw`(function () {
   // Opened from an app's "Invite a friend" (/account?invite=…): that nest's form is open; bring it into view.
   var asked = document.querySelector("form.invite-form[data-open]");
   if (asked) asked.scrollIntoView({ block: "center" });
+  var linked = document.getElementById("links-list");
+  if (linked) linked.addEventListener("click", function (ev) {
+    var b = ev.target.closest("button[data-action=unlink]");
+    if (!b) return;
+    var li = b.closest("[data-link]");
+    if (!confirm("Unlink " + li.querySelector("strong").textContent + "? The copy stays where it is and stops changing.")) return;
+    b.disabled = true;
+    pnApi("DELETE", "/v1/links/" + li.getAttribute("data-link")).then(function (res) {
+      b.disabled = false;
+      if (ok(res)) location.reload();
+    });
+  });
   var shared = document.getElementById("shared-list");
   if (shared) shared.addEventListener("click", function (ev) {
     var b = ev.target.closest("button[data-action=leave]");
@@ -926,7 +940,10 @@ const INVITE_JS = String.raw`(function () {
     ask.disabled = true;
     no.disabled = true;
     error.hidden = true;
-    pnApi("POST", "/v1/invite/request", { t: token }).then(function (res) {
+    var picked = document.querySelector('input[name="joining"]:checked');
+    var body = { t: token };
+    if (picked) body.nestId = picked.value;
+    pnApi("POST", "/v1/invite/request", body).then(function (res) {
       var err = res.body && res.body.error;
       if (err === "unauthorized") { location.href = "/login?next=" + encodeURIComponent(here()); return; }
       // Let in already (asked from another tab, and the owner was quick): the page says so.
