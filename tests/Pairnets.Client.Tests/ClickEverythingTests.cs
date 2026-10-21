@@ -1051,10 +1051,12 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
         const string name = "the invite window";
         static Window Build(Bench b)
         {
-            Directory.CreateDirectory(Path.Combine(b.Dir, "Photos"));
-            File.WriteAllText(Path.Combine(b.Dir, "Photos", "trip.jpg"), "photo");
-            Directory.CreateDirectory(Path.Combine(b.Dir, "School"));
-            return new InviteWindow("Home nest", FriendsNest, b.Dir, sealedNest: false, b.Opened.Add);
+            // A nest folder of its own: the bench's folder also holds the dialogs' "Chosen" folder.
+            var nest = Path.Combine(b.Dir, "Nest");
+            Directory.CreateDirectory(Path.Combine(nest, "Photos"));
+            File.WriteAllText(Path.Combine(nest, "Photos", "trip.jpg"), "photo");
+            Directory.CreateDirectory(Path.Combine(nest, "School"));
+            return new InviteWindow("Home nest", FriendsNest, nest, sealedNest: false, b.Opened.Add);
         }
         yield return new Screen(name, "the whole nest, view only", Build, (_, w) => Wpf.WaitUntil(() => ((InviteWindow)w).FoldersLoaded, "the folders"));
         yield return new Screen(name, "chosen folders", Build, async (_, w) =>
