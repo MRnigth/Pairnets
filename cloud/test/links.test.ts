@@ -138,6 +138,29 @@ describe("linked nests", () => {
     expect((await b.call("GET", `/v1/servers/${nest.nestId}/people`)).json.members).toHaveLength(0);
   });
 
+  it("two people who invite each other's whole nest: the second link is refused when it is let in, so nothing goes round", async () => {
+    const { b, ownerId, nest, anna, annaId, annaNest } = await setup();
+    const whole = { kind: "nest", access: "view", folders: null };
+    // Both invites are made and asked for before either is let in, so the check when inviting finds nothing yet.
+    const mine = await inviteNest(b, nest, whole);
+    const hers = await anna.call("POST", `/v1/servers/${annaNest.nestId}/invites`, { body: whole });
+    expect(hers.status, hers.text).toBe(201);
+    expect((await anna.call("POST", "/v1/invite/request", { body: { t: tokenOf(mine.json.link), nestId: annaNest.nestId } })).status).toBe(200);
+    expect((await b.call("POST", "/v1/invite/request", { body: { t: tokenOf(hers.json.link), nestId: nest.nestId } })).status).toBe(200);
+
+    const first = await b.call("POST", `/v1/servers/${nest.nestId}/invites/${mine.json.id}/approve`);
+    expect(first.json.link.status).toBe("active");
+    expect(annaNest.linkedIn).toEqual(["From Jonas Lund – Home nest"]);
+
+    const second = await anna.call("POST", `/v1/servers/${annaNest.nestId}/invites/${hers.json.id}/approve`);
+    expect(second.status, second.text).toBe(200);
+    expect(nest.links.size).toBe(0); // the owner's nest never starts copying Anna's nest back
+    expect([...annaNest.devices.values()].filter((d) => d.personId === ownerId)).toHaveLength(0);
+    expect((await anna.call("GET", "/v1/links")).json.outgoing).toHaveLength(0);
+    expect((await b.call("GET", "/v1/links")).json.outgoing).toHaveLength(1); // the first link stays
+    expect([...nest.devices.values()].filter((d) => d.personId === annaId)).toHaveLength(1);
+  });
+
   it("changing what is shared reaches the link; removing Anna ends it on both nests", async () => {
     const { b, nest, anna, annaId, annaNest } = await setup();
     await link(b, nest, anna, annaNest);

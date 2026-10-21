@@ -476,6 +476,9 @@ export class FakeNestServer {
       if (this.sealed) return jsonResp(409, { error: "sealed" });
       if ([...this.links.values()].filter((l) => l.id !== b.id && l.key).length >= 4) return jsonResp(409, { error: "link_limit" });
       this.links.set(b.id, { ...b, folders: b.folders ?? null });
+      // Like the real nest: the link's folder now came in through a link (LinkStore.LinkedInFolders).
+      const folder = `From ${b.ownerName} – ${b.nestName}`;
+      if (!this.linkedIn.includes(folder)) this.linkedIn.push(folder);
       return jsonResp(200, view(this.links.get(b.id)!));
     }
     const one = /^\/api\/relay\/links\/([^/]+)$/.exec(p);

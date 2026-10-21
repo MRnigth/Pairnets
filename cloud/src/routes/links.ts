@@ -92,10 +92,15 @@ export async function checkNestInvite(ctx: Ctx, n: AdminTarget, folders: string[
     throw e;
   }
   if (linkedIn === null) throw new HttpError(409, "nest_too_old", "Update your nest first. Linked nests need its newest version.");
-  const passedOn = linkedIn.filter((f) => folders === null || folders.some((x) => x.toLowerCase() === f.toLowerCase()));
+  const passedOn = sharedOn(linkedIn, folders);
   if (passedOn.length > 0) {
     throw new HttpError(400, "linked_in", `${passedOn.join(", ")} came from another nest, so it can't be shared on. Choose your own folders.`);
   }
+}
+
+/** Of the folders that came in through links, those a share of `folders` (null = the whole nest) would pass on. */
+function sharedOn(linkedIn: string[], folders: string[] | null): string[] {
+  return linkedIn.filter((f) => folders === null || folders.some((x) => x.toLowerCase() === f.toLowerCase()));
 }
 
 /** The friend's nests that could join (the invite page's choice): their own relayed nests, not the inviting one. */
@@ -148,6 +153,14 @@ export async function deliverLink(ctx: Ctx, link: LinkRow): Promise<boolean> {
     const f = await nestFriendFeatures(ctx, to);
     if (f.sealed) {
       await audit(ctx, "link_refused_sealed", link.account_id, to.id);
+      await removeMemberOf(ctx, from, link.account_id);
+      return true;
+    }
+    // Checked again here, not only when inviting: two people who invite each other's whole nest before either is let in
+    // would otherwise each copy the other nest into their own, round and round until a disk is full.
+    const linkedIn = await linkedInFolders(ctx, from);
+    if (linkedIn !== null && sharedOn(linkedIn, parseFolders(member.folders)).length > 0) {
+      await audit(ctx, "link_refused_linked_in", link.account_id, from.id, { to: to.id });
       await removeMemberOf(ctx, from, link.account_id);
       return true;
     }
