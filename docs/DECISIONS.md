@@ -1356,3 +1356,7 @@ Inno's progress window (`/SILENT`).
   text, so the shared `Input` frame (which also sets the content's margin from Padding) put the email 92 px in, far
   right of the envelope. The sign-in boxes (`BigInput`) got their own frame. No other box has the gap: the search box and
   the Settings boxes use `PgInput`, whose frame does not add the padding again, and nothing else uses `Input` itself.
+* **Version: 1.0.60.1, from tag `v1.0.60.1`, like 1.0.59.1.** The apps, 1.0.52's frozen updater and update.sh's
+  `sort -V` all put 1.0.60 < 1.0.60.1 < 1.0.61 (test rows in `OldUpdaterCompatTests` and `UpdateScriptTests`), the
+  app calls itself by all four numbers, and the tag's release job passes `--latest`. The next main build
+  (1.0.<run>, 61 or more) is newer.

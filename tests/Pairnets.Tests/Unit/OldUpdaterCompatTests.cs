@@ -152,6 +152,9 @@ public class OldUpdaterCompatTests
     [InlineData("1.0.59", "1.0.59.1", false)]
     [InlineData("1.0.59.2", "1.0.59.1", true)]
     [InlineData("1.0.59.10", "1.0.59.9", true)]
+    [InlineData("1.0.60.1", "1.0.60", true)]   // the quick fix (tag v1.0.60.1) after 1.0.60
+    [InlineData("1.0.61", "1.0.60.1", true)]
+    [InlineData("1.0.60", "1.0.60.1", false)]
     public void QuickFixVersions_CompareAsNumbers_InTodaysAppsAndIn1_0_52(string candidate, string current, bool newer)
     {
         Assert.Equal(newer, UpdateChecker.IsNewer(candidate, current));
@@ -170,6 +173,9 @@ public class OldUpdaterCompatTests
         Assert.False(UpdateChecker.ServerIsOlder("1.0.59.1", "1.0.59.1"));
         Assert.True(UpdateChecker.ServerIsOlder("1.0.59", "1.0.59.1"));
         Assert.False(UpdateChecker.ServerIsOlder("1.0.60", "1.0.59.1"));
+        Assert.Equal("1.0.60.1", PairnetsInfo.FormatVersion(Version.Parse("1.0.60.1")));
+        Assert.True(UpdateChecker.ServerIsOlder("1.0.60", "1.0.60.1"));
+        Assert.False(UpdateChecker.ServerIsOlder("1.0.60.1", "1.0.60.1"));
     }
 
     [Fact]
