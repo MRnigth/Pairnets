@@ -1341,3 +1341,22 @@ Inno's progress window (`/SILENT`).
   `AppUpdate_TheNewVersion_StaysSignedIn_KeepsEverySetting_AndOnlySaysItWasUpdated` (a whole update in the Windows
   app's harness, then the new version starting on the same files).
 * **Smaller "Start over" card** in Settings (asked the same day): the size of the Report a bug row, both apps.
+
+## 1.0.60.1: a quick fix after 1.0.60 (2026-10-21)
+
+`release/1.0.60.1` is the released 1.0.60 (d42a4b4) with two display fixes merged in.
+
+* **The Overview map is balanced.** This computer's line and each other computer's line are the same length
+  (110-230 px, or what their pill or word needs), and the picture sits in the middle of its card. A name shows up to
+  150 px before it ends in "…" (84 px, as before, when the window is narrow), with the full name in its tooltip. The other
+  computers' word ("in sync", "next", "off since …") sits on their line like this computer's; with a speed pill or a ✕ on
+  the line, it follows the name instead. In a narrow window the curve from the nest gets shorter (down to 32 px) before
+  the whole picture is shrunk.
+* **The sign-in boxes count their padding once (Windows).** A WPF text box keeps its own Padding around its
+  text, so the shared `Input` frame (which also sets the content's margin from Padding) put the email 92 px in, far
+  right of the envelope. The sign-in boxes (`BigInput`) got their own frame. No other box has the gap: the search box and
+  the Settings boxes use `PgInput`, whose frame does not add the padding again, and nothing else uses `Input` itself.
+* **Version: 1.0.60.1, from tag `v1.0.60.1`, like 1.0.59.1.** The apps, 1.0.52's frozen updater and update.sh's
+  `sort -V` all put 1.0.60 < 1.0.60.1 < 1.0.61 (test rows in `OldUpdaterCompatTests` and `UpdateScriptTests`), the
+  app calls itself by all four numbers, and the tag's release job passes `--latest`. The next main build
+  (1.0.<run>, 61 or more) is newer.

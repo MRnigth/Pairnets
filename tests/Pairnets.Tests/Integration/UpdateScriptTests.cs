@@ -160,6 +160,9 @@ public class UpdateScriptTests : IDisposable
     [InlineData("1.0.59.1", "1.0.60", true)]   // the next normal release after it
     [InlineData("1.0.59.1", "1.0.59.1", false)]
     [InlineData("1.0.59.1", "1.0.59", false)]  // never back down
+    [InlineData("1.0.60", "1.0.60.1", true)]   // the quick fix after 1.0.60
+    [InlineData("1.0.60.1", "1.0.61", true)]
+    [InlineData("1.0.60.1", "1.0.60", false)]
     [InlineData("1.0.9", "1.0.10", true)]      // numbers, not letters
     public void FourPartVersions_AreComparedAsNumbers(string installed, string release, bool installs)
     {

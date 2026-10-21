@@ -22,10 +22,18 @@ public sealed class HubView : UserControl
     private const double Height168 = 168;
     private const int Slots = 5;
 
-    /// <summary>The fixed columns: this computer, the nest, and the others' side at its widest.</summary>
-    private const double ThisWidth = 138, NestWidth = 52, RightWidth = 96 + 334;
+    /// <summary>The nest's column, and how wide the curved start of each other computer's line is at most and at least.</summary>
+    private const double NestWidth = 52, Curve = 96, CurveMin = 32;
 
-    private readonly Grid _root = new() { Height = Height168 };
+    /// <summary>
+    /// A computer's name is drawn up to <see cref="NameMax"/> wide (<see cref="NameTight"/> when the window is narrow), then
+    /// ends in "…" (the full name is in its tooltip). Both lines are the same length, between <see cref="LineMin"/> (or what
+    /// their words need) and <see cref="LineMax"/>.
+    /// </summary>
+    private const double NameMax = 150, NameTight = 84, LineMin = 100, LineMax = 230;
+
+    private readonly Grid _root = new() { Height = Height168, HorizontalAlignment = HorizontalAlignment.Center };
+    private readonly StackPanel _thisStack = new() { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
     private readonly Border _thisIcon = new();
     private readonly LineIcon _thisGlyph = Icon(19, 1.8);
     private readonly Ellipse _thisDot = Dot(11);
@@ -42,10 +50,9 @@ public sealed class HubView : UserControl
     private readonly Ellipse _nestDot = Dot(12);
     private readonly TextBlock _nestTitle = new() { Text = "Your nest" };
     private readonly TextBlock _nestSub = new();
-    private readonly Canvas _right = new() { Width = RightWidth, Height = Height168 };
+    private readonly Canvas _right = new() { Height = Height168 };
     private readonly LayoutTransformControl _scaler = new();
     private readonly Slot[] _slots = new Slot[Slots];
-    private double _rightNeed = RightWidth;
     private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromMilliseconds(33) };
     private double _phase;
     private DateTime _last;
@@ -55,10 +62,10 @@ public sealed class HubView : UserControl
 
     public HubView()
     {
-        _root.ColumnDefinitions.Add(new ColumnDefinition(ThisWidth, GridUnitType.Pixel));
-        _root.ColumnDefinitions.Add(new ColumnDefinition(1, GridUnitType.Star) { MinWidth = 60 });
+        _root.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
+        _root.ColumnDefinitions.Add(new ColumnDefinition(LineMin, GridUnitType.Pixel));
         _root.ColumnDefinitions.Add(new ColumnDefinition(NestWidth, GridUnitType.Pixel));
-        _root.ColumnDefinitions.Add(new ColumnDefinition(RightWidth, GridUnitType.Pixel));
+        _root.ColumnDefinitions.Add(new ColumnDefinition(LineMin, GridUnitType.Pixel));
 
         BuildThis();
         BuildLine();
@@ -129,7 +136,7 @@ public sealed class HubView : UserControl
 
     private void BuildThis()
     {
-        var stack = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        var stack = _thisStack;
         _thisIcon.Width = _thisIcon.Height = 40;
         _thisIcon.CornerRadius = new CornerRadius(12);
         Paint(_thisIcon, Border.BackgroundProperty, "T.Chip");
@@ -146,9 +153,9 @@ public sealed class HubView : UserControl
         var texts = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
         _thisName.FontWeight = FontWeight.Bold;
         _thisName.TextTrimming = TextTrimming.CharacterEllipsis;
-        _thisName.MaxWidth = 84;
+        _thisName.MaxWidth = NameMax;
         Paint(_thisName, TextBlock.ForegroundProperty, "T.Text");
-        var sub = new TextBlock { Text = "This computer", FontSize = 12, TextTrimming = TextTrimming.CharacterEllipsis, MaxWidth = 84 };
+        var sub = new TextBlock { Text = "This computer", FontSize = 12, TextTrimming = TextTrimming.CharacterEllipsis, MaxWidth = NameMax };
         Paint(sub, TextBlock.ForegroundProperty, "T.TextSoft");
         texts.Children.Add(_thisName);
         texts.Children.Add(sub);
@@ -261,6 +268,7 @@ public sealed class HubView : UserControl
     {
         // This computer
         _thisName.Text = string.IsNullOrEmpty(thisName) ? "This computer" : thisName;
+        ToolTip.SetTip(_thisStack, _thisName.Text);
         _thisGlyph.Data = DeviceIconArt.For(m.This.Icon);
         Paint(_thisDot, Shape.FillProperty, DotKey(m.This.Dot));
         var line = m.This;
@@ -303,7 +311,6 @@ public sealed class HubView : UserControl
             else
                 _slots[i].Hide();
         }
-        _rightNeed = Math.Min(RightWidth, 96 + _slots.Max(s => s.Need()));
         InvalidateMeasure();
         UpdateTimer();
     }
@@ -315,14 +322,25 @@ public sealed class HubView : UserControl
 
     internal TextBlock ThisLabel => _thisLabel;
 
+    /// <summary>This computer's name, the word on the first other computer's line, and both lines' ends, for the checks.</summary>
+    internal TextBlock ThisName => _thisName;
+
+    internal TextBlock OtherLabel => _slots[0].Label;
+
+    internal Control ThisLineStart => _thisLeft;
+
+    internal Control OtherLineEnd => _slots[0].LineEnd;
+
+    internal Control OtherIcon => _slots[0].IconBox;
+
     /// <summary>How much the picture is shrunk to fit (1 when it fits as it is), for the checks.</summary>
     internal double Scale => _scaler.LayoutTransform is ScaleTransform t ? t.ScaleX : 1;
 
     /// <summary>
-    /// Fits the picture to the width it has. This computer's line always fits its speed pill or word (it used to be
-    /// squeezed to 60 px in a 980 px window, and the pill ran under the nest). When that leaves too little, the others'
-    /// side gives up its spare room first, down to what their names and words need; only then is the whole picture
-    /// shrunk, evenly, so nothing is cut off or drawn over anything else.
+    /// Fits the picture to the width it has. This computer's line and the other computers' lines are always the same
+    /// length, long enough for the widest speed pill or word on any of them (it used to be squeezed to 60 px in a 980 px
+    /// window, and the pill ran under the nest), and the picture sits in the middle of its card. When even the shortest
+    /// such lines do not fit, the whole picture is shrunk, evenly, so nothing is cut off or drawn over anything else.
     /// </summary>
     protected override Size MeasureOverride(Size availableSize)
     {
@@ -335,14 +353,30 @@ public sealed class HubView : UserControl
     {
         Control middle = _thisPill.IsVisible ? _thisPill : _thisLabel.IsVisible ? _thisLabel : _thisCross;
         middle.Measure(Size.Infinity);
-        var line = Math.Max(60, middle.DesiredSize.Width + _thisLine.Margin.Left + 24);
-        var right = Math.Clamp(width - ThisWidth - NestWidth - line, _rightNeed, RightWidth);
-        _root.ColumnDefinitions[1].MinWidth = line;
-        _root.ColumnDefinitions[3].Width = new GridLength(right, GridUnitType.Pixel);
-        _right.Width = right;
+        // The gap between this computer's name and its line; the others' icons keep the same gap from theirs.
+        var gap = _thisLine.Margin.Left;
+        var need = Math.Max(LineMin, Math.Max(middle.DesiredSize.Width + 24, _slots.Max(s => s.LineNeed())));
+        double thisWidth = 0, tail = 0, room = 0;
+        // Long names first give up width (down to what the map showed before), so the lines keep their words.
+        foreach (var nameMax in new[] { NameMax, NameTight })
+        {
+            _thisName.MaxWidth = nameMax;
+            foreach (var slot in _slots)
+                slot.NameMax = nameMax;
+            _thisStack.Measure(Size.Infinity);
+            thisWidth = _thisStack.DesiredSize.Width;
+            tail = _slots.Max(s => s.TailNeed());
+            room = (width - thisWidth - gap - NestWidth - tail) / 2;
+            if (room >= need)
+                break;
+        }
+        var line = Math.Clamp(room, need, Math.Max(need, LineMax));
+        _root.ColumnDefinitions[1].Width = new GridLength(gap + line, GridUnitType.Pixel);
+        _root.ColumnDefinitions[3].Width = new GridLength(line + tail, GridUnitType.Pixel);
+        _right.Width = line + tail;
         foreach (var slot in _slots)
-            slot.RowWidth = right - 96;
-        var natural = ThisWidth + line + NestWidth + right;
+            slot.Layout(line, tail);
+        var natural = thisWidth + gap + line + NestWidth + line + tail;
         var scale = Math.Min(1, width / natural);
         if (Math.Abs(scale - Scale) > 0.001)
             _scaler.LayoutTransform = scale < 1 ? new ScaleTransform(scale, scale) : null;
@@ -457,10 +491,11 @@ public sealed class HubView : UserControl
         private readonly Path _base = new() { StrokeLineCap = PenLineCap.Round };
         private readonly Path _flow = new() { StrokeLineCap = PenLineCap.Round, IsHitTestVisible = false };
         private int _direction = 1;
+        private double _endY = 84;
 
         public HubCurve()
         {
-            Width = 96;
+            Width = Curve;
             Height = Height168;
             IsHitTestVisible = false;
             Children.Add(_base);
@@ -474,10 +509,8 @@ public sealed class HubView : UserControl
         public void Apply(NestLineKind kind, double endY, int direction)
         {
             _direction = direction;
-            var data = Math.Abs(endY - 84) < 0.5
-                ? "M0 84 L96 84"
-                : FormattableString.Invariant($"M0 84 C48 84 48 {endY:0.##} 96 {endY:0.##}");
-            _base.Data = _flow.Data = Geometry.Parse(data);
+            _endY = endY;
+            Draw();
             var (brush, thickness, dashed) = LineStyle(kind);
             Paint(_base, Shape.StrokeProperty, brush);
             _base.StrokeThickness = thickness;
@@ -488,6 +521,24 @@ public sealed class HubView : UserControl
             _flow.StrokeDashArray = new AvaloniaList<double> { 3.2, 12 };
         }
 
+        /// <summary>Makes the curve this wide (narrower when the window is narrow, so the word on the line keeps its room).</summary>
+        public void Reach(double width)
+        {
+            if (Math.Abs(width - Width) < 0.01)
+                return;
+            Width = width;
+            Draw();
+        }
+
+        private void Draw()
+        {
+            var w = Width;
+            var data = Math.Abs(_endY - 84) < 0.5
+                ? FormattableString.Invariant($"M0 84 L{w:0.##} 84")
+                : FormattableString.Invariant($"M0 84 C{w / 2:0.##} 84 {w / 2:0.##} {_endY:0.##} {w:0.##} {_endY:0.##}");
+            _base.Data = _flow.Data = Geometry.Parse(data);
+        }
+
         public void Move(double phase) => _flow.StrokeDashOffset = -_direction * phase / (_flow.StrokeThickness <= 0 ? 1 : _flow.StrokeThickness);
     }
 
@@ -496,12 +547,14 @@ public sealed class HubView : UserControl
     {
         private readonly HubView _hub;
         private readonly HubCurve _curve = new();
-        private readonly Grid _row = new() { Width = 334, Height = 28 };
+        private readonly Grid _row = new() { Height = 28 };
+        private readonly Grid _seg = new();
         private readonly HubStroke _line1 = new();
         private readonly HubStroke _line2 = new();
         private readonly Border _pill = new();
         private readonly TextBlock _pillText = new();
         private readonly Border _cross = Cross();
+        private readonly TextBlock _label = new();
         private readonly Border _icon = new();
         private readonly LineIcon _glyph = Icon(14, 2);
         private readonly Ellipse _dot = Dot(9);
@@ -513,13 +566,15 @@ public sealed class HubView : UserControl
         public Slot(HubView hub)
         {
             _hub = hub;
-            _row.ColumnDefinitions.Add(new ColumnDefinition(104, GridUnitType.Pixel));
+            // [straight part of the line] [icon] [name] [status, when it is not on the line]
+            _row.ColumnDefinitions.Add(new ColumnDefinition(0, GridUnitType.Pixel));
             _row.ColumnDefinitions.Add(new ColumnDefinition(36, GridUnitType.Pixel));
-            _row.ColumnDefinitions.Add(new ColumnDefinition(1, GridUnitType.Star));
             _row.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
+            _row.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
+            _row.ColumnDefinitions.Add(new ColumnDefinition(1, GridUnitType.Star));
 
-            // The 104 px beside the curve: [pill] line [x] line.
-            var seg = new Grid { Width = 104 };
+            // The straight part after the curve: [pill] line [x or word] line.
+            var seg = _seg;
             seg.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
             seg.ColumnDefinitions.Add(new ColumnDefinition(1, GridUnitType.Star));
             seg.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
@@ -537,13 +592,21 @@ public sealed class HubView : UserControl
             Paint(_pillText, TextBlock.ForegroundProperty, "T.AccentInk");
             _pill.Child = _pillText;
             _cross.Margin = new Thickness(4, 0, 4, 0);
+            // The word on the line ("in sync"), drawn like the one on this computer's line.
+            _label.FontSize = 12;
+            _label.FontWeight = FontWeight.Bold;
+            _label.VerticalAlignment = VerticalAlignment.Center;
+            _label.Margin = new Thickness(6, 0, 6, 0);
+            var middle = new Grid { VerticalAlignment = VerticalAlignment.Center };
+            middle.Children.Add(_cross);
+            middle.Children.Add(_label);
             Grid.SetColumn(_pill, 0);
             Grid.SetColumn(_line1, 1);
-            Grid.SetColumn(_cross, 2);
+            Grid.SetColumn(middle, 2);
             Grid.SetColumn(_line2, 3);
             seg.Children.Add(_pill);
             seg.Children.Add(_line1);
-            seg.Children.Add(_cross);
+            seg.Children.Add(middle);
             seg.Children.Add(_line2);
             _row.Children.Add(seg);
 
@@ -580,7 +643,7 @@ public sealed class HubView : UserControl
             _moreButton.VerticalAlignment = VerticalAlignment.Center;
             _moreButton.Click += OnMoreComputers;
             Grid.SetColumn(_moreButton, 2);
-            Grid.SetColumnSpan(_moreButton, 2);
+            Grid.SetColumnSpan(_moreButton, 3);
             _row.Children.Add(_moreButton);
         }
 
@@ -592,25 +655,66 @@ public sealed class HubView : UserControl
 
         public string Text => _name.IsVisible ? $"{_name.Text}: {_status.Text}" : string.Empty;
 
-        public double RowWidth
+        public TextBlock Label => _label;
+
+        public Control LineEnd => _seg;
+
+        public Control IconBox => _icon;
+
+        /// <summary>The widest its name is drawn before it ends in "…".</summary>
+        public double NameMax
         {
-            set => _row.Width = Math.Max(0, value);
+            set => _name.MaxWidth = value + _name.Margin.Left + _name.Margin.Right;
         }
 
-        /// <summary>The width its row needs to show the name and the status in full (0 when it shows nothing).</summary>
-        public double Need()
+        /// <summary>
+        /// Gives the whole line (curve and straight part) and what follows it (icon, name, status) their widths. The curve
+        /// gets narrower, down to <see cref="CurveMin"/>, when the straight part would be too short for its pill or word.
+        /// </summary>
+        public void Layout(double line, double tail)
+        {
+            var curve = Math.Clamp(line - MiddleNeed(), CurveMin, Curve);
+            var straight = Math.Max(0, line - curve);
+            _curve.Reach(curve);
+            Canvas.SetLeft(_row, curve);
+            _seg.Width = straight;
+            _row.ColumnDefinitions[0].Width = new GridLength(straight, GridUnitType.Pixel);
+            _row.Width = straight + tail;
+        }
+
+        /// <summary>How long the whole line must be for its pill, word or ✕ to sit on the straight part (0 when it has none).</summary>
+        public double LineNeed()
+        {
+            var middle = MiddleNeed();
+            return middle > 0 ? CurveMin + middle : 0;
+        }
+
+        /// <summary>The room the pill, word or ✕ needs on the straight part, with a bit of line on each side (0 when it has none).</summary>
+        private double MiddleNeed()
         {
             if (!_row.IsVisible)
                 return 0;
-            var fixedPart = _row.ColumnDefinitions[0].Width.Value + _row.ColumnDefinitions[1].Width.Value;
+            Control? middle = _pill.IsVisible ? _pill : _label.IsVisible ? _label : _cross.IsVisible ? _cross : null;
+            if (middle is null)
+                return 0;
+            middle.Measure(Size.Infinity);
+            return middle.DesiredSize.Width + 16;
+        }
+
+        /// <summary>The width after the line: icon, name (trimmed past <see cref="NameMax"/>) and status, or "+N more" (0 when it shows nothing).</summary>
+        public double TailNeed()
+        {
+            if (!_row.IsVisible)
+                return 0;
+            var icon = _row.ColumnDefinitions[1].Width.Value;
             if (_moreButton.IsVisible)
             {
                 _moreButton.Measure(Size.Infinity);
-                return fixedPart + _moreButton.DesiredSize.Width;
+                return icon + _moreButton.DesiredSize.Width;
             }
             _name.Measure(Size.Infinity);
             _status.Measure(Size.Infinity);
-            return fixedPart + _name.DesiredSize.Width + _status.DesiredSize.Width;
+            return icon + _name.DesiredSize.Width + (_status.IsVisible ? _status.DesiredSize.Width : 0);
         }
 
         public void AddTo(Canvas canvas)
@@ -619,7 +723,7 @@ public sealed class HubView : UserControl
             Canvas.SetLeft(_curve, 0);
             Canvas.SetTop(_curve, 0);
             canvas.Children.Add(_row);
-            Canvas.SetLeft(_row, 96);
+            Canvas.SetLeft(_row, Curve);
         }
 
         public void Hide() => _curve.IsVisible = _row.IsVisible = false;
@@ -643,11 +747,18 @@ public sealed class HubView : UserControl
             _pill.IsVisible = o.HasPill && showSpeed;
             _pillText.Text = o.Speed ?? string.Empty;
             _cross.IsVisible = o.HasCross;
-            _line2.IsVisible = o.HasCross;
-            _segEnd.Width = o.HasCross ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
+            // As on this computer's line: the word sits on the line unless a pill or a ✕ is there; then it follows the name.
+            var onLine = !o.HasPill && !o.HasCross;
+            _label.IsVisible = onLine;
+            _label.Text = o.Status;
+            Paint(_label, TextBlock.ForegroundProperty, InkKey(o.Kind));
+            var split = o.HasCross || onLine;
+            _line2.IsVisible = split;
+            _segEnd.Width = split ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
 
             _moreButton.IsVisible = false;
-            _name.IsVisible = _status.IsVisible = true;
+            _name.IsVisible = true;
+            _status.IsVisible = !onLine;
             _name.Text = o.Name;
             Paint(_name, TextBlock.ForegroundProperty, o.Online ? "T.Text" : "T.Muted");
             _status.Text = o.Status;
@@ -666,7 +777,7 @@ public sealed class HubView : UserControl
             Canvas.SetTop(_row, y - 14);
             _curve.Apply(NestLineKind.Next, y, 1);
             _line1.Apply(NestLineKind.Next, 1);
-            _pill.IsVisible = _cross.IsVisible = _line2.IsVisible = false;
+            _pill.IsVisible = _cross.IsVisible = _label.IsVisible = _line2.IsVisible = false;
             _segEnd.Width = new GridLength(0);
             _icon.IsVisible = false;
             _name.IsVisible = _status.IsVisible = false;

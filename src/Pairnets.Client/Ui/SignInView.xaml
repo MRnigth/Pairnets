@@ -51,6 +51,23 @@
       <Setter Property="FontSize" Value="15" />
       <Setter Property="FontWeight" Value="SemiBold" />
       <Setter Property="Padding" Value="46,0,16,0" />
+      <!-- The text box already keeps its Padding around the text, so the frame must not add it again: with "Input"'s
+           frame the text started 92 px in, far right of the envelope and of the "Enter your email" hint. -->
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="TextBox">
+            <Border x:Name="bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                    BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="12">
+              <ScrollViewer x:Name="PART_ContentHost" VerticalAlignment="Center" />
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsKeyboardFocused" Value="True">
+                <Setter TargetName="bd" Property="BorderBrush" Value="{DynamicResource T.Accent}" />
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
     </Style>
     <!-- A white card row: soft icon circle, two lines, and optionally something on the right -->
     <Style x:Key="RowCard" TargetType="Border">
