@@ -241,6 +241,28 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
         return await ReadJsonAsync<DeviceMe>(resp, timeout, ct).ConfigureAwait(false);
     }
 
+    /// <summary>The folders of this nest linked with another nest, or null for a nest from before linked nests.</summary>
+    public async Task<IReadOnlyList<LinkedFolder>?> GetLinkedFoldersAsync(CancellationToken ct)
+    {
+        using var timeout = Linked(ct, TimeSpan.FromSeconds(30));
+        using var resp = await SendAsync(() => new HttpRequestMessage(HttpMethod.Get, "api/links"), HttpCompletionOption.ResponseContentRead, timeout, ct).ConfigureAwait(false);
+        if ((int)resp.StatusCode is 404 or 405)
+            return null;
+        await ThrowForStatusAsync(resp).ConfigureAwait(false);
+        return (await ReadJsonAsync<LinkedFolderList>(resp, timeout, ct).ConfigureAwait(false))?.Links;
+    }
+
+    /// <summary>The nests shared with this nest's owner's account, or null for a nest from before shared nests.</summary>
+    public async Task<IReadOnlyList<SharedNestOffer>?> GetSharedNestOffersAsync(CancellationToken ct)
+    {
+        using var timeout = Linked(ct, TimeSpan.FromSeconds(30));
+        using var resp = await SendAsync(() => new HttpRequestMessage(HttpMethod.Get, "api/offers"), HttpCompletionOption.ResponseContentRead, timeout, ct).ConfigureAwait(false);
+        if ((int)resp.StatusCode is 404 or 405)
+            return null;
+        await ThrowForStatusAsync(resp).ConfigureAwait(false);
+        return (await ReadJsonAsync<SharedNestOfferList>(resp, timeout, ct).ConfigureAwait(false))?.Offers;
+    }
+
     /// <summary>Removes a computer from the nest (this one too: "Sign out of this computer"). False when it was already gone.</summary>
     public async Task<bool> RemoveDeviceAsync(string id, CancellationToken ct)
     {

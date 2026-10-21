@@ -782,6 +782,15 @@ public sealed class TrayController : ITrayActions, IDisposable
     }
 
     /// <summary>Either answer to the name offer: it is not offered again.</summary>
+    /// <summary>Shared nests answered "Not now" while the app runs; they are offered again at the next start.</summary>
+    private readonly HashSet<string> _notNow = new(StringComparer.Ordinal);
+
+    private void NotNow(string nestId)
+    {
+        _notNow.Add(nestId);
+        _dirty = true;
+    }
+
     private void AnswerNameOffer()
     {
         var nest = Nest;
@@ -943,6 +952,12 @@ public sealed class TrayController : ITrayActions, IDisposable
         if (NameOffer.For(Nest, ComputerName.Default()) is { } offer)
             items.Add(new AttentionItem(offer.Title, offer.Detail, offer.UseLabel, () => UseOwnName(offer), AttentionKind.Rename,
                 SecondLabel: offer.KeepLabel, Second: AnswerNameOffer));
+        foreach (var n in LinkNotices.Build(status, _runs.Select(r => Relay.NestId(r.Settings.ServerUrl) ?? r.Id), _notNow, DateTimeOffset.UtcNow))
+        {
+            items.Add(n.Kind == AttentionKind.Shared
+                ? new AttentionItem(n.Title, n.Detail, n.ActionLabel, AddNest, n.Kind, SecondLabel: LinkNotice.NotNowLabel, Second: () => NotNow(n.NestId!))
+                : new AttentionItem(n.Title, n.Detail, n.ActionLabel, () => RevealFile(n.Folder!), n.Kind));
+        }
         foreach (var join in status.JoinRequests)
         {
             items.Add(new AttentionItem(join.Title, join.Advice,

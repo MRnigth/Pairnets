@@ -854,13 +854,17 @@
                     <Border Classes="pcard enter" Padding="22,18">
                       <Grid ColumnDefinitions="Auto,*">
                         <Border Classes="sq44" Margin="0,0,16,0" VerticalAlignment="Top"
-                                Classes.tint-accent="{Binding Kind, Converter={x:Static v:KindIs.Instance}, ConverterParameter='Join,Rename'}"
-                                Classes.tint-warn="{Binding Kind, Converter={x:Static v:KindIs.Instance}, ConverterParameter='Conflict,Warning'}">
+                                Classes.tint-accent="{Binding Kind, Converter={x:Static v:KindIs.Instance}, ConverterParameter='Join,Rename,Shared'}"
+                                Classes.tint-warn="{Binding Kind, Converter={x:Static v:KindIs.Instance}, ConverterParameter='Conflict,Warning,Linked'}">
                           <Panel>
                             <v:LineIcon Classes="icon ink-accent" Width="22" Height="22" StrokeThickness="1.9" Data="{StaticResource I.JoinPc}"
                                         IsVisible="{Binding Kind, Converter={x:Static v:KindIs.Instance}, ConverterParameter='Join'}" />
                             <v:LineIcon Classes="icon ink-accent" Width="22" Height="22" StrokeThickness="1.9" Data="{StaticResource I.Pencil}"
                                         IsVisible="{Binding Kind, Converter={x:Static v:KindIs.Instance}, ConverterParameter='Rename'}" />
+                            <v:LineIcon Classes="icon ink-accent" Width="22" Height="22" StrokeThickness="1.9" Data="{StaticResource I.Nest}"
+                                        IsVisible="{Binding Kind, Converter={x:Static v:KindIs.Instance}, ConverterParameter='Shared'}" />
+                            <v:LineIcon Classes="icon ink-warn" Width="22" Height="22" StrokeThickness="1.9" Data="{StaticResource I.Nest}"
+                                        IsVisible="{Binding Kind, Converter={x:Static v:KindIs.Instance}, ConverterParameter='Linked'}" />
 
                             <v:LineIcon Classes="icon ink-warn" Width="22" Height="22" StrokeThickness="1.9" Data="{StaticResource I.Copy}"
                                         IsVisible="{Binding Kind, Converter={x:Static v:KindIs.Instance}, ConverterParameter='Conflict'}" />
@@ -888,7 +892,7 @@
                             <Button Grid.Column="2" Content="{Binding SecondLabel}" Height="38" Padding="16,0" Margin="0,0,8,0" FontWeight="Bold" VerticalAlignment="Center"
                                     IsVisible="{Binding SecondLabel, Converter={x:Static v:HasText.Instance}}" Click="OnAttentionSecond" Tag="{Binding}" />
                             <Button Grid.Column="3" Content="{Binding ActionLabel}" Height="38" Padding="16,0" FontWeight="Bold" VerticalAlignment="Center" HorizontalAlignment="Right"
-                                    Classes.accent="{Binding Kind, Converter={x:Static v:KindIs.Instance}, ConverterParameter='Join,Rename'}"
+                                    Classes.accent="{Binding Kind, Converter={x:Static v:KindIs.Instance}, ConverterParameter='Join,Rename,Shared'}"
                                     Click="OnAttentionAction" Tag="{Binding}" />
                           </Grid>
                         </StackPanel>
