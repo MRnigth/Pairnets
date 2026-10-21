@@ -54,9 +54,9 @@ public partial class SendCrashWindow : Window
         {
             problem = await _send(NoteBox.Text);
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            problem = "Couldn't send: " + ex.Message;
+            problem = "Couldn't send it. Try again later.";
         }
         if (problem is null)
         {

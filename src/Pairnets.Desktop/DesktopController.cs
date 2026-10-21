@@ -530,7 +530,10 @@ public sealed class DesktopController : ITrayActions, IDisposable
         if (_session?.Status is not { } status || PeopleSection.From(status) is not { Visible: true, NestId: { } nestId } people)
             return;
         var window = new InviteWindow(status.NestTitle, nestId, Nest.Folder, people.Sealed, _platform.Open);
-        window.Show();
+        if (_window is { IsVisible: true })
+            window.Show(_window); // on top of the app, as on Windows
+        else
+            window.Show();
         window.Activate();
     }
 
@@ -547,8 +550,8 @@ public sealed class DesktopController : ITrayActions, IDisposable
 
     /// <summary>
     /// "Sign out of this computer": removes its key on the nest (best effort), stops syncing, forgets the key,
-    /// and offers to sign in again. The files in the folder stay. With several nests this is "Leave this nest on this
-    /// PC" (<see cref="LeaveNest"/>): only the picked nest goes, the others keep syncing.
+    /// and offers to sign in again. The files in the folder stay. With several nests this is "Stop syncing this nest
+    /// here" (<see cref="LeaveNest"/>): only the picked nest goes, the others keep syncing.
     /// </summary>
     public async void SignOut()
     {
@@ -600,7 +603,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
     }
 
     /// <summary>
-    /// "Leave this nest on this PC": this computer is signed out of the picked nest (its key there is removed), stops
+    /// "Stop syncing this nest here": this computer is signed out of the picked nest (its key there is removed), stops
     /// syncing it and forgets it; the files in its folder stay. The other nests keep syncing. With one nest left this is
     /// the plain sign-out.
     /// </summary>
@@ -618,9 +621,9 @@ public sealed class DesktopController : ITrayActions, IDisposable
         {
             var nest = run.Settings;
             var title = NestNames.Title(nest, _settings, run.Session?.Status);
-            if (!await Dialogs.ConfirmAsync(_window, "Pairnets – leave " + title,
-                    $"Leave {title} on this computer?\n\nThis computer stops syncing {title} and is signed out of it. Your files in {nest.Folder} stay here and on the nest. Your other nests keep syncing.",
-                    "Leave", "Cancel"))
+            if (!await Dialogs.ConfirmAsync(_window, "Pairnets – stop syncing " + title,
+                    $"Stop syncing {title} on this computer?\n\nThis computer is signed out of {title}. Your files in {nest.Folder} stay here and on the nest. Your other nests keep syncing.",
+                    "Stop syncing", "Cancel"))
                 return;
             var removed = await SignOutOnNestAsync(run);
             StopNest(run);
@@ -639,7 +642,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
             _selected = null;
             StartAll();
             if (!removed)
-                await Dialogs.InfoAsync(_window, "Pairnets", $"{title} was left here, but the nest could not be told. " + Relay.RemoveByHandHint(nest.ServerUrl));
+                await Dialogs.InfoAsync(_window, "Pairnets", $"{title} stopped syncing here, but the nest could not be told. " + Relay.RemoveByHandHint(nest.ServerUrl));
             _window?.Navigate(MainPage.Overview);
         }
         finally
@@ -679,7 +682,10 @@ public sealed class DesktopController : ITrayActions, IDisposable
             UpdateFileManagerEntry();
             ShowMainWindow();
         };
-        window.Show();
+        if (_window is { IsVisible: true })
+            _ = window.ShowDialog(_window); // the app waits for it, as on Windows
+        else
+            window.Show();
         window.Activate();
     }
 

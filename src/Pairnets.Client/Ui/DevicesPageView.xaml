@@ -173,13 +173,13 @@
                       <Button Style="{StaticResource PgChipButton}" Height="34" Content="Change…" ToolTip="{Binding ChangeLabel}"
                               AutomationProperties.Name="{Binding ChangeLabel}" Click="OnPersonChange" />
                       <Button Style="{StaticResource PgLink}" Margin="12,0,0,0" FontSize="13" Foreground="{DynamicResource T.BadText}" Content="Remove"
-                              AutomationProperties.Name="{Binding RemoveLabel}" Click="OnPersonRemove" />
+                              ToolTip="Opens your account page" AutomationProperties.Name="{Binding RemoveLabel}" Click="OnPersonRemove" />
                     </StackPanel>
                     <StackPanel x:Name="WaitingButtons" Grid.Column="4" Orientation="Horizontal" VerticalAlignment="Center" Visibility="Collapsed">
                       <Button Style="{StaticResource PgButton}" Height="34" Foreground="{DynamicResource T.BadText}" Content="Decline"
-                              AutomationProperties.Name="{Binding DeclineLabel}" Click="OnPersonDecline" />
+                              ToolTip="Opens your account page" AutomationProperties.Name="{Binding DeclineLabel}" Click="OnPersonDecline" />
                       <Button Style="{StaticResource PgPrimary}" Height="34" Margin="8,0,0,0" Content="{Binding LetInLabel}"
-                              AutomationProperties.Name="{Binding LetInLabel}" Click="OnPersonLetIn" />
+                              ToolTip="Opens your account page" AutomationProperties.Name="{Binding LetInLabel}" Click="OnPersonLetIn" />
                     </StackPanel>
                   </Grid>
                 </Border>

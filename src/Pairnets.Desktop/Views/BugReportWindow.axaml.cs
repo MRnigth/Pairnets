@@ -110,7 +110,7 @@ public partial class BugReportWindow : Window
     {
         if (!sent)
             return;
-        SentChipText.Text = count == 1 ? "Crash report sent to Pairnets" : $"{count} crash reports sent to Pairnets";
+        SentChipText.Text = count == 1 ? "Crash report sent to Pairnets" : "Crash reports sent to Pairnets";
         CrashBannerTitle.Text = "Thank you. The crash report was sent.";
         CrashBannerText.Text = "Only the crash report went out. The bug report below was not sent.";
         SendCrashButton.IsVisible = false;

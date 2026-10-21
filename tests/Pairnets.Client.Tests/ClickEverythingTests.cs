@@ -982,7 +982,7 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
         On("Choose for a folder inside these… (opens Files)", "ask the app for the Files page", c => c.Bench.Events.Items.Contains("OpenFilesRequested")),
         On("Reset this app…", "ask the app to reset everything", c => c.Bench.Events.Items.Contains("ResetRequested")),
         On("Add a nest…", "ask the app to sign in to one more nest", c => c.Bench.Events.Items.Contains("AddNestRequested")),
-        On("Leave…", "ask the app to leave this nest on this computer", c => c.Bench.Events.Items.Contains("LeaveNestRequested")),
+        On("Stop syncing…", "ask the app to stop syncing this nest on this computer", c => c.Bench.Events.Items.Contains("LeaveNestRequested")),
         new(t => t.Handlers.Contains("SettingsView.OnAboutLink"),"ask the app to open that page of pairnets.app in the browser",
             c => c.Target.Element is Button { CommandParameter: string url } && url.StartsWith(PairnetsLinks.Website, StringComparison.Ordinal)
                 && c.Bench.Opened.Items.SequenceEqual([url])),

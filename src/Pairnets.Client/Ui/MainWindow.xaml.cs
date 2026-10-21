@@ -306,6 +306,8 @@ public partial class MainWindow : Window, IPageHost
         var allNests = page == MainPage.Overview && ShowsAllNests;
         if (allNests)
             PageTitle.Text = "All nests";
+        if (allNests && AllNestsPage.Visibility != Visibility.Visible)
+            Motion.Enter(AllNestsPage); // slides in like the other pages
         AllNestsPage.Visibility = Show(allNests);
         foreach (var (element, shown) in new (FrameworkElement, MainPage)[]
                  {

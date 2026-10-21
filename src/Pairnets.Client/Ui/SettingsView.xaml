@@ -520,7 +520,7 @@
         </Border>
 
         <!-- Start over -->
-        <!-- Nests: one more nest, each in a folder of its own; with several, leave this one on this PC -->
+        <!-- Nests: one more nest, each in a folder of its own; with several, stop syncing this one here -->
         <Border Style="{StaticResource PgCard}" Padding="20,18" Margin="0,16,0,0">
           <StackPanel>
             <Grid>
@@ -549,10 +549,10 @@
                 <ui:LineIcon Width="22" Height="22" StrokeThickness="2.1" Stroke="{DynamicResource T.BadText}" Data="{StaticResource I.Nest}" />
               </Border>
               <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                <TextBlock x:Name="LeaveTitle" Style="{StaticResource PgCardTitle}" Foreground="{DynamicResource T.BadText}" Text="Leave this nest on this PC" />
+                <TextBlock x:Name="LeaveTitle" Style="{StaticResource PgCardTitle}" Foreground="{DynamicResource T.BadText}" Text="Stop syncing this nest here" />
                 <TextBlock x:Name="LeaveText" Style="{StaticResource PgSub}" FontSize="13" Margin="0,2,0,0" TextWrapping="Wrap" />
               </StackPanel>
-              <Button x:Name="LeaveButton" Grid.Column="2" Style="{StaticResource PgDanger}" Content="Leave…" Padding="16,0" Margin="16,0,0,0" VerticalAlignment="Center" Click="OnLeaveNest" />
+              <Button x:Name="LeaveButton" Grid.Column="2" Style="{StaticResource PgDanger}" Content="Stop syncing…" Padding="16,0" Margin="16,0,0,0" VerticalAlignment="Center" Click="OnLeaveNest" />
             </Grid>
           </StackPanel>
         </Border>

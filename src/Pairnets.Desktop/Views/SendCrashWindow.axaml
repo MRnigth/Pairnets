@@ -2,7 +2,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:v="using:Pairnets.Desktop.Views"
         x:Class="Pairnets.Desktop.Views.SendCrashWindow"
-        Title="Send crash report" Width="600" Height="540" MinWidth="460" MinHeight="420"
+        Title="Send crash report" Width="620" Height="560" MinWidth="460" MinHeight="420"
         Background="{DynamicResource T.Card}"
         WindowStartupLocation="CenterOwner" Icon="avares://Pairnets/Assets/pairnets-icon-256.png">
   <!-- "Send crash report to Pairnets": exactly what goes out, an optional note, then Send or Don't send. -->

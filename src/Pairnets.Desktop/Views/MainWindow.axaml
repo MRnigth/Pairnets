@@ -896,13 +896,13 @@
                               <TextBlock Text="{Binding Pill}" FontSize="12" FontWeight="Bold" HorizontalAlignment="Center" Foreground="{Binding ViewOnly, Converter={x:Static v:BrushWhen.Instance}, ConverterParameter=T.Muted|T.OkText}" />
                             </Border>
                             <StackPanel Grid.Column="4" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center" IsVisible="{Binding !Waiting}">
-                              <Button Classes="small" Content="Change…" AutomationProperties.Name="{Binding ChangeLabel}" Click="OnPersonChange" />
-                              <Button Classes="link" Content="Remove" Foreground="{DynamicResource T.BadText}" AutomationProperties.Name="{Binding RemoveLabel}" Click="OnPersonRemove" />
+                              <Button Classes="small" Content="Change…" ToolTip.Tip="{Binding ChangeLabel}" AutomationProperties.Name="{Binding ChangeLabel}" Click="OnPersonChange" />
+                              <Button Classes="link" Content="Remove" Foreground="{DynamicResource T.BadText}" ToolTip.Tip="Opens your account page" AutomationProperties.Name="{Binding RemoveLabel}" Click="OnPersonRemove" />
                             </StackPanel>
                             <StackPanel Grid.Column="4" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center" IsVisible="{Binding Waiting}">
                               <Button Classes="SecondaryButton" Height="34" Padding="12,0" Content="Decline" Foreground="{DynamicResource T.BadText}"
-                                      AutomationProperties.Name="{Binding DeclineLabel}" Click="OnPersonDecline" />
-                              <Button Classes="accent" Height="34" Padding="14,0" Content="{Binding LetInLabel}" AutomationProperties.Name="{Binding LetInLabel}" Click="OnPersonLetIn" />
+                                      ToolTip.Tip="Opens your account page" AutomationProperties.Name="{Binding DeclineLabel}" Click="OnPersonDecline" />
+                              <Button Classes="accent" Height="34" Padding="14,0" Content="{Binding LetInLabel}" ToolTip.Tip="Opens your account page" AutomationProperties.Name="{Binding LetInLabel}" Click="OnPersonLetIn" />
                             </StackPanel>
                           </Grid>
                         </Border>

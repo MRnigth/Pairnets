@@ -85,8 +85,8 @@ public partial class SettingsView : UserControl
             ServerHeading.Text = "This nest: " + nestTitle;
             PageSub.Text = $"The address, folder and name are for {nestTitle}. Everything else is for all your nests. Switches apply at once.";
             LeaveRow.IsVisible = true;
-            LeaveTitle.Text = $"Leave {nestTitle} on this PC";
-            LeaveText.Text = $"Stops syncing it here. Files in {(string.IsNullOrWhiteSpace(current.Folder) ? "its folder" : current.Folder)} stay on this computer and on the nest.";
+            LeaveTitle.Text = $"Stop syncing {nestTitle} here";
+            LeaveText.Text = $"This computer is signed out of it. Files in {(string.IsNullOrWhiteSpace(current.Folder) ? "its folder" : current.Folder)} stay on this computer and on the nest.";
             Avalonia.Automation.AutomationProperties.SetName(LeaveButton, LeaveTitle.Text);
         }
         ServerUrlBox.Text = current.ServerUrl ?? string.Empty;
@@ -457,7 +457,7 @@ public partial class SettingsView : UserControl
     /// <summary>Where this nest's key is saved outside the settings file (Mac, Linux): see <see cref="ClientSettings.KeySlotFor"/>.</summary>
     public string? KeySlot { get; init; }
 
-    /// <summary>"Leave this nest on this PC…" (the controller asks first). Shown with several nests.</summary>
+    /// <summary>"Stop syncing this nest here…" (the controller asks first). Shown with several nests.</summary>
     public event Action? LeaveNestRequested;
 
     private void OnLeaveNest(object? sender, RoutedEventArgs e) => LeaveNestRequested?.Invoke();

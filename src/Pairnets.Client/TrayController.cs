@@ -564,8 +564,8 @@ public sealed class TrayController : ITrayActions, IDisposable
 
     /// <summary>
     /// "Sign out of this computer": removes its key on the nest (best effort), stops syncing, forgets the key,
-    /// and offers to sign in again. The files in the folder stay. With several nests this is "Leave this nest on this
-    /// PC" (<see cref="LeaveNest"/>): only the picked nest goes, the others keep syncing.
+    /// and offers to sign in again. The files in the folder stay. With several nests this is "Stop syncing this nest
+    /// here" (<see cref="LeaveNest"/>): only the picked nest goes, the others keep syncing.
     /// </summary>
     public async void SignOut()
     {
@@ -618,7 +618,7 @@ public sealed class TrayController : ITrayActions, IDisposable
     }
 
     /// <summary>
-    /// "Leave this nest on this PC": this computer is signed out of the picked nest (its key there is removed), stops
+    /// "Stop syncing this nest here": this computer is signed out of the picked nest (its key there is removed), stops
     /// syncing it and forgets it; the files in its folder stay. The other nests keep syncing. With one nest left this is
     /// the plain sign-out.
     /// </summary>
@@ -636,8 +636,8 @@ public sealed class TrayController : ITrayActions, IDisposable
         {
             var nest = run.Settings;
             var title = NestNames.Title(nest, _settings, run.Session?.Status);
-            if (Dialogs.Ask(null, $"Leave {title} on this computer?\n\nThis computer stops syncing {title} and is signed out of it. Your files in {nest.Folder} stay here and on the nest. Your other nests keep syncing.",
-                    "Pairnets – leave " + title, MessageBoxButton.OKCancel, MessageBoxImage.Question, MessageBoxResult.Cancel) != MessageBoxResult.OK)
+            if (!Dialogs.Confirm(null, $"Stop syncing {title} on this computer?\n\nThis computer is signed out of {title}. Your files in {nest.Folder} stay here and on the nest. Your other nests keep syncing.",
+                    "Pairnets – stop syncing " + title, "Stop syncing", "Cancel"))
                 return;
             var removed = await SignOutOnNestAsync(run);
             StopNest(run);
@@ -656,7 +656,7 @@ public sealed class TrayController : ITrayActions, IDisposable
             _selected = null;
             StartAll();
             if (!removed)
-                Dialogs.Ask(null, $"{title} was left here, but the nest could not be told. " + Relay.RemoveByHandHint(nest.ServerUrl),
+                Dialogs.Ask(null, $"{title} stopped syncing here, but the nest could not be told. " + Relay.RemoveByHandHint(nest.ServerUrl),
                     "Pairnets", MessageBoxButton.OK, MessageBoxImage.Warning);
             _window?.Navigate(MainPage.Overview);
         }

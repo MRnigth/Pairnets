@@ -70,7 +70,7 @@ public partial class BugReportWindow : Window
         Heading.Text = copied ? "Bug report copied" : "Bug report ready";
         Explanation.Text = (copied ? "It is on the clipboard" : "Copy it with \"Copy again\"")
             + (_path is null ? "" : $" and saved as {Path.GetFileName(_path)} in the Pairnets log folder")
-            + ". Paste it to whoever helps you; nothing was sent anywhere.";
+            + ". Paste it to whoever helps you.";
         ShowSendCrash();
     }
 
@@ -96,7 +96,7 @@ public partial class BugReportWindow : Window
         Dialogs.ShowWindow(window);
         if (!window.Sent)
             return;
-        SentChipText.Text = cards.Count == 1 ? "Crash report sent to Pairnets" : $"{cards.Count} crash reports sent to Pairnets";
+        SentChipText.Text = cards.Count == 1 ? "Crash report sent to Pairnets" : "Crash reports sent to Pairnets";
         CrashBannerTitle.Text = "Thank you. The crash report was sent.";
         CrashBannerText.Text = "Only the crash report went out. The bug report below was not sent.";
         SendCrashButton.Visibility = Visibility.Collapsed;

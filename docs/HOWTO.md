@@ -646,7 +646,7 @@ and files never move between nests.
   most (red, orange, grey, yellow, blue, then green).
 * **For all nests at once:** pausing, the speed limits (one limit shared by all nests), notifications and starting
   with Windows. A notice says which nest it is about.
-* **Leave one:** open the nest, then Settings › **Leave <nest> on this PC…**. This computer is signed out of that
+* **Stop syncing one:** open the nest, then Settings › **Stop syncing <nest> here** › **Stop syncing…**. This computer is signed out of that
   nest and stops syncing it; the files stay in its folder and on the nest. Your other nests keep syncing.
 
 ---
