@@ -479,7 +479,7 @@ const ACCOUNT_JS = String.raw`(function () {
         return;
       }
       var said = res.body.emailed ? "Invite sent to " + email + ". You can copy the link too:" :
-        withEmail ? "The email can't go out today. Copy the link and send it yourself:" : "Copied. Send the link however you like; it works for 7 days:";
+        withEmail ? "Too many invites sent today, try tomorrow. The link works now: copy it and send it yourself:" : "Copied. Send the link however you like; it works for 7 days:";
       form.querySelector("[data-field=invite-said]").textContent = said;
       form.querySelector("[data-field=invite-url]").value = res.body.link;
       form.querySelector("[data-field=invite-done]").hidden = false;

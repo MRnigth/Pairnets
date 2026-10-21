@@ -5,7 +5,7 @@
 import { describe, expect, it } from "vitest";
 import { assetUrl } from "../src/assets";
 import { cleanAccess, cleanFolders, dottedEmail, parseFolders, safeNext } from "../src/formats";
-import { INVITE_MAIL_DAILY_LIMIT } from "../src/mail";
+import { INVITE_MAIL_DAILY_LIMIT, INVITE_MAIL_SERVICE_DAILY_LIMIT } from "../src/mail";
 import type { FakeNestServer } from "./fake-relay";
 import { addServer, appSignIn, type Browser, Harness, linkNest, type Res } from "./helpers";
 
@@ -302,6 +302,36 @@ describe("friend invites: making one", () => {
     h.advance(86400);
     await b.signInByEmail(OWNER);
     expect((await invite(b, nest, {})).status).toBe(201);
+  });
+
+  it("the service's ceiling of invite emails: then an invite is still made with a link, the page says try tomorrow, and Copy invite link works", async () => {
+    const { h, b, nest } = await setup();
+    // Owners with five each, until the whole service has sent INVITE_MAIL_SERVICE_DAILY_LIMIT today.
+    let sent = 0;
+    for (let o = 0; sent < INVITE_MAIL_SERVICE_DAILY_LIMIT; o++) {
+      const owner = h.browser(`198.51.100.${120 + o}`);
+      await owner.signInByEmail(`owner${o}@example.com`);
+      const theirs = await addServer(h, owner, { label: `Nest ${o}`, ip: `198.51.100.${120 + o}` });
+      for (let i = 0; i < INVITE_MAIL_DAILY_LIMIT && sent < INVITE_MAIL_SERVICE_DAILY_LIMIT; i++, sent++) {
+        expect((await invite(owner, theirs, { access: "view", folders: [`F${i}`], email: `o${o}f${i}@example.com` })).json.emailed).toBe(true);
+      }
+    }
+    // Jonas has sent none, but the service has: the invite is made without the email, and its link works.
+    const late = await invite(b, nest, { access: "view", email: "late@example.com" });
+    expect(late.status).toBe(201);
+    expect(late.json.emailed).toBe(false);
+    expect(late.json.link).toMatch(/\/invite\?t=pni_/);
+    expect(h.mailer.to("late@example.com")).toHaveLength(0);
+    const copy = await invite(b, nest, { access: "edit" });
+    expect(copy.status).toBe(201);
+    expect(copy.json).toMatchObject({ emailed: false, link: expect.stringContaining("/invite?t=pni_") });
+    // What the page says then.
+    const script = await b.call("GET", assetUrl("account.js"));
+    expect(script.text).toContain("Too many invites sent today, try tomorrow.");
+    // The next day the service sends again.
+    h.advance(86400);
+    await b.signInByEmail(OWNER);
+    expect((await invite(b, nest, { access: "view", email: "next@example.com" })).json.emailed).toBe(true);
   });
 
   it("Copy invite link again gives the same open link, not one more invite; other choices, a used or ended link, or an email make a new one", async () => {
