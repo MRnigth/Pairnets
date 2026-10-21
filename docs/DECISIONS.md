@@ -1454,7 +1454,7 @@ One Pairnets app can sync two nests or more, each into its own folder. The owner
   keeps only each nest's own computer key, so nothing about accounts had to change.
 * **The settings file stays readable by older versions.** The first nest keeps the top-level fields it always had
   (`serverUrl`, `folder`, `deviceName`, ...); more nests are in `otherNests`, each with the same per-nest fields
-  (`NestProfile`). An older Pairnets that reads the file (a rollback) simply syncs the first nest. Each nest has a local
+  (`NestProfile`). An older Pairnets that reads the file (a rollback) syncs the first nest; the other nests are lost as soon as it saves its settings (it does not know `otherNests`), and their keys stay unused in the Keychain or keyring. The old app cannot be changed, and the updater never goes back, so this is only written down. Each nest has a local
   id (`nestId`, "n4f2a9c1e") that keys its saved key and its notices; a file from before gets one on first start.
   Per nest: address, key, device id, folder, this computer's name there, account email, ignore rules, the nest's name,
   "update the nest by itself" and the skipped nest version. **Everything else is app-wide**: pause, speed
@@ -1573,3 +1573,7 @@ and no app does yet), then `feature/crash-send`, then `release/1.0.61.3` (4 nest
   nothing is renamed there. Deploying the Worker applies 0006, 0007 and 0008 in that order.
 * **Files page actions on a friend's view-only nest** (add, rename, move, delete) are refused by the nest (403) and the
   app shows why; nothing changes on the nest. Hiding those buttons for view-only nests is left for later.
+* **Save on one nest's Settings page changes only that nest's own values** (`SettingsSwitches.WithNestSaved`, both
+  apps): "Update the nest by itself" and "Where your files live" go to that nest; the first nest keeps its own. The
+  switches still apply to every nest. (Found in review: Save on a second nest copied its "Update the nest by itself"
+  onto the first.)

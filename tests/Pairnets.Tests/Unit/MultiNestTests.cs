@@ -295,6 +295,34 @@ public class MultiNestTests
         Assert.Equal(FilePlacement.OnDemand, back.Placement["Reports"]);
     }
 
+    [Fact]
+    public void SavingTheSecondNestsSettings_LeavesTheFirstNestsOwnChoices()
+    {
+        var s = OneNest();
+        s.AutoUpdateServer = false;
+        s.Placement["Photos"] = FilePlacement.NestOnly;
+        var id = s.AddNest(NestAt(s, "https://work.example.com/", Path.Combine(Path.GetTempPath(), "pn-work"), "STUDY-LAPTOP"));
+
+        // Save on the work nest's Settings page: its own choices change, and a switch for every nest.
+        var page = s.ForNest(id)!;
+        page.AutoUpdateServer = true;
+        page.Placement["Reports"] = FilePlacement.NestOnly;
+        page.ShowMapSpeed = false;
+        var next = SettingsSwitches.WithNestSaved(s, page);
+
+        Assert.False(next.AutoUpdateServer);
+        Assert.Equal(["Photos"], next.Placement.Keys);
+        Assert.True(next.ForNest(id)!.AutoUpdateServer);
+        Assert.Equal(["Reports"], next.ForNest(id)!.Placement.Keys);
+        Assert.False(next.ShowMapSpeed);
+        Assert.Equal(2, next.NestCount);
+
+        // Saving the first nest changes the first nest.
+        var first = next.ForNest(next.NestId)!;
+        first.AutoUpdateServer = true;
+        Assert.True(SettingsSwitches.WithNestSaved(next, first).AutoUpdateServer);
+    }
+
     private sealed class RecordingProtector : ISecretProtector
     {
         public List<string> Forgotten { get; } = [];

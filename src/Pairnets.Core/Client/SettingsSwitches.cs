@@ -54,5 +54,23 @@ public static class SettingsSwitches
         return next;
     }
 
+    /// <summary>
+    /// <paramref name="all"/> after Save on one nest's Settings page (or a new sign-in), <paramref name="saved"/>: the
+    /// page's switches for every nest, and that nest's own values (address, key, folder, name, "Update the nest by
+    /// itself", "Where your files live") for that nest only; a nest not in the list yet is added. The first nest keeps
+    /// its own values unless it is the one saved.
+    /// </summary>
+    public static ClientSettings WithNestSaved(ClientSettings all, ClientSettings saved)
+    {
+        var next = WithSwitchesFrom(all, saved);
+        next.AutoUpdateServer = all.AutoUpdateServer;
+        next.Placement = new Dictionary<string, FilePlacement>(all.Placement, StringComparer.Ordinal);
+        next.FirstRunCompleted = saved.FirstRunCompleted;
+        var nestOnly = saved.Clone();
+        if (!next.PutNest(nestOnly))
+            next.AddNest(nestOnly);
+        return next;
+    }
+
     private static double? Limit(double? mbps) => mbps is > 0 ? mbps : null;
 }

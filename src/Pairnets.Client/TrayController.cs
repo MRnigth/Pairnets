@@ -1474,14 +1474,7 @@ public sealed class TrayController : ITrayActions, IDisposable
         }
         else
         {
-            var nestOnly = settings.Clone();
-            var firstPlacement = _settings.Placement; // the first nest's own (nestOnly's goes to its nest below)
-            _settings = SettingsSwitches.WithSwitchesFrom(_settings, settings);
-            _settings.Placement = firstPlacement;
-            _settings.StartWithWindows = settings.StartWithWindows;
-            _settings.FirstRunCompleted = settings.FirstRunCompleted;
-            if (!_settings.PutNest(nestOnly))
-                _settings.AddNest(nestOnly);
+            _settings = SettingsSwitches.WithNestSaved(_settings, settings);
         }
         _settings.EnsureNestIds();
         _fileLog.Minimum = _settings.DebugMode ? LogLevel.Debug : LogLevel.Information;
