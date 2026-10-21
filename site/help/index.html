@@ -7,10 +7,12 @@
 <meta name="description" content="What to check when your Pairnets nest can't be reached, or a computer was removed.">
 <meta name="referrer" content="no-referrer">
 <meta name="color-scheme" content="light dark">
-<meta name="theme-color" content="#FFFFFF" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#171A20" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#F7F8FA" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0F1218" media="(prefers-color-scheme: dark)">
 <link rel="icon" href="/assets/logo.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/assets/icon-256.png">
+<link rel="preload" href="/assets/fonts/Newsreader.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/assets/fonts/SchibstedGrotesk.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/assets/site.css">
 <script src="/assets/site.js" defer></script>
 </head>
@@ -29,65 +31,25 @@
   </div>
 </header>
 <main id="main" tabindex="-1">
-  <div class="wrap docs">
-    <aside class="toc" aria-label="Pages">
-      <div>
-        <p class="label">Help</p>
-        <nav aria-label="Help pages">
-          <a href="/help/" aria-current="page">Help</a>
-          <a href="/faq/">FAQ</a>
-          <a href="/docs">The full guide</a>
-          <a href="/add/">Add a computer</a>
-          <a href="/contact/">Contact</a>
-        </nav>
-      </div>
-      <div>
-        <p class="label">Trust and legal</p>
-        <nav aria-label="Legal pages">
-          <a href="/security/">Security</a>
-          <a href="/privacy/">Privacy</a>
-          <a href="/terms/">Terms</a>
-          <a href="/guidelines/">Guidelines</a>
-          <a href="/cookies/">Cookie settings</a>
-          <a href="/licenses/">Open-source licences</a>
-          <a href="/delete-account/">Delete my account</a>
-        </nav>
-      </div>
-      <div class="onpage">
-        <p class="label">On this page</p>
-        <nav aria-label="On this page">
-          <a href="#not-connected">My nest doesn’t show up</a>
-          <a href="#add-nest">Add a new nest to my account</a>
-          <a href="#cant-reach">“Can’t reach it” in the app</a>
-          <a href="#code-expired">The code expired, or it said no</a>
-          <a href="#signed-out">“Signed out” in the app</a>
-          <a href="#cant-sign-in">I can’t sign in to my account</a>
-          <a href="#lost">A computer was lost or stolen</a>
-          <a href="#own-domain">Lost passkey on my own domain</a>
-          <a href="#what-we-see">What pairnets.app sees</a>
-          <a href="#more">More</a>
-        </nav>
-      </div>
-    </aside>
-    <article class="doc">
-      <p class="crumbs"><a href="/">pairnets.app</a> / help</p>
+  <div class="wrap">
+    <article class="read">
       <h1>Help</h1>
       <p class="lead">Quick answers for signing in and reaching your nest. Start here. General questions? See the <a href="/faq/">FAQ</a>.</p>
-      <details class="toc-phone">
-        <summary>On this page</summary>
-        <nav aria-label="On this page">
-          <a href="#not-connected">My nest doesn’t show up</a>
-          <a href="#add-nest">Add a new nest to my account</a>
-          <a href="#cant-reach">“Can’t reach it” in the app</a>
-          <a href="#code-expired">The code expired, or it said no</a>
-          <a href="#signed-out">“Signed out” in the app</a>
-          <a href="#cant-sign-in">I can’t sign in to my account</a>
-          <a href="#lost">A computer was lost or stolen</a>
-          <a href="#own-domain">Lost passkey on my own domain</a>
-          <a href="#what-we-see">What pairnets.app sees</a>
-          <a href="#more">More</a>
-        </nav>
-      </details>
+      <nav class="contents" aria-labelledby="contents-h">
+        <h2 id="contents-h">On this page</h2>
+        <ol>
+          <li><a href="#not-connected">My nest doesn’t show up</a></li>
+          <li><a href="#add-nest">Add a new nest to my account</a></li>
+          <li><a href="#cant-reach">“Can’t reach it” in the app</a></li>
+          <li><a href="#code-expired">The code expired, or it said no</a></li>
+          <li><a href="#signed-out">“Signed out” in the app</a></li>
+          <li><a href="#cant-sign-in">I can’t sign in to my account</a></li>
+          <li><a href="#lost">A computer was lost or stolen</a></li>
+          <li><a href="#own-domain">Lost passkey on my own domain</a></li>
+          <li><a href="#what-we-see">What pairnets.app sees</a></li>
+          <li><a href="#more">More</a></li>
+        </ol>
+      </nav>
       <section class="first" id="not-connected">
         <p class="tag">Start here</p>
         <h2>My nest doesn't show up, or the app says it isn't connected</h2>
@@ -140,10 +102,6 @@
         <h2>More<a class="anchor" href="#more" aria-label="Link to this answer">#</a></h2>
         <p>The <a href="/docs">full guide</a> covers installing the server, how syncing and conflicts work, restoring old versions, and updates. General questions, like what Pairnets costs or where your files go, are in the <a href="/faq/">FAQ</a>. Still stuck? <a href="/contact/">Get in touch</a>.</p>
       </section>
-      <div class="next">
-        <a href="/add/"><span>Next</span>Add a computer</a>
-        <a class="right" href="/faq/"><span>Also</span>Questions and answers</a>
-      </div>
     </article>
   </div>
 </main>
