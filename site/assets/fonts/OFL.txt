@@ -1,4 +1,11 @@
-Copyright 2020 The Plus Jakarta Sans Project Authors (https://github.com/tokotype/PlusJakartaSans)
+These fonts are used by pairnets.app. Each is licensed under the SIL Open Font License, Version 1.1:
+
+Newsreader (Newsreader.woff2, Newsreader-Italic.woff2): Copyright 2020 The Newsreader Project Authors (https://github.com/productiontype/Newsreader)
+Schibsted Grotesk (SchibstedGrotesk.woff2): Copyright 2023 The Schibsted-Grotesk Project Authors (https://github.com/schibsted/schibsted-grotesk)
+IBM Plex Mono (IBMPlexMono-Medium.woff2, unchanged): Copyright 2017 IBM Corp. (https://github.com/IBM/plex), with Reserved Font Name "Plex"
+
+Newsreader and Schibsted Grotesk are cut down to Latin letters and one weight range for the web; the copyright and
+licence stay in each file's name table. IBM Plex Mono is the Latin file as Google Fonts serves it, not changed.
 
 This Font Software is licensed under the SIL Open Font License, Version 1.1.
 This license is copied below, and is also available with a FAQ at:
