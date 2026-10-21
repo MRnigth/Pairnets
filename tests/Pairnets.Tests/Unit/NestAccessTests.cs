@@ -198,6 +198,20 @@ public class NestAccessTests
     }
 
     [Fact]
+    public void ThePeopleRowsReadAgainAreEqual_SoThePagesDoNotRedrawAndTakeTheFocus()
+    {
+        // The nest's answer read anew (as every refresh does): new lists with the same people in them.
+        PeopleSection Read(string[] folders) => PeopleSection.From(Owners(new PeopleAnswer(
+            [new FriendPerson("acc_anna", "Anna Berg · a•••@gmail.com", "edit", [.. folders], [new FriendDevice("d1", "ANNA-LAPTOP", null, null)])],
+            [new FriendRequestEntry("inv_1", "Oskar Nilsson", "oskar.n@example.com", "view", ["Music"])])));
+
+        Assert.True(Read(["Photos", "School"]).Rows.SequenceEqual(Read(["Photos", "School"]).Rows));
+        Assert.Equal(Read(["Photos"]).Rows[0].GetHashCode(), Read(["Photos"]).Rows[0].GetHashCode());
+        // A real change still redraws.
+        Assert.False(Read(["Photos", "School"]).Rows.SequenceEqual(Read(["Photos", "Music"]).Rows));
+    }
+
+    [Fact]
     public void ThePeopleSectionIsOnlyForTheOwnerOfANestReachedThroughPairnets()
     {
         Assert.Equal("Only you so far", PeopleSection.From(Owners(null)).Summary);
@@ -227,8 +241,9 @@ public class NestAccessTests
     public void TheInviteWindowHandsOverToTheAccountPage()
     {
         Assert.Equal($"https://sync.pairnets.app/account?invite={NestId}&access=view", Relay.InviteUrl(NestId, null, canChange: false));
-        Assert.Equal($"https://sync.pairnets.app/account?invite={NestId}&folders=Photos,School%20work&access=edit",
-            Relay.InviteUrl(NestId, ["Photos", "School work"], canChange: true));
+        // One folders= per folder: a comma inside a name stays part of it.
+        Assert.Equal($"https://sync.pairnets.app/account?invite={NestId}&folders=Photos%2C%202026&folders=School%20work&access=edit",
+            Relay.InviteUrl(NestId, ["Photos, 2026", "School work"], canChange: true));
         Assert.Null(InviteChoices.Problem(wholeNest: true, []));
         Assert.NotNull(InviteChoices.Problem(wholeNest: false, []));
         Assert.Null(InviteChoices.Problem(wholeNest: false, ["Photos"]));

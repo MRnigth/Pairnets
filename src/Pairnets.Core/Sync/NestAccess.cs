@@ -67,10 +67,23 @@ public sealed record NestAccess(string Level, IReadOnlyList<string>? Folders = n
         return new NestAccess(known, shared, Clean(sharedBy), Clean(nestName));
     }
 
-    /// <summary>A top-level folder name a share can name: 1–255 characters, no "/", "\" or control character, not "." or "..".</summary>
+    /// <summary>
+    /// A top-level folder name a share can name, by the same rule as the account service (<c>cleanFolders</c> in
+    /// cloud/src/formats.ts) and the nest: 1–255 characters, not "." or "..", no "/" or "\", no space at either end, and
+    /// no control or invisible character (<see cref="IsHiddenChar"/>). A name one of them would refuse is never offered.
+    /// </summary>
     public static bool IsFolderName(string? name) =>
-        name is { Length: > 0 and <= 255 } && name is not ("." or "..")
-        && !name.Contains('/', StringComparison.Ordinal) && !name.Contains('\\', StringComparison.Ordinal) && !name.Any(char.IsControl);
+        name is { Length: > 0 and <= 255 } && name is not ("." or "..") && name.Trim() == name
+        && !name.Contains('/', StringComparison.Ordinal) && !name.Contains('\\', StringComparison.Ordinal) && !name.Any(IsHiddenChar);
+
+    /// <summary>
+    /// The characters the account service strips from names (<c>HIDDEN_RANGES</c> in cloud/src/formats.ts): control
+    /// characters, soft hyphen, Arabic letter mark, Mongolian vowel separator, zero-width and direction marks, bidi
+    /// embeddings and isolates, word joiner and invisible operators, byte order mark.
+    /// </summary>
+    public static bool IsHiddenChar(char c) =>
+        c is <= '\u001F' or (>= '\u007F' and <= '\u009F') or '­' or '؜' or '᠎' or (>= '​' and <= '‏')
+            or (>= '‪' and <= '‮') or (>= '⁠' and <= '⁤') or (>= '⁦' and <= '⁩') or '﻿';
 
     /// <summary>Whether <paramref name="path"/> (nest-relative, "/"-separated, as the sync API uses it) is inside the share.</summary>
     public bool Allows(string? path)

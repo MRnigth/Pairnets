@@ -349,16 +349,31 @@ public sealed class FriendRelayTests : IAsyncLifetime
         Assert.Equal(("inv_oskar", "Oskar Nilsson"), (kept.Id, kept.Name));
     }
 
+    /// <summary>JSON as the service writes it: letters of every script as they are (UTF-8), not \u escapes.</summary>
+    private static readonly JsonSerializerOptions AsTheServiceSends = new() { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
+
+    [Fact]
+    public async Task AFriendsComputerWithTheLongestFolderListCanSignIn()
+    {
+        // Twenty folder names of 255 characters, each 3 bytes in UTF-8: far longer than the 4 KiB the other calls may be.
+        var folders = Enumerable.Range(1, DeviceAccess.MaxFolders).Select(i => $"{i:00}" + new string('文', DeviceAccess.MaxFolderLength - 2)).ToList();
+        var json = JsonSerializer.Serialize(folders, AsTheServiceSends);
+        Assert.True(System.Text.Encoding.UTF8.GetByteCount(json) > RelayAuthMiddleware.MaxBodyBytes);
+        var (id, _) = await AddFriendAsync("ANNA-LAPTOP", folders: json);
+        Assert.Equal(folders, Auth.GetDevice(id)!.AccessOrOwner.Folders!);
+    }
+
     [Fact]
     public async Task AFullListOfPeopleWaitingFitsInOneCall()
     {
-        // Twenty people, each with twenty long folder names: longer than the 4 KiB the other calls may be.
-        var folders = Enumerable.Range(1, DeviceAccess.MaxFolders).Select(i => $"{i:00} " + new string('f', 60)).ToList();
+        // Twenty people, each with twenty folder names of 255 characters of 3 bytes each: the longest list the service sends.
+        var folders = Enumerable.Range(1, DeviceAccess.MaxFolders).Select(i => $"{i:00}" + new string('文', DeviceAccess.MaxFolderLength - 2)).ToList();
         var body = JsonSerializer.Serialize(new
         {
             requests = Enumerable.Range(1, FriendRequests.Max).Select(i => new { id = $"inv_{i}", name = $"Person {i}", access = "view", folders }),
-        });
-        Assert.True(body.Length > RelayAuthMiddleware.MaxBodyBytes && body.Length <= RelayAuthMiddleware.MaxListBodyBytes, body.Length.ToString());
+        }, AsTheServiceSends);
+        var bytes = System.Text.Encoding.UTF8.GetByteCount(body);
+        Assert.True(bytes > RelayAuthMiddleware.MaxBodyBytes && bytes <= RelayAuthMiddleware.MaxListBodyBytes, bytes.ToString());
 
         Assert.Equal(FriendRequests.Max, (await OkAsync(HttpMethod.Put, "/api/relay/requests", body)).GetProperty("requests").GetInt32());
 

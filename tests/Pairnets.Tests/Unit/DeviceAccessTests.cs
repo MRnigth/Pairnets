@@ -52,7 +52,21 @@ public sealed class DeviceAccessTests
     [InlineData("Photos/2026", false)]
     [InlineData("Photos\\2026", false)]
     [InlineData("Pho\ntos", false)]
-    public void FolderNamesAreTopLevelNames(string name, bool valid) => Assert.Equal(valid, DeviceAccess.IsFolderName(name));
+    // The account service's rule (cleanFolders, cloud/test/friends.test.ts has the same list): a comma is part of a name;
+    // a space at either end, and invisible or direction-changing characters, are refused by all three.
+    [InlineData("Photos, 2026", true)]
+    [InlineData("Photos ", false)]
+    [InlineData(" Photos", false)]
+    [InlineData("Pho​tos", false)]
+    [InlineData("‮Photos", false)]
+    [InlineData("Pho­tos", false)]
+    [InlineData("Pho\u0085tos", false)]
+    [InlineData("Photos﻿", false)]
+    public void FolderNamesAreTopLevelNames(string name, bool valid)
+    {
+        Assert.Equal(valid, DeviceAccess.IsFolderName(name));
+        Assert.Equal(valid, Pairnets.Core.Sync.NestAccess.IsFolderName(name)); // the apps offer only what the nest takes
+    }
 
     [Fact]
     public void FolderNamesAreAtMost255Characters()
