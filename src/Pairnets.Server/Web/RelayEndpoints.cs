@@ -164,7 +164,7 @@ public static class RelayEndpoints
     /// <summary>ISO 8601 in UTC with whole seconds, as the service's JSON uses (2026-10-09T00:00:00Z).</summary>
     private static string Iso(DateTimeOffset time) => time.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", CultureInfo.InvariantCulture);
 
-    private static string? Clean(string? text, int max)
+    internal static string? Clean(string? text, int max)
     {
         if (text is null)
             return null;

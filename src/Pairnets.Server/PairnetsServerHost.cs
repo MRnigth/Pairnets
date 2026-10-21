@@ -79,6 +79,10 @@ public static class PairnetsServerHost
         builder.Services.AddHostedService<HistoryPurgeService>();
         builder.Services.AddHostedService<UploadSessionSweeper>();
         builder.Services.AddHostedService<ConnectionGuardService>();
+        builder.Services.AddSingleton(sp => new LinkStore(sp.GetRequiredService<ServerPaths>()));
+        builder.Services.AddSingleton<LinkSync>();
+        builder.Services.AddSingleton<NestLinkWorker>();
+        builder.Services.AddHostedService(sp => sp.GetRequiredService<NestLinkWorker>());
         builder.Services.Configure<HostOptions>(o => o.ShutdownTimeout = TimeSpan.FromSeconds(60));
         builder.WebHost.ConfigureKestrel(k =>
         {
@@ -133,6 +137,7 @@ public static class PairnetsServerHost
         KeyEndpoints.Map(app);
         PairingEndpoints.Map(app);
         RelayEndpoints.Map(app);
+        LinkEndpoints.Map(app);
         WebUi.Map(app);
         WebEndpoints.Map(app);
         app.Lifetime.ApplicationStopped.Register(store.Dispose);

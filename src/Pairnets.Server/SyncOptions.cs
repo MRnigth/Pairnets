@@ -23,6 +23,12 @@ public sealed partial class SyncOptions
 
     public TimeSpan PurgeInterval { get; set; } = TimeSpan.FromDays(1);
 
+    /// <summary>How often each linked nest is brought into step (Sync:LinkInterval, "00:00:30"); sooner after a change to a link.</summary>
+    public TimeSpan LinkInterval { get; set; } = TimeSpan.FromSeconds(30);
+
+    /// <summary>Delay before the first pass of the linked nests after startup (Sync:LinkInitialDelay).</summary>
+    public TimeSpan LinkInitialDelay { get; set; } = TimeSpan.FromSeconds(20);
+
     /// <summary>How often live push connections are checked against the list of computers (Sync:ConnectionCheckInterval, "00:00:10").</summary>
     public TimeSpan ConnectionCheckInterval { get; set; } = TimeSpan.FromSeconds(10);
 
