@@ -1363,3 +1363,34 @@ One Pairnets app can sync two nests or more, each into its own folder. The owner
 * **File Explorer:** the first nest's folder is "Pairnets" in the left side as before; each other nest gets its own
   entry, "Pairnets – Work nest", with an id made from the nest's id; the right-click items work in every nest's folder.
 * **Reset this app** signs out of and forgets every nest. The bug report and crash cards take every nest's names out.
+
+## Friend invites (1.0.61.2, 2026-10-21)
+
+The owner of a nest can let friends sync it with their own Pairnets accounts. Pictures: the "Invite friends to your
+nest" canvas (a copy is in `Pairnets\designs\invite-friends-2026-10-21`). The owner's answers, and what follows from them:
+
+* **Whole nest or chosen folders, view only or can change.** A friend gets the whole nest or some of its top-level
+  folders, and either "View only" (the default) or "Can change". The nest holds every friend's computer to that
+  (`AccessGate`): a view-only computer can't write, a computer with folders can't reach paths outside them, listings and
+  the live push only show what is shared, and only the owner's computers may remove other computers, update or rename
+  the nest, or change encryption. Every computer from before is the owner's, and so is every way of signing in that is
+  not a computer key; a damaged row counts as view only with nothing shared, never as the owner.
+* **A link alone never lets anyone in.** An invite is a link (it ends after 7 days) that the owner copies or has
+  Pairnets email. The friend signs in, presses "Ask to join", and waits; the owner presses "Let in" or "Decline" on the
+  account page (the apps' People section and the owner's email lead there). Only then does the nest appear on the
+  friend's app sign-in page, under "Shared with you". Because using the link only asks, the link itself is kept (not
+  only a hash) so the owner can copy it again; "Let in" needs a recent sign-in, like allowing a computer.
+* **The website does the account part; the apps hand over to it.** Creating invites, letting in, changing and
+  removing friends need a signed-in browser, so the apps' "Invite a friend…" window collects the choices and opens the
+  account page with them filled in, and their People rows open the account page at that nest. The apps hold no
+  account token, as before. The People list itself comes from the nest (`GET /api/people`), which the service keeps
+  up to date (`PUT /api/relay/requests`, `PATCH`/`DELETE /api/relay/people/{id}`).
+* **Removing a friend** removes every computer of theirs from the nest at once. Files already on their computers stay
+  there, and the page says so. If the nest is offline, the service tries again every hour until it hears back.
+* **Encrypted nests are shared whole only.** The key ring is one per nest, so a share of some folders would need a key
+  per folder; that is a later step. The friend's computer gets the key like any new computer (the 6-digit code compare
+  with one of the owner's computers), which comes with encryption phase B.
+* **Old nests can't take friends.** The nest says it can (`features: ["friends"]` in its status); without that, the
+  service makes no invites for it and never hands a friend a key to it.
+* **Limits:** 10 friends per nest (people plus open invites), 20 invites a day per account, and invite emails have their
+  own budget of 5 a day, apart from the sign-in and notice mail.
