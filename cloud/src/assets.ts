@@ -77,8 +77,8 @@ form.rename .input-row button.secondary { margin-left: 8px; }
 .legal { color: var(--faint); font-size: .875rem; text-align: center; margin: 20px 0 0; }
 footer nav { color: var(--faint); }
 footer nav a { color: var(--muted); }
-/* Lists: hairlines, a darker one on top. */
-.list { list-style: none; padding: 0; margin: 0; border-top: 1px solid var(--text); }
+/* Lists: hairlines between the rows. */
+.list { list-style: none; padding: 0; margin: 0; border-top: 1px solid var(--line); }
 .list > li { border-bottom: 1px solid var(--line); padding: 18px 0; }
 .list > li strong { font-weight: 650; }
 .actions { margin-top: 10px; display: flex; gap: 10px 20px; flex-wrap: wrap; align-items: center; }
