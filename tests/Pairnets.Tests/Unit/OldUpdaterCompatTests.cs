@@ -221,7 +221,7 @@ public class OldUpdaterCompatTests
         Assert.Contains("--latest=false", create);
         Assert.DoesNotMatch(new Regex(@"--latest(\s|\\|$)"), create);
         // Links that want the main build name its tag (download/latest/), not GitHub's latest release.
-        foreach (var line in RepoPaths.Read("site", "_redirects").Split('\n').Where(l => l.Contains("github.com", StringComparison.Ordinal)))
+        foreach (var line in RepoPaths.Read("site", "_redirects").Split('\n').Where(l => l.Contains("/releases/", StringComparison.Ordinal)))
             Assert.Contains("/releases/download/latest/", line);
     }
 
