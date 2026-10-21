@@ -229,7 +229,8 @@ public sealed class CapturingLoggerProvider : ILoggerProvider
 
     /// <summary>The server's last warnings and errors, for a failing test's message.</summary>
     public string Problems() => string.Join("\n", Lines.Where(l => l.StartsWith("Warning", StringComparison.Ordinal)
-        || l.StartsWith("Error", StringComparison.Ordinal) || l.StartsWith("Critical", StringComparison.Ordinal)).TakeLast(15));
+        || l.StartsWith("Error", StringComparison.Ordinal) || l.StartsWith("Critical", StringComparison.Ordinal)
+        || System.Text.RegularExpressions.Regex.IsMatch(l, @"-> (408|5\d\d) in ")).TakeLast(15));
 
     public ILogger CreateLogger(string categoryName) => new Logger(this, categoryName);
 
