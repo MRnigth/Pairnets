@@ -1342,18 +1342,20 @@ Inno's progress window (`/SILENT`).
   app's harness, then the new version starting on the same files).
 * **Smaller "Start over" card** in Settings (asked the same day): the size of the Report a bug row, both apps.
 
-## pairnets.app in the apps' new look, "Product first" (2026-10-19)
+## pairnets.app looks "made by one person" (2026-10-21)
 
-* **"Product first" was picked out of three looks.** The home page opens on a dark stage (dark in light mode too)
-  that draws the app itself: the left side with the computers, the Overview, the nest with a line to each computer.
-  The drawing is plain HTML and inline SVG (no picture file, no script), uses made-up names (DESKTOP, LAPTOP, MINI-PC,
-  MEDIA-PC), and is one `role="img"` with a spoken description; its parts are hidden from screen readers. Update it
-  when the app's Overview changes a lot.
-* **Every other page is a docs page**: a side list of all pages (Help and Trust and legal) plus "On this page" built
-  from the page's own headings, which stays in view on computers and folds into one "On this page" row on phones. The
-  words on the pages did not change.
-* **The apps' font, served by pairnets.app itself.** Plus Jakarta Sans as Latin-only woff2 files (about 16 KB per
-  weight) in `site/assets/fonts`, so the strict CSP (`font-src 'self'`) stays and no font host sees visitors.
-* **The design-review fixes stay:** text sizes in rem, taller tap areas on phones, commands that wrap whole, blue only
-  for Sign in, the main download and the coffee, and the nest line joining the steps (now on Add a computer and
-  Delete my account too).
+* **Picked over "Product first"**, which read as a stock template (dark hero with a glow, pill badges, a drawn app
+  window, cards everywhere). The site now looks like paper and ink: serif headings (Newsreader), plain text (Schibsted
+  Grotesk), typed commands in IBM Plex Mono, hairlines instead of cards, and blue only for links and the one main
+  button on a page (the download on the home page; Sign in and the coffee keep their `accent` class for `site.js` and
+  the tests, but are drawn quiet).
+* **Real pictures of the app, not drawings.** The Overview, History, Devices and tray, light and dark (`<picture>`
+  follows the system), as WebP in `site/assets/shots`. Captions say only what the picture shows. On the home page the
+  big pictures run off the right edge on purpose; `.opening` and `.chapter` clip them, so the page never scrolls
+  sideways. Swap the pictures when the app changes a lot.
+* **Every other page is one reading column** with "On this page" as a short numbered list under the title. The side
+  list of pages is gone (the footer has every page). The words did not change.
+* **Fonts served by pairnets.app itself**, Latin only: Newsreader and Schibsted Grotesk cut down with fonttools (one
+  weight, or one weight range), IBM Plex Mono as Google Fonts serves it, unchanged (its licence reserves the name
+  "Plex" for changed copies). About 160 KB on the home page, less elsewhere. The strict CSP (`font-src 'self'`) stays.
+* **The design-review fixes stay:** text sizes in rem, taller tap areas on phones, commands that wrap on phones.

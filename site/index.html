@@ -7,31 +7,16 @@
 <meta name="description" content="Pairnets keeps a folder identical on your computers through a small server you own. No cloud storage in between.">
 <meta name="referrer" content="no-referrer">
 <meta name="color-scheme" content="light dark">
-<meta name="theme-color" content="#0E1014">
+<meta name="theme-color" content="#F7F8FA" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0F1218" media="(prefers-color-scheme: dark)">
 <link rel="icon" href="/assets/logo.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/assets/icon-256.png">
+<link rel="preload" href="/assets/fonts/Newsreader.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/assets/fonts/SchibstedGrotesk.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/assets/site.css">
 <script src="/assets/site.js" defer></script>
 </head>
-<body class="on-stage">
-<svg class="defs" aria-hidden="true" focusable="false">
-  <symbol id="i-desktop" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></g></symbol>
-  <symbol id="i-laptop" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="5" width="16" height="11" rx="1.5"/><path d="M2 19h20"/></g></symbol>
-  <symbol id="i-mini" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="8" width="16" height="8" rx="2"/><circle cx="8" cy="12" r="1"/><path d="M12 12h4"/></g></symbol>
-  <symbol id="i-media" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="13" rx="2"/><path d="M8 21h8M9 2l3 3 3-3"/></g></symbol>
-  <symbol id="i-nest" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 7.5h.01M7 16.5h.01"/></g></symbol>
-  <symbol id="i-terminal" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="m7 10 3 2-3 2M12 15h5"/></g></symbol>
-  <symbol id="i-home" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V20h5v-6h4v6h5V9.5"/></g></symbol>
-  <symbol id="i-activity" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l3-8 4 16 3-8h4"/></g></symbol>
-  <symbol id="i-history" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 2"/></g></symbol>
-  <symbol id="i-settings" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></g></symbol>
-  <symbol id="i-folder" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/></g></symbol>
-  <symbol id="i-pause" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M9 5v14M15 5v14"/></g></symbol>
-  <symbol id="i-sync" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 0 0-14.3-4.9L4 8"/><path d="M4 3v5h5"/><path d="M4 13a8 8 0 0 0 14.3 4.9L20 16"/><path d="M20 21v-5h-5"/></g></symbol>
-  <symbol id="i-shield" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 4.5 6v5.5c0 4.5 3.2 8.2 7.5 9.5 4.3-1.3 7.5-5 7.5-9.5V6z"/><path d="m9 12 2 2 4-4"/></g></symbol>
-  <symbol id="i-copies" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></g></symbol>
-  <symbol id="i-key" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="15" r="4"/><path d="m11 12 9-9M17 6l3 3M15 8l2 2"/></g></symbol>
-</svg>
+<body>
 <a class="skip" href="#main">Skip to content</a>
 <header class="top">
   <div class="wrap">
@@ -47,197 +32,140 @@
 </header>
 <main id="main" tabindex="-1">
 
-  <section class="stage" aria-labelledby="hero-title">
-    <div class="wrap">
-      <div class="stage-head">
-        <div>
-          <p class="eyebrow"><span class="dot"></span>Free · Windows, Mac and Linux · your own server</p>
-          <h1 id="hero-title">One folder, the same <span class="soft">on all your computers.</span></h1>
-        </div>
-        <div>
-          <p class="lead">Pairnets keeps a folder identical on your computers through a small server you own. Your files are never stored in someone else's cloud.</p>
-          <div class="actions">
-            <a class="button accent big" id="download-main" href="/download/windows">Download for Windows</a>
-            <a class="button big" href="/add/">Add a computer →</a>
-          </div>
-          <p class="others">Other systems:
-            <a href="/download/mac-apple-silicon">Mac (Apple silicon)</a>
-            <a href="/download/mac-intel">Mac (Intel)</a>
-            <a href="/download/linux">Linux</a>
-            <a href="/download/windows-portable">Windows (no installer)</a>
-          </p>
-          <p class="others" id="phone-note" hidden>Pairnets is for computers for now. A phone app will use the same sign-in.</p>
-        </div>
+  <section class="opening" aria-labelledby="title">
+    <div class="text">
+      <h1 id="title">One folder, the same on all your computers.</h1>
+      <p class="lead">Pairnets keeps a folder identical on your computers through a small server you own. Your files are never stored in someone else's cloud.</p>
+      <div class="actions">
+        <a class="button accent big" id="download-main" href="/download/windows">Download for Windows</a>
+        <a href="/add/">Add a computer →</a>
       </div>
-
-      <figure class="window" role="img" aria-label="The Pairnets app on DESKTOP while it gets 3 files from your nest: LAPTOP is in sync, MINI-PC is getting them too, MEDIA-PC can't be reached.">
-        <div class="window-bar" aria-hidden="true">
-          <img src="/assets/logo.svg" alt=""><span>Pairnets</span><span class="grow"></span>
-          <span class="ctl"><svg viewBox="0 0 10 10" fill="none" stroke="currentColor"><path d="M1 5h8"/></svg></span>
-          <span class="ctl"><svg viewBox="0 0 10 10" fill="none" stroke="currentColor"><rect x="1.5" y="1.5" width="7" height="7"/></svg></span>
-          <span class="ctl"><svg viewBox="0 0 10 10" fill="none" stroke="currentColor"><path d="m1.5 1.5 7 7m0-7-7 7"/></svg></span>
-        </div>
-        <div class="window-body" aria-hidden="true">
-          <div class="app-side">
-            <p class="sec">This computer</p>
-            <div class="pc me"><span class="ic"><svg><use href="#i-desktop"/></svg><span class="st"></span></span><span class="nm"><b>DESKTOP</b><span class="get">getting 3 files</span></span></div>
-            <p class="sec">Your computers</p>
-            <div class="pc"><span class="ic"><svg><use href="#i-laptop"/></svg><span class="st"></span></span><span class="nm"><b>LAPTOP</b><span>in sync</span></span></div>
-            <div class="pc"><span class="ic"><svg><use href="#i-mini"/></svg><span class="st"></span></span><span class="nm"><b>MINI-PC</b><span class="get">getting them</span></span></div>
-            <div class="pc"><span class="ic"><svg><use href="#i-media"/></svg><span class="st bad"></span></span><span class="nm"><b>MEDIA-PC</b><span class="bad">can’t reach</span></span></div>
-            <div class="tiles">
-              <span class="tile on"><svg><use href="#i-home"/></svg>Overview</span>
-              <span class="tile"><svg><use href="#i-activity"/></svg>Activity</span>
-              <span class="tile"><svg><use href="#i-history"/></svg>History</span>
-              <span class="tile"><svg><use href="#i-settings"/></svg>Settings</span>
-            </div>
-          </div>
-          <div class="app-main">
-            <div class="app-head">
-              <span class="title">Overview</span>
-              <span class="app-btn opt"><svg><use href="#i-folder"/></svg>Open folder</span>
-              <span class="app-btn opt"><svg><use href="#i-pause"/></svg>Pause</span>
-              <span class="app-btn go"><svg><use href="#i-sync"/></svg>Sync now</span>
-            </div>
-            <div class="status-card">
-              <div class="status-top">
-                <span class="pill sync">Syncing</span>
-                <span class="what">Getting 3 files from your nest</span>
-                <span class="pct">64%</span>
-              </div>
-              <div class="bar"><span></span></div>
-              <div class="status-meta"><span>2 of 3 files · 48 MB of 75 MB</span><span>12 MB/s · a few seconds left</span></div>
-              <hr>
-              <svg class="hub hub-wide" viewBox="0 0 700 196">
-                <path class="ln get" d="M150 98 H318"/>
-                <path class="spark" pathLength="100" d="M318 98 H150"/>
-                <g class="speed"><rect x="194" y="86" width="82" height="24" rx="12"/><text x="235" y="102" text-anchor="middle">↓ 12 MB/s</text></g>
-                <path class="ln ok" d="M380 98 C460 98 460 30 540 30"/>
-                <path class="ln get" d="M380 98 H540"/>
-                <path class="spark two" pathLength="100" d="M380 98 H540"/>
-                <path class="ln bad" d="M380 98 C460 98 460 166 540 166"/>
-                <g class="xmark"><circle cx="462" cy="146" r="10"/><path d="m458 142 8 8m0-8-8 8"/></g>
-                <rect class="chip" x="0" y="76" width="44" height="44" rx="12"/>
-                <svg class="cg" x="11" y="87" width="22" height="22"><use href="#i-desktop"/></svg>
-                <circle class="dotst ok" cx="42" cy="118" r="6"/>
-                <text x="56" y="94">DESKTOP</text><text class="sub" x="56" y="111">This computer</text>
-                <rect class="nestbox" x="321" y="70" width="56" height="56" rx="16"/>
-                <svg class="cg nest" x="336" y="85" width="26" height="26"><use href="#i-nest"/></svg>
-                <circle class="dotst ok" cx="374" cy="123" r="6"/>
-                <text x="349" y="148" text-anchor="middle">Your nest</text><text class="sub" x="349" y="165" text-anchor="middle">412 GB free</text>
-                <rect class="chip" x="548" y="12" width="36" height="36" rx="10"/><svg class="cg" x="557" y="21" width="18" height="18"><use href="#i-laptop"/></svg>
-                <text x="596" y="27">LAPTOP</text><text class="sub okt" x="596" y="43">in sync</text>
-                <rect class="chip" x="548" y="80" width="36" height="36" rx="10"/><svg class="cg" x="557" y="89" width="18" height="18"><use href="#i-mini"/></svg>
-                <text x="596" y="95">MINI-PC</text><text class="sub get" x="596" y="111">↓ 4.1 MB/s</text>
-                <rect class="chip" x="548" y="148" width="36" height="36" rx="10"/><svg class="cg" x="557" y="157" width="18" height="18"><use href="#i-media"/></svg>
-                <text x="596" y="163">MEDIA-PC</text><text class="sub badt" x="596" y="179">can’t reach</text>
-              </svg>
-              <svg class="hub hub-tall" viewBox="0 0 330 260">
-                <path class="ln get" d="M66 130 C108 130 108 32 150 32"/>
-                <path class="spark" pathLength="100" d="M66 130 C108 130 108 32 150 32"/>
-                <path class="ln ok" d="M66 130 C108 130 108 98 150 98"/>
-                <path class="ln get" d="M66 130 C108 130 108 164 150 164"/>
-                <path class="ln bad" d="M66 130 C108 130 108 230 150 230"/>
-                <g class="xmark"><circle cx="112" cy="196" r="9"/><path d="m108.5 192.5 7 7m0-7-7 7"/></g>
-                <rect class="nestbox" x="8" y="102" width="56" height="56" rx="16"/>
-                <svg class="cg nest" x="23" y="117" width="26" height="26"><use href="#i-nest"/></svg>
-                <text x="36" y="180" text-anchor="middle">Your nest</text><text class="sub" x="36" y="196" text-anchor="middle">412 GB free</text>
-                <rect class="chip" x="156" y="14" width="36" height="36" rx="10"/><svg class="cg" x="165" y="23" width="18" height="18"><use href="#i-desktop"/></svg>
-                <text x="202" y="29">DESKTOP</text><text class="sub get" x="202" y="45">↓ 12 MB/s · this one</text>
-                <rect class="chip" x="156" y="80" width="36" height="36" rx="10"/><svg class="cg" x="165" y="89" width="18" height="18"><use href="#i-laptop"/></svg>
-                <text x="202" y="95">LAPTOP</text><text class="sub okt" x="202" y="111">in sync</text>
-                <rect class="chip" x="156" y="146" width="36" height="36" rx="10"/><svg class="cg" x="165" y="155" width="18" height="18"><use href="#i-mini"/></svg>
-                <text x="202" y="161">MINI-PC</text><text class="sub get" x="202" y="177">↓ 4.1 MB/s</text>
-                <rect class="chip" x="156" y="212" width="36" height="36" rx="10"/><svg class="cg" x="165" y="221" width="18" height="18"><use href="#i-media"/></svg>
-                <text x="202" y="227">MEDIA-PC</text><text class="sub badt" x="202" y="243">can’t reach</text>
-              </svg>
-            </div>
-            <div class="recent">
-              <div><b>Budget 2026.xlsx</b>changed on LAPTOP · just now</div>
-              <div><b>Holiday photos</b>12 new files · 10:41</div>
-              <div><b>Notes.md</b>both versions kept · 09:58</div>
-            </div>
-          </div>
-        </div>
-      </figure>
+      <p class="others">Also for
+        <a href="/download/mac-apple-silicon">Mac (Apple silicon)</a>
+        <a href="/download/mac-intel">Mac (Intel)</a>
+        <a href="/download/linux">Linux</a>
+        <a href="/download/windows-portable">Windows (no installer)</a>
+      </p>
+      <p class="others" id="phone-note" hidden>Pairnets is for computers for now. A phone app will use the same sign-in.</p>
     </div>
+    <figure>
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="/assets/shots/overview-dark.webp">
+        <img class="shot" src="/assets/shots/overview-light.webp" width="1200" height="780" alt="The Pairnets app on a Mac. The Overview shows 120 files going up to the nest at 4.90 MB/s, with a line from the nest to each computer: LAPTOP and MINI-PC are getting the files, three others can't be reached.">
+      </picture>
+      <figcaption><b>The Overview, while a Mac sends 120 files to its nest.</b> Each computer gets its own line: blue while it gets files, red and dashed while it can't be reached.</figcaption>
+    </figure>
   </section>
 
-  <section class="band" aria-labelledby="how">
-    <div class="wrap">
-      <div class="band-head">
-        <div><p class="label">Set up in three steps</p><h2 id="how">From download to in sync</h2></div>
-        <p>No server addresses or secret tokens to copy. You sign in with your browser and pick a folder.</p>
+  <section class="chapter" aria-labelledby="how">
+    <div class="wrap split">
+      <div class="say">
+        <h2 id="how">Three steps</h2>
+        <p>No server addresses or secret tokens to copy.</p>
       </div>
-      <ol class="path">
-        <li><div class="n"><b>1</b><span>Get the app</span></div><h3>Install Pairnets</h3><p>It lives in your tray or menu bar and keeps one folder in sync.</p></li>
-        <li><div class="n"><b>2</b><span>Sign in</span></div><h3>Sign in with your browser</h3><p>Choose <em>Continue with email</em> (or <em>Continue with Google</em>) in the app. Your browser opens sync.pairnets.app; check that the code matches and press <em>Allow</em>.</p></li>
-        <li><div class="n"><b>3</b><span>Pick a folder</span></div><h3>Choose what to keep in sync</h3><p>It catches up with your other computers, then stays in sync. Switch computers any time.</p></li>
+      <ol class="how">
+        <li><div><h3>Get the app</h3><p>Install Pairnets on the computer. It lives in your tray or menu bar and keeps one folder in sync.</p></div></li>
+        <li><div><h3>Sign in with your browser</h3><p>Choose <em>Continue with email</em> (or <em>Continue with Google</em>) in the app. Your browser opens sync.pairnets.app; you check that the code matches and press <em>Allow</em>.</p></div></li>
+        <li><div><h3>Pick a folder</h3><p>It catches up with your other computers, then stays in sync. Switch computers any time.</p></div></li>
       </ol>
     </div>
   </section>
 
-  <section class="band" aria-labelledby="why">
-    <div class="wrap">
-      <div class="band-head">
-        <div><p class="label">Safety</p><h2 id="why">Built to keep your files safe</h2></div>
-      </div>
-      <dl class="spec">
-        <div><span class="ic"><svg aria-hidden="true"><use href="#i-shield"/></svg></span><dt>Yours, not ours</dt><dd>The server is a small program on a machine you own, reached through a Cloudflare Tunnel, so there are no ports to open. Only computers you have approved get in. This website never sees your files.</dd></div>
-        <div><span class="ic"><svg aria-hidden="true"><use href="#i-copies"/></svg></span><dt>Never overwrites silently</dt><dd>If two computers change the same file, both versions are kept. Every overwritten or deleted file stays on your server for 30 days.</dd></div>
-        <div><span class="ic"><svg aria-hidden="true"><use href="#i-key"/></svg></span><dt>One key per computer</dt><dd>Lost a laptop? Remove just that computer from your nest and its key stops working at once. Nothing else changes.</dd></div>
-      </dl>
+  <section class="chapter" aria-labelledby="yours">
+    <div class="wrap split">
+      <h2 class="statement" id="yours">The server is a small program on a machine you own. Only computers you have approved get in.</h2>
+      <p>It's reached through a Cloudflare Tunnel, so there are no ports to open. This website never sees your files.</p>
     </div>
   </section>
 
-  <section class="band" id="download" aria-labelledby="dl">
-    <div class="wrap">
-      <div class="band-head">
-        <div><p class="label">Download</p><h2 id="dl">Get Pairnets</h2></div>
-        <p>Free on every system. Install it on each computer, and put the nest on one computer that is always on.</p>
+  <section class="chapter" aria-labelledby="copies">
+    <div class="wrap split">
+      <div class="say">
+        <h2 id="copies">Never overwrites silently</h2>
+        <p>If two computers change the same file, both versions are kept. Every overwritten or deleted file stays on your server for 30 days.</p>
       </div>
+      <figure class="show">
+        <picture>
+          <source media="(prefers-color-scheme: dark)" srcset="/assets/shots/history-dark.webp">
+          <img class="shot" src="/assets/shots/history-light.webp" width="1480" height="1027" loading="lazy" alt="The History page: a list of files on the left, and on the right the older versions of report-q3.xlsx kept on the nest, each with a Restore button.">
+        </picture>
+        <figcaption><b>History.</b> Older versions of a file, kept on your nest. Restore puts one back; the version you have now stays as a version, so nothing is lost.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section class="chapter" aria-labelledby="keys">
+    <div class="wrap split flip">
+      <div class="say">
+        <h2 id="keys">One key per computer</h2>
+        <p>Lost a laptop? Remove just that computer from your nest and its key stops working at once. Nothing else changes.</p>
+      </div>
+      <figure class="show">
+        <picture>
+          <source media="(prefers-color-scheme: dark)" srcset="/assets/shots/devices-dark.webp">
+          <img class="shot" src="/assets/shots/devices-light.webp" width="1480" height="1027" loading="lazy" alt="The Devices page: the nest, online, with its version and free space, and six computers below it, three online and three last seen days ago.">
+        </picture>
+        <figcaption><b>Devices.</b> Your nest and every computer that uses it, with when each one was last seen.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section class="chapter" aria-labelledby="tray">
+    <div class="wrap tray">
+      <div class="say">
+        <h2 id="tray">It lives in your tray or menu bar</h2>
+        <p>Pairnets keeps working when its window is closed. The tray shows what is moving, and lets you pause.</p>
+      </div>
+      <figure>
+        <picture>
+          <source media="(prefers-color-scheme: dark)" srcset="/assets/shots/tray-dark.webp">
+          <img class="shot" src="/assets/shots/tray-light.webp" width="606" height="840" loading="lazy" alt="The tray panel: Syncing, 30%, uploading 120 files to your nest, with the speed to each computer and a Pause button.">
+        </picture>
+      </figure>
+    </div>
+  </section>
+
+  <section class="chapter" id="download" aria-labelledby="dl">
+    <div class="wrap">
+      <h2 id="dl" class="statement">Download</h2>
       <div class="downloads">
         <div class="dl">
-          <div class="dl-top"><span class="ic"><svg aria-hidden="true"><use href="#i-desktop"/></svg></span><div><h3>Windows</h3><p class="req">Windows 10 and 11 · 64-bit</p></div></div>
+          <h3>Windows</h3>
+          <p class="req">Windows 10 and 11, 64-bit.</p>
           <div class="row"><a class="button" href="/download/windows">Installer</a><a class="button" href="/download/windows-portable">No installer (.zip)</a></div>
         </div>
         <div class="dl">
-          <div class="dl-top"><span class="ic"><svg aria-hidden="true"><use href="#i-laptop"/></svg></span><div><h3>Mac</h3><p class="req">macOS 11 or newer</p></div></div>
+          <h3>Mac</h3>
+          <p class="req">macOS 11 or newer.</p>
           <div class="row"><a class="button" href="/download/mac-apple-silicon">Apple silicon</a><a class="button" href="/download/mac-intel">Intel</a></div>
-          <p><strong>First time:</strong> Pairnets isn't notarised yet, so macOS blocks it. Try to open it once, then open System Settings → Privacy &amp; Security and press “Open Anyway” (on macOS 14 and older, right-click → Open also works). Or use the one-line install.</p>
+          <p class="note"><strong>First time:</strong> Pairnets isn't notarised yet, so macOS blocks it. Try to open it once, then open System Settings → Privacy &amp; Security and press “Open Anyway” (on macOS 14 and older, right-click → Open also works). Or use the one-line install.</p>
         </div>
         <div class="dl">
-          <div class="dl-top"><span class="ic"><svg aria-hidden="true"><use href="#i-terminal"/></svg></span><div><h3>Linux desktop</h3><p class="req">64-bit · with a system tray</p></div></div>
+          <h3>Linux</h3>
+          <p class="req">64-bit desktop, with a system tray.</p>
           <div class="row"><a class="button" href="/download/linux">Download (.tar.gz)</a></div>
         </div>
-        <div class="dl nest">
-          <div class="text">
-            <div class="dl-top"><span class="ic"><svg aria-hidden="true"><use href="#i-nest"/></svg></span><div><h3>Your nest (your own server)</h3><p class="req">Any always-on Ubuntu computer</p></div></div>
-            <p>Run one command, then open the link it shows and add the nest to your Pairnets account. No domain, no Cloudflare account.</p>
-            <p><a href="/docs">The guide</a> has the details, and a way to use your own domain instead.</p>
-          </div>
-          <div class="term">
-            <div class="term-bar" aria-hidden="true"><i></i><i></i><i></i><span>on the Ubuntu computer</span></div>
-            <pre><code><span class="p" aria-hidden="true">$ </span>curl -fsSL https://pairnets.app/get.sh | sudo bash</code></pre>
-          </div>
+        <div class="dl">
+          <h3>Your nest</h3>
+          <p class="req">Your own server: any always-on Ubuntu computer. Run one command, then open the link it shows and add the nest to your Pairnets account. No domain, no Cloudflare account.</p>
+          <span></span>
+          <pre class="command"><code>curl -fsSL https://pairnets.app/get.sh | sudo bash</code></pre>
+          <p class="note"><a href="/docs">The guide</a> has the details, and a way to use your own domain instead.</p>
         </div>
       </div>
     </div>
   </section>
 
-  <section class="band" aria-labelledby="support">
-    <div class="wrap">
-      <div class="support">
-        <svg class="support-cup" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <path d="M8 19h28v11a10 10 0 0 1-10 10h-8A10 10 0 0 1 8 30z"/>
-          <path d="M36 22h2.5a5.5 5.5 0 0 1 0 11H35"/>
-          <path d="M17 7c-2 2.5 2 4.5 0 7M26 7c-2 2.5 2 4.5 0 7"/>
-          <path d="M22 34.5l-5-4.8a3 3 0 0 1 5-3.4 3 3 0 0 1 5 3.4z" fill="currentColor" stroke="none"/>
-        </svg>
-        <div class="support-text">
-          <h2 id="support">Like Pairnets?</h2>
-          <p>Pairnets is free. If you like it, buy me a coffee to keep the servers running. It's never required, and every feature stays free.</p>
-        </div>
+  <section class="wrap" aria-labelledby="support">
+    <div class="note-from">
+      <h2 id="support" class="sign">A note from the maker</h2>
+      <blockquote>
+        <p>Pairnets is free, and every feature stays free. The code is open source under the MIT licence.</p>
+        <p>It's made by one person in Denmark.</p>
+      </blockquote>
+      <p class="sign">MRnigth</p>
+      <div class="coffee">
+        <p>Like Pairnets? Buy me a coffee to keep the servers running. It's never required.</p>
         <a class="button accent" href="/donate">Buy me a coffee ♥</a>
       </div>
     </div>
