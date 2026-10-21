@@ -177,7 +177,7 @@ describe("schema", () => {
 
   it("migration 0007 adds an invite's kind (old invites are for a person) and the links table, and keeps every row of 0006", async () => {
     const db = env.DB;
-    for (const t of ["nest_links", ...TABLES]) await db.prepare(`DROP TABLE IF EXISTS ${t}`).run();
+    for (const t of ["link_ends", "nest_links", ...TABLES]) await db.prepare(`DROP TABLE IF EXISTS ${t}`).run();
     for (const m of [migration, migration2, migration3, migration4, migration5, migration6]) await runSql(db, m);
     await db
       .prepare(
@@ -200,6 +200,8 @@ describe("schema", () => {
     await expect(add("lnk_testlink00000000000000003", "nst_testnest000000000000000003", "broken")).rejects.toThrow();
     const indexes = (await db.prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'nest_links' AND name NOT LIKE 'sqlite_%' ORDER BY name").all<{ name: string }>()).results;
     expect(indexes.map((i) => i.name)).toEqual(["nest_links_account", "nest_links_to"]);
+    await db.prepare("INSERT INTO link_ends (link_id, to_nest, created_at) VALUES ('lnk_testlink00000000000000001', 'nst_testnest000000000000000002', 1)").run();
+    await expect(db.prepare("INSERT INTO link_ends (link_id, to_nest, created_at) VALUES ('lnk_testlink00000000000000001', 'nst_testnest000000000000000003', 2)").run()).rejects.toThrow();
   });
 
   it("no secret is stored in clear", async () => {

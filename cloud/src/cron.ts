@@ -11,7 +11,7 @@
 import type { Ctx } from "./context";
 import { sweepInactive } from "./inactive";
 import { REQUEST_KEEP, retryFriends } from "./routes/friends";
-import { retryLinks } from "./routes/links";
+import { retryLinks, tellLinkEnds } from "./routes/links";
 import { DAY, HOUR } from "./ratelimit";
 import { runRouter } from "./router";
 
@@ -68,6 +68,7 @@ export async function sweep(ctx: Ctx): Promise<Record<string, number | string | 
   Object.assign(counts, inactive);
   counts.friendsSynced = await retryFriends(ctx);
   counts.linksSettled = await retryLinks(ctx);
+  counts.linkEndsTold = await tellLinkEnds(ctx);
 
   const need = await db
     .prepare(

@@ -22,3 +22,11 @@ CREATE TABLE nest_links (
 );
 CREATE INDEX nest_links_to ON nest_links(to_nest);
 CREATE INDEX nest_links_account ON nest_links(account_id);
+
+-- A link that ended while the joining nest was off (or whose sharing nest or account went away): the joining nest is
+-- still to be told, so its folder stops waiting and the link no longer counts there. The hourly cron tries again.
+CREATE TABLE link_ends (
+  link_id       TEXT PRIMARY KEY,                 -- the link's id on the joining nest
+  to_nest       TEXT NOT NULL,                    -- the joining nest
+  created_at    INTEGER NOT NULL
+);

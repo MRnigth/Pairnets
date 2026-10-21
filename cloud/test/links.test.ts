@@ -174,6 +174,51 @@ describe("linked nests", () => {
     expect((await b.call("GET", "/v1/links")).json.outgoing).toHaveLength(0);
   });
 
+  it("removing the joining nest takes its key back on the owner's nest", async () => {
+    const { b, nest, anna, annaId, annaNest } = await setup();
+    await link(b, nest, anna, annaNest);
+    expect([...nest.devices.values()].filter((d) => d.personId === annaId)).toHaveLength(1);
+
+    expect((await anna.call("DELETE", `/v1/servers/${annaNest.nestId}`)).status).toBe(204);
+    expect([...nest.devices.values()].filter((d) => d.personId === annaId)).toHaveLength(0);
+    expect((await b.call("GET", `/v1/servers/${nest.nestId}/people`)).json.members).toHaveLength(0);
+    expect((await b.call("GET", "/v1/links")).json.outgoing).toHaveLength(0);
+  });
+
+  it("a link ended while the joining nest is off: it is told once it is back, also when the owner's nest goes", async () => {
+    const { h, b, nest, anna, annaId, annaNest } = await setup();
+    await link(b, nest, anna, annaNest);
+    annaNest.running = false;
+    expect((await b.call("DELETE", `/v1/servers/${nest.nestId}/people/${annaId}`)).status).toBe(204);
+    expect([...annaNest.links.values()][0].key).not.toBeNull(); // not told yet
+    await h.scheduled();
+    expect([...annaNest.links.values()][0].key).not.toBeNull();
+    annaNest.running = true;
+    await h.scheduled();
+    expect([...annaNest.links.values()][0].key).toBeNull();
+    expect(await h.env.DB.prepare("SELECT COUNT(*) AS n FROM link_ends").first("n")).toBe(0);
+
+    // Linked again, then the owner removes the whole nest while Anna's nest is off.
+    await link(b, nest, anna, annaNest);
+    const again = [...annaNest.links.values()].find((l) => l.key)!;
+    annaNest.running = false;
+    expect((await b.call("DELETE", `/v1/servers/${nest.nestId}`)).status).toBe(204);
+    annaNest.running = true;
+    await h.scheduled();
+    expect(annaNest.links.get(again.id)!.key).toBeNull();
+  });
+
+  it("a key the owner's nest refuses for good ends the link at once instead of waiting in the hourly retries", async () => {
+    const { b, nest, anna, annaId, annaNest } = await setup();
+    const inv = await inviteNest(b, nest); // chosen folders
+    expect((await anna.call("POST", "/v1/invite/request", { body: { t: tokenOf(inv.json.link), nestId: annaNest.nestId } })).status).toBe(200);
+    nest.sealed = true; // encrypted meanwhile: it only shares whole now, so the key is refused (400 sealed_whole_only)
+    await b.call("POST", `/v1/servers/${nest.nestId}/invites/${inv.json.id}/approve`);
+    expect((await b.call("GET", "/v1/links")).json.outgoing).toHaveLength(0);
+    expect([...nest.devices.values()].filter((d) => d.personId === annaId)).toHaveLength(0);
+    expect(annaNest.links.size).toBe(0);
+  });
+
   it("either owner can unlink; nobody else can", async () => {
     const { h, b, nest, anna, annaId, annaNest } = await setup();
     await link(b, nest, anna, annaNest);

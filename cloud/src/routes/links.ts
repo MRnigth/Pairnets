@@ -173,6 +173,13 @@ export async function deliverLink(ctx: Ctx, link: LinkRow): Promise<boolean> {
       person: `${ownerName(to)} · ${to.label}`,
       personId: link.account_id,
     });
+    if (minted.status >= 400 && minted.status < 500 && ![401, 408, 429].includes(minted.status)) {
+      // The sharing nest refuses this key for good (for example an encrypted nest and chosen folders): nothing was shared,
+      // and trying every hour would only keep newer links waiting behind it.
+      await audit(ctx, "link_refused_key", link.account_id, from.id, { to: to.id, status: minted.status, error: obj(minted.json)?.error ?? null });
+      await removeMemberOf(ctx, from, link.account_id);
+      return true;
+    }
     const d = minted.status === 200 ? obj(minted.json) : null;
     if (!d || typeof d.id !== "string" || typeof d.key !== "string" || d.key.length === 0) return false;
     made = { id: d.id, key: d.key };
@@ -226,20 +233,61 @@ export async function changeLinks(ctx: Ctx, fromNest: string, accountId: string,
 
 /**
  * A member was removed or left (friends.ts removeMember): their links from that nest end. The key on the sharing nest goes
- * with the member's computers; the joining nest forgets its side (best effort: without the key it can't sync anyway).
+ * with the member's computers; the joining nest is told to forget its side, now or, if it is off, by the hourly cron.
  */
 export async function endLinks(ctx: Ctx, fromNest: string, accountId: string): Promise<void> {
   const rows = await ctx.env.DB.prepare("SELECT * FROM nest_links WHERE from_nest = ?1 AND account_id = ?2").bind(fromNest, accountId).all<LinkRow>();
   for (const l of rows.results) {
     await ctx.env.DB.prepare("DELETE FROM nest_links WHERE id = ?1").bind(l.id).run();
-    const to = await nestWithOwner(ctx, l.to_nest);
-    if (!to || l.status !== "active") continue;
+    if (l.status === "active") await tellLinkEnded(ctx, l.id, l.to_nest);
+  }
+}
+
+/**
+ * Before links are deleted along with their sharing nest or account (servers.ts, accounts.ts): the joining nests of the
+ * active ones are noted, to be told by {@link tellLinkEnds}. Joining nests that go too need nothing.
+ */
+export function noteLinkEnds(ctx: Ctx, where: string, id: string): D1PreparedStatement {
+  // `where` names ?1 (the nest or account going); ?2 is the time.
+  return ctx.env.DB.prepare(
+    `INSERT OR IGNORE INTO link_ends (link_id, to_nest, created_at)
+       SELECT id, to_nest, ?2 FROM nest_links WHERE status = 'active' AND (${where})`,
+  ).bind(id, ctx.now);
+}
+
+/** Tells one joining nest that its link ended; if it is off, the hourly cron tries again. */
+async function tellLinkEnded(ctx: Ctx, linkId: string, toNest: string): Promise<boolean> {
+  const to = await nestWithOwner(ctx, toNest);
+  if (to) {
     try {
-      await adminCall(ctx.env, ctx.now, to, "DELETE", `/api/relay/links/${l.id}`);
+      const r = await adminCall(ctx.env, ctx.now, to, "DELETE", `/api/relay/links/${linkId}`);
+      if (r.status >= 500) throw new NestOffline();
     } catch (e) {
       if (!(e instanceof NestOffline)) throw e;
+      await ctx.env.DB.prepare("INSERT OR IGNORE INTO link_ends (link_id, to_nest, created_at) VALUES (?1, ?2, ?3)").bind(linkId, toNest, ctx.now).run();
+      return false;
     }
   }
+  await ctx.env.DB.prepare("DELETE FROM link_ends WHERE link_id = ?1").bind(linkId).run();
+  return true;
+}
+
+/** A joining nest that stays off this long is not told any more (its link shows a problem there once the key fails). */
+const LINK_END_KEEP_MS = 30 * 24 * 3600 * 1000;
+
+/** The hourly cron (and right after a nest or account goes): joining nests still to be told. Returns how many were told. */
+export async function tellLinkEnds(ctx: Ctx): Promise<number> {
+  await ctx.env.DB.prepare("DELETE FROM link_ends WHERE created_at <= ?1").bind(ctx.now - LINK_END_KEEP_MS).run();
+  const rows = await ctx.env.DB.prepare("SELECT * FROM link_ends ORDER BY created_at LIMIT ?1").bind(LINKS_PER_SWEEP).all<{ link_id: string; to_nest: string }>();
+  let told = 0;
+  for (const r of rows.results) {
+    try {
+      if (await tellLinkEnded(ctx, r.link_id, r.to_nest)) told++;
+    } catch (e) {
+      console.error("links: telling a nest its link ended failed", e instanceof Error ? e.message : "unknown");
+    }
+  }
+  return told;
 }
 
 /** The hourly cron: links let in while a nest was offline get their key now. Returns how many were settled. */
