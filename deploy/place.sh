@@ -266,24 +266,16 @@ place_check() {
 
 # place_write_unit <kind> <folder>: the bind mount that shows <folder> at the fixed path.
 place_write_unit() {
-  local kind="$1" dir="$2" link unit drive needs=""
+  local kind="$1" dir="$2" link unit
   link="$(place_link "$kind")"
   unit="$PLACE_UNIT_DIR/$(place_unit "$kind")"
-  # Only the drive that holds the folder, not every folder above it: RequiresMountsFor would also pull in a stale
-  # /etc/fstab line for a parent (a cloud machine's /mnt that is not there) and then never start.
-  drive="$(findmnt -rn -o TARGET --target "$dir" 2>/dev/null | head -n1)"
-  drive="$(printf '%b' "$drive")" # findmnt -r escapes spaces as \x20
-  if [[ -n "$drive" && "$drive" != / ]]; then
-    drive="$(systemd-escape -p --suffix=mount "$drive")"
-    needs="Requires=$drive"$'\n'"After=$drive"
-  fi
   cat > "$unit.tmp" <<UNIT
 # Written by Pairnets (deploy/place.sh): the folder you chose for Pairnets, shown at $link.
 # Change it with the install command (--$([[ "$kind" == data ]] && echo data || echo program)-dir) or, for the files, in the app's Settings.
 [Unit]
 Description=Pairnets $([[ "$kind" == data ]] && echo files || echo program) on $dir
-${needs:+$needs
-}AssertPathExists=$dir/$PLACE_MARKER
+RequiresMountsFor=$dir
+AssertPathExists=$dir/$PLACE_MARKER
 
 [Mount]
 What=$dir

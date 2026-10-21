@@ -201,7 +201,15 @@ jobs:
 
       - name: Choose a drive, update, move the files (phase C)
         if: matrix.check == 'choose-a-drive'
-        run: sudo bash tests/linux-server/place-check.sh --feed dist/feed1 --feed2 dist/feed2
+        run: |
+          # The runner's /etc/fstab names a /mnt disk (ephemeral0) that is not there; systemd ties the test drives under
+          # /mnt to that failed mount, so drop the stale line first (a real server with such a line has the same problem).
+          if ! findmnt -rn --mountpoint /mnt >/dev/null && grep -qE '^[^#[:space:]]+[[:space:]]+/mnt[[:space:]]' /etc/fstab; then
+            sudo sed -i -E 's|^([^#[:space:]]+[[:space:]]+/mnt[[:space:]].*)$|# \1|' /etc/fstab
+            sudo systemctl daemon-reload
+            sudo systemctl reset-failed mnt.mount 2>/dev/null || true
+          fi
+          sudo bash tests/linux-server/place-check.sh --feed dist/feed1 --feed2 dist/feed2
 
       - name: Server logs
         if: always()
