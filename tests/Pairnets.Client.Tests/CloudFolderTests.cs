@@ -232,15 +232,11 @@ public sealed class CloudFolderTests : IDisposable
             StabilityWindow = TimeSpan.Zero,
         };
 
-        // Windows' cloud files service may still hold here.txt for a moment after it was marked in sync; the next pass reads it.
         var scan = await scanner.ScanAsync(CancellationToken.None);
-        for (var tries = 0; !scan.Files["here.txt"].Stable && tries < 20; tries++)
-        {
-            await Task.Delay(100);
-            scan = await scanner.ScanAsync(CancellationToken.None);
-        }
 
-        Assert.True(scan.Files["here.txt"].Stable, scan.Files["here.txt"].UnstableReason);
+        // In sync and not pinned, so Windows may free here.txt at any moment (GitHub's runners do): then it is not read either.
+        var freed = cloud.IsCloudOnly(here);
+        Assert.Equal(!freed, scan.Files["here.txt"].Stable);
         Assert.False(scan.Files["there.txt"].Stable); // unknown to the notes and only on the nest: not read, not deleted
         Assert.True(cloud.IsCloudOnly(Path.Combine(root, "there.txt")));
 
@@ -249,7 +245,7 @@ public sealed class CloudFolderTests : IDisposable
         // With the cloud folder off (or after leaving it), placeholders are still files: never "deleted", never read.
         var plain = new LocalScanner(root, new Pairnets.Core.Paths.IgnoreList(), state, TimeProvider.System, NullLogger.Instance) { StabilityWindow = TimeSpan.Zero };
         var plainScan = await plain.ScanAsync(CancellationToken.None);
-        Assert.True(plainScan.Files["here.txt"].Stable);
+        Assert.Equal(!cloud.IsCloudOnly(here), plainScan.Files["here.txt"].Stable);
         Assert.False(plainScan.Files["there.txt"].Stable);
     }
 
