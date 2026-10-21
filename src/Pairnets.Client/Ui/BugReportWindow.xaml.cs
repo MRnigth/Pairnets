@@ -93,7 +93,7 @@ public partial class BugReportWindow : Window
             return;
         var send = _sendCrashes;
         var window = new SendCrashWindow(cards, note => send(cards, note)) { Owner = this };
-        window.ShowDialog();
+        Dialogs.ShowWindow(window);
         if (!window.Sent)
             return;
         SentChipText.Text = cards.Count == 1 ? "Crash report sent to Pairnets" : $"{cards.Count} crash reports sent to Pairnets";

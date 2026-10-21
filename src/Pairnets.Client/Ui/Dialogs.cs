@@ -45,6 +45,9 @@ public static class Dialogs
 
         /// <summary>The files "Add files" adds, or null for Cancel.</summary>
         IReadOnlyList<string>? OpenFiles(string title) => null;
+
+        /// <summary>Opens one of the app's own windows (<see cref="ShowWindow"/>) without waiting for it to close.</summary>
+        void Show(Window window) => window.Show();
     }
 
     /// <summary>A pop-up with buttons of its own: the last one is the main one.</summary>
@@ -110,6 +113,15 @@ public static class Dialogs
         window.Content = content;
         window.Loaded += (_, _) => noButton.Focus();
         return window.ShowDialog() == true;
+    }
+
+    /// <summary>Shows one of the app's own windows as a dialog and waits until it closes (in tests: opens it and goes on).</summary>
+    public static void ShowWindow(Window window)
+    {
+        if (Responder is { } responder)
+            responder.Show(window);
+        else
+            window.ShowDialog();
     }
 
     /// <summary>Lets the person choose a folder; null when they cancel.</summary>
