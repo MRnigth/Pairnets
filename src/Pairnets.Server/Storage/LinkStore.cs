@@ -76,11 +76,19 @@ public sealed record NestLink(
             : null;
 }
 
+/// <summary>
+/// A nest someone shared with this nest's owner's account (docs/DECISIONS.md, option B). The service hands it to every
+/// nest the owner has, so each of the owner's computers can offer "Add it". Only a hint: adding it still runs the usual
+/// sign-in in the browser, where the shared nest is chosen.
+/// </summary>
+public sealed record SharedOffer(string NestId, string NestName, string OwnerName, string Access, IReadOnlyList<string>? Folders);
+
 /// <summary>The hashes a file had on both nests the last time a link brought them into step.</summary>
 public sealed record LinkFile(string Path, string? RemoteHash, string? LocalHash);
 
 /// <summary>
-/// links.db in the data folder: the nests this nest is linked to and what each pass last saw. It is its own file, so
+/// links.db in the data folder: the nests this nest is linked to and what each pass last saw, and the nests shared with
+/// its owner's account (<see cref="SharedOffer"/>). It is its own file, so
 /// auth.db's schema stays the computers' own.
 /// </summary>
 public sealed class LinkStore
@@ -140,6 +148,12 @@ public sealed class LinkStore
                     remoteHash TEXT NULL,
                     localHash TEXT NULL,
                     PRIMARY KEY(linkId, path));
+                CREATE TABLE IF NOT EXISTS offers(
+                    nestId TEXT PRIMARY KEY NOT NULL,
+                    nestName TEXT NOT NULL,
+                    ownerName TEXT NOT NULL,
+                    access TEXT NOT NULL,
+                    folders TEXT NULL);
                 PRAGMA user_version=1;
                 """);
         }
@@ -259,6 +273,45 @@ public sealed class LinkStore
         cmd.Parameters.AddWithValue("$id", linkId);
         cmd.Parameters.AddWithValue("$p", path);
         cmd.ExecuteNonQuery();
+    }
+
+    public IReadOnlyList<SharedOffer> Offers()
+    {
+        using var conn = Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT nestId, nestName, ownerName, access, folders FROM offers ORDER BY ownerName, nestName;";
+        using var r = cmd.ExecuteReader();
+        var list = new List<SharedOffer>();
+        while (r.Read())
+            list.Add(new SharedOffer(r.GetString(0), r.GetString(1), r.GetString(2), r.GetString(3),
+                r.IsDBNull(4) ? null : JsonSerializer.Deserialize<List<string>>(r.GetString(4))));
+        return list;
+    }
+
+    /// <summary>The service's whole current list replaces the old one (a nest no longer shared simply drops out).</summary>
+    public void SetOffers(IEnumerable<SharedOffer> offers)
+    {
+        using var conn = Open();
+        using var tx = conn.BeginTransaction();
+        using (var del = conn.CreateCommand())
+        {
+            del.Transaction = tx;
+            del.CommandText = "DELETE FROM offers;";
+            del.ExecuteNonQuery();
+        }
+        foreach (var o in offers)
+        {
+            using var cmd = conn.CreateCommand();
+            cmd.Transaction = tx;
+            cmd.CommandText = "INSERT OR REPLACE INTO offers(nestId, nestName, ownerName, access, folders) VALUES($n, $name, $owner, $a, $f);";
+            cmd.Parameters.AddWithValue("$n", o.NestId);
+            cmd.Parameters.AddWithValue("$name", o.NestName);
+            cmd.Parameters.AddWithValue("$owner", o.OwnerName);
+            cmd.Parameters.AddWithValue("$a", o.Access);
+            cmd.Parameters.AddWithValue("$f", o.Folders is null ? (object)DBNull.Value : JsonSerializer.Serialize(o.Folders));
+            cmd.ExecuteNonQuery();
+        }
+        tx.Commit();
     }
 
     private bool Update(string id, string set, params (string Name, object Value)[] values)

@@ -236,6 +236,33 @@ public sealed class NestLinkTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task SharedNestOffersReachTheAppsAndAreReplacedAsAWhole()
+    {
+        var put = await RelayAsync(HttpMethod.Put, "/api/relay/offers", new
+        {
+            offers = new[]
+            {
+                new { nestId = OtherNestId, nestName = "Home nest", ownerName = "Oskar", access = "view", folders = (string[]?)["Photos"] },
+            },
+        });
+        Assert.Equal(HttpStatusCode.OK, put.StatusCode);
+
+        var me = _anna.MintKey("ANNA-PC");
+        using var http = _anna.RawHttp();
+        http.DefaultRequestHeaders.Authorization = new("Bearer", me.Key);
+        var offer = Assert.Single((await http.GetFromJsonAsync<LinkEndpoints.OfferList>("api/offers", PairnetsJson.Options))!.Offers);
+        Assert.Equal(new SharedOffer(OtherNestId, "Home nest", "Oskar", "view", ["Photos"]) with { Folders = offer.Folders }, offer);
+        Assert.Equal(["Photos"], offer.Folders);
+
+        Assert.Equal(HttpStatusCode.OK, (await RelayAsync(HttpMethod.Put, "/api/relay/offers", new { offers = Array.Empty<object>() })).StatusCode);
+        Assert.Empty((await http.GetFromJsonAsync<LinkEndpoints.OfferList>("api/offers", PairnetsJson.Options))!.Offers);
+
+        using var anonymous = _anna.RawHttp();
+        Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.GetAsync("api/offers")).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await RelayAsync(HttpMethod.Put, "/api/relay/offers", new { offers = new[] { new { nestId = "x" } } })).StatusCode);
+    }
+
+    [Fact]
     public async Task AnEncryptedNestCantJoin()
     {
         _anna.Store.Manifest.TurnOnSealed();

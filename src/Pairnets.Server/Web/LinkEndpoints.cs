@@ -37,6 +37,12 @@ public static partial class LinkEndpoints
 
     public sealed record AppLinkList(IReadOnlyList<AppLink> Links);
 
+    public sealed record OffersRequest(IReadOnlyList<OfferItem>? Offers);
+
+    public sealed record OfferItem(string? NestId, string? NestName, string? OwnerName, string? Access, IReadOnlyList<string>? Folders);
+
+    public sealed record OfferList(IReadOnlyList<SharedOffer> Offers);
+
     public static void Map(WebApplication app)
     {
         var relay = app.MapGroup(RelayEndpoints.Prefix + "/links").AddEndpointFilter(async (context, next) =>
@@ -83,6 +89,30 @@ public static partial class LinkEndpoints
             log.LogInformation("The link with {Owner}'s {Nest} was ended; {Folder} stays", link.OwnerName, link.NestName, link.Folder);
             return Json(new RelayEndpoints.RemoveResult(true));
         });
+
+        // The nests shared with the owner's account (option B): the service sends the whole list after every change.
+        app.MapGroup(RelayEndpoints.Prefix + "/offers").AddEndpointFilter(async (context, next) =>
+                RelayAuthMiddleware.VerifiedBody(context.HttpContext) is null ? RelayEndpoints.BadSignature() : await next(context))
+            .MapPut("", (HttpContext ctx, LinkStore links) =>
+            {
+                var body = Read<OffersRequest>(ctx);
+                if (body?.Offers is not { Count: <= 50 } given)
+                    return RelayEndpoints.Error(StatusCodes.Status400BadRequest, "bad_request");
+                var offers = new List<SharedOffer>();
+                foreach (var o in given)
+                {
+                    if (!Relay.IsNestId(o.NestId) || RelayEndpoints.Clean(o.NestName, 64) is not { } name || RelayEndpoints.Clean(o.OwnerName, 40) is not { } owner
+                        || ParseAccess(o.Access) is not { } access || CleanFolders(o.Folders, out var folders) is false)
+                        return RelayEndpoints.Error(StatusCodes.Status400BadRequest, "bad_request");
+                    offers.Add(new SharedOffer(o.NestId!, name, owner, access == LinkAccess.Edit ? "edit" : "view", folders));
+                }
+                links.SetOffers(offers);
+                return Json(new OfferList(links.Offers()));
+            });
+
+        app.MapGet("/api/offers", (HttpContext ctx, LinkStore links) => DeviceIdentity.Of(ctx) is null
+            ? Results.Json(new ErrorBody(ErrorCodes.Unauthorized, "Not signed in."), PairnetsJson.Options, statusCode: StatusCodes.Status401Unauthorized)
+            : Json(new OfferList(links.Offers())));
 
         // Any computer of this nest: the linked folders, so the apps can mark them.
         app.MapGet("/api/links", (HttpContext ctx, LinkStore links) => DeviceIdentity.Of(ctx) is null
