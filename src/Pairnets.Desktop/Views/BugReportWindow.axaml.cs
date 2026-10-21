@@ -7,11 +7,16 @@ using Pairnets.Core.Settings;
 
 namespace Pairnets.Desktop.Views;
 
-/// <summary>"Report a bug": builds the report, copies it to the clipboard and saves it next to the logs. Nothing is sent anywhere.</summary>
+/// <summary>
+/// "Report a bug": builds the report, copies it to the clipboard and saves it next to the logs. Nothing is sent anywhere,
+/// unless the user presses "Send crash report" (shown when there are crash cards not sent yet).
+/// </summary>
 public partial class BugReportWindow : Window
 {
     private readonly Func<Task<string>> _build;
     private readonly Action<string> _open;
+    private readonly string? _crashesDir;
+    private readonly Func<IReadOnlyList<CrashCard>, string?, Task<string?>>? _sendCrashes;
     private string? _path;
 
     public BugReportWindow()
@@ -23,11 +28,16 @@ public partial class BugReportWindow : Window
     /// <param name="open">Opens the saved file.</param>
     /// <param name="afterError">True when Pairnets opened this after an unexpected error.</param>
     /// <param name="saveDirectory">Where the report is saved (default: Pairnets's log folder).</param>
-    public BugReportWindow(Func<Task<string>> build, Action<string> open, bool afterError = false, string? saveDirectory = null)
+    /// <param name="crashesDir">The crash cards (<see cref="ClientEnvironment.CrashesDir"/>); null hides "Send crash report".</param>
+    /// <param name="sendCrashes">Sends cards with the user's note (<see cref="CrashSender.SendAsync"/>); null or what went wrong.</param>
+    public BugReportWindow(Func<Task<string>> build, Action<string> open, bool afterError = false, string? saveDirectory = null,
+        string? crashesDir = null, Func<IReadOnlyList<CrashCard>, string?, Task<string?>>? sendCrashes = null)
     {
         InitializeComponent();
         _build = build;
         _open = open;
+        _crashesDir = crashesDir;
+        _sendCrashes = sendCrashes;
         SaveDirectory = saveDirectory ?? PairnetsPaths.LogsDir;
         if (afterError)
             Heading.Text = "Pairnets hit an unexpected error and kept running. Building a bug report…";
@@ -39,6 +49,8 @@ public partial class BugReportWindow : Window
     // Exposed for the headless UI test.
     internal string ReportValue => ReportText.Text ?? string.Empty;
     internal string? SavedPath => _path;
+    internal bool CrashBannerShown => CrashBanner.IsVisible;
+    internal string SentChipValue => SentChipText.Text ?? string.Empty;
 
     internal async Task BuildAsync()
     {
@@ -78,6 +90,41 @@ public partial class BugReportWindow : Window
             Explanation.Inlines.Add(name);
         }
         Explanation.Inlines.Add(new Avalonia.Controls.Documents.Run(". Paste it to whoever helps you."));
+        ShowSendCrash();
+    }
+
+    private IReadOnlyList<CrashCard> Unsent() => _crashesDir is null ? [] : CrashSender.Unsent(_crashesDir);
+
+    private void ShowSendCrash()
+    {
+        var cards = _sendCrashes is null ? [] : Unsent();
+        CrashBanner.IsVisible = cards.Count > 0;
+        if (cards.Count == 0)
+            return;
+        var times = cards.Sum(c => c.Count);
+        CrashBannerTitle.Text = $"Pairnets crashed {(times == 1 ? "once" : $"{times} times")}. Help us fix it?";
+    }
+
+    /// <summary>After the send window: when it sent, the chip and banner say so and the button goes.</summary>
+    internal void AfterSend(bool sent, int count)
+    {
+        if (!sent)
+            return;
+        SentChipText.Text = count == 1 ? "Crash report sent to Pairnets" : $"{count} crash reports sent to Pairnets";
+        CrashBannerTitle.Text = "Thank you. The crash report was sent.";
+        CrashBannerText.Text = "Only the crash report went out. The bug report below was not sent.";
+        SendCrashButton.IsVisible = false;
+    }
+
+    private async void OnSendCrash(object? sender, RoutedEventArgs e)
+    {
+        var cards = Unsent();
+        if (_sendCrashes is null || cards.Count == 0)
+            return;
+        var send = _sendCrashes;
+        var window = new SendCrashWindow(cards, note => send(cards, note));
+        await window.ShowDialog(this);
+        AfterSend(window.Sent, cards.Count);
     }
 
     private async Task<bool> CopyAsync(string text)

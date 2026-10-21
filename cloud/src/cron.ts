@@ -11,6 +11,7 @@
 import type { Ctx } from "./context";
 import { sweepInactive } from "./inactive";
 import { REQUEST_KEEP, retryFriends } from "./routes/friends";
+import { crashSweep } from "./routes/crash";
 import { DAY, HOUR } from "./ratelimit";
 import { runRouter } from "./router";
 
@@ -40,6 +41,7 @@ export async function sweep(ctx: Ctx): Promise<Record<string, number | string | 
       .bind(now, now - REQUEST_KEEP),
     db.prepare("DELETE FROM nest_invites WHERE nest_id NOT IN (SELECT id FROM nests WHERE mode = 'relay' AND status IN ('pending', 'active'))"),
     db.prepare("DELETE FROM nest_members WHERE nest_id NOT IN (SELECT id FROM nests WHERE mode = 'relay' AND status IN ('pending', 'active'))"),
+    crashSweep(db, now),
   ]);
   const names = [
     "sessions",
@@ -54,6 +56,7 @@ export async function sweep(ctx: Ctx): Promise<Record<string, number | string | 
     "invitesEnded",
     "invitesOfGoneNests",
     "membersOfGoneNests",
+    "crashReports",
   ];
   const counts: Record<string, number | string | null> = {};
   results.forEach((r, i) => (counts[names[i]] = r.meta.changes ?? 0));

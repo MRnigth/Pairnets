@@ -1561,3 +1561,15 @@ nest" canvas (a copy is in `Pairnets\designs\invite-friends-2026-10-21`). The ow
   service makes no invites for it and never hands a friend a key to it.
 * **Limits:** 10 friends per nest (people plus open invites), 20 invites a day per account, and invite emails have their
   own budget of 5 a day, apart from the sign-in and notice mail.
+
+## One release: 1.0.61 holds several nests, encryption phase A, friend invites and crash reports (2026-10-21)
+
+The owner decided everything goes out together as **1.0.61** from `release/1.0.61`: 1.0.60.1 + several nests, then
+`release/1.0.61.2` (friend invites, which holds 1.0.61.1's encryption phase A; the nest only seals when an app asks,
+and no app does yet), then `feature/crash-send`, then `release/1.0.61.3` (4 nests, linked nests) by its own chat.
+
+* **D1 migrations are numbered in merge order:** `0006_friends` (invites), `0007_links` (1.0.61.3), and crash-send's
+  migration, written as 0006 on its own branch, is **`0008_crash_reports`**. Production D1 had neither applied, so
+  nothing is renamed there. Deploying the Worker applies 0006, 0007 and 0008 in that order.
+* **Files page actions on a friend's view-only nest** (add, rename, move, delete) are refused by the nest (403) and the
+  app shows why; nothing changes on the nest. Hiding those buttons for view-only nests is left for later.

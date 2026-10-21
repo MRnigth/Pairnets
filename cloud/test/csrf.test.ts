@@ -45,6 +45,7 @@ describe("csrf", () => {
         "/v1/app/poll",
         "/v1/app/start",
         "/v1/claim",
+        "/v1/crash",
         "/v1/heartbeat",
         "/v1/nest/confirm",
         "/v1/nest/unlink",
@@ -63,6 +64,7 @@ describe("csrf", () => {
     expect((await c.call("POST", "/v1/nest/unlink", { body: {} })).status).toBe(410);
     expect((await c.call("POST", "/v1/servers/start", { body: {} })).status).toBe(200);
     expect((await c.call("POST", "/v1/servers/poll", { body: { deviceCode: "x" } })).status).toBe(400);
+    expect((await c.call("POST", "/v1/crash", { body: {} })).status).toBe(400);
   });
 
   it("exempt endpoints never act on the browser's cookie", async () => {

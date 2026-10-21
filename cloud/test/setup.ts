@@ -10,6 +10,7 @@ export const TABLES = [
   "nest_members",
   "nest_invites",
   "audit",
+  "crash_reports",
   "rate_counters",
   "sessions",
   "identities",

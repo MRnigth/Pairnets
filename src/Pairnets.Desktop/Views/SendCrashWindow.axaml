@@ -1,0 +1,50 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:v="using:Pairnets.Desktop.Views"
+        x:Class="Pairnets.Desktop.Views.SendCrashWindow"
+        Title="Send crash report" Width="600" Height="540" MinWidth="460" MinHeight="420"
+        Background="{DynamicResource T.Card}"
+        WindowStartupLocation="CenterOwner" Icon="avares://Pairnets/Assets/pairnets-icon-256.png">
+  <!-- "Send crash report to Pairnets": exactly what goes out, an optional note, then Send or Don't send. -->
+  <Grid Margin="24,20" RowDefinitions="Auto,*,Auto,Auto,Auto">
+    <Grid ColumnDefinitions="Auto,*">
+      <Border Width="40" Height="40" CornerRadius="20" Margin="0,0,14,0" VerticalAlignment="Top" Background="{DynamicResource T.AccentSoft}">
+        <v:LineIcon Width="20" Height="20" StrokeThickness="2.6" Stroke="{DynamicResource T.AccentInk}" Data="{StaticResource I.Mail}" />
+      </Border>
+      <StackPanel Grid.Column="1" Spacing="4">
+        <TextBlock x:Name="Heading" FontSize="20" FontWeight="ExtraBold" TextWrapping="Wrap" Text="Send this crash report to us?" />
+        <TextBlock Classes="muted" FontSize="13" TextWrapping="Wrap" Text="This is exactly what will be sent to Pairnets. It helps us find the bug and fix it." />
+      </StackPanel>
+    </Grid>
+
+    <Border Grid.Row="1" Background="{DynamicResource T.Bg}" BorderBrush="{DynamicResource T.Border}" BorderThickness="1" CornerRadius="14" Margin="0,14,0,0" ClipToBounds="True">
+      <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+        <SelectableTextBlock x:Name="PreviewText" Margin="16,12" FontFamily="Menlo, Consolas, DejaVu Sans Mono, monospace" FontSize="12" LineHeight="18" TextWrapping="Wrap" />
+      </ScrollViewer>
+    </Border>
+
+    <StackPanel Grid.Row="2" Margin="0,14,0,0" Spacing="6">
+      <TextBlock Text="What were you doing when it happened? (optional)" FontSize="13" FontWeight="Bold" />
+      <TextBox x:Name="NoteBox" Classes="field" Height="64" AcceptsReturn="True" TextWrapping="Wrap" MaxLength="1000" VerticalContentAlignment="Top" />
+    </StackPanel>
+
+    <Grid Grid.Row="3" ColumnDefinitions="Auto,*" Margin="0,12,0,0">
+      <v:LineIcon Width="14" Height="14" StrokeThickness="2.2" Stroke="{DynamicResource T.Muted}" Data="{StaticResource I.Lock}" Margin="0,1,8,0" VerticalAlignment="Top" />
+      <TextBlock Grid.Column="1" Classes="muted" FontSize="12" TextWrapping="Wrap"
+                 Text="Only this is sent. No files, folder or computer names, logs, settings, email or account. Your IP address is not stored." />
+    </Grid>
+
+    <Grid Grid.Row="4" ColumnDefinitions="*,Auto" Margin="0,14,0,0">
+      <TextBlock x:Name="Problem" Foreground="{DynamicResource T.BadText}" FontSize="12" FontWeight="Bold" TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,0,12,0" IsVisible="False" />
+      <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+        <Button x:Name="CancelButton" Classes="SecondaryButton" Background="{DynamicResource T.Chip}" Content="Don't send" Click="OnCancel" />
+        <Button x:Name="SendButton" Classes="accent" Padding="20,0" Click="OnSend">
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <v:LineIcon Width="15" Height="15" StrokeThickness="2" Stroke="White" Data="{StaticResource I.Arrow}" />
+            <TextBlock x:Name="SendLabel" Text="Send" VerticalAlignment="Center" />
+          </StackPanel>
+        </Button>
+      </StackPanel>
+    </Grid>
+  </Grid>
+</Window>

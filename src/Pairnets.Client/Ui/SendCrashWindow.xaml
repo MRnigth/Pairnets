@@ -1,0 +1,73 @@
+<Window x:Class="Pairnets.Client.Ui.SendCrashWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ui="clr-namespace:Pairnets.Client.Ui"
+        Title="Send crash report" Width="620" Height="560" MinWidth="460" MinHeight="420"
+        WindowStartupLocation="CenterOwner">
+  <!-- "Send crash report to Pairnets": exactly what goes out, an optional note, then Send or Don't send. -->
+  <Grid>
+  <Grid Margin="24,20">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="*" />
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="Auto" />
+    </Grid.RowDefinitions>
+
+    <Grid>
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="Auto" />
+        <ColumnDefinition Width="*" />
+      </Grid.ColumnDefinitions>
+      <Border x:Name="StateCircle" Width="40" Height="40" CornerRadius="20" Background="{DynamicResource T.AccentSoft}" VerticalAlignment="Top" Margin="0,0,14,0">
+        <ui:LineIcon x:Name="StateIcon" Width="20" Height="20" StrokeThickness="2.6" Stroke="{DynamicResource T.AccentInk}" Data="{x:Static ui:StepIcons.Mail}" />
+      </Border>
+      <StackPanel Grid.Column="1">
+        <TextBlock x:Name="Heading" FontSize="20" FontWeight="ExtraBold" TextWrapping="Wrap" Text="Send this crash report to us?" />
+        <TextBlock x:Name="Explanation" Foreground="{DynamicResource T.Muted}" FontSize="13" TextWrapping="Wrap" Margin="0,4,0,0"
+                   Text="This is exactly what will be sent to Pairnets. It helps us find the bug and fix it." />
+      </StackPanel>
+    </Grid>
+
+    <Border Grid.Row="1" Margin="0,14,0,0" CornerRadius="14" BorderThickness="1" BorderBrush="{DynamicResource T.Border}" Background="{DynamicResource T.Card}" Padding="4,4">
+      <TextBox x:Name="PreviewText" IsReadOnly="True" BorderThickness="0" Background="Transparent" Foreground="{DynamicResource T.Text}"
+               FontFamily="Cascadia Mono, Consolas" FontSize="12" Padding="12,8" TextWrapping="Wrap"
+               VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" />
+    </Border>
+
+    <StackPanel Grid.Row="2" Margin="0,14,0,0">
+      <TextBlock Text="What were you doing when it happened? (optional)" FontSize="13" FontWeight="Bold" Margin="0,0,0,6" />
+      <TextBox x:Name="NoteBox" Style="{StaticResource PgInput}" Height="64" Padding="12,8" AcceptsReturn="True" TextWrapping="Wrap"
+               VerticalContentAlignment="Top" FontWeight="Normal" FontSize="13" MaxLength="1000" VerticalScrollBarVisibility="Auto" />
+    </StackPanel>
+
+    <Grid Grid.Row="3" Margin="0,12,0,0">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="Auto" />
+        <ColumnDefinition Width="*" />
+      </Grid.ColumnDefinitions>
+      <ui:LineIcon Width="14" Height="14" StrokeThickness="2.2" Stroke="{DynamicResource T.Muted}" Data="{x:Static ui:StepIcons.Lock}" Margin="0,1,8,0" VerticalAlignment="Top" />
+      <TextBlock x:Name="Promise" Grid.Column="1" Foreground="{DynamicResource T.Muted}" FontSize="12" TextWrapping="Wrap"
+                 Text="Only this is sent. No files, folder or computer names, logs, settings, email or account. Your IP address is not stored." />
+    </Grid>
+
+    <Grid Grid.Row="4" Margin="0,14,0,0">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="*" />
+        <ColumnDefinition Width="Auto" />
+      </Grid.ColumnDefinitions>
+      <TextBlock x:Name="Problem" Foreground="{DynamicResource T.BadText}" FontSize="12" FontWeight="Bold" TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,0,12,0" Visibility="Collapsed" />
+      <StackPanel Grid.Column="1" Orientation="Horizontal">
+        <Button x:Name="CancelButton" Style="{StaticResource SecondaryButton}" Content="Don't send" Margin="0,0,8,0" Click="OnCancel" />
+        <Button x:Name="SendButton" Style="{StaticResource AccentButton}" Padding="20,0" Click="OnSend">
+          <StackPanel Orientation="Horizontal">
+            <ui:LineIcon Width="15" Height="15" StrokeThickness="2" Stroke="White" Data="{x:Static ui:StepIcons.Arrow}" Margin="0,0,8,0" />
+            <TextBlock x:Name="SendLabel" Text="Send" />
+          </StackPanel>
+        </Button>
+      </StackPanel>
+    </Grid>
+  </Grid>
+  </Grid>
+</Window>

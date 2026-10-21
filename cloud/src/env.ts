@@ -49,6 +49,11 @@ export interface Env {
   GOOGLE_AUTH_URL?: string;
   GOOGLE_TOKEN_URL?: string;
   GOOGLE_JWKS_URL?: string;
+  /**
+   * Who may read the crash reports (/admin/crashes) and is emailed about new kinds of crash: account emails, comma
+   * separated. A secret, so the address is not in the repository. Unset: nobody.
+   */
+  ADMIN_EMAILS?: string;
   /** Test seam for local end-to-end runs (a stand-in Cloudflare API). Never set in production. */
   CF_API_URL?: string;
 }
