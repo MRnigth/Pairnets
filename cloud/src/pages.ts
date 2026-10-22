@@ -204,6 +204,7 @@ function inviteForm(n: ServerView, open: { folders: string[] | null; access: "vi
 <fieldset><legend>What they get</legend>
 <label class="choice"><input type="radio" name="what-${id}" value="whole"${chosen ? "" : " checked"}> The whole nest</label>
 <label class="choice"><input type="radio" name="what-${id}" value="folders" data-field="chosen"${chosen ? " checked" : ""}> Chosen folders</label>
+<p class="muted" data-field="folder-status" role="status" hidden></p>
 <div class="folder-ticks" data-field="folder-ticks">${ticks}</div>
 <label for="folder-add-${id}">${sent.length ? "Add another folder" : "Add a folder"} (a top-level folder of the nest)</label>
 <div class="input-row"><input id="folder-add-${id}" name="folder-add" maxlength="255" autocomplete="off" placeholder="School"><button type="button" data-action="invite-add-folder">Add</button></div>

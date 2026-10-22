@@ -167,6 +167,7 @@ Friends (§10) add to this list, on nests whose status says `"features":["friend
 | `PATCH /api/relay/people/{personId}` | `{"access":"view"|"edit","folders":[…]|null}` | `{"devices":n}`: every computer of that person changes (0 is fine); sealed + folders → 400 `sealed_whole_only` |
 | `DELETE /api/relay/people/{personId}` | | `{"devices":n}`: every computer of that person is removed like `DELETE …/devices/{id}` (0 is fine) |
 | `PUT /api/relay/requests` | `{"requests":[{"id":"inv_…","name":"Oskar","email":"oskar@…","access":"view","folders":null,"at":"…"}]}` (at most 20) | replaces the list of people waiting for the owner's answer; only the owner's computers read it |
+| `GET /api/relay/folders` (1.0.61.3) | | `{"sealed":false,"folders":[{"name":"Photos","bytes":123,"files":40,"linkedIn":false}],"more":false}`: the top-level folders of the current files, by name, at most 500 (`more` when cut); only names a share can name; `linkedIn` = came in through a link (never shared on). An encrypted nest answers `{"sealed":true,"folders":[]}`. An older nest answers 404 |
 
 ## 5. The relay and the router
 
@@ -342,6 +343,7 @@ has to hear about a change, or (with `removed_at`) a removal.
 |---|---|---|---|
 | `POST /v1/servers/{id}/invites` | `{access?, folders?, email?}` | 201 `{id, link, expiresAt, emailed}`; the link lasts 7 days; with `email` Pairnets sends it (the `invite` mail budget; when that is used up, `emailed:false` and no address is kept) | 400 `bad_access`, `bad_request` (not an address), `sealed_whole_only`; 409 `own_nest` (the owner's own address), `too_many_friends`, `nest_offline`, `nest_too_old` (no `friends` in the nest's live status); 429 `rate_limited` (20 a day per account) |
 | `GET /v1/servers/{id}/people` | — | 200 `{members:[{accountId, name, email, access, folders, addedAt, synced}], invites:[{id, link, email, access, folders, createdAt, expiresAt, status:"open"|"requested", requester:{accountId, name, email, at}|null}], max:10}` | 404 |
+| `GET /v1/servers/{id}/folders` (1.0.61.3) | — | 200 `{ok:true, sealed, folders:[{name, bytes, files, linkedIn}], more}`, asked of the nest each time (`GET /api/relay/folders`) and never kept; the invite form and Change… tick them. The nest off → 200 `{ok:false, reason:"offline"}`, too old → `{ok:false, reason:"too_old"}`: the form falls back to typed names. 120 an hour per account | 404 (another account's nest too); 401 |
 | `POST /v1/servers/{id}/invites/{inv}/approve` | — (**recent sign-in**) | 200 `{status:"in", member}`; writes the member row, emails the friend ("You're in Home nest", `invite` budget), sends the nest the waiting list | 401 `reauth_required`; 400 `bad_request` (nobody asked yet); 409 `already_decided`, `cancelled`; 404 |
 | `POST /v1/servers/{id}/invites/{inv}/decline` | — | 200 `{status:"declined"}`; the waiting list is sent again | as approve, no recent sign-in needed |
 | `DELETE /v1/servers/{id}/invites/{inv}` | — | 204 (also when already cancelled); the link stops working | 409 `already_decided`; 404 |

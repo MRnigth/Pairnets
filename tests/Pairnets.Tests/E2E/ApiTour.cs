@@ -90,6 +90,7 @@ public sealed partial class ApiTour : IAsyncDisposable
         new("PATCH", "/api/relay/people/{personId}"),
         new("DELETE", "/api/relay/people/{personId}"),
         new("PUT", "/api/relay/requests"),
+        new("GET", "/api/relay/folders"),
 
         // Linked nests and the nests shared with the owner's account (Web/LinkEndpoints.cs).
         new("GET", "/api/relay/links/"),

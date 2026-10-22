@@ -1732,3 +1732,20 @@ change was never seen.
   wipe-everything item there is easier to hit by mistake, and the Mac/Linux menu-bar menu differs per desktop.
 * The sign-in window's "Start over" (a new code after someone pressed Deny) is a different button and stays.
 * Windows: the fold uses the same shared template as "Advanced: files to ignore" (`FoldCard`, `FoldChevron`).
+
+## The invite form lists the nest's real folders (1.0.61.3, 2026-10-22)
+
+* **Asked of the nest, live, never kept.** "Invite a friend…" and a friend's "Change…" on the account page ask
+  `GET /v1/servers/{id}/folders`, which makes one signed call to the nest (`GET /api/relay/folders`). The folder names
+  pass through the Worker in memory only: no D1 table, no log. Only the nest's owner, signed in in a browser, may ask
+  (`requireBrowser` + `ownServer`; anyone else gets 404 like an unknown nest).
+* **Tick boxes with size and file count**, sorted by name. Folders the app handed over (or a friend already has) stay
+  ticked; one the nest doesn't have yet stays as "Not on the nest yet". Typing a name stays possible ("Or type a folder
+  name") for a folder that isn't there yet.
+* **A folder that came in through a link is shown but can't be ticked** ("Came from another nest, so it can't be
+  shared"): the nest never shares it on, with anyone (`AccessGate`).
+* **Fallback:** the nest off, too old for the list, or any error → "Couldn't reach Home nest, so its folders can't be
+  listed. Type the folder names instead." and the typed box works as in 1.0.61.2. An encrypted nest is shared whole only,
+  so "Chosen folders" and the typed box go away.
+* The nest's list is one SQL query over the manifest (grouped by the first path segment), so a big nest is not loaded
+  into memory; at most 500 folders.

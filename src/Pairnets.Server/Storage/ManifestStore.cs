@@ -152,6 +152,25 @@ public sealed class ManifestStore
         return Convert.ToInt64(Scalar(conn, "SELECT COALESCE(SUM(size), 0) FROM files WHERE deleted=0"), CultureInfo.InvariantCulture);
     }
 
+    /// <summary>
+    /// The top-level folders of the current files, with their size and file count, in one query (files at the top are
+    /// not in a folder). Letter case does not matter, as everywhere on the nest: "Photos/a" and "photos/b" are one folder.
+    /// </summary>
+    public List<(string Name, long Bytes, long Files)> TopFolders()
+    {
+        using var conn = Open();
+        using var cmd = Command(conn, """
+            SELECT MIN(substr(path, 1, instr(path, '/') - 1)), SUM(size), COUNT(*) FROM files
+            WHERE deleted=0 AND instr(path, '/') > 1
+            GROUP BY substr(pathLower, 1, instr(pathLower, '/') - 1)
+            """);
+        using var r = cmd.ExecuteReader();
+        var list = new List<(string, long, long)>();
+        while (r.Read())
+            list.Add((r.GetString(0), r.GetInt64(1), r.GetInt64(2)));
+        return list;
+    }
+
     public List<ManifestEntry> AllLive()
     {
         using var conn = Open();

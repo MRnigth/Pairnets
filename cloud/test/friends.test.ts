@@ -258,6 +258,58 @@ describe("friend invites: making one", () => {
     expect((await b.call("GET", "/v1/servers")).json[0]).toMatchObject({ friends: true, sealed: true });
   });
 
+  it("the invite form lists the nest's own top-level folders, asked live, for its owner only", async () => {
+    const { h, b, nest, anna } = await setup();
+    nest.topFolders = [
+      { name: "Photos", bytes: 12_400_000_000, files: 3210 },
+      { name: "From Ida", bytes: 2, files: 1 },
+      { name: "a/b", bytes: 1, files: 1 }, // not a name a share can name: never passed on
+    ];
+    nest.linkedIn = ["From Ida"];
+    const listed = await b.call("GET", `/v1/servers/${nest.nestId}/folders`);
+    expect(listed.status, listed.text).toBe(200);
+    expect(listed.json).toEqual({
+      ok: true,
+      sealed: false,
+      more: false,
+      folders: [
+        { name: "Photos", bytes: 12_400_000_000, files: 3210, linkedIn: false },
+        { name: "From Ida", bytes: 2, files: 1, linkedIn: true },
+      ],
+    });
+    expect(listed.headers.get("cache-control")).toBe("no-store");
+    // Asked of the nest, never kept: no table holds a folder name.
+    expect(nest.requests.filter((r) => r.path === "/api/relay/folders")).toHaveLength(1);
+    expect(JSON.stringify(await h.query("SELECT * FROM nests"))).not.toContain("Photos");
+
+    // Nobody else: another account and other nests answer 404, signed out 401.
+    expect((await anna.call("GET", `/v1/servers/${nest.nestId}/folders`)).status).toBe(404);
+    expect((await h.browser("203.0.113.79").call("GET", `/v1/servers/${nest.nestId}/folders`)).status).toBe(401);
+    expect((await b.call("GET", "/v1/servers/nst_testnest000000000000000001/folders")).status).toBe(404);
+    expect(nest.requests.filter((r) => r.path === "/api/relay/folders")).toHaveLength(1);
+
+    // The form falls back to typed names: the nest is off, or too old to list them.
+    nest.running = false;
+    expect((await b.call("GET", `/v1/servers/${nest.nestId}/folders`)).json).toEqual({ ok: false, reason: "offline" });
+    nest.running = true;
+    nest.topFolders = null;
+    expect((await b.call("GET", `/v1/servers/${nest.nestId}/folders`)).json).toEqual({ ok: false, reason: "too_old" });
+
+    // An encrypted nest is shared whole only: no folders.
+    nest.topFolders = [{ name: "Photos", bytes: 1, files: 1 }];
+    nest.sealed = true;
+    expect((await b.call("GET", `/v1/servers/${nest.nestId}/folders`)).json).toEqual({ ok: true, sealed: true, folders: [], more: false });
+
+    // The form has a line that says how the list went; the page's script asks when a form opens and falls back to typing.
+    expect((await b.call("GET", "/account")).text).toContain('<p class="muted" data-field="folder-status" role="status" hidden></p>');
+    const script = (await b.call("GET", "/assets/account.js")).text;
+    for (const piece of ['"/folders"', "Getting the folders on ", "so its folders can't be listed. Type the folder names instead.", "Not on the nest yet",
+      "Came from another nest, so it can't be shared", "has no folders yet", "data-linked-in", "Other folder names, one per line"]) {
+      expect(script, piece).toContain(piece);
+    }
+    expect(script).not.toContain("innerHTML");
+  });
+
   it("at most 10 friends per nest, members and open invites together; a cancelled or ended invite frees its place", async () => {
     const { h, b, nest, anna } = await setup();
     let k = 0;

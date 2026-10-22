@@ -99,6 +99,52 @@ public sealed class RelayModeTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task TheFoldersListTheNestsTopLevelFoldersWithSizes()
+    {
+        // An empty nest has none.
+        var empty = await JsonOf(await SendAsync(Signed(HttpMethod.Get, "/api/relay/folders")));
+        Assert.False(empty.GetProperty("sealed").GetBoolean());
+        Assert.Equal(0, empty.GetProperty("folders").GetArrayLength());
+
+        var grant = _server.MintKey("LAPTOP");
+        using var api = _server.Client("LAPTOP", grant.Key);
+        foreach (var (path, text) in new[]
+                 {
+                     ("top.txt", "x"), ("Photos/a.jpg", "12345"), ("Photos/b/c.jpg", "123"), ("School/notes.txt", "1"),
+                     ("From Ida/plan.txt", "22"),
+                 })
+        {
+            using var content = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(text));
+            await api.UploadAsync(path, "none", 1_700_000_000_000, content, null, CancellationToken.None);
+        }
+        _server.Services.GetRequiredService<LinkStore>().Add("lnk_test0000000000000001", OtherNestId, "dev-ida",
+            AuthStore.KeyPrefix + Guid.NewGuid().ToString("N"), "From Ida", LinkAccess.View, null, "Ida", "Work");
+
+        var listed = await JsonOf(await SendAsync(Signed(HttpMethod.Get, "/api/relay/folders")));
+        Assert.False(listed.GetProperty("more").GetBoolean());
+        var folders = listed.GetProperty("folders").EnumerateArray()
+            .Select(f => (f.GetProperty("name").GetString()!, f.GetProperty("bytes").GetInt64(), f.GetProperty("files").GetInt64(),
+                f.GetProperty("linkedIn").GetBoolean()))
+            .ToList();
+        Assert.Equal(3, folders.Count);
+        Assert.Equal(("From Ida", 2L, 1L, true), folders[0]);
+        // Files deeper down count for their top-level folder; a file at the top is in no folder.
+        Assert.Equal(8L, folders[1].Item2);
+        Assert.Equal(2L, folders[1].Item3);
+        Assert.Equal("Photos", folders[1].Item1);
+        Assert.Equal(("School", 1L, 1L, false), folders[2]);
+
+        // Only the service may ask.
+        await AssertRefusedAsync(new HttpRequestMessage(HttpMethod.Get, "api/relay/folders"), "no signature");
+
+        // An encrypted nest is shared whole only: it lists none.
+        _server.Store.Manifest.TurnOnSealed();
+        var sealedList = await JsonOf(await SendAsync(Signed(HttpMethod.Get, "/api/relay/folders")));
+        Assert.True(sealedList.GetProperty("sealed").GetBoolean());
+        Assert.Equal(0, sealedList.GetProperty("folders").GetArrayLength());
+    }
+
+    [Fact]
     public async Task AComputerTheServiceAddsSyncsIsListedAndIsRemovedLikeAnyOther()
     {
         // The service asks for a key when an app signs in with the owner's account.
