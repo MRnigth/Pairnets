@@ -541,12 +541,18 @@ public sealed class TrayController : ITrayActions, IDisposable
                 "Pairnets", MessageBoxButton.OK, MessageBoxImage.Information);
     }
 
-    /// <summary>"Invite a friend…": the invite window for the nest shown, which hands over to the account page in the browser.</summary>
+    /// <summary>
+    /// The nest "Invite a friend…" invites to: the one shown, or (on "All nests", or a friend's nest) the first nest here
+    /// you own that is reached through Pairnets. Null when there is none.
+    /// </summary>
+    private NestRun? InviteRun => new[] { Current }.Concat(_runs).FirstOrDefault(r => r?.Session?.Status is { } s && PeopleSection.From(s).Visible);
+
+    /// <summary>"Invite a friend…": the invite window for that nest (<see cref="InviteRun"/>), which hands over to the account page in the browser.</summary>
     public void InviteFriend()
     {
-        if (_session?.Status is not { } status || PeopleSection.From(status) is not { Visible: true, NestId: { } nestId } people)
+        if (InviteRun is not { Session.Status: { } status } run || PeopleSection.From(status) is not { Visible: true, NestId: { } nestId } people)
             return;
-        var window = new InviteWindow(status.NestTitle, nestId, Nest.Folder, people.Sealed, Shell) { Owner = _window is { IsVisible: true } ? _window : null };
+        var window = new InviteWindow(status.NestTitle, nestId, run.Settings.Folder, people.Sealed, Shell) { Owner = _window is { IsVisible: true } ? _window : null };
         window.Show();
         window.Activate();
     }
@@ -680,7 +686,7 @@ public sealed class TrayController : ITrayActions, IDisposable
             return;
         }
         var blank = _settings.BlankNest();
-        var window = new SettingsWindow(blank, _platform.Secrets, Shell, adding: new NestAdding(_settings, blank));
+        var window = new SettingsWindow(blank, _platform.Secrets, Shell, adding: new NestAdding(_settings, blank) { CanInvite = InviteRun is not null });
         _signInWindow = window;
         bool? accepted;
         try
@@ -690,6 +696,11 @@ public sealed class TrayController : ITrayActions, IDisposable
         finally
         {
             _signInWindow = null;
+        }
+        if (window.InviteInstead)
+        {
+            InviteFriend();
+            return;
         }
         if (accepted != true || window.Result is null)
             return;
@@ -1358,6 +1369,7 @@ public sealed class TrayController : ITrayActions, IDisposable
             NestNames.Title(picked, _settings, _session?.Status), _runs.Count, folder => _settings.FolderProblem(folder, picked.NestId))
         {
             KeySlot = _settings.KeySlotFor(picked),
+            CanInvite = InviteRun is not null,
         };
         view.OpenFilesRequested += () => _window?.Navigate(MainPage.Files);
         view.Saved += v =>
@@ -1369,6 +1381,7 @@ public sealed class TrayController : ITrayActions, IDisposable
         view.ResetRequested += ResetEverything;
         view.LeaveNestRequested += LeaveNest;
         view.AddNestRequested += AddNest;
+        view.InviteFriendRequested += InviteFriend;
         view.ShowDevicesRequested += () => _window?.Navigate(MainPage.Devices);
         view.ReportBugRequested += () => ReportBug();
         view.OpenLinkRequested += Shell;

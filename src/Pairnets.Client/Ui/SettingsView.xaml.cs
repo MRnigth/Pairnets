@@ -556,6 +556,18 @@ public partial class SettingsView : UserControl
 
     private void OnAddNest(object sender, RoutedEventArgs e) => AddNestRequested?.Invoke();
 
+    /// <summary>"Invite a friend…" beside "Add a nest…", shown when there is a nest here you own (see <see cref="CanInvite"/>).</summary>
+    public event Action? InviteFriendRequested;
+
+    private void OnInviteFriend(object sender, RoutedEventArgs e) => InviteFriendRequested?.Invoke();
+
+    /// <summary>There is a nest here to invite a friend to: shows "Invite a friend…" on the "Add a nest" card.</summary>
+    public bool CanInvite
+    {
+        get => InviteNestButton.Visibility == Visibility.Visible;
+        init => InviteNestButton.Visibility = value ? Visibility.Visible : Visibility.Collapsed;
+    }
+
     /// <summary>"Report a bug…": opens the bug report window.</summary>
     public event Action? ReportBugRequested;
 

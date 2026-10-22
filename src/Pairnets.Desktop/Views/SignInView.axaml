@@ -416,10 +416,17 @@
         <TextBlock x:Name="FootText" Classes="SoftText" FontSize="12" Text="Only computers you allow can get into your nest." />
       </StackPanel>
       <Border x:Name="AccountFooter" BorderBrush="{DynamicResource T.Border}" BorderThickness="0,1,0,0" Padding="0,8,0,0">
-        <Button x:Name="OwnNestButton" Classes="link" HorizontalAlignment="Center" Click="OnOwnNest">
-          <TextBlock Text="I run my own nest on my own domain: use its address" Foreground="{DynamicResource T.Muted}" TextDecorations="Underline"
-                     TextWrapping="Wrap" TextAlignment="Center" />
-        </Button>
+        <StackPanel>
+          <Button x:Name="OwnNestButton" Classes="link" HorizontalAlignment="Center" Click="OnOwnNest">
+            <TextBlock Text="I run my own nest on my own domain: use its address" Foreground="{DynamicResource T.Muted}" TextDecorations="Underline"
+                       TextWrapping="Wrap" TextAlignment="Center" />
+          </Button>
+          <!-- "Add a nest" only, with a nest you own: invite someone to that one instead -->
+          <Button x:Name="InviteInsteadButton" Classes="link" HorizontalAlignment="Center" Margin="0,6,0,0" IsVisible="False" Click="OnInviteInstead">
+            <TextBlock Text="Want a friend in a nest you already have? Invite a friend…" Foreground="{DynamicResource T.AccentInk}" TextDecorations="Underline"
+                       TextWrapping="Wrap" TextAlignment="Center" />
+          </Button>
+        </StackPanel>
       </Border>
       <StackPanel x:Name="AccountWaitFooter" Orientation="Horizontal" HorizontalAlignment="Center" IsVisible="False">
         <Button x:Name="AccountOpenAgainButton" Classes="subtle big" HorizontalAlignment="Center" Content="Open the page again" Padding="18,0" Margin="0,0,8,0"

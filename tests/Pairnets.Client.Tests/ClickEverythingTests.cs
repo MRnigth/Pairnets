@@ -920,7 +920,7 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
 
     // ------------------------------------------------------------------ Settings
 
-    private Window SettingsHost(Bench b, bool ownKey, bool canMove = false, int nests = 1)
+    private Window SettingsHost(Bench b, bool ownKey, bool canMove = false, int nests = 1, bool canInvite = false)
     {
         b.Updates = new UpdateService(new UpdateChecker(new HttpClient(), fixture.Feed.DownloadBase, fixture.Feed.ReleasePage, FakeReleaseFeed.SigningKey),
             PairnetsInfo.ProductVersion, UpdateChecker.AssetForThisPlatform());
@@ -933,8 +933,9 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
             Folder = b.Dir,
             FirstRunCompleted = true,
         };
-        var view = new SettingsView(settings, b.Secrets, b.Updates, "Nest " + PairnetsInfo.ProductVersion, new FakeNestFiles(), "Work nest", nests);
+        var view = new SettingsView(settings, b.Secrets, b.Updates, "Nest " + PairnetsInfo.ProductVersion, new FakeNestFiles(), "Work nest", nests) { CanInvite = canInvite };
         view.OpenFilesRequested += () => b.Events.Add("OpenFilesRequested");
+        view.InviteFriendRequested += () => b.Events.Add("InviteFriendRequested");
         view.Saved += _ => b.Events.Add("Saved");
         view.AddNestRequested += () => b.Events.Add("AddNestRequested");
         view.LeaveNestRequested += () => b.Events.Add("LeaveNestRequested");
@@ -959,6 +960,7 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
         yield return new Screen("Settings", "on the shared token (address and token shown)", b => SettingsHost(b, ownKey: false), Answers: s => s.AgreeToEverything());
         yield return new Screen("Settings", "a nest that can move its files", b => SettingsHost(b, ownKey: true, canMove: true), Answers: s => s.AgreeToEverything());
         yield return new Screen("Settings", "one of two nests (with Leave)", b => SettingsHost(b, ownKey: true, nests: 2), Answers: s => s.AgreeToEverything());
+        yield return new Screen("Settings", "a nest you own (with Invite a friend…)", b => SettingsHost(b, ownKey: true, nests: 2, canInvite: true), Answers: s => s.AgreeToEverything());
     }
 
     private static SettingsView View(Check c) => (SettingsView)c.Window.Content;
@@ -982,6 +984,7 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
         On("Choose for a folder inside these… (opens Files)", "ask the app for the Files page", c => c.Bench.Events.Items.Contains("OpenFilesRequested")),
         On("Reset this app…", "ask the app to reset everything", c => c.Bench.Events.Items.Contains("ResetRequested")),
         On("Add a nest…", "ask the app to sign in to one more nest", c => c.Bench.Events.Items.Contains("AddNestRequested")),
+        On("Invite a friend…", "ask the app to open the invite window", c => c.Bench.Events.Items.Contains("InviteFriendRequested")),
         On("Stop syncing…", "ask the app to stop syncing this nest on this computer", c => c.Bench.Events.Items.Contains("LeaveNestRequested")),
         new(t => t.Handlers.Contains("SettingsView.OnAboutLink"),"ask the app to open that page of pairnets.app in the browser",
             c => c.Target.Element is Button { CommandParameter: string url } && url.StartsWith(PairnetsLinks.Website, StringComparison.Ordinal)
@@ -999,6 +1002,15 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
     private SettingsWindow SignInWindow(Bench b)
     {
         var window = new SettingsWindow(new ClientSettings { DeviceName = "DESKTOP" }, b.Secrets, b.Opened.Add);
+        window.SignIn.Service = fixture.Service.Url;
+        return window;
+    }
+
+    /// <summary>"Add a nest…" on a computer with a nest you own: the same window, offering "Invite a friend…" too.</summary>
+    private SettingsWindow AddNestWindow(Bench b)
+    {
+        var all = new ClientSettings { DeviceName = "DESKTOP" };
+        var window = new SettingsWindow(all.BlankNest(), b.Secrets, b.Opened.Add, adding: new NestAdding(all, all.BlankNest()) { CanInvite = true });
         window.SignIn.Service = fixture.Service.Url;
         return window;
     }
@@ -1028,6 +1040,8 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
     private IEnumerable<Screen> SignInScreens()
     {
         const string name = "the sign-in window";
+        yield return new Screen("the add-a-nest window", "a nest you own here (with Invite a friend…)", AddNestWindow,
+            (b, w) => Wpf.Ui(() => SignIn(w).AccountEmailBox.Text = ClickFixture.OwnerEmail), Modal: true);
         yield return new Screen(name, "the first step, a Pairnets account, an email typed", SignInWindow,
             (b, w) => Wpf.Ui(() => SignIn(w).AccountEmailBox.Text = ClickFixture.OwnerEmail), Modal: true);
         yield return new Screen(name, "finish in your browser", SignInWindow, (b, w) => Wpf.Ui(() =>
@@ -1097,6 +1111,7 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
         On(["Continue", "Try again"], "check the typed address", c => OnStep(c, SignInStep.Address)),
         On("Change", "show the nest's name field again", c => SignIn(c.Window) is { FoundCard.IsVisible: false, AddressBox.IsVisible: true }),
         On("Sign in with a Pairnets account instead", "go back to the Pairnets account step", c => OnStep(c, SignInStep.Account)),
+        On("Want a friend in a nest you already have? Invite a friend…", "close the add window, so the invite window opens", c => ((SettingsWindow)c.Window).InviteInstead),
         // Finish in your browser, and no nest yet.
         On("Open the page again", "open the service's page again", c => c.Bench.Opened.Items.SequenceEqual([AccountLink])),
         new(t => t.Handlers.Contains("SignInView.OnAccountCancel"), "stop and go back to the Pairnets account step (Cancel, or Sign out with no nest yet)", c => OnStep(c, SignInStep.Account)),

@@ -537,7 +537,11 @@
                 <TextBlock Style="{StaticResource PgSub}" FontSize="13" Margin="0,2,0,0" TextWrapping="Wrap"
                            Text="Sync one more nest on this computer: yours, a friend's or one from work. Its files get a folder of their own." />
               </StackPanel>
-              <Button x:Name="AddNestButton" Grid.Column="2" Style="{StaticResource PgButton}" Content="Add a nest…" Padding="16,0" Margin="16,0,0,0" VerticalAlignment="Center" Click="OnAddNest" />
+              <StackPanel Grid.Column="2" Orientation="Horizontal" Margin="16,0,0,0" VerticalAlignment="Center">
+                <Button x:Name="InviteNestButton" Style="{StaticResource PgButton}" Foreground="{DynamicResource T.AccentInk}" Content="Invite a friend…" Padding="16,0" Margin="0,0,8,0"
+                        Visibility="Collapsed" Click="OnInviteFriend" />
+                <Button x:Name="AddNestButton" Style="{StaticResource PgButton}" Content="Add a nest…" Padding="16,0" Click="OnAddNest" />
+              </StackPanel>
             </Grid>
             <Grid x:Name="LeaveRow" Margin="0,14,0,0" Visibility="Collapsed">
               <Grid.ColumnDefinitions>
