@@ -1097,6 +1097,29 @@ describe("friend invites: the account page", () => {
     }
     expect(script).not.toContain("innerHTML");
 
+    // "The whole nest" greys the tick boxes out and they can't be ticked (QA sweep 2026-10-22); "Chosen folders" brings
+    // them back, except a folder that came in through a link.
+    const source = script.match(/function syncWhat\(form\) \{[\s\S]*?\n {2}\}/)?.[0];
+    expect(source).toBeTruthy();
+    const syncWhat = new Function(`${source}; return syncWhat;`)() as (form: unknown) => void;
+    const box = (linked: boolean) => ({ disabled: false, closest: () => ({ hasAttribute: () => linked }) });
+    const boxes = [box(false), box(true)];
+    const ticks = { classes: new Set<string>(), classList: { toggle(c: string, on: boolean) { if (on) ticks.classes.add(c); else ticks.classes.delete(c); } } };
+    const typed = { disabled: false };
+    const whole = { checked: true };
+    const form = {
+      querySelector: (q: string) => (q === "input[type=radio][value=whole]" ? whole : q === "textarea[name=folders]" ? typed : null),
+      querySelectorAll: (q: string) => (q === ".folder-ticks" ? [ticks] : q === "input[name=folder-pick]" ? boxes : []),
+    };
+    syncWhat(form);
+    expect([ticks.classes.has("off"), boxes[0].disabled, boxes[1].disabled, typed.disabled]).toEqual([true, true, true, true]);
+    whole.checked = false;
+    syncWhat(form);
+    expect([ticks.classes.has("off"), boxes[0].disabled, boxes[1].disabled, typed.disabled]).toEqual([false, false, true, false]);
+    for (const piece of ['ev.target.value === "whole"', "syncWhat(form);", ".folder-ticks.off"]) {
+      expect(script + (await b.call("GET", "/assets/style.css")).text, piece).toContain(piece);
+    }
+
     // What the form sends is what an invite takes: one folder, view only.
     const made = await invite(b, nest, { access: "view", folders: ["Photos"] });
     expect(made.status, made.text).toBe(201);

@@ -125,6 +125,7 @@ form.rename p, .rename-done { margin: 6px 0 0; font-size: 0.9375rem; }
 label.choice span .muted { display: block; }
 .folder-ticks { max-height: 440px; overflow-y: auto; }
 .folder-ticks label.choice[data-linked-in] { opacity: .55; }
+.folder-ticks.off { opacity: .45; }
 .cookie-notice { position: fixed; left: 24px; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); z-index: 20;
   width: 400px; max-width: calc(100% - 48px); background: var(--bg); color: var(--text); border: 1px solid var(--line);
   border-radius: 8px; padding: 16px 18px; font-size: 15px; line-height: 1.5;
@@ -483,6 +484,19 @@ const ACCOUNT_JS = String.raw`(function () {
   function pickChosen(form) {
     var chosen = form.querySelector("[data-field=chosen]");
     if (chosen && !chosen.disabled) chosen.checked = true;
+    syncWhat(form);
+  }
+  // "The whole nest" shares everything: the folder tick boxes (and the typed names) are greyed out and can't be ticked
+  // then, so it is never unclear what a ticked folder would mean. "Add" still picks "Chosen folders" for the name.
+  function syncWhat(form) {
+    var whole = form.querySelector("input[type=radio][value=whole]");
+    var off = !!(whole && whole.checked);
+    Array.prototype.forEach.call(form.querySelectorAll(".folder-ticks"), function (ticks) { ticks.classList.toggle("off", off); });
+    Array.prototype.forEach.call(form.querySelectorAll("input[name=folder-pick]"), function (box) {
+      box.disabled = off || box.closest("label").hasAttribute("data-linked-in");
+    });
+    var typed = form.querySelector("textarea[name=folders]");
+    if (typed) typed.disabled = off;
   }
   // ---- The nest's own top-level folders as tick boxes (1.0.61.3): asked of the nest once per nest when a form opens.
   // Typed names stay possible; when the nest can't be asked, typing is the way.
@@ -546,6 +560,7 @@ const ACCOUNT_JS = String.raw`(function () {
   }
   // The invite form: its tick boxes from the nest, once; a sealed nest is shared whole only.
   function loadInviteFolders(li, id, form) {
+    syncWhat(form);
     if (form.hasAttribute("data-folders-asked")) return;
     form.setAttribute("data-folders-asked", "");
     fillFolders(li, id, form.querySelector("[data-field=folder-ticks]"), form.querySelector("[data-field=folder-status]"), function (listed, sealed) {
@@ -559,6 +574,7 @@ const ACCOUNT_JS = String.raw`(function () {
         add.nextElementSibling.hidden = true;
       }
       if (listed) form.querySelector("label[for='folder-add-" + id + "']").textContent = "Or type a folder name";
+      syncWhat(form);
     });
   }
   // What a form says: {access, folders?}, or the problem to show.
@@ -656,7 +672,8 @@ const ACCOUNT_JS = String.raw`(function () {
     form.appendChild(actions);
     form.appendChild(error);
     row.querySelector(".who").appendChild(form);
-    fillFolders(row.closest("[data-server]"), id, ticks, status, function () {});
+    syncWhat(form);
+    fillFolders(row.closest("[data-server]"), id, ticks, status, function () { syncWhat(form); });
     cancel.addEventListener("click", function () { form.parentNode.removeChild(form); if (opener) opener.focus(); });
     form.addEventListener("submit", function (ev) {
       ev.preventDefault();
@@ -750,6 +767,7 @@ const ACCOUNT_JS = String.raw`(function () {
   if (servers) servers.addEventListener("change", function (ev) {
     var form = ev.target.closest("form.invite-form, form.change");
     if (form && ev.target.name === "folder-pick" && ev.target.checked) pickChosen(form);
+    if (form && ev.target.type === "radio" && (ev.target.value === "whole" || ev.target.value === "folders")) syncWhat(form);
   });
   if (servers) servers.addEventListener("keydown", function (ev) {
     if (ev.key !== "Enter" || ev.target.name !== "folder-add") return;
