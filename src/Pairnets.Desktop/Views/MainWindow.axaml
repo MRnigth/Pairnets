@@ -457,7 +457,13 @@
                                           IsVisible="{Binding !#ShowAllToggle.IsChecked}">
                               <ItemsControl.ItemTemplate>
                                 <DataTemplate DataType="c:ActivityItem">
-                                  <Grid ColumnDefinitions="*,Auto" Height="26">
+                                  <Grid ColumnDefinitions="*,Auto" Height="26" Background="Transparent" ToolTip.Tip="{Binding TimeText}">
+                                    <Grid.ContextMenu>
+                                      <ContextMenu IsVisible="{Binding Path, Converter={x:Static ObjectConverters.IsNotNull}}">
+                                        <MenuItem Header="Show in folder" Click="OnRevealActivity" />
+                                        <MenuItem Header="Show versions…" Click="OnActivityVersions" />
+                                      </ContextMenu>
+                                    </Grid.ContextMenu>
                                     <TextBlock Text="{Binding Primary}" FontSize="13" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
                                     <TextBlock Grid.Column="1" Text="{Binding Time, Converter={x:Static v:ClockText.Instance}}" Classes="t3" VerticalAlignment="Center" Margin="10,0,0,0" />
                                   </Grid>
@@ -467,7 +473,13 @@
                             <ItemsControl ItemsSource="{Binding Items}" IsVisible="{Binding #ShowAllToggle.IsChecked}">
                               <ItemsControl.ItemTemplate>
                                 <DataTemplate DataType="c:ActivityItem">
-                                  <Grid ColumnDefinitions="*,Auto" Height="26">
+                                  <Grid ColumnDefinitions="*,Auto" Height="26" Background="Transparent" ToolTip.Tip="{Binding TimeText}">
+                                    <Grid.ContextMenu>
+                                      <ContextMenu IsVisible="{Binding Path, Converter={x:Static ObjectConverters.IsNotNull}}">
+                                        <MenuItem Header="Show in folder" Click="OnRevealActivity" />
+                                        <MenuItem Header="Show versions…" Click="OnActivityVersions" />
+                                      </ContextMenu>
+                                    </Grid.ContextMenu>
                                     <TextBlock Text="{Binding Primary}" FontSize="13" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
                                     <TextBlock Grid.Column="1" Text="{Binding Time, Converter={x:Static v:ClockText.Instance}}" Classes="t3" VerticalAlignment="Center" Margin="10,0,0,0" />
                                   </Grid>

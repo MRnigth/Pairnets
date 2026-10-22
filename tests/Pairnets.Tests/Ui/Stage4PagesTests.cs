@@ -141,6 +141,32 @@ public class Stage4PagesTests
     }
 
     [AvaloniaFact]
+    public void AFileInAnOpenedFolderRow_HasShowInFolderAndShowVersions_LikeTheOtherRows()
+    {
+        var actions = new SampleActions();
+        var window = Open(actions);
+        var now = DateTimeOffset.Now;
+        var feed = new ActivityFeed();
+        for (var i = 0; i < 6; i++)
+            feed.Add(new ActivityItem(now.AddSeconds(-i * 5), ActivityKind.Uploaded, $"Photos/Holiday/img-{i}.jpg", "Uploaded"));
+        window.ShowActivity(feed.Items);
+        window.Navigate(MainPage.Activity);
+        Layout(window);
+        Screen.All<ToggleButton>(window).Single(t => t.Name == "FolderChevron").IsChecked = true;
+        Dispatcher.UIThread.RunJobs();
+
+        var file = Screen.All<Grid>(window).First(g => g.IsEffectivelyVisible && g.DataContext is ActivityItem && g.ContextMenu is not null);
+        file.ContextMenu!.Open(file); // a right-click
+        Dispatcher.UIThread.RunJobs();
+        var items = file.ContextMenu.Items.OfType<MenuItem>().ToList();
+        Assert.Equal(["Show in folder", "Show versions…"], items.Select(i => (string)i.Header!));
+        items[0].RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(MenuItem.ClickEvent, items[0]));
+        Assert.Equal("reveal:" + ((ActivityItem)file.DataContext!).Path, Assert.Single(actions.Calls));
+        file.ContextMenu.Close();
+        Close(window);
+    }
+
+    [AvaloniaFact]
     public void NeedsYouDrawsOneCardPerThingAndACalmEmptyPage()
     {
         var window = Open();
