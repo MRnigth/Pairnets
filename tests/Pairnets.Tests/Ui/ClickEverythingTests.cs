@@ -246,6 +246,21 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
             Person.Click(Screen.Find<ToggleButton>(view, label));
         Person.Click(Screen.Find<Button>(view, "Advanced: files to ignore Add your own rules on top of the usual ones. 0 rules"));
         Person.Type(Screen.Named<TextBox>(view, "IgnoreBox"), "*.bak");
+
+        // A limit that is on but can't be used (0, or not a number) stops Save with a word, as in the Windows app.
+        var opened = new List<Window>();
+        using (Window.WindowOpenedEvent.AddClassHandler(typeof(Window), (sender, _) => opened.Add((Window)sender!)))
+        {
+            Person.Type(Screen.Named<TextBox>(view, "UpLimitValue"), "0");
+            Person.Click(Screen.Find<Button>(view, "Save"));
+            await Wait.Until(() => opened.Count > 0, "Save to refuse the speed limit");
+        }
+        var refused = opened.Single();
+        Assert.Contains("at least 0.1", AppUnderTest.TextOf(refused));
+        Person.Click(Screen.Find<Button>(refused, "OK"));
+        Assert.DoesNotContain("saved", stage.Events);
+        Person.Type(Screen.Named<TextBox>(view, "UpLimitValue"), "5");
+
         Person.Click(Screen.Find<Button>(view, "Save"));
         await Wait.Until(() => stage.Events.Contains("saved"), "Save to hand the settings to the app");
 

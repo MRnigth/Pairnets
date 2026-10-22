@@ -466,7 +466,10 @@ public partial class SettingsView : UserControl
 
     private static double? Limit(ToggleSwitch box, TextBox value) =>
         box.IsChecked == true
-        && double.TryParse((value.Text ?? string.Empty).Trim().Replace(',', '.'), NumberStyles.Float, CultureInfo.InvariantCulture, out var v) && v > 0 ? v : null;
+        && double.TryParse((value.Text ?? string.Empty).Trim().Replace(',', '.'), NumberStyles.Float, CultureInfo.InvariantCulture, out var v) && v >= MinLimit ? v : null;
+
+    /// <summary>The smallest speed limit, in MB/s (as in the Windows app).</summary>
+    private const double MinLimit = 0.1;
 
     /// <summary>The settings to save, when the window closes with a result.</summary>
     public ClientSettings? Result { get; private set; }
@@ -649,6 +652,12 @@ public partial class SettingsView : UserControl
         if (string.IsNullOrWhiteSpace(token))
         {
             await Dialogs.InfoAsync(Owner, "Pairnets", "Enter the token printed by install.sh on the server.");
+            return;
+        }
+        // A limit that is on but can't be read is not saved as "no limit" without a word.
+        if (!LimitReadable(UpLimitBox, UpLimitValue) || !LimitReadable(DownLimitBox, DownLimitValue))
+        {
+            await Dialogs.InfoAsync(Owner, "Pairnets", "Enter the speed limits in MB/s, for example 5 or 0.5 (at least 0.1).");
             return;
         }
         var folder = (FolderBox.Text ?? string.Empty).Trim();
