@@ -976,4 +976,31 @@
     <Setter Property="BorderBrush" Value="{DynamicResource T.NeedsActive}" />
     <Setter Property="Foreground" Value="{DynamicResource T.WarnText}" />
   </Style>
+
+  <!-- Back and forward above every page: a quiet round button, faint while there is nowhere to go. -->
+  <Style Selector="Button.pagenav">
+    <Setter Property="Width" Value="30" />
+    <Setter Property="Height" Value="30" />
+    <Setter Property="MinWidth" Value="30" />
+    <Setter Property="MinHeight" Value="0" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="CornerRadius" Value="999" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <Style Selector="Button.pagenav /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <Style Selector="Button.pagenav:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource T.Hover}" />
+  </Style>
+  <Style Selector="Button.pagenav:pressed /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource T.Hover}" />
+  </Style>
+  <Style Selector="Button.pagenav:disabled">
+    <Setter Property="Opacity" Value="0.3" />
+  </Style>
+  <Style Selector="Button.pagenav:disabled /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
 </Styles>

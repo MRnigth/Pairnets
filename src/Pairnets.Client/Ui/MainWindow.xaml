@@ -321,9 +321,19 @@
     <Grid Grid.Column="1">
       <Grid.RowDefinitions>
         <RowDefinition Height="Auto" />
+        <RowDefinition Height="Auto" />
         <RowDefinition Height="*" />
       </Grid.RowDefinitions>
-      <Grid x:Name="PageHeader" Margin="28,22,28,0">
+      <!-- Back and forward: the same place on every page; greyed out when there is nowhere to go. -->
+      <StackPanel x:Name="PageNav" Orientation="Horizontal" Margin="22,10,28,0">
+        <Button x:Name="BackButton" Style="{StaticResource PageNavButton}" ToolTip="Back" AutomationProperties.Name="Back" IsEnabled="False" Click="OnBack">
+          <ui:LineIcon Width="18" Height="18" StrokeThickness="2.4" Stroke="{DynamicResource T.Text}" Data="{StaticResource I.ChevronLeft}" />
+        </Button>
+        <Button x:Name="ForwardButton" Style="{StaticResource PageNavButton}" Margin="2,0,0,0" ToolTip="Forward" AutomationProperties.Name="Forward" IsEnabled="False" Click="OnForward">
+          <ui:LineIcon Width="18" Height="18" StrokeThickness="2.4" Stroke="{DynamicResource T.Text}" Data="{StaticResource I.Chevron}" />
+        </Button>
+      </StackPanel>
+      <Grid x:Name="PageHeader" Grid.Row="1" Margin="28,4,28,0">
         <Grid.ColumnDefinitions>
           <ColumnDefinition Width="*" />
           <ColumnDefinition Width="Auto" />
@@ -368,7 +378,7 @@
         </StackPanel>
       </Grid>
 
-      <Grid Grid.Row="1">
+      <Grid Grid.Row="2">
         <!-- ============ Overview ============ -->
         <ScrollViewer x:Name="OverviewPage" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
           <ui:OverviewView x:Name="Overview" />
@@ -388,7 +398,7 @@
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
           </Grid.RowDefinitions>
-          <StackPanel x:Name="FilesHeader" Margin="28,40,28,0">
+          <StackPanel x:Name="FilesHeader" Margin="28,8,28,0">
             <TextBlock Style="{StaticResource PgTitle}" Text="Files" />
             <TextBlock Style="{StaticResource PgSub}" Text="Everything on your nest, and what was deleted in the last 30 days." />
             <Border Style="{StaticResource PgTabs}" HorizontalAlignment="Left" Margin="0,16,0,0">

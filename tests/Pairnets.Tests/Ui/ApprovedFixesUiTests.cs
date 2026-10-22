@@ -76,9 +76,11 @@ public class ApprovedFixesUiTests
         var menus = bar.Items.OfType<NativeMenuItem>().Where(i => i is not NativeMenuItemSeparator).ToList();
         Assert.Equal(["File", "Sync", "View", "Window", "Help"], menus.Select(m => m.Header));
         var view = menus[2].Menu!.Items.OfType<NativeMenuItem>().Where(i => i is not NativeMenuItemSeparator).ToList();
-        Assert.Equal(7, view.Count); // six pages and folding the side panel (the line between is left out)
-        Assert.Equal(new KeyGesture(Key.D1, KeyModifiers.Meta), view[0].Gesture);
-        Assert.Equal("Fold Side Panel", view[6].Header);
+        Assert.Equal(9, view.Count); // back, forward, six pages and folding the side panel (the lines between are left out)
+        Assert.Equal(new KeyGesture(Key.OemOpenBrackets, KeyModifiers.Meta), view[0].Gesture);
+        Assert.Equal("Forward", view[1].Header);
+        Assert.Equal(new KeyGesture(Key.D1, KeyModifiers.Meta), view[2].Gesture);
+        Assert.Equal("Fold Side Panel", view[8].Header);
         Assert.Equal(new KeyGesture(Key.R, KeyModifiers.Meta), menus[1].Menu!.Items.OfType<NativeMenuItem>().Where(i => i is not NativeMenuItemSeparator).First().Gesture);
         Assert.Equal("Report a Bug…", menus[4].Menu!.Items.OfType<NativeMenuItem>().Where(i => i is not NativeMenuItemSeparator).Single().Header);
     }

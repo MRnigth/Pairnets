@@ -1657,3 +1657,24 @@ A (a nest joins another nest) and B (invite an account), with the recommended an
   nothing about the sender), kept 90 days, 5 an hour per address and 300 a day in all; `/admin/reports` for the
   `ADMIN_EMAILS` accounts, who get an email per report (at most 20 a day). A report is at most 60,000 characters,
   cut in the middle so the start (versions, settings, status) and the newest log lines stay.
+
+## Back and forward above every page (2026-10-22)
+
+A back button on every page was asked for, to return to the page you were on before.
+
+* **Two small chevrons, ‹ and ›, at the top left of the page area**, the same place on every page and in both apps (as
+  in macOS System Settings and Finder), not a browser-style bar with an address. They sit in their own thin row above
+  the pages, so they stay put when a page scrolls; the pages' top space went from 40 to 8 to keep the titles where
+  they were.
+* **Greyed out, not hidden, when there is nowhere to go**, so nothing moves when they turn on. The tooltip names the
+  page: "Back to Activity (Alt+Left)".
+* **One history in Core** (`PageHistory`), noted in each window's `ShowPage`, so every way of opening a page counts:
+  tiles, the dock, links on a page, the tray, shortcuts. Opening a page another way clears forward, as in a browser.
+  Up to 30 steps, not saved between runs.
+* **Files and its Deleted tab are one page**: changing tabs is no step, and back or forward returns to the tab that was
+  open. Clean up is part of Files.
+* **Back to Settings asks the app for a fresh form**, as its tile does, so the form starts from the saved settings.
+* **Windows and dialogs are not pages** (settings window, nest update, bug report, invites, sign-in, the tray panel):
+  they keep their own Close and Cancel.
+* Keys: Alt+Left and Alt+Right on Windows and Linux, ⌘[ and ⌘] on a Mac (Alt+arrows move by word there; also in the
+  Mac View menu), a keyboard's Back and Forward keys, and the mouse's side buttons.

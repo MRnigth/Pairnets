@@ -7,7 +7,7 @@ namespace Pairnets.Client.Ui;
 
 /// <summary>
 /// The main window's keyboard shortcuts (<see cref="Shortcuts"/>, the same as the Mac/Linux app): Ctrl+F search, Ctrl+R and
-/// F5 sync now, Ctrl+, Settings, Ctrl+1…6 the pages. The tooltips name them.
+/// F5 sync now, Ctrl+, Settings, Ctrl+1…6 the pages, Alt+Left and Alt+Right back and forward. The tooltips name them.
 /// </summary>
 public partial class MainWindow
 {
@@ -31,9 +31,14 @@ public partial class MainWindow
         if (e.Handled)
             return;
         var modifiers = Keyboard.Modifiers;
+        var key = e.Key == Key.System ? e.SystemKey : e.Key;
+        if (Run(Shortcuts.ForHistory(key.ToString(), modifiers == ModifierKeys.Alt, modifiers == ModifierKeys.Control, mac: false)))
+        {
+            e.Handled = true;
+            return;
+        }
         if (modifiers is not (ModifierKeys.None or ModifierKeys.Control))
             return;
-        var key = e.Key == Key.System ? e.SystemKey : e.Key;
         if (Run(Shortcuts.For(key.ToString(), modifiers == ModifierKeys.Control)))
             e.Handled = true;
     }
@@ -78,6 +83,12 @@ public partial class MainWindow
                 return true;
             case ShortcutAction.PageDevices:
                 GoTo(MainPage.Devices);
+                return true;
+            case ShortcutAction.Back:
+                GoBack();
+                return true;
+            case ShortcutAction.Forward:
+                GoForward();
                 return true;
             default:
                 return false;

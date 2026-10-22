@@ -9,7 +9,8 @@ namespace Pairnets.Desktop.Views;
 
 /// <summary>
 /// The main window's keyboard shortcuts (<see cref="Shortcuts"/>, the same as the Windows app) and, on a Mac, its menu bar.
-/// Ctrl+F search, Ctrl+R and F5 sync now, Ctrl+, Settings, Ctrl+1…6 the pages; on a Mac the Command key (⌘) instead of Ctrl.
+/// Ctrl+F search, Ctrl+R and F5 sync now, Ctrl+, Settings, Ctrl+1…6 the pages, Alt+Left and Alt+Right back and forward; on
+/// a Mac the Command key (⌘) instead of Ctrl, and ⌘[ and ⌘] back and forward.
 /// </summary>
 public partial class MainWindow
 {
@@ -23,6 +24,7 @@ public partial class MainWindow
     {
         // Tunnel, so a focused text box does not keep Ctrl+R or Ctrl+1 to itself.
         AddHandler(KeyDownEvent, OnShortcutKey, RoutingStrategies.Tunnel);
+        WireHistory();
         HintShortcuts();
         if (OperatingSystem.IsMacOS())
         {
@@ -52,6 +54,11 @@ public partial class MainWindow
     private void OnShortcutKey(object? sender, KeyEventArgs e)
     {
         var command = CommandKey;
+        if (Run(Shortcuts.ForHistory(e.Key.ToString(), e.KeyModifiers == KeyModifiers.Alt, e.KeyModifiers == command, OperatingSystem.IsMacOS())))
+        {
+            e.Handled = true;
+            return;
+        }
         if (e.KeyModifiers != KeyModifiers.None && e.KeyModifiers != command)
             return;
         if (Run(Shortcuts.For(e.Key.ToString(), e.KeyModifiers == command)))
@@ -99,6 +106,12 @@ public partial class MainWindow
             case ShortcutAction.PageDevices:
                 GoTo(MainPage.Devices);
                 return true;
+            case ShortcutAction.Back:
+                GoBack();
+                return true;
+            case ShortcutAction.Forward:
+                GoForward();
+                return true;
             default:
                 return false;
         }
@@ -137,6 +150,9 @@ public partial class MainWindow
 
         _foldMenuItem = Item(SideFolded ? "Open Side Panel" : "Fold Side Panel", () => SetFolded(!SideFolded), new KeyGesture(Key.S, cmd | KeyModifiers.Control));
         var view = Menu("View",
+            Item("Back", () => Run(ShortcutAction.Back), new KeyGesture(Key.OemOpenBrackets, cmd)),
+            Item("Forward", () => Run(ShortcutAction.Forward), new KeyGesture(Key.OemCloseBrackets, cmd)),
+            new NativeMenuItemSeparator(),
             Item("Overview", () => Run(ShortcutAction.PageOverview), new KeyGesture(Key.D1, cmd)),
             Item("Activity", () => Run(ShortcutAction.PageActivity), new KeyGesture(Key.D2, cmd)),
             Item("Needs You", () => Run(ShortcutAction.PageNeedsYou), new KeyGesture(Key.D3, cmd)),

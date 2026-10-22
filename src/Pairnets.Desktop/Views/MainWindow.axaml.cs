@@ -307,6 +307,7 @@ public partial class MainWindow : Window
         if (Page == MainPage.Settings && page != MainPage.Settings)
             SettingsPage.Content = null; // next time the form starts again from the saved settings
         var wasFiles = Page is MainPage.Files or MainPage.History && FilesPage.IsVisible;
+        NoteVisit(Page, page);
         Page = page;
         _cleanup = false;
         (PageTitle.Text, PageSubtitle.Text) = page switch

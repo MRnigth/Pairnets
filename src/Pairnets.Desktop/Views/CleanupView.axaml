@@ -4,7 +4,7 @@
              xmlns:c="using:Pairnets.Core.Client"
              x:Class="Pairnets.Desktop.Views.CleanupView">
   <!-- "Clean up your nest": the biggest files on the nest, to save elsewhere or (only when completely sure) delete for good. -->
-  <Grid RowDefinitions="Auto,Auto,Auto,Auto,*,Auto" Margin="28,40,28,24">
+  <Grid RowDefinitions="Auto,Auto,Auto,Auto,*,Auto" Margin="28,8,28,24">
     <!-- Header -->
     <Grid ColumnDefinitions="*,Auto">
       <StackPanel>
