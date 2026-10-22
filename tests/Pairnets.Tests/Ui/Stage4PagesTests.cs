@@ -380,7 +380,7 @@ public class Stage4PagesTests
     }
 
     [AvaloniaFact]
-    public void SettingsHasTheDesignsCardsAndKeepsTheStartOverCardAtTheEnd()
+    public void SettingsHasTheDesignsCardsAndKeepsStartOverInTheClosedAdvancedFold()
     {
         var view = new SettingsView(new ClientSettings
         {
@@ -394,9 +394,12 @@ public class Stage4PagesTests
         Assert.Contains("2 rules", texts);
         Assert.Contains("Connected", texts);
         Assert.Contains(texts, t => t is not null && t.StartsWith("Pairnets ", StringComparison.Ordinal) && t.EndsWith("your nest runs 1.0.48", StringComparison.Ordinal));
-        Assert.Contains("Your files in /home/me/Work stay where they are.", texts);
         Assert.False(Screen.Named<TextBox>(view, "IgnoreBox").IsEffectivelyVisible); // closed until the card is opened
         Assert.False(Screen.Named<TextBox>(view, "ServerUrlBox").IsEffectivelyVisible);
+        Assert.False(Screen.Named<Button>(view, "ResetButton").IsEffectivelyVisible); // Start over waits inside Advanced
+        Person.Click(Screen.Named<Button>(view, "AdvancedHeader"));
+        Assert.True(Screen.Named<Button>(view, "ResetButton").IsEffectivelyVisible);
+        Assert.Contains("Your files in /home/me/Work stay where they are.", Screen.All<TextBlock>(view).Where(t => t.IsEffectivelyVisible).Select(t => t.Text));
         window.Close();
     }
 }

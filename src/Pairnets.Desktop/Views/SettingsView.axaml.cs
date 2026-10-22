@@ -135,6 +135,7 @@ public partial class SettingsView : UserControl
 
         // Pieces that are wired here rather than in the XAML.
         IgnoreHeader.Click += OnToggleIgnore;
+        AdvancedHeader.Click += OnToggleAdvanced;
         IgnoreBox.TextChanged += OnIgnoreChanged;
         Scroller.SizeChanged += OnPageSized;
         ShowIgnoreCount();
@@ -385,6 +386,12 @@ public partial class SettingsView : UserControl
         IgnoreChevron.Data = Visuals.Resource<Geometry>(IgnorePanel.IsVisible ? "I.ChevronUp" : "I.ChevronDown");
     }
 
+    private void OnToggleAdvanced(object? sender, RoutedEventArgs e)
+    {
+        StartOverCard.IsVisible = !StartOverCard.IsVisible;
+        AdvancedChevron.Data = Visuals.Resource<Geometry>(StartOverCard.IsVisible ? "I.ChevronUp" : "I.ChevronDown");
+    }
+
     private void OnIgnoreChanged(object? sender, TextChangedEventArgs e) => ShowIgnoreCount();
 
     private void ShowIgnoreCount()
@@ -507,6 +514,15 @@ public partial class SettingsView : UserControl
     {
         if (Scroller.Content is Visual content && PlacementRows.TranslatePoint(new Point(0, 0), content) is { } at)
             Scroller.Offset = new Vector(0, Math.Max(0, at.Y - 140));
+    }
+
+    /// <summary>Opens the folded "Advanced" part (Start over) and scrolls to it (screenshot test).</summary>
+    internal void OpenAdvanced()
+    {
+        if (!StartOverCard.IsVisible)
+            OnToggleAdvanced(null, new RoutedEventArgs());
+        UpdateLayout();
+        Scroller.ScrollToEnd();
     }
 
     /// <summary>"Reset this app…" (the controller asks first, and starts over from the sign-in window).</summary>

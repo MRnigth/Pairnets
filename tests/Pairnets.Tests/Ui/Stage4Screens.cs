@@ -90,7 +90,7 @@ internal static class Stage4Screens
         window.Navigate(MainPage.Devices);
         Save(window, outDir, "devices", suffix);
 
-        // Settings, and scrolled to "Start over"
+        // Settings, scrolled to the end, and with Advanced (Start over) opened
         var settings = new SettingsView(new ClientSettings
         {
             ServerUrl = "https://nest.example.com/", Folder = Folder, DeviceName = "DESKTOP", DeviceId = "id", AccountEmail = "alex@example.com",
@@ -100,6 +100,8 @@ internal static class Stage4Screens
         Save(window, outDir, "settings", suffix);
         settings.ScrollToEnd();
         Save(window, outDir, "settings-start-over", suffix);
+        settings.OpenAdvanced();
+        Save(window, outDir, "settings-advanced", suffix);
 
         // Account, and the same page for an older nest that sends no email
         window.Navigate(MainPage.Account);

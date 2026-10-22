@@ -99,7 +99,7 @@ on my own domain: use its address** at the bottom of the window, type your nest'
 (`sync.example.com`), sign in on your nest's website and press **Allow** there.
 
 Each computer gets its own key; there is no address-and-token form. To start over on a computer,
-use **Settings → Start over → Reset this app…**: it removes Pairnets' settings, saved key and sync
+use **Settings → Advanced → Reset this app…**: it removes Pairnets' settings, saved key and sync
 notes on that computer (and the computer from your nest), never your synced files.
 
 

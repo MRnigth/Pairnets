@@ -412,6 +412,7 @@ public sealed class TrayControllerTests
 
         await app.Menu("Settings…");
         app.Dialogs.When("Reset Pairnets on this computer?", MessageBoxResult.OK);
+        await app.Press(app.Tray.Window!, "AdvancedExpander"); // Start over waits inside the folded Advanced part
         await app.Press(app.Tray.Window!, "Reset this app…");
 
         await app.Showing<SettingsWindow>("the sign-in window after the reset");

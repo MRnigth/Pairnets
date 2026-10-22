@@ -355,7 +355,7 @@ what cannot lose or silently overwrite data.
   waits at most 60 s and otherwise answers 202, and the app asks again with the same ticket until it is done.
   Left as it was: a file someone put into `files/` by hand is hashed under the server's lock when a computer
   overwrites it (rare, and only once).
-* **Going back to an older app** needs Settings → Start over: an app from before refuses a state.db at schema 2
+* **Going back to an older app** needs Settings → Start over (since 2026-10-22 inside Settings → Advanced): an app from before refuses a state.db at schema 2
   ("created by a newer Pairnets"). Nothing is lost by that; it only stops syncing until reset.
 
 ## Renamed from Tether to Pairnets
@@ -1715,3 +1715,13 @@ change was never seen.
 * **A warning or problem keeps its own colour.** The row stays warm or red; while its page is open it also gets a 2 px
   blue ring, so both things show. The clicks themselves stay: this computer → Overview, the nest → Computers (its card
   is the top of that page).
+
+## "Start over" moves into a folded "Advanced" part of Settings (2026-10-22)
+
+* **The owner's call:** the red "Start over" card was too prominent. It is not removed: **Reset this app…**, its warning and
+  everything it does stay the same. Only the place changes, the same in both apps: a card at the very bottom of
+  Settings (under About), **Advanced**, folded shut by default; opening it shows Start over.
+* Considered and not chosen: the tray / menu-bar menu. It is the place people go to quickly (open, pause, quit), so a
+  wipe-everything item there is easier to hit by mistake, and the Mac/Linux menu-bar menu differs per desktop.
+* The sign-in window's "Start over" (a new code after someone pressed Deny) is a different button and stays.
+* Windows: the fold uses the same shared template as "Advanced: files to ignore" (`FoldCard`, `FoldChevron`).

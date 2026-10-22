@@ -435,6 +435,7 @@ public sealed class DesktopControllerTests
         Assert.StartsWith(app.Env.LocalDir, notes); // the sync notes live in the app's own folder
 
         var page = await app.SettingsPageAsync();
+        Person.Click(Screen.Named<Button>(page, "AdvancedHeader")); // folded shut until opened
         Person.Click(Screen.Find<Button>(page, "Reset this app…"));
         await app.AnswerAsync("Pairnets – reset", "Reset");
 

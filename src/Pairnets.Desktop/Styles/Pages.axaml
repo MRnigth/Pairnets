@@ -10,11 +10,6 @@
     <Setter Property="BorderThickness" Value="1" />
     <Setter Property="CornerRadius" Value="20" />
   </Style>
-  <Style Selector="Border.dangercard">
-    <Setter Property="BorderBrush" Value="{DynamicResource T.BadBorder}" />
-    <Setter Property="Background" Value="{DynamicResource T.Card}" />
-    <Setter Property="Padding" Value="0" />
-  </Style>
   <Style Selector="Border.hair">
     <Setter Property="Height" Value="1" />
     <Setter Property="Background" Value="{DynamicResource T.Border}" />

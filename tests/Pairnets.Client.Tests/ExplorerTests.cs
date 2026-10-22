@@ -238,6 +238,7 @@ public sealed class ExplorerTests : IDisposable
 
         await app.Menu("Settings…");
         app.Dialogs.When("Reset Pairnets on this computer?", MessageBoxResult.OK);
+        await app.Press(app.Tray.Window!, "AdvancedExpander"); // Start over waits inside the folded Advanced part
         await app.Press(app.Tray.Window!, "Reset this app…");
         await app.Showing<Ui.SettingsWindow>("the sign-in window after the reset");
 

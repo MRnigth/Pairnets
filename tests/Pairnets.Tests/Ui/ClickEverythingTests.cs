@@ -390,6 +390,7 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
             new("the Settings page (a nest that can move its files, the Linux program folder)", s => SettingsStage(s, ownKey: true, canMove: true)),
             new("the Settings page (one of two nests, with Leave)", s => SettingsStage(s, ownKey: true, nests: 2)),
             new("the Settings page (a nest you own, with Invite a friend…)", s => SettingsStage(s, ownKey: true, nests: 2, canInvite: true)),
+            new("the Settings page (Advanced opened, with Start over)", s => SettingsStage(s, ownKey: true, advancedOpen: true)),
         ],
         ["sign-in"] =
         [
@@ -708,7 +709,7 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
 
     // ------------------------------------------------------------------ settings
 
-    private Task<SettingsView> SettingsStage(Stage s, bool ownKey, bool canMove = false, int nests = 1, bool canInvite = false)
+    private Task<SettingsView> SettingsStage(Stage s, bool ownKey, bool canMove = false, int nests = 1, bool canInvite = false, bool advancedOpen = false)
     {
         var secrets = new MemorySecrets();
         var key = ownKey ? fixture.Nest.MintKey("MACBOOK-" + Guid.NewGuid().ToString("N")[..6]) : null;
@@ -747,6 +748,8 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
             view.ShowProgramFolder("~/.local/opt/pairnets");
         }
         s.Show(new Window { Content = view, Width = 900, Height = 780 });
+        if (advancedOpen)
+            Person.Click(view.AdvancedHeader);
 
         var expected = fixture.Feed.Asset is null ? "up to date" : "version 99.0.0 is available";
         s.Expect["OnShowDevices"] = Raised(s, "show-devices");
@@ -765,6 +768,7 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
         s.Expect[":On this PC"] = That(() => view.PlacementChosen(string.Empty) == FilePlacement.OnThisPc, "everything stay on this computer");
         s.Expect[":On-Demand"] = That(() => Asked(s, "Make "), "the question before files leave this computer show");
         s.Expect[":Only on the nest"] = That(() => Asked(s, "Keep "), "the question before files leave this computer show");
+        s.Expect["OnToggleAdvanced"] = That(() => Screen.Named<Button>(view, "ResetButton").IsEffectivelyVisible != advancedOpen, "the Advanced part (Start over) open or close");
         s.Expect["OnToggleIgnore"] = That(() => Screen.Named<TextBox>(view, "IgnoreBox").IsEffectivelyVisible, "the rules box show");
         s.Expect["OnIgnoreChanged"] = That(() => Screen.Named<TextBlock>(view, "IgnoreCount").Text == "1 rule", "the rule count change to 1 rule");
         s.Expect["OnSave"] = All(Raised(s, "saved"), That(() => view.Result is { } r && r.Folder == fixture.Folder && r.DeviceId == key?.Id && r.FirstRunCompleted,

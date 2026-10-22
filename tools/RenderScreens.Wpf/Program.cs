@@ -269,6 +269,8 @@ public static partial class Program
         Save(window, outDir, $"stage4-settings-{suffix}.png", print);
         page.ScrollToEnd();
         Save(window, outDir, $"stage4-settings-start-over-{suffix}.png", print);
+        page.OpenAdvanced();
+        Save(window, outDir, $"stage4-settings-advanced-{suffix}.png", print);
 
         // A window with nothing synced yet.
         window.Navigate(MainPage.Overview);
@@ -431,6 +433,8 @@ public static partial class Program
         settingsPage.ShowNestStorage(null);
         settingsPage.ScrollToEnd();
         Save(window, outDir, $"windows-main-settings-start-over-{suffix}.png", print);
+        settingsPage.OpenAdvanced();
+        Save(window, outDir, $"windows-main-settings-advanced-{suffix}.png", print);
         window.AllowClose = true;
         window.Close();
 

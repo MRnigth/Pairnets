@@ -22,7 +22,8 @@ with Windows, tick "Start Pairnets when I sign in to Windows" in step 6, or
 right-click its icon and tick "Start with Windows".
 
 To start again from the beginning: right-click the icon, choose
-"Settings...", go to "Start over" and press "Reset this app...". This signs
+"Settings...", open "Advanced" at the very bottom and press "Reset this
+app...". This signs
 this computer out of your nest and forgets its settings. The files in your
 sync folder are never deleted.
 
