@@ -251,6 +251,34 @@ public partial class SettingsView : UserControl
     /// <summary>The choices as Save will save them.</summary>
     public IReadOnlyDictionary<string, FilePlacement> PlacementToSave => _placement;
 
+    /// <summary>"500 MB · all on this PC": each row's line, kept to update it as the sync frees or downloads files.</summary>
+    private readonly Dictionary<string, TextBlock> _sizeLines = new(StringComparer.Ordinal);
+
+    private DateTimeOffset _sizesAt;
+
+    private static string SizeText(string folder, INestFiles? files, IReadOnlyList<NestEntry> tops) =>
+        folder.Length == 0 ? FilesPageText.EverythingElseNote
+        : files is null ? string.Empty
+        : FilesPageText.SizeLine(tops.FirstOrDefault(e => e.IsFolder && e.Path == folder)?.Size ?? 0, Read(() => files.BytesHere(folder), 0L));
+
+    /// <summary>
+    /// Reads each row's "· all on this PC" line again: a choice frees or downloads its files after it is saved, so the
+    /// line drawn then is out of date once the sync has done it. At most every two seconds while the status changes.
+    /// </summary>
+    public void RefreshPlacementSizes(bool now = false)
+    {
+        if (!now && DateTimeOffset.UtcNow - _sizesAt < TimeSpan.FromSeconds(2))
+            return;
+        _sizesAt = DateTimeOffset.UtcNow;
+        var files = _files;
+        var tops = Read(() => files?.List(string.Empty), null) ?? [];
+        foreach (var (folder, line) in _sizeLines)
+            line.Text = SizeText(folder, files, tops);
+    }
+
+    /// <summary>The "500 MB · all on this PC" line of a folder's row.</summary>
+    public string? PlacementSizeShown(string folder) => _sizeLines.TryGetValue(folder, out var line) ? line.Text : null;
+
     private void DrawPlacement()
     {
         var files = _files;
@@ -259,13 +287,13 @@ public partial class SettingsView : UserControl
         PlacementRows.Opacity = files is null ? 0.55 : 1;
         PlacementNote.Text = files is null ? FilesPageText.SettingsOff : FilesPageText.SettingsText.Replace("this PC", "this computer", StringComparison.Ordinal);
         var tops = Read(() => files?.List(string.Empty), null) ?? [];
+        _sizeLines.Clear();
         foreach (var folder in PlacementFolders)
         {
             var name = folder.Length == 0 ? FilesPageText.EverythingElse : folder;
             var row = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
-            var size = folder.Length == 0 ? FilesPageText.EverythingElseNote
-                : files is null ? string.Empty
-                : FilesPageText.SizeLine(tops.FirstOrDefault(e => e.IsFolder && e.Path == folder)?.Size ?? 0, Read(() => files.BytesHere(folder), 0L));
+            var sizeLine = new TextBlock { Text = SizeText(folder, files, tops), Classes = { "t3" } };
+            _sizeLines[folder] = sizeLine;
             row.Children.Add(new StackPanel
             {
                 VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
@@ -273,7 +301,7 @@ public partial class SettingsView : UserControl
                 Children =
                 {
                     new TextBlock { Text = name, FontWeight = FontWeight.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis },
-                    new TextBlock { Text = size, Classes = { "t3" } },
+                    sizeLine,
                 },
             });
             var segments = new StackPanel { Orientation = Avalonia.Layout.Orientation.Horizontal };
@@ -336,6 +364,8 @@ public partial class SettingsView : UserControl
     /// </summary>
     public void ShowPlacementStatus(StatusSnapshot? status)
     {
+        if (_lastChoice is not null && status is not null)
+            RefreshPlacementSizes(); // the sync frees or downloads the files after the choice
         if (_lastChoice is not { } last)
         {
             PlacementStatusBox.IsVisible = false;

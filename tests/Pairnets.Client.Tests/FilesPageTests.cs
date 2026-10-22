@@ -284,6 +284,27 @@ public sealed class FilesPageTests
     }
 
     [Fact]
+    public async Task AFolderFreedAfterItsChoice_NoLongerSaysAllOnThisPc()
+    {
+        var nest = new FakeNestFiles();
+        var script = new DialogScript { Chooses = choice => choice.Buttons[^1] };
+        using var answers = script.Install();
+        var settings = new ClientSettings { ServerUrl = "https://nest.example.com/", Folder = @"D:\Sync", DeviceName = "DESKTOP", FirstRunCompleted = true };
+        var view = await Wpf.Ui(() => new SettingsView(settings, new FakeSecrets(), files: nest) { FilesSource = () => nest });
+        Assert.EndsWith("all on this PC", await Wpf.Ui(() => view.PlacementSizeShown("Documents")));
+
+        await Wpf.Ui(() => view.ChoosePlacement("Documents", FilePlacement.NestOnly));
+        // The sync frees the files a moment later; the next status the app shows reads the line again.
+        var now = DateTimeOffset.Now;
+        nest.Put("Documents/report.docx", 2_400_000, now, here: false);
+        nest.Put("Documents/taxes/2025.pdf", 800_000, now, here: false);
+        await Wpf.Ui(() => view.ShowPlacementStatus(StatusSnapshot.Initial with { Status = RunnerStatus.Idle, Text = "Up to date" }));
+        Assert.Equal(FilesPageText.SizeLine(nest.List(string.Empty).Single(e => e.Path == "Documents").Size, 0),
+            await Wpf.Ui(() => view.PlacementSizeShown("Documents")));
+        Assert.Empty(Wpf.TakeCrashes());
+    }
+
+    [Fact]
     public async Task AFolderRowsMenu_OpensWhereThisFolderLives_WithItsThreeChoices()
     {
         var (window, _, _, _, answers) = await OpenAsync();

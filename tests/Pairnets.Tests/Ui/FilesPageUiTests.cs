@@ -169,6 +169,30 @@ public class FilesPageUiTests
     }
 
     [AvaloniaFact]
+    public async Task AFolderFreedAfterItsChoice_NoLongerSaysAllOnThisPc()
+    {
+        var nest = new FakeNestFiles();
+        var settings = new ClientSettings { ServerUrl = "https://nest.example.com/", Folder = "/Users/me/Work", DeviceName = "MacBook", FirstRunCompleted = true };
+        var view = new SettingsView(settings, new MemorySecrets(), autoStart: false, files: nest) { FilesSource = () => nest };
+        var host = new Window { Content = view, Width = 900, Height = 780 };
+        host.Show();
+        Assert.EndsWith("all on this PC", view.PlacementSizeShown("Documents"));
+
+        var choosing = view.ChoosePlacementAsync("Documents", FilePlacement.NestOnly);
+        var question = await Wait.For(() => AllWindows().FirstOrDefault(w => w != host && w.IsVisible && w.Title == "Keep Documents only on your nest?"), "the question");
+        Person.Click(Screen.Find<Button>(question, "Free " + Format.Bytes(nest.BytesHere("Documents"))));
+        await choosing;
+
+        // The sync frees the files a moment later; the next status the app shows reads the line again.
+        var now = DateTimeOffset.Now;
+        nest.Put("Documents/report.docx", 2_400_000, now, here: false);
+        nest.Put("Documents/taxes/2025.pdf", 800_000, now, here: false);
+        view.ShowPlacementStatus(StatusSnapshot.Initial with { Status = RunnerStatus.Idle, Text = "Up to date" });
+        Assert.Equal(FilesPageText.SizeLine(nest.List(string.Empty).Single(e => e.Path == "Documents").Size, 0), view.PlacementSizeShown("Documents"));
+        host.Close();
+    }
+
+    [AvaloniaFact]
     public async Task TheSettingsCard_ListsTheTopFolders_AsksFirst_AndAppliesTheChoiceAtOnce()
     {
         var nest = new FakeNestFiles();
