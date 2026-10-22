@@ -123,6 +123,8 @@ form.rename p, .rename-done { margin: 6px 0 0; font-size: 0.9375rem; }
 .invite-form, form.change { margin-top: 10px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 8px; }
 .invite-form h3 { display: block; margin: 0 0 4px; font-size: 1rem; }
 label.choice span .muted { display: block; }
+.folder-ticks { max-height: 440px; overflow-y: auto; }
+.folder-ticks label.choice[data-linked-in] { opacity: .55; }
 .cookie-notice { position: fixed; left: 24px; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); z-index: 20;
   width: 400px; max-width: calc(100% - 48px); background: var(--bg); color: var(--text); border: 1px solid var(--line);
   border-radius: 8px; padding: 16px 18px; font-size: 15px; line-height: 1.5;
@@ -482,6 +484,83 @@ const ACCOUNT_JS = String.raw`(function () {
     var chosen = form.querySelector("[data-field=chosen]");
     if (chosen && !chosen.disabled) chosen.checked = true;
   }
+  // ---- The nest's own top-level folders as tick boxes (1.0.61.3): asked of the nest once per nest when a form opens.
+  // Typed names stay possible; when the nest can't be asked, typing is the way.
+  var folderLists = {};
+  function nestFolders(id) {
+    if (!folderLists[id]) folderLists[id] = pnApi("GET", "/v1/servers/" + id + "/folders");
+    return folderLists[id];
+  }
+  function folderBox(name, checked, detail) {
+    var label = el("label", "choice");
+    var box = el("input");
+    box.type = "checkbox";
+    box.name = "folder-pick";
+    box.value = name;
+    box.checked = checked;
+    label.appendChild(box);
+    var text = el("span", "", name);
+    if (detail) text.appendChild(el("span", "muted", detail));
+    label.appendChild(document.createTextNode(" "));
+    label.appendChild(text);
+    return label;
+  }
+  function folderDetail(f) {
+    return f.linkedIn ? "Came from another nest, so it can't be shared" : bytes(f.bytes) + " · " + f.files.toLocaleString() + (f.files === 1 ? " file" : " files");
+  }
+  // Fills a form's tick boxes from the nest: its folders by name, the ones already ticked (from an app, or a friend's
+  // share) kept ticked, and a ticked name the nest doesn't have kept as "Not on the nest yet". Calls done(true) once listed.
+  function fillFolders(li, id, ticks, status, done) {
+    var nest = li.querySelector("[data-field=label]").textContent;
+    status.textContent = "Getting the folders on " + nest + "…";
+    status.hidden = false;
+    nestFolders(id).then(function (res) {
+      if (res.body && (res.body.error === "reauth_required" || res.body.error === "unauthorized")) { ok(res); return; }
+      var list = res.ok && res.body.ok ? res.body : null;
+      if (!list) {
+        status.textContent = "Couldn't reach " + nest + ", so its folders can't be listed. Type the folder names instead.";
+        done(false, false);
+        return;
+      }
+      if (list.sealed) { status.hidden = true; done(false, true); return; }
+      var ticked = Array.prototype.map.call(ticks.querySelectorAll("input[name=folder-pick]:checked"), function (box) { return box.value; });
+      ticks.textContent = "";
+      list.folders.forEach(function (f) {
+        // A folder that came in through a link is never shared on, with anyone: shown, but it can't be ticked.
+        var label = folderBox(f.name, !f.linkedIn && ticked.indexOf(f.name) >= 0, folderDetail(f));
+        if (f.linkedIn) {
+          label.setAttribute("data-linked-in", "");
+          label.querySelector("input").disabled = true;
+        }
+        ticks.appendChild(label);
+      });
+      var names = list.folders.map(function (f) { return f.name; });
+      ticked.forEach(function (name) {
+        if (names.indexOf(name) < 0) ticks.appendChild(folderBox(name, true, "Not on the nest yet"));
+      });
+      status.textContent = !list.folders.length ? nest + " has no folders yet. Share the whole nest, or type a folder name." :
+        list.more ? "Showing the first " + list.folders.length + " folders. Type a name for another." : "";
+      status.hidden = !status.textContent;
+      done(true, false);
+    });
+  }
+  // The invite form: its tick boxes from the nest, once; a sealed nest is shared whole only.
+  function loadInviteFolders(li, id, form) {
+    if (form.hasAttribute("data-folders-asked")) return;
+    form.setAttribute("data-folders-asked", "");
+    fillFolders(li, id, form.querySelector("[data-field=folder-ticks]"), form.querySelector("[data-field=folder-status]"), function (listed, sealed) {
+      if (sealed) {
+        var chosen = form.querySelector("[data-field=chosen]");
+        chosen.disabled = true;
+        if (chosen.checked) form.querySelector("input[name='what-" + id + "'][value=whole]").checked = true;
+        form.querySelector("[data-field=sealed-note]").hidden = false;
+        var add = form.querySelector("label[for='folder-add-" + id + "']");
+        add.hidden = true;
+        add.nextElementSibling.hidden = true;
+      }
+      if (listed) form.querySelector("label[for='folder-add-" + id + "']").textContent = "Or type a folder name";
+    });
+  }
   // What a form says: {access, folders?}, or the problem to show.
   function shareOf(form, whatName, accessName) {
     var what = form.querySelector("input[name='" + whatName + "']:checked");
@@ -545,14 +624,21 @@ const ACCOUNT_JS = String.raw`(function () {
     var access = row.getAttribute("data-access");
     form.appendChild(radio("change-what-" + n, "whole", "The whole nest", !folders.length));
     form.appendChild(radio("change-what-" + n, "folders", "Chosen folders", !!folders.length));
-    var label = el("label", "", "Folder names, one per line");
+    // The shared folders are ticked boxes; the nest's other folders join them once it answers.
+    var status = el("p", "muted");
+    status.setAttribute("role", "status");
+    status.hidden = true;
+    var ticks = el("div", "folder-ticks");
+    folders.forEach(function (f) { ticks.appendChild(folderBox(f, true)); });
+    var label = el("label", "", "Other folder names, one per line");
     label.htmlFor = "change-folders-" + n;
     var input = el("textarea");
     input.id = "change-folders-" + n;
     input.name = "folders";
-    input.rows = 3;
-    input.value = folders.join("\n");
+    input.rows = 2;
     input.autocomplete = "off";
+    form.appendChild(status);
+    form.appendChild(ticks);
     form.appendChild(label);
     form.appendChild(input);
     form.appendChild(radio("change-access-" + n, "view", "View only", access !== "edit"));
@@ -570,6 +656,7 @@ const ACCOUNT_JS = String.raw`(function () {
     form.appendChild(actions);
     form.appendChild(error);
     row.querySelector(".who").appendChild(form);
+    fillFolders(row.closest("[data-server]"), id, ticks, status, function () {});
     cancel.addEventListener("click", function () { form.parentNode.removeChild(form); if (opener) opener.focus(); });
     form.addEventListener("submit", function (ev) {
       ev.preventDefault();
@@ -595,7 +682,7 @@ const ACCOUNT_JS = String.raw`(function () {
     var invite = b.closest("[data-invite]");
     var person = b.closest("[data-person]");
     var inv = invite && invite.getAttribute("data-invite");
-    if (action === "invite-open") { form.hidden = false; form.querySelector("input").focus(); }
+    if (action === "invite-open") { form.hidden = false; form.querySelector("input").focus(); loadInviteFolders(li, id, form); }
     else if (action === "invite-close") { form.hidden = true; }
     else if (action === "invite-add-folder") { addFolder(form); }
     else if (action === "invite-link") { sendInvite(li, id, form, false, b); }
@@ -661,7 +748,7 @@ const ACCOUNT_JS = String.raw`(function () {
   });
   // Ticking a folder means "Chosen folders"; Enter in "Add another folder" adds it instead of sending the invite.
   if (servers) servers.addEventListener("change", function (ev) {
-    var form = ev.target.closest("form.invite-form");
+    var form = ev.target.closest("form.invite-form, form.change");
     if (form && ev.target.name === "folder-pick" && ev.target.checked) pickChosen(form);
   });
   if (servers) servers.addEventListener("keydown", function (ev) {
@@ -681,7 +768,11 @@ const ACCOUNT_JS = String.raw`(function () {
   loadServers();
   // Opened from an app's "Invite a friend" (/account?invite=…): that nest's form is open; bring it into view.
   var asked = document.querySelector("form.invite-form[data-open]");
-  if (asked) asked.scrollIntoView({ block: "center" });
+  if (asked) {
+    asked.scrollIntoView({ block: "center" });
+    var askedLi = asked.closest("[data-server]");
+    loadInviteFolders(askedLi, askedLi.getAttribute("data-server"), asked);
+  }
   var linked = document.getElementById("links-list");
   if (linked) linked.addEventListener("click", function (ev) {
     var b = ev.target.closest("button[data-action=unlink]");

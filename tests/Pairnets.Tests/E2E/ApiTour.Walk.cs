@@ -546,6 +546,7 @@ public sealed partial class ApiTour
                      (HttpMethod.Patch, "api/relay/devices/dev-1", new { name = "Desk" }),
                      (HttpMethod.Delete, "api/relay/devices/dev-1", null),
                      (HttpMethod.Put, "api/relay/name", new { name = "soro" }),
+                     (HttpMethod.Get, "api/relay/folders", null),
                      (HttpMethod.Get, "api/relay/links", null),
                      (HttpMethod.Post, "api/relay/links", new { id = "lnk_tour00000001" }),
                      (HttpMethod.Patch, "api/relay/links/lnk_tour00000001", new { access = "edit" }),
@@ -589,6 +590,7 @@ public sealed partial class ApiTour
             await laptop.WaitForAsync(SyncHub.NestRenamedMethod, args => (string?)args[0] == "soro");
         }
         Assert.Equal("soro", (await Signed(HttpMethod.Get, "/api/relay/status")).GetProperty("name").GetString());
+        Assert.False((await Signed(HttpMethod.Get, "/api/relay/folders")).GetProperty("sealed").GetBoolean());
 
         Step("The linked nest joins another nest: the service sets the link up, changes it, ends it and says which nests are shared with the account; its computers see both");
         using var computer = new HttpClient(new RecordingHandler(Record, new SocketsHttpHandler { UseProxy = false })) { BaseAddress = linked.Url };

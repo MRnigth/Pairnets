@@ -60,6 +60,15 @@ public static class RelayEndpoints
 
     public sealed record RelayError(string Error);
 
+    /// <param name="LinkedIn">It came in through a link: the service never lets it be shared on to a friend's nest.</param>
+    public sealed record Folder(string Name, long Bytes, long Files, bool LinkedIn);
+
+    /// <param name="More">There were more than <see cref="MaxFolderList"/> folders; the first ones by name are listed.</param>
+    public sealed record FolderList(bool Sealed, IReadOnlyList<Folder> Folders, bool More);
+
+    /// <summary>At most this many folders in <c>GET /folders</c>.</summary>
+    public const int MaxFolderList = 500;
+
     public static void Map(WebApplication app)
     {
         // The middleware already checked every path under /api/relay; this makes sure no endpoint here can answer a
@@ -239,6 +248,22 @@ public static class RelayEndpoints
             requests.Replace(list);
             log.LogInformation("{Count} person(s) wait to be let in", list.Count);
             return Json(new RequestsResult(list.Count));
+        });
+
+        // The nest's top-level folders, for the owner's invite form on the account page (1.0.61.3): names a share can
+        // name, with size and file count, and whether one came in through a link (never shared on to a friend's nest).
+        // An encrypted nest is only shared whole, and its names are not the owner's to read here: it lists none.
+        relay.MapGet("/folders", (SyncStore store, LinkStore links) =>
+        {
+            if (store.Sealed)
+                return Json(new FolderList(true, [], false));
+            var linkedIn = links.LinkedInFolders();
+            var all = store.Manifest.TopFolders()
+                .Where(f => DeviceAccess.IsFolderName(f.Name) && !f.Name.StartsWith(".pairnets", StringComparison.OrdinalIgnoreCase))
+                .OrderBy(f => f.Name, StringComparer.OrdinalIgnoreCase)
+                .Select(f => new Folder(f.Name, f.Bytes, f.Files, LinkStore.IsUnder(f.Name, linkedIn)))
+                .ToList();
+            return Json(new FolderList(false, all.Take(MaxFolderList).ToList(), all.Count > MaxFolderList));
         });
     }
 

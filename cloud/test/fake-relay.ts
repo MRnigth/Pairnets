@@ -258,6 +258,8 @@ export class FakeNestServer {
   links = new Map<string, FakeLink>();
   /** Top-level folders that came in through links (GET /api/relay/links answers them). */
   linkedIn: string[] = [];
+  /** Its top-level folders (GET /api/relay/folders, 1.0.61.3); null for a nest from before that list (404). */
+  topFolders: { name: string; bytes: number; files: number }[] | null = [];
   /** The nests shared with the owner's account, as last PUT; null until the service sent a list. */
   offers: unknown[] | null = null;
 
@@ -435,6 +437,11 @@ export class FakeNestServer {
       if (!Array.isArray(b.requests) || b.requests.length > 20) return jsonResp(400, { error: "bad_request" });
       this.waiting = b.requests as FakeRequest[];
       return jsonResp(200, { requests: this.waiting.length });
+    }
+    if (this.topFolders !== null && !this.old && req.method === "GET" && p === "/api/relay/folders") {
+      if (this.sealed) return jsonResp(200, { sealed: true, folders: [], more: false });
+      const linked = (name: string) => this.linkedIn.some((f) => f.toLowerCase() === name.toLowerCase());
+      return jsonResp(200, { sealed: false, folders: this.topFolders.map((f) => ({ ...f, linkedIn: linked(f.name) })), more: false });
     }
     if (this.linksSupported && !this.old && p.startsWith("/api/relay/links")) return this.linkAdmin(req.method, p, bytes);
     if (this.linksSupported && !this.old && req.method === "PUT" && p === "/api/relay/offers") {

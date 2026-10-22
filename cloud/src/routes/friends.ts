@@ -323,6 +323,46 @@ export async function listPeopleRoute(ctx: Ctx, nestId: string): Promise<Respons
   });
 }
 
+/** The folder list the invite form asks a nest for (GET /api/relay/folders) at most this often per account. */
+const FOLDER_LISTS_PER_HOUR = 120;
+/** And at most this many folders of it are passed on (the nest sends at most 500). */
+const MAX_LISTED_FOLDERS = 500;
+
+/**
+ * GET /v1/servers/{id}/folders: the nest's top-level folders for its owner's invite form (1.0.61.3), asked live from the
+ * nest and never kept. 200 {ok:true, sealed, folders:[{name, bytes, files, linkedIn}], more} or 200 {ok:false, reason:
+ * "offline"|"too_old"} so the form falls back to typed names. Another account's nest answers 404 like an unknown one.
+ */
+export async function listFoldersRoute(ctx: Ctx, nestId: string): Promise<Response> {
+  const s = await requireBrowser(ctx);
+  const n = await ownServer(ctx, s.accountId, nestId);
+  await enforce(ctx, "nest-folders", s.accountId, FOLDER_LISTS_PER_HOUR, HOUR);
+  let r;
+  try {
+    r = await adminCall(ctx.env, ctx.now, n, "GET", "/api/relay/folders");
+  } catch (e) {
+    if (e instanceof NestOffline) return json(200, { ok: false, reason: "offline" });
+    throw e;
+  }
+  if (r.status === 404 || r.status === 405) return json(200, { ok: false, reason: "too_old" });
+  const body = obj(r.json);
+  if (r.status !== 200 || !body || !Array.isArray(body.folders)) return json(200, { ok: false, reason: "offline" });
+  if (n.status === "pending") await markReached(ctx.env, ctx.now, n.id);
+  const folders = body.folders
+    .map(folderJson)
+    .filter((f) => f !== null)
+    .slice(0, MAX_LISTED_FOLDERS);
+  return json(200, { ok: true, sealed: body.sealed === true, folders: body.sealed === true ? [] : folders, more: body.more === true });
+}
+
+/** One folder as the nest lists it, with only the documented fields: a name a share can name, and whole counts. */
+function folderJson(v: unknown): { name: string; bytes: number; files: number; linkedIn: boolean } | null {
+  const f = obj(v);
+  if (!f || typeof f.name !== "string" || cleanFolders([f.name]) === "invalid") return null;
+  const whole = (x: unknown) => (typeof x === "number" && Number.isSafeInteger(x) && x >= 0 ? x : 0);
+  return { name: f.name, bytes: whole(f.bytes), files: whole(f.files), linkedIn: f.linkedIn === true };
+}
+
 /** `access` and `folders` from a body, or 400 bad_access. */
 function shareFrom(b: Record<string, unknown>): { access: FriendAccess; folders: string[] | null } {
   const access = cleanAccess(b.access);
