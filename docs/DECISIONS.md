@@ -1639,3 +1639,13 @@ A (a nest joins another nest) and B (invite an account), with the recommended an
   shared with the account (`/api/links`, `/api/offers`) are for the owner's computers only.
 * **The Files page and storage for friends.** Moving is a write (both ends must be in the share), and deleting for
   good and "Where your files live" (`/api/purge`, `/api/storage`) are the owner's only.
+
+## The left side shows which page is open (2026-10-22)
+
+* **Soft blue on a side row means "this page is open", nothing else.** This computer's row is soft blue while the
+  Overview is open, the nest's row while Computers is open (next to their blue page tile); the folded dock's buttons get
+  soft blue with a blue ring. Before, a syncing computer's row was soft blue on every page, so it looked chosen while
+  the nest's row never did. Syncing now only colours the row's text.
+* **A warning or problem keeps its own colour.** The row stays warm or red; while its page is open it also gets a 2 px
+  blue ring, so both things show. The clicks themselves stay: this computer → Overview, the nest → Computers (its card
+  is the top of that page).

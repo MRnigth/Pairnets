@@ -106,7 +106,7 @@
                     <ColumnDefinition Width="*" />
                   </Grid.ColumnDefinitions>
                   <Grid Margin="0,0,10,0" VerticalAlignment="Center">
-                    <Border Style="{StaticResource IconSquare}" />
+                    <Border x:Name="NestIconSq" Style="{StaticResource IconSquare}" />
                     <ui:LineIcon Width="17" Height="17" StrokeThickness="1.8" Stroke="{DynamicResource T.Text}" Data="{StaticResource I.Nest}" />
                     <Ellipse x:Name="NestDot" Width="10" Height="10" StrokeThickness="2" Stroke="{DynamicResource T.Card}" Fill="{DynamicResource T.Ok}"
                              HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,-2,-2" />
@@ -269,7 +269,7 @@
           <!-- Computers -->
           <Border Style="{StaticResource DockPill}" Margin="0,12,0,0">
             <StackPanel>
-              <Button x:Name="DockThis" Style="{StaticResource DockButton}" Background="{DynamicResource T.AccentSoft}" Click="OnThisComputer">
+              <Button x:Name="DockThis" Style="{StaticResource DockButton}" Click="OnThisComputer">
                 <Grid Width="44" Height="44">
                   <Ellipse x:Name="DockRingTrack" Stroke="{DynamicResource T.Track}" StrokeThickness="2.5" Visibility="Collapsed" />
                   <Ellipse x:Name="DockRing" Stroke="{DynamicResource T.Accent}" StrokeThickness="2.5" StrokeDashCap="Round" RenderTransformOrigin="0.5,0.5" Visibility="Collapsed">

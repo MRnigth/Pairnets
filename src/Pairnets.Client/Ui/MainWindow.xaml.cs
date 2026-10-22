@@ -339,6 +339,7 @@ public partial class MainWindow : Window, IPageHost
         }
         if (page == MainPage.Account)
             AccountPage.Show(_status, ThisDevice, null);
+        RefreshSide(); // the side shows which page is open
     }
 
     /// <summary>The Files page's two tabs and Clean up: which one shows.</summary>

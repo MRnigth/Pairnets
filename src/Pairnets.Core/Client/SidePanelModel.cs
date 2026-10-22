@@ -57,11 +57,15 @@ public enum OtherKind
 /// <summary>This computer's card at the top of the left side.</summary>
 /// <param name="Text">"This one · sending 4.90 MB/s".</param>
 /// <param name="Detail">The same without "This one · " (for tooltips).</param>
-/// <param name="Tone">Colours the text and, unless <see cref="SideTone.Neutral"/>, the card behind it.</param>
+/// <param name="Tone">Colours the text; a warning or a problem also colours the card behind it (see <see cref="Loud"/>).</param>
 /// <param name="BarPercent">0–100 while syncing and the progress is known; the card then shows a bar.</param>
 public sealed record SideThisComputer(string Name, string Text, string Detail, SideDot Dot, SideTone Tone, int? BarPercent, DeviceIconKind Icon)
 {
-    public bool Highlighted => Tone != SideTone.Neutral;
+    /// <summary>
+    /// True when the card itself takes the warning or problem colour. Syncing only colours the text: a soft-blue card
+    /// means "the page you are on" (the Overview), like a chosen nest row.
+    /// </summary>
+    public bool Loud => Tone is SideTone.Warn or SideTone.Bad;
 
     public bool ShowBar => BarPercent is not null;
 
@@ -72,6 +76,9 @@ public sealed record SideThisComputer(string Name, string Text, string Detail, S
 /// <summary>The nest's row; <paramref name="Title"/> is its name ("soro") once its owner gave it one, else "Your nest".</summary>
 public sealed record SideNest(string Text, SideDot Dot, SideTone Tone, string Title = "Your nest")
 {
+    /// <summary>True when the row takes the warning or problem colour.</summary>
+    public bool Loud => Tone is SideTone.Warn or SideTone.Bad;
+
     /// <summary>"Your nest, 412 GB free · v1.0.48".</summary>
     public string Tooltip => Title + ", " + Text;
 }

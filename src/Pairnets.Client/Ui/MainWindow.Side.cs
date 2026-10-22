@@ -103,13 +103,9 @@ public partial class MainWindow
         AccountButton.ToolTip = m.AccountLabel;
         System.Windows.Automation.AutomationProperties.SetName(AccountButton, m.AccountLabel);
 
-        // This computer
+        // This computer: its page is the Overview
         var t = m.This;
-        if (t.Highlighted)
-            ThisCard.SetResourceReference(BackgroundProperty, PillKey(t.Tone));
-        else
-            ThisCard.Background = Brushes.Transparent;
-        ThisIconSq.SetResourceReference(Border.BackgroundProperty, t.Highlighted ? "T.Card" : "T.Chip");
+        PaintRow(ThisCard, ThisIconSq, ThisName, Page == MainPage.Overview, t.Loud, t.Tone);
         ThisIcon.Data = IconOf(t.Icon);
         ThisDot.SetResourceReference(Shape.FillProperty, DotKey(t.Dot));
         ThisName.Text = t.Name;
@@ -120,12 +116,9 @@ public partial class MainWindow
         if (t.BarPercent is { } percent)
             Motion.Glide(ThisBar, percent);
 
-        // The nest
+        // The nest: its card is at the top of the Computers page
         var n = m.Nest;
-        if (n.Tone == SideTone.Neutral)
-            NestRow.Background = Brushes.Transparent;
-        else
-            NestRow.SetResourceReference(BackgroundProperty, PillKey(n.Tone));
+        PaintRow(NestRow, NestIconSq, NestTitle, Page == MainPage.Devices, n.Loud, n.Tone);
         NestDot.SetResourceReference(Shape.FillProperty, DotKey(n.Dot));
         NestTitle.Text = n.Title;
         NestSub.Text = n.Text;
@@ -153,6 +146,24 @@ public partial class MainWindow
         System.Windows.Automation.AutomationProperties.SetName(NavAttention, m.Tiles.AttentionAlert ? $"Needs you, {m.Tiles.AttentionCount}" : "Needs you");
     }
 
+    /// <summary>
+    /// Paints a side row so the side always shows where you are: soft blue while its page is open, the warning or problem
+    /// colour when it has one, then with a blue ring while its page is open.
+    /// </summary>
+    private static void PaintRow(Button row, Border square, TextBlock name, bool current, bool loud, SideTone tone)
+    {
+        if (loud)
+            row.SetResourceReference(BackgroundProperty, PillKey(tone));
+        else if (current)
+            row.SetResourceReference(BackgroundProperty, "T.AccentSoft");
+        else
+            row.Background = Brushes.Transparent;
+        row.SetResourceReference(BorderBrushProperty, "T.AccentButton");
+        row.BorderThickness = new Thickness(loud && current ? 2 : 0);
+        square.SetResourceReference(Border.BackgroundProperty, loud || current ? "T.Card" : "T.Chip");
+        name.SetResourceReference(TextBlock.ForegroundProperty, current && !loud ? "T.AccentInk" : "T.Text");
+    }
+
     private void DrawDock(SidePanelModel m)
     {
         DockAccountInitial.Text = m.AccountInitial;
@@ -166,6 +177,7 @@ public partial class MainWindow
 
         // This computer, with a ring around it while it syncs
         DockThisIcon.Data = IconOf(m.This.Icon);
+        PaintDockButton(DockThis, Page == MainPage.Overview);
         DockThis.ToolTip = m.This.Tooltip;
         System.Windows.Automation.AutomationProperties.SetName(DockThis, m.This.Tooltip);
         var ring = m.RingPercent;
@@ -178,6 +190,7 @@ public partial class MainWindow
         }
 
         DockNestDot.SetResourceReference(Shape.FillProperty, DotKey(m.Nest.Dot));
+        PaintDockButton(DockNest, Page == MainPage.Devices);
         DockNest.ToolTip = m.Nest.Tooltip;
         System.Windows.Automation.AutomationProperties.SetName(DockNest, m.Nest.Tooltip);
 
@@ -189,6 +202,22 @@ public partial class MainWindow
         var tip = string.Join("\n", m.DockMore.Select(o => $"{o.Name}   {o.Text}"));
         DockMore.ToolTip = tip;
         System.Windows.Automation.AutomationProperties.SetName(DockMore, m.DockMoreLabel);
+    }
+
+    /// <summary>A dock button whose page is open: soft blue with a blue ring.</summary>
+    private static void PaintDockButton(Button button, bool current)
+    {
+        button.SetResourceReference(BackgroundProperty, current ? "T.AccentSoft" : "T.Chip");
+        if (current)
+        {
+            button.SetResourceReference(BorderBrushProperty, "T.AccentButton");
+            button.BorderThickness = new Thickness(2);
+        }
+        else
+        {
+            button.ClearValue(BorderBrushProperty);
+            button.ClearValue(BorderThicknessProperty);
+        }
     }
 
     private static void DrawDockOther(Button button, LineIcon icon, Ellipse dot, SideOther? other)

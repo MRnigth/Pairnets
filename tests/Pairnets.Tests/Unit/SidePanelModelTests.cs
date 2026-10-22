@@ -53,7 +53,7 @@ public class SidePanelModelTests
         var m = Build(SyncingNow());
         Assert.Equal("This one · uploading 4.90 MB/s", m.This.Text);
         Assert.Equal(SideTone.Accent, m.This.Tone);
-        Assert.True(m.This.Highlighted);
+        Assert.False(m.This.Loud); // syncing colours the text, not the card
         Assert.Equal(SideDot.Ok, m.This.Dot);
         Assert.Equal(31, m.This.BarPercent);
         Assert.Equal(31, m.RingPercent);
@@ -85,7 +85,7 @@ public class SidePanelModelTests
         var m = Build(Base());
         Assert.Equal("This one · up to date", m.This.Text);
         Assert.Equal(SideTone.Neutral, m.This.Tone);
-        Assert.False(m.This.Highlighted);
+        Assert.False(m.This.Loud);
         Assert.False(m.This.ShowBar);
         Assert.Equal("Up to date", m.Tiles.OverviewNote);
         Assert.Equal(["in sync", "in sync", "off " + Presences.Since(Now.AddDays(-2), Now), "off " + Presences.Since(Now.AddDays(-3), Now), "off " + Presences.Since(Now.AddDays(-4), Now)],
@@ -104,7 +104,7 @@ public class SidePanelModelTests
         var m = Build(s);
         Assert.Equal("This one · waits for LAPTOP", m.This.Text);
         Assert.Equal(SideDot.Ok, m.This.Dot);
-        Assert.False(m.This.Highlighted);
+        Assert.False(m.This.Loud);
         Assert.Equal("Waiting", m.Tiles.OverviewNote);
         Assert.Equal("↑ 3.80 MB/s", m.Others[0].Text);
         Assert.Equal("LAPTOP", m.Others[0].Name);
@@ -171,7 +171,7 @@ public class SidePanelModelTests
         var m = Build(s);
         Assert.Equal("This one · offline", m.This.Text);
         Assert.Equal(SideDot.Off, m.This.Dot);
-        Assert.False(m.This.Highlighted);
+        Assert.False(m.This.Loud);
         Assert.Equal("Offline", m.Tiles.OverviewNote);
         Assert.Equal("Can’t reach it · trying again", m.Nest.Text);
         Assert.Equal(SideDot.Bad, m.Nest.Dot);
@@ -189,7 +189,7 @@ public class SidePanelModelTests
         var m = Build(Base(RunnerStatus.Paused) with { Paused = true });
         Assert.Equal("This one · paused", m.This.Text);
         Assert.Equal(SideDot.Off, m.This.Dot);
-        Assert.False(m.This.Highlighted);
+        Assert.False(m.This.Loud);
         Assert.Equal("Paused", m.Tiles.OverviewNote);
         Assert.Equal("online", m.Others[0].Text);
     }
