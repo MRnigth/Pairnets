@@ -132,7 +132,7 @@ public static class InviteChoices
             foreach (var dir in new DirectoryInfo(folder).EnumerateDirectories().OrderBy(d => d.Name, StringComparer.OrdinalIgnoreCase))
             {
                 ct.ThrowIfCancellationRequested();
-                if (dir.Name.StartsWith(".pairnets", StringComparison.OrdinalIgnoreCase) || (dir.Attributes & (FileAttributes.Hidden | FileAttributes.ReparsePoint)) != 0
+                if (dir.Name.StartsWith(".pairnets", StringComparison.OrdinalIgnoreCase) || (dir.Attributes & FileAttributes.Hidden) != 0 || IsLink(dir)
                     || !NestAccess.IsFolderName(dir.Name))
                     continue;
                 list.Add((dir.Name, SizeOf(dir, ct)));
@@ -145,15 +145,33 @@ public static class InviteChoices
         return list;
     }
 
+    /// <summary>
+    /// A link (symbolic link or junction) to somewhere else: never offered or counted. Other reparse points stay: in a
+    /// folder kept On-Demand, or under OneDrive, every folder and file is a cloud placeholder, and those are the nest's
+    /// own folders (reading their names and sizes downloads nothing).
+    /// </summary>
+    internal static bool IsLink(FileSystemInfo entry) =>
+        (entry.Attributes & FileAttributes.ReparsePoint) != 0 && entry.LinkTarget is not null;
+
     private static long SizeOf(DirectoryInfo dir, CancellationToken ct)
     {
         long bytes = 0;
         try
         {
-            foreach (var file in dir.EnumerateFiles("*", new EnumerationOptions { RecurseSubdirectories = true, IgnoreInaccessible = true, AttributesToSkip = FileAttributes.ReparsePoint }))
+            var options = new EnumerationOptions { IgnoreInaccessible = true, AttributesToSkip = 0 };
+            var folders = new Stack<DirectoryInfo>([dir]);
+            while (folders.TryPop(out var here))
             {
-                ct.ThrowIfCancellationRequested();
-                bytes += file.Length;
+                foreach (var entry in here.EnumerateFileSystemInfos("*", options))
+                {
+                    ct.ThrowIfCancellationRequested();
+                    if (IsLink(entry))
+                        continue;
+                    if (entry is DirectoryInfo inner)
+                        folders.Push(inner);
+                    else if (entry is FileInfo file)
+                        bytes += file.Length;
+                }
             }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
