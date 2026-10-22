@@ -221,11 +221,11 @@ public sealed class ExplorerTests : IDisposable
     public async Task App_TakesTheInstallersChoicesOnce()
     {
         await using var nest = await TestServer.StartWithWebsiteAsync();
-        await using var app = await TrayHarness.CreateAsync(nest, setupChoices: ("run-1", "explorerside=0;explorermenu=0;where=nest;autostart=0"));
+        await using var app = await TrayHarness.CreateAsync(nest, setupChoices: ("run-1", "explorerside=0;explorermenu=0;where=ondemand;autostart=0"));
         await app.StartAsync();
 
         Assert.Null(app.Platform.ExplorerEntries.Items[^1]); // neither part wanted
-        Assert.Equal(Core.Sync.FilePlacement.NestOnly, app.SavedSettings.Placement[""]);
+        Assert.Equal(Core.Sync.FilePlacement.OnDemand, app.SavedSettings.Placement[""]);
         Assert.Equal("run-1", app.SavedSettings.SetupChoicesApplied);
     }
 

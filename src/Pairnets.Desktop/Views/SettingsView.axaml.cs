@@ -502,6 +502,13 @@ public partial class SettingsView : UserControl
     /// <summary>Scrolls to the bottom of the page (screenshot test).</summary>
     internal void ScrollToEnd() => Scroller.ScrollToEnd();
 
+    /// <summary>Scrolls "Where your files live" into view (the screenshots).</summary>
+    internal void ScrollToPlacement()
+    {
+        if (Scroller.Content is Visual content && PlacementRows.TranslatePoint(new Point(0, 0), content) is { } at)
+            Scroller.Offset = new Vector(0, Math.Max(0, at.Y - 140));
+    }
+
     /// <summary>"Reset this app…" (the controller asks first, and starts over from the sign-in window).</summary>
     public event Action? ResetRequested;
 

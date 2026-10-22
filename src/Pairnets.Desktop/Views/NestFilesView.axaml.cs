@@ -200,6 +200,7 @@ public partial class NestFilesView : UserControl
         }
         ShowEmpty(_rows.Count > 0 ? null : search.Length > 0 ? FilesPageText.NoMatch : FilesPageText.Empty);
         var placement = files.PlacementOf(_folder);
+        PickNestOnly.IsVisible = PlacementMap.Allowed(_folder, FilePlacement.NestOnly);
         PlacementText.Text = NestFiles.PlacementText(placement);
         PlacementIcon.Data = Visuals.Resource<Geometry>(WhereIconConverter.Key(placement));
         PlacementIcon.Stroke = Visuals.Resource<IBrush>(WhereBrushConverter.Key(placement));

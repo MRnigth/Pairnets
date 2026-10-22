@@ -92,6 +92,8 @@ public static partial class Program
                     Stage6.Render(outDir, dark ? "dark" : "light", print);
                 else if (args.Contains("--stage7"))
                     Stage7.Render(outDir, dark ? "dark" : "light", print);
+                else if (args.Contains("--nest-only"))
+                    NestOnlyScreens.Render(outDir, dark ? "dark" : "light", print);
                 else if (args.Contains("--stage4"))
                     RenderStage4(outDir, dark ? "dark" : "light", print);
                 else

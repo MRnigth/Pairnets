@@ -167,6 +167,14 @@ public static class Dialogs
         return result;
     }
 
+    /// <summary>The window <see cref="Choose"/> would show, not shown (the screenshot tool draws it).</summary>
+    public static Window ChoicePreview(string title, string text, IReadOnlyList<string> points, params string[] buttons)
+    {
+        var popup = Popup(null, title, text, points, out var body);
+        body.Children.Add(ButtonRow(popup, buttons.Select((b, i) => (b, i == buttons.Length - 1, (Action)(() => { }))).ToArray()));
+        return popup;
+    }
+
     /// <summary>Asks for one line of text (a new name); null for Cancel.</summary>
     public static string? Prompt(Window? owner, string title, string text, string initial, string ok)
     {

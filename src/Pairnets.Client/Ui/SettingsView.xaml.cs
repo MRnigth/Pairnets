@@ -591,6 +591,15 @@ public partial class SettingsView : UserControl
     /// <summary>Scrolls to the bottom of the page (screenshot tool).</summary>
     public void ScrollToEnd() => Scroller.ScrollToEnd();
 
+    /// <summary>Scrolls "Where your files live" into view (the screenshot tool).</summary>
+    public void ScrollToPlacement()
+    {
+        UpdateLayout();
+        var top = PlacementRows.TransformToAncestor(Scroller).Transform(new Point(0, 0)).Y + Scroller.VerticalOffset;
+        Scroller.ScrollToVerticalOffset(Math.Max(0, top - 140));
+        UpdateLayout();
+    }
+
     /// <summary>"Reset this app…" (the controller asks first, and starts over from the sign-in window).</summary>
     public event Action? ResetRequested;
 
