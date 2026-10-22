@@ -249,7 +249,7 @@ public partial class HistoryPageView : UserControl
             if (rows.Count == 0)
             {
                 _versionsMessage.Text = file.Deleted
-                    ? "Your nest no longer has a copy: it was deleted more than 30 days ago."
+                    ? HistoryQuery.NoCopyLeft()
                     : "No older versions: this file has not been changed or replaced in the last 30 days.";
                 VersionList.Children.Add(_versionsMessage);
             }
@@ -411,7 +411,7 @@ public partial class HistoryPageView : UserControl
         {
             var versions = await source.GetVersionsAsync(file.Path, CancellationToken.None);
             error = versions.Count == 0
-                ? "Your nest no longer has a copy of " + file.Name + ": it was deleted more than 30 days ago."
+                ? HistoryQuery.NoCopyLeft(file.Name)
                 : await source.RestoreVersionAsync(file.Path, versions[0], CancellationToken.None);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)

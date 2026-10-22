@@ -99,6 +99,13 @@ public static class HistoryQuery
     /// <summary>How long the server keeps deleted files and older versions (its default).</summary>
     public static readonly TimeSpan Retention = TimeSpan.FromDays(30);
 
+    /// <summary>
+    /// Restore found nothing on the nest: the file was deleted for good (on another computer, or before this app
+    /// remembered it), or so long ago that the nest forgot it.
+    /// </summary>
+    public static string NoCopyLeft(string? name = null) =>
+        "Your nest no longer has a copy" + (name is null ? string.Empty : " of " + name) + ": it was deleted for good, or more than 30 days ago.";
+
     /// <summary>The most rows a list shows; searching narrows it down.</summary>
     public const int MaxRows = 400;
 

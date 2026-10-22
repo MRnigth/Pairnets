@@ -296,6 +296,7 @@ public class NestFilesTests : IAsyncLifetime
 
         Assert.False((await session.Files.DeleteForGoodAsync("Videos/trip.mp4", "delete")).Ok); // not the word
         Assert.NotNull(OnNest("Videos/trip.mp4"));
+        Assert.True((await session.Files.DeleteAsync("notes.txt")).Ok); // an ordinary deletion, for the Deleted list below
 
         // Also while the nest is full: it is how room is made.
         session.UpdateStatusForTests(s => s with { Server = new ServerInfo("id", 1, 1, DiskFreeBytes: 1024, DiskTotalBytes: 1L << 40) });
@@ -303,6 +304,12 @@ public class NestFilesTests : IAsyncLifetime
         Assert.Null(OnNest("Videos/trip.mp4"));
         Assert.Empty(_server.Store.ListHistory("Videos/trip.mp4"));
         Assert.DoesNotContain(session.Files.Biggest(), e => e.Path == "Videos/trip.mp4");
+
+        // The Deleted list offers no Restore for it (nothing is left), but still lists an ordinary deletion.
+        var deleted = (await session.GetServerFilesAsync(CancellationToken.None)).Where(f => f.Deleted).Select(f => f.Path).ToList();
+        Assert.Contains("notes.txt", deleted);
+        Assert.DoesNotContain("Videos/trip.mp4", deleted);
+        Assert.Contains(_server.Store.ReadManifest(null).Entries, e => e is { Path: "Videos/trip.mp4", Deleted: true }); // other computers still delete it
     }
 
     [Fact]

@@ -1237,11 +1237,15 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
 
     // ------------------------------------------------------------------ history (the History page)
 
-    /// <summary>Every file the server knows, deleted ones included, read in one request.</summary>
+    /// <summary>
+    /// Every file the server knows, deleted ones included, read in one request. Files deleted for good from this
+    /// computer are left out: nothing of them can be restored (<see cref="PurgedFiles"/>).
+    /// </summary>
     public async Task<IReadOnlyList<ServerFile>> GetServerFilesAsync(CancellationToken ct)
     {
         var manifest = await Api.GetManifestAsync(null, ct).ConfigureAwait(false);
-        return manifest.Entries.Select(ServerFile.From).ToList();
+        var purged = PurgedFiles.Load(State);
+        return manifest.Entries.Where(e => !PurgedFiles.Contains(purged, e)).Select(ServerFile.From).ToList();
     }
 
     /// <summary>The older versions of <paramref name="path"/> the server keeps, newest first.</summary>

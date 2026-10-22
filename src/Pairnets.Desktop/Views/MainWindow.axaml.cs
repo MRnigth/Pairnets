@@ -956,7 +956,7 @@ public partial class MainWindow : Window
             VersionCount.Text = VersionRow.CountText(_versions.Count);
             VersionsMessage.IsVisible = _versions.Count == 0;
             VersionsMessage.Text = file.Deleted
-                ? "Your nest no longer has a copy: it was deleted more than 30 days ago."
+                ? HistoryQuery.NoCopyLeft()
                 : "No older versions: this file has not been changed or replaced in the last 30 days.";
         }
         catch (OperationCanceledException)
@@ -1027,7 +1027,7 @@ public partial class MainWindow : Window
         {
             var versions = await source.GetVersionsAsync(file.Path, CancellationToken.None);
             error = versions.Count == 0
-                ? "Your nest no longer has a copy of this file."
+                ? HistoryQuery.NoCopyLeft(file.Name)
                 : await source.RestoreVersionAsync(file.Path, versions[0], CancellationToken.None);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)

@@ -582,6 +582,7 @@ public sealed class NestFiles : INestFiles
                     return NestResult.Fail(result.Message ?? "Your nest did not delete it.");
             }
             _session.State.UpsertRemote(result.Entry!);
+            PurgedFiles.Add(_session.State, result.Entry!);
             if (Local(path) is { } here && File.Exists(here))
             {
                 _session.State.RemoveFile(path);
