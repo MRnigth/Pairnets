@@ -224,9 +224,9 @@ async function route(ctx: Ctx, isApi: boolean): Promise<Response> {
   const method = req.method.toUpperCase();
   const path = url.pathname;
 
-  // Any request: 300 a minute per IP. The static files under /assets/ are cached and never touch the database, so they
-  // are not counted (a page load would otherwise spend a dozen of the 300 on files).
-  const global = path.startsWith("/assets/") ? null : await hit(ctx, "req", ctx.ipKey, 300, MINUTE);
+  // Any request: 300 a minute per IP. The static files (/assets/, /favicon.ico) are cached and never touch the database,
+  // so they are not counted (a page load would otherwise spend a dozen of the 300 on files).
+  const global = isStaticPath(path) ? null : await hit(ctx, "req", ctx.ipKey, 300, MINUTE);
   if (global?.limited) throw new HttpError(429, "rate_limited", undefined, { "Retry-After": String(global.retryAfter) });
 
   // CSRF rule: every mutation carries exactly our Origin, except the server/app endpoints that never read cookies.
@@ -247,14 +247,20 @@ async function route(ctx: Ctx, isApi: boolean): Promise<Response> {
     return m.handler(ctx, m.param, m.param2);
   }
 
-  if (method === "GET" && path.startsWith("/assets/")) {
-    const asset = ASSETS[path.slice("/assets/".length)];
+  if (method === "GET" && isStaticPath(path)) {
+    // /favicon.ico: what browsers ask for when an answer has no icon link (JSON, old browsers); the PNG logo.
+    const asset = ASSETS[path === "/favicon.ico" ? "icon.png" : path.slice("/assets/".length)];
     if (!asset) throw new HttpError(404, "not_found", "There is no such page.");
     return new Response(asset.body, { status: 200, headers: { "Content-Type": asset.type, "Cache-Control": "public, max-age=3600" } });
   }
   const m = match(PAGE_ROUTES, method, path);
   if (!m) throw new HttpError(404, "not_found", "There is no such page.");
   return m.handler(ctx, m.param, m.param2);
+}
+
+/** The Worker's own static files: /assets/... and /favicon.ico. */
+function isStaticPath(path: string): boolean {
+  return path.startsWith("/assets/") || path === "/favicon.ico";
 }
 
 /** /n/<nestId>/... (and /n itself, so every answer under it is JSON). */
@@ -269,7 +275,7 @@ export function createWorker(overrides: Partial<Deps> = {}): ExportedHandler<Env
     async fetch(req: Request, env: Env, exec: ExecutionContext): Promise<Response> {
       const url = new URL(req.url);
       const isApi = url.pathname.startsWith("/v1/");
-      const isAsset = url.pathname.startsWith("/assets/");
+      const isAsset = isStaticPath(url.pathname);
       const ip = req.headers.get("CF-Connecting-IP") || "unknown";
       const ctx: Ctx = {
         req,

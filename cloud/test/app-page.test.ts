@@ -167,6 +167,17 @@ describe("the Sign in an app page", () => {
     const logo = await v.call("GET", "/assets/logo.svg");
     expect(logo.headers.get("content-type")).toBe("image/svg+xml");
     expect(logo.text).toContain('<path d="M75.2,92.6 A36,36 0 1 1 92.6,75.2"');
+    // The logo in the browser tab: every page links it (SVG, plus a PNG for home screens), and /favicon.ico is the PNG.
+    const page = (await v.call("GET", "/login")).text;
+    expect(page).toContain(`<link rel="icon" href="${assetUrl("logo.svg")}" type="image/svg+xml">`);
+    expect(page).toContain(`<link rel="apple-touch-icon" href="${assetUrl("icon.png")}">`);
+    for (const path of ["/assets/icon.png", "/favicon.ico"]) {
+      const icon = await h.browser().call("GET", path);
+      expect(icon.status, path).toBe(200);
+      expect(icon.headers.get("content-type"), path).toBe("image/png");
+      expect(icon.headers.get("cache-control"), path).toBe("public, max-age=3600");
+    }
+    expect([...(ASSETS["icon.png"].body as Uint8Array).slice(1, 4)].map((c) => String.fromCharCode(c)).join("")).toBe("PNG");
     // Fonts may come from this site only.
     expect((await v.call("GET", "/login")).headers.get("content-security-policy")).toContain("font-src 'self';");
   });
