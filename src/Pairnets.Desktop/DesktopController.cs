@@ -394,6 +394,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
             limits: _limits);
         session.StatusChanged += _ => _dirty = true;
         session.Activity.Added += _ => _dirty = true;
+        session.Activity.Cleared += () => _dirty = true;
         session.ConflictCreated += c => Notify("conflict:" + c.Path, PrefixOf(run) + "Conflict: both computers changed a file",
             $"{c.Path}: your version was kept as \"{PathRules.FileName(c.ConflictCopyPath)}\".", run);
         session.PathWarningRaised += w => Notify("warning:" + w.Path, PrefixOf(run) + (w.Code == ErrorCodes.CaseCollision ? "Name collision" : "File name not allowed"),
@@ -1036,7 +1037,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
             items.Add(new AttentionItem("Syncing is paused until you decide", status.Text, status.FixLabel, FixBlocked));
         foreach (var w in _session.Warnings())
             items.Add(new AttentionItem(w.Path, w.Message ?? w.Code, "Show in folder", () => _platform.Reveal(LocalPath(w.Path)), w.Code == ErrorCodes.CaseCollision ? AttentionKind.NameClash : AttentionKind.Warning));
-        foreach (var c in _session.Activity.Items.Where(i => i.Kind == ActivityKind.Conflict && i.Path is not null).Take(20))
+        foreach (var c in _session.ConflictCopies.Items.Where(i => i.Path is not null))
         {
             if (File.Exists(LocalPath(c.Path!)))
                 items.Add(new AttentionItem("Conflict copy: " + PathRules.FileName(c.Path!), "Both computers changed this file. Compare the two, keep what you want, delete the other.", "Show in folder", () => _platform.Reveal(LocalPath(c.Path!)), AttentionKind.Conflict, null, c.Time));
@@ -1676,6 +1677,17 @@ public sealed class DesktopController : ITrayActions, IDisposable
     {
         if (run.Settings.Folder is { } f && Directory.Exists(f))
             _platform.Open(f);
+    }
+
+    /// <summary>Empties the picked nest's activity list after asking. Only the list in memory: no file is touched.</summary>
+    public async void ClearActivity()
+    {
+        if (_session is not { } session || session.Activity.Items.Count == 0)
+            return;
+        if (!await Dialogs.ConfirmAsync(_window, "Pairnets – clear activity",
+                "Clear the activity list?\n\nThis only empties the list on this computer. Your files, your nest and its History aren't touched.", "Clear", "Cancel"))
+            return;
+        session.Activity.Clear();
     }
 
     public void ViewLog() => _platform.Open(_fileLog.CurrentFile);

@@ -1639,6 +1639,11 @@ A (a nest joins another nest) and B (invite an account), with the recommended an
   shared with the account (`/api/links`, `/api/offers`) are for the owner's computers only.
 * **The Files page and storage for friends.** Moving is a write (both ends must be in the share), and deleting for
   good and "Where your files live" (`/api/purge`, `/api/storage`) are the owner's only.
+* **"Clear" on the Activity page (1.0.61.3).** It empties the activity list of the nest on screen, on this computer only,
+  after asking. The list was only ever kept in memory (200 lines, gone at restart), so nothing is written or sent: no
+  file, folder, state.db row, nest History or server data changes. All tabs are cleared together (the tabs only filter
+  one list). The "Needs you" conflict cards come from their own small list (`ClientSession.ConflictCopies`), so a clear
+  doesn't hide a conflict copy that still needs looking at.
 * **"Invite a friend to this folder…" (step A).** It is on the "…" menu of a top-level folder on the Files page, in
   both apps, for the owner of a nest reached through Pairnets that is not encrypted (an encrypted nest is shared whole).
   It opens the usual invite window with "Chosen folders" picked and that folder ticked; a folder that lives only on the

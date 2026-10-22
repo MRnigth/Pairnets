@@ -86,6 +86,9 @@ public sealed class ActivityFeed(int capacity = 200)
 
     public event Action<ActivityItem>? Added;
 
+    /// <summary>The list was emptied with <see cref="Clear"/>.</summary>
+    public event Action? Cleared;
+
     public int Capacity { get; } = capacity;
 
     public void Add(ActivityItem item)
@@ -97,6 +100,17 @@ public sealed class ActivityFeed(int capacity = 200)
                 _items.RemoveLast();
         }
         Added?.Invoke(item);
+    }
+
+    /// <summary>
+    /// Empties the list. It is only this list in memory: no file, folder, state.db row, nest History or server data
+    /// is read or changed.
+    /// </summary>
+    public void Clear()
+    {
+        lock (_gate)
+            _items.Clear();
+        Cleared?.Invoke();
     }
 
     public void Add(ActivityKind kind, string? path, string text, TimeProvider? clock = null) =>

@@ -80,6 +80,7 @@ public sealed class SampleActions : ITrayActions
     public void SyncNow() => Calls.Add("sync");
     public void TogglePause() => Calls.Add("pause");
     public void OpenFolder() => Calls.Add("folder");
+    public void ClearActivity() => Calls.Add("clear-activity");
     public void ShowSettings() => Calls.Add("settings");
     public void ViewLog() => Calls.Add("log");
     public void UpdateNow() => Calls.Add("update");

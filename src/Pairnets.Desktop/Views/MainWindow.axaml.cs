@@ -42,6 +42,11 @@ public interface IMainActions
     void TogglePause();
     void OpenFolder();
 
+    /// <summary>"Clear" on the Activity page: asks, then empties the activity list (never files or History).</summary>
+    void ClearActivity()
+    {
+    }
+
     /// <summary>Opens the Settings page (the controller hands the form to <see cref="MainWindow.ShowSettingsPage"/>).</summary>
     void ShowSettings();
     void ViewLog();
@@ -672,7 +677,7 @@ public partial class MainWindow : Window
     private void UpdatePanels()
     {
         ActivityEmpty.IsVisible = _activityItems.Count == 0;
-        ActivityTools.IsVisible = ActivityListCard.IsVisible = _activityItems.Count > 0;
+        ActivityTools.IsVisible = ActivityListCard.IsVisible = ClearActivityButton.IsEnabled = _activityItems.Count > 0;
         AttentionList.IsVisible = _attention.Count > 0;
         AttentionEmpty.IsVisible = _attention.Count == 0;
         DevicesPanel.IsVisible = _devices.Count > 0;
@@ -1101,6 +1106,8 @@ public partial class MainWindow : Window
     private void OnSyncNow(object? sender, RoutedEventArgs e) => _actions?.SyncNow();
     private void OnPause(object? sender, RoutedEventArgs e) => _actions?.TogglePause();
     private void OnOpenFolder(object? sender, RoutedEventArgs e) => _actions?.OpenFolder();
+
+    private void OnClearActivity(object? sender, RoutedEventArgs e) => _actions?.ClearActivity();
     private void OnViewLog(object? sender, RoutedEventArgs e) => _actions?.ViewLog();
     private void OnReportBug(object? sender, RoutedEventArgs e) => _actions?.ReportBug();
     private void OnUpdateNow(object? sender, RoutedEventArgs e) => _actions?.UpdateNow();

@@ -293,6 +293,7 @@ public sealed class RecordingActions(IHistorySource? history = null) : ITrayActi
     public void SyncNow() => Calls.Add(nameof(SyncNow));
     public void TogglePause() => Calls.Add(nameof(TogglePause));
     public void OpenFolder() => Calls.Add(nameof(OpenFolder));
+    public void ClearActivity() => Calls.Add(nameof(ClearActivity));
     public void ShowSettings() => Calls.Add(nameof(ShowSettings));
     public void ViewLog() => Calls.Add(nameof(ViewLog));
     public void UpdateNow() => Calls.Add(nameof(UpdateNow));

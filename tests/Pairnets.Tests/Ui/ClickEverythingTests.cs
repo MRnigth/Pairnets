@@ -543,6 +543,7 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
         s.Expect["OnUpdateNow"] = Calls(a, "update");
         s.Expect["OnUpdateLater"] = Calls(a, "dismiss");
         s.Expect["OnOpenFolder"] = Calls(a, "folder");
+        s.Expect["OnClearActivity"] = Calls(a, "clear-activity");
         s.Expect["OnPause"] = Calls(a, "pause");
         s.Expect["OnSyncNow"] = Calls(a, "sync");
         s.Expect["OnViewLog"] = Calls(a, "log");

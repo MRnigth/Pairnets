@@ -19,12 +19,17 @@
         <TextBlock Style="{StaticResource PgTitle}" Text="Activity" />
         <TextBlock Style="{StaticResource PgSub}" Text="Everything that synced, newest first." />
       </StackPanel>
-      <Button x:Name="OpenFolderButton" Grid.Column="1" Style="{StaticResource PgButton}" VerticalAlignment="Center" ToolTip="Open the synced folder" Click="OnOpenFolder">
+      <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+      <Button x:Name="ClearButton" Style="{StaticResource PgButton}" Margin="0,0,8,0" Padding="16,0" ToolTip="Empty this list. Your files aren't touched." Click="OnClearActivity">
+        <TextBlock Text="Clear" VerticalAlignment="Center" />
+      </Button>
+      <Button x:Name="OpenFolderButton" Style="{StaticResource PgButton}" VerticalAlignment="Center" ToolTip="Open the synced folder" Click="OnOpenFolder">
         <StackPanel Orientation="Horizontal">
           <ui:LineIcon Width="16" Height="16" Margin="0,0,8,0" StrokeThickness="1.9" Stroke="{DynamicResource T.Text}" Data="{StaticResource I.Folder}" />
           <TextBlock Text="Open folder" VerticalAlignment="Center" />
         </StackPanel>
       </Button>
+      </StackPanel>
     </Grid>
 
     <!-- Filters and search -->

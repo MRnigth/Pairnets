@@ -337,6 +337,7 @@ public sealed class TrayController : ITrayActions, IDisposable
         }
         session.StatusChanged += _ => _dirty = true;
         session.Activity.Added += _ => _dirty = true;
+        session.Activity.Cleared += () => _dirty = true;
         session.ConflictCreated += c => RunOnUi(() => Toast("conflict:" + c.Path, PrefixOf(run) + "Conflict: both computers changed a file",
             $"{c.Path} was changed on both. Your version was kept as \"{PathRules.FileName(c.ConflictCopyPath)}\".", Forms.ToolTipIcon.Warning, () => ShowNest(run), run));
         session.PathWarningRaised += w => RunOnUi(() => Toast("warning:" + w.Path, PrefixOf(run) + (w.Code == ErrorCodes.CaseCollision ? "Name collision" : "File name not allowed"),
@@ -1059,7 +1060,7 @@ public sealed class TrayController : ITrayActions, IDisposable
             items.Add(new AttentionItem("Syncing is paused until you decide", _session.Status.Text, status.FixLabel, FixBlocked));
         foreach (var w in _session.Warnings())
             items.Add(new AttentionItem(w.Path, w.Message ?? w.Code, "Show in folder", () => RevealFile(w.Path), w.Code == ErrorCodes.CaseCollision ? AttentionKind.NameClash : AttentionKind.Warning));
-        foreach (var c in _session.Activity.Items.Where(i => i.Kind == Pairnets.Core.Client.ActivityKind.Conflict && i.Path is not null).Take(20))
+        foreach (var c in _session.ConflictCopies.Items.Where(i => i.Path is not null))
         {
             if (File.Exists(LocalPath(c.Path!)))
                 items.Add(new AttentionItem("Conflict copy: " + PathRules.FileName(c.Path!), "Both computers changed this file. Compare the two, keep what you want, delete the other.", "Show in folder", () => RevealFile(c.Path!), AttentionKind.Conflict, null, c.Time));
@@ -1752,6 +1753,18 @@ public sealed class TrayController : ITrayActions, IDisposable
     {
         if (run.Settings.Folder is { } f && Directory.Exists(f))
             Shell(f);
+    }
+
+    /// <summary>Empties the picked nest's activity list after asking. Only the list in memory: no file is touched.</summary>
+    public void ClearActivity()
+    {
+        if (_session is not { } session || session.Activity.Items.Count == 0)
+            return;
+        if (!Dialogs.Confirm(_window is { IsVisible: true } ? _window : null,
+                "Clear the activity list?\n\nThis only empties the list on this computer. Your files, your nest and its History aren't touched.",
+                "Pairnets – clear activity", "Clear"))
+            return;
+        session.Activity.Clear();
     }
 
     /// <summary>"Sign in again" on the Account page: the sign-in window.</summary>

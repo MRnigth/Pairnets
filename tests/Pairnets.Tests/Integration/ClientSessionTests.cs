@@ -85,6 +85,33 @@ public class ClientSessionTests : IAsyncLifetime
         await WaitUntil(() => session.Status is { Status: RunnerStatus.Idle, Text: "Up to date" }, "up to date after resume");
     }
 
+    [Fact]
+    public async Task ClearingTheActivityListTouchesNoFileStateOrNest()
+    {
+        File.WriteAllText(Path.Combine(_folder.Path, "keep.txt"), "mine");
+        Directory.CreateDirectory(Path.Combine(_folder.Path, "photos"));
+        File.WriteAllBytes(Path.Combine(_folder.Path, "photos", "a.jpg"), [1, 2, 3, 4]);
+        await using var session = Start();
+        await WaitUntil(() => session.Activity.Items.Count(i => i.Kind == ActivityKind.Uploaded) == 2, "both uploads");
+        await WaitUntil(() => session.Status is { Status: RunnerStatus.Idle, Text: "Up to date" }, "up to date");
+
+        string Disk() => string.Join("\n", Directory.EnumerateFiles(_folder.Path, "*", SearchOption.AllDirectories)
+            .Where(f => !Path.GetFileName(f).StartsWith('.')) // the folder marker
+            .Order(StringComparer.Ordinal).Select(f => f + "=" + Convert.ToHexString(File.ReadAllBytes(f))));
+        string Nest() => string.Join("\n", _server.Store.ReadManifest(null).Entries.OrderBy(e => e.Path, StringComparer.Ordinal)
+            .Select(e => $"{e.Path}={e.Hash}/{e.Deleted}"));
+        string State() => string.Join("\n", new[] { "keep.txt", "photos/a.jpg" }.Select(p => $"{p}={session.State.GetRemote(p)}"));
+        var (disk, nest, state) = (Disk(), Nest(), State());
+
+        session.Activity.Clear();
+
+        Assert.Empty(session.Activity.Items);
+        Assert.Equal(disk, Disk());
+        Assert.Equal(nest, Nest());
+        Assert.Equal(state, State());
+        Assert.Contains("keep.txt", nest);
+    }
+
     /// <summary>A clock whose stopwatch only moves when told (the speed is measured with it).</summary>
     private sealed class SteppingClock : TimeProvider
     {

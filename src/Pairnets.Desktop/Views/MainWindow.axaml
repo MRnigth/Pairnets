@@ -358,12 +358,17 @@
               <TextBlock Classes="PageTitle" Text="Activity" />
               <TextBlock Classes="t2" Margin="0,2,0,0" Text="Everything that synced, newest first." />
             </StackPanel>
-            <Button Grid.Column="1" Classes="SecondaryButton" Height="38" Padding="14,0" Click="OnOpenFolder" ToolTip.Tip="Open the synced folder">
-              <StackPanel Orientation="Horizontal" Spacing="8">
-                <v:LineIcon Classes="icon" Width="16" Height="16" Data="{StaticResource I.Folder}" />
-                <TextBlock Text="Open folder" VerticalAlignment="Center" />
-              </StackPanel>
-            </Button>
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+              <Button x:Name="ClearActivityButton" Classes="SecondaryButton" Height="38" Padding="16,0" Click="OnClearActivity" ToolTip.Tip="Empty this list. Your files aren't touched.">
+                <TextBlock Text="Clear" VerticalAlignment="Center" />
+              </Button>
+              <Button Classes="SecondaryButton" Height="38" Padding="14,0" Click="OnOpenFolder" ToolTip.Tip="Open the synced folder">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                  <v:LineIcon Classes="icon" Width="16" Height="16" Data="{StaticResource I.Folder}" />
+                  <TextBlock Text="Open folder" VerticalAlignment="Center" />
+                </StackPanel>
+              </Button>
+            </StackPanel>
           </Grid>
 
           <Grid x:Name="ActivityTools" Grid.Row="1" ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto" Margin="0,16,0,0">
