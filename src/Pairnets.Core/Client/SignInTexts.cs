@@ -14,6 +14,10 @@ public static class SignInTexts
             ? ("Sign in again", $"This computer is signed out. Sign in to keep syncing {current.Folder} as {current.DeviceName}; your settings are kept.")
             : ("Sign in to Pairnets", "Keep one folder the same on all your computers.");
 
+    /// <summary>The nest kept the computer's old name: renaming it is on the Settings page ("This computer's name").</summary>
+    public static string RenameFailed(string name) =>
+        $"Your nest could not rename this computer, so it stays {name}. You can rename it later on the Settings page, under \"This computer's name\".";
+
     public static bool SigningInAgain(ClientSettings current) =>
         !string.IsNullOrWhiteSpace(current.ServerUrl) && !string.IsNullOrWhiteSpace(current.Folder)
         && !string.IsNullOrWhiteSpace(current.DeviceName) && string.IsNullOrWhiteSpace(current.ProtectedToken);

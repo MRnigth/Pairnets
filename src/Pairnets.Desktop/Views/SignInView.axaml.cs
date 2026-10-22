@@ -820,7 +820,7 @@ public partial class SignInView : UserControl
         }
         catch (Exception ex) when (ex is PairnetsNetworkException or PairnetsProtocolException or PairnetsAuthException)
         {
-            await Dialogs.InfoAsync(Owner, "Pairnets", $"Your nest could not rename this computer, so it stays {grant.Name}. You can rename it later on the Account page.");
+            await Dialogs.InfoAsync(Owner, "Pairnets", SignInTexts.RenameFailed(grant.Name));
             return grant;
         }
     }

@@ -812,7 +812,7 @@ public partial class SignInView : UserControl
         }
         catch (Exception ex) when (ex is PairnetsNetworkException or PairnetsProtocolException or PairnetsAuthException)
         {
-            Ask($"Your nest could not rename this computer, so it stays {grant.Name}. You can rename it later on the Account page.",
+            Ask(SignInTexts.RenameFailed(grant.Name),
                 MessageBoxButton.OK, MessageBoxImage.Information);
             return grant;
         }
