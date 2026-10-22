@@ -1766,3 +1766,27 @@ change was never seen.
   page, unchanged. The installer itself is unchanged.
 * **Tests:** `AppUpdate_TheNewVersion_StaysSignedIn_KeepsEverySetting_AndOpensItsWindowAgain` (renamed from
   `…AndOnlySaysItWasUpdated`, Windows) and `AfterAnUpdate_TheNewAppOpensItsWindowAgain_WithANote` (Avalonia).
+
+## QA sweep fixes, round 1 (1.0.61.4, 2026-10-23)
+
+* **"Deleted for good" leaves the Deleted list on this computer only.** The nest keeps an ordinary "deleted" entry for a
+  purged file, so other computers delete their copies; the Deleted list is that same manifest. Marking purged entries on
+  the nest would change the sync list every computer reads, so this round keeps the nest as it is: the computer that
+  deleted for good remembers each purge (path and the entry's version, in its state database) and leaves those rows out.
+  Another computer still lists the file; there its Restore says "it was deleted for good, or more than 30 days ago"
+  instead of only blaming the 30 days. A nest-side mark can come later with a nest update.
+* **Paused: "N changes waiting to sync", no arrow.** The paused count holds changes made here and changes coming from
+  the nest alike, so it no longer says "here", "↑" or "go up". Splitting it into up and down needs the sync runner to
+  count each side; not worth it for one line.
+* **Empty folders after a Files-page delete or rename** are removed by Core, bottom-up, only when nothing is left in
+  them (a file the nest did not know, or a link, keeps the folder). A letter-case-only rename keeps the folder: it is
+  the same folder.
+* **Mac/Linux questions:** the last button (No, Cancel, OK) is the default for Enter and Esc and has the focus; a pop-up's
+  main button takes Enter and its first other button Esc, as in the Windows app. The yes button is red for sign out,
+  stop syncing, reset, allow deletions, clear activity and delete.
+* **Invite form, "The whole nest":** the folder tick boxes (and the Change… form's typed names) are greyed out and can't
+  be ticked; "Add" still picks "Chosen folders" for the name typed, so the shortcut stays.
+* **Settings placement rows** read their size line again on the status ticks after a choice (at most every two seconds),
+  not by redrawing the rows, so the choice buttons don't jump while the sync frees or downloads.
+* **pairnets.app/favicon.ico** was already in `site/` on main (8a40637); the live site still 404s only because Pages
+  serves an older branch. No code change: it needs a Pages deploy.
