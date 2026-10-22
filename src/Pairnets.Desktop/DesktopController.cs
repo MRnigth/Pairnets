@@ -1732,17 +1732,24 @@ public sealed class DesktopController : ITrayActions, IDisposable
         window.Activate();
     }
 
+    /// <summary>The question after an error nothing else caught, as in the Windows app (the report would replace the clipboard).</summary>
+    internal static string UnexpectedErrorQuestion(Exception error) =>
+        "Pairnets hit an unexpected error and will keep running:\n" + error.Message
+        + "\n\nCreate a bug report? It is copied to the clipboard so you can paste it to whoever helps you. Nothing is sent unless you choose to send it.";
+
     /// <summary>An error nothing else caught: log it, keep running, and offer a bug report with it.</summary>
-    private void OnUnhandledException(object? sender, DispatcherUnhandledExceptionEventArgs e)
+    private async void OnUnhandledException(object? sender, DispatcherUnhandledExceptionEventArgs e)
     {
         _crashes.Record(e.Exception, CrashPlace.Screen);
         e.Handled = true;
         if (_reportingError)
-            return; // the report window itself failed; do not loop
+            return; // the question or the report window itself failed; do not loop
         _reportingError = true;
+        var error = e.Exception;
         try
         {
-            ShowBugReport(e.Exception);
+            if (await Dialogs.ConfirmAsync(_window, "Pairnets", UnexpectedErrorQuestion(error)))
+                ShowBugReport(error);
         }
         catch (Exception ex)
         {

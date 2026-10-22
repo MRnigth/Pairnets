@@ -93,6 +93,9 @@ public sealed class AppUnderTest : IAsyncDisposable
     }
 
     /// <summary>The main window, which must be open.</summary>
+    /// <summary>Set by a test that throws on purpose, so the unhandled error in the log doesn't fail it.</summary>
+    public bool ExpectsUnhandledErrors { get; set; }
+
     public MainWindow MainWindow => App.Window is { IsVisible: true } window ? window : throw new Xunit.Sdk.XunitException("The main window is not open.");
 
     /// <summary>Waits for a window with this title (a new one, when <paramref name="not"/> is the one shown before).</summary>
@@ -237,7 +240,7 @@ public sealed class AppUnderTest : IAsyncDisposable
         await Nest.DisposeAsync();
         await Feed.DisposeAsync();
         Root.Dispose();
-        if (log is not null)
+        if (log is not null && !ExpectsUnhandledErrors)
             throw new Xunit.Sdk.XunitException("The app hit an unhandled error (see \"Unhandled UI exception\"):" + Environment.NewLine + log);
     }
 }

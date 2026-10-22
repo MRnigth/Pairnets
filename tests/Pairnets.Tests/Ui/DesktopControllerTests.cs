@@ -723,6 +723,28 @@ public sealed class DesktopControllerTests
     }
 
     [AvaloniaFact]
+    public async Task AnUnexpectedError_AsksBeforeTheBugReport_WhichWouldReplaceTheClipboard()
+    {
+        await using var app = await AppUnderTest.StartAsync();
+        app.ExpectsUnhandledErrors = true;
+        bool ReportShown() => app.Desktop.Windows.Any(w => w.IsVisible && w.Title == "Report a bug");
+
+        Avalonia.Threading.Dispatcher.UIThread.Post(() => throw new InvalidOperationException("Something broke"));
+        var question = await app.DialogAsync("Pairnets");
+        Assert.Contains("unexpected error", AppUnderTest.TextOf(question));
+        Assert.Contains("Something broke", AppUnderTest.TextOf(question));
+        Assert.False(ReportShown()); // nothing yet: the report copies itself to the clipboard
+        await app.AnswerAsync("Pairnets", "No");
+        Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        Assert.False(ReportShown());
+
+        Avalonia.Threading.Dispatcher.UIThread.Post(() => throw new InvalidOperationException("Something broke again"));
+        await app.AnswerAsync("Pairnets", "Yes");
+        var report = await app.WindowAsync("Report a bug");
+        Person.Click(Screen.Find<Button>(report, "Close"));
+    }
+
+    [AvaloniaFact]
     public async Task AddComputer_ManageDevices_ViewLog_ReportBug()
     {
         await using var app = await AppUnderTest.StartAsync();
