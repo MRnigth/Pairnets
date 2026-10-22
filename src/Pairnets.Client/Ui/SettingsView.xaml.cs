@@ -536,6 +536,14 @@ public partial class SettingsView : UserControl
     /// <summary>Scrolls to the bottom of the page (screenshot tool).</summary>
     public void ScrollToEnd() => Scroller.ScrollToEnd();
 
+    /// <summary>Opens the folded "Advanced" part (Start over) and scrolls to it (screenshot tool).</summary>
+    public void OpenAdvanced()
+    {
+        AdvancedExpander.IsExpanded = true;
+        UpdateLayout();
+        Scroller.ScrollToEnd();
+    }
+
     /// <summary>"Reset this app…" (the controller asks first, and starts over from the sign-in window).</summary>
     public event Action? ResetRequested;
 

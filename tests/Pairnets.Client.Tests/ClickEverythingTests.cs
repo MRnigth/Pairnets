@@ -920,7 +920,7 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
 
     // ------------------------------------------------------------------ Settings
 
-    private Window SettingsHost(Bench b, bool ownKey, bool canMove = false, int nests = 1)
+    private Window SettingsHost(Bench b, bool ownKey, bool canMove = false, int nests = 1, bool advancedOpen = false)
     {
         b.Updates = new UpdateService(new UpdateChecker(new HttpClient(), fixture.Feed.DownloadBase, fixture.Feed.ReleasePage, FakeReleaseFeed.SigningKey),
             PairnetsInfo.ProductVersion, UpdateChecker.AssetForThisPlatform());
@@ -947,6 +947,7 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
         view.ChangeStorageRequested += () => b.Events.Add("ChangeStorageRequested");
         if (canMove)
             view.ShowNestStorage(SampleStorage());
+        view.AdvancedExpander.IsExpanded = advancedOpen;
         var host = new Window { Title = "Settings", Width = 700, Height = 560, Content = view };
         ThemeManager.Attach(host);
         return host;
@@ -959,6 +960,7 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
         yield return new Screen("Settings", "on the shared token (address and token shown)", b => SettingsHost(b, ownKey: false), Answers: s => s.AgreeToEverything());
         yield return new Screen("Settings", "a nest that can move its files", b => SettingsHost(b, ownKey: true, canMove: true), Answers: s => s.AgreeToEverything());
         yield return new Screen("Settings", "one of two nests (with Leave)", b => SettingsHost(b, ownKey: true, nests: 2), Answers: s => s.AgreeToEverything());
+        yield return new Screen("Settings", "with Advanced opened (Start over)", b => SettingsHost(b, ownKey: true, advancedOpen: true), Answers: s => s.AgreeToEverything());
     }
 
     private static SettingsView View(Check c) => (SettingsView)c.Window.Content;
@@ -974,7 +976,7 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
         new(t => t.Handlers.Contains("SettingsView.OnChangeStorage"), "ask the app to show where the nest keeps its files",
             c => c.Bench.Events.Items.Contains("ChangeStorageRequested")),
         On("Change…", "let you choose the folder and show it", c => View(c).FolderBox.Text == c.Bench.Script.Folder),
-        new(t => t.Element is Expander, "open the files-to-ignore section", c => ((Expander)c.Target.Element).IsExpanded != c.WasChecked),
+        new(t => t.Element is Expander, "open or close the section (files to ignore, Advanced)", c => ((Expander)c.Target.Element).IsExpanded != c.WasChecked),
         On("Check now", "look for an app update and say what it found", c => View(c).VersionText.Text.Contains("is available", StringComparison.Ordinal), seconds: 20),
         new(t => t.Element is RadioButton { GroupName: "par" }, "choose that many files at the same time", c => ((RadioButton)c.Target.Element).IsChecked == true),
         new(t => t.Element is RadioButton { GroupName: { } g } && g.StartsWith("placement:", StringComparison.Ordinal), "ask first, then choose where that folder lives (applied at once)",

@@ -557,6 +557,8 @@ public class DesktopUiTests
         settingsPage.ShowProgramFolder(null);
         settingsPage.ScrollToEnd();
         Save(window, outDir, $"main-window-settings-start-over-{suffix}.png");
+        settingsPage.OpenAdvanced();
+        Save(window, outDir, $"main-window-settings-advanced-{suffix}.png");
         window.AllowClose = true;
         window.Close();
 

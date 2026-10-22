@@ -346,25 +346,6 @@
           </StackPanel>
         </Border>
 
-        <!-- Start over -->
-        <Border x:Name="StartOverCard" Classes="pcard dangercard" Padding="20,12">
-          <Grid ColumnDefinitions="Auto,*,Auto">
-            <Border Classes="sq34 tint-bad" Margin="0,0,12,0" VerticalAlignment="Center">
-              <v:LineIcon Classes="icon ink-bad" Width="17" Height="17" StrokeThickness="2" Data="{StaticResource I.Restore}" />
-            </Border>
-            <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
-              <TextBlock Text="Start over" FontWeight="Bold" />
-              <TextBlock Classes="t3" TextTrimming="CharacterEllipsis"
-                         Text="Forgets every setting and signs this computer out, then opens the sign-in screen." />
-              <StackPanel Orientation="Horizontal" Spacing="5" Margin="0,2,0,0">
-                <v:LineIcon Classes="icon ink-ok" Width="11" Height="11" StrokeThickness="2.6" Data="{StaticResource I.Check}" VerticalAlignment="Center" />
-                <TextBlock x:Name="StartOverNote" FontSize="11.5" FontWeight="SemiBold" Foreground="{DynamicResource T.OkText}" TextTrimming="CharacterEllipsis" />
-              </StackPanel>
-            </StackPanel>
-            <Button x:Name="ResetButton" Grid.Column="2" Classes="reset" Height="32" FontSize="12.5" Padding="12,0" Margin="12,0,0,0" VerticalAlignment="Center" Content="Reset this app…" Click="OnReset" />
-          </Grid>
-        </Border>
-
         <!-- About: version and licence, and the website's help and legal pages (each link's CommandParameter is its address) -->
         <Border Classes="pcard" Padding="20,16">
           <StackPanel Spacing="10">
@@ -388,6 +369,37 @@
             </WrapPanel>
           </StackPanel>
         </Border>
+
+        <!-- Advanced (folded shut): Start over, out of the way -->
+        <StackPanel>
+          <Button x:Name="AdvancedHeader" Classes="rowbtn cardbtn" Padding="20,14" HorizontalContentAlignment="Stretch">
+            <Grid ColumnDefinitions="Auto,*,Auto">
+              <v:LineIcon Classes="icon ink-soft" Width="17" Height="17" Margin="0,0,12,0" Data="{StaticResource I.Sliders}" VerticalAlignment="Center" />
+              <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                <TextBlock Classes="advtitle" Text="Advanced" />
+                <TextBlock Classes="t3" Text="Start over: reset Pairnets on this computer." TextWrapping="Wrap" />
+              </StackPanel>
+              <v:LineIcon x:Name="AdvancedChevron" Grid.Column="2" Classes="icon ink-soft" Width="14" Height="14" StrokeThickness="2.4" Data="{StaticResource I.ChevronDown}" VerticalAlignment="Center" />
+            </Grid>
+          </Button>
+          <Border x:Name="StartOverCard" Classes="pcard" Padding="20,12" Margin="0,8,0,0" IsVisible="False">
+            <Grid ColumnDefinitions="Auto,*,Auto">
+              <Border Classes="sq34 tint-bad" Margin="0,0,12,0" VerticalAlignment="Center">
+                <v:LineIcon Classes="icon ink-bad" Width="17" Height="17" StrokeThickness="2" Data="{StaticResource I.Restore}" />
+              </Border>
+              <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
+                <TextBlock Text="Start over" FontWeight="Bold" />
+                <TextBlock Classes="t3" TextWrapping="Wrap"
+                           Text="Forgets every setting and signs this computer out, then opens the sign-in screen." />
+                <StackPanel Orientation="Horizontal" Spacing="5" Margin="0,2,0,0">
+                  <v:LineIcon Classes="icon ink-ok" Width="11" Height="11" StrokeThickness="2.6" Data="{StaticResource I.Check}" VerticalAlignment="Center" />
+                  <TextBlock x:Name="StartOverNote" FontSize="11.5" FontWeight="SemiBold" Foreground="{DynamicResource T.OkText}" TextTrimming="CharacterEllipsis" />
+                </StackPanel>
+              </StackPanel>
+              <Button x:Name="ResetButton" Grid.Column="2" Classes="reset" Height="32" FontSize="12.5" Padding="12,0" Margin="12,0,0,0" VerticalAlignment="Center" Content="Reset this app…" Click="OnReset" />
+            </Grid>
+          </Border>
+        </StackPanel>
 
         <TextBlock x:Name="ServerVersionText" Classes="t3" HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" />
       </StackPanel>

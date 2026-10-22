@@ -26,6 +26,48 @@
       <Setter Property="FontWeight" Value="SemiBold" />
       <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
+    <!-- A card that folds open (files to ignore, Advanced): the header is the toggle, the body shows while open -->
+    <ControlTemplate x:Key="FoldCard" TargetType="Expander">
+      <Border Style="{StaticResource PgCard}">
+        <StackPanel>
+          <ToggleButton IsChecked="{Binding IsExpanded, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}" Cursor="Hand" FocusVisualStyle="{DynamicResource FocusRing}">
+            <ToggleButton.Template>
+              <ControlTemplate TargetType="ToggleButton">
+                <Border Background="Transparent" Padding="20,14">
+                  <ContentPresenter />
+                </Border>
+              </ControlTemplate>
+            </ToggleButton.Template>
+            <ContentPresenter ContentSource="Header" />
+          </ToggleButton>
+          <ContentPresenter x:Name="body" Margin="20,0,20,16" Visibility="Collapsed" />
+        </StackPanel>
+      </Border>
+      <ControlTemplate.Triggers>
+        <Trigger Property="IsExpanded" Value="True">
+          <Setter TargetName="body" Property="Visibility" Value="Visible" />
+        </Trigger>
+      </ControlTemplate.Triggers>
+    </ControlTemplate>
+    <!-- The chevron on the right of a fold, as in the Mac/Linux app: down while shut, up while open -->
+    <Style x:Key="FoldChevron" TargetType="ui:LineIcon">
+      <Setter Property="Width" Value="14" />
+      <Setter Property="Height" Value="14" />
+      <Setter Property="StrokeThickness" Value="2.4" />
+      <Setter Property="Stroke" Value="{DynamicResource T.Muted}" />
+      <Setter Property="Data" Value="{StaticResource I.ChevronDown}" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="RenderTransformOrigin" Value="0.5,0.5" />
+      <Style.Triggers>
+        <DataTrigger Binding="{Binding IsExpanded, RelativeSource={RelativeSource AncestorType=Expander}}" Value="True">
+          <Setter Property="RenderTransform">
+            <Setter.Value>
+              <RotateTransform Angle="180" />
+            </Setter.Value>
+          </Setter>
+        </DataTrigger>
+      </Style.Triggers>
+    </Style>
   </UserControl.Resources>
 
   <Grid>
@@ -226,7 +268,7 @@
             </Border>
 
             <!-- Advanced: files to ignore (folds open) -->
-            <Expander x:Name="IgnoreExpander" Margin="0,16,0,0" Foreground="{DynamicResource T.Text}">
+            <Expander x:Name="IgnoreExpander" Template="{StaticResource FoldCard}" Margin="0,16,0,0" Foreground="{DynamicResource T.Text}">
               <Expander.Header>
                 <Grid>
                   <Grid.ColumnDefinitions>
@@ -242,49 +284,9 @@
                     <TextBlock Style="{StaticResource PgSmall}" Text="Add your own rules on top of the usual ones." />
                   </StackPanel>
                   <TextBlock x:Name="IgnoreCount" Grid.Column="2" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource T.TextSoft}" VerticalAlignment="Center" Margin="10,0" />
-                  <!-- The chevron on the right, as in the Mac/Linux app: down while shut, up while open -->
-                  <ui:LineIcon Grid.Column="3" Width="14" Height="14" StrokeThickness="2.4" Stroke="{DynamicResource T.Muted}" Data="{StaticResource I.ChevronDown}"
-                               VerticalAlignment="Center" RenderTransformOrigin="0.5,0.5">
-                    <ui:LineIcon.Style>
-                      <Style TargetType="ui:LineIcon">
-                        <Style.Triggers>
-                          <DataTrigger Binding="{Binding IsExpanded, RelativeSource={RelativeSource AncestorType=Expander}}" Value="True">
-                            <Setter Property="RenderTransform">
-                              <Setter.Value>
-                                <RotateTransform Angle="180" />
-                              </Setter.Value>
-                            </Setter>
-                          </DataTrigger>
-                        </Style.Triggers>
-                      </Style>
-                    </ui:LineIcon.Style>
-                  </ui:LineIcon>
+                  <ui:LineIcon Grid.Column="3" Style="{StaticResource FoldChevron}" />
                 </Grid>
               </Expander.Header>
-              <Expander.Template>
-                <ControlTemplate TargetType="Expander">
-                  <Border Style="{StaticResource PgCard}">
-                    <StackPanel>
-                      <ToggleButton IsChecked="{Binding IsExpanded, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}" Cursor="Hand" FocusVisualStyle="{DynamicResource FocusRing}">
-                        <ToggleButton.Template>
-                          <ControlTemplate TargetType="ToggleButton">
-                            <Border Background="Transparent" Padding="20,14">
-                              <ContentPresenter />
-                            </Border>
-                          </ControlTemplate>
-                        </ToggleButton.Template>
-                        <ContentPresenter ContentSource="Header" />
-                      </ToggleButton>
-                      <ContentPresenter x:Name="body" Margin="20,0,20,16" Visibility="Collapsed" />
-                    </StackPanel>
-                  </Border>
-                  <ControlTemplate.Triggers>
-                    <Trigger Property="IsExpanded" Value="True">
-                      <Setter TargetName="body" Property="Visibility" Value="Visible" />
-                    </Trigger>
-                  </ControlTemplate.Triggers>
-                </ControlTemplate>
-              </Expander.Template>
               <StackPanel>
                 <TextBox x:Name="IgnoreBox" Style="{StaticResource PgInput}" Height="96" AcceptsReturn="True" VerticalContentAlignment="Top" Padding="12,8"
                          VerticalScrollBarVisibility="Auto" ToolTip="One rule per line, e.g. *.bak or node_modules/" />
@@ -519,7 +521,6 @@
           </Grid>
         </Border>
 
-        <!-- Start over -->
         <!-- Nests: one more nest, each in a folder of its own; with several, stop syncing this one here -->
         <Border Style="{StaticResource PgCard}" Padding="20,18" Margin="0,16,0,0">
           <StackPanel>
@@ -557,29 +558,6 @@
           </StackPanel>
         </Border>
 
-        <Border Style="{StaticResource PgCard}" Padding="20,12" Margin="0,16,0,0" BorderBrush="{DynamicResource T.BadBorder}">
-          <Grid>
-            <Grid.ColumnDefinitions>
-              <ColumnDefinition Width="Auto" />
-              <ColumnDefinition Width="*" />
-              <ColumnDefinition Width="Auto" />
-            </Grid.ColumnDefinitions>
-            <Border Width="34" Height="34" CornerRadius="11" Margin="0,0,12,0" Background="{DynamicResource T.BadPill}">
-              <ui:LineIcon Width="17" Height="17" StrokeThickness="2.1" Stroke="{DynamicResource T.BadText}" Data="{StaticResource I.Reset}" />
-            </Border>
-            <StackPanel Grid.Column="1" VerticalAlignment="Center">
-              <TextBlock Text="Start over" FontWeight="Bold" Foreground="{DynamicResource T.Text}" />
-              <TextBlock Style="{StaticResource PgSmall}" TextTrimming="CharacterEllipsis"
-                         Text="Forgets every setting and signs this computer out, then opens the sign-in screen." />
-              <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
-                <ui:LineIcon Width="12" Height="12" Margin="0,0,5,0" StrokeThickness="2.4" Stroke="{DynamicResource T.OkText}" Data="{StaticResource I.Shield}" />
-                <TextBlock x:Name="StayText" FontSize="11.5" FontWeight="SemiBold" Foreground="{DynamicResource T.OkText}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
-              </StackPanel>
-            </StackPanel>
-            <Button x:Name="ResetButton" Grid.Column="2" Style="{StaticResource PgDanger}" Content="Reset this app…" Height="32" FontSize="12.5" Padding="12,0" Margin="12,0,0,0" VerticalAlignment="Center" Click="OnReset" />
-          </Grid>
-        </Border>
-
         <!-- About: version and licence, and the website's help and legal pages (each link's CommandParameter is its address) -->
         <Border Style="{StaticResource Section}" Margin="0,16,0,0">
           <StackPanel>
@@ -603,6 +581,46 @@
             </WrapPanel>
           </StackPanel>
         </Border>
+
+        <!-- Advanced (folded shut): Start over, out of the way -->
+        <Expander x:Name="AdvancedExpander" Template="{StaticResource FoldCard}" Margin="0,16,0,0" Foreground="{DynamicResource T.Text}">
+          <Expander.Header>
+            <Grid>
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+              </Grid.ColumnDefinitions>
+              <ui:LineIcon Width="17" Height="17" Margin="0,0,12,0" StrokeThickness="2" Stroke="{DynamicResource T.Muted}" VerticalAlignment="Center"
+                           Data="M4,7 L20,7 M4,17 L20,17 M9,4 L9,10 M15,14 L15,20" />
+              <StackPanel Grid.Column="1">
+                <TextBlock Text="Advanced" FontWeight="Bold" Foreground="{DynamicResource T.Text}" />
+                <TextBlock Style="{StaticResource PgSmall}" Text="Start over: reset Pairnets on this computer." />
+              </StackPanel>
+              <ui:LineIcon Grid.Column="2" Style="{StaticResource FoldChevron}" />
+            </Grid>
+          </Expander.Header>
+          <Grid>
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="Auto" />
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <Border Width="34" Height="34" CornerRadius="11" Margin="0,0,12,0" Background="{DynamicResource T.BadPill}">
+              <ui:LineIcon Width="17" Height="17" StrokeThickness="2.1" Stroke="{DynamicResource T.BadText}" Data="{StaticResource I.Reset}" />
+            </Border>
+            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+              <TextBlock Text="Start over" FontWeight="Bold" Foreground="{DynamicResource T.Text}" />
+              <TextBlock Style="{StaticResource PgSmall}" TextWrapping="Wrap"
+                         Text="Forgets every setting and signs this computer out, then opens the sign-in screen." />
+              <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
+                <ui:LineIcon Width="12" Height="12" Margin="0,0,5,0" StrokeThickness="2.4" Stroke="{DynamicResource T.OkText}" Data="{StaticResource I.Shield}" />
+                <TextBlock x:Name="StayText" FontSize="11.5" FontWeight="SemiBold" Foreground="{DynamicResource T.OkText}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+              </StackPanel>
+            </StackPanel>
+            <Button x:Name="ResetButton" Grid.Column="2" Style="{StaticResource PgDanger}" Content="Reset this app…" Height="32" FontSize="12.5" Padding="12,0" Margin="12,0,0,0" VerticalAlignment="Center" Click="OnReset" />
+          </Grid>
+        </Expander>
 
         <TextBlock x:Name="FooterText" Style="{StaticResource PgSmall}" HorizontalAlignment="Center" Margin="0,16,0,0" />
       </StackPanel>

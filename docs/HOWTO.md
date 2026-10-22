@@ -499,7 +499,8 @@ to join, and when an app update is ready. They apply to this computer only; each
 
 **Settings** has your nest (with **Manage devices on the web**, **Sign out of this computer**, and
 the server address and token under **Advanced**), the folder, this computer's name, ignore patterns,
-**Updates and speed** and **Start over**. **Save** applies it at once.
+**Updates and speed**, and at the very bottom a folded **Advanced** part with **Start over**. **Save**
+applies it at once.
 
 **When an update is out**, a small card at the bottom of the left side says so, with **Update now**
 (Windows and Linux) or **Open download page** (Mac). See [Updates](#updates) below.
@@ -999,8 +1000,8 @@ computer has its own allowance, so two computers at home do not slow each other 
 
 ### Starting over
 
-**Settings → Start over → Reset this app…** returns this computer to how it was before you first
-set it up. After you confirm it:
+**Settings → Advanced → Reset this app…** returns this computer to how it was before you first set it
+up. **Advanced** is the folded card at the very bottom of Settings; click it to open it. After you confirm it:
 
 * this computer is removed from your nest (if the nest can't be reached, Pairnets says so; remove
   the computer on your nest's **Devices** page then);
@@ -1016,7 +1017,7 @@ conflict copies.
 
 ### Uninstalling
 
-Use **Reset this app…** (above) first if you also want Pairnets' settings, saved key and sync notes
+Use **Settings → Advanced → Reset this app…** (above) first if you also want Pairnets' settings, saved key and sync notes
 gone, then uninstall.
 
 **Uninstall from a Mac**: menu-bar icon → **Quit Pairnets**, untick "Start at login" first if you
@@ -1030,7 +1031,7 @@ app under "Pairnets" (Reset removes it).
 **Uninstall from Windows**: right-click → **Exit**. Untick "Start with Windows" first if you had it
 on. Then delete `Pairnets.exe`, or uninstall through *Settings → Apps* if you used the installer.
 Your synced folder and its files stay where they are. To also remove Pairnets's settings and
-state, use **Reset this app…** before uninstalling (or delete `%AppData%\Pairnets` and
+state, use **Settings → Advanced → Reset this app…** before uninstalling (or delete `%AppData%\Pairnets` and
 `%LocalAppData%\Pairnets` by hand).
 
 **Uninstall the server**:
