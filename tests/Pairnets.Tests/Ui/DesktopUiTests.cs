@@ -772,6 +772,17 @@ public class DesktopUiTests
         Save(serverUpdate, outDir, $"server-update-manual-{suffix}.png");
         serverUpdate.Close();
 
+        // A question with something that can't be undone: the yes button is red, Cancel is the default (Enter and Esc).
+        var opened = new List<Avalonia.Controls.Window>();
+        using (Avalonia.Controls.Window.WindowOpenedEvent.AddClassHandler(typeof(Avalonia.Controls.Window), (sender, _) => opened.Add((Avalonia.Controls.Window)sender!)))
+        {
+            _ = Dialogs.ConfirmAsync(null, "Pairnets – sign out",
+                "Sign out of this computer?\n\nSyncing stops. Your files in /home/me/Work stay here. Sign in again to continue.", "Sign out", "Cancel", danger: true);
+        }
+        var question = opened.Single();
+        Save(question, outDir, $"question-danger-{suffix}.png");
+        question.Close();
+
         // Settings > Your nest > "Change…": the nest's drives, sure?, moving, moved, not moved.
         var place = new NestPlaceWindow(null, Pairnets.Tests.Unit.NestPlaceFlowTests.Sample());
         place.Show();
