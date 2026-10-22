@@ -2,10 +2,62 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:ui="clr-namespace:Pairnets.Client.Ui"
-        Title="Invite a friend" Width="560" Height="680" MinWidth="460" MinHeight="520"
+        Title="Invite a friend" Width="560" MinWidth="460" MinHeight="420" MaxHeight="820" SizeToContent="Height"
         WindowStartupLocation="CenterScreen">
   <!-- "Invite a friend…" (friend invites): what they get and what they can do, then the account page in the browser
        finishes it (it sends the email or gives the link; only a signed-in browser may make an invite). -->
+  <Window.Resources>
+    <!-- A folder in "Chosen folders" (and "All folders" above them): tick box, folder icon, then the content (name and size).
+         The row lights up under the pointer and turns blue when ticked; "All folders" shows a dash when only some are. -->
+    <Style x:Key="FolderRow" TargetType="CheckBox">
+      <Setter Property="Cursor" Value="Hand" />
+      <Setter Property="Foreground" Value="{DynamicResource T.Text}" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="FontSize" Value="13.5" />
+      <Setter Property="FocusVisualStyle" Value="{DynamicResource FocusRing}" />
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="CheckBox">
+            <Border x:Name="bd" CornerRadius="10" Padding="10,9" Background="Transparent">
+              <Grid>
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="Auto" />
+                  <ColumnDefinition Width="Auto" />
+                  <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Border x:Name="box" Width="18" Height="18" CornerRadius="5" BorderThickness="1.5" BorderBrush="{DynamicResource T.Muted}" Background="Transparent" VerticalAlignment="Center">
+                  <Grid>
+                    <Path x:Name="tick" Data="{StaticResource I.Check}" Stroke="White" StrokeThickness="2.6" Stretch="Uniform" Margin="3" Visibility="Collapsed"
+                          StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" />
+                    <Rectangle x:Name="dash" Width="8" Height="2.2" RadiusX="1" RadiusY="1" Fill="White" Visibility="Collapsed" />
+                  </Grid>
+                </Border>
+                <Path x:Name="icon" Grid.Column="1" Data="{StaticResource I.Folder}" Fill="{DynamicResource T.Muted}" Stretch="Uniform" Width="20" Height="16" Margin="12,0,10,0" VerticalAlignment="Center" />
+                <ContentPresenter Grid.Column="2" VerticalAlignment="Center" />
+              </Grid>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="bd" Property="Background" Value="{DynamicResource T.Hover}" />
+              </Trigger>
+              <Trigger Property="IsChecked" Value="True">
+                <Setter TargetName="bd" Property="Background" Value="{DynamicResource T.Selected}" />
+                <Setter TargetName="box" Property="Background" Value="{DynamicResource T.AccentButton}" />
+                <Setter TargetName="box" Property="BorderBrush" Value="{DynamicResource T.AccentButton}" />
+                <Setter TargetName="tick" Property="Visibility" Value="Visible" />
+                <Setter TargetName="icon" Property="Fill" Value="{DynamicResource T.Accent}" />
+              </Trigger>
+              <Trigger Property="IsChecked" Value="{x:Null}">
+                <Setter TargetName="box" Property="Background" Value="{DynamicResource T.AccentButton}" />
+                <Setter TargetName="box" Property="BorderBrush" Value="{DynamicResource T.AccentButton}" />
+                <Setter TargetName="dash" Property="Visibility" Value="Visible" />
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+  </Window.Resources>
   <Grid Margin="24,20">
     <Grid.RowDefinitions>
       <RowDefinition Height="Auto" />
@@ -22,16 +74,43 @@
     <ScrollViewer Grid.Row="1" Margin="0,16,0,0" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
       <StackPanel>
         <TextBlock Style="{StaticResource PgCardTitle}" Text="What they get" />
-        <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
-          <RadioButton x:Name="WholeChoice" Style="{StaticResource PgSeg}" GroupName="scope" Content="The whole nest" IsChecked="True" Checked="OnScopeChanged" />
-          <RadioButton x:Name="FoldersChoice" Style="{StaticResource PgSeg}" GroupName="scope" Content="Chosen folders" Margin="6,0,0,0" Checked="OnScopeChanged" />
-        </StackPanel>
+        <!-- PgSeg is 32 px wide for Settings' 1/2/4/8; these fit their words and drop to a new line when narrow -->
+        <WrapPanel Margin="0,8,0,0">
+          <RadioButton x:Name="WholeChoice" Style="{StaticResource PgSeg}" GroupName="scope" Width="Auto" Margin="0,0,6,6"
+                       AutomationProperties.Name="The whole nest" IsChecked="True" Checked="OnScopeChanged">
+            <TextBlock Text="The whole nest" Margin="12,0" />
+          </RadioButton>
+          <RadioButton x:Name="FoldersChoice" Style="{StaticResource PgSeg}" GroupName="scope" Width="Auto" Margin="0,0,6,6"
+                       AutomationProperties.Name="Chosen folders" Checked="OnScopeChanged">
+            <TextBlock Text="Chosen folders" Margin="12,0" />
+          </RadioButton>
+        </WrapPanel>
         <TextBlock x:Name="SealedNote" Foreground="{DynamicResource T.Muted}" FontSize="12.5" TextWrapping="Wrap" Margin="0,8,0,0" Visibility="Collapsed"
                    Text="Your nest is encrypted, so for now it can only be shared whole." />
         <Border x:Name="FolderBox" Margin="0,10,0,0" CornerRadius="14" BorderThickness="1" BorderBrush="{DynamicResource T.Border}" Background="{DynamicResource T.Card}"
                 Padding="14,10" Visibility="Collapsed">
           <StackPanel>
-            <TextBlock x:Name="FolderNote" Foreground="{DynamicResource T.Muted}" FontSize="12.5" TextWrapping="Wrap" Text="Looking at the folders…" />
+            <Grid>
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+              </Grid.ColumnDefinitions>
+              <TextBlock Text="Choose the folders they get" FontWeight="Bold" FontSize="13.5" Foreground="{DynamicResource T.Text}" TextWrapping="Wrap" VerticalAlignment="Center" />
+              <TextBlock x:Name="ChosenSummary" Grid.Column="1" Foreground="{DynamicResource T.Muted}" FontSize="12.5" Margin="12,0,0,0" VerticalAlignment="Center" />
+            </Grid>
+            <TextBlock x:Name="FolderNote" Foreground="{DynamicResource T.Muted}" FontSize="12.5" TextWrapping="Wrap" Margin="0,2,0,6" Text="Looking at the folders…" />
+            <CheckBox x:Name="AllFolders" Style="{StaticResource FolderRow}" IsThreeState="True" Visibility="Collapsed" Click="OnAllFolders"
+                      AutomationProperties.Name="All folders">
+              <Grid>
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="*" />
+                  <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Text="All folders" TextTrimming="CharacterEllipsis" />
+                <TextBlock x:Name="AllSize" Grid.Column="1" Foreground="{DynamicResource T.Muted}" FontWeight="Normal" FontSize="12.5" Margin="12,0,0,0" VerticalAlignment="Center" />
+              </Grid>
+            </CheckBox>
+            <Border x:Name="AllLine" Height="1" Margin="10,2" Background="{DynamicResource T.Border}" Visibility="Collapsed" />
             <StackPanel x:Name="FolderList" />
           </StackPanel>
         </Border>
@@ -39,14 +118,14 @@
         <TextBlock Style="{StaticResource PgCardTitle}" Margin="0,20,0,0" Text="What they can do" />
         <RadioButton x:Name="ViewChoice" GroupName="access" IsChecked="True" Margin="0,10,0,0" AutomationProperties.Name="View only">
           <StackPanel Margin="4,0,0,0">
-            <TextBlock Text="View only" FontWeight="Bold" />
+            <TextBlock Text="View only" FontWeight="Bold" Foreground="{DynamicResource T.Text}" />
             <TextBlock Foreground="{DynamicResource T.Muted}" FontSize="12.5" TextWrapping="Wrap"
                        Text="They get your files and your changes. What they change stays on their computer." />
           </StackPanel>
         </RadioButton>
         <RadioButton x:Name="EditChoice" GroupName="access" Margin="0,10,0,0" AutomationProperties.Name="Can change">
           <StackPanel Margin="4,0,0,0">
-            <TextBlock Text="Can change" FontWeight="Bold" />
+            <TextBlock Text="Can change" FontWeight="Bold" Foreground="{DynamicResource T.Text}" />
             <TextBlock Foreground="{DynamicResource T.Muted}" FontSize="12.5" TextWrapping="Wrap"
                        Text="They can add, edit and delete in these folders. Deleted files still go to your nest's history." />
           </StackPanel>

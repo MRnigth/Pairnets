@@ -602,6 +602,29 @@ public static partial class Program
         sendable.UpdateLayout();
         Save(sendable, outDir, $"windows-bug-report-sent-{suffix}.png", print);
         sendable.Close();
+        // A nest's "Invite a friend…": the whole nest, then chosen folders (at the window's narrowest too).
+        // Real-looking sizes from sparse files (nothing is really written), and one empty folder.
+        var inviteNest = Path.Combine(Path.GetTempPath(), "pairnets-invite-shots");
+        foreach (var (dir, size) in new[] { ("Photos", 2_400_000_000L), ("Music", 12_100_000_000L), ("School", 380_000_000L), ("Projects", 0L) })
+        {
+            Directory.CreateDirectory(Path.Combine(inviteNest, dir));
+            if (size > 0)
+                using (var data = File.Create(Path.Combine(inviteNest, dir, "data.bin")))
+                    data.SetLength(size);
+        }
+        var invite = new InviteWindow("Home nest", "nst_0123456789abcdefghjkmnpqrs", inviteNest, sealedNest: false, _ => { });
+        Place(invite);
+        Save(invite, outDir, $"windows-invite-{suffix}.png", print);
+        ((System.Windows.Controls.RadioButton)invite.FindName("FoldersChoice")).IsChecked = true;
+        foreach (var box in ((System.Windows.Controls.Panel)invite.FindName("FolderList")).Children.OfType<System.Windows.Controls.CheckBox>())
+            box.IsChecked = (string)box.Tag is "Photos" or "School";
+        Save(invite, outDir, $"windows-invite-folders-{suffix}.png", print);
+        invite.Close();
+        var narrowInvite = new InviteWindow("Home nest", "nst_0123456789abcdefghjkmnpqrs", inviteNest, sealedNest: false, _ => { });
+        narrowInvite.Width = narrowInvite.MinWidth;
+        Place(narrowInvite);
+        Save(narrowInvite, outDir, $"windows-invite-narrow-{suffix}.png", print);
+        narrowInvite.Close();
 
         Stage6.Render(outDir, suffix, print);
     }
@@ -710,7 +733,8 @@ public static partial class Program
         var width = content.ActualWidth + content.Margin.Left + content.Margin.Right;
         var height = content.ActualHeight + content.Margin.Top + content.Margin.Bottom;
         // The bitmap's DPI does the 1.5× (no extra transform), and the brush shows the content's whole layout box, empty
-        // edges included (by default a VisualBrush crops to what is drawn, which shifts a page with margins).
+        // edges included (by default a VisualBrush crops to what is drawn, which shifts a page with margins). The brush
+        // already draws the content at its margin, so it is laid down at the picture's corner.
         const double scale = 1.5;
         var visual = new DrawingVisual();
         using (var dc = visual.RenderOpen())
@@ -722,8 +746,8 @@ public static partial class Program
                 AlignmentX = AlignmentX.Left,
                 AlignmentY = AlignmentY.Top,
                 ViewboxUnits = BrushMappingMode.Absolute,
-                Viewbox = new Rect(0, 0, content.ActualWidth, content.ActualHeight),
-            }, null, new Rect(content.Margin.Left, content.Margin.Top, content.ActualWidth, content.ActualHeight));
+                Viewbox = new Rect(0, 0, width, height),
+            }, null, new Rect(0, 0, width, height));
         }
         var bitmap = new RenderTargetBitmap((int)Math.Ceiling(width * scale), (int)Math.Ceiling(height * scale), 96 * scale, 96 * scale, PixelFormats.Pbgra32);
         bitmap.Render(visual);

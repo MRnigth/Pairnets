@@ -198,6 +198,79 @@
     <Setter Property="Background" Value="{DynamicResource T.AccentButton}" />
   </Style>
 
+  <!-- numseg's look, sized to its words: the invite window's "What they get" (the Windows app's PgSeg with Width="Auto") -->
+  <Style Selector="RadioButton.pill">
+    <Setter Property="Foreground" Value="{DynamicResource T.Muted}" />
+    <Setter Property="FontWeight" Value="Bold" />
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Border x:Name="bd" Background="Transparent" CornerRadius="8" Height="28" Padding="12,0">
+          <ContentPresenter Content="{TemplateBinding Content}" Foreground="{TemplateBinding Foreground}"
+                            HorizontalAlignment="Center" VerticalAlignment="Center" />
+        </Border>
+      </ControlTemplate>
+    </Setter>
+  </Style>
+  <Style Selector="RadioButton.pill:pointerover:not(:checked) /template/ Border#bd">
+    <Setter Property="Background" Value="{DynamicResource T.Hover}" />
+  </Style>
+  <Style Selector="RadioButton.pill:checked">
+    <Setter Property="FontWeight" Value="ExtraBold" />
+    <Setter Property="Foreground" Value="White" />
+  </Style>
+  <Style Selector="RadioButton.pill:checked /template/ Border#bd">
+    <Setter Property="Background" Value="{DynamicResource T.AccentButton}" />
+  </Style>
+
+  <!-- A folder in the invite window's "Chosen folders" (and "All folders" above them): tick box, folder icon, then the
+       content (name and size). The row lights up under the pointer and turns blue when ticked; a dash when only some are. -->
+  <Style Selector="CheckBox.folderrow">
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="Foreground" Value="{DynamicResource T.Text}" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="FontSize" Value="13.5" />
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Border x:Name="bd" CornerRadius="10" Padding="10,9" Background="Transparent">
+          <Grid ColumnDefinitions="Auto,Auto,*">
+            <Border x:Name="box" Width="18" Height="18" CornerRadius="5" BorderThickness="1.5" BorderBrush="{DynamicResource T.Muted}" Background="Transparent" VerticalAlignment="Center">
+              <Panel>
+                <Path x:Name="tick" Data="{StaticResource I.Check}" Stroke="White" StrokeThickness="2.6" Stretch="Uniform" Margin="3" IsVisible="False"
+                      StrokeLineCap="Round" StrokeJoin="Round" />
+                <Rectangle x:Name="dash" Width="8" Height="2.2" RadiusX="1" RadiusY="1" Fill="White" IsVisible="False" />
+              </Panel>
+            </Border>
+            <Path x:Name="icon" Grid.Column="1" Data="{StaticResource I.Folder}" Fill="{DynamicResource T.Muted}" Stretch="Uniform" Width="20" Height="16" Margin="12,0,10,0" VerticalAlignment="Center" />
+            <ContentPresenter Grid.Column="2" Content="{TemplateBinding Content}" Foreground="{TemplateBinding Foreground}" VerticalAlignment="Center" HorizontalAlignment="Stretch" />
+          </Grid>
+        </Border>
+      </ControlTemplate>
+    </Setter>
+  </Style>
+  <Style Selector="CheckBox.folderrow:pointerover /template/ Border#bd">
+    <Setter Property="Background" Value="{DynamicResource T.Hover}" />
+  </Style>
+  <Style Selector="CheckBox.folderrow:checked /template/ Border#bd">
+    <Setter Property="Background" Value="{DynamicResource T.Selected}" />
+  </Style>
+  <Style Selector="CheckBox.folderrow:checked /template/ Border#box, CheckBox.folderrow:indeterminate /template/ Border#box">
+    <Setter Property="Background" Value="{DynamicResource T.AccentButton}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource T.AccentButton}" />
+  </Style>
+  <Style Selector="CheckBox.folderrow:checked /template/ Path#tick">
+    <Setter Property="IsVisible" Value="True" />
+  </Style>
+  <Style Selector="CheckBox.folderrow:indeterminate /template/ Rectangle#dash">
+    <Setter Property="IsVisible" Value="True" />
+  </Style>
+  <Style Selector="CheckBox.folderrow:checked /template/ Path#icon">
+    <Setter Property="Fill" Value="{DynamicResource T.Accent}" />
+  </Style>
+
   <!-- Secondary buttons that sit on a chip colour (Settings, Account) -->
   <Style Selector="Button.chipbtn">
     <Setter Property="MinHeight" Value="34" />

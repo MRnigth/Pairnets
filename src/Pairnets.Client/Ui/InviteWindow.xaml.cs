@@ -57,20 +57,58 @@ public partial class InviteWindow : Window
     {
         var folder = _folder;
         var found = await Task.Run(() => InviteChoices.LocalFolders(folder));
+        _sizes = found.ToDictionary(f => f.Name, f => f.Bytes, StringComparer.Ordinal);
         FolderList.Children.Clear();
         foreach (var (name, bytes) in found)
         {
-            var box = new CheckBox { Tag = name, Margin = new Thickness(0, 8, 0, 0), VerticalContentAlignment = VerticalAlignment.Center };
-            var size = new TextBlock { Text = Format.Bytes(bytes), FontSize = 12, Margin = new Thickness(10, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
-            size.SetResourceReference(TextBlock.ForegroundProperty, "T.Muted");
-            box.Content = new StackPanel { Orientation = Orientation.Horizontal, Children = { new TextBlock { Text = name, FontWeight = FontWeights.SemiBold }, size } };
+            var box = new CheckBox { Tag = name, Style = (Style)FindResource("FolderRow"), Content = Row(name, InviteChoices.SizeText(bytes)) };
+            box.Checked += (_, _) => ShowChosen();
+            box.Unchecked += (_, _) => ShowChosen();
             System.Windows.Automation.AutomationProperties.SetName(box, name);
             FolderList.Children.Add(box);
         }
         FolderNote.Text = found.Count == 0
             ? "There are no folders here yet. Share the whole nest, or make a folder first."
-            : "Tick the folders they get. Everything inside a folder comes with it.";
+            : "Everything inside a folder comes with it.";
+        AllSize.Text = InviteChoices.SizeText(found.Sum(f => f.Bytes));
+        AllFolders.Visibility = AllLine.Visibility = found.Count > 1 ? Visibility.Visible : Visibility.Collapsed;
+        ShowChosen();
         FoldersLoaded = true;
+    }
+
+    private Dictionary<string, long> _sizes = [];
+
+    private IEnumerable<CheckBox> FolderBoxes => FolderList.Children.OfType<CheckBox>();
+
+    /// <summary>A folder row's words: its name (cut short with "…" when long) and its size on the right.</summary>
+    private static Grid Row(string name, string size)
+    {
+        var row = new Grid();
+        row.ColumnDefinitions.Add(new ColumnDefinition());
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        row.Children.Add(new TextBlock { Text = name, TextTrimming = TextTrimming.CharacterEllipsis });
+        var bytes = new TextBlock { Text = size, FontWeight = FontWeights.Normal, FontSize = 12.5, Margin = new Thickness(12, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+        bytes.SetResourceReference(TextBlock.ForegroundProperty, "T.Muted");
+        Grid.SetColumn(bytes, 1);
+        row.Children.Add(bytes);
+        return row;
+    }
+
+    /// <summary>"2 of 4 chosen · 2.59 GB" over the list, and "All folders" ticked, empty or with a dash.</summary>
+    private void ShowChosen()
+    {
+        var chosen = FolderBoxes.Where(b => b.IsChecked == true).Select(b => (string)b.Tag).ToList();
+        ChosenSummary.Text = _sizes.Count == 0 ? "" : InviteChoices.ChosenSummary(chosen.Count, _sizes.Count, chosen.Sum(n => _sizes[n]));
+        AllFolders.IsChecked = InviteChoices.AllTicked(chosen.Count, _sizes.Count);
+    }
+
+    /// <summary>"All folders": ticks every folder, or clears them all when every one is ticked already.</summary>
+    private void OnAllFolders(object sender, RoutedEventArgs e)
+    {
+        var tickAll = FolderBoxes.Any(b => b.IsChecked != true);
+        foreach (var box in FolderBoxes)
+            box.IsChecked = tickAll;
+        ShowChosen();
     }
 
     private void OnScopeChanged(object sender, RoutedEventArgs e)

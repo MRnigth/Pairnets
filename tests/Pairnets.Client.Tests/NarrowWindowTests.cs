@@ -71,6 +71,33 @@ public sealed class NarrowWindowTests
     private static List<TextBlock> Shown(Window window) => Presser.Elements(window).OfType<TextBlock>().Where(t => t.IsVisible).ToList();
 
     [Fact]
+    public async Task TheInviteWindowsChoicesShowTheirWholeWords()
+    {
+        var window = await Wpf.Ui(() =>
+        {
+            var w = new InviteWindow("Home nest", "nst_0123456789abcdefghjkmnpqrs", null, sealedNest: false, _ => { });
+            w.Width = w.MinWidth;
+            w.Show();
+            return w;
+        });
+        await Wpf.WaitUntil(() => window.IsLoaded, "the window to open");
+        await Wpf.Settle();
+        await Wpf.Ui(() =>
+        {
+            // A label too wide for its pill still says it is whole; the pill around it is what gets too narrow.
+            foreach (var choice in new[] { window.WholeChoice, window.FoldersChoice })
+            {
+                var label = Presser.Elements(choice).OfType<TextBlock>().Single();
+                var whole = new TextBlock { Text = label.Text, FontFamily = label.FontFamily, FontSize = label.FontSize, FontWeight = label.FontWeight };
+                TextOptions.SetTextFormattingMode(whole, TextOptions.GetTextFormattingMode(label));
+                whole.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+                Assert.True(choice.ActualWidth >= whole.DesiredSize.Width, $"{label.Text}: the pill is {choice.ActualWidth:0} wide, its words need {whole.DesiredSize.Width:0}");
+            }
+        });
+        await Done();
+    }
+
+    [Fact]
     public async Task TheNestVersionCardShowsItsLabelAndValueInFull()
     {
         var window = await OpenAsync(Synced());

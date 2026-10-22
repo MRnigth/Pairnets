@@ -250,6 +250,19 @@ public class NestAccessTests
     }
 
     [Fact]
+    public void TheInviteWindowsFolderListSaysSizesAndHowManyAreChosen()
+    {
+        Assert.Equal("Empty", InviteChoices.SizeText(0));
+        Assert.Equal("362 MB", InviteChoices.SizeText(380_000_000));
+        Assert.Equal("None chosen yet", InviteChoices.ChosenSummary(0, 4, 0));
+        Assert.Equal("2 of 4 chosen · 2.59 GB", InviteChoices.ChosenSummary(2, 4, 2_780_000_000));
+        Assert.Equal("1 of 4 chosen", InviteChoices.ChosenSummary(1, 4, 0)); // an empty folder: no "0 B"
+        Assert.False(InviteChoices.AllTicked(0, 4));
+        Assert.Null(InviteChoices.AllTicked(2, 4)); // some: the dash
+        Assert.True(InviteChoices.AllTicked(4, 4));
+    }
+
+    [Fact]
     public void TheInviteWindowOffersThisComputersTopLevelFoldersWithTheirSizes()
     {
         using var dir = new TempDir("invite");

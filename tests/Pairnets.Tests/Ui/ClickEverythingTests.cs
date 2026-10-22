@@ -953,6 +953,8 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
         s.Expect["OnScopeChanged:Chosen folders"] = That(() => Screen.Named<Border>(window, "FolderBox").IsVisible && Screen.Named<StackPanel>(window, "FolderList").Children.Count == 2,
             "this computer's folders show to tick");
         s.Expect["OnScopeChanged:The whole nest"] = That(() => !Screen.Named<Border>(window, "FolderBox").IsVisible, "the folders to tick go away");
+        s.Expect["OnFolderTicked"] = That(() => Screen.Named<TextBlock>(window, "ChosenSummary").Text?.Contains(" chosen") == true, "the count over the list follow the ticks");
+        s.Expect["OnAllFolders"] = That(() => window.ChosenFolders.Count is 0 or 2, "every folder be ticked at once (or all cleared)");
         s.Expect["OnCancel"] = That(() => !window.IsVisible && s.Opened.Count == 0, "the window close without opening anything");
         // Nothing ticked yet with chosen folders: it asks for one first.
         s.Expect["OnContinue"] = chooseFolders

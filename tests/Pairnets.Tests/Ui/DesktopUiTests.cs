@@ -431,6 +431,24 @@ public class DesktopUiTests
         window.Close();
     }
 
+    /// <summary>The invite window's "What they get" choices show their whole words, even at the window's narrowest.</summary>
+    [AvaloniaFact]
+    public void InviteChoicesShowTheirWholeWords()
+    {
+        var window = new InviteWindow("Home nest", "nst_0123456789abcdefghjkmnpqrs", null, sealedNest: false, _ => { });
+        window.Show();
+        window.Width = window.MinWidth;
+        Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        foreach (var name in new[] { "WholeChoice", "FoldersChoice" })
+        {
+            var choice = Avalonia.Controls.ControlExtensions.FindControl<Avalonia.Controls.RadioButton>(window, name)!;
+            var whole = new Avalonia.Controls.TextBlock { Text = (string)choice.Content!, FontSize = choice.FontSize, FontWeight = Avalonia.Media.FontWeight.Bold };
+            whole.Measure(Size.Infinity);
+            Assert.True(choice.Bounds.Width >= whole.DesiredSize.Width, $"{name} is {choice.Bounds.Width:0} wide, its words need {whole.DesiredSize.Width:0}");
+        }
+        window.Close();
+    }
+
     /// <summary>
     /// Renders the windows (light and dark) to PNG files for documentation when PAIRNETS_SCREENSHOT_DIR
     /// is set (otherwise it just checks that frames can be rendered).
@@ -720,6 +738,29 @@ public class DesktopUiTests
         failed.Render();
         Save(failed, outDir, $"nest-place-failed-{suffix}.png");
         failed.Close();
+
+        // A nest's "Invite a friend…": the whole nest, then chosen folders (at the window's narrowest too).
+        // Real-looking sizes from sparse files (nothing is really written), and one empty folder.
+        var inviteNest = Path.Combine(Path.GetTempPath(), "pairnets-invite-shots");
+        foreach (var (dir, size) in new[] { ("Photos", 2_400_000_000L), ("Music", 12_100_000_000L), ("School", 380_000_000L), ("Projects", 0L) })
+        {
+            Directory.CreateDirectory(Path.Combine(inviteNest, dir));
+            if (size > 0)
+                using (var data = File.Create(Path.Combine(inviteNest, dir, "data.bin")))
+                    data.SetLength(size);
+        }
+        var invite = new InviteWindow("Home nest", "nst_0123456789abcdefghjkmnpqrs", inviteNest, sealedNest: false, _ => { });
+        invite.Show();
+        Save(invite, outDir, $"invite-{suffix}.png");
+        Avalonia.Controls.ControlExtensions.FindControl<Avalonia.Controls.RadioButton>(invite, "FoldersChoice")!.IsChecked = true;
+        Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        for (var i = 0; i < 200 && !invite.FoldersLoaded; i++) { Thread.Sleep(10); Avalonia.Threading.Dispatcher.UIThread.RunJobs(); }
+        foreach (var box in Avalonia.Controls.ControlExtensions.FindControl<Avalonia.Controls.StackPanel>(invite, "FolderList")!.Children.OfType<Avalonia.Controls.CheckBox>())
+            box.IsChecked = (string)box.Tag! is "Photos" or "School";
+        Save(invite, outDir, $"invite-folders-{suffix}.png");
+        invite.Width = invite.MinWidth;
+        Save(invite, outDir, $"invite-narrow-{suffix}.png");
+        invite.Close();
 
         // The bug report window, with a sample report.
         var bugDir = Path.Combine(Path.GetTempPath(), "pairnets-bug-shots");
