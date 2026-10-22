@@ -238,7 +238,9 @@ public class OverviewModelTests
         Assert.Equal("Resume", m.HeadButton!.Label);
         Assert.True(m.HeadButton.Large);
         Assert.Equal(OverviewAction.TogglePause, m.HeadButton.Action);
-        Assert.Contains(m.Infos, i => i.Text == "5 changes waiting here");
+        // Waiting changes can be downloads as well as uploads: no "here", no up arrow, no "go up".
+        Assert.Contains(m.Infos, i => i.Text == "5 changes waiting to sync" && i.Icon == OverviewIcon.Sync);
+        Assert.DoesNotContain("go up", m.Detail);
         Assert.Contains(m.Infos, i => i.Text == "Your other computers keep syncing");
     }
 

@@ -423,15 +423,16 @@ public sealed record OverviewModel
             case NestMapState.Paused:
             {
                 var infos = new List<OverviewInfo> { new(OverviewIcon.Clock, "Syncing is paused") };
+                // The count holds changes made here and changes coming from the nest alike, so no direction is named.
                 if (s.PendingChanges > 0)
-                    infos.Add(new OverviewInfo(OverviewIcon.Up, Count(s.PendingChanges, "change") + " waiting here"));
+                    infos.Add(new OverviewInfo(OverviewIcon.Sync, Count(s.PendingChanges, "change") + " waiting to sync"));
                 infos.Add(new OverviewInfo(OverviewIcon.Computer, "Your other computers keep syncing"));
                 return model with
                 {
                     Glyph = OverviewIcon.Pause,
                     GlyphTone = OverviewTone.Neutral,
                     Title = "Paused",
-                    Detail = "Nothing syncs until you resume. Changes you make here are kept safe and go up when you press Resume.",
+                    Detail = "Nothing syncs until you resume. Changes here and on your nest are kept safe and sync when you press Resume.",
                     HeadButton = new OverviewButton("Resume", OverviewIcon.Play, OverviewAction.TogglePause, OverviewButtonKind.Primary, Large: true),
                     Infos = infos,
                     Lower = OverviewLower.ChangesAndFacts,
