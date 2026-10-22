@@ -16,6 +16,31 @@ public static class Dialogs
     public static async Task<bool> ConfirmAsync(Window? owner, string title, string text, string yes = "Yes", string no = "No") =>
         await ShowAsync(owner, title, text, [yes, no]) == yes;
 
+    /// <summary>
+    /// Puts text on the clipboard; false when it can't (no clipboard, or another app holds it). Never throws, so a
+    /// busy clipboard doesn't end up in the crash handler and the bug report (as the Windows app's CopyText).
+    /// </summary>
+    public static async Task<bool> CopyTextAsync(TopLevel? top, string text)
+    {
+        try
+        {
+            return await ClipboardWriter(top, text);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>What <see cref="CopyTextAsync"/> writes with; the tests swap in one that fails, as a busy clipboard does.</summary>
+    internal static Func<TopLevel?, string, Task<bool>> ClipboardWriter { get; set; } = async (top, text) =>
+    {
+        if (top?.Clipboard is not { } clipboard)
+            return false;
+        await clipboard.SetTextAsync(text);
+        return true;
+    };
+
     /// <summary>Asks for a folder; null when none was chosen.</summary>
     public static Task<string?> PickFolderAsync(Window? owner, string title) => FolderPicker(owner, title);
 

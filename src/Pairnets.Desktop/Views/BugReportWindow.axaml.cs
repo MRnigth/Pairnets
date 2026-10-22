@@ -190,20 +190,7 @@ public partial class BugReportWindow : Window
         AfterSend(window.Sent, cards.Count);
     }
 
-    private async Task<bool> CopyAsync(string text)
-    {
-        try
-        {
-            if (Clipboard is not { } clipboard)
-                return false;
-            await clipboard.SetTextAsync(text);
-            return true;
-        }
-        catch (Exception ex) when (ex is not OutOfMemoryException)
-        {
-            return false; // no clipboard (headless, or another app holds it)
-        }
-    }
+    private Task<bool> CopyAsync(string text) => Dialogs.CopyTextAsync(this, text); // false: no clipboard (headless, or another app holds it)
 
     private async void OnCopy(object? sender, RoutedEventArgs e)
     {

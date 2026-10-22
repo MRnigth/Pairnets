@@ -168,11 +168,7 @@ public partial class ServerUpdateWindow : Window
         DetailsScroller.ScrollToEnd();
     }
 
-    private async void OnCopyDetails(object? sender, RoutedEventArgs e)
-    {
-        if (Clipboard is { } clipboard)
-            await clipboard.SetTextAsync(_details.ToString());
-    }
+    private async void OnCopyDetails(object? sender, RoutedEventArgs e) => await Dialogs.CopyTextAsync(this, _details.ToString());
 
     /// <summary>Which of the three steps a progress message belongs to: getting it, installing it, restarting.</summary>
     internal static int StepOf(string message) =>
@@ -347,9 +343,5 @@ public partial class ServerUpdateWindow : Window
             Dispatcher.UIThread.Post(() => AppendDetail("--- What the server reports ---" + Environment.NewLine + details), DispatcherPriority.Background);
     }
 
-    private async void OnCopy(object? sender, RoutedEventArgs e)
-    {
-        if (Clipboard is { } clipboard)
-            await clipboard.SetTextAsync(CommandText.Text ?? string.Empty);
-    }
+    private async void OnCopy(object? sender, RoutedEventArgs e) => await Dialogs.CopyTextAsync(this, CommandText.Text ?? string.Empty);
 }

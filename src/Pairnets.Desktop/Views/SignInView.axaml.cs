@@ -675,11 +675,8 @@ public partial class SignInView : UserControl
 
     private async void OnCopy(object? sender, RoutedEventArgs e)
     {
-        if (_state?.VerifyUrl is { } link && TopLevel.GetTopLevel(this)?.Clipboard is { } clipboard)
-        {
-            await clipboard.SetTextAsync(link);
+        if (_state?.VerifyUrl is { } link && await Dialogs.CopyTextAsync(TopLevel.GetTopLevel(this), link))
             CopyButton.Content = "Copied";
-        }
     }
 
     private void OnRetry(object? sender, RoutedEventArgs e)

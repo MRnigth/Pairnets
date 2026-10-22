@@ -129,11 +129,7 @@ public partial class NestPlaceWindow : Window
         Render();
     }
 
-    private async void OnCopy(object? sender, RoutedEventArgs e)
-    {
-        if (Clipboard is { } clipboard)
-            await clipboard.SetTextAsync(CommandText.Text ?? string.Empty);
-    }
+    private async void OnCopy(object? sender, RoutedEventArgs e) => await Dialogs.CopyTextAsync(this, CommandText.Text ?? string.Empty);
 
     /// <summary>Draws the flow's step.</summary>
     internal void Render()

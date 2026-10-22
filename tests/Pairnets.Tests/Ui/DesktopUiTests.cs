@@ -251,6 +251,29 @@ public class DesktopUiTests
         var debug = new ServerUpdateWindow(null, "1.0.52", "1.0.58", debug: () => true);
         debug.Show();
         Assert.True(debug.DetailsShown);
+
+        // A busy clipboard (another app holds it) makes Copy do nothing, not crash into the bug report.
+        var writer = Dialogs.ClipboardWriter;
+        var clipboardCrashes = new List<Exception>();
+        void OnCrash(object? sender, Avalonia.Threading.DispatcherUnhandledExceptionEventArgs e)
+        {
+            clipboardCrashes.Add(e.Exception);
+            e.Handled = true;
+        }
+        Avalonia.Threading.Dispatcher.UIThread.UnhandledException += OnCrash;
+        try
+        {
+            Dialogs.ClipboardWriter = (_, _) => throw new System.Runtime.InteropServices.COMException("The clipboard is busy");
+            Person.Click(Screen.Find<Avalonia.Controls.Button>(debug, "Copy details"));
+            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            Assert.Empty(clipboardCrashes);
+            Assert.False(Dialogs.CopyTextAsync(debug, "x").Result);
+        }
+        finally
+        {
+            Dialogs.ClipboardWriter = writer;
+            Avalonia.Threading.Dispatcher.UIThread.UnhandledException -= OnCrash;
+        }
         Assert.Equal("S.Orange", debug.BadgeKey);
         debug.AppendDetail("[  0s] Asking the server to update");
         debug.ShowResult(new ServerUpdateResult(false, "The updater did not start.", "1.0.52", CanUpdateItself: true,
