@@ -20,6 +20,21 @@ public class ActivityAndStatusTests
     }
 
     [Fact]
+    public void ClearEmptiesTheListAndNewActivityStillArrives()
+    {
+        var feed = new ActivityFeed();
+        var cleared = 0;
+        feed.Cleared += () => cleared++;
+        for (var i = 0; i < 5; i++)
+            feed.Add(ActivityKind.DeletedOnServer, $"f{i}", $"Deleted f{i}");
+        feed.Clear();
+        Assert.Empty(feed.Items);
+        Assert.Equal(1, cleared);
+        feed.Add(ActivityKind.Uploaded, "new", "Uploaded new");
+        Assert.Equal(["new"], feed.Items.Select(i => i.Path));
+    }
+
+    [Fact]
     public void ConnectionIsShownOnlyOnceKnown()
     {
         var starting = StatusSnapshot.Initial;

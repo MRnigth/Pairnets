@@ -467,6 +467,12 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
     public SyncRunner Runner { get; }
     public ActivityFeed Activity { get; } = new();
 
+    /// <summary>
+    /// The latest conflict copies, for the "Needs you" cards. Kept apart from <see cref="Activity"/> so clearing the
+    /// activity list doesn't hide a conflict that still needs looking at.
+    /// </summary>
+    public ActivityFeed ConflictCopies { get; } = new(20);
+
     public StatusSnapshot Status
     {
         get
@@ -572,6 +578,7 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
         Engine.ConflictCreated += c =>
         {
             Activity.Add(ActivityKind.Conflict, c.ConflictCopyPath, $"Conflict on {c.Path}: your version was kept as {PathRules.FileName(c.ConflictCopyPath)}", _clock);
+            ConflictCopies.Add(ActivityKind.Conflict, c.ConflictCopyPath, c.Path, _clock);
             ConflictCreated?.Invoke(c);
         };
         Engine.PathWarningRaised += w =>

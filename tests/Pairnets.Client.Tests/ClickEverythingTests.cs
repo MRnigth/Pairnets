@@ -847,6 +847,7 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
         new(t => t.Element is Button && t.Label.StartsWith("Show all ", StringComparison.Ordinal), "show every file of the folder",
             c => !Presser.Find(c.Window).Any(x => x.Label.StartsWith("Show all ", StringComparison.Ordinal))),
         On("Open your folder", "open the synced folder", Called("OpenFolder")),
+        On("Clear", "ask, then empty the activity list", Called("ClearActivity")),
 
         // Needs you and the Devices page.
         new(t => t.Handlers.Contains("DevicesPageView.OnInviteFriend"), "open the invite window", Called("InviteFriend")),

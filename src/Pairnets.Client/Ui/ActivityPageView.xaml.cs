@@ -128,6 +128,8 @@ public partial class ActivityPageView : UserControl
 
     private void OnOpenFolder(object sender, RoutedEventArgs e) => Host?.Actions?.OpenFolder();
 
+    private void OnClearActivity(object sender, RoutedEventArgs e) => Host?.Actions?.ClearActivity();
+
     // ------------------------------------------------------------------ drawing
 
     /// <summary>
@@ -167,6 +169,7 @@ public partial class ActivityPageView : UserControl
         FitFilterBar();
 
         var none = _items.Count == 0;
+        ClearButton.IsEnabled = !none;
         FilterBar.Visibility = none ? Visibility.Collapsed : Visibility.Visible;
         EmptyState.Visibility = none ? Visibility.Visible : Visibility.Collapsed;
 

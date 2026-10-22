@@ -202,6 +202,7 @@ public sealed class OpenedFiles : IDisposable
                         {
                             _session.Activity.Add(ActivityKind.Conflict, copy.Path,
                                 $"{copy.Name} changed on your nest while it was open here; your version was kept as \"{PathRules.FileName(name)}\"", _clock);
+                            _session.ConflictCopies.Add(ActivityKind.Conflict, copy.Path, name, _clock);
                             copy = copy with { Path = name };
                         }
                     }

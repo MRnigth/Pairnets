@@ -42,6 +42,11 @@ public interface IMainActions
     void TogglePause();
     void OpenFolder();
 
+    /// <summary>"Clear" on the Activity page: asks, then empties the activity list (never files or History).</summary>
+    void ClearActivity()
+    {
+    }
+
     /// <summary>Opens the Settings page (the controller hands the form to <see cref="MainWindow.ShowSettingsPage"/>).</summary>
     void ShowSettings();
     void ViewLog();
