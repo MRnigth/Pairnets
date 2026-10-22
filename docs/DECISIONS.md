@@ -1706,3 +1706,12 @@ change was never seen.
 * **A read-only copy is kept here quietly** (`PassResult.KeptHere`, logged once), not an error retried every pass.
 * **Follow-up, not changed here:** while the folder-empty / mass-delete guard blocks a pass, downloads wait too, so a
   folder switched back to "On this PC" refills only after the person decides on the Overview.
+## The left side shows which page is open (2026-10-22)
+
+* **Soft blue on a side row means "this page is open", nothing else.** This computer's row is soft blue while the
+  Overview is open, the nest's row while Computers is open (next to their blue page tile); the folded dock's buttons get
+  soft blue with a blue ring. Before, a syncing computer's row was soft blue on every page, so it looked chosen while
+  the nest's row never did. Syncing now only colours the row's text.
+* **A warning or problem keeps its own colour.** The row stays warm or red; while its page is open it also gets a 2 px
+  blue ring, so both things show. The clicks themselves stay: this computer → Overview, the nest → Computers (its card
+  is the top of that page).

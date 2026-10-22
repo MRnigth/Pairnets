@@ -97,7 +97,7 @@
               <Button x:Name="NestRow" Classes="siderow" Background="Transparent" Margin="0,6,0,0" Click="OnNestRow">
                 <Grid ColumnDefinitions="Auto,*">
                   <Grid Margin="0,0,10,0" VerticalAlignment="Center">
-                    <Border Classes="IconSquare" />
+                    <Border x:Name="NestIconSq" Classes="IconSquare" />
                     <v:LineIcon Classes="icon" Width="17" Height="17" StrokeThickness="1.8" Data="{StaticResource I.Nest}" />
                     <Ellipse x:Name="NestDot" Width="10" Height="10" StrokeThickness="2" Stroke="{DynamicResource T.Card}" Fill="{DynamicResource T.Ok}"
                              HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,-2,-2" />
@@ -245,7 +245,7 @@
           <!-- Computers -->
           <Border Classes="dockpill" Margin="0,12,0,0">
             <StackPanel>
-              <Button x:Name="DockThis" Classes="dockbtn" Background="{DynamicResource T.AccentSoft}" Click="OnThisComputer">
+              <Button x:Name="DockThis" Classes="dockbtn" Click="OnThisComputer">
                 <Grid Width="44" Height="44">
                   <Ellipse x:Name="DockRingTrack" Stroke="{DynamicResource T.Track}" StrokeThickness="2.5" IsVisible="False" Margin="1" />
                   <Ellipse x:Name="DockRing" Stroke="{DynamicResource T.Accent}" StrokeThickness="2.5" StrokeLineCap="Round" RenderTransformOrigin="50%,50%" IsVisible="False" Margin="1">

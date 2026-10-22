@@ -696,9 +696,12 @@
     <Setter Property="CornerRadius" Value="24" />
   </Style>
 
-  <!-- A flat clickable row (this computer, the nest): the background is the state colour -->
+  <!-- A flat clickable row (this computer, the nest): soft blue while its page is open, warm or red for a problem
+       (then a blue ring says the page is open) -->
   <Style x:Key="SideRow" TargetType="Button">
     <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
     <Setter Property="Foreground" Value="{DynamicResource T.Text}" />
     <Setter Property="Cursor" Value="Hand" />
     <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRing}" />
@@ -708,6 +711,7 @@
           <Grid>
             <Border x:Name="bd" Background="{TemplateBinding Background}" CornerRadius="16" />
             <Border x:Name="hv" Background="{DynamicResource T.Hover}" CornerRadius="16" Opacity="0" IsHitTestVisible="False" />
+            <Border BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="16" IsHitTestVisible="False" />
             <ContentPresenter Margin="12,10" HorizontalAlignment="Stretch" TextElement.Foreground="{TemplateBinding Foreground}" />
           </Grid>
           <ControlTemplate.Triggers>

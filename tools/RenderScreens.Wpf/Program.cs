@@ -90,6 +90,8 @@ public static partial class Program
                     RenderStage3(outDir, dark ? "dark" : "light", print);
                 else if (args.Contains("--stage6"))
                     Stage6.Render(outDir, dark ? "dark" : "light", print);
+                else if (args.Contains("--sidebar"))
+                    Stage8.Render(outDir, dark ? "dark" : "light", print);
                 else if (args.Contains("--stage7"))
                     Stage7.Render(outDir, dark ? "dark" : "light", print);
                 else if (args.Contains("--nest-only"))

@@ -805,7 +805,8 @@
     <Setter Property="BorderThickness" Value="1" />
     <Setter Property="CornerRadius" Value="24" />
   </Style>
-  <!-- A flat clickable row (this computer, the nest): the background is the state colour, set from code -->
+  <!-- A flat clickable row (this computer, the nest): soft blue while its page is open, warm or red for a problem
+       (then a blue ring says the page is open); set from code -->
   <Style Selector="Button.siderow">
     <Setter Property="BorderThickness" Value="0" />
     <Setter Property="CornerRadius" Value="16" />
