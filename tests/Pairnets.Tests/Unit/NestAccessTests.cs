@@ -265,6 +265,30 @@ public class NestAccessTests
     }
 
     [Fact]
+    public void TheInviteWindowLeavesOutLinksButNotTheNestsOwnFolders()
+    {
+        using var dir = new TempDir("invite-links");
+        Directory.CreateDirectory(Path.Combine(dir.Path, "Photos"));
+        File.WriteAllBytes(Path.Combine(dir.Path, "Photos", "a.jpg"), new byte[700]);
+        using var elsewhere = new TempDir("invite-elsewhere");
+        File.WriteAllBytes(Path.Combine(elsewhere.Path, "big.bin"), new byte[5000]);
+        try
+        {
+            // A link to another place (a folder, and one inside Photos) is not the nest's: not offered, not counted.
+            Directory.CreateSymbolicLink(Path.Combine(dir.Path, "Linked"), elsewhere.Path);
+            Directory.CreateSymbolicLink(Path.Combine(dir.Path, "Photos", "Linked"), elsewhere.Path);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return; // this computer may not make links (Windows without Developer Mode)
+        }
+        Assert.True(InviteChoices.IsLink(new DirectoryInfo(Path.Combine(dir.Path, "Linked"))));
+        Assert.False(InviteChoices.IsLink(new DirectoryInfo(Path.Combine(dir.Path, "Photos"))));
+        Assert.Equal([("Photos", 700L)], InviteChoices.LocalFolders(dir.Path));
+    }
+
+
+    [Fact]
     public void AFriendsNestSaysWhoseItIsAndWhatIsHeldBack()
     {
         var access = NestAccess.Read("view", ["Photos", "School"], "Oskar Nilsson", "Home nest");
