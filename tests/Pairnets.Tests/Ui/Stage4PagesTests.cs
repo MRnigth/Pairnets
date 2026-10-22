@@ -313,6 +313,34 @@ public class Stage4PagesTests
     }
 
     [AvaloniaFact]
+    public void TheJoinRequestShowsWithoutCards_AndADisconnectClearsTheCardsAndSaysLoading()
+    {
+        var window = Open(new SampleActions());
+        window.ShowStatus(SixComputers(join: false), "/home/me/Work", "DESKTOP");
+        window.Navigate(MainPage.Devices);
+        Layout(window);
+        Assert.Equal(6, window.DeviceRows);
+
+        // The nest went away (or another nest was picked): its old cards go and "Loading…" is back.
+        window.ShowStatus(SixComputers(join: false) with { Devices = null }, "/home/me/Work", "DESKTOP");
+        Layout(window);
+        Assert.Equal(0, window.DeviceRows);
+        Assert.False(window.DevicesShown);
+        Assert.Equal("Loading the computers that use your nest…", window.DevicesEmptyValue);
+
+        // An old nest lists no computers, but someone asking to join can still be reviewed here.
+        window.ShowStatus(SixComputers(join: true) with { Devices = null, DevicesUnsupported = true }, "/home/me/Work", "DESKTOP");
+        Layout(window);
+        Assert.True(window.JoinChipShown);
+        Assert.Equal("Update your nest to see the computers that use it.", window.DevicesEmptyValue);
+        window.ShowStatus(SixComputers(join: true) with { Devices = [] }, "/home/me/Work", "DESKTOP");
+        Layout(window);
+        Assert.True(window.JoinChipShown);
+        Assert.Equal("No computers have used this nest yet.", window.DevicesEmptyValue);
+        Close(window);
+    }
+
+    [AvaloniaFact]
     public void TheComputerCardKeepsTheIconSlotAndHidesThePencilOnAnOldNest()
     {
         var window = Open(new SampleActions());

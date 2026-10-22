@@ -843,7 +843,8 @@
               </Border>
 
               <!-- Computers -->
-              <StackPanel x:Name="DevicesPanel" Spacing="10" IsVisible="False">
+              <!-- The heading (and the join request) shows also while no cards do: loading, an old nest, no computers yet. -->
+              <StackPanel Spacing="10">
                 <Grid ColumnDefinitions="Auto,*,Auto" Height="32" Margin="4,0,0,0">
                   <TextBlock Classes="ctitle" Text="Computers" VerticalAlignment="Center" />
                   <TextBlock x:Name="DevicesSummaryText" Grid.Column="1" Classes="t3" VerticalAlignment="Center" Margin="12,0" />
@@ -857,6 +858,7 @@
                     </StackPanel>
                   </Button>
                 </Grid>
+                <StackPanel x:Name="DevicesPanel" IsVisible="False">
                 <ItemsControl x:Name="DevicesList" v:DeviceIconPencil.IconChosen="OnDeviceIconChosen">
                   <ItemsControl.ItemsPanel>
                     <ItemsPanelTemplate>
@@ -869,11 +871,12 @@
                     </DataTemplate>
                   </ItemsControl.ItemTemplate>
                 </ItemsControl>
-              </StackPanel>
-              <StackPanel x:Name="DevicesEmpty" HorizontalAlignment="Center" Spacing="10" Margin="0,24">
-                <v:LineIcon Classes="icon muted" Width="30" Height="30" StrokeThickness="1.6" Data="{StaticResource I.Server}" HorizontalAlignment="Center" />
-                <TextBlock x:Name="DevicesEmptyText" Classes="t2" TextWrapping="Wrap" TextAlignment="Center" MaxWidth="340"
-                           Text="Loading the computers that use your nest…" />
+                </StackPanel>
+                <StackPanel x:Name="DevicesEmpty" HorizontalAlignment="Center" Spacing="10" Margin="0,14">
+                  <v:LineIcon Classes="icon muted" Width="30" Height="30" StrokeThickness="1.6" Data="{StaticResource I.Server}" HorizontalAlignment="Center" />
+                  <TextBlock x:Name="DevicesEmptyText" Classes="t2" TextWrapping="Wrap" TextAlignment="Center" MaxWidth="340"
+                             Text="Loading the computers that use your nest…" />
+                </StackPanel>
               </StackPanel>
 
               <!-- People: the friends the nest is shared with, and those waiting to be let in (the owner's computers, nests

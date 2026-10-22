@@ -549,23 +549,25 @@ public partial class MainWindow : Window
         NestOnlineDot.Fill = Visuals.Resource<IBrush>(nest.Online ? "T.Ok" : "T.Bad");
         NestOnlineText.Foreground = Visuals.Resource<IBrush>(nest.Online ? "T.OkText" : "T.BadText");
 
-        DrawPeople(PeopleSection.From(s));
+        // Every snapshot, as in the Windows app: the join request shows with or without cards, a disconnect or another
+        // nest clears the old cards and says "Loading…" again.
+        var join = DevicesSummary.JoinText(s);
+        JoinChip.IsVisible = join is not null;
+        JoinChipText.Text = join ?? string.Empty;
         if (s.DevicesUnsupported)
             DevicesEmptyText.Text = "Update your nest to see the computers that use it.";
-        if (s.Devices is not null)
-        {
-            var cards = DeviceCard.From(s, ThisDevice, DateTimeOffset.UtcNow);
-            var count = _devices.Count;
-            SyncCards(cards);
-            DevicesSummaryText.Text = DevicesSummary.Line(cards);
-            var join = DevicesSummary.JoinText(s);
-            JoinChip.IsVisible = join is not null;
-            JoinChipText.Text = join ?? string.Empty;
-            if (s.Devices.Count == 0 && !s.DevicesUnsupported)
-                DevicesEmptyText.Text = "No computers have used this nest yet.";
-            if (count != _devices.Count)
-                UpdatePanels();
-        }
+        else if (s.Devices is null)
+            DevicesEmptyText.Text = "Loading the computers that use your nest…";
+        else if (s.Devices.Count == 0)
+            DevicesEmptyText.Text = "No computers have used this nest yet.";
+
+        DrawPeople(PeopleSection.From(s));
+        var cards = DeviceCard.From(s, ThisDevice, DateTimeOffset.UtcNow);
+        var count = _devices.Count;
+        SyncCards(cards);
+        DevicesSummaryText.Text = DevicesSummary.Line(cards);
+        if (count != _devices.Count)
+            UpdatePanels();
     }
 
     /// <summary>Brings the cards to the new list: the same computers stay in place (live speeds change every second).</summary>
@@ -1064,7 +1066,8 @@ public partial class MainWindow : Window
     internal bool CalloutVisible => Overview.NeedsVisible;
     internal int DeviceRows => _devices.Count;
     internal bool DevicesShown => DevicesPanel.IsVisible && DevicesPage.IsVisible;
-    internal bool JoinChipShown => JoinChip.IsVisible;
+    internal bool JoinChipShown => JoinChip.IsEffectivelyVisible;
+    internal string DevicesEmptyValue => DevicesEmpty.IsEffectivelyVisible ? DevicesEmptyText.Text ?? string.Empty : string.Empty;
     internal string JoinChipValue => JoinChipText.Text ?? string.Empty;
     internal string DevicesSummaryValue => DevicesSummaryText.Text ?? string.Empty;
     internal int AttentionCards => _attention.Count;
