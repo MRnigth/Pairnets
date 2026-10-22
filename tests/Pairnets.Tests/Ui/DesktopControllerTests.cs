@@ -78,6 +78,22 @@ public sealed class DesktopControllerTests
     }
 
     [AvaloniaFact]
+    public async Task ShowInFolder_ShowsTheFile_OrOpensTheSyncedFolderWhenTheFileIsGone()
+    {
+        await using var app = await AppUnderTest.StartAsync();
+        var here = Path.Combine(app.Folder, "here.txt");
+        File.WriteAllText(here, "x");
+
+        app.App.RevealFile("here.txt");
+        Assert.Equal(here, Path.GetFullPath(Assert.Single(app.Platform.Revealed)));
+
+        // Deleted, moved or a conflict copy cleared up: xdg-open and open do nothing on a missing path.
+        app.App.RevealFile("gone/away.txt");
+        Assert.Single(app.Platform.Revealed);
+        Assert.Equal(Path.GetFullPath(app.Folder), Path.GetFullPath(Assert.Single(app.Platform.Opened)));
+    }
+
+    [AvaloniaFact]
     public async Task FirstRun_ClickingTheIconAgain_BringsTheSignInForwardInsteadOfOpeningAnother()
     {
         await using var app = await AppUnderTest.StartAsync(signedIn: false);

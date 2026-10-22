@@ -1022,7 +1022,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
         {
             items.Add(n.Kind == AttentionKind.Shared
                 ? new AttentionItem(n.Title, n.Detail, n.ActionLabel, AddNest, n.Kind, SecondLabel: LinkNotice.NotNowLabel, Second: () => NotNow(n.NestId!))
-                : new AttentionItem(n.Title, n.Detail, n.ActionLabel, () => _platform.Reveal(LocalPath(n.Folder!)), n.Kind));
+                : new AttentionItem(n.Title, n.Detail, n.ActionLabel, () => RevealFile(n.Folder!), n.Kind));
         }
         foreach (var join in status.JoinRequests)
         {
@@ -1036,11 +1036,11 @@ public sealed class DesktopController : ITrayActions, IDisposable
         if (status.FixLabel is not null)
             items.Add(new AttentionItem("Syncing is paused until you decide", status.Text, status.FixLabel, FixBlocked));
         foreach (var w in _session.Warnings())
-            items.Add(new AttentionItem(w.Path, w.Message ?? w.Code, "Show in folder", () => _platform.Reveal(LocalPath(w.Path)), w.Code == ErrorCodes.CaseCollision ? AttentionKind.NameClash : AttentionKind.Warning));
+            items.Add(new AttentionItem(w.Path, w.Message ?? w.Code, "Show in folder", () => RevealFile(w.Path), w.Code == ErrorCodes.CaseCollision ? AttentionKind.NameClash : AttentionKind.Warning));
         foreach (var c in _session.ConflictCopies.Items.Where(i => i.Path is not null))
         {
             if (File.Exists(LocalPath(c.Path!)))
-                items.Add(new AttentionItem("Conflict copy: " + PathRules.FileName(c.Path!), "Both computers changed this file. Compare the two, keep what you want, delete the other.", "Show in folder", () => _platform.Reveal(LocalPath(c.Path!)), AttentionKind.Conflict, null, c.Time));
+                items.Add(new AttentionItem("Conflict copy: " + PathRules.FileName(c.Path!), "Both computers changed this file. Compare the two, keep what you want, delete the other.", "Show in folder", () => RevealFile(c.Path!), AttentionKind.Conflict, null, c.Time));
         }
         return items;
     }
@@ -1141,7 +1141,25 @@ public sealed class DesktopController : ITrayActions, IDisposable
     public Task<bool> SetDeviceIcon(string id, string icon) =>
         _session is { } session ? session.SetDeviceIconAsync(id, icon) : Task.FromResult(false);
 
-    public void RevealFile(string syncPath) => _platform.Reveal(LocalPath(syncPath));
+    /// <summary>
+    /// Shows the file in the file manager; a file that is gone (deleted, moved, a conflict copy cleared up) opens the
+    /// synced folder instead, as xdg-open and open do nothing on a missing path.
+    /// </summary>
+    public void RevealFile(string syncPath)
+    {
+        var full = LocalPath(syncPath);
+        try
+        {
+            if (File.Exists(full))
+                _platform.Reveal(full);
+            else
+                OpenFolder();
+        }
+        catch (System.ComponentModel.Win32Exception ex)
+        {
+            _log.LogWarning("Cannot open the file manager: {Error}", ex.Message);
+        }
+    }
 
     /// <summary>"Sync now": the picked nest; on "All nests" (or from the tray with several nests) every nest.</summary>
     public void SyncNow()
