@@ -23,10 +23,12 @@ public partial class ServerUpdateWindow : Window
     /// <param name="session">The current session, looked up on every click: saving Settings replaces it.</param>
     /// <param name="debug">Whether Debug mode is on, also looked up on every click.</param>
     /// <param name="nestName">How the nest is called on the cards (default: the address of the session's nest).</param>
-    public ServerUpdateWindow(Func<ClientSession?>? session, string serverVersion, string? appVersion = null, Func<bool>? debug = null, string? nestName = null)
+    /// <param name="alwaysUpdate">The nest's "Update the nest by itself" setting, which the switch shows and can change.</param>
+    public ServerUpdateWindow(Func<ClientSession?>? session, string serverVersion, string? appVersion = null, Func<bool>? debug = null, string? nestName = null, bool alwaysUpdate = false)
     {
         ThemeManager.Attach(this);
         InitializeComponent();
+        AlwaysBox.IsChecked = alwaysUpdate;
         Icon = AppIcons.WindowIcon;
         _session = session ?? (() => null);
         _debugMode = debug ?? (() => false);
@@ -84,7 +86,7 @@ public partial class ServerUpdateWindow : Window
         return _session()?.Settings.ServerUrl is { } url && Uri.TryCreate(url, UriKind.Absolute, out var uri) ? uri.Host : string.Empty;
     }
 
-    /// <summary>Set when the user ticked "From now on, update the nest by itself".</summary>
+    /// <summary>Whether "From now on, update the nest by itself" is on when the window closes (it starts as the setting).</summary>
     public bool AlwaysUpdate => AlwaysBox.IsChecked == true;
 
     public string ServerVersion { get; }

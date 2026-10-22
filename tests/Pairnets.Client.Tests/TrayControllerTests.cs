@@ -464,6 +464,14 @@ public sealed class TrayControllerTests
         await app.Press(always, "From now on, update the nest by itself");
         await app.Press(always, "Not now");
         await app.WaitUntil(() => app.SavedSettings.AutoUpdateServer, "automatic server updates to be saved");
+
+        // Opened again, the switch shows the setting (as Settings does), and turning it off is kept too.
+        await app.Press(main, "Update nest…");
+        var off = await app.Showing<ServerUpdateWindow>("the server update window");
+        Assert.True(await app.Wpf.Ui(() => off.AlwaysUpdate));
+        await app.Press(off, "From now on, update the nest by itself");
+        await app.Press(off, "Not now");
+        await app.WaitUntil(() => !app.SavedSettings.AutoUpdateServer, "automatic server updates to be turned off");
     }
 
     [Fact]

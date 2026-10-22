@@ -496,6 +496,7 @@ public sealed class DesktopControllerTests
         // "Update the nest" asks the nest (POST /api/update); its updater installs the new version.
         Person.Click(await ServerButton());
         var update = (ServerUpdateWindow)await app.WindowAsync("Update your nest", not: always);
+        Assert.True(update.AlwaysUpdate); // the switch shows the setting, as Settings does
         var updater = app.Nest.Services.GetRequiredService<ServerUpdater>();
         var asks = 0;
         using var stop = new CancellationTokenSource();

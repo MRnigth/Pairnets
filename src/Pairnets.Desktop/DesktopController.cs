@@ -1517,7 +1517,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
 
     private void ShowServerUpdate(NestRun run, string serverVersion, ServerUpdateResult? result)
     {
-        var dialog = new ServerUpdateWindow(() => run.Session, serverVersion, debug: () => _settings.DebugMode); // saving Settings replaces the session
+        var dialog = new ServerUpdateWindow(() => run.Session, serverVersion, debug: () => _settings.DebugMode, alwaysUpdate: run.Settings.AutoUpdateServer); // saving Settings replaces the session
         if (result is not null)
             dialog.ShowResult(result);
         dialog.Closed += (_, _) =>
@@ -1525,9 +1525,11 @@ public sealed class DesktopController : ITrayActions, IDisposable
             var nest = run.Settings;
             if (dialog.Skipped)
                 nest.SkippedServerVersion = dialog.ServerVersion;
-            if (dialog.AlwaysUpdate)
-                nest.AutoUpdateServer = true;
-            if (dialog.Skipped || dialog.AlwaysUpdate)
+            // The switch starts as the setting, so it can turn it on and off again.
+            var switched = dialog.AlwaysUpdate != nest.AutoUpdateServer;
+            if (switched)
+                nest.AutoUpdateServer = dialog.AlwaysUpdate;
+            if (dialog.Skipped || switched)
                 SaveNest(nest);
         };
         dialog.Show();
