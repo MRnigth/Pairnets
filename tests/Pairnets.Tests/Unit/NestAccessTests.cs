@@ -260,6 +260,38 @@ public class NestAccessTests
         Assert.False(InviteChoices.AllTicked(0, 4));
         Assert.Null(InviteChoices.AllTicked(2, 4)); // some: the dash
         Assert.True(InviteChoices.AllTicked(4, 4));
+        Assert.Equal("Only on the nest", InviteChoices.SizeText((long?)null));
+    }
+
+    [Fact]
+    public void InviteAFriendToThisFolderIsOfferedOnTopLevelFoldersOnly()
+    {
+        var now = DateTimeOffset.UtcNow;
+        NestRow Row(string path, bool folder) => new(new NestEntry(path, folder, 0, now, null, FileWhere.Here, FilePlacement.OnThisPc));
+        Assert.True(InviteChoices.CanInviteTo(Row("Photos", folder: true)));
+        Assert.False(InviteChoices.CanInviteTo(Row("Photos/2026", folder: true))); // inside another folder: not yet
+        Assert.False(InviteChoices.CanInviteTo(Row("notes.txt", folder: false)));
+        Assert.False(InviteChoices.CanInviteTo(Row(" Photos", folder: true))); // a name the account service would refuse
+        // The Files page's rows: only when the owner can invite to this nest's folders.
+        Assert.True(NestRow.For(Row("Photos", folder: true).Entry, canInvite: true).Invitable);
+        Assert.False(NestRow.For(Row("Photos", folder: true).Entry, canInvite: false).Invitable);
+        Assert.False(NestRow.For(Row("Photos/2026", folder: true).Entry, canInvite: true, "in Photos").Invitable);
+
+        Assert.Equal("Invite a friend to Photos", InviteChoices.Heading("Home nest", "Photos"));
+        Assert.Equal("Invite a friend to Home nest", InviteChoices.Heading("Home nest", null));
+
+        // The folder it started from is ticked even when it lives only on the nest (no size), in name order.
+        Assert.Equal([("Music", (long?)null), ("Photos", 2000L)], InviteChoices.Offered([("Photos", 2000L)], "Music"));
+        Assert.Equal([("Photos", (long?)2000L)], InviteChoices.Offered([("Photos", 2000L)], "Photos"));
+        Assert.Equal([("Photos", (long?)2000L)], InviteChoices.Offered([("Photos", 2000L)], "a/b"));
+    }
+
+    [Fact]
+    public void OnlyTheOwnerOfANestThatIsNotEncryptedCanInviteToAFolder()
+    {
+        Assert.False(PeopleSection.Hidden.CanInviteToFolder);
+        Assert.True(new PeopleSection(true, "Only you so far", [], NestId, Sealed: false).CanInviteToFolder);
+        Assert.False(new PeopleSection(true, "Only you so far", [], NestId, Sealed: true).CanInviteToFolder);
     }
 
     [Fact]

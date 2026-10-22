@@ -183,13 +183,19 @@ function day(sec: number): string {
   return new Date(sec * 1000).toLocaleDateString("en-GB", { day: "numeric", month: "long", timeZone: "UTC" });
 }
 
-/** The invite form under a nest's People: drawn hidden, or open and filled in when the apps handed over to it. */
+/**
+ * The invite form under a nest's People: drawn hidden, or open and filled in when the apps handed over to it. The
+ * folders the app sent are tick boxes (ticked); "Add another folder" takes one more name for the odd case. Started from
+ * one folder ("Invite a friend to this folder…" in the apps), the heading names that folder.
+ */
 function inviteForm(n: ServerView, open: { folders: string[] | null; access: "view" | "edit" } | null): string {
   const id = e(n.id);
   const chosen = !!open?.folders;
   const edit = open?.access === "edit";
+  const sent = open?.folders ?? [];
+  const ticks = sent.map((f) => `<label class="choice"><input type="checkbox" name="folder-pick" value="${e(f)}" checked> ${e(f)}</label>`).join("\n");
   return `<form class="invite-form" data-field="invite-form"${open ? " data-open" : " hidden"}>
-<h3>Invite a friend to ${e(n.label)}</h3>
+<h3>Invite a friend to ${e(sent.length === 1 ? sent[0]! : n.label)}</h3>
 <p class="muted">They sign in with their own Pairnets account. You can change or take back access any time.</p>
 <fieldset><legend>Who are you inviting?</legend>
 <label class="choice"><input type="radio" name="kind-${id}" value="person" checked> <span><strong>A person</strong> <span class="muted">They add your nest on the computers they choose.</span></span></label>
@@ -198,8 +204,9 @@ function inviteForm(n: ServerView, open: { folders: string[] | null; access: "vi
 <fieldset><legend>What they get</legend>
 <label class="choice"><input type="radio" name="what-${id}" value="whole"${chosen ? "" : " checked"}> The whole nest</label>
 <label class="choice"><input type="radio" name="what-${id}" value="folders" data-field="chosen"${chosen ? " checked" : ""}> Chosen folders</label>
-<label for="folders-${id}">Folder names, one per line (top-level folders of the nest)</label>
-<textarea id="folders-${id}" name="folders" rows="3" maxlength="6000" autocomplete="off" placeholder="Photos&#10;School">${e(open?.folders ? open.folders.join("\n") : "")}</textarea>
+<div class="folder-ticks" data-field="folder-ticks">${ticks}</div>
+<label for="folder-add-${id}">${sent.length ? "Add another folder" : "Add a folder"} (a top-level folder of the nest)</label>
+<div class="input-row"><input id="folder-add-${id}" name="folder-add" maxlength="255" autocomplete="off" placeholder="School"><button type="button" data-action="invite-add-folder">Add</button></div>
 <p class="muted" data-field="sealed-note" hidden>An encrypted nest can only be shared whole.</p>
 </fieldset>
 <fieldset><legend>What they can do</legend>

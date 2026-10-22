@@ -3,6 +3,7 @@ using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Pairnets.Core.Client;
+using Pairnets.Core.Sync;
 
 namespace Pairnets.Desktop.Views;
 
@@ -18,6 +19,7 @@ public partial class InviteWindow : Window
     private readonly string? _folder;
     private readonly Action<string> _open;
     private readonly Uri? _service;
+    private readonly string? _startFolder;
 
     public InviteWindow()
         : this("Your nest", "nst_00000000000000000000000000", null, false, _ => { })
@@ -30,19 +32,25 @@ public partial class InviteWindow : Window
     /// <param name="sealedNest">An encrypted nest: it can only be shared whole.</param>
     /// <param name="open">Opens a link in the browser.</param>
     /// <param name="service">The Pairnets service (tests use a stand-in).</param>
-    public InviteWindow(string nestTitle, string nestId, string? folder, bool sealedNest, Action<string> open, Uri? service = null)
+    /// <param name="startFolder">"Invite a friend to this folder…" on the Files page: this top-level folder comes ticked under "Chosen folders".</param>
+    public InviteWindow(string nestTitle, string nestId, string? folder, bool sealedNest, Action<string> open, Uri? service = null, string? startFolder = null)
     {
         InitializeComponent();
         _nestId = nestId;
         _folder = folder;
         _open = open;
         _service = service;
-        Heading.Text = "Invite a friend to " + nestTitle;
+        _startFolder = sealedNest || !NestAccess.IsFolderName(startFolder) ? null : startFolder;
+        Heading.Text = InviteChoices.Heading(nestTitle, _startFolder);
+        if (_startFolder is not null)
+            Title = Heading.Text; // "Invite a friend to Photos" in the taskbar too
         if (sealedNest)
         {
             FoldersChoice.IsEnabled = false;
             SealedNote.IsVisible = true;
         }
+        else if (_startFolder is not null)
+            FoldersChoice.IsChecked = true;
         Opened += async (_, _) => await LoadFoldersAsync();
     }
 
@@ -60,12 +68,12 @@ public partial class InviteWindow : Window
     internal async Task LoadFoldersAsync()
     {
         var folder = _folder;
-        var found = await Task.Run(() => InviteChoices.LocalFolders(folder));
-        _sizes = found.ToDictionary(f => f.Name, f => f.Bytes, StringComparer.Ordinal);
+        var found = InviteChoices.Offered(await Task.Run(() => InviteChoices.LocalFolders(folder)), _startFolder);
+        _sizes = found.ToDictionary(f => f.Name, f => f.Bytes ?? 0, StringComparer.Ordinal);
         FolderList.Children.Clear();
         foreach (var (name, bytes) in found)
         {
-            var box = new CheckBox { Tag = name, Classes = { "folderrow" }, Content = Row(name, InviteChoices.SizeText(bytes)) };
+            var box = new CheckBox { Tag = name, Classes = { "folderrow" }, Content = Row(name, InviteChoices.SizeText(bytes)), IsChecked = name == _startFolder };
             box.IsCheckedChanged += OnFolderTicked;
             Avalonia.Automation.AutomationProperties.SetName(box, name);
             FolderList.Children.Add(box);
@@ -73,7 +81,7 @@ public partial class InviteWindow : Window
         FolderNote.Text = found.Count == 0
             ? "There are no folders here yet. Share the whole nest, or make a folder first."
             : "Everything inside a folder comes with it.";
-        AllSize.Text = InviteChoices.SizeText(found.Sum(f => f.Bytes));
+        AllSize.Text = InviteChoices.SizeText(found.Sum(f => f.Bytes ?? 0));
         AllFolders.IsVisible = AllLine.IsVisible = found.Count > 1;
         ShowChosen();
         FoldersLoaded = true;

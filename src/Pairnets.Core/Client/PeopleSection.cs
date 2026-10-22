@@ -49,6 +49,9 @@ public sealed record PeopleSection(bool Visible, string Summary, IReadOnlyList<P
     /// <summary>The account page at this nest's People.</summary>
     public string? PeopleUrl => NestId is null ? null : Relay.PeopleUrl(NestId);
 
+    /// <summary>"Invite a friend to this folder…" shows on the Files page: the owner can invite, and not to an encrypted nest (it is shared whole).</summary>
+    public bool CanInviteToFolder => Visible && NestId is not null && !Sealed;
+
     public static PeopleSection From(StatusSnapshot s)
     {
         if (!s.IsRelay || !s.Access.IsOwner || Relay.NestId(s.ServerUrl) is not { } nestId)
@@ -121,6 +124,30 @@ public static class InviteChoices
     /// <summary>At most this many folders in one invite (the nest takes 20).</summary>
     public const int MaxFolders = 20;
 
+    /// <summary>
+    /// Whether a Files page row gets "Invite a friend to this folder…": a folder at the top of the nest whose name a share
+    /// can name (<see cref="NestAccess.IsFolderName"/>). A folder inside another one can't be shared alone yet.
+    /// </summary>
+    public static bool CanInviteTo(NestRow row) => row.IsFolder && NestAccess.IsFolderName(row.Entry.Path);
+
+    /// <summary>The invite window's heading and title: "Invite a friend to Photos" when it starts from a folder, else "… to Home nest".</summary>
+    public static string Heading(string nestTitle, string? folder) => "Invite a friend to " + (string.IsNullOrEmpty(folder) ? nestTitle : folder);
+
+    /// <summary>
+    /// The folders the invite window ticks boxes for: this computer's top-level folders, and the folder the window started
+    /// from when it isn't here (it lives only on the nest), with no size.
+    /// </summary>
+    public static IReadOnlyList<(string Name, long? Bytes)> Offered(IReadOnlyList<(string Name, long Bytes)> local, string? startFolder)
+    {
+        var list = local.Select(f => (f.Name, (long?)f.Bytes)).ToList();
+        if (NestAccess.IsFolderName(startFolder) && !list.Any(f => string.Equals(f.Name, startFolder, StringComparison.Ordinal)))
+        {
+            list.Add((startFolder!, null));
+            list.Sort((a, b) => StringComparer.OrdinalIgnoreCase.Compare(a.Name, b.Name));
+        }
+        return list;
+    }
+
     /// <summary>The top-level folders of the nest's folder on this computer, with their sizes, by name (Pairnets's own left out).</summary>
     public static IReadOnlyList<(string Name, long Bytes)> LocalFolders(string? folder, CancellationToken ct = default)
     {
@@ -183,6 +210,9 @@ public static class InviteChoices
     /// <summary>Why the choices can't go on yet ("Choose at least one folder."), or null.</summary>
     /// <summary>A folder's size in the list: "2.24 GB", or "Empty" (never "0 B").</summary>
     public static string SizeText(long bytes) => bytes <= 0 ? "Empty" : Format.Bytes(bytes);
+
+    /// <summary>A folder in the list: its size, or "Only on the nest" for the folder the window started from when it isn't on this computer.</summary>
+    public static string SizeText(long? bytes) => bytes is { } b ? SizeText(b) : "Only on the nest";
 
     /// <summary>The line over the folder list: "None chosen yet", "2 of 4 chosen · 2.59 GB" ("2 of 4 chosen" when they are empty).</summary>
     public static string ChosenSummary(int chosen, int total, long bytes) =>

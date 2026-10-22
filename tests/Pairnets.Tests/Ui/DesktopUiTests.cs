@@ -101,6 +101,10 @@ public sealed class SampleActions : ITrayActions
 
     public void InviteFriend() => Calls.Add("invite-friend");
 
+    public bool CanInviteToFolder { get; set; } = true;
+
+    public void InviteFriendTo(string folder) => Calls.Add("invite-to:" + folder);
+
     public void OpenPeople() => Calls.Add("people");
 
     public Dictionary<NoticeKind, bool> Notify { get; } = [];

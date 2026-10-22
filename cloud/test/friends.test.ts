@@ -972,8 +972,15 @@ describe("friend invites: the account page", () => {
     const page = (await b.call("GET", path)).text;
     expect(page).toContain('<form class="invite-form" data-field="invite-form" data-open>');
     expect(page).toContain(`<input type="radio" name="what-${nest.nestId}" value="folders" data-field="chosen" checked> Chosen folders`);
-    // One folder per line: the comma stays part of "Photos, 2026".
-    expect(page).toContain('placeholder="Photos&#10;School">Photos, 2026\nSchool</textarea>');
+    // Each folder the app sent is a ticked box: the comma stays part of "Photos, 2026". Two folders: the nest's name on top.
+    expect(page).toContain('<label class="choice"><input type="checkbox" name="folder-pick" value="Photos, 2026" checked> Photos, 2026</label>');
+    expect(page).toContain('<label class="choice"><input type="checkbox" name="folder-pick" value="School" checked> School</label>');
+    expect(page).toContain(`<label for="folder-add-${nest.nestId}">Add another folder (a top-level folder of the nest)</label>`);
+    expect(page).toContain(
+      `<input id="folder-add-${nest.nestId}" name="folder-add" maxlength="255" autocomplete="off" placeholder="School"><button type="button" data-action="invite-add-folder">Add</button>`,
+    );
+    expect(page).toContain("<h3>Invite a friend to Home nest</h3>");
+    expect(page).not.toContain("<textarea");
     expect(page).toContain(`<input type="radio" name="access-${nest.nestId}" value="edit" checked>`);
     // Only that nest's form.
     expect(page.match(/data-field="invite-form" data-open>/g)).toHaveLength(1);
@@ -981,7 +988,8 @@ describe("friend invites: the account page", () => {
     // Folders it would refuse: still "Chosen folders", with nothing typed; never the whole nest, which is more.
     const refused = (await b.call("GET", `/account?invite=${nest.nestId}&folders=a/b`)).text;
     expect(refused).toContain(`<input type="radio" name="what-${nest.nestId}" value="folders" data-field="chosen" checked> Chosen folders`);
-    expect(refused).toContain(`placeholder="Photos&#10;School"></textarea>`);
+    expect(refused).toContain('<div class="folder-ticks" data-field="folder-ticks"></div>');
+    expect(refused).toContain(`<label for="folder-add-${nest.nestId}">Add a folder (a top-level folder of the nest)</label>`);
     // The whole nest and view only when nothing is said.
     const plain = (await b.call("GET", `/account?invite=${nest.nestId}`)).text;
     expect(plain).toContain(`<input type="radio" name="what-${nest.nestId}" value="whole" checked>`);
@@ -1002,7 +1010,7 @@ describe("friend invites: the account page", () => {
     // and nothing typed, never lost and never the whole nest.
     const long = Array.from({ length: 20 }, (_, i) => `Folder ${i} ${"ø".repeat(200)}`);
     const longPath = `/account?invite=${nest.nestId}${long.map((f) => `&folders=${encodeURIComponent(f)}`).join("")}&access=view`;
-    expect((await b.call("GET", longPath)).text).toContain(`${long[19]}</textarea>`); // signed in: all of them
+    expect((await b.call("GET", longPath)).text).toContain(`value="${long[19]}" checked> ${long[19]}</label>`); // signed in: all of them
     const longOut = await h.browser("203.0.113.85").call("GET", longPath);
     const back = decodeURIComponent(longOut.location!.slice("/login?next=".length));
     expect(back).toBe(`/account?invite=${nest.nestId}&folders=.&access=view`);
@@ -1011,7 +1019,36 @@ describe("friend invites: the account page", () => {
     await signedIn.signInByEmail(OWNER);
     const form = (await signedIn.call("GET", back)).text;
     expect(form).toContain(`<input type="radio" name="what-${nest.nestId}" value="folders" data-field="chosen" checked> Chosen folders`);
-    expect(form).toContain(`placeholder="Photos&#10;School"></textarea>`);
+    expect(form).toContain('<div class="folder-ticks" data-field="folder-ticks"></div>');
+  });
+
+  it('started from one folder ("Invite a friend to this folder…" in the apps): the heading names it, its box is ticked', async () => {
+    const { b, nest } = await setup();
+    const page = (await b.call("GET", `/account?invite=${nest.nestId}&folders=Photos&access=view`)).text;
+    expect(page).toContain('<form class="invite-form" data-field="invite-form" data-open>\n<h3>Invite a friend to Photos</h3>');
+    expect(page).toContain(`<input type="radio" name="what-${nest.nestId}" value="folders" data-field="chosen" checked> Chosen folders`);
+    expect(page).toContain(
+      '<div class="folder-ticks" data-field="folder-ticks"><label class="choice"><input type="checkbox" name="folder-pick" value="Photos" checked> Photos</label></div>',
+    );
+    expect(page).toContain("Add another folder (a top-level folder of the nest)");
+    expect(page).toContain(`<input type="radio" name="access-${nest.nestId}" value="view" checked>`);
+    // A folder name is shown as text, never as markup.
+    const odd = (await b.call("GET", `/account?invite=${nest.nestId}&folders=${encodeURIComponent('Tom & "Jerry" <3')}`)).text;
+    expect(odd).toContain("<h3>Invite a friend to Tom &amp; &quot;Jerry&quot; &lt;3</h3>");
+    expect(odd).toContain('value="Tom &amp; &quot;Jerry&quot; &lt;3" checked>');
+    expect(odd).not.toContain('"Jerry" <3');
+
+    // The page's script ticks, adds and sends the boxes: the ticked boxes plus what is typed, each name once.
+    const script = (await b.call("GET", "/assets/account.js")).text;
+    for (const piece of ['"invite-add-folder"', "input[name=folder-pick]:checked", "[name=folder-add]", "[data-field=folder-ticks]", "Tick or type at least one folder"]) {
+      expect(script, piece).toContain(piece);
+    }
+    expect(script).not.toContain("innerHTML");
+
+    // What the form sends is what an invite takes: one folder, view only.
+    const made = await invite(b, nest, { access: "view", folders: ["Photos"] });
+    expect(made.status, made.text).toBe(201);
+    expect((await b.call("GET", "/account")).text).toContain("Photos · view only");
   });
 });
 

@@ -474,6 +474,7 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
         [
             new("the invite window (the whole nest, view only)", s => InviteStage(s, chooseFolders: false)),
             new("the invite window (chosen folders)", s => InviteStage(s, chooseFolders: true)),
+            new("the invite window (started from the Photos folder)", s => InviteStage(s, chooseFolders: false, startFolder: "Photos")),
         ],
         ["questions"] =
         [
@@ -646,6 +647,8 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
         s.Expect["OnRowMove"] = That(() => Asked(s, "Move "), "the folder to move it to be asked for");
         s.Expect["OnRowDelete"] = That(() => Asked(s, "Pairnets – delete"), "the question before deleting show");
         s.Expect[":Where this folder lives"] = That(() => true, "its three choices show");
+        s.Expect["OnRowInvite"] = That(() => s.Actions.Calls.Any(c => c.StartsWith("invite-to:", StringComparison.Ordinal) && !c.Contains('/')),
+            "the invite window open with that top-level folder ticked");
         s.Expect["OnRowPlace:On this PC"] = That(() => nest.Calls.All(c => c.StartsWith("place:", StringComparison.Ordinal) && c.EndsWith(":OnThisPc", StringComparison.Ordinal)),
             "the folder come back to this computer (nothing to ask)");
         s.Expect["OnRowPlace:On-Demand"] = That(() => Asked(s, "Make ") || nest.Calls.Count == 0, "the question before files leave this computer show");
@@ -938,14 +941,27 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
     };
 
     /// <summary>"Invite a friend…" for a nest whose folder holds Photos and School.</summary>
-    private async Task InviteStage(Stage s, bool chooseFolders)
+    private async Task InviteStage(Stage s, bool chooseFolders, string? startFolder = null)
     {
         var folder = Path.Combine(fixture.Reports, "invite-" + Guid.NewGuid().ToString("N")[..6]);
         Directory.CreateDirectory(Path.Combine(folder, "Photos"));
         File.WriteAllText(Path.Combine(folder, "Photos", "trip.jpg"), "photo");
         Directory.CreateDirectory(Path.Combine(folder, "School"));
-        var window = s.Show(new InviteWindow("Home nest", FriendsNest, folder, sealedNest: false, s.Opened.Add));
+        var window = s.Show(new InviteWindow("Home nest", FriendsNest, folder, sealedNest: false, s.Opened.Add, startFolder: startFolder));
         await Wait.Until(() => window.FoldersLoaded, "this computer's folders to show");
+        if (startFolder is not null)
+        {
+            // "Invite a friend to this folder…" on the Files page: that folder comes ticked, and Continue shares just it.
+            Assert.Equal("Invite a friend to " + startFolder, window.Title);
+            Assert.True(Screen.Named<RadioButton>(window, "FoldersChoice").IsChecked);
+            Assert.Equal([startFolder], window.ChosenFolders);
+            s.Expect["OnContinue"] = That(() => s.Opened.SequenceEqual([$"https://sync.pairnets.app/account?invite={FriendsNest}&folders={startFolder}&access=view"]) && !window.IsVisible,
+                "the account page's invite form open for that folder, view only");
+            s.Expect["OnScopeChanged:Chosen folders"] = That(() => Screen.Named<Border>(window, "FolderBox").IsVisible, "this computer's folders show to tick");
+            s.Expect["OnScopeChanged:The whole nest"] = That(() => !Screen.Named<Border>(window, "FolderBox").IsVisible, "the folders to tick go away");
+            s.Expect["OnCancel"] = That(() => !window.IsVisible && s.Opened.Count == 0, "the window close without opening anything");
+            return;
+        }
         if (chooseFolders)
             Screen.Named<RadioButton>(window, "FoldersChoice").IsChecked = true;
         Dispatcher.UIThread.RunJobs();

@@ -120,6 +120,14 @@ public interface IMainActions
     {
     }
 
+    /// <summary>Whether "Invite a friend to this folder…" shows on the Files page's top-level folders (see <see cref="PeopleSection.CanInviteToFolder"/>).</summary>
+    bool CanInviteToFolder => false;
+
+    /// <summary>"Invite a friend to this folder…" on the Files page: the invite window with "Chosen folders" picked and that folder ticked.</summary>
+    void InviteFriendTo(string folder)
+    {
+    }
+
     /// <summary>Change…, Remove, Decline or "Let … in" under People: the account page at this nest's People.</summary>
     void OpenPeople()
     {

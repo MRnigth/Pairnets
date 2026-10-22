@@ -803,6 +803,11 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
         new(t => IsRowItem(t, "Move to…"), "move it to the folder chosen", c => NestCalled(c, "move:")),
         new(t => IsRowItem(t, "Delete…"), "ask, then delete it on the nest", c => NestCalled(c, "delete:")),
         new(t => IsRowItem(t, "Where this folder lives"), "show the three choices", c => true),
+        // The presser reaches the item before the menu's bindings hide it on a file: there it does nothing.
+        new(t => IsRowItem(t, "Invite a friend to this folder…"), "open the invite window with that top-level folder ticked (nothing on a file)",
+            c => c.Item is NestRow row && (row.Invitable
+                ? c.Bench.Actions.Calls.Items.SequenceEqual([$"InviteFriendTo({row.Entry.Path})"])
+                : c.Bench.Actions.Calls.Items.Count == 0)),
         new(t => t.Kind == PressKind.MenuItem && t.MenuOwner?.DataContext is NestRow && t.Element is MenuItem { Tag: string }, "ask first, then choose where that folder lives",
             c => Nest(c).PlacementOf(((NestRow)c.Item!).Entry.Path) == PlacementNamed(c.Target.Label)),
         new(t => t.Element.Name == "PlacementButton", "open the choices of where this folder lives", c => ((Button)c.Target.Element).ContextMenu!.IsOpen),
@@ -1284,16 +1289,24 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
     private static IEnumerable<Screen> InviteScreens()
     {
         const string name = "the invite window";
-        static Window Build(Bench b)
+        static Window Build(Bench b) => Make(b, null);
+        static Window Make(Bench b, string? startFolder)
         {
             // A nest folder of its own: the bench's folder also holds the dialogs' "Chosen" folder.
             var nest = Path.Combine(b.Dir, "Nest");
             Directory.CreateDirectory(Path.Combine(nest, "Photos"));
             File.WriteAllText(Path.Combine(nest, "Photos", "trip.jpg"), "photo");
             Directory.CreateDirectory(Path.Combine(nest, "School"));
-            return new InviteWindow("Home nest", FriendsNest, nest, sealedNest: false, b.Opened.Add);
+            return new InviteWindow("Home nest", FriendsNest, nest, sealedNest: false, b.Opened.Add, startFolder: startFolder);
         }
         yield return new Screen(name, "the whole nest, view only", Build, (_, w) => Wpf.WaitUntil(() => ((InviteWindow)w).FoldersLoaded, "the folders"));
+        // "Invite a friend to this folder…" on the Files page: Photos comes ticked under "Chosen folders".
+        yield return new Screen(name, "started from the Photos folder", b => Make(b, "Photos"), async (_, w) =>
+        {
+            await Wpf.WaitUntil(() => ((InviteWindow)w).FoldersLoaded, "the folders");
+            await Wpf.Ui(() => Assert.True(w.Title == "Invite a friend to Photos" && ((InviteWindow)w).FoldersChoice.IsChecked == true
+                && ((InviteWindow)w).ChosenFolders.SequenceEqual(["Photos"]), "Photos should come ticked"));
+        });
         yield return new Screen(name, "chosen folders", Build, async (_, w) =>
         {
             await Wpf.WaitUntil(() => ((InviteWindow)w).FoldersLoaded, "the folders");
@@ -1312,8 +1325,10 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
             c => ((InviteWindow)c.Window).WholeChoice.IsChecked == true && !((InviteWindow)c.Window).FolderBox.IsVisible),
         new(t => t.Element.Name is "ViewChoice" or "EditChoice", "pick what they can do", c => ((RadioButton)c.Target.Element).IsChecked == true),
         On("Cancel", "close the window without opening anything", c => c.Bench.Closed && c.Bench.Opened.Items.Count == 0),
-        On("Continue in your browser", "open the account page's invite form for the whole nest, view only, and close",
-            c => c.Bench.Opened.Items is [var link] && link == $"https://sync.pairnets.app/account?invite={FriendsNest}&access=view" && c.Bench.Closed),
+        On("Continue in your browser", "open the account page's invite form for the whole nest (or the folder it started from), view only, and close",
+            c => c.Bench.Opened.Items is [var link] && c.Bench.Closed
+                && (link == $"https://sync.pairnets.app/account?invite={FriendsNest}&access=view"
+                    || (c.Window.Title == "Invite a friend to Photos" && link == $"https://sync.pairnets.app/account?invite={FriendsNest}&folders=Photos&access=view"))),
     ];
 
     // ------------------------------------------------------------------ the tray menu and icon (the real tray controller)

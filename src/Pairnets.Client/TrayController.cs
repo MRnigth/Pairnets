@@ -548,11 +548,21 @@ public sealed class TrayController : ITrayActions, IDisposable
     private NestRun? InviteRun => new[] { Current }.Concat(_runs).FirstOrDefault(r => r?.Session?.Status is { } s && PeopleSection.From(s).Visible);
 
     /// <summary>"Invite a friend…": the invite window for that nest (<see cref="InviteRun"/>), which hands over to the account page in the browser.</summary>
-    public void InviteFriend()
+    public void InviteFriend() => OpenInvite(null);
+
+    /// <summary>Whether the Files page offers "Invite a friend to this folder…" on its top-level folders.</summary>
+    public bool CanInviteToFolder => _session?.Status is { } status && PeopleSection.From(status).CanInviteToFolder;
+
+    /// <summary>"Invite a friend to this folder…" on the Files page: the invite window with that folder ticked.</summary>
+    public void InviteFriendTo(string folder) => OpenInvite(folder);
+
+    private void OpenInvite(string? startFolder)
     {
         if (InviteRun is not { Session.Status: { } status } run || PeopleSection.From(status) is not { Visible: true, NestId: { } nestId } people)
             return;
-        var window = new InviteWindow(status.NestTitle, nestId, run.Settings.Folder, people.Sealed, Shell) { Owner = _window is { IsVisible: true } ? _window : null };
+        if (startFolder is not null && !ReferenceEquals(run, Current))
+            return; // the folder is one of the nest shown on the Files page
+        var window = new InviteWindow(status.NestTitle, nestId, run.Settings.Folder, people.Sealed, Shell, startFolder: startFolder) { Owner = _window is { IsVisible: true } ? _window : null };
         window.Show();
         window.Activate();
     }

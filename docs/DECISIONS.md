@@ -1639,6 +1639,13 @@ A (a nest joins another nest) and B (invite an account), with the recommended an
   shared with the account (`/api/links`, `/api/offers`) are for the owner's computers only.
 * **The Files page and storage for friends.** Moving is a write (both ends must be in the share), and deleting for
   good and "Where your files live" (`/api/purge`, `/api/storage`) are the owner's only.
+* **"Invite a friend to this folder…" (step A).** It is on the "…" menu of a top-level folder on the Files page, in
+  both apps, for the owner of a nest reached through Pairnets that is not encrypted (an encrypted nest is shared whole).
+  It opens the usual invite window with "Chosen folders" picked and that folder ticked; a folder that lives only on the
+  nest is still offered, with no size. The account page's invite form shows the folders the app sent as tick boxes
+  (ticked) instead of a text box, plus "Add another folder" for the odd one; its heading names the folder when exactly
+  one was sent. A folder inside another one can't be shared alone yet (step B), and access is still one level per
+  person (step C); neither needed a change on the nest or in D1.
 
 ## "Send bug report": Report a bug can go to Pairnets too (2026-10-22)
 

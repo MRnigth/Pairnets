@@ -21,6 +21,16 @@ public sealed record NestRow(NestEntry Entry, string Detail = "")
 
     public bool HasDetail => Detail.Length > 0;
 
+    /// <summary>Its "…" menu has "Invite a friend to this folder…" (<see cref="InviteChoices.CanInviteTo"/>, and the owner can invite).</summary>
+    public bool Invitable { get; init; }
+
+    /// <summary>The row for <paramref name="entry"/>; <paramref name="canInvite"/>: the owner can invite friends to this nest's folders.</summary>
+    public static NestRow For(NestEntry entry, bool canInvite, string detail = "")
+    {
+        var row = new NestRow(entry, detail);
+        return canInvite && InviteChoices.CanInviteTo(row) ? row with { Invitable = true } : row;
+    }
+
     /// <summary>What the Where column draws: a folder its choice, a file where it is.</summary>
     public FilePlacement Shows => Entry.IsFolder ? Entry.Placement : Entry.Where switch
     {

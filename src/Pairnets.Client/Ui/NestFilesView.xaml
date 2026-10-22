@@ -154,6 +154,7 @@
                       <MenuItem Header="Move to…" Click="OnRowMove" />
                       <MenuItem Header="Delete…" Click="OnRowDelete" />
                       <Separator Visibility="{Binding IsFolder, Converter={StaticResource Visible}}" />
+                      <MenuItem Header="Invite a friend to this folder…" Tag="Invite" Click="OnRowInvite" Visibility="{Binding Invitable, Converter={StaticResource Visible}}" />
                       <MenuItem Header="Where this folder lives" Visibility="{Binding IsFolder, Converter={StaticResource Visible}}">
                         <MenuItem Header="On this PC" Tag="ThisPc" Click="OnRowPlace" />
                         <MenuItem Header="On-Demand" Tag="Demand" Click="OnRowPlace" />

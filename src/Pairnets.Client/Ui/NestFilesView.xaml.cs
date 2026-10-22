@@ -169,15 +169,16 @@ public partial class NestFilesView : UserControl
             return;
         }
         var search = FilesSearch.Text.Trim();
+        var canInvite = Host?.Actions is { CanInviteToFolder: true };
         if (search.Length > 0)
         {
             foreach (var entry in files.Search(search))
-                _rows.Add(new NestRow(entry, "in " + (PathRules.Parent(entry.Path) ?? FilesPageText.Top)));
+                _rows.Add(NestRow.For(entry, canInvite, "in " + (PathRules.Parent(entry.Path) ?? FilesPageText.Top)));
         }
         else
         {
             foreach (var entry in files.List(_folder))
-                _rows.Add(new NestRow(entry));
+                _rows.Add(NestRow.For(entry, canInvite));
         }
         ShowEmpty(_rows.Count > 0 ? null : search.Length > 0 ? FilesPageText.NoMatch : FilesPageText.Empty);
         var placement = files.PlacementOf(_folder);
@@ -307,11 +308,27 @@ public partial class NestFilesView : UserControl
 
     private void OnRowMore(object sender, RoutedEventArgs e)
     {
-        if (sender is Button { ContextMenu: { } menu } button)
+        if (sender is Button { ContextMenu: { } menu, DataContext: NestRow row } button)
         {
+            // "Invite a friend to this folder…" only on a top-level folder of a nest the owner can share folders of.
+            foreach (var item in menu.Items.OfType<MenuItem>().Where(i => i.Tag is "Invite"))
+                item.Visibility = Host?.Actions is { CanInviteToFolder: true } && InviteChoices.CanInviteTo(row) ? Visibility.Visible : Visibility.Collapsed;
             menu.PlacementTarget = button;
             menu.IsOpen = true;
         }
+    }
+
+    private void OnRowInvite(object sender, RoutedEventArgs e)
+    {
+        if (RowOf(sender) is { } row)
+            InviteTo(row);
+    }
+
+    /// <summary>"Invite a friend to this folder…": the invite window with this folder ticked.</summary>
+    public void InviteTo(NestRow row)
+    {
+        if (InviteChoices.CanInviteTo(row))
+            Host?.Actions?.InviteFriendTo(row.Entry.Path);
     }
 
     private static NestRow? RowOf(object sender) => (sender as FrameworkElement)?.DataContext as NestRow;

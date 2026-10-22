@@ -92,6 +92,8 @@ public static partial class Program
                     Stage6.Render(outDir, dark ? "dark" : "light", print);
                 else if (args.Contains("--sidebar"))
                     Stage8.Render(outDir, dark ? "dark" : "light", print);
+                else if (args.Contains("--invite-folder"))
+                    InviteFolder.Render(outDir, dark ? "dark" : "light", print);
                 else if (args.Contains("--stage7"))
                     Stage7.Render(outDir, dark ? "dark" : "light", print);
                 else if (args.Contains("--nest-only"))
@@ -711,7 +713,7 @@ public static partial class Program
     }
 
     /// <summary>Runs the dispatcher (and so the animations) for a moment: pages and rows fade in.</summary>
-    private static void Settle(Window window, int milliseconds = 450)
+    internal static void Settle(Window window, int milliseconds = 450)
     {
         var frame = new System.Windows.Threading.DispatcherFrame();
         var timer = new System.Windows.Threading.DispatcherTimer(TimeSpan.FromMilliseconds(milliseconds),

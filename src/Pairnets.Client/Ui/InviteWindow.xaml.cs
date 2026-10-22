@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using Pairnets.Client.Themes;
 using Pairnets.Core.Client;
+using Pairnets.Core.Sync;
 
 namespace Pairnets.Client.Ui;
 
@@ -17,6 +18,7 @@ public partial class InviteWindow : Window
     private readonly string? _folder;
     private readonly Action<string> _open;
     private readonly Uri? _service;
+    private readonly string? _startFolder;
 
     /// <param name="nestTitle">"Home nest".</param>
     /// <param name="nestId">The nest's id at Pairnets ("nst_…").</param>
@@ -24,7 +26,8 @@ public partial class InviteWindow : Window
     /// <param name="sealedNest">An encrypted nest: it can only be shared whole.</param>
     /// <param name="open">Opens a link in the browser.</param>
     /// <param name="service">The Pairnets service (tests use a stand-in).</param>
-    public InviteWindow(string nestTitle, string nestId, string? folder, bool sealedNest, Action<string> open, Uri? service = null)
+    /// <param name="startFolder">"Invite a friend to this folder…" on the Files page: this top-level folder comes ticked under "Chosen folders".</param>
+    public InviteWindow(string nestTitle, string nestId, string? folder, bool sealedNest, Action<string> open, Uri? service = null, string? startFolder = null)
     {
         ThemeManager.Attach(this);
         InitializeComponent();
@@ -33,12 +36,17 @@ public partial class InviteWindow : Window
         _folder = folder;
         _open = open;
         _service = service;
-        Heading.Text = "Invite a friend to " + nestTitle;
+        _startFolder = sealedNest || !NestAccess.IsFolderName(startFolder) ? null : startFolder;
+        Heading.Text = InviteChoices.Heading(nestTitle, _startFolder);
+        if (_startFolder is not null)
+            Title = Heading.Text; // "Invite a friend to Photos" in the taskbar too
         if (sealedNest)
         {
             FoldersChoice.IsEnabled = false;
             SealedNote.Visibility = Visibility.Visible;
         }
+        else if (_startFolder is not null)
+            FoldersChoice.IsChecked = true;
         Loaded += async (_, _) => await LoadFoldersAsync();
     }
 
@@ -56,12 +64,12 @@ public partial class InviteWindow : Window
     private async Task LoadFoldersAsync()
     {
         var folder = _folder;
-        var found = await Task.Run(() => InviteChoices.LocalFolders(folder));
-        _sizes = found.ToDictionary(f => f.Name, f => f.Bytes, StringComparer.Ordinal);
+        var found = InviteChoices.Offered(await Task.Run(() => InviteChoices.LocalFolders(folder)), _startFolder);
+        _sizes = found.ToDictionary(f => f.Name, f => f.Bytes ?? 0, StringComparer.Ordinal);
         FolderList.Children.Clear();
         foreach (var (name, bytes) in found)
         {
-            var box = new CheckBox { Tag = name, Style = (Style)FindResource("FolderRow"), Content = Row(name, InviteChoices.SizeText(bytes)) };
+            var box = new CheckBox { Tag = name, Style = (Style)FindResource("FolderRow"), Content = Row(name, InviteChoices.SizeText(bytes)), IsChecked = name == _startFolder };
             box.Checked += (_, _) => ShowChosen();
             box.Unchecked += (_, _) => ShowChosen();
             System.Windows.Automation.AutomationProperties.SetName(box, name);
@@ -70,7 +78,7 @@ public partial class InviteWindow : Window
         FolderNote.Text = found.Count == 0
             ? "There are no folders here yet. Share the whole nest, or make a folder first."
             : "Everything inside a folder comes with it.";
-        AllSize.Text = InviteChoices.SizeText(found.Sum(f => f.Bytes));
+        AllSize.Text = InviteChoices.SizeText(found.Sum(f => f.Bytes ?? 0));
         AllFolders.Visibility = AllLine.Visibility = found.Count > 1 ? Visibility.Visible : Visibility.Collapsed;
         ShowChosen();
         FoldersLoaded = true;

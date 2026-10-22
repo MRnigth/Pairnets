@@ -446,14 +446,50 @@ const ACCOUNT_JS = String.raw`(function () {
   function folderList(text) {
     return text.split(/\r?\n/).map(function (f) { return f.trim(); }).filter(function (f) { return f.length > 0; });
   }
+  // The folders a form names: the invite form's ticked boxes and its "Add another folder" box, or Change…'s lines.
+  function chosenFolders(form) {
+    var list = [];
+    form.querySelectorAll("input[name=folder-pick]:checked").forEach(function (box) { list.push(box.value); });
+    var typed = form.querySelector("[name=folders]");
+    if (typed) list = list.concat(folderList(typed.value));
+    var extra = form.querySelector("[name=folder-add]");
+    if (extra && extra.value.trim()) list.push(extra.value.trim());
+    return list.filter(function (f, i) { return list.indexOf(f) === i; });
+  }
+  // "Add" next to "Add another folder": the name becomes one more ticked box, and "Chosen folders" is picked.
+  function addFolder(form) {
+    var input = form.querySelector("[name=folder-add]");
+    var name = input.value.trim();
+    if (!name) { input.focus(); return; }
+    var same = Array.prototype.filter.call(form.querySelectorAll("input[name=folder-pick]"), function (box) { return box.value === name; });
+    if (same.length) same[0].checked = true;
+    else {
+      var label = el("label", "choice");
+      var box = el("input");
+      box.type = "checkbox";
+      box.name = "folder-pick";
+      box.value = name;
+      box.checked = true;
+      label.appendChild(box);
+      label.appendChild(document.createTextNode(" " + name));
+      form.querySelector("[data-field=folder-ticks]").appendChild(label);
+    }
+    input.value = "";
+    pickChosen(form);
+    input.focus();
+  }
+  function pickChosen(form) {
+    var chosen = form.querySelector("[data-field=chosen]");
+    if (chosen && !chosen.disabled) chosen.checked = true;
+  }
   // What a form says: {access, folders?}, or the problem to show.
   function shareOf(form, whatName, accessName) {
     var what = form.querySelector("input[name='" + whatName + "']:checked");
     var access = form.querySelector("input[name='" + accessName + "']:checked");
     var body = { access: access ? access.value : "view", folders: null };
     if (what && what.value === "folders") {
-      var list = folderList(form.querySelector("[name=folders]").value);
-      if (!list.length) return "Type at least one folder name, or choose The whole nest.";
+      var list = chosenFolders(form);
+      if (!list.length) return "Tick or type at least one folder, or choose The whole nest.";
       body.folders = list;
     }
     return body;
@@ -561,6 +597,7 @@ const ACCOUNT_JS = String.raw`(function () {
     var inv = invite && invite.getAttribute("data-invite");
     if (action === "invite-open") { form.hidden = false; form.querySelector("input").focus(); }
     else if (action === "invite-close") { form.hidden = true; }
+    else if (action === "invite-add-folder") { addFolder(form); }
     else if (action === "invite-link") { sendInvite(li, id, form, false, b); }
     else if (action === "invite-copy-new") { copy(form.querySelector("[data-field=invite-url]").value, b); }
     else if (action === "invite-finish") { location.hash = "people-" + id; location.reload(); }
@@ -621,6 +658,18 @@ const ACCOUNT_JS = String.raw`(function () {
       if (!confirm("Remove this nest from your account? Its computers stop syncing through Pairnets. The files stay on the nest.")) return;
       pnApi("DELETE", "/v1/servers/" + id).then(function (res) { if (ok(res)) location.reload(); });
     }
+  });
+  // Ticking a folder means "Chosen folders"; Enter in "Add another folder" adds it instead of sending the invite.
+  if (servers) servers.addEventListener("change", function (ev) {
+    var form = ev.target.closest("form.invite-form");
+    if (form && ev.target.name === "folder-pick" && ev.target.checked) pickChosen(form);
+  });
+  if (servers) servers.addEventListener("keydown", function (ev) {
+    if (ev.key !== "Enter" || ev.target.name !== "folder-add") return;
+    var form = ev.target.closest("form.invite-form");
+    if (!form) return;
+    ev.preventDefault();
+    addFolder(form);
   });
   if (servers) servers.addEventListener("submit", function (ev) {
     var form = ev.target.closest("form.invite-form");
