@@ -735,7 +735,6 @@ public class DesktopUiTests
         for (var i = 0; i < 200 && !invite.FoldersLoaded; i++) { Thread.Sleep(10); Avalonia.Threading.Dispatcher.UIThread.RunJobs(); }
         foreach (var box in Avalonia.Controls.ControlExtensions.FindControl<Avalonia.Controls.StackPanel>(invite, "FolderList")!.Children.OfType<Avalonia.Controls.CheckBox>())
             box.IsChecked = (string)box.Tag! is "Photos" or "School";
-        invite.Height = 780;
         Save(invite, outDir, $"invite-folders-{suffix}.png");
         invite.Width = invite.MinWidth;
         Save(invite, outDir, $"invite-narrow-{suffix}.png");

@@ -595,7 +595,6 @@ public static partial class Program
         ((System.Windows.Controls.RadioButton)invite.FindName("FoldersChoice")).IsChecked = true;
         foreach (var box in ((System.Windows.Controls.Panel)invite.FindName("FolderList")).Children.OfType<System.Windows.Controls.CheckBox>())
             box.IsChecked = (string)box.Tag is "Photos" or "School";
-        invite.Height = 780;
         Save(invite, outDir, $"windows-invite-folders-{suffix}.png", print);
         invite.Close();
         var narrowInvite = new InviteWindow("Home nest", "nst_0123456789abcdefghjkmnpqrs", inviteNest, sealedNest: false, _ => { });

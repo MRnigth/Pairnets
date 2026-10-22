@@ -66,7 +66,7 @@ public partial class InviteWindow : Window
         foreach (var (name, bytes) in found)
         {
             var box = new CheckBox { Tag = name, Classes = { "folderrow" }, Content = Row(name, InviteChoices.SizeText(bytes)) };
-            box.IsCheckedChanged += (_, _) => ShowChosen();
+            box.IsCheckedChanged += OnFolderTicked;
             Avalonia.Automation.AutomationProperties.SetName(box, name);
             FolderList.Children.Add(box);
         }
@@ -99,6 +99,9 @@ public partial class InviteWindow : Window
         ChosenSummary.Text = _sizes.Count == 0 ? "" : InviteChoices.ChosenSummary(chosen.Count, _sizes.Count, chosen.Sum(n => _sizes[n]));
         AllFolders.IsChecked = InviteChoices.AllTicked(chosen.Count, _sizes.Count);
     }
+
+    /// <summary>A folder ticked or cleared: the count over the list and "All folders" follow.</summary>
+    private void OnFolderTicked(object? sender, RoutedEventArgs e) => ShowChosen();
 
     /// <summary>"All folders": ticks every folder, or clears them all when every one is ticked already.</summary>
     private void OnAllFolders(object? sender, RoutedEventArgs e)
