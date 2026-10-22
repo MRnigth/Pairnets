@@ -72,6 +72,12 @@ public sealed partial class ClientSettings
     /// <summary>The main window's left side is folded into the dock (page buttons and computers); false = open.</summary>
     public bool SideFolded { get; set; }
 
+    /// <summary>
+    /// Windows only, opt-in: draw Pairnets' windows without the graphics card ("Simple window drawing" in the tray menu),
+    /// for PCs where a window opens blank because the graphics driver or an overlay breaks its drawing.
+    /// </summary>
+    public bool SoftwareDrawing { get; set; }
+
     /// <summary>Look for a new Pairnets version at start-up and once a day.</summary>
     public bool CheckForUpdates { get; set; } = true;
 

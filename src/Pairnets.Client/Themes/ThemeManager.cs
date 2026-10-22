@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Interop;
+using System.Windows.Media;
 using Microsoft.Win32;
 
 namespace Pairnets.Client.Themes;
@@ -16,6 +17,20 @@ public static class ThemeManager
     private static bool _listening;
 
     public static bool IsDark { get; private set; }
+
+    /// <summary>
+    /// "Simple window drawing" (<see cref="Pairnets.Core.Client.SimpleDrawing"/>): the windows are drawn without the
+    /// graphics card. Also on by itself when Windows reports no usable graphics card (WPF draws in software then anyway).
+    /// </summary>
+    public static bool SimpleDrawing { get; private set; }
+
+    /// <summary>Turns simple drawing on or off, for the windows open now and every window opened later.</summary>
+    public static void SetSimpleDrawing(Application app, bool on)
+    {
+        SimpleDrawing = on;
+        foreach (Window w in app.Windows)
+            ApplyDrawing(w);
+    }
 
     /// <summary>Applies the theme to <paramref name="app"/>. <paramref name="dark"/> null follows Windows.</summary>
     public static void Apply(Application app, bool? dark = null)
@@ -52,7 +67,23 @@ public static class ThemeManager
     public static void Attach(Window window)
     {
         window.SetResourceReference(FrameworkElement.StyleProperty, "PairnetsWindow");
-        window.SourceInitialized += (_, _) => ApplyTitleBar(window);
+        window.SourceInitialized += (_, _) =>
+        {
+            ApplyTitleBar(window);
+            ApplyDrawing(window);
+        };
+    }
+
+    /// <summary>
+    /// Software or hardware drawing for this window only. Windows that draw through their own see-through layer (the
+    /// tray panel) already reach the screen without the graphics card's direct path, so they are left as they are.
+    /// </summary>
+    private static void ApplyDrawing(Window window)
+    {
+        if (window.AllowsTransparency || PresentationSource.FromVisual(window) is not HwndSource { CompositionTarget: { } target })
+            return;
+        var simple = SimpleDrawing || RenderCapability.Tier >> 16 == 0;
+        target.RenderMode = simple ? RenderMode.SoftwareOnly : RenderMode.Default;
     }
 
     private static bool SystemPrefersDark()

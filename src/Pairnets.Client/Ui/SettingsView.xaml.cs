@@ -576,6 +576,7 @@ public partial class SettingsView : UserControl
                 FirstRunCompleted = true,
                 Paused = _original.Paused,
                 SideFolded = _original.SideFolded,
+                SoftwareDrawing = _original.SoftwareDrawing,
                 CheckForUpdates = UpdateBox.IsChecked == true,
                 WaitForPeerBatches = WaitBox.IsChecked == true,
                 ShowMapSpeed = MapSpeedBox.IsChecked == true,

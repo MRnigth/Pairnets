@@ -68,6 +68,11 @@ public sealed class TrayController : ITrayActions, IDisposable
     private readonly Forms.ToolStripMenuItem _reportBug = new("Report a bug…");
     private readonly Forms.ToolStripMenuItem _pause = new("Pause syncing");
     private readonly Forms.ToolStripMenuItem _autoStart = new("Start with Windows") { CheckOnClick = true };
+    private readonly Forms.ToolStripMenuItem _simpleDrawing = new("Simple window drawing")
+    {
+        CheckOnClick = true,
+        ToolTipText = "Draw Pairnets' windows without the graphics card. Try it if the window opens blank.",
+    };
     private readonly Forms.ToolStripMenuItem _exit = new("Exit");
 
     /// <param name="platform">Windows itself: the saved key, the Recycle Bin, start with Windows, opening things.</param>
@@ -90,10 +95,11 @@ public sealed class TrayController : ITrayActions, IDisposable
         _package = UpdatePackage.ForThisComputer(IsInstalledCopy);
         _updates = new UpdateService(env.CreateUpdateChecker(), PairnetsInfo.ProductVersion, _package.Asset);
         _fileLog.Minimum = _settings.DebugMode ? LogLevel.Debug : LogLevel.Information; // Debug mode: more detail in the log
+        StartSimpleDrawing();
 
         var menu = new Forms.ContextMenuStrip();
         menu.Items.AddRange([_openApp, _statusItem, new Forms.ToolStripSeparator(), _syncNow, _openFolder, _fixProblem,
-            new Forms.ToolStripSeparator(), _settingsItem, _viewLog, _reportBug, _pause, _autoStart, new Forms.ToolStripSeparator(), _exit]);
+            new Forms.ToolStripSeparator(), _settingsItem, _viewLog, _reportBug, _pause, _autoStart, _simpleDrawing, new Forms.ToolStripSeparator(), _exit]);
         _openApp.Click += (_, _) => ShowMainWindow();
         _syncNow.Click += (_, _) =>
         {
@@ -113,8 +119,13 @@ public sealed class TrayController : ITrayActions, IDisposable
         _reportBug.Click += (_, _) => ReportBug();
         _pause.Click += (_, _) => TogglePause();
         _autoStart.Click += (_, _) => SetAutoStart(_autoStart.Checked);
+        _simpleDrawing.Click += (_, _) => SetSimpleDrawing(_simpleDrawing.Checked);
         _exit.Click += (_, _) => Exit();
-        menu.Opening += (_, _) => _autoStart.Checked = SafeIsAutoStart();
+        menu.Opening += (_, _) =>
+        {
+            _autoStart.Checked = SafeIsAutoStart();
+            _simpleDrawing.Checked = Themes.ThemeManager.SimpleDrawing;
+        };
 
         _icon = new Forms.NotifyIcon
         {
@@ -1835,6 +1846,33 @@ public sealed class TrayController : ITrayActions, IDisposable
         {
             Dialogs.Ask(null, "Could not change the startup setting: " + FriendlyErrors.Describe(ex), "Pairnets");
         }
+    }
+
+    /// <summary>"Simple window drawing" at start-up: from the setting, the start-up argument or the environment variable.</summary>
+    private void StartSimpleDrawing()
+    {
+        var on = SimpleDrawing.IsWanted(_settings, Environment.GetCommandLineArgs(), Environment.GetEnvironmentVariable(SimpleDrawing.EnvironmentVariable));
+        if (Application.Current is { } app)
+            Themes.ThemeManager.SetSimpleDrawing(app, on);
+        if (on)
+            _log.LogInformation("Simple window drawing is on: windows are drawn without the graphics card");
+    }
+
+    /// <summary>The tray menu's "Simple window drawing": saved, and the open windows are drawn again at once.</summary>
+    private void SetSimpleDrawing(bool on)
+    {
+        _settings.SoftwareDrawing = on;
+        try
+        {
+            SettingsStore.Save(_env.SettingsPath, _settings);
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or IOException or System.Security.SecurityException)
+        {
+            _log.LogWarning("Could not save simple window drawing: {Error}", ex.Message);
+        }
+        if (Application.Current is { } app)
+            Themes.ThemeManager.SetSimpleDrawing(app, on);
+        _log.LogInformation("Simple window drawing turned {State}", on ? "on" : "off");
     }
 
     private bool SafeIsAutoStart()

@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging;
+using Pairnets.Core.Client;
 using Pairnets.Core.Logging;
 using Pairnets.Core.Paths;
 using Pairnets.Core.Settings;
@@ -39,6 +40,36 @@ public class ClientSupportTests
         File.WriteAllText(path, "{ not json");
         Assert.False(SettingsStore.Load(path).IsComplete);
         Assert.False(SettingsStore.Load(dir.Combine("missing.json")).IsComplete);
+    }
+
+    [Fact]
+    public void SimpleDrawingIsOffUnlessAskedForAndSurvivesASave()
+    {
+        using var dir = new TempDir("drawing");
+        var path = dir.Combine("settings.json");
+        var settings = new ClientSettings();
+        Assert.False(settings.SoftwareDrawing);
+        Assert.False(SimpleDrawing.IsWanted(settings, ["Pairnets.exe", "--autostart"], null));
+
+        settings.SoftwareDrawing = true;
+        SettingsStore.Save(path, settings);
+        var loaded = SettingsStore.Load(path);
+        Assert.True(loaded.SoftwareDrawing);
+        Assert.True(SimpleDrawing.IsWanted(loaded, [], null));
+        loaded.SoftwareDrawing = false;
+        SettingsStore.Save(path, loaded);
+        Assert.False(SettingsStore.Load(path).SoftwareDrawing);
+
+        // A settings file from before the switch has none: off.
+        File.WriteAllText(path, "{}");
+        Assert.False(SettingsStore.Load(path).SoftwareDrawing);
+
+        // For support: the start-up argument or the environment variable, without changing the setting.
+        Assert.True(SimpleDrawing.IsWanted(new ClientSettings(), ["Pairnets.exe", SimpleDrawing.Argument], null));
+        Assert.True(SimpleDrawing.IsWanted(new ClientSettings(), [], "1"));
+        Assert.True(SimpleDrawing.IsWanted(new ClientSettings(), [], "TRUE"));
+        Assert.False(SimpleDrawing.IsWanted(new ClientSettings(), [], "0"));
+        Assert.False(SimpleDrawing.IsWanted(new ClientSettings(), [], ""));
     }
 
     [Fact]
