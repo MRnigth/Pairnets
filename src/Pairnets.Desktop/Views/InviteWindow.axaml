@@ -26,7 +26,18 @@
         <Border x:Name="FolderBox" Margin="0,10,0,0" CornerRadius="14" BorderThickness="1" BorderBrush="{DynamicResource T.Border}" Background="{DynamicResource T.Bg}"
                 Padding="14,10" IsVisible="False">
           <StackPanel>
-            <TextBlock x:Name="FolderNote" Classes="muted" FontSize="12.5" TextWrapping="Wrap" Text="Looking at the folders…" />
+            <Grid ColumnDefinitions="*,Auto">
+              <TextBlock Text="Choose the folders they get" FontWeight="Bold" FontSize="13.5" TextWrapping="Wrap" VerticalAlignment="Center" />
+              <TextBlock x:Name="ChosenSummary" Grid.Column="1" Classes="muted" FontSize="12.5" Margin="12,0,0,0" VerticalAlignment="Center" />
+            </Grid>
+            <TextBlock x:Name="FolderNote" Classes="muted" FontSize="12.5" TextWrapping="Wrap" Margin="0,2,0,6" Text="Looking at the folders…" />
+            <CheckBox x:Name="AllFolders" Classes="folderrow" IsThreeState="True" IsVisible="False" Click="OnAllFolders" AutomationProperties.Name="All folders">
+              <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Text="All folders" TextTrimming="CharacterEllipsis" />
+                <TextBlock x:Name="AllSize" Grid.Column="1" Classes="muted" FontWeight="Normal" FontSize="12.5" Margin="12,0,0,0" VerticalAlignment="Center" />
+              </Grid>
+            </CheckBox>
+            <Border x:Name="AllLine" Height="1" Margin="10,2" Background="{DynamicResource T.Border}" IsVisible="False" />
             <StackPanel x:Name="FolderList" />
           </StackPanel>
         </Border>

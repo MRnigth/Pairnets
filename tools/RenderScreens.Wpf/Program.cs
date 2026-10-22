@@ -580,13 +580,22 @@ public static partial class Program
         send.Close();
 
         // A nest's "Invite a friend…": the whole nest, then chosen folders (at the window's narrowest too).
+        // Real-looking sizes from sparse files (nothing is really written), and one empty folder.
         var inviteNest = Path.Combine(Path.GetTempPath(), "pairnets-invite-shots");
-        Directory.CreateDirectory(Path.Combine(inviteNest, "Photos"));
-        Directory.CreateDirectory(Path.Combine(inviteNest, "School"));
+        foreach (var (dir, size) in new[] { ("Photos", 2_400_000_000L), ("Music", 12_100_000_000L), ("School", 380_000_000L), ("Projects", 0L) })
+        {
+            Directory.CreateDirectory(Path.Combine(inviteNest, dir));
+            if (size > 0)
+                using (var data = File.Create(Path.Combine(inviteNest, dir, "data.bin")))
+                    data.SetLength(size);
+        }
         var invite = new InviteWindow("Home nest", "nst_0123456789abcdefghjkmnpqrs", inviteNest, sealedNest: false, _ => { });
         Place(invite);
         Save(invite, outDir, $"windows-invite-{suffix}.png", print);
         ((System.Windows.Controls.RadioButton)invite.FindName("FoldersChoice")).IsChecked = true;
+        foreach (var box in ((System.Windows.Controls.Panel)invite.FindName("FolderList")).Children.OfType<System.Windows.Controls.CheckBox>())
+            box.IsChecked = (string)box.Tag is "Photos" or "School";
+        invite.Height = 780;
         Save(invite, outDir, $"windows-invite-folders-{suffix}.png", print);
         invite.Close();
         var narrowInvite = new InviteWindow("Home nest", "nst_0123456789abcdefghjkmnpqrs", inviteNest, sealedNest: false, _ => { });

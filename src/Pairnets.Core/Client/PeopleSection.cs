@@ -163,6 +163,18 @@ public static class InviteChoices
     }
 
     /// <summary>Why the choices can't go on yet ("Choose at least one folder."), or null.</summary>
+    /// <summary>A folder's size in the list: "2.24 GB", or "Empty" (never "0 B").</summary>
+    public static string SizeText(long bytes) => bytes <= 0 ? "Empty" : Format.Bytes(bytes);
+
+    /// <summary>The line over the folder list: "None chosen yet", "2 of 4 chosen · 2.59 GB" ("2 of 4 chosen" when they are empty).</summary>
+    public static string ChosenSummary(int chosen, int total, long bytes) =>
+        chosen == 0 ? "None chosen yet"
+        : bytes > 0 ? $"{chosen} of {total} chosen · {Format.Bytes(bytes)}"
+        : $"{chosen} of {total} chosen";
+
+    /// <summary>The "All folders" box: ticked when every folder is, empty when none is, a dash (null) for some.</summary>
+    public static bool? AllTicked(int chosen, int total) => chosen == 0 ? false : chosen >= total ? true : null;
+
     public static string? Problem(bool wholeNest, IReadOnlyCollection<string> folders) =>
         wholeNest ? null
         : folders.Count == 0 ? "Choose at least one folder, or share the whole nest."

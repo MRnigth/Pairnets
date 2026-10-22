@@ -6,6 +6,58 @@
         WindowStartupLocation="CenterScreen">
   <!-- "Invite a friend…" (friend invites): what they get and what they can do, then the account page in the browser
        finishes it (it sends the email or gives the link; only a signed-in browser may make an invite). -->
+  <Window.Resources>
+    <!-- A folder in "Chosen folders" (and "All folders" above them): tick box, folder icon, then the content (name and size).
+         The row lights up under the pointer and turns blue when ticked; "All folders" shows a dash when only some are. -->
+    <Style x:Key="FolderRow" TargetType="CheckBox">
+      <Setter Property="Cursor" Value="Hand" />
+      <Setter Property="Foreground" Value="{DynamicResource T.Text}" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="FontSize" Value="13.5" />
+      <Setter Property="FocusVisualStyle" Value="{DynamicResource FocusRing}" />
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="CheckBox">
+            <Border x:Name="bd" CornerRadius="10" Padding="10,9" Background="Transparent">
+              <Grid>
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="Auto" />
+                  <ColumnDefinition Width="Auto" />
+                  <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Border x:Name="box" Width="18" Height="18" CornerRadius="5" BorderThickness="1.5" BorderBrush="{DynamicResource T.Muted}" Background="Transparent" VerticalAlignment="Center">
+                  <Grid>
+                    <Path x:Name="tick" Data="{StaticResource I.Check}" Stroke="White" StrokeThickness="2.6" Stretch="Uniform" Margin="3" Visibility="Collapsed"
+                          StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" />
+                    <Rectangle x:Name="dash" Width="8" Height="2.2" RadiusX="1" RadiusY="1" Fill="White" Visibility="Collapsed" />
+                  </Grid>
+                </Border>
+                <Path x:Name="icon" Grid.Column="1" Data="{StaticResource I.Folder}" Fill="{DynamicResource T.Muted}" Stretch="Uniform" Width="20" Height="16" Margin="12,0,10,0" VerticalAlignment="Center" />
+                <ContentPresenter Grid.Column="2" VerticalAlignment="Center" />
+              </Grid>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="bd" Property="Background" Value="{DynamicResource T.Hover}" />
+              </Trigger>
+              <Trigger Property="IsChecked" Value="True">
+                <Setter TargetName="bd" Property="Background" Value="{DynamicResource T.Selected}" />
+                <Setter TargetName="box" Property="Background" Value="{DynamicResource T.AccentButton}" />
+                <Setter TargetName="box" Property="BorderBrush" Value="{DynamicResource T.AccentButton}" />
+                <Setter TargetName="tick" Property="Visibility" Value="Visible" />
+                <Setter TargetName="icon" Property="Fill" Value="{DynamicResource T.Accent}" />
+              </Trigger>
+              <Trigger Property="IsChecked" Value="{x:Null}">
+                <Setter TargetName="box" Property="Background" Value="{DynamicResource T.AccentButton}" />
+                <Setter TargetName="box" Property="BorderBrush" Value="{DynamicResource T.AccentButton}" />
+                <Setter TargetName="dash" Property="Visibility" Value="Visible" />
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+  </Window.Resources>
   <Grid Margin="24,20">
     <Grid.RowDefinitions>
       <RowDefinition Height="Auto" />
@@ -38,7 +90,27 @@
         <Border x:Name="FolderBox" Margin="0,10,0,0" CornerRadius="14" BorderThickness="1" BorderBrush="{DynamicResource T.Border}" Background="{DynamicResource T.Card}"
                 Padding="14,10" Visibility="Collapsed">
           <StackPanel>
-            <TextBlock x:Name="FolderNote" Foreground="{DynamicResource T.Muted}" FontSize="12.5" TextWrapping="Wrap" Text="Looking at the folders…" />
+            <Grid>
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+              </Grid.ColumnDefinitions>
+              <TextBlock Text="Choose the folders they get" FontWeight="Bold" FontSize="13.5" Foreground="{DynamicResource T.Text}" TextWrapping="Wrap" VerticalAlignment="Center" />
+              <TextBlock x:Name="ChosenSummary" Grid.Column="1" Foreground="{DynamicResource T.Muted}" FontSize="12.5" Margin="12,0,0,0" VerticalAlignment="Center" />
+            </Grid>
+            <TextBlock x:Name="FolderNote" Foreground="{DynamicResource T.Muted}" FontSize="12.5" TextWrapping="Wrap" Margin="0,2,0,6" Text="Looking at the folders…" />
+            <CheckBox x:Name="AllFolders" Style="{StaticResource FolderRow}" IsThreeState="True" Visibility="Collapsed" Click="OnAllFolders"
+                      AutomationProperties.Name="All folders">
+              <Grid>
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="*" />
+                  <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Text="All folders" TextTrimming="CharacterEllipsis" />
+                <TextBlock x:Name="AllSize" Grid.Column="1" Foreground="{DynamicResource T.Muted}" FontWeight="Normal" FontSize="12.5" Margin="12,0,0,0" VerticalAlignment="Center" />
+              </Grid>
+            </CheckBox>
+            <Border x:Name="AllLine" Height="1" Margin="10,2" Background="{DynamicResource T.Border}" Visibility="Collapsed" />
             <StackPanel x:Name="FolderList" />
           </StackPanel>
         </Border>

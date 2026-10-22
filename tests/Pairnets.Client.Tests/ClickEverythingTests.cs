@@ -1260,6 +1260,8 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
 
     private static readonly IReadOnlyList<Rule> InviteRules =
     [
+        new(t => t.Element.Name == "AllFolders", "tick every folder at once (or clear them all)",
+            c => ((InviteWindow)c.Window).ChosenFolders.Count is 0 or 2),
         Switch, // a folder's tick box
         new(t => t.Element.Name == "FoldersChoice", "show this computer's folders to tick",
             c => ((InviteWindow)c.Window).FolderBox.IsVisible && ((InviteWindow)c.Window).FolderList.Children.Count == 2),

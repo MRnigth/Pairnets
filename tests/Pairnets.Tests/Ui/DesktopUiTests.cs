@@ -718,13 +718,24 @@ public class DesktopUiTests
         failed.Close();
 
         // A nest's "Invite a friend…": the whole nest, then chosen folders (at the window's narrowest too).
+        // Real-looking sizes from sparse files (nothing is really written), and one empty folder.
         var inviteNest = Path.Combine(Path.GetTempPath(), "pairnets-invite-shots");
-        Directory.CreateDirectory(Path.Combine(inviteNest, "Photos"));
-        Directory.CreateDirectory(Path.Combine(inviteNest, "School"));
+        foreach (var (dir, size) in new[] { ("Photos", 2_400_000_000L), ("Music", 12_100_000_000L), ("School", 380_000_000L), ("Projects", 0L) })
+        {
+            Directory.CreateDirectory(Path.Combine(inviteNest, dir));
+            if (size > 0)
+                using (var data = File.Create(Path.Combine(inviteNest, dir, "data.bin")))
+                    data.SetLength(size);
+        }
         var invite = new InviteWindow("Home nest", "nst_0123456789abcdefghjkmnpqrs", inviteNest, sealedNest: false, _ => { });
         invite.Show();
         Save(invite, outDir, $"invite-{suffix}.png");
         Avalonia.Controls.ControlExtensions.FindControl<Avalonia.Controls.RadioButton>(invite, "FoldersChoice")!.IsChecked = true;
+        Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        for (var i = 0; i < 200 && !invite.FoldersLoaded; i++) { Thread.Sleep(10); Avalonia.Threading.Dispatcher.UIThread.RunJobs(); }
+        foreach (var box in Avalonia.Controls.ControlExtensions.FindControl<Avalonia.Controls.StackPanel>(invite, "FolderList")!.Children.OfType<Avalonia.Controls.CheckBox>())
+            box.IsChecked = (string)box.Tag! is "Photos" or "School";
+        invite.Height = 780;
         Save(invite, outDir, $"invite-folders-{suffix}.png");
         invite.Width = invite.MinWidth;
         Save(invite, outDir, $"invite-narrow-{suffix}.png");
