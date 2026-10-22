@@ -594,7 +594,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
         {
             var nest = Nest;
             if (!await Dialogs.ConfirmAsync(_window, "Pairnets – sign out",
-                    $"Sign out of this computer?\n\nSyncing stops. Your files in {nest.Folder} stay here. Sign in again to continue.", "Sign out", "Cancel"))
+                    $"Sign out of this computer?\n\nSyncing stops. Your files in {nest.Folder} stay here. Sign in again to continue.", "Sign out", "Cancel", danger: true))
                 return;
             var removed = await SignOutOnNestAsync(Current);
             StopSession();
@@ -650,7 +650,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
             var title = NestNames.Title(nest, _settings, run.Session?.Status);
             if (!await Dialogs.ConfirmAsync(_window, "Pairnets – stop syncing " + title,
                     $"Stop syncing {title} on this computer?\n\nThis computer is signed out of {title}. Your files in {nest.Folder} stay here and on the nest. Your other nests keep syncing.",
-                    "Stop syncing", "Cancel"))
+                    "Stop syncing", "Cancel", danger: true))
                 return;
             var removed = await SignOutOnNestAsync(run);
             StopNest(run);
@@ -746,7 +746,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
         var folders = _settings.Nests().Select(n => n.Folder).Where(f => !string.IsNullOrWhiteSpace(f)).ToList();
         var where = folders.Count == 0 ? "your sync folder" : string.Join(" and ", folders);
         if (!await Dialogs.ConfirmAsync(_window, "Pairnets – reset",
-                $"Reset Pairnets on this computer?\n\nThis signs this computer out of your nest, forgets every setting and the saved sign-in, and removes Pairnets' sync notes. Your files in {where} are not deleted. The log files are kept.\n\nYou start again from the sign-in screen.", "Reset", "Cancel"))
+                $"Reset Pairnets on this computer?\n\nThis signs this computer out of your nest, forgets every setting and the saved sign-in, and removes Pairnets' sync notes. Your files in {where} are not deleted. The log files are kept.\n\nYou start again from the sign-in screen.", "Reset", "Cancel", danger: true))
             return;
         _resetting = true;
         try
@@ -1213,7 +1213,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
             case BlockReason.FolderEmpty:
                 if (_session.PendingDeletes().Count is > 0 and var pending
                     && await Dialogs.ConfirmAsync(_window, "Pairnets – allow deletions?", _session.DescribePendingDeletes(),
-                        OverviewModel.DeleteButtons(pending).Yes, OverviewModel.DeleteButtons(pending).No))
+                        OverviewModel.DeleteButtons(pending).Yes, OverviewModel.DeleteButtons(pending).No, danger: true))
                     _session.ApproveDeletions();
                 break;
             case BlockReason.ForeignMarker:
@@ -1705,7 +1705,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
         if (_session is not { } session || session.Activity.Items.Count == 0)
             return;
         if (!await Dialogs.ConfirmAsync(_window, "Pairnets – clear activity",
-                "Clear the activity list?\n\nThis only empties the list on this computer. Your files, your nest and its History aren't touched.", "Clear", "Cancel"))
+                "Clear the activity list?\n\nThis only empties the list on this computer. Your files, your nest and its History aren't touched.", "Clear", "Cancel", danger: true))
             return;
         session.Activity.Clear();
     }

@@ -13,8 +13,13 @@ public static class Dialogs
 {
     public static Task InfoAsync(Window? owner, string title, string text) => ShowAsync(owner, title, text, ["OK"]);
 
-    public static async Task<bool> ConfirmAsync(Window? owner, string title, string text, string yes = "Yes", string no = "No") =>
-        await ShowAsync(owner, title, text, [yes, no]) == yes;
+    /// <summary>
+    /// Asks a yes/no question; true for <paramref name="yes"/>. <paramref name="no"/> is the default button (Enter and
+    /// Esc), so a hurried key press changes nothing, and with <paramref name="danger"/> (signing out, deleting) the yes
+    /// button is red, as in the Windows app.
+    /// </summary>
+    public static async Task<bool> ConfirmAsync(Window? owner, string title, string text, string yes = "Yes", string no = "No", bool danger = false) =>
+        await ShowAsync(owner, title, text, [yes, no], danger) == yes;
 
     /// <summary>
     /// Puts text on the clipboard; false when it can't (no clipboard, or another app holds it). Never throws, so a
@@ -188,9 +193,15 @@ public static class Dialogs
         };
         var row = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Spacing = 8, Margin = new Thickness(0, 8, 0, 0) };
         var made = new List<Button>();
+        var cancel = buttons.FirstOrDefault(b => !b.Main).Label;
         foreach (var (label, main, answer) in buttons)
         {
-            var b = new Button { Content = label, MinWidth = 80, Height = 38, Padding = new Thickness(16, 0), HorizontalContentAlignment = HorizontalAlignment.Center };
+            // Enter presses the main button and Esc the first other one (Cancel), as in the Windows app.
+            var b = new Button
+            {
+                Content = label, MinWidth = 80, Height = 38, Padding = new Thickness(16, 0), HorizontalContentAlignment = HorizontalAlignment.Center,
+                IsDefault = main, IsCancel = label == cancel && !main,
+            };
             b.Classes.Add(main ? "accent" : "SecondaryButton");
             b.Click += (_, _) =>
             {
@@ -215,7 +226,8 @@ public static class Dialogs
         return result;
     }
 
-    private static async Task<string?> ShowAsync(Window? owner, string title, string text, string[] buttons)
+    /// <summary>A message with buttons; the last (No, Cancel, OK) is the safe one, pressed by Enter and Esc and focused.</summary>
+    private static async Task<string?> ShowAsync(Window? owner, string title, string text, string[] buttons, bool danger = false)
     {
         string? result = null;
         var window = new Window
@@ -227,16 +239,24 @@ public static class Dialogs
             WindowStartupLocation = owner is null ? WindowStartupLocation.CenterScreen : WindowStartupLocation.CenterOwner,
         };
         var row = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Spacing = 8 };
-        foreach (var label in buttons)
+        Button? safe = null;
+        for (var i = 0; i < buttons.Length; i++)
         {
-            var b = new Button { Content = label, MinWidth = 80, HorizontalContentAlignment = HorizontalAlignment.Center };
+            var label = buttons[i];
+            var last = i == buttons.Length - 1;
+            var b = new Button { Content = label, MinWidth = 80, HorizontalContentAlignment = HorizontalAlignment.Center, IsDefault = last, IsCancel = last };
+            if (danger && i == 0 && !last)
+                b.Classes.Add("danger"); // what can't be undone stands out
             b.Click += (_, _) =>
             {
                 result = label;
                 window.Close();
             };
             row.Children.Add(b);
+            if (last)
+                safe = b;
         }
+        window.Opened += (_, _) => safe?.Focus();
         window.Content = new StackPanel
         {
             Margin = new Thickness(20),

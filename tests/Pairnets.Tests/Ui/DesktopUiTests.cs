@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
+using Avalonia.Input;
 using Pairnets.Core;
 using Pairnets.Core.Client;
 using Pairnets.Core.Settings;
@@ -132,6 +133,35 @@ public sealed class SampleActions : ITrayActions
 /// <summary>Loads the macOS/Linux windows headlessly: XAML parses, controls bind, states render.</summary>
 public class DesktopUiTests
 {
+    [AvaloniaFact]
+    public async Task AQuestion_KeepsTheSafeAnswerOnEnterAndEscape_AndPaintsWhatCantBeUndoneRed()
+    {
+        var opened = new List<Avalonia.Controls.Window>();
+        using var watch = Avalonia.Controls.Window.WindowOpenedEvent.AddClassHandler(typeof(Avalonia.Controls.Window), (sender, _) => opened.Add((Avalonia.Controls.Window)sender!));
+
+        var signOut = Dialogs.ConfirmAsync(null, "Pairnets – sign out", "Sign out of this computer?", "Sign out", "Cancel", danger: true);
+        var question = Assert.Single(opened);
+        Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        var buttons = Screen.All<Avalonia.Controls.Button>(question).ToList();
+        Assert.Equal(["Sign out", "Cancel"], buttons.Select(b => (string)b.Content!));
+        Assert.Contains("danger", buttons[0].Classes);
+        Assert.False(buttons[0].IsDefault || buttons[0].IsCancel);
+        Assert.True(buttons[1].IsDefault && buttons[1].IsCancel);
+        Assert.True(buttons[1].IsFocused);
+        Person.PressEscape(question);
+        Assert.False(await signOut);
+
+        // An ordinary question has no red button; Enter keeps the safe answer too.
+        opened.Clear();
+        var open = Dialogs.ConfirmAsync(null, "Pairnets", "Open Pairnets?");
+        var plain = Assert.Single(opened);
+        Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        Assert.DoesNotContain(Screen.All<Avalonia.Controls.Button>(plain), b => b.Classes.Contains("danger"));
+        plain.KeyPressQwerty(PhysicalKey.Enter, RawInputModifiers.None);
+        Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        Assert.False(await open);
+    }
+
     [AvaloniaFact]
     public void DevicesTabListsTheServersComputers()
     {

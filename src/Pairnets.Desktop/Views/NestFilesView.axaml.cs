@@ -420,7 +420,7 @@ public partial class NestFilesView : UserControl
 
     public async Task DeleteAsync(NestEntry entry)
     {
-        if (Files is not { } files || !await Dialogs.ConfirmAsync(Owner, "Pairnets – delete", FilesPageText.DeleteQuestion(entry), "Delete", "Cancel"))
+        if (Files is not { } files || !await Dialogs.ConfirmAsync(Owner, "Pairnets – delete", FilesPageText.DeleteQuestion(entry), "Delete", "Cancel", danger: true))
             return;
         if (Handle(await files.DeleteAsync(entry.Path)))
             Say($"Deleted {entry.Name}. It is in the Deleted tab for 30 days.", ok: true);
