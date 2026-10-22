@@ -386,6 +386,8 @@ public sealed class NestFiles : INestFiles
         {
             _session.Runner.RequestSync("moved on the Files page");
         }
+        if (!caseOnly)
+            RemoveEmptyFolder(from);
         _session.Activity.Add(ActivityKind.Info, to, $"Moved {PathRules.FileName(from)} to {to}", _clock);
         return NestResult.Done;
     }
@@ -436,6 +438,39 @@ public sealed class NestFiles : INestFiles
         }
     }
 
+    /// <summary>
+    /// After a folder was deleted or moved away on the nest and its files went from here, the folder here (and the
+    /// empty folders in it) goes too, so no empty shell stays in the Pairnets folder. Anything still in it (a file the
+    /// nest did not know, a link) keeps it.
+    /// </summary>
+    private void RemoveEmptyFolder(string path)
+    {
+        if (Local(path) is not { } full || !Directory.Exists(full))
+            return;
+        try
+        {
+            RemoveIfEmpty(new DirectoryInfo(full));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _log.LogInformation("The empty folder {Path} stays here: {Error}", path, ex.Message);
+        }
+
+        static bool RemoveIfEmpty(DirectoryInfo dir)
+        {
+            if ((dir.Attributes & FileAttributes.ReparsePoint) != 0)
+                return false;
+            var all = new EnumerationOptions { AttributesToSkip = 0 };
+            var empty = true;
+            foreach (var sub in dir.EnumerateDirectories("*", all))
+                empty &= RemoveIfEmpty(sub);
+            if (!empty || dir.EnumerateFileSystemInfos("*", all).Any())
+                return false;
+            dir.Delete(recursive: false);
+            return true;
+        }
+    }
+
     /// <summary>Deletes a file or folder on the nest (its versions go to History) and the copy here (to the trash).</summary>
     public async Task<NestResult> DeleteAsync(string path, CancellationToken ct = default)
     {
@@ -468,6 +503,7 @@ public sealed class NestFiles : INestFiles
         {
             _session.Runner.RequestSync("deleted on the Files page");
         }
+        RemoveEmptyFolder(path);
         _session.Activity.Add(ActivityKind.DeletedOnServer, path, $"Deleted on the nest: {path} (it can be restored from History)", _clock);
         return NestResult.Done;
     }

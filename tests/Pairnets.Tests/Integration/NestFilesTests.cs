@@ -227,6 +227,24 @@ public class NestFilesTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task RenamingOrDeletingAFolderHere_LeavesNoEmptyFolderBehind()
+    {
+        await OnTheNestAsync(("Trip/a.txt", "a"), ("Trip/day 1/b.txt", "b"));
+        await using var session = Start();
+        await WaitUntil(() => File.Exists(Here("Trip/day 1/b.txt")), "the download");
+        await WaitIdle(session);
+
+        Assert.True((await session.Files.RenameAsync("Trip", "Trip 2")).Ok);
+        Assert.Equal("b", File.ReadAllText(Here("Trip 2/day 1/b.txt")));
+        Assert.False(Directory.Exists(Here("Trip")));
+
+        await WaitUntil(() => session.Status.Status == RunnerStatus.Idle, "idle");
+        Assert.True((await session.Files.DeleteAsync("Trip 2")).Ok);
+        Assert.False(Directory.Exists(Here("Trip 2")));
+        Assert.Null(OnNest("Trip 2/a.txt"));
+    }
+
+    [Fact]
     public async Task WhileTheNestIsFullOnlyOpeningWorks()
     {
         await OnTheNestAsync(("Docs/a.txt", "a"));
