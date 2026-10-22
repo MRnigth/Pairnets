@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { assetUrl, fingerprint } from "../src/assets";
+import { ASSETS, assetUrl, fingerprint } from "../src/assets";
 import { CSP } from "../src/http";
 import { loginEmail, noticeEmail } from "../src/mail";
 import { Harness, type Res } from "./helpers";
@@ -58,7 +58,7 @@ describe("headers on every response", () => {
     }
   });
 
-  it("pages link their stylesheet and scripts with a version, so a deploy shows at once", async () => {
+  it("pages link their stylesheet, scripts and icons with a version, so a deploy shows at once", async () => {
     const h = await Harness.create();
     const visitor = h.browser();
     const b = h.browser();
@@ -76,10 +76,12 @@ describe("headers on every response", () => {
       const links = [...page.text.matchAll(/(?:href|src)="(\/assets\/[^"]*)"/g)].map((m) => m[1]);
       expect(links.length, path).toBeGreaterThanOrEqual(2);
       for (const link of links) {
-        expect(link, path).toMatch(/^\/assets\/[a-z-]+\.(css|js)\?v=[0-9a-z]+$/);
+        expect(link, path).toMatch(/^\/assets\/[a-z-]+\.(css|js|svg|png)\?v=[0-9a-z]+$/);
         const asset = await b.call("GET", link);
         expect(asset.status, link).toBe(200);
-        expect(fingerprint(asset.text), link).toBe(link.split("?v=")[1]);
+        // The PNG icon's bytes don't survive reading the answer as text, so its fingerprint is checked on the file served.
+        const name = link.slice("/assets/".length).split("?")[0];
+        expect(fingerprint(name.endsWith(".png") ? ASSETS[name].body : asset.text), link).toBe(link.split("?v=")[1]);
       }
     }
     expect(fingerprint("a")).not.toBe(fingerprint("b"));

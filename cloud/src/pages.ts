@@ -25,6 +25,8 @@ export function layout(title: string, main: string, opts: LayoutOptions = {}): s
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
 <title>${e(title)} · Pairnets</title>
+<link rel="icon" href="${e(assetUrl("logo.svg"))}" type="image/svg+xml">
+<link rel="apple-touch-icon" href="${e(assetUrl("icon.png"))}">
 ${styles}
 ${turnstile}
 ${scripts}

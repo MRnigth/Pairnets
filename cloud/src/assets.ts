@@ -2,6 +2,7 @@
 // Kept as strings so the Worker has no build step and no asset binding.
 
 import { FONT_ASSETS } from "./fonts";
+import { ICON_PNG } from "./icon";
 
 const STYLE = String.raw`
 /* The account pages in pairnets.app's look, "Made by one person": paper and ink, serif headings, hairlines instead of
@@ -1104,6 +1105,7 @@ export const ASSETS: Record<string, { type: string; body: string | Uint8Array }>
   "invite.js": { type: "text/javascript; charset=utf-8", body: SHARED_JS + INVITE_JS },
   "app.css": { type: "text/css; charset=utf-8", body: APP_STYLE },
   "logo.svg": { type: "image/svg+xml", body: LOGO_SVG },
+  "icon.png": { type: "image/png", body: ICON_PNG },
   ...FONT_ASSETS,
   "cookie-notice.js": { type: "text/javascript; charset=utf-8", body: COOKIE_NOTICE_JS },
 };
