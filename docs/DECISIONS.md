@@ -1725,3 +1725,15 @@ change was never seen.
   wipe-everything item there is easier to hit by mistake, and the Mac/Linux menu-bar menu differs per desktop.
 * The sign-in window's "Start over" (a new code after someone pressed Deny) is a different button and stays.
 * Windows: the fold uses the same shared template as "Advanced: files to ignore" (`FoldCard`, `FoldChevron`).
+
+## After an update, Pairnets opens its window again (2026-10-22)
+
+* **The owner's call:** after an update the app "didn't open". It did restart (the hidden installer's `[Run]` line, or
+  `SelfReplace` + `StartUpdatedApp`, both with `--after-update`), but on purpose only in the tray with a note, so it
+  looked closed. Now the new version opens the main window too, both apps; the "Pairnets is up to date" note stays.
+* **Why always the window:** an app update only starts from **Update now** in the main window (no automatic install),
+  so the person was in the window seconds before. Started at log-in (`--autostart`) never carries `--after-update`,
+  so it still starts in the tray. Signed out / first run: the sign-in window, as before. The Mac updates by download
+  page, unchanged. The installer itself is unchanged.
+* **Tests:** `AppUpdate_TheNewVersion_StaysSignedIn_KeepsEverySetting_AndOpensItsWindowAgain` (renamed from
+  `…AndOnlySaysItWasUpdated`, Windows) and `AfterAnUpdate_TheNewAppOpensItsWindowAgain_WithANote` (Avalonia).

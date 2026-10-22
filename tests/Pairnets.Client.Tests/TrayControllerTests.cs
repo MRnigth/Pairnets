@@ -546,7 +546,7 @@ public sealed class TrayControllerTests
     }
 
     [Fact]
-    public async Task AppUpdate_TheNewVersion_StaysSignedIn_KeepsEverySetting_AndOnlySaysItWasUpdated()
+    public async Task AppUpdate_TheNewVersion_StaysSignedIn_KeepsEverySetting_AndOpensItsWindowAgain()
     {
         await using var nest = await TestServer.StartWithWebsiteAsync();
         await using var feed = await FakeReleaseFeed.StartAsync("99.0.0");
@@ -578,13 +578,14 @@ public sealed class TrayControllerTests
         await app.WaitUntil(() => app.Platform.UpdatedApps.Count == 1, "the new Pairnets.exe to start");
         Assert.Equal((exe, SelfReplace.AfterUpdateArgument), app.Platform.UpdatedApps.Items[0]);
 
-        // The new version starts the way the update starts it: no sign-in window, no main window popping up, only a note.
+        // The new version starts the way the update starts it: no sign-in window; the main window opens again, with a note.
         await app.RestartAsNewVersionAsync(SelfReplace.AfterUpdateArgument);
         await app.WaitUntil(() => app.Notifications.Items.Any(n => n.Title == UpdateTexts.UpdatedTitle), "the 'updated' note");
         await app.SyncedOnce();
         Assert.NotNull(app.Tray.Session);
-        Assert.False(await app.Wpf.Ui(() => System.Windows.Application.Current.Windows.OfType<System.Windows.Window>().Any(w => w.IsVisible)),
-            "After an update nothing pops up: no sign-in window and no main window.");
+        Assert.True(await app.Wpf.Ui(() => app.Tray.Window is { IsVisible: true }), "After an update the main window opens again.");
+        Assert.Equal(new[] { "main" }, await app.Wpf.Ui(() => System.Windows.Application.Current.Windows.OfType<System.Windows.Window>()
+            .Where(w => w.IsVisible).Select(w => w == app.Tray.Window ? "main" : w.GetType().Name).ToArray()));
 
         var after = app.SavedSettings;
         Assert.True(after.IsComplete && after.FirstRunCompleted);
