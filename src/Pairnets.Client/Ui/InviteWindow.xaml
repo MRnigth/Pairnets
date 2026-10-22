@@ -22,10 +22,17 @@
     <ScrollViewer Grid.Row="1" Margin="0,16,0,0" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
       <StackPanel>
         <TextBlock Style="{StaticResource PgCardTitle}" Text="What they get" />
-        <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
-          <RadioButton x:Name="WholeChoice" Style="{StaticResource PgSeg}" GroupName="scope" Content="The whole nest" IsChecked="True" Checked="OnScopeChanged" />
-          <RadioButton x:Name="FoldersChoice" Style="{StaticResource PgSeg}" GroupName="scope" Content="Chosen folders" Margin="6,0,0,0" Checked="OnScopeChanged" />
-        </StackPanel>
+        <!-- PgSeg is 32 px wide for Settings' 1/2/4/8; these fit their words and drop to a new line when narrow -->
+        <WrapPanel Margin="0,8,0,0">
+          <RadioButton x:Name="WholeChoice" Style="{StaticResource PgSeg}" GroupName="scope" Width="Auto" Margin="0,0,6,6"
+                       AutomationProperties.Name="The whole nest" IsChecked="True" Checked="OnScopeChanged">
+            <TextBlock Text="The whole nest" Margin="12,0" />
+          </RadioButton>
+          <RadioButton x:Name="FoldersChoice" Style="{StaticResource PgSeg}" GroupName="scope" Width="Auto" Margin="0,0,6,6"
+                       AutomationProperties.Name="Chosen folders" Checked="OnScopeChanged">
+            <TextBlock Text="Chosen folders" Margin="12,0" />
+          </RadioButton>
+        </WrapPanel>
         <TextBlock x:Name="SealedNote" Foreground="{DynamicResource T.Muted}" FontSize="12.5" TextWrapping="Wrap" Margin="0,8,0,0" Visibility="Collapsed"
                    Text="Your nest is encrypted, so for now it can only be shared whole." />
         <Border x:Name="FolderBox" Margin="0,10,0,0" CornerRadius="14" BorderThickness="1" BorderBrush="{DynamicResource T.Border}" Background="{DynamicResource T.Card}"
@@ -39,14 +46,14 @@
         <TextBlock Style="{StaticResource PgCardTitle}" Margin="0,20,0,0" Text="What they can do" />
         <RadioButton x:Name="ViewChoice" GroupName="access" IsChecked="True" Margin="0,10,0,0" AutomationProperties.Name="View only">
           <StackPanel Margin="4,0,0,0">
-            <TextBlock Text="View only" FontWeight="Bold" />
+            <TextBlock Text="View only" FontWeight="Bold" Foreground="{DynamicResource T.Text}" />
             <TextBlock Foreground="{DynamicResource T.Muted}" FontSize="12.5" TextWrapping="Wrap"
                        Text="They get your files and your changes. What they change stays on their computer." />
           </StackPanel>
         </RadioButton>
         <RadioButton x:Name="EditChoice" GroupName="access" Margin="0,10,0,0" AutomationProperties.Name="Can change">
           <StackPanel Margin="4,0,0,0">
-            <TextBlock Text="Can change" FontWeight="Bold" />
+            <TextBlock Text="Can change" FontWeight="Bold" Foreground="{DynamicResource T.Text}" />
             <TextBlock Foreground="{DynamicResource T.Muted}" FontSize="12.5" TextWrapping="Wrap"
                        Text="They can add, edit and delete in these folders. Deleted files still go to your nest's history." />
           </StackPanel>

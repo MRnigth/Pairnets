@@ -63,7 +63,9 @@ public partial class InviteWindow : Window
             var box = new CheckBox { Tag = name, Margin = new Thickness(0, 8, 0, 0), VerticalContentAlignment = VerticalAlignment.Center };
             var size = new TextBlock { Text = Format.Bytes(bytes), FontSize = 12, Margin = new Thickness(10, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
             size.SetResourceReference(TextBlock.ForegroundProperty, "T.Muted");
-            box.Content = new StackPanel { Orientation = Orientation.Horizontal, Children = { new TextBlock { Text = name, FontWeight = FontWeights.SemiBold }, size } };
+            var title = new TextBlock { Text = name, FontWeight = FontWeights.SemiBold };
+            title.SetResourceReference(TextBlock.ForegroundProperty, "T.Text");
+            box.Content = new StackPanel { Orientation = Orientation.Horizontal, Children = { title, size } };
             System.Windows.Automation.AutomationProperties.SetName(box, name);
             FolderList.Children.Add(box);
         }

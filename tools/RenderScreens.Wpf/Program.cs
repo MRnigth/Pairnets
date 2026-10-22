@@ -579,6 +579,22 @@ public static partial class Program
         Save(send, outDir, $"windows-send-crash-{suffix}.png", print);
         send.Close();
 
+        // A nest's "Invite a friend…": the whole nest, then chosen folders (at the window's narrowest too).
+        var inviteNest = Path.Combine(Path.GetTempPath(), "pairnets-invite-shots");
+        Directory.CreateDirectory(Path.Combine(inviteNest, "Photos"));
+        Directory.CreateDirectory(Path.Combine(inviteNest, "School"));
+        var invite = new InviteWindow("Home nest", "nst_0123456789abcdefghjkmnpqrs", inviteNest, sealedNest: false, _ => { });
+        Place(invite);
+        Save(invite, outDir, $"windows-invite-{suffix}.png", print);
+        ((System.Windows.Controls.RadioButton)invite.FindName("FoldersChoice")).IsChecked = true;
+        Save(invite, outDir, $"windows-invite-folders-{suffix}.png", print);
+        invite.Close();
+        var narrowInvite = new InviteWindow("Home nest", "nst_0123456789abcdefghjkmnpqrs", inviteNest, sealedNest: false, _ => { });
+        narrowInvite.Width = narrowInvite.MinWidth;
+        Place(narrowInvite);
+        Save(narrowInvite, outDir, $"windows-invite-narrow-{suffix}.png", print);
+        narrowInvite.Close();
+
         Stage6.Render(outDir, suffix, print);
     }
 
@@ -686,7 +702,8 @@ public static partial class Program
         var width = content.ActualWidth + content.Margin.Left + content.Margin.Right;
         var height = content.ActualHeight + content.Margin.Top + content.Margin.Bottom;
         // The bitmap's DPI does the 1.5× (no extra transform), and the brush shows the content's whole layout box, empty
-        // edges included (by default a VisualBrush crops to what is drawn, which shifts a page with margins).
+        // edges included (by default a VisualBrush crops to what is drawn, which shifts a page with margins). The brush
+        // already draws the content at its margin, so it is laid down at the picture's corner.
         const double scale = 1.5;
         var visual = new DrawingVisual();
         using (var dc = visual.RenderOpen())
@@ -698,8 +715,8 @@ public static partial class Program
                 AlignmentX = AlignmentX.Left,
                 AlignmentY = AlignmentY.Top,
                 ViewboxUnits = BrushMappingMode.Absolute,
-                Viewbox = new Rect(0, 0, content.ActualWidth, content.ActualHeight),
-            }, null, new Rect(content.Margin.Left, content.Margin.Top, content.ActualWidth, content.ActualHeight));
+                Viewbox = new Rect(0, 0, width, height),
+            }, null, new Rect(0, 0, width, height));
         }
         var bitmap = new RenderTargetBitmap((int)Math.Ceiling(width * scale), (int)Math.Ceiling(height * scale), 96 * scale, 96 * scale, PixelFormats.Pbgra32);
         bitmap.Render(visual);
