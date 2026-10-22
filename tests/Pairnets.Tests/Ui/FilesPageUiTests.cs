@@ -199,4 +199,108 @@ public class FilesPageUiTests
         Assert.False(Screen.Named<StackPanel>(off, "PlacementRows").IsEnabled);
         host.Close();
     }
+
+    /// <summary>The choices the card offers on <paramref name="folder"/>'s row, by their names.</summary>
+    private static List<string> Offered(SettingsView view, string folder)
+    {
+        var row = folder.Length == 0 ? FilesPageText.EverythingElse : folder;
+        return Screen.All<RadioButton>(Screen.Named<StackPanel>(view, "PlacementRows"))
+            .Select(b => Avalonia.Automation.AutomationProperties.GetName(b) ?? string.Empty)
+            .Where(n => n.StartsWith(row + ": ", StringComparison.Ordinal))
+            .Select(n => n[(row.Length + 2)..])
+            .ToList();
+    }
+
+    /// <summary>Every text a pop-up shows, joined.</summary>
+    private static string Words(Window popup) => string.Join(" | ", Screen.All<TextBlock>(popup).Select(t => t.Text));
+
+    [AvaloniaFact]
+    public async Task TheWholeFolderRow_NeverOffersOnlyOnTheNest_AndNamesWhatAChoiceChanges()
+    {
+        var nest = new FakeNestFiles();
+        var settings = new ClientSettings { ServerUrl = "https://nest.example.com/", Folder = "/Users/me/Work", DeviceName = "MacBook", FirstRunCompleted = true };
+        settings.Placement["Photos"] = FilePlacement.NestOnly;
+        var view = new SettingsView(settings, new MemorySecrets(), autoStart: false, files: nest);
+        var applied = new List<ClientSettings>();
+        view.SwitchesChanged += applied.Add;
+        var host = new Window { Content = view, Width = 900, Height = 780 };
+        host.Show();
+
+        Assert.DoesNotContain("Only on the nest", Offered(view, ""));
+        Assert.Contains("On this PC", Offered(view, ""));
+        Assert.Contains("Only on the nest", Offered(view, "Videos"));
+
+        // Asked for anyway: nothing is asked, saved or applied.
+        await view.ChoosePlacementAsync("", FilePlacement.NestOnly);
+        Assert.Empty(applied);
+        Assert.Equal(FilePlacement.OnThisPc, view.PlacementChosen(""));
+        Assert.Null(view.PlacementStatusShown);
+
+        // On-Demand for the whole folder names the loose files and every folder without its own choice first.
+        var choosing = view.ChoosePlacementAsync("", FilePlacement.OnDemand);
+        var question = await Wait.For(() => AllWindows().FirstOrDefault(w => w != host && w.IsVisible && w.Title == "Make all your files On-Demand?"), "the question");
+        Assert.Contains("This changes: 1 file right in your Pairnets folder (not in a folder), Documents (2 files), Videos (1 file).", Words(question));
+        Person.Click(Screen.Find<Button>(question, "Make it On-Demand"));
+        await choosing;
+        Assert.Equal(FilePlacement.OnDemand, applied.Single().Placement[""]);
+        Assert.Equal("Saved: All other files → On-Demand.", view.PlacementStatusShown);
+        host.Close();
+    }
+
+    [AvaloniaFact]
+    public async Task AChoice_StartsTheSyncAgain_WithoutACrash_AndTheCardFollowsTheDownload()
+    {
+        var first = new FakeNestFiles();
+        INestFiles running = first;
+        var settings = new ClientSettings { ServerUrl = "https://nest.example.com/", Folder = "/Users/me/Work", DeviceName = "MacBook", FirstRunCompleted = true };
+        settings.Placement["Videos"] = FilePlacement.NestOnly;
+        var view = new SettingsView(settings, new MemorySecrets(), autoStart: false, files: first) { FilesSource = () => running };
+        view.SwitchesChanged += _ =>
+        {
+            // As the app does: the old sync's list is closed and a new one runs.
+            first.Closed = true;
+            var next = new FakeNestFiles();
+            next.Placement.Clear();
+            running = next;
+        };
+        var host = new Window { Content = view, Width = 900, Height = 780 };
+        host.Show();
+
+        await view.ChoosePlacementAsync("Videos", FilePlacement.OnThisPc);
+        Assert.Equal(FilePlacement.OnThisPc, view.PlacementChosen("Videos"));
+        Assert.Equal("Saved: Videos → On this computer.", view.PlacementStatusShown);
+
+        var downloading = StatusSnapshot.Initial with
+        {
+            Status = RunnerStatus.Syncing, Text = "Syncing", CurrentPath = "Videos/wedding-full-day.mp4", Operation = "download",
+            FilesTotal = 149, FilesDone = 37, Active = [new ActiveTransfer("Videos/wedding-full-day.mp4", "download", 10, 100)],
+        };
+        view.ShowPlacementStatus(downloading);
+        Assert.StartsWith("Saved: Videos → On this computer. Downloading", view.PlacementStatusShown);
+        Assert.Contains("37 of 149 files", view.PlacementStatusShown);
+
+        // Even a page with no new list to read draws again without a crash.
+        var stale = new SettingsView(settings, new MemorySecrets(), autoStart: false, files: first);
+        host.Content = stale;
+        await stale.ChoosePlacementAsync("Documents", FilePlacement.OnThisPc);
+        host.Close();
+    }
+
+    [AvaloniaFact]
+    public async Task TheFilesPage_ChoosesForExactlyTheFolderPicked_NeverTheWholeFolder()
+    {
+        var (window, _, nest) = Open();
+        window.Navigate(MainPage.Files);
+        Assert.False(await window.FilesView.ChoosePlacementAsync("", FilePlacement.NestOnly));
+        Assert.Empty(nest.Calls);
+
+        var choosing = window.FilesView.ChoosePlacementAsync("Videos", FilePlacement.NestOnly);
+        var question = await PopupAsync(window, "Keep Videos only on your nest?");
+        Assert.Contains("This changes: 1 file right in Videos.", Words(question));
+        Person.Click(Screen.Find<Button>(question, "Keep it on the nest only"));
+        Assert.True(await choosing);
+        Assert.Equal(["place:Videos:NestOnly"], nest.Calls);
+        Assert.DoesNotContain("", nest.Placement.Keys);
+        window.Close();
+    }
 }

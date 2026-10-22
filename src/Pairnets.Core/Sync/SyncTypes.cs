@@ -107,6 +107,9 @@ public sealed class PassResult
     /// <summary>Copies of nest-only files kept here this pass because the nest is (nearly) full.</summary>
     public int KeptForRoom { get; set; }
 
+    /// <summary>Copies of nest-only files kept here because Windows won't let Pairnets remove them (read-only): never an error.</summary>
+    public int KeptHere { get; set; }
+
     /// <summary>Files skipped because they were still being written, locked, or otherwise unknown.</summary>
     public int Unstable { get; set; }
 

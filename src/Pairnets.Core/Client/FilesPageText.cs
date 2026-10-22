@@ -91,8 +91,8 @@ public static class FilesPageText
     public const string SettingsTitle = "Where your files live";
     public const string SettingsNote = "This PC only · your other computers choose for themselves";
     public const string SettingsText = "Keep big folders on your nest to free space here. Pairnets only removes a file from this PC once it is safely on your nest.";
-    public const string EverythingElse = "Everything else";
-    public const string EverythingElseNote = "Files and folders not listed below";
+    public const string EverythingElse = "All other files";
+    public const string EverythingElseNote = "Files right in your Pairnets folder and every folder not listed below";
     public const string SettingsLink = "Choose for a folder inside these… (opens Files)";
     public const string SettingsOff = "Sign in and connect to your nest to choose where your files live.";
 
@@ -136,17 +136,23 @@ public static class FilesPageText
     /// <summary>A change that takes files off this computer is asked about first.</summary>
     public static bool AsksFirst(FilePlacement from, FilePlacement to) => to != FilePlacement.OnThisPc && to != from;
 
-    /// <summary>The question before <paramref name="folder"/> goes to On-Demand or the nest only.</summary>
-    public static AwayQuestion AwayQuestion(string folder, FilePlacement to, long bytesHere)
+    /// <summary>
+    /// The question before <paramref name="folder"/> goes to On-Demand or the nest only. <paramref name="affects"/> names
+    /// what the choice changes (<see cref="Affects"/>): it comes first, so a choice for every folder never looks like one
+    /// for a single folder.
+    /// </summary>
+    public static AwayQuestion AwayQuestion(string folder, FilePlacement to, long bytesHere, string? affects = null)
     {
         var name = FolderName(folder);
         var size = Format.Bytes(bytesHere);
+        string[] first = affects is { Length: > 0 } ? [affects] : [];
         if (to == FilePlacement.OnDemand)
         {
             return new AwayQuestion($"Make {name} On-Demand?",
                 "Pairnets checks that each file is safely on your nest, then keeps only its icon on this PC. A file downloads again when you open it."
                 + (bytesHere > 0 ? $" This frees up to {size}." : string.Empty),
                 [
+                    .. first,
                     "Files still being uploaded stay here until your nest has them.",
                     "Right-click a file › Always keep on this device to keep it here.",
                     "Your other computers keep their copies.",
@@ -156,12 +162,85 @@ public static class FilesPageText
         return new AwayQuestion($"Keep {name} only on your nest?",
             "Pairnets checks that each file is safely on your nest, then removes it from this PC." + (bytesHere > 0 ? $" This frees {size}." : string.Empty),
             [
+                .. first,
+                $"New files you put in {name} later are removed from this PC too, once your nest has them.",
                 "Files still being uploaded stay here until your nest has them.",
                 "Open them any time from Files while your nest is online.",
                 "Your other computers keep their copies.",
             ],
             bytesHere > 0 ? "Free " + size : "Keep it on the nest only");
     }
+
+    /// <summary>
+    /// What a choice for <paramref name="folder"/> changes, from its list on the nest (<see cref="INestFiles.List"/>):
+    /// "This changes: 932 files right in your Pairnets folder (not in a folder), DCIM (141 files) and 3 more folders". Folders
+    /// inside with a choice of their own (not <paramref name="now"/>) keep it and are left out.
+    /// </summary>
+    public static string Affects(IReadOnlyList<NestEntry> inFolder, string folder, FilePlacement now, int max = 4)
+    {
+        var whole = PlacementMap.NormalizeFolder(folder).Length == 0;
+        var name = whole ? "your Pairnets folder" : FolderName(folder);
+        var folders = inFolder.Where(e => e.IsFolder && e.Placement == now).ToList();
+        var loose = inFolder.Count(e => !e.IsFolder);
+        if (folders.Count == 0 && loose == 0)
+            return $"There are no files on your nest in {name} yet. New files you put in it follow this choice.";
+        var parts = new List<string>();
+        if (loose > 0)
+            parts.Add($"{Files(loose)} right in {name}" + (whole ? " (not in a folder)" : string.Empty));
+        parts.AddRange(folders.Take(max).Select(f => $"{f.Name} ({Files(f.Files)})"));
+        var text = "This changes: " + string.Join(", ", parts);
+        var more = folders.Count - Math.Min(max, folders.Count);
+        if (more > 0)
+            text += $" and {Format.Count(more)} more {(more == 1 ? "folder" : "folders")}";
+        return text + ".";
+    }
+
+    private static string Files(int count) => $"{Format.Count(count)} {(count == 1 ? "file" : "files")}";
+
+    /// <summary>
+    /// The line under the Settings card after a choice: what was saved and what Pairnets is doing about it now, read again
+    /// as the sync goes ("Saved: Photos → On this PC. Downloading · 37 of 120 files"). <paramref name="since"/> is when the
+    /// choice was made: a sync that finished before it says nothing about the choice yet.
+    /// </summary>
+    public static string PlacementStatus(string folder, FilePlacement placement, StatusSnapshot? status, DateTimeOffset since, DateTimeOffset now)
+    {
+        var label = PlacementMap.NormalizeFolder(folder) is { Length: > 0 } f ? f : EverythingElse;
+        var saved = $"Saved: {label} → {NestFiles.PlacementText(placement)}.";
+        if (status is null)
+            return saved;
+        if (status.FixLabel is not null)
+            return saved + " Syncing is paused until you decide on the Overview, so no file moves yet.";
+        if (status.Status == RunnerStatus.Syncing)
+            return saved + " " + status.StatusLineAt(now);
+        if (status.Paused)
+            return saved + " Syncing is paused; the files move when you resume.";
+        if (status.LastSyncAt is not { } at || at < since)
+        {
+            // A new sync starts out offline until it reaches the nest: only a long wait means it can't.
+            return status.Status == RunnerStatus.Offline && now - since > StartGrace
+                ? saved + " Your nest can't be reached right now; the files move once it's back."
+                : saved + " Starting…";
+        }
+        return saved + " Done: " + placement switch
+        {
+            FilePlacement.NestOnly => "its files are on your nest only. New files you put in it leave this PC once your nest has them.",
+            FilePlacement.OnDemand => "its files show in File Explorer and download when you open them.",
+            _ => "every file is on this PC.",
+        };
+    }
+
+    /// <summary>How long a sync started again by a choice may take to reach the nest before the line says it can't.</summary>
+    public static readonly TimeSpan StartGrace = TimeSpan.FromSeconds(30);
+
+    /// <summary>The notice after a sync removed copies from this PC because their folder lives on the nest only.</summary>
+    public static (string Title, string Text) FreedNotice(int count) =>
+        ("Moved to your nest only",
+         $"{Format.Count(count)} {(count == 1 ? "file is" : "files are")} now on your nest only, not on this PC. Open them in Pairnets › Files, or choose On this PC in Settings to get them back.");
+
+    /// <summary>The Overview's line for folders that live on the nest only: "DCIM, Photos" or "DCIM, Photos and 2 more".</summary>
+    public static string NestOnlyFolders(IReadOnlyList<string> folders, int max = 3) =>
+        folders.Count <= max ? string.Join(", ", folders)
+            : string.Join(", ", folders.Take(max)) + $" and {Format.Count(folders.Count - max)} more";
 
     /// <summary>"3.1 GB free of 1 TB on your nest." (empty when the nest has not said).</summary>
     public static string FreeLine(ServerInfo? server) => server?.DiskFreeBytes is { } free

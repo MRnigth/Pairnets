@@ -51,7 +51,7 @@ public static class SetupChoices
                     {
                         "here" => FilePlacement.OnThisPc,
                         "ondemand" => FilePlacement.OnDemand,
-                        "nest" => FilePlacement.NestOnly,
+                        "nest" => FilePlacement.OnThisPc, // an older installer's choice: the whole folder is never nest only
                         _ => (FilePlacement?)null,
                     };
                     if (placement is FilePlacement.OnThisPc)

@@ -1639,3 +1639,31 @@ A (a nest joins another nest) and B (invite an account), with the recommended an
   shared with the account (`/api/links`, `/api/offers`) are for the owner's computers only.
 * **The Files page and storage for friends.** Moving is a write (both ends must be in the share), and deleting for
   good and "Where your files live" (`/api/purge`, `/api/storage`) are the owner's only.
+
+## "Only on the nest" is per folder, and every placement change says what it does (2026-10-22)
+
+A person picked one folder for "Only on the nest" on the Settings card, but the choice landed on the whole-folder row
+("Everything else", key `""`). Every file anywhere in the Pairnets folder was then uploaded and removed from the PC
+two minutes later: about 930 loose screenshots, and later a camera folder put in to sync. Nothing was lost (the nest
+had every file), but it looked like files vanishing, and the Settings page crashed right after the choice, so the
+change was never seen.
+
+* **The whole folder is never nest only.** `PlacementMap.Allowed` refuses `NestOnly` for `""`: the map ignores it, the
+  Settings card and the Files page's top level don't offer it, and `PlacementMap.Choose` turns it into "On this PC".
+  On-Demand stays for the whole folder (the files stay visible in Explorer).
+* **Existing settings are fixed once** (`SettingsUpgrades` 2): `placement[""] = NestOnly` is removed for every nest on
+  the computer, so its files come back. The installer's "Only on the nest" task is gone; an older installer's
+  `where=nest` reads as "On this PC".
+* **The row says what it covers.** "All other files · Files right in your Pairnets folder and every folder not listed
+  below".
+* **The question names what changes** (`FilesPageText.Affects`): loose files first ("932 files right in your Pairnets
+  folder (not in a folder)"), then each folder with its file count, capped with "and N more folders". Folders with a
+  choice of their own are left out. A nest-only question also says new files put in the folder later leave the PC too.
+* **The card shows what happened.** A line under it says what was saved and follows the sync ("Downloading · 37 of 120
+  files", "Syncing is paused until you decide", "Done: every file is on this PC"). The page reads the running sync's
+  files each time (`SettingsView.FilesSource`), since a choice starts the sync again and closed the old list (the crash).
+* **Freeing is never silent.** A pass that frees copies raises one notice ("N files are now on your nest only…"), and
+  the Overview lists the folders kept on the nest only with a link to Files.
+* **A read-only copy is kept here quietly** (`PassResult.KeptHere`, logged once), not an error retried every pass.
+* **Follow-up, not changed here:** while the folder-empty / mass-delete guard blocks a pass, downloads wait too, so a
+  folder switched back to "On this PC" refills only after the person decides on the Overview.

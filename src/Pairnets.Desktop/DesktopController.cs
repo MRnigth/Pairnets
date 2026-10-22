@@ -416,6 +416,12 @@ public sealed class DesktopController : ITrayActions, IDisposable
             Notify("blocked:" + r.BlockReason, PrefixOf(run) + (r.BlockReason is BlockReason.MassDelete or BlockReason.FolderEmpty ? "Deletions blocked"
                 : r.BlockReason == BlockReason.SignedOut ? "Signed out of your nest"
                 : r.BlockReason == BlockReason.SignInRequired ? "Sign in to your nest" : "Pairnets paused syncing"), r.Message ?? r.BlockReason.ToString(), run);
+        else if (r.Freed > 0)
+        {
+            // Copies removed here because their folder lives on the nest only: never silent.
+            var (title, text) = FilesPageText.FreedNotice(r.Freed);
+            Notify("freed", PrefixOf(run) + title, text.Replace("this PC", "this computer", StringComparison.Ordinal), run);
+        }
         else if (r.Outcome == PassOutcome.AuthFailed)
             Notify("auth", PrefixOf(run) + "Sign in to your nest", "Your nest did not accept this computer's sign-in. Open Pairnets and sign in again to keep syncing.", run);
     }
@@ -915,6 +921,8 @@ public sealed class DesktopController : ITrayActions, IDisposable
             _window.ShowStatus(status, Nest.Folder, Nest.DeviceName);
             _window.ShowActivity(_session?.Activity.Items ?? []);
             _window.ShowAttention(BuildAttention(status));
+            if (_settingsView is { IsLoaded: true } settings)
+                settings.ShowPlacementStatus(status);
         }
         if (_panel is { IsVisible: true })
         {
@@ -1232,6 +1240,8 @@ public sealed class DesktopController : ITrayActions, IDisposable
         {
             KeySlot = _settings.KeySlotFor(picked),
         };
+        view.FilesSource = () => _session?.Files; // a choice starts the sync again: read the running one's files
+        _settingsView = view;
         view.OpenFilesRequested += () => _window?.Navigate(MainPage.Files);
         view.Saved += v =>
         {
@@ -1253,6 +1263,9 @@ public sealed class DesktopController : ITrayActions, IDisposable
         _window!.ShowSettingsPage(view);
         _ = FillNestStorageAsync(view);
     }
+
+    /// <summary>The Settings page last shown: its "Where your files live" line follows the sync while it is open.</summary>
+    private SettingsView? _settingsView;
 
     /// <summary>What the nest last said about where it keeps its files (the window shows it at once).</summary>
     private NestStorage? _nestStorage;

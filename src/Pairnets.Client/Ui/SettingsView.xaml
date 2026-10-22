@@ -471,6 +471,10 @@
             <TextBlock x:Name="PlacementNote" Style="{StaticResource PgSmall}" FontSize="13" Margin="0,8,0,4" TextWrapping="Wrap"
                        Text="Keep big folders on your nest to free space here. Pairnets only removes a file from this PC once it is safely on your nest." />
             <StackPanel x:Name="PlacementRows" />
+            <!-- What the last choice did, and what Pairnets is doing about it now (read again as the sync goes). -->
+            <Border x:Name="PlacementStatusBox" Visibility="Collapsed" Margin="0,12,0,0" Padding="12,8" CornerRadius="10" Background="{DynamicResource T.OkPill}">
+              <TextBlock x:Name="PlacementStatusText" FontSize="13" FontWeight="SemiBold" TextWrapping="Wrap" Foreground="{DynamicResource T.OkText}" />
+            </Border>
             <Button Style="{StaticResource PgLink}" HorizontalAlignment="Left" Margin="0,12,0,0" Padding="0,2" Content="Choose for a folder inside these… (opens Files)" Click="OnPlacementLink" />
           </StackPanel>
         </Border>

@@ -75,8 +75,21 @@ public sealed class FakeNestFiles : INestFiles
     private NestEntry File(string path, (long Size, DateTimeOffset Changed, bool Here) f) =>
         new(path, false, f.Size, f.Changed, "hash-" + path, f.Here ? FileWhere.Here : FileWhere.NestOnly, PlacementOf(path));
 
+    /// <summary>
+    /// The sync these files belong to was started again (a placement choice does that): reading the list then fails as
+    /// the real one did ("ExecuteReader can only be called when the connection is open").
+    /// </summary>
+    public bool Closed { get; set; }
+
+    private void ThrowIfClosed()
+    {
+        if (Closed)
+            throw new InvalidOperationException("ExecuteReader can only be called when the connection is open.");
+    }
+
     public IReadOnlyList<NestEntry> List(string folder)
     {
+        ThrowIfClosed();
         folder = PlacementMap.NormalizeFolder(folder);
         var prefix = folder.Length == 0 ? string.Empty : folder + "/";
         var folders = new Dictionary<string, (long Size, int Files, DateTimeOffset Changed)>(StringComparer.Ordinal);
@@ -121,6 +134,7 @@ public sealed class FakeNestFiles : INestFiles
 
     public long BytesHere(string folder)
     {
+        ThrowIfClosed();
         folder = PlacementMap.NormalizeFolder(folder);
         return All().Where(f => f.Value.Here && (folder.Length == 0 || f.Key.StartsWith(folder + "/", StringComparison.Ordinal))).Sum(f => f.Value.Size);
     }
