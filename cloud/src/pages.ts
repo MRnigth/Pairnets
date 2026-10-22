@@ -869,6 +869,7 @@ export function addPage(req: ServerRequestView | null, typed: string | null, cou
       "Add a nest",
       `<section class="card">
 <h1>Add a nest</h1>
+<p class="muted">When you set up Pairnets on your own server, its installer shows a code like ABCD-EFGH. Type it here to add that nest to your account.</p>
 ${msg}
 <form method="get" action="/add">
 <label for="code">Code shown by the installer</label>

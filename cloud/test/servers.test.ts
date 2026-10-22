@@ -169,7 +169,10 @@ describe("adding a server", () => {
     const bad = await stranger.call("GET", "/add?code=NOPE-NOPE");
     expect(bad.status).toBe(404);
     expect(bad.text).toContain("That code is not valid or has expired.");
-    expect((await stranger.call("GET", "/add")).text).toContain("Code shown by the installer");
+    const add = (await stranger.call("GET", "/add")).text;
+    expect(add).toContain("Code shown by the installer");
+    // Where the code comes from, as /app says for the apps' codes.
+    expect(add).toContain("When you set up Pairnets on your own server, its installer shows a code like ABCD-EFGH.");
     expect((await stranger.call("GET", `/add?code=${userCode}`)).status).toBe(200);
     expect((await h.client().call("GET", `/v1/servers/requests/${userCode}`)).status).toBe(401);
   });
