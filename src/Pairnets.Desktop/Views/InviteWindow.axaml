@@ -18,8 +18,8 @@
       <StackPanel>
         <TextBlock FontSize="15" FontWeight="ExtraBold" Text="What they get" />
         <WrapPanel Margin="0,8,0,0" ItemSpacing="6" LineSpacing="6">
-          <RadioButton x:Name="WholeChoice" Classes="seg" GroupName="scope" Content="The whole nest" IsChecked="True" IsCheckedChanged="OnScopeChanged" />
-          <RadioButton x:Name="FoldersChoice" Classes="seg" GroupName="scope" Content="Chosen folders" IsCheckedChanged="OnScopeChanged" />
+          <RadioButton x:Name="WholeChoice" Classes="pill" GroupName="scope" Content="The whole nest" IsChecked="True" IsCheckedChanged="OnScopeChanged" />
+          <RadioButton x:Name="FoldersChoice" Classes="pill" GroupName="scope" Content="Chosen folders" IsCheckedChanged="OnScopeChanged" />
         </WrapPanel>
         <TextBlock x:Name="SealedNote" Classes="muted" FontSize="12.5" TextWrapping="Wrap" Margin="0,8,0,0" IsVisible="False"
                    Text="Your nest is encrypted, so for now it can only be shared whole." />

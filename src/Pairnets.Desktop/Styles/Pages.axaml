@@ -203,6 +203,32 @@
     <Setter Property="Background" Value="{DynamicResource T.AccentButton}" />
   </Style>
 
+  <!-- numseg's look, sized to its words: the invite window's "What they get" (the Windows app's PgSeg with Width="Auto") -->
+  <Style Selector="RadioButton.pill">
+    <Setter Property="Foreground" Value="{DynamicResource T.Muted}" />
+    <Setter Property="FontWeight" Value="Bold" />
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Border x:Name="bd" Background="Transparent" CornerRadius="8" Height="28" Padding="12,0">
+          <ContentPresenter Content="{TemplateBinding Content}" Foreground="{TemplateBinding Foreground}"
+                            HorizontalAlignment="Center" VerticalAlignment="Center" />
+        </Border>
+      </ControlTemplate>
+    </Setter>
+  </Style>
+  <Style Selector="RadioButton.pill:pointerover:not(:checked) /template/ Border#bd">
+    <Setter Property="Background" Value="{DynamicResource T.Hover}" />
+  </Style>
+  <Style Selector="RadioButton.pill:checked">
+    <Setter Property="FontWeight" Value="ExtraBold" />
+    <Setter Property="Foreground" Value="White" />
+  </Style>
+  <Style Selector="RadioButton.pill:checked /template/ Border#bd">
+    <Setter Property="Background" Value="{DynamicResource T.AccentButton}" />
+  </Style>
+
   <!-- Secondary buttons that sit on a chip colour (Settings, Account) -->
   <Style Selector="Button.chipbtn">
     <Setter Property="MinHeight" Value="34" />
