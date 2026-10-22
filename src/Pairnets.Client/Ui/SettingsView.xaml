@@ -35,7 +35,7 @@
     </Grid.RowDefinitions>
 
     <!-- Header: the title, and Cancel and Save (for the text boxes; the switches apply at once) -->
-    <Grid Margin="28,40,28,16">
+    <Grid Margin="28,8,28,16">
       <Grid.ColumnDefinitions>
         <ColumnDefinition Width="*" />
         <ColumnDefinition Width="Auto" />

@@ -7,7 +7,7 @@
     <ui:FileIconConverter x:Key="FileIcon" />
   </UserControl.Resources>
   <!-- "Clean up your nest": the biggest files on the nest, to save elsewhere or (only when completely sure) delete for good. -->
-  <Grid Margin="28,40,28,24">
+  <Grid Margin="28,8,28,24">
     <Grid.RowDefinitions>
       <RowDefinition Height="Auto" />
       <RowDefinition Height="Auto" />

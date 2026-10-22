@@ -293,6 +293,11 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
                 w.ShowActivity(SampleFeed().Items);
                 w.Navigate(MainPage.Activity);
             })),
+            new("the main window (overview after going back from Activity)", s => MainStage(s, w =>
+            {
+                w.Navigate(MainPage.Activity);
+                w.GoBack();
+            })),
             new("the main window (History page)", s => MainStage(s, w => w.Navigate(MainPage.History), async w => await w.LoadHistoryAsync())),
             new("the main window (History page, all files)", s => MainStage(s, w => w.Navigate(MainPage.History), async w =>
             {
@@ -555,6 +560,8 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
         s.Expect["OnFoldSide"] = That(() => w.SideFolded, "the left side fold into the dock");
         s.Expect["OnUnfoldSide"] = That(() => !w.SideFolded, "the left side open again");
         s.Expect["OnFoldGroup"] = That(() => !w.GroupGrid.IsVisible, "the other computers fold away");
+        s.Expect["OnBack"] = That(() => w.CanGoForward, "the page before open, with forward on");
+        s.Expect["OnForward"] = That(() => w.CanGoBack, "the page after open, with back on");
         s.Expect["OnAccount"] = OnPage(w, MainPage.Account);
         s.Expect["OnThisComputer"] = OnPage(w, MainPage.Overview);
         s.Expect["OnNestRow"] = OnPage(w, MainPage.Devices);

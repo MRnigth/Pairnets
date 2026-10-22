@@ -654,6 +654,12 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
             main.ShowActivity(RowsWithAFolder());
             main.Navigate(MainPage.Activity);
         }));
+        yield return new Screen(name, "the Overview after going back from Activity (forward is on)", NewMainWindow, (b, w) => Wpf.Ui(() =>
+        {
+            var main = (MainWindow)w;
+            main.Navigate(MainPage.Activity);
+            main.GoBack();
+        }));
         yield return new Screen(name, "the Activity page, a folder opened", NewMainWindow, (b, w) => Wpf.Ui(() =>
         {
             var main = (MainWindow)w;
@@ -836,6 +842,10 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
             c => c.Bench.Actions.Calls.Items.Contains($"RevealFile({((ActivityItem)c.Item!).Path})")),
         new(t => t.Kind == PressKind.MenuItem && t.Label == "Show versions…", "open History on that file (its versions, or the deleted table when it was deleted)",
             c => ShowsFileInHistory((MainWindow)c.Window, ((ActivityItem)c.Item!).Path!)),
+
+        // Back and forward above every page: the tooltip names the page they open.
+        new(t => t.Element is Button && (t.Label.StartsWith("Back to ", StringComparison.Ordinal) || t.Label.StartsWith("Forward to ", StringComparison.Ordinal)),
+            "open the page its tooltip names", c => c.Target.Label.Contains(" to " + MainWindow.PageName(((MainWindow)c.Window).Page) + " (", StringComparison.Ordinal)),
 
         // The Activity page.
         new(t => t.Element is RadioButton { GroupName: "activityfilter" }, "show only that kind of row",

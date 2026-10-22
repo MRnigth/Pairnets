@@ -36,4 +36,26 @@ public class UiShortcutsTests
         Assert.Equal("Computers (⌘5)", Shortcuts.WithHint("Computers", ShortcutAction.PageDevices, mac: true));
         Assert.Equal("More", Shortcuts.WithHint("More", ShortcutAction.None, mac: false));
     }
+
+    [Theory]
+    [InlineData("Left", true, false, false, ShortcutAction.Back)]
+    [InlineData("Right", true, false, false, ShortcutAction.Forward)]
+    [InlineData("OemOpenBrackets", false, true, true, ShortcutAction.Back)]
+    [InlineData("OemCloseBrackets", false, true, true, ShortcutAction.Forward)]
+    [InlineData("BrowserBack", false, false, false, ShortcutAction.Back)]
+    [InlineData("BrowserForward", false, false, true, ShortcutAction.Forward)]
+    [InlineData("Left", false, false, false, ShortcutAction.None)]
+    [InlineData("Left", true, false, true, ShortcutAction.None)] // Alt+Left moves by word on a Mac
+    [InlineData("Left", true, true, false, ShortcutAction.None)]
+    [InlineData("OemOpenBrackets", false, true, false, ShortcutAction.None)]
+    [InlineData("BrowserBack", true, false, false, ShortcutAction.None)]
+    public void BackAndForwardKeys(string key, bool alt, bool command, bool mac, ShortcutAction action) =>
+        Assert.Equal(action, Shortcuts.ForHistory(key, alt, command, mac));
+
+    [Fact]
+    public void BackAndForwardHints()
+    {
+        Assert.Equal("Back (Alt+Left)", Shortcuts.WithHint("Back", ShortcutAction.Back, mac: false));
+        Assert.Equal("Forward (⌘])", Shortcuts.WithHint("Forward", ShortcutAction.Forward, mac: true));
+    }
 }

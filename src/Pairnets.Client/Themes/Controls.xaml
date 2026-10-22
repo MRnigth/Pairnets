@@ -631,6 +631,23 @@
     </Setter>
   </Style>
 
+  <!-- Back and forward above every page: a quiet round button, faint while there is nowhere to go. -->
+  <Style x:Key="PageNavButton" TargetType="Button" BasedOn="{StaticResource RoundIconButton}">
+    <Setter Property="Width" Value="30" />
+    <Setter Property="Height" Value="30" />
+    <Setter Property="MinWidth" Value="30" />
+    <Setter Property="MinHeight" Value="30" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Tag" Value="{DynamicResource T.Hover}" />
+    <Setter Property="ui:Pg.Pressed" Value="{DynamicResource T.Hover}" />
+    <Setter Property="ToolTipService.ShowOnDisabled" Value="False" />
+    <Style.Triggers>
+      <Trigger Property="IsEnabled" Value="False">
+        <Setter Property="Opacity" Value="0.6" />
+      </Trigger>
+    </Style.Triggers>
+  </Style>
+
   <!-- The attention strip (warm). -->
   <Style x:Key="Attention" TargetType="Border">
     <Setter Property="Background" Value="{DynamicResource T.WarnPill}" />

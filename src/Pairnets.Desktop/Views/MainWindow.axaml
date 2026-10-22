@@ -293,8 +293,17 @@
     </Grid>
 
     <!-- ======================= Page ======================= -->
-    <Grid Grid.Column="1" RowDefinitions="Auto,*">
-      <Grid x:Name="HeaderRow" ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto" Margin="28,22,28,0">
+    <Grid Grid.Column="1" RowDefinitions="Auto,Auto,*">
+      <!-- Back and forward: the same place on every page; greyed out when there is nowhere to go. -->
+      <StackPanel x:Name="PageNav" Orientation="Horizontal" Spacing="2" Margin="22,10,28,0">
+        <Button x:Name="BackButton" Classes="pagenav" ToolTip.Tip="Back" AutomationProperties.Name="Back" IsEnabled="False" Click="OnBack">
+          <v:LineIcon Width="18" Height="18" StrokeThickness="2.4" Stroke="{DynamicResource T.Text}" Data="{StaticResource I.ChevronLeft}" />
+        </Button>
+        <Button x:Name="ForwardButton" Classes="pagenav" ToolTip.Tip="Forward" AutomationProperties.Name="Forward" IsEnabled="False" Click="OnForward">
+          <v:LineIcon Width="18" Height="18" StrokeThickness="2.4" Stroke="{DynamicResource T.Text}" Data="{StaticResource I.Chevron}" />
+        </Button>
+      </StackPanel>
+      <Grid x:Name="HeaderRow" Grid.Row="1" ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto" Margin="28,4,28,0">
         <StackPanel VerticalAlignment="Center">
           <TextBlock x:Name="PageNest" FontSize="12" FontWeight="ExtraBold" Foreground="{DynamicResource T.AccentInk}" Margin="1,0,0,1" IsVisible="False" />
           <TextBlock x:Name="PageTitle" Classes="title" Text="Overview" />
@@ -331,7 +340,7 @@
         </StackPanel>
       </Grid>
 
-      <Panel Grid.Row="1">
+      <Panel Grid.Row="2">
         <!-- ============ Overview ============ -->
         <ScrollViewer x:Name="OverviewPage" HorizontalScrollBarVisibility="Disabled">
           <v:OverviewView x:Name="Overview" />
@@ -343,7 +352,7 @@
         </ScrollViewer>
 
         <!-- ============ Activity ============ -->
-        <Grid x:Name="ActivityPage" RowDefinitions="Auto,Auto,*" Margin="28,40,28,24" IsVisible="False">
+        <Grid x:Name="ActivityPage" RowDefinitions="Auto,Auto,*" Margin="28,8,28,24" IsVisible="False">
           <Grid ColumnDefinitions="*,Auto">
             <StackPanel VerticalAlignment="Center">
               <TextBlock Classes="PageTitle" Text="Activity" />
@@ -522,7 +531,7 @@
 
         <!-- ============ Files: all files on the nest, and the deleted ones (History); Clean up in its place ============ -->
         <Grid x:Name="FilesPage" RowDefinitions="Auto,*" IsVisible="False">
-          <StackPanel x:Name="FilesHeader" Margin="28,40,28,0">
+          <StackPanel x:Name="FilesHeader" Margin="28,8,28,0">
             <TextBlock Classes="PageTitle" Text="Files" />
             <TextBlock Classes="t2" Margin="0,2,0,0" TextWrapping="Wrap" Text="Everything on your nest, and what was deleted in the last 30 days." />
             <Border Classes="tabs" HorizontalAlignment="Left" Margin="0,16,0,0">
@@ -743,7 +752,7 @@
         </Grid>
 
         <!-- ============ Devices: the nest and every computer that uses it ============ -->
-        <Grid x:Name="DevicesPage" RowDefinitions="Auto,*" Margin="28,40,28,24" IsVisible="False">
+        <Grid x:Name="DevicesPage" RowDefinitions="Auto,*" Margin="28,8,28,24" IsVisible="False">
           <Grid ColumnDefinitions="*,Auto,Auto">
             <StackPanel VerticalAlignment="Center">
               <TextBlock Classes="PageTitle" Text="Computers" />
@@ -929,7 +938,7 @@
         </Grid>
 
         <!-- ============ Needs you ============ -->
-        <Grid x:Name="AttentionPage" RowDefinitions="Auto,*" Margin="28,40,28,24" IsVisible="False">
+        <Grid x:Name="AttentionPage" RowDefinitions="Auto,*" Margin="28,8,28,24" IsVisible="False">
           <StackPanel>
             <TextBlock Classes="PageTitle" Text="Needs you" />
             <TextBlock x:Name="AttentionSubtitle" Classes="t2" Margin="0,2,0,0" TextWrapping="Wrap" />
@@ -1010,10 +1019,10 @@
         </Grid>
 
         <!-- ============ Account ============ -->
-        <v:AccountPageView x:Name="AccountPage" Margin="28,40,28,24" IsVisible="False" />
+        <v:AccountPageView x:Name="AccountPage" Margin="28,8,28,24" IsVisible="False" />
 
         <!-- ============ Settings (the form is a SettingsView the controller provides) ============ -->
-        <ContentControl x:Name="SettingsPage" Margin="28,40,28,24" IsVisible="False" />
+        <ContentControl x:Name="SettingsPage" Margin="28,8,28,24" IsVisible="False" />
       </Panel>
     </Grid>
   </Grid>

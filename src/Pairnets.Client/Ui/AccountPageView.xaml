@@ -3,7 +3,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:ui="clr-namespace:Pairnets.Client.Ui">
   <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-    <StackPanel Margin="28,40,28,24">
+    <StackPanel Margin="28,8,28,24">
       <StackPanel>
         <TextBlock Style="{StaticResource PgTitle}" Text="Account" />
         <TextBlock Style="{StaticResource PgSub}" FontSize="13" Text="Who is signed in on this computer, and when Pairnets should tell you things." />

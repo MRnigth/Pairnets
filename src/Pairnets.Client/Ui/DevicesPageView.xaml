@@ -3,7 +3,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:ui="clr-namespace:Pairnets.Client.Ui">
   <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-    <StackPanel Margin="28,40,28,24">
+    <StackPanel Margin="28,8,28,24">
       <!-- Header -->
       <Grid>
         <Grid.ColumnDefinitions>
