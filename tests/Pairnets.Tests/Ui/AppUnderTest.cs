@@ -60,7 +60,7 @@ public sealed class AppUnderTest : IAsyncDisposable
     /// </summary>
     public static async Task<AppUnderTest> StartAsync(bool signedIn = true, Dictionary<string, string?>? nestConfig = null,
         Action<WebApplicationBuilder>? configureNest = null, string? releaseVersion = null, Action<ClientSettings>? rememberedWhenSignedOut = null,
-        Action<ClientEnvironment>? beforeStart = null)
+        Action<ClientEnvironment>? beforeStart = null, string[]? args = null)
     {
         var nest = await TestServer.StartWithWebsiteAsync(nestConfig, configureNest);
         var feed = await FakeReleaseFeed.StartAsync(releaseVersion ?? PairnetsInfo.ProductVersion);
@@ -87,7 +87,7 @@ public sealed class AppUnderTest : IAsyncDisposable
         }
         beforeStart?.Invoke(app.Env);
         app.App = new DesktopController(Application.Current!, app.Desktop, app.Platform, app.Env);
-        app.App.Start([]);
+        app.App.Start(args ?? []);
         Dispatcher.UIThread.RunJobs();
         return app;
     }

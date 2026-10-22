@@ -193,7 +193,11 @@ public sealed class DesktopController : ITrayActions, IDisposable
         if (FileManagerCommand.FromArguments(args) is { } command)
             HandleFileCommand(command); // started by a right-click item in the file manager while Pairnets was not running
         else if (args.Contains(SelfReplace.AfterUpdateArgument))
-            Notify("updated", UpdateTexts.UpdatedTitle, UpdateTexts.Updated(PairnetsInfo.ProductVersion)); // updated itself: say so, don't pop the window up
+        {
+            // Updated itself from the window's "Update now": open the window again, with a note that it worked.
+            ShowMainWindow();
+            Notify("updated", UpdateTexts.UpdatedTitle, UpdateTexts.Updated(PairnetsInfo.ProductVersion));
+        }
         else if (!args.Contains(AppActivation.AutoStartArgument))
             ShowMainWindow();
     }

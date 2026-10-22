@@ -70,7 +70,7 @@ public static class UpdateTexts
     public static string Ready(string current) =>
         $"You have {current}. The update takes about 10 seconds and Pairnets restarts by itself. You stay signed in.";
 
-    /// <summary>The note the new version shows once after updating itself (instead of opening its window).</summary>
+    /// <summary>The note the new version shows once after updating itself (next to its window, which opens again).</summary>
     public const string UpdatedTitle = "Pairnets is up to date";
 
     public static string Updated(string version) =>

@@ -610,6 +610,16 @@ public sealed class DesktopControllerTests
     }
 
     [AvaloniaFact]
+    public async Task AfterAnUpdate_TheNewAppOpensItsWindowAgain_WithANote()
+    {
+        // The new app starts the way the update starts it ("--after-update"): back in the window "Update now" was pressed in.
+        await using var app = await AppUnderTest.StartAsync(args: [SelfReplace.AfterUpdateArgument]);
+        await app.WaitUntilIdleAsync();
+        Assert.True(app.App.Window is { IsVisible: true }, "After an update the main window opens again.");
+        Assert.Contains(app.Platform.Notices, n => n.Title == UpdateTexts.UpdatedTitle);
+    }
+
+    [AvaloniaFact]
     public async Task AppUpdate_ThatFails_SaysWhyAndOffersToTryAgain_NeverTheBrowser()
     {
         await using var app = await AppUnderTest.StartAsync(releaseVersion: "99.0.0");

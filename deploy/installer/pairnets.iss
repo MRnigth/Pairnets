@@ -71,7 +71,7 @@ Root: HKCU; Subkey: "Software\Classes\pairnets\shell\open\command"; ValueType: s
 Filename: "{sys}\ie4uinit.exe"; Parameters: "-show"; Flags: runhidden nowait skipifdoesntexist
 Filename: "{app}\Pairnets.exe"; Description: "Open Pairnets now"; Flags: nowait postinstall skipifsilent
 ; After an update from inside Pairnets (a hidden install) start it again by itself; --after-update makes it show a
-; small "updated" note instead of opening its window.
+; small "updated" note and opens its window again.
 Filename: "{app}\Pairnets.exe"; Parameters: "--after-update"; Flags: nowait; Check: WizardSilent
 
 [UninstallRun]

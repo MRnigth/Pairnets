@@ -251,7 +251,11 @@ public sealed class TrayController : ITrayActions, IDisposable
         if (FileManagerCommand.FromArguments(Arguments) is { } command)
             HandleFileCommand(command); // started by a right-click item in Explorer while Pairnets was not running
         else if (Arguments.Contains(SelfReplace.AfterUpdateArgument))
+        {
+            // Updated itself from the window's "Update now": open the window again, with a note that it worked.
+            ShowMainWindow();
             Toast("updated", UpdateTexts.UpdatedTitle, UpdateTexts.Updated(PairnetsInfo.ProductVersion), Forms.ToolTipIcon.Info, ShowMainWindow);
+        }
         else if (!Arguments.Contains(AppActivation.AutoStartArgument))
             ShowMainWindow();
     }
