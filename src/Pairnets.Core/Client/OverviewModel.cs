@@ -63,6 +63,9 @@ public enum OverviewAction
     CheckNestUpdate,
     SeeActivity,
     Review,
+
+    /// <summary>The Files page (folders kept on the nest only open there).</summary>
+    OpenFiles,
 }
 
 public enum OverviewButtonKind
@@ -304,7 +307,7 @@ public sealed record OverviewModel
                     Detail = (lastSynced is null ? "Connected to your nest" : $"Last synced {lastSynced} · connected to your nest"),
                     Lower = OverviewLower.ChangesAndFacts,
                     Changes = changes,
-                    Facts = s.Access.IsShared ? SharedFacts(s.Access, open) : FactsOf(open, version, space),
+                    Facts = s.Access.IsShared ? SharedFacts(s.Access, open) : FactsOf(open, NestOnlyFact(s), version, space),
                 };
 
             case NestMapState.Waiting:
@@ -522,6 +525,10 @@ public sealed record OverviewModel
             Facts = details,
         };
     }
+
+    /// <summary>"On your nest only: DCIM, Photos" with a link to Files, while some folder lives on the nest only; else null.</summary>
+    internal static OverviewFact? NestOnlyFact(StatusSnapshot s) => s.NestOnlyFolders.Count == 0 ? null
+        : new OverviewFact(OverviewIcon.Server, "On your nest only", FilesPageText.NestOnlyFolders(s.NestOnlyFolders), LinkText: "Files", LinkAction: OverviewAction.OpenFiles);
 
     /// <summary>The stopped-to-keep-files-safe card's calm button: syncing stays stopped and the folder opens.</summary>
     public const string KeepMyFiles = "Keep my files";

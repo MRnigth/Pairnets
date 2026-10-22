@@ -310,6 +310,7 @@ public sealed class OverviewView : UserControl
         OverviewAction.OpenAccount => OnOpenAccount,
         OverviewAction.SeeList => OnSeeList,
         OverviewAction.Review => OnReviewAttention,
+        OverviewAction.OpenFiles => OnOpenFiles,
         _ => OnOverviewButton,
     };
 
@@ -330,6 +331,8 @@ public sealed class OverviewView : UserControl
     private void OnSeeList(object? sender, RoutedEventArgs e) => Act?.Invoke(OverviewAction.SeeList);
 
     private void OnReviewAttention(object? sender, RoutedEventArgs e) => Act?.Invoke(OverviewAction.Review);
+
+    private void OnOpenFiles(object? sender, RoutedEventArgs e) => Act?.Invoke(OverviewAction.OpenFiles);
 
     private void OnOverviewButton(object? sender, RoutedEventArgs e) => Act?.Invoke(OverviewAction.None);
 

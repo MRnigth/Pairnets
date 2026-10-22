@@ -536,6 +536,11 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
             ServerUrl = string.IsNullOrWhiteSpace(settings.ServerUrl) ? null : settings.ServerUrl,
             NestLabel = settings.NestLabel,
             Access = engine.Access,
+            NestOnlyFolders = settings.Placement
+                .Where(p => p.Value == FilePlacement.NestOnly && PlacementMap.Allowed(p.Key, p.Value))
+                .Select(p => PlacementMap.NormalizeFolder(p.Key))
+                .Order(StringComparer.CurrentCultureIgnoreCase)
+                .ToList(),
         };
         if (settings.Paused)
             runner.Pause(); // before it starts, so a paused app never begins a pass

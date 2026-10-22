@@ -167,6 +167,14 @@ public static class Dialogs
         return result;
     }
 
+    /// <summary>The window <see cref="Choose"/> would show, not shown (the screenshot tool draws it).</summary>
+    public static Window ChoicePreview(string title, string text, IReadOnlyList<string> points, params string[] buttons)
+    {
+        var popup = Popup(null, title, text, points, out var body);
+        body.Children.Add(ButtonRow(popup, buttons.Select((b, i) => (b, i == buttons.Length - 1, (Action)(() => { }))).ToArray()));
+        return popup;
+    }
+
     /// <summary>Asks for one line of text (a new name); null for Cancel.</summary>
     public static string? Prompt(Window? owner, string title, string text, string initial, string ok)
     {
@@ -258,11 +266,12 @@ public static class Dialogs
     /// Asks before a folder's files leave this PC (On-Demand or only on the nest); true when the person agrees, or
     /// when nothing leaves.
     /// </summary>
-    public static bool ConfirmAway(Window? owner, string folder, Pairnets.Core.Sync.FilePlacement from, Pairnets.Core.Sync.FilePlacement to, long bytesHere)
+    public static bool ConfirmAway(Window? owner, string folder, Pairnets.Core.Sync.FilePlacement from, Pairnets.Core.Sync.FilePlacement to, long bytesHere,
+        string? affects = null)
     {
         if (!FilesPageText.AsksFirst(from, to))
             return true;
-        var question = FilesPageText.AwayQuestion(folder, to, bytesHere);
+        var question = FilesPageText.AwayQuestion(folder, to, bytesHere, affects);
         return Choose(owner, question.Title, question.Text, question.Points, "Cancel", question.Button) == question.Button;
     }
 

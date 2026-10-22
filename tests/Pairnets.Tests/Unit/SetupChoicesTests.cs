@@ -17,7 +17,7 @@ public class SetupChoicesTests
         Assert.False(settings.ShowInFileManager);
         Assert.True(settings.ExplorerRightClick);
         Assert.Equal(CloudFolderMode.KeepAllHere, settings.CloudFolder);
-        Assert.Equal(FilePlacement.NestOnly, settings.Placement[""]);
+        Assert.Empty(settings.Placement); // an older installer's "only on the nest": the whole folder is never nest only
         Assert.False(settings.CheckForUpdates);
         Assert.True(settings.AutoUpdateServer);
         Assert.True(settings.StartWithWindows);
@@ -42,8 +42,9 @@ public class SetupChoicesTests
         var iss = File.ReadAllText(RepoPaths.Of("deploy", "installer", "pairnets.iss"));
         foreach (var key in new[] { "explorerside", "explorermenu", "syncticks", "where", "checkupdates", "updatenest", "autostart" })
             Assert.Matches(new Regex(@"'[;]?" + key + "="), iss);
-        foreach (var task in new[] { "startmenu", "desktopicon", "explorerside", "explorermenu", "syncticks", "wherehere", "whereondemand", "wherenest", "checkupdates", "updatenest", "autostart" })
+        foreach (var task in new[] { "startmenu", "desktopicon", "explorerside", "explorermenu", "syncticks", "wherehere", "whereondemand", "checkupdates", "updatenest", "autostart" })
             Assert.Contains($"Name: \"{task}\"", iss);
+        Assert.DoesNotContain("wherenest", iss); // the whole folder is never nest only
         Assert.Contains("not WizardSilent()", iss); // a silent update leaves the settings alone
         Assert.Contains("not WasInstalled", iss); // so does an upgrade by hand: only a first install passes the ticks on
         Assert.Contains("UsePreviousTasks=yes", iss);

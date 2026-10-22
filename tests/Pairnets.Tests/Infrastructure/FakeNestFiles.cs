@@ -48,6 +48,32 @@ public sealed class FakeNestFiles : INestFiles
     /// <summary>What <see cref="OpenAsync"/> answers with as the path to open.</summary>
     public string OpenedPath { get; set; } = Path.Combine(Path.GetTempPath(), "pairnets-opened.txt");
 
+    /// <summary>
+    /// The nest of the "Where your files live" screenshots, the one that went wrong (2026-10-22): 932 screenshots right in
+    /// the Pairnets folder and 141 camera photos in DCIM, all on this computer.
+    /// </summary>
+    public static FakeNestFiles ScreenshotNest()
+    {
+        var nest = new FakeNestFiles();
+        nest.Clear();
+        var day = new DateTimeOffset(2026, 4, 18, 11, 34, 34, TimeSpan.FromHours(2));
+        for (var i = 0; i < 932; i++)
+            nest.Put($"Skærmbillede {day.AddMinutes(i * 37):yyyy-MM-dd HHmmss}.png", 310_000, day.AddMinutes(i * 37));
+        for (var i = 0; i < 141; i++)
+            nest.Put($"DCIM/104_PANA/P1040{261 + i:000}.JPG", 3_400_000, day.AddDays(-200));
+        return nest;
+    }
+
+    /// <summary>Starts from an empty nest (the screenshots fill their own).</summary>
+    public void Clear()
+    {
+        lock (_gate)
+        {
+            _files.Clear();
+            Placement.Clear();
+        }
+    }
+
     public void Put(string path, long size, DateTimeOffset changed, bool here = true)
     {
         lock (_gate)
@@ -75,8 +101,21 @@ public sealed class FakeNestFiles : INestFiles
     private NestEntry File(string path, (long Size, DateTimeOffset Changed, bool Here) f) =>
         new(path, false, f.Size, f.Changed, "hash-" + path, f.Here ? FileWhere.Here : FileWhere.NestOnly, PlacementOf(path));
 
+    /// <summary>
+    /// The sync these files belong to was started again (a placement choice does that): reading the list then fails as
+    /// the real one did ("ExecuteReader can only be called when the connection is open").
+    /// </summary>
+    public bool Closed { get; set; }
+
+    private void ThrowIfClosed()
+    {
+        if (Closed)
+            throw new InvalidOperationException("ExecuteReader can only be called when the connection is open.");
+    }
+
     public IReadOnlyList<NestEntry> List(string folder)
     {
+        ThrowIfClosed();
         folder = PlacementMap.NormalizeFolder(folder);
         var prefix = folder.Length == 0 ? string.Empty : folder + "/";
         var folders = new Dictionary<string, (long Size, int Files, DateTimeOffset Changed)>(StringComparer.Ordinal);
@@ -121,6 +160,7 @@ public sealed class FakeNestFiles : INestFiles
 
     public long BytesHere(string folder)
     {
+        ThrowIfClosed();
         folder = PlacementMap.NormalizeFolder(folder);
         return All().Where(f => f.Value.Here && (folder.Length == 0 || f.Key.StartsWith(folder + "/", StringComparison.Ordinal))).Sum(f => f.Value.Size);
     }

@@ -18,7 +18,8 @@ public enum FilePlacement
 /// <summary>
 /// The placement chosen for folders of the Pairnets folder on this computer (never synced to other computers). A path
 /// takes the choice of the nearest folder above it that has one; with none, it is <see cref="FilePlacement.OnThisPc"/>.
-/// The empty folder ("") stands for the whole Pairnets folder. Letter case does not matter, as on the nest.
+/// The empty folder ("") stands for the whole Pairnets folder. Letter case does not matter, as on the nest. The whole
+/// folder is never "nest only" (<see cref="Allowed"/>): every file put in it would leave this computer two minutes later.
 /// </summary>
 public sealed class PlacementMap
 {
@@ -31,6 +32,8 @@ public sealed class PlacementMap
         _byKey = new Dictionary<string, FilePlacement>(StringComparer.Ordinal);
         foreach (var (folder, placement) in folders)
         {
+            if (!Allowed(folder, placement))
+                continue; // an older choice for the whole folder: everything stays on this computer
             var mode = placement == FilePlacement.OnDemand && !onDemandWorks ? FilePlacement.OnThisPc : placement;
             _byKey[PathRules.CaseKey(NormalizeFolder(folder))] = mode;
         }
@@ -41,6 +44,13 @@ public sealed class PlacementMap
 
     /// <summary>True when some folder is not fully on this computer.</summary>
     public bool AnyAway => _byKey.Values.Any(p => p != FilePlacement.OnThisPc);
+
+    /// <summary>
+    /// False for "only on the nest" on the whole Pairnets folder (""): a new file put anywhere in it would be uploaded and
+    /// then removed from this computer, which looks like it vanished. Nest only is chosen per folder.
+    /// </summary>
+    public static bool Allowed(string folder, FilePlacement placement) =>
+        placement != FilePlacement.NestOnly || NormalizeFolder(folder).Length > 0;
 
     /// <summary>True when some folder uses <paramref name="placement"/>.</summary>
     public bool Uses(FilePlacement placement) => _byKey.ContainsValue(placement);
@@ -55,6 +65,8 @@ public sealed class PlacementMap
     public static void Choose(Dictionary<string, FilePlacement> placement, string folder, FilePlacement choice)
     {
         folder = NormalizeFolder(folder);
+        if (!Allowed(folder, choice))
+            choice = FilePlacement.OnThisPc;
         var above = folder.Length == 0 ? FilePlacement.OnThisPc
             : new PlacementMap(placement.Where(p => NormalizeFolder(p.Key) != folder)).For(folder);
         foreach (var key in placement.Keys.Where(k => PathRules.CaseKey(NormalizeFolder(k)) == PathRules.CaseKey(folder)).ToList())

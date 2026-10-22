@@ -110,6 +110,9 @@ public sealed class NestFiles : INestFiles
         ? [FilePlacement.OnThisPc, FilePlacement.OnDemand, FilePlacement.NestOnly]
         : [FilePlacement.OnThisPc, FilePlacement.NestOnly];
 
+    /// <summary>The choices offered for <paramref name="folder"/>: the whole Pairnets folder ("") is never nest only (<see cref="PlacementMap.Allowed"/>).</summary>
+    public static IReadOnlyList<FilePlacement> ChoicesFor(string folder) => Choices.Where(c => PlacementMap.Allowed(folder, c)).ToList();
+
     /// <summary>Where <paramref name="folder"/>'s files live (its own choice or the nearest above it).</summary>
     public FilePlacement PlacementOf(string folder) => _session.Engine.Placement.For(PlacementMap.NormalizeFolder(folder));
 

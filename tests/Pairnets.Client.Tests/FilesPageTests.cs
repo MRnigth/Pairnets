@@ -185,4 +185,119 @@ public sealed class FilesPageTests
         Assert.False(await Wpf.Ui(() => off.PlacementRows.IsEnabled));
         Assert.Empty(Wpf.TakeCrashes());
     }
+
+    /// <summary>The choices the card offers on <paramref name="folder"/>'s row, by their names.</summary>
+    private static IReadOnlyList<string> Offered(SettingsView view, string folder)
+    {
+        var row = folder.Length == 0 ? FilesPageText.EverythingElse : folder;
+        return Logical(view.PlacementRows).OfType<System.Windows.Controls.RadioButton>()
+            .Select(System.Windows.Automation.AutomationProperties.GetName)
+            .Where(n => n.StartsWith(row + ": ", StringComparison.Ordinal))
+            .Select(n => n[(row.Length + 2)..])
+            .ToList();
+    }
+
+    private static IEnumerable<object> Logical(DependencyObject parent)
+    {
+        foreach (var child in LogicalTreeHelper.GetChildren(parent))
+        {
+            yield return child;
+            if (child is DependencyObject d)
+            {
+                foreach (var below in Logical(d))
+                    yield return below;
+            }
+        }
+    }
+
+    [Fact]
+    public async Task TheWholeFolderRow_NeverOffersOnlyOnTheNest_AndNamesWhatAChoiceChanges()
+    {
+        var nest = new FakeNestFiles();
+        var script = new DialogScript { Chooses = choice => choice.Buttons[^1] };
+        using var answers = script.Install();
+        var settings = new ClientSettings { ServerUrl = "https://nest.example.com/", Folder = @"D:\Sync", DeviceName = "DESKTOP", FirstRunCompleted = true };
+        settings.Placement["Photos"] = FilePlacement.NestOnly;
+        var view = await Wpf.Ui(() => new SettingsView(settings, new FakeSecrets(), files: nest));
+        var applied = new List<ClientSettings>();
+        await Wpf.Ui(() => view.SwitchesChanged += applied.Add);
+
+        Assert.DoesNotContain("Only on the nest", await Wpf.Ui(() => Offered(view, "")));
+        Assert.Contains("On this PC", await Wpf.Ui(() => Offered(view, "")));
+        Assert.Contains("Only on the nest", await Wpf.Ui(() => Offered(view, "Videos")));
+
+        // Asked for anyway: nothing is asked, saved or applied.
+        await Wpf.Ui(() => view.ChoosePlacement("", FilePlacement.NestOnly));
+        Assert.Empty(script.Popups.Items);
+        Assert.Empty(applied);
+        Assert.Equal(FilePlacement.OnThisPc, await Wpf.Ui(() => view.PlacementChosen("")));
+        Assert.Null(await Wpf.Ui(() => view.PlacementStatusShown));
+
+        // On-Demand for the whole folder names the loose files and every folder without its own choice first.
+        await Wpf.Ui(() => view.ChoosePlacement("", FilePlacement.OnDemand));
+        var asked = script.Choices.Items.Single();
+        Assert.Equal("This changes: 1 file right in your Pairnets folder (not in a folder), Documents (2 files), Videos (1 file).", asked.Points[0]);
+        Assert.Equal(FilePlacement.OnDemand, applied.Single().Placement[""]);
+        Assert.Equal("Saved: All other files → On-Demand.", await Wpf.Ui(() => view.PlacementStatusShown));
+        Assert.Empty(Wpf.TakeCrashes());
+    }
+
+    [Fact]
+    public async Task AChoice_StartsTheSyncAgain_WithoutACrash_AndTheCardFollowsTheDownload()
+    {
+        var first = new FakeNestFiles();
+        var running = (INestFiles)first;
+        var script = new DialogScript { Chooses = choice => choice.Buttons[^1] };
+        using var answers = script.Install();
+        var settings = new ClientSettings { ServerUrl = "https://nest.example.com/", Folder = @"D:\Sync", DeviceName = "DESKTOP", FirstRunCompleted = true };
+        settings.Placement["Videos"] = FilePlacement.NestOnly;
+        var view = await Wpf.Ui(() => new SettingsView(settings, new FakeSecrets(), files: first) { FilesSource = () => running });
+        await Wpf.Ui(() => view.SwitchesChanged += _ =>
+        {
+            // As the app does: the old sync's list is closed and a new one runs.
+            first.Closed = true;
+            var next = new FakeNestFiles();
+            next.Placement.Clear();
+            running = next;
+        });
+
+        await Wpf.Ui(() => view.ChoosePlacement("Videos", FilePlacement.OnThisPc));
+        Assert.Empty(Wpf.TakeCrashes());
+        Assert.Equal(FilePlacement.OnThisPc, await Wpf.Ui(() => view.PlacementChosen("Videos")));
+        Assert.Equal("Saved: Videos → On this PC.", await Wpf.Ui(() => view.PlacementStatusShown));
+        Assert.Contains("Videos", await Wpf.Ui(() => view.PlacementFolders.ToList()));
+
+        var downloading = StatusSnapshot.Initial with
+        {
+            Status = RunnerStatus.Syncing, Text = "Syncing", CurrentPath = "Videos/wedding-full-day.mp4", Operation = "download",
+            FilesTotal = 149, FilesDone = 37, Active = [new ActiveTransfer("Videos/wedding-full-day.mp4", "download", 10, 100)],
+        };
+        await Wpf.Ui(() => view.ShowPlacementStatus(downloading));
+        var line = await Wpf.Ui(() => view.PlacementStatusShown);
+        Assert.StartsWith("Saved: Videos → On this PC. Downloading", line);
+        Assert.Contains("37 of 149 files", line);
+
+        // Even a page with no new list to read draws again without a crash.
+        var stale = await Wpf.Ui(() => new SettingsView(settings, new FakeSecrets(), files: first));
+        await Wpf.Ui(() => stale.ChoosePlacement("Documents", FilePlacement.OnThisPc));
+        Assert.Empty(Wpf.TakeCrashes());
+    }
+
+    [Fact]
+    public async Task TheFilesPage_ChoosesForExactlyTheFolderPicked_NeverTheWholeFolder()
+    {
+        var (window, _, nest, script, answers) = await OpenAsync();
+        script.Chooses = choice => choice.Buttons[^1];
+        await Wpf.Ui(() => window.Navigate(MainPage.Files));
+
+        // At the top of the nest (the whole folder) nest only is refused without a question.
+        Assert.False(await Wpf.Ui(() => window.FilesPane.ChoosePlacement("", FilePlacement.NestOnly)));
+        Assert.Empty(script.Popups.Items);
+
+        Assert.True(await Wpf.Ui(() => window.FilesPane.ChoosePlacement("Videos", FilePlacement.NestOnly)));
+        Assert.Equal(["place:Videos:NestOnly"], nest.Calls.Where(c => c.StartsWith("place:", StringComparison.Ordinal)));
+        Assert.DoesNotContain("", nest.Placement.Keys);
+        Assert.Equal("This changes: 1 file right in Videos.", script.Choices.Items.Single().Points[0]);
+        await Done(answers);
+    }
 }

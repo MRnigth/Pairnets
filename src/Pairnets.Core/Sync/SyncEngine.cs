@@ -1232,6 +1232,11 @@ public sealed class SyncEngine
         var full = ResolveLocal(item.Path);
         if (!File.Exists(full))
             return;
+        if ((File.GetAttributes(full) & FileAttributes.ReadOnly) != 0)
+        {
+            KeptHere(item.Path, "it is read-only", ctx);
+            return;
+        }
         if (_state.GetRemote(item.Path) is not { Deleted: false, Hash: { } onNest }
             || (onNest != item.Local && onNest != item.Server))
         {
@@ -1247,8 +1252,8 @@ public sealed class SyncEngine
                 NotFreed(item.Path, "it stands for another version than planned", ctx);
                 return;
             }
-            _state.RemoveFile(item.Path);
-            File.Delete(full);
+            if (!RemoveEvicted(item.Path, full, ctx))
+                return;
         }
         else
         {
@@ -1274,8 +1279,8 @@ public sealed class SyncEngine
                     NotFreed(item.Path, "it changed during the pass (it is uploaded instead)", ctx);
                     return;
                 }
-                _state.RemoveFile(item.Path);
-                File.Delete(full);
+                if (!RemoveEvicted(item.Path, full, ctx))
+                    return;
             }
         }
         MarkTouched(item.Path);
@@ -1284,6 +1289,37 @@ public sealed class SyncEngine
             ctx.Result.Freed++;
         FileSynced?.Invoke(SyncAction.Evict, item.Path);
         _log.LogInformation("Freed {Path} here: it lives on the nest only", item.Path);
+    }
+
+    /// <summary>Forgets and deletes an evicted copy; false (kept here quietly) when Windows refuses the delete.</summary>
+    private bool RemoveEvicted(string path, string full, PassContext ctx)
+    {
+        _state.RemoveFile(path);
+        try
+        {
+            File.Delete(full);
+            return true;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            KeptHere(path, "Windows won't let Pairnets remove it", ctx); // the next pass records it again
+            return false;
+        }
+    }
+
+    /// <summary>The paths already logged as kept here (<see cref="KeptHere(string, string, PassContext)"/>): said once, not every pass.</summary>
+    private readonly HashSet<string> _keptHereLogged = new(StringComparer.Ordinal);
+
+    private void KeptHere(string path, string why, PassContext ctx)
+    {
+        bool first;
+        lock (ctx.Gate)
+        {
+            ctx.Result.KeptHere++;
+            first = _keptHereLogged.Add(path);
+        }
+        if (first)
+            _log.LogInformation("Keeping {Path} on this computer although it lives on the nest only: {Why}", path, why);
     }
 
     private void NotFreed(string path, string why, PassContext ctx)

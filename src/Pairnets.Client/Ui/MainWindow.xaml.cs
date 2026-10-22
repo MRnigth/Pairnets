@@ -502,6 +502,9 @@ public partial class MainWindow : Window, IPageHost
             case OverviewAction.SeeActivity:
                 Navigate(MainPage.Activity);
                 break;
+            case OverviewAction.OpenFiles:
+                Navigate(MainPage.Files);
+                break;
         }
     }
 

@@ -181,6 +181,7 @@ public partial class NestFilesView : UserControl
         }
         ShowEmpty(_rows.Count > 0 ? null : search.Length > 0 ? FilesPageText.NoMatch : FilesPageText.Empty);
         var placement = files.PlacementOf(_folder);
+        PickNestOnly.Visibility = PlacementMap.Allowed(_folder, FilePlacement.NestOnly) ? Visibility.Visible : Visibility.Collapsed;
         PlacementText.Text = NestFiles.PlacementText(placement);
         PlacementIcon.Data = Visuals.Resource<Geometry>(WhereIconConverter.Key(placement));
         PlacementIcon.SetResourceReference(LineIcon.StrokeProperty, WhereBrushConverter.Key(placement));
@@ -256,6 +257,8 @@ public partial class NestFilesView : UserControl
             item.Header = new StackPanel { Margin = new Thickness(0, 4, 0, 4), Children = { title, line } };
             item.IsChecked = placement == now;
         }
+        // The top of the nest is the whole Pairnets folder: never nest only (that is chosen per folder).
+        PickNestOnly.Visibility = PlacementMap.Allowed(_folder, FilePlacement.NestOnly) ? Visibility.Visible : Visibility.Collapsed;
         System.Windows.Automation.AutomationProperties.SetName(PlacementMenu, FilesPageText.PickerTitle(_folder));
         PlacementMenu.PlacementTarget = PlacementButton;
         PlacementMenu.IsOpen = true;
@@ -273,13 +276,17 @@ public partial class NestFilesView : UserControl
             ChoosePlacement(row.Entry.Path, placement);
     }
 
-    /// <summary>Asks first when files leave this PC, then saves the choice (syncing starts again with it).</summary>
+    /// <summary>
+    /// Asks first when files leave this PC (naming every folder and file it changes), then saves the choice for exactly
+    /// <paramref name="folder"/> (syncing starts again with it). The whole Pairnets folder is never nest only.
+    /// </summary>
     public bool ChoosePlacement(string folder, FilePlacement placement)
     {
-        if (Files is not { } files)
+        if (Files is not { } files || !PlacementMap.Allowed(folder, placement))
             return false;
         var now = files.PlacementOf(folder);
-        if (now == placement || !Dialogs.ConfirmAway(Owner, folder, now, placement, files.BytesHere(folder)))
+        if (now == placement
+            || !Dialogs.ConfirmAway(Owner, folder, now, placement, files.BytesHere(folder), FilesPageText.Affects(files.List(folder), folder, now)))
             return false;
         files.SetPlacement(folder, placement);
         Say($"{FilesPageText.FolderName(folder)}: {NestFiles.PlacementText(placement)}. Pairnets moves the files now.", ok: true);

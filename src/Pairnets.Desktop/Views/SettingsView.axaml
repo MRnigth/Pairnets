@@ -289,6 +289,10 @@
             <TextBlock x:Name="PlacementNote" Classes="t3" FontSize="13" TextWrapping="Wrap"
                        Text="Keep big folders on your nest to free space here. Pairnets only removes a file from this computer once it is safely on your nest." />
             <StackPanel x:Name="PlacementRows" Spacing="12" />
+            <!-- What the last choice did, and what Pairnets is doing about it now (read again as the sync goes). -->
+            <Border x:Name="PlacementStatusBox" IsVisible="False" Padding="12,8" CornerRadius="10" Background="{DynamicResource T.OkPill}">
+              <TextBlock x:Name="PlacementStatusText" FontSize="13" FontWeight="SemiBold" TextWrapping="Wrap" Foreground="{DynamicResource T.OkText}" />
+            </Border>
             <Button Classes="link" HorizontalAlignment="Left" Margin="0,4,0,0" Content="Choose for a folder inside these… (opens Files)" Click="OnPlacementLink" />
           </StackPanel>
         </Border>

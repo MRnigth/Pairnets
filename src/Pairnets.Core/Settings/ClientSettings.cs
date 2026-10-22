@@ -344,8 +344,11 @@ public static class SettingsUpgrades
     /// <summary>
     /// 1 (1.0.60): "Check for updates" is switched on once for everyone. Copies left with it off (test set-ups) never
     /// heard of new versions and had to be updated by running the installer by hand. Switched off again later, it stays off.
+    /// 2 (fix for 1.0.61): "Only on the nest" for the whole Pairnets folder ("") is taken out, for this nest and every
+    /// other one: it removed every file put anywhere in the folder from this computer (docs/DECISIONS.md). The choice is
+    /// now made per folder; the files come back to this computer.
     /// </summary>
-    public const int Current = 1;
+    public const int Current = 2;
 
     /// <summary>Applies what <paramref name="settings"/> did not have yet; returns a line for the log per change (empty: nothing to save).</summary>
     public static IReadOnlyList<string> Apply(ClientSettings settings)
@@ -356,6 +359,19 @@ public static class SettingsUpgrades
             if (!settings.CheckForUpdates)
                 done.Add("\"Check for updates\" was off; switched it on once, so this computer hears about new versions again.");
             settings.CheckForUpdates = true;
+        }
+        if (settings.SettingsVersion < 2)
+        {
+            var nests = new List<Dictionary<string, FilePlacement>> { settings.Placement };
+            nests.AddRange((settings.OtherNests ?? []).Select(n => n.Placement));
+            foreach (var placement in nests)
+            {
+                foreach (var key in placement.Where(p => !PlacementMap.Allowed(p.Key, p.Value)).Select(p => p.Key).ToList())
+                {
+                    placement.Remove(key);
+                    done.Add("\"Only on the nest\" for the whole folder was taken out: its files come back to this computer. Choose it per folder instead.");
+                }
+            }
         }
         if (settings.SettingsVersion < Current)
         {

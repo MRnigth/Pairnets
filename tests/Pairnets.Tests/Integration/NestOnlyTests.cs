@@ -101,10 +101,10 @@ public class NestOnlyTests : IAsyncLifetime
     {
         // More files than the mass-delete guard allows, all freed at once, and the folder ends up empty.
         for (var i = 0; i < 80; i++)
-            _laptop.Write($"f{i:00}.txt", "content " + i);
+            _laptop.Write($"Photos/f{i:00}.txt", "content " + i);
         Completed(await _laptop.SyncAsync());
 
-        _laptop.Place(("", FilePlacement.NestOnly));
+        _laptop.Place(("Photos", FilePlacement.NestOnly));
         var pass = Completed(await _laptop.SyncAsync());
         Assert.Equal(80, pass.Freed);
         Assert.Empty(_laptop.Files());
@@ -176,6 +176,52 @@ public class NestOnlyTests : IAsyncLifetime
         _laptop.NestFull = false;
         Assert.Equal(1, Completed(await _laptop.SyncAsync()).Freed);
         Assert.Empty(_laptop.Files());
+    }
+
+    [Fact]
+    public async Task NestOnlyForTheWholeFolder_IsIgnored_AndNothingLeaves()
+    {
+        // Whole-folder nest-only in an older settings file: loose files and folders all stay here.
+        _laptop.Write("Skærmbillede 2026-04-18 113434.png", "shot");
+        _laptop.Write("DCIM/104_PANA/P1040754.JPG", "photo");
+        Completed(await _laptop.SyncAsync());
+
+        _laptop.Place(("", FilePlacement.NestOnly));
+        var pass = Completed(await _laptop.SyncAsync());
+        Assert.Equal(0, pass.Freed);
+        Assert.Equal(["DCIM/104_PANA/P1040754.JPG", "Skærmbillede 2026-04-18 113434.png"], _laptop.Files());
+
+        // One folder nest only still works next to it.
+        _laptop.Place(("", FilePlacement.NestOnly), ("DCIM", FilePlacement.NestOnly));
+        Assert.Equal(1, Completed(await _laptop.SyncAsync()).Freed);
+        Assert.Equal(["Skærmbillede 2026-04-18 113434.png"], _laptop.Files());
+    }
+
+    [Fact]
+    public async Task AReadOnlyFile_IsKeptHereQuietly_NotAnError()
+    {
+        _laptop.Write("DCIM/104_PANA/P1040754.JPG", "read-only photo");
+        _laptop.Write("DCIM/104_PANA/P1040755.JPG", "photo");
+        Completed(await _laptop.SyncAsync());
+        File.SetAttributes(_laptop.Full("DCIM/104_PANA/P1040754.JPG"), FileAttributes.ReadOnly);
+        try
+        {
+            _laptop.Place(("DCIM", FilePlacement.NestOnly));
+            var pass = Completed(await _laptop.SyncAsync());
+            Assert.Equal(1, pass.Freed);
+            Assert.Equal(1, pass.KeptHere);
+            Assert.Equal(0, pass.Errors);
+            Assert.True(_laptop.Exists("DCIM/104_PANA/P1040754.JPG"));
+
+            var again = Completed(await _laptop.SyncAsync());
+            Assert.Equal(0, again.Errors);
+            Assert.Equal(1, again.KeptHere);
+            Assert.Equal(2, (await NestFilesAsync()).Count);
+        }
+        finally
+        {
+            File.SetAttributes(_laptop.Full("DCIM/104_PANA/P1040754.JPG"), FileAttributes.Normal);
+        }
     }
 
     [Fact]

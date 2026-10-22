@@ -955,6 +955,8 @@ public sealed class TrayController : ITrayActions, IDisposable
             _window.ShowStatus(status, Nest.Folder, Nest.DeviceName);
             _window.ShowActivity(_session?.Activity.Items ?? []);
             _window.ShowAttention(BuildAttention(status));
+            if (_settingsView is { IsLoaded: true } settings)
+                settings.ShowPlacementStatus(status);
         }
         if (_panel is { IsVisible: true })
         {
@@ -1067,6 +1069,16 @@ public sealed class TrayController : ITrayActions, IDisposable
                 : result.BlockReason == BlockReason.SignInRequired ? "Sign in to your nest" : "Pairnets paused syncing";
             Toast("blocked:" + result.BlockReason, PrefixOf(run) + title, result.Message ?? result.BlockReason.ToString(),
                 result.BlockReason == BlockReason.SignedOut ? Forms.ToolTipIcon.Error : Forms.ToolTipIcon.Warning, () => Picked(FixBlocked), run);
+        }
+        else if (result.Freed > 0)
+        {
+            // Copies removed here because their folder lives on the nest only: never silent.
+            var (title, text) = FilesPageText.FreedNotice(result.Freed);
+            Toast("freed", PrefixOf(run) + title, text, Forms.ToolTipIcon.Info, () => Picked(() =>
+            {
+                ShowMainWindow();
+                _window?.Navigate(MainPage.Files);
+            }), run);
         }
         else if (result.Outcome == PassOutcome.AuthFailed)
         {
@@ -1371,6 +1383,8 @@ public sealed class TrayController : ITrayActions, IDisposable
             KeySlot = _settings.KeySlotFor(picked),
             CanInvite = InviteRun is not null,
         };
+        view.FilesSource = () => _session?.Files; // a choice starts the sync again: read the running one's files
+        _settingsView = view;
         view.OpenFilesRequested += () => _window?.Navigate(MainPage.Files);
         view.Saved += v =>
         {
@@ -1390,6 +1404,9 @@ public sealed class TrayController : ITrayActions, IDisposable
         _window.ShowSettingsPage(view);
         _ = FillNestStorageAsync(view);
     }
+
+    /// <summary>The Settings page last shown: its "Where your files live" line follows the sync while it is open.</summary>
+    private SettingsView? _settingsView;
 
     /// <summary>What the nest last said about where it keeps its files (the window shows it at once).</summary>
     private NestStorage? _nestStorage;

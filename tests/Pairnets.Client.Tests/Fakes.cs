@@ -180,9 +180,13 @@ internal sealed class DialogScript : Dialogs.IResponder
     /// <summary>The files "Add files" adds (null: Cancel).</summary>
     public IReadOnlyList<string>? AddFiles { get; set; }
 
+    /// <summary>Every question with buttons, whole (its points too).</summary>
+    public Log<Dialogs.Choice> Choices { get; } = new();
+
     public string? Choose(Dialogs.Choice choice)
     {
         Popups.Add(choice.Title);
+        Choices.Add(choice);
         return Chooses(choice);
     }
 

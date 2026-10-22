@@ -95,11 +95,12 @@ public static class Dialogs
     }
 
     /// <summary>Asks before a folder's files leave this computer; true when the person agrees, or when nothing leaves.</summary>
-    public static async Task<bool> ConfirmAwayAsync(Window? owner, string folder, FilePlacement from, FilePlacement to, long bytesHere)
+    public static async Task<bool> ConfirmAwayAsync(Window? owner, string folder, FilePlacement from, FilePlacement to, long bytesHere,
+        string? affects = null)
     {
         if (!FilesPageText.AsksFirst(from, to))
             return true;
-        var question = FilesPageText.AwayQuestion(folder, to, bytesHere);
+        var question = FilesPageText.AwayQuestion(folder, to, bytesHere, affects);
         return await ChooseAsync(owner, question.Title, question.Text, question.Points, "Cancel", question.Button) == question.Button;
     }
 

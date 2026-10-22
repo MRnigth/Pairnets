@@ -43,7 +43,6 @@ Name: "explorermenu"; Description: "Add Pairnets to the right-click menu (only i
 Name: "syncticks"; Description: "Show sync ticks in File Explorer"; GroupDescription: "File Explorer:"
 Name: "wherehere"; Description: "Everything on this PC (works without internet)"; GroupDescription: "Where your files live (each folder can be changed later):"; Flags: exclusive
 Name: "whereondemand"; Description: "On-Demand: files show in Explorer and download when you open them"; GroupDescription: "Where your files live (each folder can be changed later):"; Flags: exclusive unchecked
-Name: "wherenest"; Description: "Only on the nest: nothing on this PC, open files in Pairnets › Files"; GroupDescription: "Where your files live (each folder can be changed later):"; Flags: exclusive unchecked
 Name: "checkupdates"; Description: "Look for new Pairnets versions by itself"; GroupDescription: "Updates and start-up:"
 Name: "updatenest"; Description: "Update my nest by itself"; GroupDescription: "Updates and start-up:"; Flags: unchecked
 Name: "autostart"; Description: "Start Pairnets when I log in"; GroupDescription: "Updates and start-up:"
@@ -161,8 +160,6 @@ begin
   Where := 'here';
   if WizardIsTaskSelected('whereondemand') then
     Where := 'ondemand';
-  if WizardIsTaskSelected('wherenest') then
-    Where := 'nest';
   RegWriteStringValue(HKCU, 'Software\Pairnets\Setup', 'Choices',
     'explorerside=' + OnOff('explorerside') + ';explorermenu=' + OnOff('explorermenu') + ';syncticks=' + OnOff('syncticks') +
     ';where=' + Where + ';checkupdates=' + OnOff('checkupdates') + ';updatenest=' + OnOff('updatenest') + ';autostart=' + OnOff('autostart'));

@@ -45,8 +45,17 @@ public partial class SettingsView : UserControl
     /// <summary>"Where your files live" as chosen on this page (saved with the rest).</summary>
     private readonly Dictionary<string, FilePlacement> _placement;
 
+    /// <summary>The nest's files the page was opened with; null when not connected.</summary>
+    private readonly INestFiles? _firstFiles;
+
+    /// <summary>
+    /// The running nest's files, asked each time they are read: a choice starts the sync again, and the files the page was
+    /// opened with then read a closed list. Unset: the files it was opened with.
+    /// </summary>
+    public Func<INestFiles?>? FilesSource { get; set; }
+
     /// <summary>The nest's files (the folders to choose for); null when not connected.</summary>
-    private readonly INestFiles? _files;
+    private INestFiles? _files => FilesSource is { } source ? source() : _firstFiles;
 
     /// <param name="files">The nest's files (the folders to choose where they live); null when not connected.</param>
     /// <param name="nestTitle">The nest these settings are for ("Work nest"), when this computer syncs several (<paramref name="nestCount"/>).</param>
@@ -55,7 +64,7 @@ public partial class SettingsView : UserControl
         INestFiles? files = null, string? nestTitle = null, int nestCount = 1, Func<string, string?>? folderProblem = null)
     {
         _updates = updates;
-        _files = files;
+        _firstFiles = files;
         _placement = new Dictionary<string, FilePlacement>(current.Placement, StringComparer.Ordinal);
         InitializeComponent();
         _original = current;
@@ -257,11 +266,12 @@ public partial class SettingsView : UserControl
 
     private void DrawPlacement()
     {
+        var files = _files;
         PlacementRows.Children.Clear();
-        PlacementRows.IsEnabled = _files is not null;
-        PlacementRows.Opacity = _files is null ? 0.55 : 1;
-        PlacementNote.Text = _files is null ? FilesPageText.SettingsOff : FilesPageText.SettingsText;
-        var tops = _files?.List(string.Empty) ?? [];
+        PlacementRows.IsEnabled = files is not null;
+        PlacementRows.Opacity = files is null ? 0.55 : 1;
+        PlacementNote.Text = files is null ? FilesPageText.SettingsOff : FilesPageText.SettingsText;
+        var tops = Read(() => files?.List(string.Empty), null) ?? [];
         foreach (var folder in PlacementFolders)
         {
             var row = new Grid { Margin = new Thickness(0, 12, 0, 0) };
@@ -270,13 +280,13 @@ public partial class SettingsView : UserControl
             var words = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 12, 0) };
             words.Children.Add(Parts.Text(folder.Length == 0 ? FilesPageText.EverythingElse : folder, 14, "T.Text", FontWeights.SemiBold));
             var size = folder.Length == 0 ? FilesPageText.EverythingElseNote
-                : _files is null ? string.Empty
-                : FilesPageText.SizeLine(SizeOf(folder, tops), _files.BytesHere(folder));
+                : files is null ? string.Empty
+                : FilesPageText.SizeLine(SizeOf(folder, tops), Read(() => files.BytesHere(folder), 0L));
             words.Children.Add(Parts.Text(size, 12, "T.Muted"));
             row.Children.Add(words);
             var segments = new StackPanel { Orientation = Orientation.Horizontal };
             var now = PlacementChosen(folder);
-            foreach (var choice in NestFiles.Choices)
+            foreach (var choice in NestFiles.ChoicesFor(folder))
             {
                 var button = new RadioButton
                 {
@@ -310,18 +320,63 @@ public partial class SettingsView : UserControl
         return 0;
     }
 
-    /// <summary>A choice in the card: asked first when files leave this PC, then applied at once like the switches.</summary>
+    /// <summary>
+    /// A choice in the card: asked first when files leave this PC (naming every folder and file it changes), then applied
+    /// at once like the switches, and said under the card (<see cref="ShowPlacementStatus"/>). The whole Pairnets folder
+    /// is never nest only.
+    /// </summary>
     public void ChoosePlacement(string folder, FilePlacement choice)
     {
         var now = PlacementChosen(folder);
-        if (now == choice)
+        if (now == choice || !PlacementMap.Allowed(folder, choice))
+        {
+            DrawPlacement();
             return;
-        if (Dialogs.ConfirmAway(Owner, folder, now, choice, _files?.BytesHere(folder) ?? 0))
+        }
+        var files = _files;
+        var affects = files is null ? null : Read(() => FilesPageText.Affects(files.List(folder), folder, now), null);
+        if (Dialogs.ConfirmAway(Owner, folder, now, choice, files is null ? 0 : Read(() => files.BytesHere(folder), 0L), affects))
         {
             PlacementMap.Choose(_placement, folder, choice);
-            ApplySwitches();
+            _lastChoice = (PlacementMap.NormalizeFolder(folder), choice, DateTimeOffset.UtcNow);
+            ApplySwitches(); // starts the sync again: the files are read from the new one from here on
+            ShowPlacementStatus(null);
         }
         DrawPlacement(); // also puts the choice back when the person said no
+    }
+
+    /// <summary>The last choice made on this page, and when (for the line under the card).</summary>
+    private (string Folder, FilePlacement Placement, DateTimeOffset At)? _lastChoice;
+
+    /// <summary>
+    /// The line under the card after a choice: what was saved and what the sync does about it now ("Downloading · 37 of
+    /// 120 files"). The app calls it as the status changes; hidden until a choice is made here.
+    /// </summary>
+    public void ShowPlacementStatus(StatusSnapshot? status)
+    {
+        if (_lastChoice is not { } last)
+        {
+            PlacementStatusBox.Visibility = Visibility.Collapsed;
+            return;
+        }
+        PlacementStatusText.Text = FilesPageText.PlacementStatus(last.Folder, last.Placement, status, last.At, DateTimeOffset.UtcNow);
+        PlacementStatusBox.Visibility = Visibility.Visible;
+    }
+
+    /// <summary>The line under the card, or null while it is hidden.</summary>
+    public string? PlacementStatusShown => PlacementStatusBox.Visibility == Visibility.Visible ? PlacementStatusText.Text : null;
+
+    /// <summary>A read of the nest's files that may meet a sync being started again: <paramref name="fallback"/> then.</summary>
+    private static T Read<T>(Func<T> read, T fallback)
+    {
+        try
+        {
+            return read();
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or ObjectDisposedException)
+        {
+            return fallback;
+        }
     }
 
     /// <summary>"Choose for a folder inside these…": the Files page.</summary>
@@ -535,6 +590,15 @@ public partial class SettingsView : UserControl
 
     /// <summary>Scrolls to the bottom of the page (screenshot tool).</summary>
     public void ScrollToEnd() => Scroller.ScrollToEnd();
+
+    /// <summary>Scrolls "Where your files live" into view (the screenshot tool).</summary>
+    public void ScrollToPlacement()
+    {
+        UpdateLayout();
+        var top = PlacementRows.TransformToAncestor(Scroller).Transform(new Point(0, 0)).Y + Scroller.VerticalOffset;
+        Scroller.ScrollToVerticalOffset(Math.Max(0, top - 140));
+        UpdateLayout();
+    }
 
     /// <summary>"Reset this app…" (the controller asks first, and starts over from the sign-in window).</summary>
     public event Action? ResetRequested;

@@ -120,6 +120,9 @@ public sealed record StatusSnapshot(
     /// <summary>The nest's folders linked with another account's nest (empty for most nests, and for older ones).</summary>
     public IReadOnlyList<LinkedFolder> LinkedFolders { get; init; } = [];
 
+    /// <summary>The folders this computer keeps on the nest only ("Where your files live"), for the Overview.</summary>
+    public IReadOnlyList<string> NestOnlyFolders { get; init; } = [];
+
     /// <summary>Nests shared with the owner's account that this computer could add (<see cref="LinkNotices"/>).</summary>
     public IReadOnlyList<SharedNestOffer> SharedOffers { get; init; } = [];
 
