@@ -80,7 +80,7 @@ public partial class SignInView : UserControl
         _openUrl = openUrl;
         InviteInsteadButton.IsVisible = adding?.CanInvite == true;
         FolderBox.Text = current.Folder ?? string.Empty;
-        AutoStartBox.IsChecked = autoStart || current.StartWithWindows;
+        AutoStartBox.IsChecked = autoStart || current.StartWithWindows || !current.FirstRunCompleted; // on for a new computer, as in the Windows app
         AddressBox.Text = SuggestedAddress(current, nestHint);
         AddressBox.TextChanged += (_, _) =>
         {

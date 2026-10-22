@@ -70,7 +70,7 @@ public sealed class DesktopControllerTests
         Assert.Equal(app.Nest.Url.ToString(), saved.ServerUrl);
         Assert.Single(app.Platform.SecretStore.Kept);
         Assert.True(Directory.Exists(app.Folder));
-        Assert.Equal([false], app.Platform.AutoStartChanges); // "Start Pairnets when I log in" was left off
+        Assert.Equal([true], app.Platform.AutoStartChanges); // "Start Pairnets when I log in" starts on for a new computer, as in the Windows app
         await app.WaitUntilIdleAsync();
         File.WriteAllText(Path.Combine(app.Folder, "first.txt"), "synced after signing in");
         PressSyncNow(app, app.MainWindow);
