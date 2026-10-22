@@ -249,7 +249,13 @@ public static class Dialogs
     {
         if (Responder is { } responder)
             return responder.SaveFile(title, fileName);
-        var dialog = new SaveFileDialog { Title = title, FileName = fileName, OverwritePrompt = true };
+        var dialog = new SaveFileDialog { Title = title, FileName = fileName, OverwritePrompt = true, Filter = "All files (*.*)|*.*" };
+        if (FilesPageText.SaveCopyType(fileName) is { } type)
+        {
+            dialog.Filter = $"{type.Label} (*.{type.Extension})|*.{type.Extension}|" + dialog.Filter;
+            dialog.DefaultExt = type.Extension;
+            dialog.AddExtension = true;
+        }
         return (owner is not null ? dialog.ShowDialog(owner) : dialog.ShowDialog()) == true ? dialog.FileName : null;
     }
 

@@ -132,6 +132,16 @@ public static class FilesPageText
         $"{Format.Bytes(total)} · {(here >= total ? "all" : Format.Bytes(here))} on this PC";
 
     /// <summary>"WHERE PHOTOS LIVES ON THIS PC".</summary>
+    /// <summary>
+    /// The file type a "Save a copy…" box offers for this name, so the copy keeps its extension (".txt") even when the
+    /// person types a new name; null for a name without one.
+    /// </summary>
+    public static (string Extension, string Label)? SaveCopyType(string fileName)
+    {
+        var ext = Path.GetExtension(fileName).TrimStart('.');
+        return ext.Length == 0 ? null : (ext, ext.ToUpperInvariant() + " file");
+    }
+
     public static string PickerTitle(string folder) =>
         PlacementMap.NormalizeFolder(folder).Length == 0 ? "WHERE YOUR FILES LIVE ON THIS PC" : $"WHERE {FolderName(folder).ToUpperInvariant()} LIVES ON THIS PC";
 

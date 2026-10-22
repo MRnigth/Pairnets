@@ -118,7 +118,13 @@ public static class Dialogs
     {
         if (owner is null)
             return null;
-        var file = await owner.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions { Title = title, SuggestedFileName = fileName, ShowOverwritePrompt = true });
+        var options = new FilePickerSaveOptions { Title = title, SuggestedFileName = fileName, ShowOverwritePrompt = true };
+        if (FilesPageText.SaveCopyType(fileName) is { } type)
+        {
+            options.DefaultExtension = type.Extension;
+            options.FileTypeChoices = [new FilePickerFileType(type.Label) { Patterns = ["*." + type.Extension] }, FilePickerFileTypes.All];
+        }
+        var file = await owner.StorageProvider.SaveFilePickerAsync(options);
         return file?.TryGetLocalPath();
     }
 
