@@ -1653,7 +1653,9 @@ public sealed class DesktopController : ITrayActions, IDisposable
         var crashes = _env.CrashesDir;
         var window = new BugReportWindow(() => BugReport.BuildAsync(settings, session, _fileLog.CurrentFile, error, AppName, crashes), _platform.Open,
             afterError: error is not null, saveDirectory: _env.LogsDir, crashesDir: crashes,
-            sendCrashes: (cards, note) => CrashSender.SendAsync(crashes, cards, note, PrivacyCleaner.ThisComputer(settings)));
+            sendCrashes: (cards, note) => CrashSender.SendAsync(crashes, cards, note, PrivacyCleaner.ThisComputer(settings)),
+            prepareReport: report => BugReportSender.Prepare(report, PrivateValues(), BugReportSender.NamesIn(_settings.Nests().DefaultIfEmpty(_settings).Select(n => n.Folder))),
+            sendReport: (prepared, note) => BugReportSender.SendAsync(prepared, note, AppName, PrivateValues()));
         window.Show();
         window.Activate();
     }

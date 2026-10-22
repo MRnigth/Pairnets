@@ -13,6 +13,7 @@ export const TABLES = [
   "nest_invites",
   "audit",
   "crash_reports",
+  "bug_reports",
   "rate_counters",
   "sessions",
   "identities",

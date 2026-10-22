@@ -11,6 +11,7 @@
 import type { Ctx } from "./context";
 import { sweepInactive } from "./inactive";
 import { REQUEST_KEEP, retryFriends } from "./routes/friends";
+import { bugReportSweep } from "./routes/bugreport";
 import { crashSweep } from "./routes/crash";
 import { retryLinks, tellLinkEnds } from "./routes/links";
 import { DAY, HOUR } from "./ratelimit";
@@ -43,6 +44,7 @@ export async function sweep(ctx: Ctx): Promise<Record<string, number | string | 
     db.prepare("DELETE FROM nest_invites WHERE nest_id NOT IN (SELECT id FROM nests WHERE mode = 'relay' AND status IN ('pending', 'active'))"),
     db.prepare("DELETE FROM nest_members WHERE nest_id NOT IN (SELECT id FROM nests WHERE mode = 'relay' AND status IN ('pending', 'active'))"),
     crashSweep(db, now),
+    bugReportSweep(db, now),
     db.prepare(
       `DELETE FROM nest_links WHERE from_nest NOT IN (SELECT id FROM nests WHERE mode = 'relay' AND status IN ('pending', 'active'))
          OR to_nest NOT IN (SELECT id FROM nests WHERE mode = 'relay' AND status IN ('pending', 'active'))`,
@@ -62,6 +64,7 @@ export async function sweep(ctx: Ctx): Promise<Record<string, number | string | 
     "invitesOfGoneNests",
     "membersOfGoneNests",
     "crashReports",
+    "bugReports",
     "linksOfGoneNests",
   ];
   const counts: Record<string, number | string | null> = {};

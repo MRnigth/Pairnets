@@ -26,6 +26,7 @@ import {
 } from "./routes/account";
 import { appApproveRoute, appLogoutRoute, appPageRoute, appPollRoute, appRequestRoute, appStartRoute } from "./routes/apps";
 import { claimRoute } from "./routes/claim";
+import { bugReportListRoute, bugReportRoute, MAX_BUGREPORT_BODY } from "./routes/bugreport";
 import { crashListRoute, crashRoute, MAX_CRASH_BODY } from "./routes/crash";
 import {
   approveInviteRoute,
@@ -82,6 +83,7 @@ export const ORIGIN_EXEMPT = new Set([
   "/v1/servers/start",
   "/v1/servers/poll",
   "/v1/crash",
+  "/v1/bugreport",
 ]);
 
 const MUTATING = new Set(["POST", "PATCH", "PUT", "DELETE"]);
@@ -144,6 +146,7 @@ const API_ROUTES: Route[] = [
   { method: "PATCH", pattern: /^\/v1\/servers\/([^/]+)$/, handler: renameServerRoute },
   { method: "DELETE", pattern: /^\/v1\/servers\/([^/]+)$/, handler: removeServerRoute },
   { method: "POST", pattern: /^\/v1\/crash$/, handler: crashRoute },
+  { method: "POST", pattern: /^\/v1\/bugreport$/, handler: bugReportRoute },
 ];
 
 const PAGE_ROUTES: Route[] = [
@@ -158,6 +161,7 @@ const PAGE_ROUTES: Route[] = [
   { method: "GET", pattern: /^\/invite$/, handler: invitePageRoute },
   { method: "GET", pattern: /^\/nest-login$/, handler: nestLoginRoute },
   { method: "GET", pattern: /^\/admin\/crashes$/, handler: crashListRoute },
+  { method: "GET", pattern: /^\/admin\/reports$/, handler: bugReportListRoute },
   ...WEBSITE_PAGES.map((page): Route => ({
     method: "GET",
     pattern: new RegExp(`^/${page}/?$`),
@@ -232,8 +236,8 @@ async function route(ctx: Ctx, isApi: boolean): Promise<Response> {
 
   if (isApi) {
     if (MUTATING.has(method)) {
-      // A crash report carries stack traces, so it may be larger than the other requests.
-      ctx.body = await readBody(req, path === "/v1/crash" ? MAX_CRASH_BODY : MAX_BODY);
+      // Crash and bug reports carry stack traces and a log, so they may be larger than the other requests.
+      ctx.body = await readBody(req, path === "/v1/crash" ? MAX_CRASH_BODY : path === "/v1/bugreport" ? MAX_BUGREPORT_BODY : MAX_BODY);
       if (ctx.body.length > 0 && !isJsonType(req.headers.get("Content-Type"))) {
         throw new HttpError(415, "bad_request", "Send JSON (Content-Type: application/json).");
       }

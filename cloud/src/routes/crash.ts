@@ -24,9 +24,9 @@ export const CRASH_KEEP_DAYS = 90;
 
 const PLACES = new Set(["Screen", "Background", "Task"]);
 const CRASH_ID_RE = /^[0-9a-f]{12}$/;
-const VERSION_RE = /^[0-9A-Za-z.+-]{1,40}$/;
+export const VERSION_RE = /^[0-9A-Za-z.+-]{1,40}$/;
 /** Hidden characters, but not line breaks (the details are a stack trace). */
-const HIDDEN_BUT_NEWLINE = /[\u0000-\u0009\u000b-\u001f\u007f-\u009f­؜᠎​-‏‪-‮⁠-⁤⁦-⁩﻿]/g;
+export const HIDDEN_BUT_NEWLINE = /[\u0000-\u0009\u000b-\u001f\u007f-\u009f­؜᠎​-‏‪-‮⁠-⁤⁦-⁩﻿]/g;
 
 interface CrashCard {
   id: string;
@@ -170,12 +170,28 @@ function reportText(r: CrashRow): string {
   ].join("\n");
 }
 
-/** GET /admin/crashes: newest first. Only for a signed-in account whose email is in ADMIN_EMAILS; others get 404. */
-export async function crashListRoute(ctx: Ctx): Promise<Response> {
+/**
+ * The admin pages are only for a signed-in account whose email is in ADMIN_EMAILS: a redirect to sign in when nobody is
+ * signed in (null when the account is an admin), and 404 for everyone else.
+ */
+export async function adminOnly(ctx: Ctx, path: string): Promise<Response | null> {
   const s = await loadBrowserSession(ctx);
-  if (!s) return redirect("/login?next=/admin/crashes");
+  if (!s) return redirect(`/login?next=${path}`);
   const account = await ctx.env.DB.prepare("SELECT email FROM accounts WHERE id = ?1").bind(s.accountId).first<{ email: string }>();
   if (!account || !adminEmails(ctx).includes(account.email.toLowerCase())) throw new HttpError(404, "not_found");
+  return null;
+}
+
+/** The two admin pages link to each other. */
+export function adminNav(here: "crashes" | "reports"): string {
+  const link = (to: "crashes" | "reports", text: string) => (to === here ? `<b>${text}</b>` : `<a href="/admin/${to}">${text}</a>`);
+  return `<p class="muted">${link("crashes", "Crash reports")} · ${link("reports", "Bug reports")}</p>`;
+}
+
+/** GET /admin/crashes: newest first. Only for a signed-in account whose email is in ADMIN_EMAILS; others get 404. */
+export async function crashListRoute(ctx: Ctx): Promise<Response> {
+  const login = await adminOnly(ctx, "/admin/crashes");
+  if (login) return login;
   const rows = (await ctx.env.DB.prepare("SELECT * FROM crash_reports ORDER BY last_at DESC LIMIT 200").all<CrashRow>()).results;
   const items = rows
     .map(
@@ -189,7 +205,7 @@ export async function crashListRoute(ctx: Ctx): Promise<Response> {
     200,
     layout(
       "Crash reports",
-      `<section class="card"><h1>Crash reports</h1><p class="muted">${rows.length} kind${rows.length === 1 ? "" : "s"} of crash, newest first. Reports not seen for ${CRASH_KEEP_DAYS} days are deleted.</p></section>
+      `<section class="card"><h1>Crash reports</h1>${adminNav("crashes")}<p class="muted">${rows.length} kind${rows.length === 1 ? "" : "s"} of crash, newest first. Reports not seen for ${CRASH_KEEP_DAYS} days are deleted.</p></section>
 ${items || `<section class="card"><p>No crash reports yet.</p></section>`}`,
     ),
   );
