@@ -1400,6 +1400,8 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
         await Step("Opening the tray menu", app.OpenMenu,
             () => !app.Tray.TrayIcon.ContextMenuStrip!.Items.OfType<System.Windows.Forms.ToolStripMenuItem>().Single(i => i.Text == "Start with Windows").Checked,
             "show 'Start with Windows' as Windows has it (off)");
+        await Step("Pressing 'Simple window drawing' in the tray menu", () => app.Menu("Simple window drawing"),
+            () => app.SavedSettings.SoftwareDrawing, "turn on simple window drawing and remember it");
         await Step("A click on the tray icon", app.ClickIcon, () => app.Tray.Panel is { IsVisible: true }, "open the quick-look panel");
         await Step("A double-click on the tray icon", app.DoubleClickIcon, () => app.Tray.Panel is not { IsVisible: true } && app.Tray.Window is { IsVisible: true },
             "close the panel and open the main window");
