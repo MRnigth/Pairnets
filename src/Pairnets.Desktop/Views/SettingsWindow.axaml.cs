@@ -28,6 +28,11 @@ public partial class SettingsWindow : Window
             PlainToken = key;
             Close();
         };
+        SignIn.InviteRequested += () =>
+        {
+            InviteInstead = true;
+            Close();
+        };
         Host.Content = SignIn;
         KeyDown += async (_, e) =>
         {
@@ -47,4 +52,7 @@ public partial class SettingsWindow : Window
     public ClientSettings? Result { get; private set; }
 
     public string? PlainToken { get; private set; }
+
+    /// <summary>"Invite a friend…" was pressed: the window closed so the invite window can open instead.</summary>
+    public bool InviteInstead { get; private set; }
 }

@@ -524,12 +524,18 @@ public sealed class DesktopController : ITrayActions, IDisposable
             await Dialogs.InfoAsync(_window, "Pairnets", "Your nest has no website yet. On the server, give it its own name with: sudo ./install.sh --public-url https://nest.example.com");
     }
 
-    /// <summary>"Invite a friend…": the invite window for the nest shown, which hands over to the account page in the browser.</summary>
+    /// <summary>
+    /// The nest "Invite a friend…" invites to: the one shown, or (on "All nests", or a friend's nest) the first nest here
+    /// you own that is reached through Pairnets. Null when there is none.
+    /// </summary>
+    private NestRun? InviteRun => new[] { Current }.Concat(_runs).FirstOrDefault(r => r?.Session?.Status is { } s && PeopleSection.From(s).Visible);
+
+    /// <summary>"Invite a friend…": the invite window for that nest (<see cref="InviteRun"/>), which hands over to the account page in the browser.</summary>
     public void InviteFriend()
     {
-        if (_session?.Status is not { } status || PeopleSection.From(status) is not { Visible: true, NestId: { } nestId } people)
+        if (InviteRun is not { Session.Status: { } status } run || PeopleSection.From(status) is not { Visible: true, NestId: { } nestId } people)
             return;
-        var window = new InviteWindow(status.NestTitle, nestId, Nest.Folder, people.Sealed, _platform.Open);
+        var window = new InviteWindow(status.NestTitle, nestId, run.Settings.Folder, people.Sealed, _platform.Open);
         if (_window is { IsVisible: true })
             window.Show(_window); // on top of the app, as on Windows
         else
@@ -665,11 +671,16 @@ public sealed class DesktopController : ITrayActions, IDisposable
             return;
         }
         var blank = _settings.BlankNest();
-        var window = new SettingsWindow(blank, _platform.Secrets, SafeIsAutoStart(), _platform.Open, adding: new NestAdding(_settings, blank));
+        var window = new SettingsWindow(blank, _platform.Secrets, SafeIsAutoStart(), _platform.Open, adding: new NestAdding(_settings, blank) { CanInvite = InviteRun is not null });
         _signInWindow = window;
         window.Closed += (_, _) =>
         {
             _signInWindow = null;
+            if (window.InviteInstead)
+            {
+                InviteFriend();
+                return;
+            }
             if (window.Result is null)
                 return;
             var id = _settings.AddNest(window.Result);
@@ -1231,6 +1242,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
             NestNames.Title(picked, _settings, _session?.Status), _runs.Count, folder => _settings.FolderProblem(folder, picked.NestId))
         {
             KeySlot = _settings.KeySlotFor(picked),
+            CanInvite = InviteRun is not null,
         };
         view.OpenFilesRequested += () => _window?.Navigate(MainPage.Files);
         view.Saved += v =>
@@ -1243,6 +1255,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
         view.ResetRequested += ResetEverything;
         view.LeaveNestRequested += LeaveNest;
         view.AddNestRequested += AddNest;
+        view.InviteFriendRequested += InviteFriend;
         view.ShowDevicesRequested += () => _window?.Navigate(MainPage.Devices);
         view.OpenLinkRequested += url => _platform.Open(url);
         view.Cancelled += () => _window?.Navigate(MainPage.Overview);

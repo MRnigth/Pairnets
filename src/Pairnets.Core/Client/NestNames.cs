@@ -41,6 +41,12 @@ public sealed record NestAdding(ClientSettings All, ClientSettings New)
     /// <summary>Where the new nest's key is saved (Mac, Linux): see <see cref="ClientSettings.KeySlotFor"/>.</summary>
     public string? KeySlot => All.KeySlotFor(New);
 
+    /// <summary>
+    /// There is a nest here to invite a friend to (one you own, reached through Pairnets): the add window then offers
+    /// "Invite a friend…" instead.
+    /// </summary>
+    public bool CanInvite { get; init; }
+
     /// <summary>The nest ids of the account nests already synced here.</summary>
     public IEnumerable<string> Joined => All.Nests().Select(n => Relay.NestId(n.ServerUrl)).OfType<string>();
 

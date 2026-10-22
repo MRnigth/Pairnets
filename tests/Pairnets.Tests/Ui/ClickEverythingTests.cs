@@ -384,11 +384,13 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
             new("the Settings page (on the shared token)", s => SettingsStage(s, ownKey: false)),
             new("the Settings page (a nest that can move its files, the Linux program folder)", s => SettingsStage(s, ownKey: true, canMove: true)),
             new("the Settings page (one of two nests, with Leave)", s => SettingsStage(s, ownKey: true, nests: 2)),
+            new("the Settings page (a nest you own, with Invite a friend…)", s => SettingsStage(s, ownKey: true, nests: 2, canInvite: true)),
         ],
         ["sign-in"] =
         [
             new("the sign-in window (a Pairnets account first, an email typed)", s => AccountStage(s, view =>
                 Screen.Named<TextBox>(view, "AccountEmailBox").Text = "owner@example.com")),
+            new("the add-a-nest window (a nest you own here, with Invite a friend…)", s => AccountStage(s, adding: true)),
             new("the sign-in window (finish in your browser)", s => AccountStage(s, view =>
                 view.ShowAccount(new AccountSignInState(PairingStage.Waiting, FakeSyncService.UserCode, AccountLink, DateTimeOffset.UtcNow.AddMinutes(9)),
                     openBrowser: false))),
@@ -699,7 +701,7 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
 
     // ------------------------------------------------------------------ settings
 
-    private Task<SettingsView> SettingsStage(Stage s, bool ownKey, bool canMove = false, int nests = 1)
+    private Task<SettingsView> SettingsStage(Stage s, bool ownKey, bool canMove = false, int nests = 1, bool canInvite = false)
     {
         var secrets = new MemorySecrets();
         var key = ownKey ? fixture.Nest.MintKey("MACBOOK-" + Guid.NewGuid().ToString("N")[..6]) : null;
@@ -718,8 +720,9 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
             updates.Dispose();
             return Task.CompletedTask;
         });
-        var view = new SettingsView(settings, secrets, autoStart: false, updates, "Nest 1.0.0", new FakeNestFiles(), "Work nest", nests);
+        var view = new SettingsView(settings, secrets, autoStart: false, updates, "Nest 1.0.0", new FakeNestFiles(), "Work nest", nests) { CanInvite = canInvite };
         view.OpenFilesRequested += () => s.Events.Add("open-files");
+        view.InviteFriendRequested += () => s.Events.Add("invite-friend");
         view.Saved += _ => s.Events.Add("saved");
         view.AddNestRequested += () => s.Events.Add("add-nest");
         view.LeaveNestRequested += () => s.Events.Add("leave-nest");
@@ -747,6 +750,7 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
         s.Expect["OnParChanged"] = That(() => view.SwitchesApplied, "the choice apply at once");
         s.Expect["OnReset"] = Raised(s, "reset");
         s.Expect["OnAddNest"] = Raised(s, "add-nest");
+        s.Expect["OnInviteFriend"] = Raised(s, "invite-friend");
         s.Expect["OnLeaveNest"] = Raised(s, "leave-nest");
         s.Expect["OnCancel"] = Raised(s, "cancelled");
         s.Expect["OnReportBug"] = Raised(s, "report-bug");
@@ -816,9 +820,11 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
     }
 
     /// <summary>The sign-in window on its first step, a Pairnets account (the stand-in service), arranged by <paramref name="arrange"/>.</summary>
-    private Task AccountStage(Stage s, Action<SignInView>? arrange = null)
+    private Task AccountStage(Stage s, Action<SignInView>? arrange = null, bool adding = false)
     {
-        var window = s.Show(new SettingsWindow(new ClientSettings { DeviceName = "MACBOOK" }, new MemorySecrets(), autoStart: false, s.Opened.Add));
+        var all = new ClientSettings { DeviceName = "MACBOOK" };
+        var window = s.Show(new SettingsWindow(adding ? all.BlankNest() : all, new MemorySecrets(), autoStart: false, s.Opened.Add,
+            adding: adding ? new NestAdding(all, all.BlankNest()) { CanInvite = true } : null));
         var view = window.SignIn;
         view.Service = fixture.Service.Url;
         arrange?.Invoke(view);
@@ -833,6 +839,7 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
         s.Expect["OnTerms"] = That(() => s.Opened.SequenceEqual([PairnetsLinks.Terms]), "the Terms open");
         s.Expect["OnPrivacy"] = That(() => s.Opened.SequenceEqual([PairnetsLinks.Privacy]), "the Privacy Policy open");
         s.Expect["OnOwnNest"] = That(() => view.Step == SignInStep.Address, "the step for a nest's own address show");
+        s.Expect["OnInviteInstead"] = That(() => window.InviteInstead && !window.IsVisible, "the add window close, so the invite window opens");
         s.Expect["OnAccountOpenAgain"] = That(() => s.Opened.SequenceEqual([AccountLink]), "the service's page open again");
         s.Expect["OnAccountCancel"] = That(() => view.Step == SignInStep.Account, "the Pairnets account step show again");
         s.Expect["OnShowMeHow"] = That(() => s.Opened.SequenceEqual([origin + "/account"]), "the account page open");

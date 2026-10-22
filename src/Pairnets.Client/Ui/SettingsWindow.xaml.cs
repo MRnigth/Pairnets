@@ -25,6 +25,11 @@ public partial class SettingsWindow : Window
             PlainToken = key;
             DialogResult = true;
         };
+        SignIn.InviteRequested += () =>
+        {
+            InviteInstead = true;
+            Close();
+        };
         Host.Content = SignIn;
         // Sized to the content once (460×660), then free to resize: the steps follow the window.
         ContentRendered += (_, _) =>
@@ -57,6 +62,9 @@ public partial class SettingsWindow : Window
 
     /// <summary>The settings to save (key protected) when the dialog returns true.</summary>
     public ClientSettings? Result { get; private set; }
+
+    /// <summary>"Invite a friend…" was pressed: the window closed so the invite window can open instead.</summary>
+    public bool InviteInstead { get; private set; }
 
     /// <summary>The plain key for this session (never written to disk in plain text).</summary>
     public string? PlainToken { get; private set; }

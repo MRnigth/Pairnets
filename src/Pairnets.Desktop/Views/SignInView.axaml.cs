@@ -78,6 +78,7 @@ public partial class SignInView : UserControl
         _adding = adding;
         _protector = protector;
         _openUrl = openUrl;
+        InviteInsteadButton.IsVisible = adding?.CanInvite == true;
         FolderBox.Text = current.Folder ?? string.Empty;
         AutoStartBox.IsChecked = autoStart || current.StartWithWindows;
         AddressBox.Text = SuggestedAddress(current, nestHint);
@@ -371,6 +372,11 @@ public partial class SignInView : UserControl
     private void OnPrivacy(object? sender, RoutedEventArgs e) => _openUrl(PairnetsLinks.Privacy);
 
     private void OnOwnNest(object? sender, RoutedEventArgs e) => ShowAddressStep();
+
+    /// <summary>"Invite a friend…" in the add window: invite someone to a nest already here instead of adding one.</summary>
+    public event Action? InviteRequested;
+
+    private void OnInviteInstead(object? sender, RoutedEventArgs e) => InviteRequested?.Invoke();
 
     private void OnBackToAccount(object? sender, RoutedEventArgs e) => ShowAccountStep(null);
 

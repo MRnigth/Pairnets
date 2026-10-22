@@ -467,6 +467,18 @@ public partial class SettingsView : UserControl
 
     private void OnAddNest(object? sender, RoutedEventArgs e) => AddNestRequested?.Invoke();
 
+    /// <summary>"Invite a friend…" beside "Add a nest…", shown when there is a nest here you own (see <see cref="CanInvite"/>).</summary>
+    public event Action? InviteFriendRequested;
+
+    private void OnInviteFriend(object? sender, RoutedEventArgs e) => InviteFriendRequested?.Invoke();
+
+    /// <summary>There is a nest here to invite a friend to: shows "Invite a friend…" on the "Add a nest" card.</summary>
+    public bool CanInvite
+    {
+        get => InviteNestButton.IsVisible;
+        init => InviteNestButton.IsVisible = value;
+    }
+
     private void OnShowDevices(object? sender, RoutedEventArgs e) => ShowDevicesRequested?.Invoke();
 
     /// <summary>A link under "About Pairnets": the address of one of the website's pages (<see cref="PairnetsLinks"/>).</summary>

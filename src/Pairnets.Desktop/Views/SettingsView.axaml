@@ -331,7 +331,11 @@
                 <TextBlock Classes="t2" FontSize="13" TextWrapping="Wrap"
                            Text="Sync one more nest on this computer: yours, a friend's or one from work. Its files get a folder of their own." />
               </StackPanel>
-              <Button x:Name="AddNestButton" Grid.Column="2" Classes="SecondaryButton" Height="38" Padding="16,0" Margin="16,0,0,0" VerticalAlignment="Center" Content="Add a nest…" Click="OnAddNest" />
+              <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" Margin="16,0,0,0" VerticalAlignment="Center">
+                <Button x:Name="InviteNestButton" Classes="SecondaryButton" Height="38" Padding="16,0" Foreground="{DynamicResource T.AccentInk}" Content="Invite a friend…"
+                        IsVisible="False" Click="OnInviteFriend" />
+                <Button x:Name="AddNestButton" Classes="SecondaryButton" Height="38" Padding="16,0" Content="Add a nest…" Click="OnAddNest" />
+              </StackPanel>
             </Grid>
             <Grid x:Name="LeaveRow" ColumnDefinitions="Auto,*,Auto" Margin="0,14,0,0" IsVisible="False">
               <Border Classes="sq44 tint-bad" Margin="0,0,16,0" VerticalAlignment="Center">
