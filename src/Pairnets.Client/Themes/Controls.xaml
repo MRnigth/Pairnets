@@ -582,6 +582,42 @@
         </ControlTemplate>
       </Setter.Value>
     </Setter>
+    <Style.Triggers>
+      <!-- An item with its own items ("Where this folder lives") opens them in a card to the right -->
+      <Trigger Property="Role" Value="SubmenuHeader">
+        <Setter Property="Template">
+          <Setter.Value>
+            <ControlTemplate TargetType="MenuItem">
+              <Grid>
+                <Border x:Name="bd" Background="Transparent" CornerRadius="9" Padding="10,7">
+                  <DockPanel>
+                    <TextBlock DockPanel.Dock="Right" Text="▸" Margin="14,0,0,0" Foreground="{DynamicResource T.Muted}" VerticalAlignment="Center" />
+                    <ContentPresenter ContentSource="Header" TextElement.Foreground="{TemplateBinding Foreground}" />
+                  </DockPanel>
+                </Border>
+                <Popup x:Name="PART_Popup" Placement="Right" HorizontalOffset="4" VerticalOffset="-7" AllowsTransparency="True" Focusable="False"
+                       PopupAnimation="Fade" IsOpen="{Binding IsSubmenuOpen, RelativeSource={RelativeSource TemplatedParent}}">
+                  <Border Background="{DynamicResource T.Card}" BorderBrush="{DynamicResource T.Border}" BorderThickness="1" CornerRadius="14" Padding="6" MinWidth="170">
+                    <StackPanel IsItemsHost="True" KeyboardNavigation.DirectionalNavigation="Cycle" />
+                  </Border>
+                </Popup>
+              </Grid>
+              <ControlTemplate.Triggers>
+                <Trigger Property="IsHighlighted" Value="True">
+                  <Setter TargetName="bd" Property="Background" Value="{DynamicResource T.Hover}" />
+                </Trigger>
+                <Trigger Property="IsSubmenuOpen" Value="True">
+                  <Setter TargetName="bd" Property="Background" Value="{DynamicResource T.Hover}" />
+                </Trigger>
+                <Trigger Property="IsEnabled" Value="False">
+                  <Setter TargetName="bd" Property="Opacity" Value="0.5" />
+                </Trigger>
+              </ControlTemplate.Triggers>
+            </ControlTemplate>
+          </Setter.Value>
+        </Setter>
+      </Trigger>
+    </Style.Triggers>
   </Style>
   <Style x:Key="{x:Static MenuItem.SeparatorStyleKey}" TargetType="Separator">
     <Setter Property="Template">

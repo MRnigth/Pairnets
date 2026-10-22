@@ -284,6 +284,35 @@ public sealed class FilesPageTests
     }
 
     [Fact]
+    public async Task AFolderRowsMenu_OpensWhereThisFolderLives_WithItsThreeChoices()
+    {
+        var (window, _, _, _, answers) = await OpenAsync();
+        await Wpf.Ui(() => window.Navigate(MainPage.Files));
+        await Wpf.Settle();
+        var shown = await Wpf.Ui(() =>
+        {
+            var button = Presser.Elements(window).OfType<System.Windows.Controls.Button>()
+                .First(b => b.DataContext is NestRow { IsFolder: true } && b.ContextMenu is not null);
+            var menu = button.ContextMenu!;
+            menu.PlacementTarget = button;
+            menu.IsOpen = true;
+            menu.UpdateLayout();
+            var where = menu.Items.OfType<System.Windows.Controls.MenuItem>().Single(i => (string)i.Header == "Where this folder lives");
+            where.IsSubmenuOpen = true;
+            where.UpdateLayout();
+            var popup = (System.Windows.Controls.Primitives.Popup)where.Template.FindName("PART_Popup", where);
+            popup.Child.UpdateLayout();
+            var choices = where.Items.OfType<System.Windows.Controls.MenuItem>().Where(i => i.IsVisible).Select(i => (string)i.Header).ToList();
+            var open = popup.IsOpen;
+            menu.IsOpen = false;
+            return (open, choices);
+        });
+        Assert.True(shown.open);
+        Assert.Equal(["On this PC", "On-Demand", "Only on the nest"], shown.choices);
+        await Done(answers);
+    }
+
+    [Fact]
     public async Task TheFilesPage_ChoosesForExactlyTheFolderPicked_NeverTheWholeFolder()
     {
         var (window, _, nest, script, answers) = await OpenAsync();
