@@ -459,6 +459,8 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
             new("the bug report window", BugReportStage),
             new("the bug report window with a crash not sent yet", BugReportWithCrashStage),
             new("the send crash report window", SendCrashStage),
+            new("the bug report window with sending on", BugReportSendStage),
+            new("the send bug report window", SendBugReportStage),
         ],
         ["invite"] =
         [
@@ -948,6 +950,29 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
             crashesDir: crashes, sendCrashes: (_, note) => Task.FromResult<string?>(null)));
         await Wait.Until(() => window.CrashBannerShown, "the crash banner to show");
         s.Expect["OnSendCrash"] = That(() => s.Windows.OfType<SendCrashWindow>().Any(w => w.IsVisible), "the send crash report window open");
+    }
+
+    private async Task BugReportSendStage(Stage s)
+    {
+        Directory.CreateDirectory(fixture.Reports);
+        var window = s.Show(new BugReportWindow(() => Task.FromResult("Pairnets bug report\nFolder: " + @"D:\Home\alex\Pairnets"), s.Opened.Add, saveDirectory: fixture.Reports,
+            prepareReport: r => BugReportSender.Prepare(r), sendReport: (_, _) => Task.FromResult<string?>(null)));
+        await Wait.Until(() => window.ReportBannerShown, "the send bug report banner to show");
+        s.Expect["OnSendReport"] = That(() => s.Windows.OfType<SendCrashWindow>().Any(w => w.IsVisible && w.HeadingValue == SendReportText.Heading
+            && w.PreviewValue == "Pairnets bug report\nFolder: <path>"), "the send bug report window open, showing the cleaned report");
+    }
+
+    private static Task SendBugReportStage(Stage s)
+    {
+        var window = s.Show(SendCrashWindow.ForBugReport("Pairnets bug report\nFolder: <path>", note =>
+        {
+            s.Events.Add("sent: " + note);
+            return Task.FromResult<string?>(null);
+        }));
+        window.Note = "the folder went empty";
+        s.Expect["OnSend"] = That(() => s.Events.SequenceEqual(["sent: the folder went empty"]) && !window.IsVisible, "the report go with the note and the window close");
+        s.Expect["OnCancel"] = That(() => s.Events.Count == 0 && !window.IsVisible, "the window close without sending");
+        return Task.CompletedTask;
     }
 
     private static Task SendCrashStage(Stage s)

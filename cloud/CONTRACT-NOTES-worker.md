@@ -274,3 +274,14 @@ fold into `RELAY.md` or reverse.
 - `GET /admin/crashes`: the list, for signed-in accounts whose email is in the `ADMIN_EMAILS` secret (comma separated);
   anyone else gets 404. Those addresses also get an email for each new kind of crash, at most 5 a day.
 - Deploying it: apply migrations 0006 (friends) and 0008 (crash reports), then `npx wrangler secret put ADMIN_EMAILS`, then deploy the Worker.
+
+### Bug reports (not in the contract)
+- `POST /v1/bugreport` (Origin-exempt, no sign-in): `{"app", "version", "system", "report", "note": string|null}` from the
+  apps' "Send bug report" (`BugReportSender`): the "Report a bug" text, cleaned on the computer (`PrivacyCleaner.Clean`).
+  Report up to 64,000 characters, note up to 1000; body up to 256 KiB (JSON escapes line breaks and letters). Bad shape →
+  `400 bad_request`; 5 per hour per address and 300 a day in all → `429 rate_limited`; kept → `204`.
+- Stored in `bug_reports` (migration 0009), one row per report; nothing about the sender. Rows older than 90 days go in
+  the hourly sweep.
+- `GET /admin/reports`: the list, for the same `ADMIN_EMAILS` accounts as `/admin/crashes` (the two pages link to each
+  other); anyone else gets 404. Those addresses get an email for each report, at most 20 a day.
+- Deploying it: apply migration 0009, then deploy the Worker (`ADMIN_EMAILS` is already set).

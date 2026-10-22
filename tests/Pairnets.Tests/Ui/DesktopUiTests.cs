@@ -292,6 +292,26 @@ public class DesktopUiTests
         Assert.True(send.IsVisible);
         send.Close();
 
+        // "Send bug report…": hidden unless sending is on; its window shows the cleaned report; after sending, the chip says so.
+        Assert.False(bug.ReportBannerShown);
+        string? sentReport = null;
+        var sendable = new BugReportWindow(() => Task.FromResult("Pairnets bug report\nFolder: " + @"D:\Home\alex\Pairnets"), _ => { }, saveDirectory: reports.Path,
+            prepareReport: r => BugReportSender.Prepare(r), sendReport: (prepared, _) => { sentReport = prepared; return Task.FromResult<string?>(null); });
+        Assert.True(sendable.BuildAsync().IsCompleted);
+        Assert.True(sendable.ReportBannerShown);
+        Assert.Equal(SendReportText.BannerTitle, sendable.ReportBannerTitleValue);
+        var reportWindow = sendable.ReportSendWindow()!;
+        reportWindow.Show();
+        Assert.Equal(SendReportText.Heading, reportWindow.HeadingValue);
+        Assert.Equal("Pairnets bug report\nFolder: <path>", reportWindow.PreviewValue);
+        Assert.True(reportWindow.SendAsync().IsCompleted);
+        Assert.True(reportWindow.Sent);
+        Assert.Equal("Pairnets bug report\nFolder: <path>", sentReport);
+        sendable.AfterReportSend(true);
+        Assert.Equal("Bug report sent to Pairnets", sendable.SentChipValue);
+        Assert.Equal(SendReportText.SentTitle, sendable.ReportBannerTitleValue);
+        Assert.False(sendable.SendReportButtonShown);
+
         var dialog = new ServerUpdateWindow(null, "1.0.52", "1.0.58");
         dialog.Show();
         Assert.Equal("This app is newer than your nest", dialog.HeadingText);
@@ -718,7 +738,8 @@ public class DesktopUiTests
             Directory.Delete(crashDir, true);
         CrashCards.Add(crashDir, SampleCrash());
         var withCrash = new BugReportWindow(() => Task.FromResult("Pairnets bug report\n\n## Crash cards (cleaned, kept on this computer; 1)\n" + SampleCrash().ToText()),
-            _ => { }, saveDirectory: bugDir, crashesDir: crashDir, sendCrashes: (_, _) => Task.FromResult<string?>(null));
+            _ => { }, saveDirectory: bugDir, crashesDir: crashDir, sendCrashes: (_, _) => Task.FromResult<string?>(null),
+            prepareReport: r => BugReportSender.Prepare(r), sendReport: (_, _) => Task.FromResult<string?>(null));
         withCrash.Show();
         withCrash.BuildAsync().GetAwaiter().GetResult();
         Save(withCrash, outDir, $"bug-report-crash-{suffix}.png");
@@ -727,6 +748,27 @@ public class DesktopUiTests
         sendCrash.Show();
         Save(sendCrash, outDir, $"send-crash-{suffix}.png");
         sendCrash.Close();
+
+        // "Send bug report…": the banner in Report a bug, the window that shows the cleaned report, and after sending.
+        var sendable = new BugReportWindow(() => Task.FromResult(string.Join("\n",
+            "Pairnets bug report", "Created:   2026-10-22 10:35:49 +02:00", "App:       Linux app 1.0.61", "System:    Ubuntu 24.04.1 LTS (X64), .NET 8.0.10", "",
+            "## Settings (the token is never included)", "Server:              https://sync.pairnets.app/n/nst_0123456789abcdefghjkmnpqrs/",
+            "This computer:       alex-laptop", "Folder:              /home/alex/Pairnets", "", "## Log (last 300 lines of pairnets-20261022.log)",
+            "2026-10-22 10:34:10.343 [WRN] Pairnets.Engine: Pass blocked (FolderEmpty): The folder is empty but 1 file(s) were synced before.",
+            "2026-10-22 10:35:48.551 [INF] Pairnets.Tray: Syncing /home/alex/Pairnets as alex-laptop")),
+            _ => { }, saveDirectory: bugDir, prepareReport: r => BugReportSender.Prepare(r, ["alex-laptop", "alex"]),
+            sendReport: (_, _) => Task.FromResult<string?>(null));
+        sendable.Show();
+        sendable.BuildAsync().GetAwaiter().GetResult();
+        Save(sendable, outDir, $"bug-report-send-{suffix}.png");
+        var sendReport = sendable.ReportSendWindow()!;
+        sendReport.Note = "The folder went empty after I moved it to another drive.";
+        sendReport.Show();
+        Save(sendReport, outDir, $"send-bug-report-{suffix}.png");
+        sendReport.Close();
+        sendable.AfterReportSend(true);
+        Save(sendable, outDir, $"bug-report-sent-{suffix}.png");
+        sendable.Close();
     }
 
     /// <summary>

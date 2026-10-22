@@ -1723,7 +1723,7 @@ public sealed class TrayController : ITrayActions, IDisposable
 
     public void ViewLog() => Shell(_fileLog.CurrentFile);
 
-    /// <summary>"Report a bug": a report to paste to whoever helps (copied and saved; only crash cards are sent, and only on "Send").</summary>
+    /// <summary>"Report a bug": a report to paste to whoever helps (copied and saved). It, or the crash cards, are sent only on "Send".</summary>
     public void ReportBug() => ShowBugReport(null);
 
     /// <summary>Offered after an unexpected error: the same report, with that error in it.</summary>
@@ -1739,7 +1739,9 @@ public sealed class TrayController : ITrayActions, IDisposable
         var crashes = _env.CrashesDir;
         var window = new BugReportWindow(() => BugReport.BuildAsync(settings, session, _fileLog.CurrentFile, error, AppName, crashes), Shell,
             afterError: error is not null, logsDir: _env.LogsDir, crashesDir: crashes,
-            sendCrashes: (cards, note) => CrashSender.SendAsync(crashes, cards, note, PrivacyCleaner.ThisComputer(settings)));
+            sendCrashes: (cards, note) => CrashSender.SendAsync(crashes, cards, note, PrivacyCleaner.ThisComputer(settings)),
+            prepareReport: report => BugReportSender.Prepare(report, PrivateValues(), BugReportSender.NamesIn(_settings.Nests().DefaultIfEmpty(_settings).Select(n => n.Folder))),
+            sendReport: (prepared, note) => BugReportSender.SendAsync(prepared, note, AppName, PrivateValues()));
         window.Show();
         window.Activate();
     }

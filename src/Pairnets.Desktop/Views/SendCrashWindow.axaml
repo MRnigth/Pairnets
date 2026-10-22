@@ -5,7 +5,7 @@
         Title="Send crash report" Width="620" Height="560" MinWidth="460" MinHeight="420"
         Background="{DynamicResource T.Card}"
         WindowStartupLocation="CenterOwner" Icon="avares://Pairnets/Assets/pairnets-icon-256.png">
-  <!-- "Send crash report to Pairnets": exactly what goes out, an optional note, then Send or Don't send. -->
+  <!-- "Send crash report" / "Send bug report" to Pairnets: exactly what goes out, an optional note, then Send or Don't send. -->
   <Grid Margin="24,20" RowDefinitions="Auto,*,Auto,Auto,Auto">
     <Grid ColumnDefinitions="Auto,*">
       <Border Width="40" Height="40" CornerRadius="20" Margin="0,0,14,0" VerticalAlignment="Top" Background="{DynamicResource T.AccentSoft}">
@@ -13,7 +13,7 @@
       </Border>
       <StackPanel Grid.Column="1" Spacing="4">
         <TextBlock x:Name="Heading" FontSize="20" FontWeight="ExtraBold" TextWrapping="Wrap" Text="Send this crash report to us?" />
-        <TextBlock Classes="muted" FontSize="13" TextWrapping="Wrap" Text="This is exactly what will be sent to Pairnets. It helps us find the bug and fix it." />
+        <TextBlock x:Name="Explanation" Classes="muted" FontSize="13" TextWrapping="Wrap" Text="This is exactly what will be sent to Pairnets. It helps us find the bug and fix it." />
       </StackPanel>
     </Grid>
 
@@ -24,13 +24,13 @@
     </Border>
 
     <StackPanel Grid.Row="2" Margin="0,14,0,0" Spacing="6">
-      <TextBlock Text="What were you doing when it happened? (optional)" FontSize="13" FontWeight="Bold" />
+      <TextBlock x:Name="NoteLabel" Text="What were you doing when it happened? (optional)" FontSize="13" FontWeight="Bold" />
       <TextBox x:Name="NoteBox" Classes="field" Height="64" AcceptsReturn="True" TextWrapping="Wrap" MaxLength="1000" VerticalContentAlignment="Top" />
     </StackPanel>
 
     <Grid Grid.Row="3" ColumnDefinitions="Auto,*" Margin="0,12,0,0">
       <v:LineIcon Width="14" Height="14" StrokeThickness="2.2" Stroke="{DynamicResource T.Muted}" Data="{StaticResource I.Lock}" Margin="0,1,8,0" VerticalAlignment="Top" />
-      <TextBlock Grid.Column="1" Classes="muted" FontSize="12" TextWrapping="Wrap"
+      <TextBlock x:Name="Promise" Grid.Column="1" Classes="muted" FontSize="12" TextWrapping="Wrap"
                  Text="Only this is sent. No files, folder or computer names, logs, settings, email or account. Your IP address is not stored." />
     </Grid>
 

@@ -6,7 +6,8 @@ namespace Pairnets.Client.Ui;
 
 /// <summary>
 /// "Send crash report to Pairnets": shows exactly what will be sent (<see cref="CrashSender.Preview"/>), takes an
-/// optional note, and sends only when the user presses Send.
+/// optional note, and sends only when the user presses Send. <see cref="ForBugReport"/> does the same for the
+/// cleaned bug report (<see cref="BugReportSender.Prepare"/>).
 /// </summary>
 public partial class SendCrashWindow : Window
 {
@@ -15,14 +16,31 @@ public partial class SendCrashWindow : Window
     /// <param name="cards">The cards that will be sent (<see cref="CrashSender.Unsent"/>).</param>
     /// <param name="send">Sends them with the note; returns null when it worked, or what went wrong.</param>
     public SendCrashWindow(IReadOnlyList<CrashCard> cards, Func<string?, Task<string?>> send)
+        : this(CrashSender.Preview(cards), send)
+    {
+        if (cards.Count > 1)
+            Heading.Text = $"Send these {cards.Count} crash reports to us?";
+    }
+
+    private SendCrashWindow(string preview, Func<string?, Task<string?>> send)
     {
         ThemeManager.Attach(this);
         InitializeComponent();
         Icon = AppIcons.WindowIcon;
         _send = send;
-        PreviewText.Text = CrashSender.Preview(cards);
-        if (cards.Count > 1)
-            Heading.Text = $"Send these {cards.Count} crash reports to us?";
+        PreviewText.Text = preview;
+    }
+
+    /// <summary>"Send bug report to Pairnets": <paramref name="prepared"/> is exactly what is sent (<see cref="BugReportSender.Prepare"/>).</summary>
+    /// <param name="send">Sends it with the note; returns null when it worked, or what went wrong.</param>
+    public static SendCrashWindow ForBugReport(string prepared, Func<string?, Task<string?>> send)
+    {
+        var window = new SendCrashWindow(prepared, send) { Title = SendReportText.Title };
+        window.Heading.Text = SendReportText.Heading;
+        window.Explanation.Text = SendReportText.Explanation;
+        window.NoteLabel.Text = SendReportText.NoteLabel;
+        window.Promise.Text = SendReportText.Promise;
+        return window;
     }
 
     /// <summary>The user's note ("What were you doing?").</summary>

@@ -569,7 +569,8 @@ public static partial class Program
         CrashCards.Add(crashDir, crash);
         var crashText = bugText + "\n\n## Crash cards (cleaned, kept on this computer; 1)\n" + crash.ToText();
         var withCrash = new BugReportWindow(() => Task.FromResult(crashText), _ => { }, logsDir: Path.Combine(Path.GetTempPath(), "pairnets-bug-shots"),
-            crashesDir: crashDir, sendCrashes: (_, _) => Task.FromResult<string?>(null));
+            crashesDir: crashDir, sendCrashes: (_, _) => Task.FromResult<string?>(null),
+            prepareReport: r => BugReportSender.Prepare(r, ["DESKTOP"]), sendReport: (_, _) => Task.FromResult<string?>(null));
         Place(withCrash);
         Save(withCrash, outDir, $"windows-bug-report-crash-{suffix}.png", print);
         withCrash.Close();
@@ -578,6 +579,21 @@ public static partial class Program
         send.Note = "I renamed a folder while it was syncing.";
         Save(send, outDir, $"windows-send-crash-{suffix}.png", print);
         send.Close();
+
+        // "Send bug report to Pairnets": the banner in Report a bug, the window that shows the cleaned report, and after.
+        var sendable = new BugReportWindow(() => Task.FromResult(bugText), _ => { }, logsDir: Path.Combine(Path.GetTempPath(), "pairnets-bug-shots"),
+            prepareReport: r => BugReportSender.Prepare(r, ["DESKTOP"]), sendReport: (_, _) => Task.FromResult<string?>(null));
+        Place(sendable);
+        Save(sendable, outDir, $"windows-bug-report-send-{suffix}.png", print);
+        var sendReport = sendable.ReportSendWindow()!;
+        Place(sendReport);
+        sendReport.Note = "The folder went empty after I moved it to another drive.";
+        Save(sendReport, outDir, $"windows-send-bug-report-{suffix}.png", print);
+        sendReport.Close();
+        sendable.AfterReportSend(true);
+        sendable.UpdateLayout();
+        Save(sendable, outDir, $"windows-bug-report-sent-{suffix}.png", print);
+        sendable.Close();
 
         Stage6.Render(outDir, suffix, print);
     }

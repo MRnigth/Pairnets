@@ -37,7 +37,7 @@ public sealed class App : Application
             _crashes.Record(args.Exception, CrashPlace.Screen);
             args.Handled = true;
             var answer = Dialogs.Ask(null, "Pairnets hit an unexpected error and will keep running:\n" + args.Exception.Message
-                + "\n\nCreate a bug report? It is copied to the clipboard so you can paste it to whoever helps you; nothing is sent anywhere.",
+                + "\n\nCreate a bug report? It is copied to the clipboard so you can paste it to whoever helps you. Nothing is sent unless you choose to send it.",
                 "Pairnets", MessageBoxButton.YesNo, MessageBoxImage.Error);
             if (answer == MessageBoxResult.Yes)
             {

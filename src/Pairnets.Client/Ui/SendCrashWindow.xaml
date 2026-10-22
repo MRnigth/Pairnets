@@ -4,7 +4,7 @@
         xmlns:ui="clr-namespace:Pairnets.Client.Ui"
         Title="Send crash report" Width="620" Height="560" MinWidth="460" MinHeight="420"
         WindowStartupLocation="CenterOwner">
-  <!-- "Send crash report to Pairnets": exactly what goes out, an optional note, then Send or Don't send. -->
+  <!-- "Send crash report" / "Send bug report" to Pairnets: exactly what goes out, an optional note, then Send or Don't send. -->
   <Grid>
   <Grid Margin="24,20">
     <Grid.RowDefinitions>
@@ -37,7 +37,7 @@
     </Border>
 
     <StackPanel Grid.Row="2" Margin="0,14,0,0">
-      <TextBlock Text="What were you doing when it happened? (optional)" FontSize="13" FontWeight="Bold" Margin="0,0,0,6" />
+      <TextBlock x:Name="NoteLabel" Text="What were you doing when it happened? (optional)" FontSize="13" FontWeight="Bold" Margin="0,0,0,6" />
       <TextBox x:Name="NoteBox" Style="{StaticResource PgInput}" Height="64" Padding="12,8" AcceptsReturn="True" TextWrapping="Wrap"
                VerticalContentAlignment="Top" FontWeight="Normal" FontSize="13" MaxLength="1000" VerticalScrollBarVisibility="Auto" />
     </StackPanel>

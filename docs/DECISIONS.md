@@ -1639,3 +1639,21 @@ A (a nest joins another nest) and B (invite an account), with the recommended an
   shared with the account (`/api/links`, `/api/offers`) are for the owner's computers only.
 * **The Files page and storage for friends.** Moving is a write (both ends must be in the share), and deleting for
   good and "Where your files live" (`/api/purge`, `/api/storage`) are the owner's only.
+
+## "Send bug report": Report a bug can go to Pairnets too (2026-10-22)
+
+* **Asked for by the owner** ("the bug report thing does not work": only crash cards could be sent, so a bug without a
+  crash never reached us). Report a bug still copies and saves the report; a second banner, "Want us to look at it?",
+  offers **Send bug report…**, and the same send window as crash reports shows exactly what goes out, with an optional
+  "What went wrong?" note. Nothing is sent without pressing Send. Both apps.
+* **What is sent is cleaned on the computer first** (`BugReportSender.Prepare`), in three layers, because a log names
+  files: every file and folder name found in the nest folders (`NamesIn`, at most 20,000 names, also names with spaces
+  like "Skærmbillede 2026-01-02 101010.png"), then `PrivacyCleaner.Clean` (paths, web and email addresses, IP addresses,
+  ids, this computer's names), then any word shaped like a file name ("beach.jpg", "nest.example.com"), except the names
+  of Pairnets's own code ("Pairnets.Engine", "System.IO.IOException", "SyncEngine.cs:line 42"). Checked on a real
+  42 KB report from this PC: no file name was left. A deleted file's name with spaces can still show its first words;
+  the user sees the text before sending.
+* **Worker:** `POST /v1/bugreport` (no sign-in, Origin-exempt like `/v1/crash`), table `bug_reports` (migration 0009,
+  nothing about the sender), kept 90 days, 5 an hour per address and 300 a day in all; `/admin/reports` for the
+  `ADMIN_EMAILS` accounts, who get an email per report (at most 20 a day). A report is at most 60,000 characters,
+  cut in the middle so the start (versions, settings, status) and the newest log lines stay.

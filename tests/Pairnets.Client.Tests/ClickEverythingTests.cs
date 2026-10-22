@@ -1213,6 +1213,19 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
         // "Send crash report…": what goes out is shown first; Send hands the note to the sender (here: Opened).
         yield return new Screen("the send crash report window", "a crash card not sent yet",
             b => new SendCrashWindow([SampleCrash()], note => { b.Opened.Add("sent: " + note); return Task.FromResult<string?>(null); }) { Note = "renamed a folder" });
+        // With sending on, the window offers "Send bug report…" for the cleaned report.
+        yield return new Screen("the bug report window", "with sending on",
+            b => new BugReportWindow(() => Task.FromResult("Pairnets bug report" + Environment.NewLine + @"Folder: D:\Home\alex\Pairnets"), b.Opened.Add,
+                logsDir: b.Dir, prepareReport: r => BugReportSender.Prepare(r), sendReport: (_, _) => Task.FromResult<string?>(null)),
+            (_, w) => Wpf.WaitUntil(() => ((BugReportWindow)w).SendReportButton.IsVisible, "the send bug report banner"));
+        // "Send bug report…": the cleaned report is shown first; Send hands the note to the sender (here: Opened).
+        yield return new Screen("the send bug report window", "a report ready to send",
+            b =>
+            {
+                var w = SendCrashWindow.ForBugReport("Pairnets bug report\nFolder: <path>", note => { b.Opened.Add("sent: " + note); return Task.FromResult<string?>(null); });
+                w.Note = "renamed a folder";
+                return w;
+            });
     }
 
     private static CrashCard SampleCrash() => new()
@@ -1230,7 +1243,10 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
         On("Copy again", "copy the report again", c => c.Bench.Script.Copied.Items.Any(t => t.StartsWith("Pairnets bug report", StringComparison.Ordinal))),
         On("Send crash report…", "show what the crash report sends",
             _ => Application.Current.Windows.OfType<SendCrashWindow>().Any(w => w.IsVisible)),
-        On("Send", "send the crash report with the note and close", c => c.Bench.Opened.Items is ["sent: renamed a folder"] && c.Bench.Closed),
+        On("Send bug report…", "show the cleaned bug report it sends",
+            _ => Application.Current.Windows.OfType<SendCrashWindow>().Any(w => w.IsVisible && w.Title == SendReportText.Title
+                && w.PreviewText.Text == "Pairnets bug report\nFolder: <path>")),
+        On("Send", "send the report with the note and close", c => c.Bench.Opened.Items is ["sent: renamed a folder"] && c.Bench.Closed),
         On("Don't send", "close without sending", c => c.Bench.Opened.Items.Count == 0 && c.Bench.Closed),
     ];
 
