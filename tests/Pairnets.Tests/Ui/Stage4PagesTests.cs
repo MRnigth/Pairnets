@@ -1,3 +1,4 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Controls.Shapes;
@@ -338,6 +339,26 @@ public class Stage4PagesTests
         Assert.True(window.JoinChipShown);
         Assert.Equal("No computers have used this nest yet.", window.DevicesEmptyValue);
         Close(window);
+    }
+
+    [AvaloniaFact]
+    public void AComputerCardsLiveSpeed_EndsBeforeTheThisComputerPill_InsteadOfRunningUnderIt()
+    {
+        // A card a third of the page wide at 1200 px, with the longest status line (the QA sweep's PC-2).
+        var card = new DeviceCard("PC-2", null, true, DeviceCardTone.Moving, DeviceIconKind.Desktop, true, "Linux · 1.0.61",
+            "Online", "↓4.20 MB/s · 428 files left", "Last change just now");
+        var view = new DeviceCardView { DataContext = card };
+        var host = new Window { Content = view, Width = 270, Height = 220 };
+        host.Show();
+        Dispatcher.UIThread.RunJobs();
+        var note = Screen.Named<TextBlock>(view, "NoteText");
+        var pill = Screen.Named<Border>(view, "ThisPill");
+        Assert.True(pill.IsVisible);
+        var noteRight = note.TranslatePoint(new Point(note.Bounds.Width, 0), view)!.Value.X;
+        var pillLeft = pill.TranslatePoint(new Point(0, 0), view)!.Value.X;
+        Assert.True(noteRight <= pillLeft, $"The status line ends at {noteRight}, under the pill that starts at {pillLeft}.");
+        Assert.Equal("Online · ↓4.20 MB/s · 428 files left", ToolTip.GetTip(note));
+        host.Close();
     }
 
     [AvaloniaFact]

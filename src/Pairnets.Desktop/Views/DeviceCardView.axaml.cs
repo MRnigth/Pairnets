@@ -51,6 +51,7 @@ public partial class DeviceCardView : UserControl
         StatusText.Text = card.StatusText;
         NoteText.Text = card.StatusNote.Length > 0 ? "· " + card.StatusNote : string.Empty;
         NoteText.IsVisible = card.StatusNote.Length > 0;
+        ToolTip.SetTip(NoteText, card.StatusNote.Length > 0 ? card.StatusText + " · " + card.StatusNote : null);
         LastChangeText.Text = card.LastChangeText;
         DrawIcon(card.Icon);
         PencilButton.DeviceId = card.Id;

@@ -30,11 +30,13 @@
       <StackPanel Spacing="3">
         <Grid ColumnDefinitions="Auto,*,Auto" Height="20">
           <Ellipse x:Name="StatusDot" Classes="sdot" Width="8" Height="8" Margin="0,0,8,0" VerticalAlignment="Center" />
-          <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+          <!-- A grid, not a horizontal stack: a stack gives its texts all the width they ask for, so a long live speed
+               ran under the "This computer" pill instead of ending in "…" (the full line is in the tooltip). -->
+          <Grid Grid.Column="1" ColumnDefinitions="Auto,*" VerticalAlignment="Center" ClipToBounds="True">
             <TextBlock x:Name="StatusText" Classes="devstatus" TextTrimming="CharacterEllipsis" />
-            <TextBlock x:Name="NoteText" Classes="devnote" TextTrimming="CharacterEllipsis" />
-          </StackPanel>
-          <Border x:Name="ThisPill" Grid.Column="2" Classes="pill" Height="20" Padding="8,0" Background="{DynamicResource T.AccentSoft}" VerticalAlignment="Center" IsVisible="False">
+            <TextBlock x:Name="NoteText" Grid.Column="1" Classes="devnote" Margin="4,0,0,0" TextTrimming="CharacterEllipsis" />
+          </Grid>
+          <Border x:Name="ThisPill" Grid.Column="2" Classes="pill" Height="20" Padding="8,0" Margin="8,0,0,0" Background="{DynamicResource T.AccentSoft}" VerticalAlignment="Center" IsVisible="False">
             <TextBlock Text="This computer" FontSize="11" Foreground="{DynamicResource T.AccentInk}" VerticalAlignment="Center" />
           </Border>
         </Grid>
