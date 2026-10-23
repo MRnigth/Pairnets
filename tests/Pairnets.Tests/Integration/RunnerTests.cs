@@ -95,6 +95,14 @@ public class RunnerTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task AWakeUpAfterClosingIsIgnored()
+    {
+        var runner = _desktop.StartRunner();
+        await runner.DisposeAsync();
+        runner.RequestSync("late file event"); // a watcher or timer callback already on its way must not crash the app
+    }
+
+    [Fact]
     public async Task CatchUpIsAnnouncedAfterManyTransfers()
     {
         for (var i = 0; i < 12; i++)

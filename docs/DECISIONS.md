@@ -1802,3 +1802,6 @@ change was never seen.
 * **Risk, accepted:** a small nest can lose all but its last file without a question, e.g. 50 files deleted on another
   computer. They are not lost for good: on this computer they go to the Recycle Bin / Trash, and the nest keeps deleted
   files in History for 30 days.
+* **Found on the way:** a file event (or timer) already on its way when the sync runner closes used to crash the whole
+  app ("disposed object" in `SyncRunner`). The pre-deploy check hit it once the tests deleted 100 files at a time. A
+  late wake-up is now ignored.

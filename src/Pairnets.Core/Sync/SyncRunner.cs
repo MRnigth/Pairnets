@@ -448,7 +448,7 @@ public sealed class SyncRunner : IAsyncDisposable
             _fullRequested |= full;
             _pendingReasons.Add(reason);
         }
-        _wake.Release();
+        Wake();
     }
 
     /// <summary>Debounced request from the file watcher: waits for quiet, but never longer than the max delay.</summary>
@@ -469,7 +469,19 @@ public sealed class SyncRunner : IAsyncDisposable
                 _dueAt = due;
             _pendingReasons.Add("watcher");
         }
-        _wake.Release();
+        Wake();
+    }
+
+    // A file event or timer already on its way can land after DisposeAsync: there is nothing left to wake then.
+    private void Wake()
+    {
+        try
+        {
+            _wake.Release();
+        }
+        catch (ObjectDisposedException)
+        {
+        }
     }
 
     /// <summary>Call after the computer resumes from sleep: catch up with a full pass.</summary>
