@@ -21,7 +21,7 @@ public static class FriendlyErrors
     public const string SlowDown = "The server asked Pairnets to slow down. It goes on by itself in a moment.";
     public const string DiskFull = "There is no space left on the disk. Free some space, then try again.";
     public const string FileLocked = "A file is open in another program. Close it, then try again.";
-    public const string NoAccess = "Pairnets is not allowed to use that folder or file. Check its permissions, then try again.";
+    public const string NoAccess = "Pairnets is not allowed to use that folder or file. If it is in a folder Windows protects (like C:\\Program Files), choose a folder of your own; otherwise check its permissions, then try again.";
     public const string FileProblem = "Pairnets could not read or write a file on this computer. Check that the folder is still there and not full or locked, then try again.";
     public const string Generic = "Something unexpected went wrong. Try again. If it keeps happening, choose \"Report a bug\" in the Pairnets menu.";
 

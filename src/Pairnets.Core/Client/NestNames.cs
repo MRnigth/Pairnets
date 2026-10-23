@@ -53,8 +53,8 @@ public sealed record NestAdding(ClientSettings All, ClientSettings New)
     /// <summary>The suggested folder for the new nest: Pairnets\&lt;its name&gt;, clear of the other nests' folders.</summary>
     public string SuggestedFolder(string nestName) => Settings.NestFolders.Suggested(nestName, All.Nests().Select(n => n.Folder));
 
-    /// <summary>Why the new nest can't use <paramref name="folder"/>, or null.</summary>
-    public string? FolderProblem(string folder) => All.FolderProblem(folder, New.NestId);
+    /// <summary>Why the new nest can't use <paramref name="folder"/>, or null; the words offer <paramref name="suggested"/> instead.</summary>
+    public string? FolderProblem(string folder, string? suggested = null) => All.FolderProblem(folder, New.NestId, suggested);
 
     /// <summary>This computer already syncs the nest at <paramref name="server"/>: its name, else null.</summary>
     public string? AlreadySynced(Uri server)

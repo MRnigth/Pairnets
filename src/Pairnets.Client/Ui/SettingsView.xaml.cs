@@ -524,7 +524,10 @@ public partial class SettingsView : UserControl
             Fail("Choose the folder to sync.");
             return;
         }
-        if (_folderProblem?.Invoke(folder) is { } problem)
+        // A new folder is checked (another nest's, or one Pairnets may not save in such as C:\Program Files); the folder
+        // already in use is left to the sync, which says so itself when it can't save there.
+        if (!string.Equals(folder, _original.Folder, StringComparison.Ordinal)
+            && (_folderProblem ?? (f => SyncFolderCheck.Problem(f)))(folder) is { } problem)
         {
             Fail(problem);
             return;
@@ -533,7 +536,15 @@ public partial class SettingsView : UserControl
         {
             if (Ask($"The folder {folder} does not exist. Create it?", "Pairnets", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
                 return;
-            Directory.CreateDirectory(folder);
+            try
+            {
+                Directory.CreateDirectory(folder);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
+            {
+                Fail(FriendlyErrors.Describe(ex));
+                return;
+            }
         }
 
         SaveButton.IsEnabled = false;

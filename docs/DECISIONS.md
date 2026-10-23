@@ -1804,4 +1804,19 @@ change was never seen.
   files in History for 30 days.
 * **Found on the way:** a file event (or timer) already on its way when the sync runner closes used to crash the whole
   app ("disposed object" in `SyncRunner`). The pre-deploy check hit it once the tests deleted 100 files at a time. A
-  late wake-up is now ignored.
+  late wake-up is now ignored (`SyncRunner.Wake`; the Program Files fix below found the same crash, one fix kept).
+
+## A nest folder in C:\Program Files (1.0.61.4.1, 2026-10-23)
+
+* **Refused when it is chosen.** Windows lets only programs with admin rights save in C:\Program Files,
+  C:\Program Files (x86) and C:\Windows (on Mac/Linux /usr, /bin, /sbin, /etc, /lib, /System...), and Pairnets runs as
+  the person. Both sign-in screens and Settings now refuse such a folder, and any folder a quick test file can't be saved
+  in, with words that name it and a folder to use instead (Pairnets in the home folder, or the new nest's own); the
+  sign-in screens add "Use … instead". `SyncFolderCheck` in Core, reached through `ClientSettings.FolderProblem`.
+* **The Settings window no longer crashes** when it can't make a new folder: making it was outside the error handling.
+* **A folder chosen before** is not refused by Settings (the folder in use isn't re-checked there). The sync stops instead
+  with `BlockReason.FolderNotWritable` ("Can't save in your folder", button "Choose another folder…") when it can't
+  write its marker, or the folder is a system folder it can't save in, rather than failing every pass. The new folder
+  starts fresh (a merge: nothing is deleted on either side); the old folder is left as it was. Run as admin, a Program
+  Files folder that works keeps working.
+* **The test file** `.pairnets-write-test` is written and removed at once; it is reserved and ignored like the marker.

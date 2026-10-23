@@ -1325,6 +1325,9 @@ public sealed class TrayController : ITrayActions, IDisposable
             case BlockReason.MarkerMismatch:
                 LocateFolder(status.Text);
                 break;
+            case BlockReason.FolderNotWritable:
+                ChooseAnotherFolder();
+                break;
             case BlockReason.SignedOut:
             case BlockReason.SignInRequired:
                 ShowSettings(firstRun: true);
@@ -1355,6 +1358,27 @@ public sealed class TrayController : ITrayActions, IDisposable
         {
             Dialogs.Ask(null, FriendlyErrors.Describe(ex), "Pairnets", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
+        var nest = Nest;
+        nest.Folder = folder;
+        SaveNest(nest);
+        StartSession(null);
+        UpdateExplorerEntry();
+    }
+
+    /// <summary>
+    /// "Choose another folder…" for a folder Pairnets may not save in (C:\Program Files...): the nest starts over in the
+    /// new folder (its files come down; nothing is deleted on either side) and the old folder is left as it is.
+    /// </summary>
+    private void ChooseAnotherFolder()
+    {
+        if (Dialogs.PickFolder(null, "Choose a folder of your own for this nest", SyncFolderCheck.DefaultFolder) is not { } folder || _session is null)
+            return;
+        if (_settings.FolderProblem(folder, Nest.NestId) is { } error)
+        {
+            Dialogs.Ask(null, error, "Pairnets", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+        StopSession();
         var nest = Nest;
         nest.Folder = folder;
         SaveNest(nest);

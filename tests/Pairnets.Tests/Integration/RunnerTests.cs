@@ -95,14 +95,6 @@ public class RunnerTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task AWakeUpAfterClosingIsIgnored()
-    {
-        var runner = _desktop.StartRunner();
-        await runner.DisposeAsync();
-        runner.RequestSync("late file event"); // a watcher or timer callback already on its way must not crash the app
-    }
-
-    [Fact]
     public async Task CatchUpIsAnnouncedAfterManyTransfers()
     {
         for (var i = 0; i < 12; i++)
@@ -276,6 +268,18 @@ public class RunnerTests : IAsyncLifetime
         await WaitUntil(() => { lock (passes) return passes.Sum(p => p.Downloaded) >= 11; }, TimeSpan.FromSeconds(10), "laptop's pass report");
         lock (passes)
             Assert.True(passes.Any(p => p.Downloaded == 11), "in one go, not in pieces: " + string.Join(" | ", passes.Select(p => $"{p.Downloaded} ({p.Reasons})")));
+    }
+
+    [Fact]
+    public async Task AWakeThatArrivesAfterTheRunnerIsGoneIsIgnored()
+    {
+        // A folder watcher event already on its way when a nest stops used to crash the app.
+        var runner = new SyncRunner(_laptop.Engine, new RunnerOptions
+        {
+            ServerUrl = _laptop.Url, Token = _laptop.Token, DeviceId = "laptop", EnableHub = false, EnableWatcher = false,
+        });
+        await runner.DisposeAsync();
+        runner.RequestSync("late");
     }
 
     [Fact]

@@ -472,7 +472,10 @@ public sealed class SyncRunner : IAsyncDisposable
         Wake();
     }
 
-    // A file event or timer already on its way can land after DisposeAsync: there is nothing left to wake then.
+    /// <summary>
+    /// Wakes the loop. A watcher event already on its way when the runner is disposed (a nest stopped or moved) lands
+    /// here after the semaphore is gone; there is nothing left to wake then, and it must not take the app down.
+    /// </summary>
     private void Wake()
     {
         try
@@ -744,6 +747,7 @@ public sealed class SyncRunner : IAsyncDisposable
         if (rel.Equals(PathRules.TempFolderName, StringComparison.OrdinalIgnoreCase)
             || rel.StartsWith(PathRules.TempFolderName + "/", StringComparison.OrdinalIgnoreCase)
             || rel.Equals(PathRules.MarkerFileName, StringComparison.OrdinalIgnoreCase)
+            || rel.Equals(PathRules.ProbeFileName, StringComparison.OrdinalIgnoreCase)
             || rel.Equals(Legacy.TetherNames.TempFolderName, StringComparison.OrdinalIgnoreCase)
             || rel.StartsWith(Legacy.TetherNames.TempFolderName + "/", StringComparison.OrdinalIgnoreCase)
             || rel.Equals(Legacy.TetherNames.MarkerFileName, StringComparison.OrdinalIgnoreCase))

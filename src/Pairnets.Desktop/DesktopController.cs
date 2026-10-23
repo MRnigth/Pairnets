@@ -1232,12 +1232,37 @@ public sealed class DesktopController : ITrayActions, IDisposable
             case BlockReason.MarkerMismatch:
                 await LocateFolderAsync(status.Text);
                 break;
+            case BlockReason.FolderNotWritable:
+                await ChooseAnotherFolderAsync();
+                break;
             case BlockReason.SignedOut:
             case BlockReason.SignInRequired:
                 ShowSignIn();
                 break;
         }
         _dirty = true;
+    }
+
+    /// <summary>
+    /// "Choose another folder…" for a folder Pairnets may not save in (/usr, C:\Program Files...): the nest starts over in
+    /// the new folder (its files come down; nothing is deleted on either side) and the old folder is left as it is.
+    /// </summary>
+    private async Task ChooseAnotherFolderAsync()
+    {
+        var host = _window ?? new MainWindow(this);
+        if (await Dialogs.PickFolderAsync(host, "Choose a folder of your own for this nest") is not { } folder || _session is null)
+            return;
+        if (_settings.FolderProblem(folder, Nest.NestId) is { } error)
+        {
+            await Dialogs.InfoAsync(_window, "Pairnets", error);
+            return;
+        }
+        StopSession();
+        var nest = Nest;
+        nest.Folder = folder;
+        SaveNest(nest);
+        StartSession(null);
+        UpdateFileManagerEntry();
     }
 
     private async Task LocateFolderAsync(string message)
