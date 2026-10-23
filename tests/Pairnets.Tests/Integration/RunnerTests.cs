@@ -271,6 +271,18 @@ public class RunnerTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task AWakeThatArrivesAfterTheRunnerIsGoneIsIgnored()
+    {
+        // A folder watcher event already on its way when a nest stops used to crash the app.
+        var runner = new SyncRunner(_laptop.Engine, new RunnerOptions
+        {
+            ServerUrl = _laptop.Url, Token = _laptop.Token, DeviceId = "laptop", EnableHub = false, EnableWatcher = false,
+        });
+        await runner.DisposeAsync();
+        runner.RequestSync("late");
+    }
+
+    [Fact]
     public void BytesGoingUpKeepTheWaitAndAStuckComputerEndsIt()
     {
         var clock = new ManualClock();
