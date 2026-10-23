@@ -39,6 +39,12 @@ public enum BlockReason
 
     /// <summary>Signed out on purpose from this computer's own Sign out button: nothing is wrong, nothing syncs.</summary>
     SignedOutByYou,
+
+    /// <summary>
+    /// Pairnets may not save files in the folder (C:\Program Files and other folders the system protects): pick another
+    /// folder. Nothing in the folder is touched.
+    /// </summary>
+    FolderNotWritable,
 }
 
 /// <summary>What a running pass is doing now, so the apps can say it instead of a bare "Syncing".</summary>

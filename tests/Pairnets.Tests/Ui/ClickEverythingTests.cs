@@ -442,6 +442,13 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
                 view.Folder = fixture.Folder;
                 return Task.CompletedTask;
             })),
+            new("the sign-in window (a folder in Program Files)", s => SignInStage(s, async view =>
+            {
+                view.ShowFolderStep(fixture.Website.MintKey("MACBOOK-" + Guid.NewGuid().ToString("N")[..6]), fixture.Website.Url);
+                view.Folder = Path.Combine(SyncFolderCheck.SystemFolders()[0], "Pairnets nest");
+                Person.Click(Screen.Named<Button>(view, "StartButton"));
+                await Wait.Until(() => Screen.Named<Button>(view, "UseSuggestedButton").IsEffectivelyVisible, "the folder step to refuse a system folder and offer another");
+            })),
         ],
         ["server update"] =
         [
@@ -842,6 +849,8 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
         s.Expect["OnBackToAccount"] = That(() => view.Step == SignInStep.Account, "the Pairnets account step show");
         s.Expect["OnRetry"] = That(() => Waiting() && Screen.Named<TextBlock>(view, "CodeText").Text != shownCode, "a new code show");
         s.Expect["OnBrowse"] = That(() => view.Folder == fixture.PickedFolder, "the picked folder fill the field");
+        s.Expect["OnUseSuggested"] = That(() => view.Folder == SyncFolderCheck.DefaultFolder && !Screen.Named<Border>(view, "FolderProblemBox").IsVisible,
+            "the offered folder fill the field");
         s.Expect["OnCheck"] = That(() => view.Step == SignInStep.Address && Screen.Named<Border>(view, "FoundCard").IsEffectivelyVisible, "the nest be found");
         s.Expect["OnChange"] = That(() => !Screen.Named<Border>(view, "FoundCard").IsEffectivelyVisible && Screen.Named<TextBox>(view, "AddressBox").IsEffectivelyVisible,
             "the name field show again");

@@ -289,6 +289,26 @@ public class TwoDeviceSyncTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task AFolderPairnetsMayNotSaveInStopsCalmlyAndAsksForAnother()
+    {
+        // A folder like C:\Program Files\Sync: the files can be read, but nothing can be saved there.
+        _desktop.Write("a.txt", "a");
+        PassResult r;
+        using (var denied = WriteDenied.On(_desktop.Folder))
+        {
+            if (denied is null)
+                return; // this account may save anywhere (root on Linux): nothing to check
+            r = await _desktop.SyncAsync();
+            Assert.Equal(PassOutcome.Blocked, r.Outcome);
+            Assert.Equal(BlockReason.FolderNotWritable, r.BlockReason);
+            Assert.Contains("Choose another folder", r.Message);
+            Assert.Empty(_server.Store.ReadManifest(null).Entries);
+        }
+        Completed(await _desktop.SyncAsync());
+        Assert.Contains(_server.Store.ReadManifest(null).Entries, e => e.Path == "a.txt");
+    }
+
+    [Fact]
     public async Task ForeignMarkerNeedsConfirmation()
     {
         _desktop.Write("a.txt", "a");

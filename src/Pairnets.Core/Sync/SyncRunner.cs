@@ -732,6 +732,7 @@ public sealed class SyncRunner : IAsyncDisposable
         if (rel.Equals(PathRules.TempFolderName, StringComparison.OrdinalIgnoreCase)
             || rel.StartsWith(PathRules.TempFolderName + "/", StringComparison.OrdinalIgnoreCase)
             || rel.Equals(PathRules.MarkerFileName, StringComparison.OrdinalIgnoreCase)
+            || rel.Equals(PathRules.ProbeFileName, StringComparison.OrdinalIgnoreCase)
             || rel.Equals(Legacy.TetherNames.TempFolderName, StringComparison.OrdinalIgnoreCase)
             || rel.StartsWith(Legacy.TetherNames.TempFolderName + "/", StringComparison.OrdinalIgnoreCase)
             || rel.Equals(Legacy.TetherNames.MarkerFileName, StringComparison.OrdinalIgnoreCase))
