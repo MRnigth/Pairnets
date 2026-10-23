@@ -550,6 +550,16 @@ public sealed class DesktopController : ITrayActions, IDisposable
     /// <summary>"Invite a friend to this folder…" on the Files page: the invite window with that folder ticked.</summary>
     public void InviteFriendTo(string folder) => OpenInvite(folder);
 
+    /// <summary>Where the shown nest is saved on this computer, for the Files page's "Saved in …" line.</summary>
+    public string? LocalFolder => string.IsNullOrWhiteSpace(Nest.Folder) ? null : Nest.Folder;
+
+    /// <summary>"Change…" beside "Saved in …" on the Files page: Settings, at the folder row (the change is saved there).</summary>
+    public void ChangeLocalFolder()
+    {
+        ShowMainWindow(MainPage.Settings);
+        _settingsView?.ShowFolderRow();
+    }
+
     private void OpenInvite(string? startFolder)
     {
         if (InviteRun is not { Session.Status: { } status } run || PeopleSection.From(status) is not { Visible: true, NestId: { } nestId } people)

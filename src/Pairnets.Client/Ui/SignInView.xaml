@@ -421,13 +421,16 @@
                 <ui:LineIcon Width="20" Height="20" StrokeThickness="1.8" Stroke="{DynamicResource T.Folder}" Data="{StaticResource I.Folder}" />
               </Border>
               <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                <TextBlock Style="{StaticResource SoftText}" Text="Folder on this computer" />
+                <TextBlock x:Name="FolderLabel" Style="{StaticResource SoftText}" Text="Folder on this computer" TextWrapping="Wrap" />
                 <TextBox x:Name="FolderBox" BorderThickness="0" Background="Transparent" Foreground="{DynamicResource T.Text}" CaretBrush="{DynamicResource T.Text}"
                          FontSize="15" FontWeight="ExtraBold" Padding="0" Margin="0,1,0,0" />
               </StackPanel>
               <Button Grid.Column="2" Style="{StaticResource SecondaryButton}" Content="Choose…" MinHeight="36" Margin="10,0,0,0" Click="OnBrowse" />
             </Grid>
           </Border>
+          <!-- The folder is this computer's own: a friend's folder on their computer stays where it is -->
+          <TextBlock x:Name="FolderHereText" Style="{StaticResource SoftText}" Margin="4,6,4,0" TextWrapping="Wrap"
+                     Text="Only on this computer. Your other computers keep their own folders." />
           <!-- Several nests: this folder is another nest's, or inside or around one -->
           <Border x:Name="FolderProblemBox" Background="{DynamicResource T.BadPill}" CornerRadius="11" Padding="12,10" Margin="0,8,0,0" Visibility="Collapsed">
             <StackPanel Orientation="Horizontal">

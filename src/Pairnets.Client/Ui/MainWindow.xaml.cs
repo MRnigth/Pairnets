@@ -133,6 +133,14 @@ public interface IMainActions
     {
     }
 
+    /// <summary>Where the shown nest is saved on this computer (the Files page's "Saved in …" line), or null.</summary>
+    string? LocalFolder => null;
+
+    /// <summary>"Change…" beside "Saved in …" on the Files page: the Settings page, at the folder row.</summary>
+    void ChangeLocalFolder()
+    {
+    }
+
     /// <summary>Change…, Remove, Decline or "Let … in" under People: the account page at this nest's People.</summary>
     void OpenPeople()
     {

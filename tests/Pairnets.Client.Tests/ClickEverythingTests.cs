@@ -817,6 +817,8 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
             c => MainOf(c).FilesPane.Rows.Count > 0 && MainOf(c).FilesPane.Rows.All(r => r.Entry.Path.Contains(Presser.TypedText, StringComparison.OrdinalIgnoreCase))),
         new(t => t.Label == "Refresh" && Within<NestFilesView>(t.Element), "read the nest's list again", c => MainOf(c).FilesPane.Rows.Count > 0),
         On("Clean up…", "show Clean up your nest", c => MainOf(c).CleanupShown),
+        new(t => t.Element is Button { Name: "ChangeFolderLink" }, "open the Settings folder row for this nest",
+            c => c.Bench.Actions.Calls.Items.Contains("ChangeLocalFolder") && MainOf(c).FilesPane.SavedInLine == @"Saved in D:\Pairnets"),
         On("Add files", "add the chosen files to this folder", c => NestCalled(c, "add:")),
         new(t => t.Element is Button && Within<WrapPanel>(t.Element) && Within<NestFilesView>(t.Element), "go to that folder",
             c => MainOf(c).FilesPane.Folder == (((Button)c.Target.Element).ToolTip as string is { } tip && tip != "The top of your nest" ? tip : string.Empty)),

@@ -200,7 +200,7 @@
                   <TextBlock Style="{StaticResource PgCardTitle}" Text="This computer" VerticalAlignment="Center" />
                 </StackPanel>
                 <StackPanel Margin="0,14,0,0">
-                  <TextBlock FontSize="13" FontWeight="Bold" Margin="0,0,0,6" Text="Folder to keep in sync" />
+                  <TextBlock x:Name="FolderLabel" FontSize="13" FontWeight="Bold" Margin="0,0,0,6" TextWrapping="Wrap" Text="Folder to keep in sync" />
                   <Grid>
                     <Grid.ColumnDefinitions>
                       <ColumnDefinition Width="*" />
@@ -213,6 +213,8 @@
                     </Grid>
                     <Button Grid.Column="1" Style="{StaticResource PgChipButton}" Height="38" Content="Change…" Margin="8,0,0,0" Click="OnBrowse" />
                   </Grid>
+                  <TextBlock x:Name="FolderHereText" Style="{StaticResource PgSmall}" Margin="0,6,0,0" TextWrapping="Wrap"
+                             Text="Only on this computer. Your other computers keep their own folders." />
                 </StackPanel>
                 <StackPanel Margin="0,14,0,0">
                   <TextBlock FontSize="13" FontWeight="Bold" Margin="0,0,0,6" Text="This computer's name" />

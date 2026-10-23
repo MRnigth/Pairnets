@@ -117,6 +117,9 @@ public partial class NestFilesView : UserControl
 
     public string FooterLine => FooterText.Text ?? string.Empty;
 
+    /// <summary>"Saved in /home/…" under the list, or empty when it doesn't show.</summary>
+    public string SavedInLine => SavedInRow.IsVisible ? SavedInText.Text ?? string.Empty : string.Empty;
+
     public string MessageText => FilesMessage.IsVisible ? FilesMessageText.Text ?? string.Empty : string.Empty;
 
     public string EmptyLine => EmptyMessage.IsVisible ? EmptyText.Text ?? string.Empty : string.Empty;
@@ -181,6 +184,7 @@ public partial class NestFilesView : UserControl
         OfflineRun.Text = FilesPageText.OfflineText;
         AddFilesButton.IsEnabled = files is { NestOffline: false };
         PlacementButton.IsEnabled = files is not null;
+        ShowSavedIn();
         if (files is null)
         {
             ShowEmpty(FilesPageText.NotConnected);
@@ -458,6 +462,17 @@ public partial class NestFilesView : UserControl
     }
 
     private void OnCleanUp(object? sender, RoutedEventArgs e) => Host?.ShowCleanup();
+
+    /// <summary>"Saved in ~/Pairnets/Photos · Change…": where the shown nest is on this computer.</summary>
+    private void ShowSavedIn()
+    {
+        var folder = Host?.Actions?.LocalFolder;
+        SavedInRow.IsVisible = folder is not null;
+        SavedInText.Text = folder is null ? string.Empty : FolderChoiceText.SavedIn(folder);
+        ToolTip.SetTip(SavedInText, folder);
+    }
+
+    private void OnChangeFolder(object? sender, RoutedEventArgs e) => Host?.Actions?.ChangeLocalFolder();
 
     // ------------------------------------------------------------------ results
 

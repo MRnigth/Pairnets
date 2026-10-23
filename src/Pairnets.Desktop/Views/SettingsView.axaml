@@ -93,7 +93,7 @@
                   <TextBlock Classes="stitle" Text="This computer" VerticalAlignment="Center" />
                 </StackPanel>
                 <StackPanel Spacing="6">
-                  <TextBlock FontSize="13" FontWeight="Bold" Text="Folder to keep in sync" />
+                  <TextBlock x:Name="FolderLabel" FontSize="13" FontWeight="Bold" TextWrapping="Wrap" Text="Folder to keep in sync" />
                   <Grid ColumnDefinitions="*,Auto">
                     <TextBox x:Name="FolderBox" Classes="field" Height="38" MinHeight="38" CornerRadius="11" Watermark="Choose a folder…">
                       <TextBox.InnerLeftContent>
@@ -102,6 +102,7 @@
                     </TextBox>
                     <Button Grid.Column="1" Classes="chipbtn" Height="38" Margin="8,0,0,0" Content="Change…" Click="OnBrowse" />
                   </Grid>
+                  <TextBlock x:Name="FolderHereText" Classes="t3" TextWrapping="Wrap" Text="Only on this computer. Your other computers keep their own folders." />
                 </StackPanel>
                 <StackPanel Spacing="6">
                   <TextBlock FontSize="13" FontWeight="Bold" Text="This computer's name" />

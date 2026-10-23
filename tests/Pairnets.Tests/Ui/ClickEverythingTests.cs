@@ -277,6 +277,52 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
         Assert.Equal(fixture.Folder, saved.Folder);
     }
 
+    /// <summary>
+    /// Another folder for a friend's nest: Save asks first (the new folder fills from the nest, the old one is kept, the
+    /// friend's folder doesn't change), Cancel keeps everything, and what is saved is still the friend's nest.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task AnotherFolderForAFriendsNestAsksFirstAndKeepsItTheirs()
+    {
+        await using var stage = new Stage("the Settings page of a friend's nest");
+        var view = await SettingsStage(stage, ownKey: true, friends: true);
+        Assert.Equal("Where Work nest is saved on this computer", Screen.Named<TextBlock>(view, "FolderLabel").Text);
+        Assert.Equal("Only on this computer. Oskar's folder on their computer stays where it is.", Screen.Named<TextBlock>(view, "FolderHereText").Text);
+        var elsewhere = Directory.CreateDirectory(Path.Combine(Path.GetTempPath(), "pairnets-elsewhere-" + Guid.NewGuid().ToString("N")[..6])).FullName;
+        stage.Cleanup.Add(() =>
+        {
+            Directory.Delete(elsewhere, recursive: true);
+            return Task.CompletedTask;
+        });
+        Person.Type(Screen.Named<TextBox>(view, "FolderBox"), elsewhere);
+
+        var opened = new List<Window>();
+        using (Window.WindowOpenedEvent.AddClassHandler(typeof(Window), (sender, _) => opened.Add((Window)sender!)))
+        {
+            Person.Click(Screen.Find<Button>(view, "Save"));
+            await Wait.Until(() => opened.Count == 1, "Save to ask before the folder changes");
+            var question = opened[0];
+            Assert.Equal($"Save Work nest in {elsewhere} instead?", question.Title);
+            var words = string.Join(Environment.NewLine, Screen.All<TextBlock>(question).Select(t => t.Text));
+            Assert.Contains(fixture.Folder, words);
+            Assert.Contains("Oskar's folder on their computer doesn't change.", words);
+            Person.Click(Screen.Find<Button>(question, "Cancel"));
+            await Wait.Until(() => !question.IsVisible, "the question to close");
+            Assert.DoesNotContain("saved", stage.Events);
+
+            Person.Click(Screen.Find<Button>(view, "Save"));
+            await Wait.Until(() => opened.Count == 2, "Save to ask again");
+            Person.Click(Screen.Find<Button>(opened[1], "Save it here"));
+            await Wait.Until(() => stage.Events.Contains("saved"), "Save to hand the settings to the app");
+        }
+
+        var saved = view.Result!;
+        Assert.Equal(elsewhere, saved.Folder);
+        Assert.Equal("Oskar", saved.SharedBy);
+        Assert.Equal(NestAccess.View, saved.Access);
+        Assert.Equal(["Trip"], saved.SharedFolders!);
+    }
+
     private void Pass(ClickReport report)
     {
         output.WriteLine($"{report.Presses} presses, {report.Pressed.Count} handlers: {string.Join(", ", report.Pressed.Order())}");
@@ -650,6 +696,8 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
             "the deleted files show");
         s.Expect["OnFilesRefresh"] = That(() => w.FilesView.Rows.Count > 0, "the nest's list be read again");
         s.Expect["OnCleanUp"] = That(() => w.CleanupShown, "Clean up your nest show");
+        s.Expect["OnChangeFolder"] = That(() => s.Actions.Calls.Contains("change-folder") && w.FilesView.SavedInLine == "Saved in /home/me/Pairnets",
+            "the Settings folder row open for this nest");
         s.Expect["OnAddFiles"] = That(() => NestCalled("add:"), "the chosen file be added");
         s.Expect["OnPlacementMenu"] = That(() => w.FilesView.PlacementMenuOpen, "the choices of where the folder lives show");
         s.Expect["OnPickPlacement:On this PC*"] = That(() => nest.Calls.Count == 0 && nest.PlacementOf(startFolder) == FilePlacement.OnThisPc, "the folder stay on this computer");
@@ -728,7 +776,8 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
 
     // ------------------------------------------------------------------ settings
 
-    private Task<SettingsView> SettingsStage(Stage s, bool ownKey, bool canMove = false, int nests = 1, bool canInvite = false, bool advancedOpen = false)
+    private Task<SettingsView> SettingsStage(Stage s, bool ownKey, bool canMove = false, int nests = 1, bool canInvite = false, bool advancedOpen = false,
+        bool friends = false)
     {
         var secrets = new MemorySecrets();
         var key = ownKey ? fixture.Nest.MintKey("MACBOOK-" + Guid.NewGuid().ToString("N")[..6]) : null;
@@ -740,6 +789,9 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
             DeviceName = key?.Name ?? "MACBOOK",
             Folder = fixture.Folder,
             FirstRunCompleted = true,
+            Access = friends ? NestAccess.View : null,
+            SharedFolders = friends ? ["Trip"] : null,
+            SharedBy = friends ? "Oskar" : null,
         };
         var updates = new UpdateService(new UpdateChecker(new HttpClient(), fixture.Feed.DownloadBase, fixture.Feed.ReleasePage, FakeReleaseFeed.SigningKey), "1.0.0", fixture.Feed.Asset);
         s.Cleanup.Add(() =>
