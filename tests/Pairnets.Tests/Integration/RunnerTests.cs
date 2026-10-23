@@ -271,6 +271,20 @@ public class RunnerTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task AWatcherEventAfterTheRunnerStoppedDoesNothing()
+    {
+        var runner = new SyncRunner(_laptop.Engine, new RunnerOptions
+        {
+            ServerUrl = _laptop.Url, Token = _laptop.Token, DeviceId = "laptop", EnableHub = false, EnableWatcher = false,
+        });
+        await runner.DisposeAsync();
+
+        // A late folder-watcher event or request (the nest stopped, or its folder changed) must not throw on its thread.
+        runner.RequestSync("watcher");
+        runner.RequestSync("manual", full: true);
+    }
+
+    [Fact]
     public void BytesGoingUpKeepTheWaitAndAStuckComputerEndsIt()
     {
         var clock = new ManualClock();

@@ -448,7 +448,7 @@ public sealed class SyncRunner : IAsyncDisposable
             _fullRequested |= full;
             _pendingReasons.Add(reason);
         }
-        _wake.Release();
+        Wake();
     }
 
     /// <summary>Debounced request from the file watcher: waits for quiet, but never longer than the max delay.</summary>
@@ -469,7 +469,22 @@ public sealed class SyncRunner : IAsyncDisposable
                 _dueAt = due;
             _pendingReasons.Add("watcher");
         }
-        _wake.Release();
+        Wake();
+    }
+
+    /// <summary>
+    /// Wakes the loop. A folder-watcher event can still arrive after the runner was disposed (the nest stopped, or its
+    /// folder changed): it then does nothing, instead of ending the app with an error on a background thread.
+    /// </summary>
+    private void Wake()
+    {
+        try
+        {
+            _wake.Release();
+        }
+        catch (ObjectDisposedException)
+        {
+        }
     }
 
     /// <summary>Call after the computer resumes from sleep: catch up with a full pass.</summary>
