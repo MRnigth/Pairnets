@@ -130,11 +130,12 @@ public sealed class AppUnderTest : IAsyncDisposable
         return await Wait.For(() => Screen.All<SettingsView>(MainWindow).FirstOrDefault(), "the Settings page to show");
     }
 
-    /// <summary>An item of the tray / menu-bar menu, as it reads now.</summary>
+    /// <summary>An item of the tray / menu-bar menu, as it reads now (the shown one when a hidden row has the same name).</summary>
     public NativeMenuItem TrayItem(string header)
     {
         App.RefreshNow();
-        return App.TrayMenu?.Items.OfType<NativeMenuItem>().FirstOrDefault(i => i.Header == header)
+        var named = App.TrayMenu?.Items.OfType<NativeMenuItem>().Where(i => i.Header == header).ToList() ?? [];
+        return named.FirstOrDefault(i => i.IsVisible) ?? named.FirstOrDefault()
             ?? throw new CannotPressException($"The tray menu has no \"{header}\". It has: "
                 + string.Join(", ", App.TrayMenu?.Items.OfType<NativeMenuItem>().Select(i => "\"" + i.Header + "\"") ?? []));
     }

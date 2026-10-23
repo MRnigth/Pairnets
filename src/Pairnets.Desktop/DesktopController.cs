@@ -66,6 +66,8 @@ public sealed class DesktopController : ITrayActions, IDisposable
     private NativeMenuItem? _statusItem;
     private NativeMenuItem? _syncItem;
     private NativeMenuItem? _folderItem;
+    private NativeMenuItem? _foldersItem;
+    private readonly NativeMenu _foldersMenu = new();
     private NativeMenuItem? _fixItem;
     private NativeMenuItem? _pauseItem;
     private NativeMenuItem? _autoStartItem;
@@ -221,11 +223,10 @@ public sealed class DesktopController : ITrayActions, IDisposable
                 SyncNow();
         };
         var folder = _folderItem = new NativeMenuItem("Open folder");
-        folder.Click += (_, _) =>
-        {
-            if (folder.Menu is null)
-                OpenFolder();
-        };
+        folder.Click += (_, _) => OpenFolder();
+        // Several nests: "Open folder" lists their folders instead. Its own row with one sub-menu kept for good: the macOS
+        // menu bar throws when an item's sub-menu is swapped for another ("The menu being updated does not match").
+        _foldersItem = new NativeMenuItem("Open folder") { Menu = _foldersMenu, IsVisible = false };
         _fixItem = new NativeMenuItem("No action needed") { IsEnabled = false };
         _fixItem.Click += (_, _) => FixBlocked();
         var settings = new NativeMenuItem("Settings…");
@@ -240,7 +241,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
         _autoStartItem.Click += (_, _) => SetAutoStart(!SafeIsAutoStart());
         var quit = new NativeMenuItem("Quit Pairnets");
         quit.Click += (_, _) => Quit();
-        foreach (var item in new NativeMenuItemBase[] { quick, open, _statusItem, new NativeMenuItemSeparator(), sync, folder, _fixItem,
+        foreach (var item in new NativeMenuItemBase[] { quick, open, _statusItem, new NativeMenuItemSeparator(), sync, folder, _foldersItem, _fixItem,
                      new NativeMenuItemSeparator(), settings, log, report, _pauseItem, _autoStartItem, new NativeMenuItemSeparator(), quit })
             menu.Items.Add(item);
         _trayMenu = menu;
@@ -965,7 +966,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
     /// Several nests: the tray menu lists each nest with its state under "Open Pairnets" (a click opens the app on it),
     /// and "Open folder" opens a list of the nests' folders. With one nest the menu is as before.
     /// </summary>
-    private void DrawNestMenu(NestListModel nests)
+    internal void DrawNestMenu(NestListModel nests)
     {
         var key = nests.Visible ? string.Join("|", nests.Rows.Select(r => r.Id + r.Title + r.Text + r.Dot)) : "";
         if (key == _drawnNestMenu || _trayMenu is not { } menu)
@@ -976,11 +977,12 @@ public sealed class DesktopController : ITrayActions, IDisposable
         _nestItems.Clear();
         _statusItem!.IsVisible = !nests.Visible;
         _syncItem!.Header = nests.Visible ? "Sync all now" : "Sync now";
-        _folderItem!.Menu = null;
+        _folderItem!.IsVisible = !nests.Visible;
+        _foldersItem!.IsVisible = nests.Visible;
+        _foldersMenu.Items.Clear();
         if (!nests.Visible)
             return;
         var at = menu.Items.IndexOf(_openItem!) + 1;
-        var folders = new NativeMenu();
         foreach (var row in nests.Rows)
         {
             var id = row.Id;
@@ -1001,9 +1003,8 @@ public sealed class DesktopController : ITrayActions, IDisposable
                 if (_runs.FirstOrDefault(r => r.Id == id) is { } run)
                     OpenFolder(run);
             };
-            folders.Items.Add(folder);
+            _foldersMenu.Items.Add(folder);
         }
-        _folderItem.Menu = folders;
         var add = new NativeMenuItem("Add a nest…");
         add.Click += (_, _) => AddNest();
         menu.Items.Insert(at, add);

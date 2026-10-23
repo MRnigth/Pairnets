@@ -112,6 +112,29 @@ public class NestFilesTests : IAsyncLifetime
         Assert.Equal(5, session.Files.BytesHere(""));
     }
 
+    /// <summary>
+    /// Crash report 11eae5385eec (Windows app 1.0.61): Settings › "Where your files live" read the nest's list after the
+    /// nest had stopped and its list's database was closed. The pages now get an empty list instead of an error.
+    /// </summary>
+    [Fact]
+    public async Task AfterTheNestStopped_TheListsAreEmptyInsteadOfFailing()
+    {
+        await OnTheNestAsync(("Photos/beach.jpg", "beach"), ("notes.txt", "notes"));
+        var session = Start();
+        await WaitIdle(session);
+        var files = session.Files;
+        Assert.NotEmpty(files.List(""));
+
+        await session.DisposeAsync();
+
+        Assert.Empty(files.List(""));
+        Assert.Empty(files.Folders());
+        Assert.Empty(files.Search("beach"));
+        Assert.Equal(0, files.BytesHere(""));
+        Assert.Equal(0, files.BytesOnNest());
+        Assert.Empty(files.Biggest());
+    }
+
     [Fact]
     public async Task OpeningANestOnlyFileGivesACopy_AndSavingItSendsTheChangeToTheNest()
     {

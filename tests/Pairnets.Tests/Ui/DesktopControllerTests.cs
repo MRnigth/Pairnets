@@ -864,9 +864,45 @@ public sealed class DesktopControllerTests
         Press("Quit Pairnets");
         Assert.Equal(1, app.Desktop.ShutdownCount);
 
-        var never = app.App.TrayMenu!.Items.OfType<NativeMenuItem>().Where(i => i is not NativeMenuItemSeparator && !pressed.Contains(i))
+        var never = app.App.TrayMenu!.Items.OfType<NativeMenuItem>().Where(i => i is not NativeMenuItemSeparator && i.IsVisible && !pressed.Contains(i))
             .Select(i => "\"" + i.Header + "\"").ToList();
         Assert.True(never.Count == 0, "Never pressed in the tray menu: " + string.Join(", ", never));
+    }
+
+    /// <summary>
+    /// Crash report 8736b8c213c4 (Mac app 1.0.61.4): with several nests the tray menu was drawn again on every status change
+    /// with a new "Open folder" sub-menu, and the macOS menu bar throws when an item's sub-menu is swapped for another. The
+    /// folders' sub-menu is now made once and only refilled.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task TrayMenu_SeveralNests_KeepsOneFolderSubMenu()
+    {
+        await using var app = await AppUnderTest.StartAsync();
+        await app.WaitUntilIdleAsync();
+        static NestListRow Row(string id, string title, string text) =>
+            new(id, title, Path.Combine(Path.GetTempPath(), title), text, title + " · " + text, SideDot.Ok, SideTone.Neutral,
+                RunnerStatus.Idle, null, false, "PC", null);
+        NestListModel Nests(params NestListRow[] rows) => new(rows, rows.Length + " nests", true, RunnerStatus.Idle);
+        List<NativeMenuItem> Rows(string header) =>
+            app.App.TrayMenu!.Items.OfType<NativeMenuItem>().Where(i => i.Header == header).ToList();
+
+        app.App.DrawNestMenu(Nests(Row("a", "Home", "up to date"), Row("b", "Work", "syncing 10%")));
+        var subMenu = Rows("Open folder").Single(i => i.IsVisible).Menu;
+        Assert.NotNull(subMenu);
+        Assert.Equal(["Home", "Work"], subMenu!.Items.OfType<NativeMenuItem>().Select(i => i.Header));
+
+        // A nest's state changes and a third nest comes: the same sub-menu, filled again.
+        app.App.DrawNestMenu(Nests(Row("a", "Home", "up to date"), Row("b", "Work", "syncing 60%"), Row("c", "Photos", "up to date")));
+        var shown = Rows("Open folder").Single(i => i.IsVisible);
+        Assert.Same(subMenu, shown.Menu);
+        Assert.Equal(["Home", "Work", "Photos"], subMenu.Items.OfType<NativeMenuItem>().Select(i => i.Header));
+
+        // Back to one nest: the plain "Open folder" row, and no item's sub-menu is ever set to another.
+        app.App.DrawNestMenu(Nests(Row("a", "Home", "up to date")));
+        shown = Rows("Open folder").Single(i => i.IsVisible);
+        Assert.Null(shown.Menu);
+        Assert.Same(subMenu, Rows("Open folder").Single(i => !i.IsVisible).Menu);
+        Assert.Empty(subMenu.Items);
     }
 
     /// <summary>The file's text, or null while another process (the app writing it) holds it open.</summary>

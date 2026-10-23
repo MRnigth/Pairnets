@@ -125,7 +125,7 @@ public sealed class NestFiles : INestFiles
         var prefix = folder.Length == 0 ? string.Empty : folder + "/";
         var folders = new Dictionary<string, (long Size, int Files, long Changed)>(StringComparer.Ordinal);
         var files = new List<NestEntry>();
-        foreach (var e in _session.State.LoadRemote().Values)
+        foreach (var e in Remote())
         {
             if (e.Deleted || !e.Path.StartsWith(prefix, StringComparison.Ordinal))
                 continue;
@@ -152,7 +152,7 @@ public sealed class NestFiles : INestFiles
     public IReadOnlyList<string> Folders(int depth = 1)
     {
         var set = new SortedSet<string>(StringComparer.CurrentCultureIgnoreCase);
-        foreach (var e in _session.State.LoadRemote().Values)
+        foreach (var e in Remote())
         {
             if (e.Deleted)
                 continue;
@@ -169,7 +169,7 @@ public sealed class NestFiles : INestFiles
         text = text.Trim();
         if (text.Length == 0)
             return [];
-        return _session.State.LoadRemote().Values
+        return Remote()
             .Where(e => !e.Deleted && e.Hash is not null && e.Path.Contains(text, StringComparison.OrdinalIgnoreCase))
             .OrderBy(e => e.Path, StringComparer.CurrentCultureIgnoreCase)
             .Take(max)
@@ -183,12 +183,29 @@ public sealed class NestFiles : INestFiles
         folder = PlacementMap.NormalizeFolder(folder);
         var prefix = folder.Length == 0 ? string.Empty : folder + "/";
         long bytes = 0;
-        foreach (var e in _session.State.LoadRemote().Values)
+        foreach (var e in Remote())
         {
             if (!e.Deleted && e.Path.StartsWith(prefix, StringComparison.Ordinal) && WhereNow(e.Path) == FileWhere.Here)
                 bytes += e.Size;
         }
         return bytes;
+    }
+
+    /// <summary>
+    /// This computer's copy of the nest's list, for the pages that show it. Empty once the nest has stopped (its session
+    /// closed the list's database while a page still shows): the page draws nothing instead of failing (crash 11eae5385eec).
+    /// </summary>
+    private IEnumerable<ManifestEntry> Remote()
+    {
+        try
+        {
+            return _session.State.LoadRemote().Values;
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or ObjectDisposedException)
+        {
+            _log.LogDebug("The nest's list is closed (the nest stopped): {Message}", ex.Message);
+            return [];
+        }
     }
 
     private static DateTimeOffset Moment(long ms) => DateTimeOffset.FromUnixTimeMilliseconds(Math.Max(0, ms));
@@ -536,7 +553,7 @@ public sealed class NestFiles : INestFiles
     };
 
     /// <summary>The space each kind of file takes on the nest, biggest first (kinds with no files left out).</summary>
-    public IReadOnlyList<(FileKind Kind, long Bytes)> KindTotals() => _session.State.LoadRemote().Values
+    public IReadOnlyList<(FileKind Kind, long Bytes)> KindTotals() => Remote()
         .Where(e => !e.Deleted)
         .GroupBy(e => KindOf(e.Path))
         .Select(g => (g.Key, g.Sum(e => e.Size)))
@@ -544,7 +561,7 @@ public sealed class NestFiles : INestFiles
         .ToList();
 
     /// <summary>The biggest files on the nest (of one kind, or all), biggest first.</summary>
-    public IReadOnlyList<NestEntry> Biggest(FileKind? kind = null, int max = 50) => _session.State.LoadRemote().Values
+    public IReadOnlyList<NestEntry> Biggest(FileKind? kind = null, int max = 50) => Remote()
         .Where(e => !e.Deleted && e.Hash is not null && (kind is null || KindOf(e.Path) == kind))
         .OrderByDescending(e => e.Size)
         .ThenBy(e => e.Path, StringComparer.Ordinal)
@@ -553,7 +570,7 @@ public sealed class NestFiles : INestFiles
         .ToList();
 
     /// <summary>The space all files on the nest take now (older versions and deleted files not counted).</summary>
-    public long BytesOnNest() => _session.State.LoadRemote().Values.Where(e => !e.Deleted).Sum(e => e.Size);
+    public long BytesOnNest() => Remote().Where(e => !e.Deleted).Sum(e => e.Size);
 
     /// <summary>The space older versions and deleted files take on the nest (null when the nest doesn't say).</summary>
     public long? HistoryBytes => _session.Status.Server?.HistoryBytes;
