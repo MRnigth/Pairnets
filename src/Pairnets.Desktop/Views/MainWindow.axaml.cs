@@ -137,6 +137,26 @@ public interface IMainActions
     void OpenPeople()
     {
     }
+
+    /// <summary>"Add a link…" under Downloads on the nest: the window that hands a link to the nest to download.</summary>
+    void AddDownload()
+    {
+    }
+
+    /// <summary>Cancel on a running or waiting nest download: the nest stops it and deletes the half-done file.</summary>
+    void CancelDownload(string id)
+    {
+    }
+
+    /// <summary>Try again on a stopped nest download.</summary>
+    void RetryDownload(string id)
+    {
+    }
+
+    /// <summary>Clear (finished) or Remove (stopped): takes a nest download off the list; a finished file stays in the nest.</summary>
+    void ForgetDownload(string id)
+    {
+    }
 }
 
 public partial class MainWindow : Window
@@ -562,6 +582,7 @@ public partial class MainWindow : Window
             DevicesEmptyText.Text = "No computers have used this nest yet.";
 
         DrawPeople(PeopleSection.From(s));
+        DrawDownloads(NestDownloadsSection.From(s, DateTimeOffset.UtcNow));
         var cards = DeviceCard.From(s, ThisDevice, DateTimeOffset.UtcNow);
         var count = _devices.Count;
         SyncCards(cards);
@@ -635,6 +656,64 @@ public partial class MainWindow : Window
         if (!people.Rows.SequenceEqual(_people))
             PeopleList.ItemsSource = people.Rows;
         _people = people.Rows;
+    }
+
+    private IReadOnlyList<NestDownloadRow> _downloads = [];
+
+    /// <summary>"Downloads on the nest": shown on the owner's computers (see <see cref="NestDownloadsSection"/>).</summary>
+    private void DrawDownloads(NestDownloadsSection downloads)
+    {
+        DownloadsPanel.IsVisible = downloads.Visible;
+        DownloadsSummary.Text = downloads.Summary;
+        AddLinkButton.IsVisible = downloads.CanAdd;
+        DownloadsCard.IsVisible = downloads.Rows.Count > 0;
+        DownloadsNote.Text = downloads.Note;
+        DownloadsNoteRow.IsVisible = downloads.Note.Length > 0;
+        if (!downloads.Rows.SequenceEqual(_downloads))
+            DownloadsList.ItemsSource = downloads.Rows;
+        _downloads = downloads.Rows;
+    }
+
+    /// <summary>The downloads shown, in order.</summary>
+    internal IReadOnlyList<NestDownloadRow> DownloadRows => DownloadsPanel.IsVisible ? _downloads : [];
+
+    internal string DownloadsNoteValue => DownloadsNoteRow.IsVisible ? DownloadsNote.Text ?? string.Empty : string.Empty;
+
+    internal bool CanAddDownload => DownloadsPanel.IsVisible && AddLinkButton.IsVisible;
+
+    private static NestDownloadRow? DownloadOf(object? sender) => (sender as Control)?.DataContext as NestDownloadRow;
+
+    private void OnAddDownload(object? sender, Avalonia.Interactivity.RoutedEventArgs e) => _actions?.AddDownload();
+
+    private void OnCancelDownload(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        if (DownloadOf(sender) is { } row)
+            _actions?.CancelDownload(row.Id);
+    }
+
+    private void OnRetryDownload(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        if (DownloadOf(sender) is { } row)
+            _actions?.RetryDownload(row.Id);
+    }
+
+    // Clear (a finished one: the file stays) and Remove (a stopped one: its half-done file goes) both take it off the list.
+    private void OnClearDownload(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        if (DownloadOf(sender) is { } row)
+            _actions?.ForgetDownload(row.Id);
+    }
+
+    private void OnRemoveDownload(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        if (DownloadOf(sender) is { } row)
+            _actions?.ForgetDownload(row.Id);
+    }
+
+    private void OnShowDownload(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        if (DownloadOf(sender) is { } row)
+            ShowFilesAt(row.Folder);
     }
 
     /// <summary>The people shown, in order (a friend, or someone waiting to be let in).</summary>

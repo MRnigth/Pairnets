@@ -120,3 +120,38 @@ public sealed class BrushWhen : IValueConverter
 
     public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) => throw new NotSupportedException();
 }
+
+/// <summary>A nest download row's line: green when done, red when stopped, else the small grey text.</summary>
+public sealed class DownloadInk : IValueConverter
+{
+    public static readonly DownloadInk Instance = new();
+
+    public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture) =>
+        Visuals.Resource<Avalonia.Media.IBrush>(value switch
+        {
+            Pairnets.Core.Client.NestDownloadRowKind.Done => "T.OkText",
+            Pairnets.Core.Client.NestDownloadRowKind.Failed => "T.BadText",
+            Pairnets.Core.Client.NestDownloadRowKind.Held => "T.WarnText",
+            _ => "T.TextSoft",
+        });
+
+    public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) => throw new NotSupportedException();
+}
+
+/// <summary>A nest download row's round picture: blue while running, grey while waiting, green when done, red when stopped.</summary>
+public sealed class DownloadTint : IValueConverter
+{
+    public static readonly DownloadTint Instance = new();
+
+    public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture) =>
+        Visuals.Resource<Avalonia.Media.IBrush>(value switch
+        {
+            Pairnets.Core.Client.NestDownloadRowKind.Done => "T.OkPill",
+            Pairnets.Core.Client.NestDownloadRowKind.Failed => "T.BadPill",
+            Pairnets.Core.Client.NestDownloadRowKind.Held => "T.WarnPill",
+            Pairnets.Core.Client.NestDownloadRowKind.Waiting => "T.Chip",
+            _ => "T.AccentSoft",
+        });
+
+    public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) => throw new NotSupportedException();
+}

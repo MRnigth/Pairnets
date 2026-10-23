@@ -1,0 +1,66 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:v="using:Pairnets.Desktop.Views"
+        x:Class="Pairnets.Desktop.Views.NestDownloadWindow"
+        Title="Download a link on the nest" Width="560" SizeToContent="Height" CanResize="False"
+        Background="{DynamicResource T.Card}"
+        WindowStartupLocation="CenterOwner" Icon="avares://Pairnets/Assets/pairnets-icon-256.png">
+  <!-- "Add a link…" under Downloads on the nest: the link, the nest folder it goes in, then Start download. -->
+  <Grid Margin="24,20" RowDefinitions="Auto,Auto,Auto,Auto,Auto">
+    <Grid ColumnDefinitions="Auto,*">
+      <Border Width="40" Height="40" CornerRadius="20" Margin="0,0,14,0" VerticalAlignment="Top" Background="{DynamicResource T.AccentSoft}">
+        <v:LineIcon Width="20" Height="20" StrokeThickness="2.2" Stroke="{DynamicResource T.AccentInk}" Data="{StaticResource I.Download}" />
+      </Border>
+      <StackPanel Grid.Column="1" Spacing="4">
+        <TextBlock FontSize="20" FontWeight="ExtraBold" TextWrapping="Wrap" Text="Let the nest download it" />
+        <TextBlock Classes="muted" FontSize="13" TextWrapping="Wrap"
+                   Text="The nest fetches the file by itself, so you can turn this computer off. When it's done, it syncs to your computers like any other file." />
+      </StackPanel>
+    </Grid>
+
+    <StackPanel Grid.Row="1" Margin="0,18,0,0" Spacing="6">
+      <TextBlock Text="Paste a download link" FontSize="13" FontWeight="Bold" />
+      <TextBox x:Name="LinkBox" Classes="field" MaxLength="4000" AutomationProperties.Name="Download link" TextChanged="OnLinkChanged" />
+    </StackPanel>
+
+    <Border Grid.Row="2" Margin="0,14,0,0" Background="{DynamicResource T.Chip}" CornerRadius="14" Padding="14,10">
+      <Grid ColumnDefinitions="Auto,*,Auto">
+        <v:LineIcon Width="18" Height="18" Margin="0,0,10,0" StrokeThickness="1.9" Stroke="{DynamicResource T.Muted}" Data="{StaticResource I.Folder}" VerticalAlignment="Center" />
+        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+          <TextBlock Classes="t3" Foreground="{DynamicResource T.Muted}" Text="Save in this nest folder" />
+          <TextBlock x:Name="FolderText" FontSize="15" FontWeight="Bold" TextTrimming="CharacterEllipsis" Text="Downloads" />
+        </StackPanel>
+        <Button x:Name="ChangeButton" Grid.Column="2" Classes="small" VerticalAlignment="Center" Content="Change…"
+                AutomationProperties.Name="Change the nest folder" Click="OnChangeFolder" />
+      </Grid>
+    </Border>
+
+    <StackPanel Grid.Row="3">
+    <Border x:Name="SealedBox" Margin="0,12,0,0" Background="{DynamicResource T.WarnPill}" BorderBrush="{DynamicResource T.WarnBorder}" BorderThickness="1"
+            CornerRadius="14" Padding="14,10" IsVisible="False">
+      <Grid ColumnDefinitions="Auto,*">
+        <v:LineIcon Width="16" Height="16" StrokeThickness="2" Stroke="{DynamicResource T.WarnText}" Data="{StaticResource I.Warning}" Margin="0,1,10,0" VerticalAlignment="Top" />
+        <TextBlock x:Name="SealedText" Grid.Column="1" Foreground="{DynamicResource T.WarnText}" FontSize="13" FontWeight="Bold" TextWrapping="Wrap" />
+      </Grid>
+    </Border>
+    <Grid ColumnDefinitions="Auto,*" Margin="0,12,0,0">
+      <v:LineIcon Width="14" Height="14" StrokeThickness="2.2" Stroke="{DynamicResource T.Muted}" Data="{StaticResource I.Shield}" Margin="0,1,8,0" VerticalAlignment="Top" />
+      <TextBlock Grid.Column="1" Classes="muted" FontSize="12" TextWrapping="Wrap"
+                 Text="Only web links (https:// or http://), never addresses in your own network. The nest keeps 5 GB free on its disk and never replaces a file that has the same name." />
+    </Grid>
+    </StackPanel>
+
+    <Grid Grid.Row="4" ColumnDefinitions="*,Auto" Margin="0,16,0,0">
+      <TextBlock x:Name="Problem" Foreground="{DynamicResource T.BadText}" FontSize="12" FontWeight="Bold" TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,0,12,0" IsVisible="False" />
+      <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+        <Button x:Name="CancelButton" Classes="SecondaryButton" Background="{DynamicResource T.Chip}" Content="Cancel" IsCancel="True" Click="OnCancel" />
+        <Button x:Name="StartButton" Classes="accent" Padding="20,0" IsDefault="True" Click="OnStart">
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <v:LineIcon Width="15" Height="15" StrokeThickness="2" Stroke="White" Data="{StaticResource I.Download}" />
+            <TextBlock x:Name="StartLabel" Text="Start download" VerticalAlignment="Center" />
+          </StackPanel>
+        </Button>
+      </StackPanel>
+    </Grid>
+  </Grid>
+</Window>

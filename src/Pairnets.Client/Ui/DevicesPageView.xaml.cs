@@ -12,6 +12,7 @@ public partial class DevicesPageView : UserControl
 {
     private IReadOnlyList<DeviceCard> _shown = [];
     private IReadOnlyList<PersonRow> _people = [];
+    private IReadOnlyList<NestDownloadRow> _downloads = [];
 
     public DevicesPageView()
     {
@@ -79,6 +80,7 @@ public partial class DevicesPageView : UserControl
             DevicesEmptyText.Text = "No computers have used this nest yet.";
 
         DrawPeople(PeopleSection.From(s));
+        DrawDownloads(NestDownloadsSection.From(s, DateTimeOffset.UtcNow));
 
         var cards = DeviceCard.From(s, thisDevice, DateTimeOffset.UtcNow);
         Summary.Text = DevicesSummary.Line(cards);
@@ -118,6 +120,62 @@ public partial class DevicesPageView : UserControl
         if (!people.Rows.SequenceEqual(_people))
             PeopleList.ItemsSource = people.Rows;
         _people = people.Rows;
+    }
+
+    /// <summary>"Downloads on the nest": shown on the owner's computers (see <see cref="NestDownloadsSection"/>).</summary>
+    private void DrawDownloads(NestDownloadsSection downloads)
+    {
+        DownloadsPanel.Visibility = downloads.Visible ? Visibility.Visible : Visibility.Collapsed;
+        DownloadsSummary.Text = downloads.Summary;
+        AddLinkButton.Visibility = downloads.CanAdd ? Visibility.Visible : Visibility.Collapsed;
+        DownloadsCard.Visibility = downloads.Rows.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        DownloadsNote.Text = downloads.Note;
+        DownloadsNoteRow.Visibility = downloads.Note.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+        if (!downloads.Rows.SequenceEqual(_downloads))
+            DownloadsList.ItemsSource = downloads.Rows;
+        _downloads = downloads.Rows;
+    }
+
+    /// <summary>The downloads shown, in order.</summary>
+    public IReadOnlyList<NestDownloadRow> DownloadRows => DownloadsPanel.Visibility == Visibility.Visible ? _downloads : [];
+
+    public string DownloadsNoteText => DownloadsNoteRow.Visibility == Visibility.Visible ? DownloadsNote.Text : string.Empty;
+
+    public bool CanAddDownload => DownloadsPanel.Visibility == Visibility.Visible && AddLinkButton.Visibility == Visibility.Visible;
+
+    private static NestDownloadRow? RowOf(object sender) => (sender as FrameworkElement)?.DataContext as NestDownloadRow;
+
+    private void OnAddDownload(object sender, RoutedEventArgs e) => Host?.Actions?.AddDownload();
+
+    private void OnCancelDownload(object sender, RoutedEventArgs e)
+    {
+        if (RowOf(sender) is { } row)
+            Host?.Actions?.CancelDownload(row.Id);
+    }
+
+    private void OnRetryDownload(object sender, RoutedEventArgs e)
+    {
+        if (RowOf(sender) is { } row)
+            Host?.Actions?.RetryDownload(row.Id);
+    }
+
+    // Clear (a finished one: the file stays) and Remove (a stopped one: its half-done file goes) both take it off the list.
+    private void OnClearDownload(object sender, RoutedEventArgs e)
+    {
+        if (RowOf(sender) is { } row)
+            Host?.Actions?.ForgetDownload(row.Id);
+    }
+
+    private void OnRemoveDownload(object sender, RoutedEventArgs e)
+    {
+        if (RowOf(sender) is { } row)
+            Host?.Actions?.ForgetDownload(row.Id);
+    }
+
+    private void OnShowDownload(object sender, RoutedEventArgs e)
+    {
+        if (RowOf(sender) is { } row)
+            Host?.ShowFilesAt(row.Folder);
     }
 
     /// <summary>The people shown, in order (a friend, or someone waiting to be let in).</summary>

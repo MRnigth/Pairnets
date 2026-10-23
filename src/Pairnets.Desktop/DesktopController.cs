@@ -409,6 +409,11 @@ public sealed class DesktopController : ITrayActions, IDisposable
         });
         session.JoinRequested += r => Notify("join:" + r.Code, PrefixOf(run) + r.Title, $"Code {r.Code}. Review it on your nest (Pairnets → Needs attention).", run);
         session.CatchUpCompleted += n => Notify("catchup", PrefixOf(run) + "Pairnets is up to date", $"Synced {n} change(s) made while this computer was away.", run);
+        session.DownloadFinished += d =>
+        {
+            var (title, text) = NestDownloadsSection.DoneNote(d);
+            Notify("download:" + d.Id, PrefixOf(run) + title, text, run);
+        };
         run.Session = session;
         _dirty = true;
         _log.LogInformation("Syncing {Folder} with {Server} as {Device}", nest.Folder, nest.ServerUrl, nest.DeviceName);
@@ -1140,6 +1145,47 @@ public sealed class DesktopController : ITrayActions, IDisposable
     /// <summary>Saves the icon chosen for a computer on the nest; false when the nest cannot (too old, or unreachable).</summary>
     public Task<bool> SetDeviceIcon(string id, string icon) =>
         _session is { } session ? session.SetDeviceIconAsync(id, icon) : Task.FromResult(false);
+
+    // ------------------------------------------------------------------ downloads on the nest (1.0.61.5)
+
+    private NestDownloadWindow? _downloadWindow;
+
+    /// <summary>"Add a link…": the window that hands a link to the picked nest, which downloads it by itself.</summary>
+    void IMainActions.AddDownload()
+    {
+        if (_session is not { } session)
+            return;
+        if (_downloadWindow is { } open)
+        {
+            open.Activate();
+            return;
+        }
+        var window = new NestDownloadWindow(session.StartDownloadAsync, _ => PickDownloadFolderAsync(session))
+        {
+            Sealed = session.Status.NestDownloads?.Sealed == true,
+        };
+        _downloadWindow = window;
+        window.Closed += (_, _) => _downloadWindow = null;
+        if (_window is { IsVisible: true } owner)
+            _ = window.ShowDialog(owner);
+        else
+            window.Show();
+    }
+
+    /// <summary>"Change…" in the download window: the nest's folders, as in "Move to…" on the Files page.</summary>
+    private async Task<string?> PickDownloadFolderAsync(ClientSession session)
+    {
+        var choices = NestDownloadsSection.FolderChoices(session.Files.Folders(depth: 10));
+        return await Dialogs.PickOneAsync(_downloadWindow, "Save the download in…", "Choose the folder on your nest:", choices, "Choose") is { } pick
+            ? NestDownloadsSection.FolderOfChoice(pick)
+            : null;
+    }
+
+    void IMainActions.CancelDownload(string id) => _ = _session?.CancelDownloadAsync(id);
+
+    void IMainActions.RetryDownload(string id) => _ = _session?.RetryDownloadAsync(id);
+
+    void IMainActions.ForgetDownload(string id) => _ = _session?.CancelDownloadAsync(id);
 
     /// <summary>
     /// Shows the file in the file manager; a file that is gone (deleted, moved, a conflict copy cleared up) opens the

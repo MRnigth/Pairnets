@@ -137,6 +137,26 @@ public interface IMainActions
     void OpenPeople()
     {
     }
+
+    /// <summary>"Add a link…" under Downloads on the nest: the window that hands a link to the nest to download.</summary>
+    void AddDownload()
+    {
+    }
+
+    /// <summary>Cancel on a running or waiting nest download: the nest stops it and deletes the half-done file.</summary>
+    void CancelDownload(string id)
+    {
+    }
+
+    /// <summary>Try again on a stopped nest download.</summary>
+    void RetryDownload(string id)
+    {
+    }
+
+    /// <summary>Clear (finished) or Remove (stopped): takes a nest download off the list; a finished file stays in the nest.</summary>
+    void ForgetDownload(string id)
+    {
+    }
 }
 
 /// <summary>

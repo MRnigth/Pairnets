@@ -171,6 +171,155 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
         {
         }
         await RefreshPeopleAsync().ConfigureAwait(false);
+        await RefreshDownloadsAsync().ConfigureAwait(false);
+    }
+
+    // ------------------------------------------------------------------ downloads on the nest (1.0.61.5)
+
+    private HashSet<string>? _downloadsSeen;
+    private int _downloadsRefreshing;
+
+    /// <summary>
+    /// Raised once for each download the nest finished (also one that finished while this computer was off: the ids already
+    /// told are kept next to the state database), for the note. The Activity line is added here.
+    /// </summary>
+    public event Action<NestDownload>? DownloadFinished;
+
+    private string DownloadsSeenFile => Path.Combine(StateDirectory, "downloads-seen.txt");
+
+    /// <summary>
+    /// Reads the nest's downloads for the Computers page: with the device list every 30 seconds, and every second while one
+    /// is busy (<see cref="LiveTickAsync"/>). Only the owner's computers have them; an older nest says so
+    /// (<see cref="StatusSnapshot.NestDownloadsUnsupported"/>).
+    /// </summary>
+    public async Task RefreshDownloadsAsync()
+    {
+        if (!Engine.Access.IsOwner)
+        {
+            if (Status.NestDownloads is not null || Status.NestDownloadsUnsupported)
+                Update(s => s with { NestDownloads = null, NestDownloadsUnsupported = false });
+            return;
+        }
+        if (Interlocked.Exchange(ref _downloadsRefreshing, 1) == 1)
+            return;
+        try
+        {
+            var list = await Api.GetDownloadsAsync(CancellationToken.None).ConfigureAwait(false);
+            Update(s => s with { NestDownloads = list, NestDownloadsUnsupported = list is null });
+            if (list is not null)
+                TellFinished(list);
+        }
+        catch (PairnetsAuthException ex) when (ex.NeedsSignIn)
+        {
+            NoticeSignedOut();
+        }
+        catch (Exception ex) when (ex is PairnetsNetworkException or PairnetsAuthException or PairnetsProtocolException or ObjectDisposedException or OperationCanceledException)
+        {
+        }
+        finally
+        {
+            Interlocked.Exchange(ref _downloadsRefreshing, 0);
+        }
+    }
+
+    /// <summary>Raises <see cref="DownloadFinished"/> for the finished ones not told yet. The first time ever, only those of the last day.</summary>
+    private void TellFinished(NestDownloadList list)
+    {
+        var done = list.Downloads.Where(d => d.State == NestDownload.Done).ToList();
+        List<NestDownload> fresh;
+        lock (_gate)
+        {
+            var firstTime = _downloadsSeen is null && !File.Exists(DownloadsSeenFile);
+            _downloadsSeen ??= ReadSeen();
+            var now = _clock.GetUtcNow();
+            fresh = done.Where(d => !_downloadsSeen.Contains(d.Id) && (!firstTime || now - (d.Finished ?? now) < TimeSpan.FromDays(1))).ToList();
+            var known = list.Downloads.Select(d => d.Id).ToHashSet(StringComparer.Ordinal);
+            var changed = _downloadsSeen.RemoveWhere(id => !known.Contains(id)) > 0;
+            foreach (var d in done)
+                changed |= _downloadsSeen.Add(d.Id);
+            if (changed || firstTime)
+                SaveSeen(_downloadsSeen);
+        }
+        foreach (var d in fresh)
+        {
+            Activity.Add(ActivityKind.Info, d.Path ?? d.Name, NestDownloadsSection.DoneNote(d).Text, _clock);
+            DownloadFinished?.Invoke(d);
+        }
+    }
+
+    private HashSet<string> ReadSeen()
+    {
+        try
+        {
+            return File.Exists(DownloadsSeenFile)
+                ? File.ReadAllLines(DownloadsSeenFile).Where(l => l.Length > 0).ToHashSet(StringComparer.Ordinal)
+                : new HashSet<string>(StringComparer.Ordinal);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return new HashSet<string>(StringComparer.Ordinal);
+        }
+    }
+
+    private void SaveSeen(HashSet<string> seen)
+    {
+        try
+        {
+            File.WriteAllLines(DownloadsSeenFile, seen);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // Told again at worst.
+        }
+    }
+
+    /// <summary>"Start download": null when the nest took it (the list is read again), else what the window says went wrong.</summary>
+    public async Task<string?> StartDownloadAsync(string url, string folder)
+    {
+        string? error;
+        try
+        {
+            (_, error) = await Api.StartDownloadAsync(url, folder, CancellationToken.None).ConfigureAwait(false);
+        }
+        catch (PairnetsAuthException ex) when (ex.NeedsSignIn)
+        {
+            NoticeSignedOut();
+            return FriendlyErrors.NotAllowed;
+        }
+        catch (Exception ex) when (ex is PairnetsNetworkException or PairnetsAuthException or PairnetsProtocolException or ObjectDisposedException or OperationCanceledException)
+        {
+            return "Couldn't reach the nest. Try again in a moment.";
+        }
+        if (error is not null)
+            return NestDownloadErrors.Sentence(error);
+        await RefreshDownloadsAsync().ConfigureAwait(false);
+        return null;
+    }
+
+    /// <summary>Cancel, Clear and Remove: the nest stops it or forgets it; the list is read again. False when that didn't work.</summary>
+    public Task<bool> CancelDownloadAsync(string id) => DownloadCallAsync(ct => Api.CancelDownloadAsync(id, ct));
+
+    /// <summary>"Try again" on a stopped download.</summary>
+    public Task<bool> RetryDownloadAsync(string id) => DownloadCallAsync(ct => Api.RetryDownloadAsync(id, ct));
+
+    private async Task<bool> DownloadCallAsync(Func<CancellationToken, Task<bool>> call)
+    {
+        bool done;
+        try
+        {
+            done = await call(CancellationToken.None).ConfigureAwait(false);
+        }
+        catch (PairnetsAuthException ex) when (ex.NeedsSignIn)
+        {
+            NoticeSignedOut();
+            return false;
+        }
+        catch (Exception ex) when (ex is PairnetsNetworkException or PairnetsAuthException or PairnetsProtocolException or ObjectDisposedException or OperationCanceledException)
+        {
+            return false;
+        }
+        await RefreshDownloadsAsync().ConfigureAwait(false);
+        return done;
     }
 
     // ------------------------------------------------------------------ friends (1.0.61.2)
@@ -809,6 +958,9 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
                     peers[name] = peers[name] with { Report = null };
                 return next with { Peers = peers };
             });
+
+            if (Status.NestDownloads?.Downloads.Any(d => d.IsBusy) == true)
+                await RefreshDownloadsAsync().ConfigureAwait(false);
 
             var own = Status.OwnLive;
             if (own is not null)

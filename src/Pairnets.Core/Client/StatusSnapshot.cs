@@ -421,6 +421,14 @@ public sealed record StatusSnapshot(
     /// </summary>
     public PeopleAnswer? People { get; init; }
 
+    // ---- links the nest downloads by itself (1.0.61.5)
+
+    /// <summary>The nest's downloads (the Computers page's "Downloads on the nest"), or null: not read yet, or not the owner's computer.</summary>
+    public NestDownloadList? NestDownloads { get; init; }
+
+    /// <summary>The nest is from before it could download links (it answered 404).</summary>
+    public bool NestDownloadsUnsupported { get; init; }
+
     /// <summary>On a nest shared "View only": the changes made here that stay here (the Needs you card), or none.</summary>
     public IReadOnlyList<string> HeldBack { get; init; } = [];
 

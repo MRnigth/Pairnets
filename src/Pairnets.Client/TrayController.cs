@@ -356,6 +356,16 @@ public sealed class TrayController : ITrayActions, IDisposable
         session.PassCompleted += r => RunOnUi(() => OnPassCompleted(run, r));
         session.CatchUpCompleted += n => RunOnUi(() => Toast("catchup", PrefixOf(run) + "Pairnets is up to date",
             $"Synced {n} change(s) made while this computer was away.", Forms.ToolTipIcon.Info, () => ShowNest(run), run));
+        session.DownloadFinished += d => RunOnUi(() =>
+        {
+            var (title, text) = NestDownloadsSection.DoneNote(d);
+            Toast("download:" + d.Id, PrefixOf(run) + title, text, Forms.ToolTipIcon.Info, () =>
+            {
+                ShowNest(run);
+                if (!d.Plain)
+                    _window?.ShowFilesAt(d.Folder);
+            }, run);
+        });
         session.ServerInfoChanged += info => RunOnUi(() => OnServerInfo(run, session, info));
         session.AccountChanged += (next, token) => RunOnUi(() => OnAccountChanged(run, session, next, token));
         session.Files.Opened.NestFullWhileSaving += _ => RunOnUi(() =>
@@ -1227,6 +1237,51 @@ public sealed class TrayController : ITrayActions, IDisposable
     /// <summary>Saves the icon chosen for a computer on the nest; false when the nest cannot (too old, or unreachable).</summary>
     public Task<bool> SetDeviceIcon(string id, string icon) =>
         _session is { } session ? session.SetDeviceIconAsync(id, icon) : Task.FromResult(false);
+
+    // ------------------------------------------------------------------ downloads on the nest (1.0.61.5)
+
+    private NestDownloadWindow? _downloadWindow;
+
+    /// <summary>"Add a link…": the window that hands a link to the picked nest, which downloads it by itself.</summary>
+    void IMainActions.AddDownload()
+    {
+        if (_session is not { } session)
+            return;
+        if (_downloadWindow is { } open)
+        {
+            open.Activate();
+            return;
+        }
+        var window = new NestDownloadWindow(session.StartDownloadAsync, from => PickDownloadFolder(session))
+        {
+            Owner = _window is { IsVisible: true } ? _window : null,
+            Sealed = session.Status.NestDownloads?.Sealed == true,
+        };
+        _downloadWindow = window;
+        try
+        {
+            window.ShowDialog();
+        }
+        finally
+        {
+            _downloadWindow = null;
+        }
+    }
+
+    /// <summary>"Change…" in the download window: the nest's folders, as in "Move to…" on the Files page.</summary>
+    private string? PickDownloadFolder(ClientSession session)
+    {
+        var choices = NestDownloadsSection.FolderChoices(session.Files.Folders(depth: 10));
+        return Dialogs.PickOne(_downloadWindow, "Save the download in…", "Choose the folder on your nest:", choices, "Choose") is { } pick
+            ? NestDownloadsSection.FolderOfChoice(pick)
+            : null;
+    }
+
+    void IMainActions.CancelDownload(string id) => _ = _session?.CancelDownloadAsync(id);
+
+    void IMainActions.RetryDownload(string id) => _ = _session?.RetryDownloadAsync(id);
+
+    void IMainActions.ForgetDownload(string id) => _ = _session?.CancelDownloadAsync(id);
 
     /// <summary>The quick-look panel next to the taskbar; a second click on the icon closes it.</summary>
     private void TogglePanel()

@@ -20,6 +20,11 @@ public interface IPageHost
 
     /// <summary>The "Your nest is full" pop-up.</summary>
     void ShowNestFull();
+
+    /// <summary>Opens the Files page on a nest folder ("Show in Files" of a finished nest download).</summary>
+    void ShowFilesAt(string folder, bool choosePlacement = false)
+    {
+    }
 }
 
 /// <summary>

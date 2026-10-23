@@ -101,6 +101,13 @@ public sealed partial class ApiTour : IAsyncDisposable
         new("GET", "/api/links"),
         new("GET", "/api/offers"),
 
+        // Downloads on the nest (Web/DownloadEndpoints.cs).
+        new("GET", "/api/downloads"),
+        new("POST", "/api/downloads"),
+        new("DELETE", "/api/downloads/{id}"),
+        new("POST", "/api/downloads/{id}/retry"),
+        new("GET", "/api/downloads/{id}/file"),
+
         // The website's pages (Web/WebUi.cs).
         new("GET", "/"),
         new("GET", "/setup"),

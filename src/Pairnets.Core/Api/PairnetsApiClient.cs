@@ -269,6 +269,55 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
         return await ReadJsonAsync<PeopleAnswer>(resp, timeout, ct).ConfigureAwait(false);
     }
 
+    // ------------------------------------------------------------------ downloads on the nest (1.0.61.5)
+
+    /// <summary>The nest's downloads (only the owner's computers may ask). Null for a nest from before nest downloads.</summary>
+    public async Task<NestDownloadList?> GetDownloadsAsync(CancellationToken ct)
+    {
+        using var timeout = Linked(ct, TimeSpan.FromSeconds(30));
+        using var resp = await SendAsync(() => new HttpRequestMessage(HttpMethod.Get, "api/downloads"), HttpCompletionOption.ResponseContentRead, timeout, ct).ConfigureAwait(false);
+        if ((int)resp.StatusCode is 404 or 405)
+            return null;
+        await ThrowForStatusAsync(resp).ConfigureAwait(false);
+        return await ReadJsonAsync<NestDownloadList>(resp, timeout, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Asks the nest to download <paramref name="url"/> into <paramref name="folder"/> ("" = the top). Returns the new download,
+    /// or the <see cref="NestDownloadErrors"/> code it was refused with ("update_nest" for a nest from before nest downloads).
+    /// </summary>
+    public async Task<(NestDownload? Download, string? Error)> StartDownloadAsync(string url, string folder, CancellationToken ct)
+    {
+        using var timeout = Linked(ct, TimeSpan.FromSeconds(30));
+        using var resp = await SendAsync(() => new HttpRequestMessage(HttpMethod.Post, "api/downloads")
+            { Content = JsonContent.Create(new NestDownloadRequest(url, folder), options: PairnetsJson.Options) },
+            HttpCompletionOption.ResponseContentRead, timeout, ct).ConfigureAwait(false);
+        if ((int)resp.StatusCode is 404 or 405)
+            return (null, NestDownloadErrors.UpdateNest);
+        if ((int)resp.StatusCode is 400 or 409)
+            return (null, (await TryReadErrorAsync(resp, ct).ConfigureAwait(false))?.Code ?? NestDownloadErrors.Refused);
+        await ThrowForStatusAsync(resp).ConfigureAwait(false);
+        return (await ReadJsonAsync<NestDownload>(resp, timeout, ct).ConfigureAwait(false), null);
+    }
+
+    /// <summary>Stops a download on the nest (its half-done file goes), or takes a finished or stopped one off the list. False when the nest doesn't know it.</summary>
+    public Task<bool> CancelDownloadAsync(string id, CancellationToken ct) =>
+        DownloadCallAsync(HttpMethod.Delete, "api/downloads/" + Uri.EscapeDataString(id), ct);
+
+    /// <summary>"Try again" on a stopped download. False when the nest doesn't know it, or it isn't stopped.</summary>
+    public Task<bool> RetryDownloadAsync(string id, CancellationToken ct) =>
+        DownloadCallAsync(HttpMethod.Post, "api/downloads/" + Uri.EscapeDataString(id) + "/retry", ct);
+
+    private async Task<bool> DownloadCallAsync(HttpMethod method, string path, CancellationToken ct)
+    {
+        using var timeout = Linked(ct, TimeSpan.FromSeconds(30));
+        using var resp = await SendAsync(() => new HttpRequestMessage(method, path), HttpCompletionOption.ResponseContentRead, timeout, ct).ConfigureAwait(false);
+        if ((int)resp.StatusCode is 404 or 405)
+            return false;
+        await ThrowForStatusAsync(resp).ConfigureAwait(false);
+        return true;
+    }
+
     /// <summary>
     /// The folders of this nest linked with another nest. Null for a nest from before linked nests, and for a computer that
     /// is not the owner's (403 owner_only).

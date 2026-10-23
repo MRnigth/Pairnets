@@ -842,6 +842,72 @@
                 </StackPanel>
               </Border>
 
+              <!-- Downloads on the nest (1.0.61.5): links the nest downloads by itself, so this computer may be off meanwhile.
+                   Only on the owner's computers; see NestDownloadsSection. -->
+              <StackPanel x:Name="DownloadsPanel" Spacing="10" IsVisible="False">
+                <Grid ColumnDefinitions="Auto,*,Auto" Height="38" Margin="4,6,0,0">
+                  <TextBlock Classes="ctitle" Text="Downloads on the nest" VerticalAlignment="Center" />
+                  <TextBlock x:Name="DownloadsSummary" Grid.Column="1" Classes="t3" VerticalAlignment="Center" Margin="12,0" TextTrimming="CharacterEllipsis" />
+                  <Button x:Name="AddLinkButton" Grid.Column="2" Classes="SecondaryButton" Height="38" Padding="14,0" VerticalAlignment="Center" Foreground="{DynamicResource T.AccentInk}" Click="OnAddDownload">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                      <v:LineIcon Classes="icon ink-accent" Width="16" Height="16" Data="{StaticResource I.Download}" />
+                      <TextBlock Text="Add a link…" VerticalAlignment="Center" />
+                    </StackPanel>
+                  </Button>
+                </Grid>
+                <Border x:Name="DownloadsCard" Classes="pcard" ClipToBounds="True">
+                  <ItemsControl x:Name="DownloadsList">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate DataType="c:NestDownloadRow">
+                        <Border BorderThickness="0,0,0,1" BorderBrush="{DynamicResource T.Border}" Padding="20,14">
+                          <Grid ColumnDefinitions="Auto,*,Auto">
+                            <Border Width="40" Height="40" CornerRadius="20" Margin="0,0,14,0" VerticalAlignment="Top"
+                                    Background="{Binding Kind, Converter={x:Static v:DownloadTint.Instance}}">
+                              <Panel>
+                                <v:LineIcon Classes="icon ink-accent" Width="19" Height="19" StrokeThickness="2" Data="{StaticResource I.Download}" IsVisible="{Binding IsRunning}" />
+                                <v:LineIcon Classes="icon ink-soft" Width="19" Height="19" StrokeThickness="2" Data="{StaticResource I.Clock}" IsVisible="{Binding IsWaiting}" />
+                                <v:LineIcon Classes="icon ink-ok" Width="19" Height="19" StrokeThickness="2" Data="{StaticResource I.Check}" IsVisible="{Binding IsDone}" />
+                                <v:LineIcon Classes="icon ink-bad" Width="19" Height="19" StrokeThickness="2" Data="{StaticResource I.Warning}" IsVisible="{Binding IsFailed}" />
+                                <v:LineIcon Classes="icon ink-warn" Width="19" Height="19" StrokeThickness="2" Data="{StaticResource I.Shield}" IsVisible="{Binding IsHeld}" />
+                              </Panel>
+                            </Border>
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                              <Grid ColumnDefinitions="Auto,*">
+                                <TextBlock Text="{Binding Name}" FontSize="15" FontWeight="ExtraBold" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Name}" />
+                                <TextBlock Grid.Column="1" Text="{Binding Source}" Classes="t3" Margin="10,0,0,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                              </Grid>
+                              <ProgressBar Minimum="0" Maximum="100" Height="6" Margin="0,8,0,6" Value="{Binding PercentValue}" IsVisible="{Binding HasPercent}" />
+                              <TextBlock Text="{Binding Line}" Classes="t3" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Line}"
+                                         Foreground="{Binding Kind, Converter={x:Static v:DownloadInk.Instance}}" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="12" Margin="14,0,0,0" VerticalAlignment="Center" IsVisible="{Binding CanCancel}">
+                              <Button Classes="SecondaryButton" Height="34" Padding="12,0" Content="Cancel" ToolTip.Tip="Stops it and deletes the half-done file"
+                                      AutomationProperties.Name="{Binding CancelLabel}" Click="OnCancelDownload" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="12" Margin="14,0,0,0" VerticalAlignment="Center" IsVisible="{Binding IsDone}">
+                              <Button Classes="small" Content="Show in Files" AutomationProperties.Name="{Binding ShowLabel}" Click="OnShowDownload" />
+                              <Button Classes="link" Content="Clear" ToolTip.Tip="Takes it off this list; the file stays" AutomationProperties.Name="{Binding ClearLabel}" Click="OnClearDownload" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="12" Margin="14,0,0,0" VerticalAlignment="Center" IsVisible="{Binding IsHeld}">
+                              <Button Classes="link" Content="Remove" Foreground="{DynamicResource T.BadText}" ToolTip.Tip="Deletes it from the nest's holding spot"
+                                      AutomationProperties.Name="{Binding RemoveLabel}" Click="OnRemoveDownload" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="12" Margin="14,0,0,0" VerticalAlignment="Center" IsVisible="{Binding IsFailed}">
+                              <Button Classes="small" Content="Try again" AutomationProperties.Name="{Binding RetryLabel}" Click="OnRetryDownload" />
+                              <Button Classes="link" Content="Remove" Foreground="{DynamicResource T.BadText}" AutomationProperties.Name="{Binding RemoveLabel}" Click="OnRemoveDownload" />
+                            </StackPanel>
+                          </Grid>
+                        </Border>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </Border>
+                <Grid x:Name="DownloadsNoteRow" ColumnDefinitions="Auto,*" Margin="4,0,0,0">
+                  <v:LineIcon Classes="icon ink-soft" Width="16" Height="16" StrokeThickness="2" Data="{StaticResource I.InfoCircle}" VerticalAlignment="Top" Margin="0,1,8,0" />
+                  <TextBlock x:Name="DownloadsNote" Grid.Column="1" Classes="t2" FontSize="13" TextWrapping="Wrap" />
+                </Grid>
+              </StackPanel>
+
               <!-- Computers -->
               <!-- The heading (and the join request) shows also while no cards do: loading, an old nest, no computers yet. -->
               <StackPanel Spacing="10">

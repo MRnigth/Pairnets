@@ -216,6 +216,10 @@ public sealed class FriendAccessTests : IAsyncLifetime
         await AssertRefusedAsync(anna.PostAsync("api/keys/seal", null), AccessGate.OwnerOnly, "turning on encryption");
         await AssertRefusedAsync(anna.PutAsync("api/keys/recovery", new ByteArrayContent([1, 2, 3])), AccessGate.OwnerOnly, "the recovery envelope");
         await AssertRefusedAsync(anna.DeleteAsync("api/keys/envelopes/0123456789abcdef"), AccessGate.OwnerOnly, "a key envelope");
+        await AssertRefusedAsync(anna.GetAsync("api/downloads"), AccessGate.OwnerOnly, "the nest's downloads");
+        await AssertRefusedAsync(anna.PostAsJsonAsync("api/downloads", new { url = "https://example.com/a.iso" }), AccessGate.OwnerOnly, "a nest download");
+        await AssertRefusedAsync(anna.DeleteAsync("api/downloads/0123456789abcdef"), AccessGate.OwnerOnly, "cancelling a nest download");
+        await AssertRefusedAsync(anna.PostAsync("api/downloads/0123456789abcdef/retry", null), AccessGate.OwnerOnly, "trying a nest download again");
 
         Assert.True(Auth.GetDevice(desk.Id)!.IsActive);
         Assert.Null(Auth.GetDevice(desk.Id)!.Icon);
@@ -226,6 +230,7 @@ public sealed class FriendAccessTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.OK, (await deskHttp.GetAsync("api/people")).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await _owner.GetAsync("api/people")).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await deskHttp.GetAsync("api/update/diagnostics")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await deskHttp.GetAsync("api/downloads")).StatusCode);
     }
 
     [Fact]

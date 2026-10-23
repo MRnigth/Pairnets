@@ -96,6 +96,8 @@ public static partial class Program
                     InviteFolder.Render(outDir, dark ? "dark" : "light", print);
                 else if (args.Contains("--stage7"))
                     Stage7.Render(outDir, dark ? "dark" : "light", print);
+                else if (args.Contains("--nest-downloads"))
+                    NestDownloadScreens.Render(outDir, dark ? "dark" : "light", print);
                 else if (args.Contains("--nest-only"))
                     NestOnlyScreens.Render(outDir, dark ? "dark" : "light", print);
                 else if (args.Contains("--stage4"))
