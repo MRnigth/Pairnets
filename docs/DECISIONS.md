@@ -18,10 +18,9 @@ what cannot lose or silently overwrite data.
 
 ## Sync semantics
 
-* **Mass-delete guard, literal rule.** A pass is blocked when it would delete more than
-  `min(20 % of tracked files, 50)` on either side, with no minimum floor (your choice). In small
-  folders this means even one or two deletions need "Allow these deletions". Tracked = files with
-  an agreed base.
+* **Mass-delete guard: 100 files.** A pass is blocked when it would delete 100 files or more on
+  either side; fewer are just deleted, however big a part of the nest that is. (Until 1.0.61.4 it was
+  `min(20 % of tracked files, 50)` with no floor; see "Ask about deletions only from 100 files" below.)
 * **Allow-once scope.** An approval covers exactly the next pass and only the deletions that were
   listed. If more deletions appear, the pass is blocked again.
 * **Empty folder.** If the folder is empty while files are tracked, the pass is blocked (it
@@ -1790,3 +1789,16 @@ change was never seen.
   not by redrawing the rows, so the choice buttons don't jump while the sync frees or downloads.
 * **pairnets.app/favicon.ico** was already in `site/` on main (8a40637); the live site still 404s only because Pages
   serves an older branch. No code change: it needs a Pages deploy.
+
+## Ask about deletions only from 100 files (1.0.61.4.1, 2026-10-23)
+
+* **Rule.** Asked for: "if it's under 100 files don't ask for perms to delete the files". A sync now stops with "Allow these
+  deletions" only when it would delete 100 or more files on one side (this computer, or the nest) in one go. The old
+  20 %-of-the-nest part is gone completely, and no "more than half" guard replaces it: that would bring the question back
+  for every small nest. One setting, `EngineOptions.MassDeleteThreshold` (100), replaces `MassDeleteFraction` and
+  `MassDeleteMax`.
+* **Kept:** the empty-folder guard (every file gone while the nest still has some, usually a wrong or unplugged drive),
+  allow-once, and both apps' question and buttons, which did not change.
+* **Risk, accepted:** a small nest can lose all but its last file without a question, e.g. 50 files deleted on another
+  computer. They are not lost for good: on this computer they go to the Recycle Bin / Trash, and the nest keeps deleted
+  files in History for 30 days.

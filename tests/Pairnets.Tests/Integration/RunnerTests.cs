@@ -83,15 +83,15 @@ public class RunnerTests : IAsyncLifetime
     [Fact]
     public async Task BlockedPassReportsBlockedStatusAndApprovalRuns()
     {
-        for (var i = 0; i < 10; i++)
-            _desktop.Write($"f{i}.txt", "x");
+        for (var i = 0; i < 110; i++)
+            _desktop.Write($"f{i:000}.txt", "x");
         await _desktop.SyncAsync();
-        for (var i = 0; i < 5; i++)
-            _desktop.Delete($"f{i}.txt");
+        for (var i = 0; i < 100; i++)
+            _desktop.Delete($"f{i:000}.txt");
         var runner = _desktop.StartRunner();
         await WaitUntil(() => runner.Status == RunnerStatus.Blocked, TimeSpan.FromSeconds(10), "blocked status");
-        Assert.Equal(5, runner.ApproveDeletions());
-        await WaitUntil(() => _server.Store.ReadManifest(null).Entries.Count(e => e.Deleted) == 5, TimeSpan.FromSeconds(10), "approved deletions");
+        Assert.Equal(100, runner.ApproveDeletions());
+        await WaitUntil(() => _server.Store.ReadManifest(null).Entries.Count(e => e.Deleted) == 100, TimeSpan.FromSeconds(10), "approved deletions");
     }
 
     [Fact]

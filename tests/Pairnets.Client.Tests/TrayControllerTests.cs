@@ -289,27 +289,28 @@ public sealed class TrayControllerTests
     {
         await using var nest = await TestServer.StartWithWebsiteAsync();
         await using var app = await TrayHarness.CreateAsync(nest);
-        for (var i = 0; i < 10; i++)
-            File.WriteAllText(Path.Combine(app.Folder, $"f{i}.txt"), i.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        for (var i = 0; i < 110; i++)
+            File.WriteAllText(Path.Combine(app.Folder, $"f{i:000}.txt"), i.ToString(System.Globalization.CultureInfo.InvariantCulture));
         await app.StartAsync();
-        await app.WaitUntil(() => nest.Store.ReadManifest(null).Entries.Count(e => !e.Deleted) == 10, "the ten files to reach the nest");
+        await app.WaitUntil(() => nest.Store.ReadManifest(null).Entries.Count(e => !e.Deleted) == 110, "the 110 files to reach the nest");
         await app.SyncedOnce();
 
-        for (var i = 0; i < 5; i++)
-            File.Delete(Path.Combine(app.Folder, $"f{i}.txt"));
+        // 100 deletions in one go are held back (fewer are just done).
+        for (var i = 0; i < 100; i++)
+            File.Delete(Path.Combine(app.Folder, $"f{i:000}.txt"));
         await app.WaitUntil(() => app.Tray.Session!.Status.BlockReason == BlockReason.MassDelete, "the deletions to be held back");
         await app.WaitUntil(() => app.Notifications.Items.Any(n => n.Title == "Deletions blocked"), "a notification about the held-back deletions");
-        Assert.Equal(10, nest.Store.ReadManifest(null).Entries.Count(e => !e.Deleted)); // nothing deleted yet
+        Assert.Equal(110, nest.Store.ReadManifest(null).Entries.Count(e => !e.Deleted)); // nothing deleted yet
         await app.Wpf.Ui(app.Tray.RefreshNow);
         Assert.Contains(app.Tray.TrayIcon.ContextMenuStrip!.Items.OfType<System.Windows.Forms.ToolStripMenuItem>(),
-            i => i.Text == "Allow these deletions (5)…" && i.Available);
+            i => i.Text == "Allow these deletions (100)…" && i.Available);
 
-        app.Dialogs.When("f0.txt", MessageBoxResult.Yes);
-        await app.Press(app.Tray.Window!, "Allow these deletions (5)…");
+        app.Dialogs.When("f000.txt", MessageBoxResult.Yes);
+        await app.Press(app.Tray.Window!, "Allow these deletions (100)…");
         var question = Assert.Single(app.Dialogs.Asked.Items);
         Assert.Equal("Pairnets – allow deletions?", question.Title);
-        Assert.Contains("f4.txt", question.Text);
-        await app.WaitUntil(() => nest.Store.ReadManifest(null).Entries.Count(e => e.Deleted) == 5, "the five deletions to reach the nest");
+        Assert.Contains("f019.txt", question.Text);
+        await app.WaitUntil(() => nest.Store.ReadManifest(null).Entries.Count(e => e.Deleted) == 100, "the 100 deletions to reach the nest");
         await app.WaitUntil(() => app.Tray.Session!.Status.Status == RunnerStatus.Idle, "syncing to carry on");
     }
 

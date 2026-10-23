@@ -505,10 +505,10 @@ public sealed class SyncEngine
             .ToHashSet();
         var deleteLocal = wanted.Count(w => w.Side == DeleteSide.Local);
         var deleteRemote = wanted.Count - deleteLocal;
-        var limit = Math.Min(_options.MassDeleteFraction * tracked, _options.MassDeleteMax);
+        var limit = _options.MassDeleteThreshold;
         var folderEmpty = tracked > 0 && scan.FileCount == 0;
         var approval = _state.ConsumeApproval();
-        if (deleteLocal > limit || deleteRemote > limit || (folderEmpty && wanted.Count > 0))
+        if (deleteLocal >= limit || deleteRemote >= limit || (folderEmpty && wanted.Count > 0))
         {
             if (approval is null || !wanted.IsSubsetOf(approval))
             {

@@ -125,31 +125,52 @@ public class SyncEngineUnitTests : IDisposable
     }
 
     [Fact]
-    public async Task MassDeleteGuardUsesTheLiteralRule()
+    public async Task MassDeleteGuardAsksOnlyFromOneHundredDeletions()
+    {
+        for (var i = 0; i < 250; i++)
+            Write($"f{i:000}.txt", i.ToString());
+        await Pass();
+
+        // 99 deletions are just done...
+        for (var i = 0; i < 99; i++)
+            File.Delete(Local($"f{i:000}.txt"));
+        var r = await Pass();
+        Assert.Equal(PassOutcome.Completed, r.Outcome);
+        Assert.Equal(99, r.DeletedRemote);
+
+        // ...100 in one pass are blocked until allowed.
+        for (var i = 99; i < 199; i++)
+            File.Delete(Local($"f{i:000}.txt"));
+        r = await Pass();
+        Assert.Equal(PassOutcome.Blocked, r.Outcome);
+        Assert.Equal(BlockReason.MassDelete, r.BlockReason);
+        Assert.Equal(100, r.BlockedDeletes.Count);
+        Assert.NotNull(_api.Content("f099.txt"));
+
+        Assert.Equal(100, _engine.ApproveBlockedDeletions());
+        r = await Pass();
+        Assert.Equal(100, r.DeletedRemote);
+        Assert.Null(_api.Content("f099.txt"));
+    }
+
+    [Fact]
+    public async Task SmallNestLosesMostFilesWithoutAsking()
     {
         for (var i = 0; i < 10; i++)
             Write($"f{i}.txt", i.ToString());
         await Pass();
 
-        // 10 tracked: limit is min(20% x 10, 50) = 2. Two deletions pass...
-        File.Delete(Local("f0.txt"));
-        File.Delete(Local("f1.txt"));
+        for (var i = 0; i < 9; i++)
+            File.Delete(Local($"f{i}.txt"));
         var r = await Pass();
-        Assert.Equal(2, r.DeletedRemote);
+        Assert.Equal(PassOutcome.Completed, r.Outcome);
+        Assert.Equal(9, r.DeletedRemote);
 
-        // ...8 tracked now: limit 1.6, so two more deletions are blocked.
-        File.Delete(Local("f2.txt"));
-        File.Delete(Local("f3.txt"));
+        // Emptying the whole folder still asks: that is usually a wrong or unplugged drive.
+        File.Delete(Local("f9.txt"));
         r = await Pass();
-        Assert.Equal(PassOutcome.Blocked, r.Outcome);
-        Assert.Equal(BlockReason.MassDelete, r.BlockReason);
-        Assert.Equal(2, r.BlockedDeletes.Count);
-        Assert.NotNull(_api.Content("f2.txt"));
-
-        Assert.Equal(2, _engine.ApproveBlockedDeletions());
-        r = await Pass();
-        Assert.Equal(2, r.DeletedRemote);
-        Assert.Null(_api.Content("f2.txt"));
+        Assert.Equal(BlockReason.FolderEmpty, r.BlockReason);
+        Assert.NotNull(_api.Content("f9.txt"));
     }
 
     [Fact]
