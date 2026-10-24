@@ -1,8 +1,10 @@
 using Pairnets.Core.Client;
+using Pairnets.Tests.Infrastructure;
 
 namespace Pairnets.Tests.Unit;
 
 /// <summary>The way back from the browser: a second Pairnets pokes the running one through a named pipe.</summary>
+[Collection(OnTheirOwn.Name)]
 public sealed class AppActivationTests
 {
     // Short on purpose: on macOS the whole socket path (long temp folder + "CoreFxPipe_" + this) may not pass 104 bytes.

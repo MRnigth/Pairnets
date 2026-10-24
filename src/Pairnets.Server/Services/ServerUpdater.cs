@@ -44,8 +44,15 @@ public sealed class ServerUpdater(ServerPaths paths, SyncOptions options, TimePr
     {
         if (!Installed)
             return new UpdaterStatus(false, "missing", "This server was installed before self-update existed. Update it once by hand.");
-        var (status, writtenAt) = ReadStatusFile();
+        // Read in the order things happen, newest last: the last request, then its file, then status.json. update.sh
+        // writes its result before it deletes the request file, so a request file found gone means status.json already
+        // has the result. (Read the other way round, an update that had just finished could read as one that stopped
+        // without a result: the old status, then no request file.)
+        DateTimeOffset? lastRequest;
+        lock (_gate)
+            lastRequest = _lastRequest;
         var requestedAt = FileTime(RequestFile);
+        var (status, writtenAt) = ReadStatusFile();
         if (requestedAt is { } asked)
         {
             // update.sh keeps the request file until it ends, so a status written since the request is this run's progress.
@@ -56,11 +63,11 @@ public sealed class ServerUpdater(ServerPaths paths, SyncOptions options, TimePr
                     $"The updater did not start within {StartTimeout.TotalSeconds:0} seconds. On the server run: sudo systemctl reset-failed pairnets-update.path pairnets-update.service && sudo systemctl restart pairnets-update.path", asked);
             return new UpdaterStatus(true, "requested", "Waiting for the updater to start.", asked);
         }
-        if (status is not null && (_lastRequest is not { } last || writtenAt >= last - TimeSpan.FromSeconds(1)))
+        if (status is not null && (lastRequest is not { } last || writtenAt >= last - TimeSpan.FromSeconds(1)))
             return status;
-        if (_lastRequest is not null)
+        if (lastRequest is not null)
             return new UpdaterStatus(true, "failed",
-                "The updater stopped without reporting a result. Turn on Debug mode in the app to see its log.", _lastRequest);
+                "The updater stopped without reporting a result. Turn on Debug mode in the app to see its log.", lastRequest);
         return new UpdaterStatus(true, "idle");
     }
 
