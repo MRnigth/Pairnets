@@ -1844,7 +1844,8 @@ change was never seen.
     macOS runners are up to five times slower, and a whole window ran past CI's 10 minutes a test). One press over 2
     minutes, or a part over 9, ends the run with its name instead of a silent hang.
   * Short tests of waiting times (AppActivation, ServerUpdaterStatus) run on their own.
-  * The thread pool starts with 64 threads, because a 3-core runner adds threads slowly.
+  * Not done: starting the thread pool with more threads. It made the large-file memory test fail on macOS (the
+    shared buffer pool keeps buffers per thread, and that test counts them).
 * **Four small app bugs found on the way, fixed.**
   * The nest could say "The updater stopped without reporting a result" for an update that had just worked: it read
     status.json before the request file, which update.sh deletes after writing its result. It now reads them in the
