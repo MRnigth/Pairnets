@@ -667,9 +667,11 @@ public sealed class WindowsCloudFolder : ICloudFolder
         {
             // A placeholder of an older version: the new version's details, content left on the nest. Only while nobody
             // has it open and it is still the untouched placeholder (a change made here meanwhile is never thrown away).
+            // Open elsewhere for a moment (Explorer's preview, a virus scanner, the search index): tried again a few
+            // times, else the whole file would be downloaded instead.
             ok = WithHandle(fullPath, h => IsCloudOnly(fullPath) && Check(CfApi.CfUpdatePlaceholder(h, ref metadata, identity, identity.Length,
                 IntPtr.Zero, 0, CfApi.UpdateFlagVerifyInSync | CfApi.UpdateFlagMarkInSync | CfApi.UpdateFlagDehydrate, IntPtr.Zero, IntPtr.Zero)),
-                CfApi.OpenFlagExclusive | CfApi.OpenFlagWriteAccess);
+                CfApi.OpenFlagExclusive | CfApi.OpenFlagWriteAccess, attempts: OpenAttempts);
         }
         else
         {
@@ -1123,10 +1125,19 @@ public sealed class WindowsCloudFolder : ICloudFolder
             : 0;
 
     /// <summary>Opens a file or folder the way the cloud files API wants (never fetching its content) and runs <paramref name="action"/>.</summary>
-    private static bool WithHandle(string path, Func<IntPtr, bool> action, int flags = CfApi.OpenFlagWriteAccess)
+    /// <summary>How often a file that is open elsewhere is tried, <see cref="OpenRetry"/> apart, before giving up.</summary>
+    private const int OpenAttempts = 5;
+    private static readonly TimeSpan OpenRetry = TimeSpan.FromMilliseconds(100);
+
+    private static bool WithHandle(string path, Func<IntPtr, bool> action, int flags = CfApi.OpenFlagWriteAccess, int attempts = 1)
     {
-        if (!CfApi.Ok(CfApi.CfOpenFileWithOplock(path, flags, out var protectedHandle)))
-            return false;
+        IntPtr protectedHandle;
+        for (var attempt = 1; !CfApi.Ok(CfApi.CfOpenFileWithOplock(path, flags, out protectedHandle)); attempt++)
+        {
+            if (attempt >= attempts || !File.Exists(path))
+                return false;
+            Thread.Sleep(OpenRetry);
+        }
         try
         {
             return action(CfApi.CfGetWin32HandleFromProtectedHandle(protectedHandle));
