@@ -48,6 +48,9 @@ public sealed class ClickEverythingFixture : IAsyncLifetime
 
     internal Dictionary<string, Task<ClickReport>> Runs { get; } = [];
 
+    /// <summary>What each group has pressed so far (shared by its parts).</summary>
+    internal Dictionary<string, HashSet<string>> Pressed { get; } = [];
+
     public async Task InitializeAsync()
     {
         Directory.CreateDirectory(Folder);
@@ -167,14 +170,26 @@ public sealed class Stage : IAsyncDisposable
 /// handler the AXAML files name was pressed.
 /// </summary>
 [Collection(AvaloniaUi.Name)]
+[TestCaseOrderer("Pairnets.Tests.Ui.HandlerGuardLast", "Pairnets.Tests")]
 public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOutputHelper output) : IClassFixture<ClickEverythingFixture>
 {
     private sealed record Scene(string Where, Func<Stage, Task> Arrange);
 
     // ------------------------------------------------------------------ the tests
 
+    // The main window in four parts of its states, each a test of its own: all of it in one took over the 10 minutes CI
+    // gives one test on the slower macOS runners. (A control in states of two parts is pressed in both.)
     [AvaloniaFact]
-    public async Task TheMainWindow_EveryButtonDoesWhatItSays() => Pass(await RunAsync("main window"));
+    public async Task TheMainWindow_EveryButtonDoesWhatItSays_Part1() => Pass(await RunAsync("main window", 0));
+
+    [AvaloniaFact]
+    public async Task TheMainWindow_EveryButtonDoesWhatItSays_Part2() => Pass(await RunAsync("main window", 1));
+
+    [AvaloniaFact]
+    public async Task TheMainWindow_EveryButtonDoesWhatItSays_Part3() => Pass(await RunAsync("main window", 2));
+
+    [AvaloniaFact]
+    public async Task TheMainWindow_EveryButtonDoesWhatItSays_Part4() => Pass(await RunAsync("main window", 3));
 
     [AvaloniaFact]
     public async Task TheTrayPanel_EveryButtonDoesWhatItSays() => Pass(await RunAsync("tray panel"));
@@ -228,7 +243,10 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
     {
         var pressed = new HashSet<string>();
         foreach (var group in Groups.Keys)
-            pressed.UnionWith((await RunAsync(group)).Pressed);
+        {
+            for (var part = 0; part < PartsOf(group); part++)
+                pressed.UnionWith((await RunAsync(group, part)).Pressed);
+        }
         var never = AxamlHandlers()
             .Where(h => !pressed.Contains($"{h.View}.{h.Handler}"))
             .Select(h => $"The button {h.Handler} in {h.View}.axaml is never pressed by a test.")
@@ -1141,21 +1159,39 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
         public IEnumerable<string> HandlerNames => Handlers.Select(h => h[(h.LastIndexOf('.') + 1)..]).Where(n => n.StartsWith("On", StringComparison.Ordinal));
     }
 
-    private Task<ClickReport> RunAsync(string group)
+    private static int PartsOf(string group) => group == "main window" ? 4 : 1;
+
+    /// <summary>
+    /// Presses through one part of a group's scenes, once per test run (the handler guard reuses it). The parts before
+    /// it run first and share what was pressed, so each control is pressed once, as with the group in one go.
+    /// </summary>
+    private Task<ClickReport> RunAsync(string group, int part = 0)
     {
-        if (!fixture.Runs.TryGetValue(group, out var run))
-            fixture.Runs[group] = run = PressGroupAsync(Groups[group]);
+        var key = $"{group} {part}";
+        if (!fixture.Runs.TryGetValue(key, out var run))
+            fixture.Runs[key] = run = RunPartAsync(group, part);
         return run;
     }
 
-    private async Task<ClickReport> PressGroupAsync(Scene[] scenes)
+    private async Task<ClickReport> RunPartAsync(string group, int part)
+    {
+        if (part > 0)
+            await RunAsync(group, part - 1);
+        var scenes = Groups[group];
+        var size = (scenes.Length + PartsOf(group) - 1) / PartsOf(group);
+        if (!fixture.Pressed.TryGetValue(group, out var done))
+            fixture.Pressed[group] = done = [];
+        return await PressGroupAsync(scenes.Skip(part * size).Take(size).ToArray(), done);
+    }
+
+    private async Task<ClickReport> PressGroupAsync(Scene[] scenes, HashSet<string> done)
     {
         var report = new ClickReport();
         var picker = Dialogs.FolderPicker;
         Dialogs.FolderPicker = (_, _) => Task.FromResult<string?>(fixture.PickedFolder);
         try
         {
-            var done = new HashSet<string>(); // a control shared by several states is pressed once
+            // done: a control shared by several states is pressed once
             var recent = new Queue<string>();
             // The whole group, not one press: on a slow runner it takes minutes, but never this long.
             using var groupWatchdog = new Watchdog(() =>
@@ -1421,4 +1457,15 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
         XamlText.Views(RepoPaths.Of("src", "Pairnets.Desktop", "Views"), ".axaml")
             .SelectMany(v => v.Value.Select(h => (v.Key, h)))
             .OrderBy(h => h.Key, StringComparer.Ordinal);
+}
+
+/// <summary>
+/// Runs the handler guard after the tests whose presses it counts, so it reuses their runs instead of pressing
+/// everything again within one test (the rest keep their names' order).
+/// </summary>
+public sealed class HandlerGuardLast : Xunit.Sdk.ITestCaseOrderer
+{
+    public IEnumerable<TTestCase> OrderTestCases<TTestCase>(IEnumerable<TTestCase> testCases) where TTestCase : ITestCase =>
+        testCases.OrderBy(t => t.TestMethod.Method.Name == nameof(ClickEverythingTests.EveryHandlerInTheAxamlIsPressedByATest))
+            .ThenBy(t => t.TestMethod.Method.Name, StringComparer.Ordinal);
 }
