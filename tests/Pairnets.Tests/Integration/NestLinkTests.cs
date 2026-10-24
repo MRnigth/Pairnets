@@ -234,6 +234,29 @@ public sealed class NestLinkTests : IAsyncLifetime
         Assert.Equal("sand", await ReadAsync(_anna.Store, Folder + "/Photos/beach.jpg"));
     }
 
+    /// <summary>
+    /// Shared more while a pass was on its way: that pass read the link before the change, so it never looked at the new
+    /// folder. It used to move the cursors anyway, past the folder's older files, which then never came in.
+    /// </summary>
+    [Fact]
+    public async Task SharingMoreDuringAPassStillBringsTheOlderFiles()
+    {
+        await PutAsync(_oskarPc, "Photos/beach.jpg", "sand");
+        await PutAsync(_oskarPc, "Work/report.txt", "old news");
+        await LinkAsync(folders: ["Photos"]);
+        await PassAsync();
+        var passStarted = Links.Get(LinkId)!; // a pass reads the link here...
+
+        // What sharing more does (PATCH /api/relay/links/{id}), without the pass it starts on its own.
+        Assert.True(Links.Change(LinkId, LinkAccess.View, ["Photos", "Work"]));
+        Links.Rewind(LinkId);
+        // ...and finishes after the change.
+        await _anna.Services.GetRequiredService<LinkSync>().RunAsync(passStarted, _oskar.Client(_linkKey.Id, _linkKey.Key), CancellationToken.None);
+        await PassAsync();
+
+        Assert.Equal("old news", await ReadAsync(_anna.Store, Folder + "/Work/report.txt"));
+    }
+
     [Fact]
     public async Task ViewThenEditSendsWhatChangedHereMeanwhile()
     {
