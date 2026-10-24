@@ -177,25 +177,18 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
 
     // ------------------------------------------------------------------ the tests
 
-    // The main window in four parts of its states, each a test of its own: all of it in one took over the 10 minutes CI
-    // gives one test on the slower macOS runners. (A control in states of two parts is pressed in both.)
-    [AvaloniaFact]
-    public async Task TheMainWindow_EveryButtonDoesWhatItSays_Part1() => Pass(await RunAsync("main window", 0));
-
-    [AvaloniaFact]
-    public async Task TheMainWindow_EveryButtonDoesWhatItSays_Part2() => Pass(await RunAsync("main window", 1));
-
-    [AvaloniaFact]
-    public async Task TheMainWindow_EveryButtonDoesWhatItSays_Part3() => Pass(await RunAsync("main window", 2));
-
-    [AvaloniaFact]
-    public async Task TheMainWindow_EveryButtonDoesWhatItSays_Part4() => Pass(await RunAsync("main window", 3));
+    // The main window and the Settings page in parts of two states each, one test per part: a whole window in one test
+    // took over the 10 minutes CI gives a test on the slower macOS runners (they are up to five times slower).
+    [AvaloniaTheory]
+    [InlineData(1), InlineData(2), InlineData(3), InlineData(4), InlineData(5), InlineData(6), InlineData(7), InlineData(8), InlineData(9), InlineData(10)]
+    public async Task TheMainWindow_EveryButtonDoesWhatItSays(int part) => Pass(await RunAsync("main window", part - 1));
 
     [AvaloniaFact]
     public async Task TheTrayPanel_EveryButtonDoesWhatItSays() => Pass(await RunAsync("tray panel"));
 
-    [AvaloniaFact]
-    public async Task TheSettingsPage_EveryButtonDoesWhatItSays() => Pass(await RunAsync("settings"));
+    [AvaloniaTheory]
+    [InlineData(1), InlineData(2), InlineData(3)]
+    public async Task TheSettingsPage_EveryButtonDoesWhatItSays(int part) => Pass(await RunAsync("settings", part - 1));
 
     [AvaloniaFact]
     public async Task TheSignInWindow_EveryButtonDoesWhatItSays() => Pass(await RunAsync("sign-in"));
@@ -1159,11 +1152,12 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
         public IEnumerable<string> HandlerNames => Handlers.Select(h => h[(h.LastIndexOf('.') + 1)..]).Where(n => n.StartsWith("On", StringComparison.Ordinal));
     }
 
-    private static int PartsOf(string group) => group == "main window" ? 4 : 1;
+    private static int PartsOf(string group) => group switch { "main window" => 10, "settings" => 3, _ => 1 };
 
     /// <summary>
     /// Presses through one part of a group's scenes, once per test run (the handler guard reuses it). The parts before
-    /// it run first and share what was pressed, so each control is pressed once, as with the group in one go.
+    /// it run first and share what was pressed, so each control is pressed once, as with the group in one go. (A
+    /// control is pressed in the first state that shows it; pressed again in a later state it may do nothing new.)
     /// </summary>
     private Task<ClickReport> RunAsync(string group, int part = 0)
     {
@@ -1198,7 +1192,7 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
             {
                 lock (recent)
                     return $"the group ({report.Presses} presses, the last: {string.Join(" | ", recent)})";
-            }, TimeSpan.FromMinutes(8));
+            }, TimeSpan.FromMinutes(9));
             foreach (var scene in scenes)
             {
                 var queue = new Queue<string[]>();
@@ -1460,12 +1454,19 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
 }
 
 /// <summary>
-/// Runs the handler guard after the tests whose presses it counts, so it reuses their runs instead of pressing
-/// everything again within one test (the rest keep their names' order).
+/// The order of the ClickEverything tests: the main window's parts after the rest, each window's parts in turn (a part
+/// first runs the ones before it), and the handler guard last, so it reuses their runs instead of pressing everything
+/// again within one test.
 /// </summary>
 public sealed class HandlerGuardLast : Xunit.Sdk.ITestCaseOrderer
 {
     public IEnumerable<TTestCase> OrderTestCases<TTestCase>(IEnumerable<TTestCase> testCases) where TTestCase : ITestCase =>
-        testCases.OrderBy(t => t.TestMethod.Method.Name == nameof(ClickEverythingTests.EveryHandlerInTheAxamlIsPressedByATest))
-            .ThenBy(t => t.TestMethod.Method.Name, StringComparer.Ordinal);
+        testCases.OrderBy(t => t.TestMethod.Method.Name switch
+            {
+                nameof(ClickEverythingTests.EveryHandlerInTheAxamlIsPressedByATest) => 2,
+                var name when name.StartsWith("TheMainWindow_", StringComparison.Ordinal) => 1,
+                _ => 0,
+            })
+            .ThenBy(t => t.TestMethod.Method.Name, StringComparer.Ordinal)
+            .ThenBy(t => t.TestMethodArguments is [int part] ? part : 0);
 }

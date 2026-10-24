@@ -1840,8 +1840,9 @@ change was never seen.
   * A test that listens on the push channel makes one hub call after connecting, so the server has registered it.
   * A batch is written while the runner is paused, so the file watcher doesn't start a pass half-way through it.
   * The Avalonia window tests take turns (collection "Avalonia UI"): they share one UI thread and close each other's
-    windows. One press in ClickEverything that takes 2 minutes ends the run with its name, instead of CI's silent
-    10-minute hang.
+    windows. ClickEverything presses the main window and the Settings page in parts of two states (one test each;
+    macOS runners are up to five times slower, and a whole window ran past CI's 10 minutes a test). One press over 2
+    minutes, or a part over 9, ends the run with its name instead of a silent hang.
   * Short tests of waiting times (AppActivation, ServerUpdaterStatus) run on their own.
   * The thread pool starts with 64 threads, because a 3-core runner adds threads slowly.
 * **Four small app bugs found on the way, fixed.**
