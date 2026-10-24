@@ -161,20 +161,30 @@ public sealed class ServerUpdater(ServerPaths paths, SyncOptions options, TimePr
 
     private (UpdaterStatus? Status, DateTimeOffset? WrittenAt) ReadStatusFile()
     {
-        try
+        // Caught just while update.sh puts a new one in place (where that is not one atomic step, as on Windows), the
+        // file can't be read for a moment: read again, as "no status" could mean "stopped without a result".
+        for (var attempt = 1; ; attempt++)
         {
-            if (File.Exists(StatusFile))
+            try
             {
-                var status = JsonSerializer.Deserialize<UpdaterStatus>(File.ReadAllText(StatusFile), PairnetsJson.Options);
-                if (status is not null)
-                    return (status with { Installed = true }, FileTime(StatusFile));
+                if (File.Exists(StatusFile))
+                {
+                    var status = JsonSerializer.Deserialize<UpdaterStatus>(File.ReadAllText(StatusFile), PairnetsJson.Options);
+                    if (status is not null)
+                        return (status with { Installed = true }, FileTime(StatusFile));
+                }
+                return (null, null);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException && attempt < 5)
+            {
+                Thread.Sleep(10);
+            }
+            catch (Exception ex) when (ex is IOException or JsonException or UnauthorizedAccessException)
+            {
+                // A half-written status reads as none; the next read sees the full one.
+                return (null, null);
             }
         }
-        catch (Exception ex) when (ex is IOException or JsonException or UnauthorizedAccessException)
-        {
-            // A half-written status reads as none; the next read sees the full one.
-        }
-        return (null, null);
     }
 
     /// <summary>When the file was last written, or null when it is not there.</summary>
