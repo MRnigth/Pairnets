@@ -1852,9 +1852,14 @@ change was never seen.
     order they happen, and reads a status.json that is being replaced again instead of taking it for no result.
   * Renaming or deleting a folder on the Files page asked for a sync before removing the empty folder here, so on
     Windows that pass could keep the empty folder. The folder now goes first, tried again a few times while something
-    has it open. The same for a file there that is open elsewhere: its move is tried again, and it is forgotten under
-    its old name only once it has moved. It used to be forgotten first, so a move that failed left a "new" file that
-    the next sync sent back to the nest under the old name.
+    has it open. A file there that is open elsewhere is forgotten under its old name only once it has moved. It used
+    to be forgotten first, so a move that failed left a "new" file that the next sync sent back to the nest under the
+    old name. Now it stays known under that name and the next sync fetches the new one. Its move is not tried again:
+    a sync pass may already be fetching the new name, and a late move landing on top of it made a conflict copy.
+  * **Still open (not fixed here):** a sync pass the file watcher starts in the middle of a folder rename on the Files
+    page can read this computer before a file moved here and the nest after it moved there. It then fetches the file
+    while the move puts it there too, which leaves a conflict copy with the same content. The fix is to hold sync
+    passes while a Files-page move runs; that is a change to the sync runner, for its own branch.
   * Updating a placeholder that another program had open for a moment (Explorer, a virus scanner) downloaded the whole
     file instead, and marking a just-written file synced (then freeing it) waited for a later check. Both are now tried
     again a few times first.

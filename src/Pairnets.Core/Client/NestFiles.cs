@@ -421,7 +421,7 @@ public sealed class NestFiles : INestFiles
                 _session.State.UpsertRemote(result.Entry!);
                 if (_session.State.GetRemote(from) is { } old)
                     _session.State.UpsertRemote(old with { Deleted = true, Hash = null });
-                await FollowHereAsync(from, to).ConfigureAwait(false);
+                FollowHere(from, to);
                 return NestResult.Done;
             case ApiOutcome.NotSupported:
                 return NestResult.Fail(result.Message!);
@@ -434,39 +434,30 @@ public sealed class NestFiles : INestFiles
 
     /// <summary>
     /// The copy here follows a move on the nest: a file here moves along (the next sync records it), a placeholder is
-    /// removed (the next sync places one at the new name). A file another program has open for a moment (a sync pass
-    /// reading it, a virus scanner) is tried again a few times. If it still can't move, it stays as it was, still
-    /// known under its old name: the next sync then sees that name gone from the nest and fetches the new one, instead
-    /// of taking it for a new file and sending it back under the old name.
+    /// removed (the next sync places one at the new name). It is forgotten under its old name only once it has moved:
+    /// a file another program has open (on Windows it can't move then) stays as it was, still known under that name, so
+    /// the next sync sees the name gone from the nest and fetches the new one instead of sending it back. It is not
+    /// tried again: a sync pass may already be fetching the new name, and a late move would land on top of it.
     /// </summary>
-    private async Task FollowHereAsync(string from, string to)
+    private void FollowHere(string from, string to)
     {
         if (Local(from) is not { } source || !File.Exists(source) || Local(to) is not { } target)
             return;
-        for (var attempt = 1; ; attempt++)
+        try
         {
-            try
+            if (WhereNow(from) == FileWhere.IconOnly)
             {
-                if (WhereNow(from) == FileWhere.IconOnly)
-                {
-                    File.Delete(source);
-                    _session.State.RemoveFile(from);
-                    return;
-                }
-                Directory.CreateDirectory(Path.GetDirectoryName(target)!);
-                File.Move(source, target, overwrite: false);
+                File.Delete(source);
                 _session.State.RemoveFile(from);
                 return;
             }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-            {
-                if (attempt >= FolderRemoveAttempts || !File.Exists(source) || File.Exists(target))
-                {
-                    _log.LogInformation("The copy of {Path} here stays where it is: {Error}", from, ex.Message);
-                    return;
-                }
-            }
-            await Task.Delay(FolderRemoveRetry).ConfigureAwait(false);
+            Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+            File.Move(source, target, overwrite: false);
+            _session.State.RemoveFile(from);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _log.LogInformation("The copy of {Path} here stays where it is: {Error}", from, ex.Message);
         }
     }
 
