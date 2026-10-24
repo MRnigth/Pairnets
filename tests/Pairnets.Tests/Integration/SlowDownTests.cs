@@ -60,7 +60,7 @@ public class SlowDownTests : IAsyncLifetime
 
         var result = await pc.SyncAsync();
 
-        Assert.Equal(PassOutcome.Completed, result.Outcome);
+        Assert.True(result.Outcome == PassOutcome.Completed, result.ToString());
         Assert.Equal(0, result.Errors);
         Assert.Equal(20, result.Uploaded);
         Assert.Equal(20, _server.Store.ReadManifest(null).Entries.Count);

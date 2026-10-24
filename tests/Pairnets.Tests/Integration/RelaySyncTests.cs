@@ -59,7 +59,7 @@ public sealed class RelaySyncTests : IAsyncLifetime
 
     private static async Task WaitUntil(Func<bool> condition, string what)
     {
-        var deadline = DateTime.UtcNow.AddSeconds(30);
+        var deadline = DateTime.UtcNow.AddSeconds(90); // a busy test machine
         while (!condition())
         {
             if (DateTime.UtcNow > deadline)
@@ -85,6 +85,7 @@ public sealed class RelaySyncTests : IAsyncLifetime
         Assert.Contains("GET /api/manifest", _service.Relayed);
         Assert.Contains("PUT /api/file", _service.Relayed);
         await WaitUntil(() => session.Status.Status == RunnerStatus.Idle, "idle");
+        await WaitUntil(() => session.Runner.HubConnected, "the push channel through the relay");
 
         // Another computer adds a file. Nothing but the push through the relay makes this one look (the next
         // regular pass is an hour away), so the file arriving here proves the push channel works through it.

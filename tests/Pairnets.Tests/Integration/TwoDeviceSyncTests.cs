@@ -147,7 +147,7 @@ public class TwoDeviceSyncTests : IAsyncLifetime
             _desktop.Write($"d{i % 3}/f{i}.txt", "content " + i);
             _laptop.Write($"d{i % 3}/f{i}.txt", "content " + i);
         }
-        await _desktop.SyncAsync();
+        Completed(await _desktop.SyncUntilQuietAsync());
         var r = await _laptop.SyncAsync();
         Completed(r);
         Assert.Equal(0, r.Changes);
@@ -202,8 +202,9 @@ public class TwoDeviceSyncTests : IAsyncLifetime
     {
         for (var i = 0; i < 220; i++)
             _desktop.Write($"f{i:000}.txt", i.ToString());
-        await _desktop.SyncAsync();
-        await _laptop.SyncAsync();
+        Completed(await _desktop.SyncUntilQuietAsync());
+        Completed(await _laptop.SyncUntilQuietAsync());
+        Assert.Equal(220, _laptop.Files().Count);
 
         // 100 or more deletions on one side are blocked.
         for (var i = 0; i < 100; i++)
@@ -240,7 +241,7 @@ public class TwoDeviceSyncTests : IAsyncLifetime
     {
         for (var i = 0; i < 110; i++)
             _desktop.Write($"f{i:000}.txt", i.ToString());
-        await _desktop.SyncAsync();
+        Completed(await _desktop.SyncUntilQuietAsync());
         for (var i = 0; i < 100; i++)
             _desktop.Delete($"f{i:000}.txt");
         Assert.Equal(PassOutcome.Blocked, (await _desktop.SyncAsync()).Outcome);
@@ -405,6 +406,7 @@ public class TwoDeviceSyncTests : IAsyncLifetime
         }
         _desktop.Hooks.BeforeTransfer = Track;
         var up = await _desktop.SyncAsync();
+        Completed(up);
         Assert.Equal(24, up.Uploaded);
         Assert.Equal(4, peak);
 
