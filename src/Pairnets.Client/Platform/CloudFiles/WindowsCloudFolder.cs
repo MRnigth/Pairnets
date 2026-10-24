@@ -601,7 +601,7 @@ public sealed class WindowsCloudFolder : ICloudFolder
             if ((state & CfApi.PlaceholderStatePlaceholder) == 0)
                 return Check(CfApi.CfConvertToPlaceholder(h, identity, identity.Length, CfApi.ConvertFlagMarkInSync, IntPtr.Zero, IntPtr.Zero));
             return Check(CfApi.CfUpdatePlaceholder(h, IntPtr.Zero, identity, identity.Length, IntPtr.Zero, 0, CfApi.UpdateFlagMarkInSync, IntPtr.Zero, IntPtr.Zero));
-        }, CfApi.OpenFlagExclusive | CfApi.OpenFlagWriteAccess); // nobody writes to it meanwhile
+        }, CfApi.OpenFlagExclusive | CfApi.OpenFlagWriteAccess, attempts: OpenAttempts); // nobody writes to it meanwhile; open elsewhere for a moment: tried again
         if (ok)
             _marked[fullPath] = hash;
         else
@@ -610,7 +610,8 @@ public sealed class WindowsCloudFolder : ICloudFolder
             WithHandle(fullPath, h => Check(CfApi.CfSetPinState(h, CfApi.PinStatePinned, 0, IntPtr.Zero))); // never freed
         else if (ok && Mode == CloudFolderMode.OnDemand
             && (_freeWhenSynced.TryRemove(LongPath(fullPath), out _) || File.GetAttributes(fullPath).HasFlag(CloudPlaceholders.Unpinned)))
-            WithHandle(fullPath, h => Check(CfApi.CfDehydratePlaceholder(h, 0, CfApi.Eof, 0, IntPtr.Zero)), CfApi.OpenFlagExclusive | CfApi.OpenFlagWriteAccess); // "Free up space" waited for this
+            WithHandle(fullPath, h => Check(CfApi.CfDehydratePlaceholder(h, 0, CfApi.Eof, 0, IntPtr.Zero)), CfApi.OpenFlagExclusive | CfApi.OpenFlagWriteAccess,
+                attempts: OpenAttempts); // "Free up space" waited for this
         MarkFoldersAbove(fullPath);
     }
 
