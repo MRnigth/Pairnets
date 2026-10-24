@@ -95,6 +95,13 @@ public class NestFilesTests : IAsyncLifetime
         }
     }
 
+    /// <summary>What a folder here still holds (for a message), or "nothing" once it is gone or empty.</summary>
+    private string Inside(string folder) =>
+        Directory.Exists(Here(folder))
+            ? string.Join(", ", Directory.EnumerateFileSystemEntries(Here(folder), "*", new EnumerationOptions { RecurseSubdirectories = true, AttributesToSkip = 0 })
+                .Select(e => Path.GetRelativePath(_folder.Path, e))) is { Length: > 0 } all ? all : "nothing (empty)"
+            : "nothing";
+
     private async Task OnTheNestAsync(params (string Path, string Content)[] files)
     {
         foreach (var (path, content) in files)
@@ -273,11 +280,11 @@ public class NestFilesTests : IAsyncLifetime
 
         Assert.True((await session.Files.RenameAsync("Trip", "Trip 2")).Ok);
         Assert.Equal("b", File.ReadAllText(Here("Trip 2/day 1/b.txt")));
-        Assert.False(Directory.Exists(Here("Trip")));
+        Assert.False(Directory.Exists(Here("Trip")), "still here: " + Inside("Trip"));
 
         await WaitUntil(() => session.Status.Status == RunnerStatus.Idle, "idle");
         Assert.True((await session.Files.DeleteAsync("Trip 2")).Ok);
-        Assert.False(Directory.Exists(Here("Trip 2")));
+        Assert.False(Directory.Exists(Here("Trip 2")), "still here: " + Inside("Trip 2"));
         Assert.Null(OnNest("Trip 2/a.txt"));
     }
 

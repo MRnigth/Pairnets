@@ -167,9 +167,11 @@ public sealed class RelaySyncTests : IAsyncLifetime
 
         _service.NestOnline = false;
         session.SyncNow();
-        await WaitUntil(() => session.Status.Status == RunnerStatus.Offline, "offline");
-        Assert.Equal(ServiceErrors.NestOfflineMessage, session.Status.DetailText);
-        Assert.Equal("Not connected", session.Status.ConnectionText);
+        // One status, not two reads: the app tries again every 200 ms here, which can change it in between.
+        StatusSnapshot? offline = null;
+        await WaitUntil(() => (offline = session.Status).Status == RunnerStatus.Offline, "offline");
+        Assert.Equal(ServiceErrors.NestOfflineMessage, offline!.DetailText);
+        Assert.Equal("Not connected", offline.ConnectionText);
         Assert.Contains(session.Activity.Items, i => i.Kind == ActivityKind.Offline && i.Text.Contains(ServiceErrors.NestOfflineMessage, StringComparison.Ordinal));
         Assert.DoesNotContain(session.Activity.Items, i => i.Text.Contains("tunnel", StringComparison.OrdinalIgnoreCase));
 
