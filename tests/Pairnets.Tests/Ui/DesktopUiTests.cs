@@ -131,6 +131,7 @@ public sealed class SampleActions : ITrayActions
 }
 
 /// <summary>Loads the macOS/Linux windows headlessly: XAML parses, controls bind, states render.</summary>
+[Collection(AvaloniaUi.Name)]
 public class DesktopUiTests
 {
     [AvaloniaFact]

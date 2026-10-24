@@ -14,6 +14,7 @@ namespace Pairnets.Tests.Ui;
 /// The Files page ("All files" and "Deleted"), Clean up, the pop-ups of "Where your files live" and the Settings card in
 /// the Mac/Linux app, headless, with the nest's files in memory.
 /// </summary>
+[Collection(AvaloniaUi.Name)]
 public class FilesPageUiTests
 {
     private static readonly ServerInfo Server = new("id", 1, 1, "1.0.60", 3L << 30, 1L << 40);

@@ -23,6 +23,7 @@ namespace Pairnets.Tests.Ui;
 /// only through its windows, its tray menu and the nest's website, as a person would. The Windows app's tests
 /// (tests/Pairnets.Client.Tests) use the same scenario names.
 /// </summary>
+[Collection(AvaloniaUi.Name)]
 public sealed class DesktopControllerTests
 {
     // ------------------------------------------------------------------ first run
@@ -316,16 +317,21 @@ public sealed class DesktopControllerTests
         await app.WaitUntilIdleAsync();
         var main = app.MainWindow;
         for (var i = 0; i < 210; i++)
-            File.WriteAllText(Path.Combine(app.Folder, $"file{i:000}.txt"), $"file {i}");
+        {
+            var path = Path.Combine(app.Folder, $"file{i:000}.txt");
+            File.WriteAllText(path, $"file {i}");
+            File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddMinutes(-1)); // all in one pass, not the ones written last 2 s later
+        }
         PressSyncNow(app, main);
-        await app.WaitForNestAsync(f => f.Count == 210, "the 210 files to reach the nest");
+        // Generous: 210 uploads on a busy test machine (this test is about the question, not the speed).
+        await app.WaitForNestAsync(f => f.Count == 210, "the 210 files to reach the nest", seconds: 120);
         await app.WaitUntilIdleAsync();
 
         // Deleting 100 at once blocks the pass until someone decides (fewer are just done).
         for (var i = 0; i < 100; i++)
             File.Delete(Path.Combine(app.Folder, $"file{i:000}.txt"));
         PressSyncNow(app, main);
-        await Wait.Until(() => app.App.Session!.Status is { Status: RunnerStatus.Blocked, BlockReason: BlockReason.MassDelete }, "the deletions to be blocked");
+        await Wait.Until(() => app.App.Session!.Status is { Status: RunnerStatus.Blocked, BlockReason: BlockReason.MassDelete }, "the deletions to be blocked", seconds: 60);
         await Wait.Until(() => app.Platform.Notices.Any(n => n.Title == "Deletions blocked"), "a \"Deletions blocked\" notification");
         Assert.Equal(210, (await app.NestFilesAsync()).Count); // nothing was deleted on the nest
         app.App.RefreshNow();
@@ -335,17 +341,17 @@ public sealed class DesktopControllerTests
         var question = await app.DialogAsync("Pairnets – allow deletions?");
         Assert.Contains("file000.txt", AppUnderTest.TextOf(question));
         await app.AnswerAsync("Pairnets – allow deletions?", "Delete 100 files"); // the buttons say what they do, not Yes/No
-        await app.WaitForNestAsync(f => f.Count == 110 && !f.ContainsKey("file000.txt"), "the 100 deletions to reach the nest");
+        await app.WaitForNestAsync(f => f.Count == 110 && !f.ContainsKey("file000.txt"), "the 100 deletions to reach the nest", seconds: 90);
         await app.WaitUntilIdleAsync();
 
         // Again, decided from the tray menu this time.
         for (var i = 100; i < 200; i++)
             File.Delete(Path.Combine(app.Folder, $"file{i:000}.txt"));
         Person.Click(app.TrayItem("Sync now"));
-        await Wait.Until(() => app.App.Session!.Status.BlockReason == BlockReason.MassDelete, "the second deletions to be blocked");
+        await Wait.Until(() => app.App.Session!.Status.BlockReason == BlockReason.MassDelete, "the second deletions to be blocked", seconds: 60);
         Person.Click(app.TrayItem("Allow these deletions (100)…"));
         await app.AnswerAsync("Pairnets – allow deletions?", "Delete 100 files"); // the buttons say what they do, not Yes/No
-        await app.WaitForNestAsync(f => f.Count == 10, "the second deletions to reach the nest");
+        await app.WaitForNestAsync(f => f.Count == 10, "the second deletions to reach the nest", seconds: 90);
         Assert.Equal("No action needed", app.TrayItem("No action needed").Header);
     }
 

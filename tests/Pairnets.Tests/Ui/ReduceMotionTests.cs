@@ -6,6 +6,7 @@ using Pairnets.Tests.Infrastructure;
 namespace Pairnets.Tests.Ui;
 
 /// <summary>The Mac/Linux app keeps still when the system asks for less motion, like the Windows app (design review N2).</summary>
+[Collection(AvaloniaUi.Name)]
 public class ReduceMotionTests
 {
     [AvaloniaFact]

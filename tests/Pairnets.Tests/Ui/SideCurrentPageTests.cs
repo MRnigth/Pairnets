@@ -14,6 +14,7 @@ namespace Pairnets.Tests.Ui;
 /// The left side shows where you are: this computer's row while the Overview is open, the nest's row while Computers is
 /// open, soft blue; a row with a problem keeps its warm colour and gets a blue ring instead.
 /// </summary>
+[Collection(AvaloniaUi.Name)]
 public class SideCurrentPageTests
 {
     private static readonly DateTimeOffset Utc = DateTimeOffset.UtcNow;

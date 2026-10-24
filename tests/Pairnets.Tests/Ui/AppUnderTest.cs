@@ -148,14 +148,14 @@ public sealed class AppUnderTest : IAsyncDisposable
         return manifest.Entries.Where(e => !e.Deleted).ToDictionary(e => e.Path, e => e.Size);
     }
 
-    public async Task WaitForNestAsync(Func<Dictionary<string, long>, bool> condition, string what)
+    public async Task WaitForNestAsync(Func<Dictionary<string, long>, bool> condition, string what, int seconds = 30)
     {
-        var deadline = DateTime.UtcNow.AddSeconds(30);
+        var deadline = DateTime.UtcNow.AddSeconds(seconds);
         Dictionary<string, long> files;
         while (!condition(files = await NestFilesAsync()))
         {
             if (DateTime.UtcNow > deadline)
-                throw new Xunit.Sdk.XunitException($"Waited 30 seconds, but {what} did not happen. The nest has: {string.Join(", ", files.Keys)}");
+                throw new Xunit.Sdk.XunitException($"Waited {seconds} seconds, but {what} did not happen. The nest has: {string.Join(", ", files.Keys)}");
             await Task.Delay(100);
         }
     }

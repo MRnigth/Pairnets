@@ -15,6 +15,7 @@ namespace Pairnets.Tests.Ui;
 /// The sign-in window's account steps in the Mac/Linux app (the Windows app is the same, page for page), driven by
 /// pressing their buttons against a stand-in Pairnets service: sign in → finish in the browser → no nest yet → the folder.
 /// </summary>
+[Collection(AvaloniaUi.Name)]
 public class AccountSignInUiTests
 {
     /// <summary>Keeps the key readable, so the test can see what would be saved.</summary>
@@ -145,8 +146,11 @@ public class AccountSignInUiTests
         Click(view.AccountCancelButton);
         Assert.Equal(SignInStep.Account, view.Step);
         Assert.False(view.AccountOutcomeBox.IsVisible);
-        var polls = service.Polls;
+        // A poll already on its way when Cancel was pressed may still land: counted from after that.
         Thread.Sleep(300);
+        Dispatcher.UIThread.RunJobs();
+        var polls = service.Polls;
+        Thread.Sleep(600);
         Dispatcher.UIThread.RunJobs();
         Assert.Equal(polls, service.Polls); // the sign-in stopped asking
         Assert.Equal(SignInStep.Account, view.Step);

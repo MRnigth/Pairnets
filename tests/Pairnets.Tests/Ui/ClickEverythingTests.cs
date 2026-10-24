@@ -166,6 +166,7 @@ public sealed class Stage : IAsyncDisposable
 /// button that cannot be clicked (hidden or covered) all fail in plain English. Last, a guard checks that every
 /// handler the AXAML files name was pressed.
 /// </summary>
+[Collection(AvaloniaUi.Name)]
 public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOutputHelper output) : IClassFixture<ClickEverythingFixture>
 {
     private sealed record Scene(string Where, Func<Stage, Task> Arrange);
@@ -1190,6 +1191,7 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
             e.Handled = true;
         };
         var label = path[^1];
+        using var watchdog = new Watchdog($"pressing {string.Join(" > ", path)} on {scene.Where}");
         var stage = new Stage(scene.Where);
         Dispatcher.UIThread.UnhandledException += onCrash;
         try
@@ -1252,6 +1254,20 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
                 report.Problems.Add($"Pressing '{label}' on {scene.Where} crashed: {crashes[0].GetType().Name}: {crashes[0].Message}");
             await stage.DisposeAsync();
         }
+    }
+
+    /// <summary>
+    /// Ends the test run at once, naming the press, when one press takes minutes (the UI thread is stuck), instead of
+    /// the silent 10-minute hang that CI's blame timeout ends with a dump. It runs on a pool thread, so it fires even then.
+    /// </summary>
+    private sealed class Watchdog(string what) : IDisposable
+    {
+        private static readonly TimeSpan Limit = TimeSpan.FromMinutes(2);
+
+        private readonly Timer _timer = new(_ => Environment.FailFast(
+            $"ClickEverythingTests: {what} did not finish in {Limit.TotalMinutes:0} minutes; the UI thread is stuck."), null, Limit, Timeout.InfiniteTimeSpan);
+
+        public void Dispose() => _timer.Dispose();
     }
 
     /// <summary>What pressing <paramref name="target"/> should do; null (with the reason noted) when nobody said.</summary>

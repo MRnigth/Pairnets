@@ -15,6 +15,7 @@ namespace Pairnets.Tests.Ui;
 /// whole-folder row without "Only on the nest"), the questions naming what a choice changes, the line under the card while
 /// files come back, and the Overview's nest-only folders. Written when PAIRNETS_SCREENSHOT_DIR is set.
 /// </summary>
+[Collection(AvaloniaUi.Name)]
 public class NestOnlyScreenshotTests
 {
     private static readonly List<Window> Opened = [];
