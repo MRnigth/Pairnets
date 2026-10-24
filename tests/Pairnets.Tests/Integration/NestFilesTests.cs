@@ -279,8 +279,10 @@ public class NestFilesTests : IAsyncLifetime
         await WaitIdle(session);
 
         Assert.True((await session.Files.RenameAsync("Trip", "Trip 2")).Ok);
+        // Mostly at once; a file another program had open (a virus scanner) follows with the sync the rename starts.
+        await WaitUntil(() => !Directory.Exists(Here("Trip")) && File.Exists(Here("Trip 2/a.txt")) && File.Exists(Here("Trip 2/day 1/b.txt")),
+            "the folder here under its new name, and none left under the old one");
         Assert.Equal("b", File.ReadAllText(Here("Trip 2/day 1/b.txt")));
-        Assert.False(Directory.Exists(Here("Trip")), "still here: " + Inside("Trip"));
 
         await WaitUntil(() => session.Status.Status == RunnerStatus.Idle, "idle");
         Assert.True((await session.Files.DeleteAsync("Trip 2")).Ok);

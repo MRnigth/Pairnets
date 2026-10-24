@@ -23,7 +23,9 @@ public class LargeFileStreamingTests : IAsyncLifetime
 
     public async Task InitializeAsync()
     {
-        _server = await TestServer.StartAsync();
+        // The short stall the tests used to have: a piece sent again on a slow runner leaves its first try's buffers on the
+        // server until the stall ends, and after 30 s those would still count as memory in use.
+        _server = await TestServer.StartAsync(config: TestServer.ShortStall());
         _desktop = new Device("desktop", _server);
         _laptop = new Device("laptop", _server);
     }
