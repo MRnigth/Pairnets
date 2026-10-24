@@ -1156,6 +1156,13 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
         try
         {
             var done = new HashSet<string>(); // a control shared by several states is pressed once
+            var recent = new Queue<string>();
+            // The whole group, not one press: on a slow runner it takes minutes, but never this long.
+            using var groupWatchdog = new Watchdog(() =>
+            {
+                lock (recent)
+                    return $"the group ({report.Presses} presses, the last: {string.Join(" | ", recent)})";
+            }, TimeSpan.FromMinutes(8));
             foreach (var scene in scenes)
             {
                 var queue = new Queue<string[]>();
@@ -1169,8 +1176,21 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
                 }
                 while (queue.TryDequeue(out var path))
                 {
-                    if (done.Add(string.Join(" > ", path)))
-                        await PressPathAsync(scene, path, queue, report);
+                    var key = string.Join(" > ", path);
+                    if (path.Length > MaxMenuDepth)
+                    {
+                        report.Problems.Add($"On {scene.Where}, menus keep opening menus: {key}.");
+                        continue;
+                    }
+                    if (!done.Add(key))
+                        continue;
+                    lock (recent)
+                    {
+                        recent.Enqueue($"{scene.Where}: {key}");
+                        if (recent.Count > 8)
+                            recent.Dequeue();
+                    }
+                    await PressPathAsync(scene, path, queue, report);
                 }
             }
         }
@@ -1191,7 +1211,7 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
             e.Handled = true;
         };
         var label = path[^1];
-        using var watchdog = new Watchdog($"pressing {string.Join(" > ", path)} on {scene.Where}");
+        using var watchdog = new Watchdog(() => $"pressing {string.Join(" > ", path)} on {scene.Where}", TimeSpan.FromMinutes(2));
         var stage = new Stage(scene.Where);
         Dispatcher.UIThread.UnhandledException += onCrash;
         try
@@ -1260,15 +1280,20 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
     /// Ends the test run at once, naming the press, when one press takes minutes (the UI thread is stuck), instead of
     /// the silent 10-minute hang that CI's blame timeout ends with a dump. It runs on a pool thread, so it fires even then.
     /// </summary>
-    private sealed class Watchdog(string what) : IDisposable
+    private sealed class Watchdog(Func<string> what, TimeSpan limit) : IDisposable
     {
-        private static readonly TimeSpan Limit = TimeSpan.FromMinutes(2);
-
-        private readonly Timer _timer = new(_ => Environment.FailFast(
-            $"ClickEverythingTests: {what} did not finish in {Limit.TotalMinutes:0} minutes; the UI thread is stuck."), null, Limit, Timeout.InfiniteTimeSpan);
+        private readonly Timer _timer = new(_ =>
+        {
+            var message = $"ClickEverythingTests: {what()} did not finish in {limit.TotalMinutes:0} minutes.";
+            Console.Error.WriteLine(message); // FailFast's own text does not always reach the CI log
+            Environment.FailFast(message);
+        }, null, limit, Timeout.InfiniteTimeSpan);
 
         public void Dispose() => _timer.Dispose();
     }
+
+    /// <summary>A menu in a menu in a menu is as deep as the app goes.</summary>
+    private const int MaxMenuDepth = 4;
 
     /// <summary>What pressing <paramref name="target"/> should do; null (with the reason noted) when nobody said.</summary>
     private static Check? CheckFor(Stage stage, Pressable target, ClickReport report)
