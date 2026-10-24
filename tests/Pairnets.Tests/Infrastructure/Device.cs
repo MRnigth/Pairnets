@@ -100,12 +100,20 @@ public sealed class Device : IAsyncDisposable
 
     public Task<PassResult> SyncAsync(bool full = false) => Engine.RunPassAsync(new PassOptions("test", full), CancellationToken.None);
 
-    /// <summary>Runs passes until one changes nothing (and is not waiting for retries).</summary>
+    /// <summary>
+    /// Runs passes until one changes nothing (and is not waiting for retries). A pass that ends "Offline" (on a busy
+    /// test machine one slow request can do that) is run again, as the app would.
+    /// </summary>
     public async Task<PassResult> SyncUntilQuietAsync(int maxPasses = 10)
     {
         for (var i = 0; i < maxPasses; i++)
         {
             var r = await SyncAsync();
+            if (r.Outcome == PassOutcome.Offline && i < maxPasses - 1)
+            {
+                await Task.Delay(200);
+                continue;
+            }
             if (r.Outcome != PassOutcome.Completed || (r.Changes == 0 && !r.WantsRetry))
                 return r;
         }

@@ -14,7 +14,7 @@ public class ServerApiTests : IAsyncLifetime
 {
     private TestServer _server = null!;
 
-    public async Task InitializeAsync() => _server = await TestServer.StartAsync();
+    public async Task InitializeAsync() => _server = await TestServer.StartAsync(config: TestServer.ShortStall()); // the stalled-upload test
 
     public async Task DisposeAsync() => await _server.DisposeAsync();
 
