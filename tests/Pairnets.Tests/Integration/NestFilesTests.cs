@@ -288,6 +288,31 @@ public class NestFilesTests : IAsyncLifetime
         Assert.Null(OnNest("Trip 2/a.txt"));
     }
 
+    /// <summary>
+    /// Renamed while another program has the file here open (on Windows it can't move then): it used to stay under its
+    /// old name as a file Pairnets no longer knew, and the next sync sent it back to the nest under that name.
+    /// </summary>
+    [Fact]
+    public async Task AFileOpenElsewhereDuringARenameNeverComesBackUnderItsOldName()
+    {
+        await OnTheNestAsync(("Trip/a.txt", "a"));
+        await using var session = Start();
+        await WaitUntil(() => File.Exists(Here("Trip/a.txt")), "the download");
+        await WaitIdle(session);
+
+        using (new FileStream(Here("Trip/a.txt"), FileMode.Open, FileAccess.Read, FileShare.None)) // for as long as the rename tries
+        {
+            var renamed = await session.Files.RenameAsync("Trip/a.txt", "b.txt");
+            Assert.True(renamed.Ok, renamed.Problem);
+        }
+        session.Runner.RequestSync("test");
+
+        await WaitUntil(() => File.Exists(Here("Trip/b.txt")) && !File.Exists(Here("Trip/a.txt")), "the file here under its new name");
+        await WaitUntil(() => session.Status.Status == RunnerStatus.Idle, "idle");
+        Assert.Null(OnNest("Trip/a.txt"));
+        Assert.Equal("a", OnNest("Trip/b.txt"));
+    }
+
     [Fact]
     public async Task WhileTheNestIsFullOnlyOpeningWorks()
     {
