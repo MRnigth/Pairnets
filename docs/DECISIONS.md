@@ -1850,9 +1850,12 @@ change was never seen.
     order they happen, and reads a status.json that is being replaced again instead of taking it for no result.
   * Renaming or deleting a folder on the Files page asked for a sync before removing the empty folder here, so on
     Windows that pass could keep the empty folder. The folder now goes first, tried again a few times while something
-    has it open.
+    has it open. The same for a file there that is open elsewhere: its move is tried again, and it is forgotten under
+    its old name only once it has moved. It used to be forgotten first, so a move that failed left a "new" file that
+    the next sync sent back to the nest under the old name.
   * Updating a placeholder that another program had open for a moment (Explorer, a virus scanner) downloaded the whole
-    file instead. It is now tried again a few times first.
+    file instead, and marking a just-written file synced (then freeing it) waited for a later check. Both are now tried
+    again a few times first.
   * A linked nest whose owner shared more folders while a link pass was running: that pass then wrote its old place
     back over the restart that sharing more makes, so the new folders' older files never came in. A pass now moves
     the cursors only while the link is as it found it (same cursors, access and folders); otherwise the next pass
