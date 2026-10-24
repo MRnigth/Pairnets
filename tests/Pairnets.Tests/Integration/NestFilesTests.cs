@@ -76,16 +76,30 @@ public class NestFilesTests : IAsyncLifetime
 
     private string Here(string rel) => Path.Combine(_folder.Path, rel.Replace('/', Path.DirectorySeparatorChar));
 
-    private string? OnNest(string path) =>
-        _server.Store.ReadManifest(null).Entries.FirstOrDefault(e => e.Path == path && !e.Deleted) is { } e
-            ? File.ReadAllText(Path.Combine(_server.Paths.Files, path.Replace('/', Path.DirectorySeparatorChar)))
-            : null;
+    // Read straight from the nest's folder: while the nest stores a new version the file is gone (or busy) for a
+    // moment, so a read that fails is tried again.
+    private string? OnNest(string path)
+    {
+        for (var attempt = 1; ; attempt++)
+        {
+            if (_server.Store.ReadManifest(null).Entries.FirstOrDefault(e => e.Path == path && !e.Deleted) is null)
+                return null;
+            try
+            {
+                return File.ReadAllText(Path.Combine(_server.Paths.Files, path.Replace('/', Path.DirectorySeparatorChar)));
+            }
+            catch (IOException) when (attempt < 50)
+            {
+                Thread.Sleep(50);
+            }
+        }
+    }
 
     private async Task OnTheNestAsync(params (string Path, string Content)[] files)
     {
         foreach (var (path, content) in files)
             _other.Write(path, content);
-        Assert.Equal(PassOutcome.Completed, (await _other.SyncAsync()).Outcome);
+        Assert.Equal(PassOutcome.Completed, (await _other.SyncUntilQuietAsync()).Outcome);
     }
 
     [Fact]

@@ -374,6 +374,7 @@ public sealed class NestFiles : INestFiles
         if (moves.Count == 0)
             return NestResult.Fail("This is no longer on your nest.");
         var caseOnly = PathRules.CaseKey(from) == PathRules.CaseKey(to);
+        var finished = false;
         try
         {
             foreach (var (entry, target) in moves)
@@ -394,6 +395,7 @@ public sealed class NestFiles : INestFiles
                 if (!moved.Ok)
                     return moved;
             }
+            finished = true;
         }
         catch (Exception ex) when (ex is PairnetsNetworkException or PairnetsAuthException or PairnetsProtocolException)
         {
@@ -401,10 +403,11 @@ public sealed class NestFiles : INestFiles
         }
         finally
         {
+            // The empty folder goes before the sync is asked for: a pass reading it while it is removed keeps it on Windows.
+            if (finished && !caseOnly)
+                await RemoveEmptyFolderAsync(from).ConfigureAwait(false);
             _session.Runner.RequestSync("moved on the Files page");
         }
-        if (!caseOnly)
-            RemoveEmptyFolder(from);
         _session.Activity.Add(ActivityKind.Info, to, $"Moved {PathRules.FileName(from)} to {to}", _clock);
         return NestResult.Done;
     }
@@ -455,22 +458,38 @@ public sealed class NestFiles : INestFiles
         }
     }
 
+    private const int FolderRemoveAttempts = 10;
+    private static readonly TimeSpan FolderRemoveRetry = TimeSpan.FromMilliseconds(100);
+
     /// <summary>
     /// After a folder was deleted or moved away on the nest and its files went from here, the folder here (and the
     /// empty folders in it) goes too, so no empty shell stays in the Pairnets folder. Anything still in it (a file the
-    /// nest did not know, a link) keeps it.
+    /// nest did not know, a link) keeps it. A folder another program (a pass started by the file watcher, Explorer, a
+    /// virus scanner) is reading for a moment is tried again a few times: on Windows it can't go, or only goes once that
+    /// program lets go of it.
     /// </summary>
-    private void RemoveEmptyFolder(string path)
+    private async Task RemoveEmptyFolderAsync(string path)
     {
-        if (Local(path) is not { } full || !Directory.Exists(full))
+        if (Local(path) is not { } full)
             return;
-        try
+        for (var attempt = 1; Directory.Exists(full); attempt++)
         {
-            RemoveIfEmpty(new DirectoryInfo(full));
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            _log.LogInformation("The empty folder {Path} stays here: {Error}", path, ex.Message);
+            try
+            {
+                if (!RemoveIfEmpty(new DirectoryInfo(full)))
+                    return; // something is still in it
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                if (attempt >= FolderRemoveAttempts)
+                {
+                    _log.LogInformation("The empty folder {Path} stays here: {Error}", path, ex.Message);
+                    return;
+                }
+            }
+            if (attempt >= FolderRemoveAttempts)
+                return;
+            await Task.Delay(FolderRemoveRetry).ConfigureAwait(false);
         }
 
         static bool RemoveIfEmpty(DirectoryInfo dir)
@@ -496,6 +515,7 @@ public sealed class NestFiles : INestFiles
         var files = FilesUnder(path);
         if (files.Count == 0)
             return NestResult.Fail("This is no longer on your nest.");
+        var finished = false;
         try
         {
             foreach (var entry in files)
@@ -511,6 +531,7 @@ public sealed class NestFiles : INestFiles
                     _session.Trash.Delete(here);
                 }
             }
+            finished = true;
         }
         catch (Exception ex) when (ex is PairnetsNetworkException or PairnetsAuthException or PairnetsProtocolException or IOException or UnauthorizedAccessException)
         {
@@ -518,9 +539,11 @@ public sealed class NestFiles : INestFiles
         }
         finally
         {
+            // As for a move: the empty folder first, then the sync.
+            if (finished)
+                await RemoveEmptyFolderAsync(path).ConfigureAwait(false);
             _session.Runner.RequestSync("deleted on the Files page");
         }
-        RemoveEmptyFolder(path);
         _session.Activity.Add(ActivityKind.DeletedOnServer, path, $"Deleted on the nest: {path} (it can be restored from History)", _clock);
         return NestResult.Done;
     }
