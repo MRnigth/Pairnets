@@ -1844,14 +1844,18 @@ change was never seen.
     10-minute hang.
   * Short tests of waiting times (AppActivation, ServerUpdaterStatus) run on their own.
   * The thread pool starts with 64 threads, because a 3-core runner adds threads slowly.
-* **Three small app bugs found on the way, fixed.**
+* **Four small app bugs found on the way, fixed.**
   * The nest could say "The updater stopped without reporting a result" for an update that had just worked: it read
     status.json before the request file, which update.sh deletes after writing its result. It now reads them in the
-    order they happen.
+    order they happen, and reads a status.json that is being replaced again instead of taking it for no result.
   * Renaming or deleting a folder on the Files page asked for a sync before removing the empty folder here, so on
     Windows that pass could keep the empty folder. The folder now goes first, tried again a few times while something
     has it open.
   * Updating a placeholder that another program had open for a moment (Explorer, a virus scanner) downloaded the whole
     file instead. It is now tried again a few times first.
+  * A linked nest whose owner shared more folders while a link pass was running: that pass then wrote its old place
+    back over the restart that sharing more makes, so the new folders' older files never came in. A pass now moves
+    the cursors only while the link is as it found it (same cursors, access and folders); otherwise the next pass
+    starts from the beginning, as it should.
 * **Not changed (noted):** one slow upload still makes a whole pass Offline in the real app, with its backoff. A
   per-file "try again next pass" would be kinder, but it is a separate change.
