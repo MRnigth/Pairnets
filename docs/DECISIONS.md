@@ -1820,3 +1820,38 @@ change was never seen.
   starts fresh (a merge: nothing is deleted on either side); the old folder is left as it was. Run as admin, a Program
   Files folder that works keeps working.
 * **The test file** `.pairnets-write-test` is written and removed at once; it is reserved and ignored like the marker.
+
+## Steady tests on slow runners (2026-10-24)
+
+* **Why.** Nearly every CI and release run failed on one test, a different one each time. 76 failed jobs over the last
+  60 runs came down to a few causes in the test setup, not in sync.
+* **No false 408s.** The test server gave up on an upload after 2 s without bytes, and Kestrel's own minimum upload speed
+  applied too. On a busy runner one small upload then got a 408, the app read it as "server unreachable", and the whole
+  pass ended Offline (so 111 of 220 files arrived, and so on). The test server now waits 30 s and has no minimum speed.
+  Only the tests of the stall itself (ServerApi, ResumableTransfer, FaultInjection) still use a short stall
+  (`TestServer.ShortStall`).
+* **The rules for tests.**
+  * A setup pass that is not what the test is about goes through `Device.SyncUntilQuietAsync`, which also runs an
+    Offline pass again, and it is checked. A pass under test stays one pass.
+  * Files written just before an app starts are backdated, so the 2 s "still being written" window doesn't split them
+    over two passes.
+  * Waits for something that happens eventually get generous deadlines (60–120 s). They never replace a check of how
+    soon something happens. "Quickly" means long before the hourly pass.
+  * A test that listens on the push channel makes one hub call after connecting, so the server has registered it.
+  * A batch is written while the runner is paused, so the file watcher doesn't start a pass half-way through it.
+  * The Avalonia window tests take turns (collection "Avalonia UI"): they share one UI thread and close each other's
+    windows. One press in ClickEverything that takes 2 minutes ends the run with its name, instead of CI's silent
+    10-minute hang.
+  * Short tests of waiting times (AppActivation, ServerUpdaterStatus) run on their own.
+  * The thread pool starts with 64 threads, because a 3-core runner adds threads slowly.
+* **Three small app bugs found on the way, fixed.**
+  * The nest could say "The updater stopped without reporting a result" for an update that had just worked: it read
+    status.json before the request file, which update.sh deletes after writing its result. It now reads them in the
+    order they happen.
+  * Renaming or deleting a folder on the Files page asked for a sync before removing the empty folder here, so on
+    Windows that pass could keep the empty folder. The folder now goes first, tried again a few times while something
+    has it open.
+  * Updating a placeholder that another program had open for a moment (Explorer, a virus scanner) downloaded the whole
+    file instead. It is now tried again a few times first.
+* **Not changed (noted):** one slow upload still makes a whole pass Offline in the real app, with its backoff. A
+  per-file "try again next pass" would be kinder, but it is a separate change.
