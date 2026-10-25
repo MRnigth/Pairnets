@@ -71,12 +71,7 @@ public partial class DevicesPageView : UserControl
         JoinChip.Visibility = join is null ? Visibility.Collapsed : Visibility.Visible;
         JoinText.Text = join ?? string.Empty;
 
-        if (s.DevicesUnsupported)
-            DevicesEmptyText.Text = "Update your nest to see the computers that use it.";
-        else if (s.Devices is null)
-            DevicesEmptyText.Text = "Loading the computers on your nest…";
-        else if (s.Devices.Count == 0)
-            DevicesEmptyText.Text = "No computers have used this nest yet.";
+        DevicesEmptyText.Text = DevicesSummary.EmptyText(s);
 
         DrawPeople(PeopleSection.From(s));
 

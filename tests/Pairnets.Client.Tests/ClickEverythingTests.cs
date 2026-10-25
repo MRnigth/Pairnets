@@ -1128,7 +1128,7 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
             OpensTheAccountPage("google"), Seconds: 15),
         new(t => t.Handlers.Contains("SignInView.OnAccountEmail"), "ask Pairnets for a code and open its email sign-in in the browser",
             OpensTheAccountPage("email"), Seconds: 15),
-        On("Make an account", "open the service's sign-in page", c => c.Bench.Opened.Items.SequenceEqual([$"{ServiceOrigin}/login"])),
+        On("Make an account", "open the service's sign-in page", c => c.Bench.Opened.Items.SequenceEqual([$"{ServiceOrigin}/login?new=1"])),
         On("Terms", "open the Terms on pairnets.app", c => c.Bench.Opened.Items.SequenceEqual([PairnetsLinks.Terms])),
         On("Privacy Policy", "open the Privacy Policy on pairnets.app", c => c.Bench.Opened.Items.SequenceEqual([PairnetsLinks.Privacy])),
         On(["I run my own nest on my own domain: use its address", "I run my own nest: use its address"], "go to the step for a nest's own address",

@@ -33,7 +33,8 @@ export async function loginPageRoute(ctx: Ctx): Promise<Response> {
   const reauth = p.get("reauth") === "1";
   const error = p.get("error");
   if (!reauth && !error && (await loadBrowserSession(ctx))) return redirect(next);
-  return htmlResponse(200, loginPage({ next, reauth, error, siteKey: ctx.env.TURNSTILE_SITE_KEY ?? "" }));
+  const fresh = p.get("new") === "1";
+  return htmlResponse(200, loginPage({ next, reauth, error, siteKey: ctx.env.TURNSTILE_SITE_KEY ?? "", fresh }));
 }
 
 // GET /login/email (the emailed link's landing page; the code stays in the fragment)

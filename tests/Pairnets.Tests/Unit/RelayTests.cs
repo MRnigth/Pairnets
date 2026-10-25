@@ -77,6 +77,8 @@ public class RelayTests
         // "Make an account" in the apps: accounts are made by signing in.
         Assert.Equal("https://sync.pairnets.app/login", Relay.LoginUrl());
         Assert.Equal("http://127.0.0.1:5/login", Relay.LoginUrl(new Uri("http://127.0.0.1:5/")));
+        // ...on the page titled for a new account (the Mac test, 2026-10-24: it read "Sign in to Pairnets").
+        Assert.Equal("https://sync.pairnets.app/login?new=1", Relay.SignUpUrl());
     }
 
     [Fact]

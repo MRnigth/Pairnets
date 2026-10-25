@@ -76,6 +76,9 @@ public static partial class Relay
     /// <summary>The service's sign-in page. Accounts are made by signing in, so it is also where "Make an account" goes.</summary>
     public static string LoginUrl(Uri? service = null) => Origin(service) + "/login";
 
+    /// <summary>Where "Make an account" goes: the same sign-in page, titled for a new account ("new=1").</summary>
+    public static string SignUpUrl(Uri? service = null) => LoginUrl(service) + "?new=1";
+
     /// <summary>
     /// What to do by hand when the nest could not be told that this computer signed out (or was reset): remove it where
     /// the nest's computers are listed, the account page in relay mode or the nest's own Devices page otherwise.

@@ -671,7 +671,7 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
         s.Expect["OnCleanUp"] = That(() => w.CleanupShown, "Clean up your nest show");
         s.Expect["OnAddFiles"] = That(() => NestCalled("add:"), "the chosen file be added");
         s.Expect["OnPlacementMenu"] = That(() => w.FilesView.PlacementMenuOpen, "the choices of where the folder lives show");
-        s.Expect["OnPickPlacement:On this PC*"] = That(() => nest.Calls.Count == 0 && nest.PlacementOf(startFolder) == FilePlacement.OnThisPc, "the folder stay on this computer");
+        s.Expect["OnPickPlacement:On this computer*"] = That(() => nest.Calls.Count == 0 && nest.PlacementOf(startFolder) == FilePlacement.OnThisPc, "the folder stay on this computer");
         s.Expect["OnPickPlacement:On-Demand*"] = That(() => Asked(s, "Make "), "the question before files leave this computer show");
         s.Expect["OnPickPlacement:Only on the nest*"] = That(() => Asked(s, "Keep "), "the question before files leave this computer show");
         s.Expect["OnRowMore"] = That(() => w.FilesView.RowMenuOpen, "the row's menu open");
@@ -684,7 +684,7 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
         s.Expect[":Where this folder lives"] = That(() => true, "its three choices show");
         s.Expect["OnRowInvite"] = That(() => s.Actions.Calls.Any(c => c.StartsWith("invite-to:", StringComparison.Ordinal) && !c.Contains('/')),
             "the invite window open with that top-level folder ticked");
-        s.Expect["OnRowPlace:On this PC"] = That(() => nest.Calls.All(c => c.StartsWith("place:", StringComparison.Ordinal) && c.EndsWith(":OnThisPc", StringComparison.Ordinal)),
+        s.Expect["OnRowPlace:On this computer"] = That(() => nest.Calls.All(c => c.StartsWith("place:", StringComparison.Ordinal) && c.EndsWith(":OnThisPc", StringComparison.Ordinal)),
             "the folder come back to this computer (nothing to ask)");
         s.Expect["OnRowPlace:On-Demand"] = That(() => Asked(s, "Make ") || nest.Calls.Count == 0, "the question before files leave this computer show");
         s.Expect["OnRowPlace:Only on the nest"] = That(() => Asked(s, "Keep ") || nest.Calls.Count == 0, "the question before files leave this computer show");
@@ -803,7 +803,7 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
         s.Expect["OnCancel"] = Raised(s, "cancelled");
         s.Expect["OnReportBug"] = Raised(s, "report-bug");
         s.Expect["OnPlacementLink"] = Raised(s, "open-files");
-        s.Expect[":On this PC"] = That(() => view.PlacementChosen(string.Empty) == FilePlacement.OnThisPc, "everything stay on this computer");
+        s.Expect[":On this computer"] = That(() => view.PlacementChosen(string.Empty) == FilePlacement.OnThisPc, "everything stay on this computer");
         s.Expect[":On-Demand"] = That(() => Asked(s, "Make "), "the question before files leave this computer show");
         s.Expect[":Only on the nest"] = That(() => Asked(s, "Keep "), "the question before files leave this computer show");
         s.Expect["OnToggleAdvanced"] = That(() => Screen.Named<Button>(view, "ResetButton").IsEffectivelyVisible != advancedOpen, "the Advanced part (Start over) open or close");
@@ -886,7 +886,7 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
             $"\"Finish in your browser\" show, with the service's page open ({method})");
         s.Expect["OnAccountGoogle"] = OpensTheAccountPage("google");
         s.Expect["OnAccountEmail"] = OpensTheAccountPage("email&email=owner%40example.com");
-        s.Expect["OnMakeAccount"] = That(() => s.Opened.SequenceEqual([origin + "/login"]), "the service's sign-in page open");
+        s.Expect["OnMakeAccount"] = That(() => s.Opened.SequenceEqual([origin + "/login?new=1"]), "the service's sign-in page open");
         s.Expect["OnTerms"] = That(() => s.Opened.SequenceEqual([PairnetsLinks.Terms]), "the Terms open");
         s.Expect["OnPrivacy"] = That(() => s.Opened.SequenceEqual([PairnetsLinks.Privacy]), "the Privacy Policy open");
         s.Expect["OnOwnNest"] = That(() => view.Step == SignInStep.Address, "the step for a nest's own address show");

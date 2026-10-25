@@ -370,7 +370,7 @@ public sealed class OtherPagesTests
     {
         var (window, _, _) = await OpenAsync();
         await Wpf.Ui(() => window.Navigate(MainPage.Devices));
-        Assert.Equal("Loading the computers on your nest…", await Wpf.Ui(() => window.DevicesPane.EmptyText));
+        Assert.Equal("Loading the computers that use your nest…", await Wpf.Ui(() => window.DevicesPane.EmptyText));
         await Wpf.Ui(() => window.ShowStatus(StatusSnapshot.Initial with { DevicesUnsupported = true }, null, "DESKTOP"));
         Assert.Equal("Update your nest to see the computers that use it.", await Wpf.Ui(() => window.DevicesPane.EmptyText));
         await Done(window);

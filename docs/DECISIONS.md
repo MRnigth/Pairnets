@@ -1872,3 +1872,35 @@ change was never seen.
     starts from the beginning, as it should.
 * **Not changed (noted):** one slow upload still makes a whole pass Offline in the real app, with its backoff. A
   per-file "try again next pass" would be kinder, but it is a separate change.
+
+## Small Mac fixes from the Mac test (2026-10-25)
+
+The Mac test of 1.0.61.4 (macOS VM, 2026-10-24) found small things that said the wrong thing. Fixed in both apps where
+both had them:
+
+* **"All nests" line.** "all up to date" only when every nest is. Otherwise, first what needs you, then syncing, then
+  "1 can't be reached" / "none can be reached", then "1 paused" / "all paused", then signed out.
+* **A paused nest on the map.** Pausing stops all checks, so the map can't know whether the nest is there now. It stays
+  "online" (green) only when the nest was reached before; a nest never reached shows a grey dot and "not connected"
+  (it said "online" with a green dot).
+* **The sign-in window (Mac/Linux).** It opens at 520×640 and then lets its steps follow the window, as the Windows app
+  already did; before, the steps kept 520 px and a narrower window cut them off on both sides ("airnets").
+* **Wrong email.** Something typed that isn't an email address gets "That doesn't look like an email address" instead of
+  "Type your email address first."
+* **"this computer" in the Mac/Linux app.** The shared texts keep "this PC" (the Windows app's word); the Mac/Linux app
+  turns it into "this computer" wherever the Files page, the Settings "Where your files live" rows, the "move files
+  away" question, the nest-full pop-up and the "freed" notice show it (`Wording.Computer`). The hint under the Files
+  list wraps (a grid, not a row) in both apps.
+* **Crash cards.** The privacy cleaner took the apostrophe in "Task's" for a quote and hid most of an
+  AggregateException's message. An apostrophe inside a word is no quote now; a quoted name with an apostrophe in it
+  ('Bob's notes.txt') is still hidden whole.
+* **Needs you / Computers.** "Everything keeps syncing" only while it does ("Syncing is paused." / "Pairnets keeps trying
+  to reach your nest."). Computers says why the list isn't there when the nest can't be reached (or syncing was paused
+  before it ever was) instead of "Loading…" for ever. Both apps now use the same words for these.
+* **The menu before signing in.** Sync now, Open folder and Pause are greyed out until a nest is set up (they did
+  nothing); on Mac/Linux the first item reads "Sign in…" (it already opened the sign-in).
+* **Make an account.** The apps open `/login?new=1`; the website titles that page "Make your Pairnets account". An older
+  Worker ignores the flag (still "Sign in to Pairnets"), so this needs the next Worker deploy to show; nothing breaks
+  before it.
+* **Activity.** "Cannot reach the server; retrying." no longer adds the same sentence again when the reason is only the
+  general "Pairnets cannot reach the server…".

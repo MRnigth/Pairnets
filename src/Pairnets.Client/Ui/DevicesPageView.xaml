@@ -111,7 +111,7 @@
       <StackPanel x:Name="DevicesEmpty" HorizontalAlignment="Center" Margin="0,50,0,30">
         <ui:LineIcon Width="30" Height="30" StrokeThickness="1.6" Stroke="{DynamicResource T.TextSoft}" Data="{StaticResource I.Server}" HorizontalAlignment="Center" />
         <TextBlock x:Name="DevicesEmptyText" Style="{StaticResource PgSub}" TextAlignment="Center" MaxWidth="340" Margin="0,10,0,0"
-                   Text="Loading the computers on your nest…" />
+                   Text="Loading the computers that use your nest…" />
       </StackPanel>
 
       <!-- People: the friends the nest is shared with, and those waiting to be let in (the owner's computers, nests reached

@@ -90,6 +90,24 @@ public sealed class TrayControllerTests
         await started.WaitAsync(TimeSpan.FromSeconds(30));
     }
 
+    /// <summary>Before signing in, Sync now, Open folder and Pause syncing can't do anything yet: they are greyed out
+    /// (the Mac test, 2026-10-24, found them silent; the Windows menu is the same).</summary>
+    [Fact]
+    public async Task FirstRun_TheMenuGreysOutWhatCantWorkYet()
+    {
+        await using var app = await TrayHarness.CreateAsync();
+        var started = app.StartFirstRun();
+        var signIn = await app.Showing<SettingsWindow>("the sign-in window on the first start");
+        await app.OpenMenu();
+        foreach (var item in new[] { "Sync now", "Open folder", "Pause syncing" })
+        {
+            var e = await Assert.ThrowsAsync<Xunit.Sdk.XunitException>(() => app.Menu(item));
+            Assert.Contains("greyed out", e.Message);
+        }
+        await app.Wpf.Ui(signIn.Close);
+        await started.WaitAsync(TimeSpan.FromSeconds(30));
+    }
+
     [Fact]
     public async Task FirstRun_Escape_ClosesAnIdleSignIn_ButAsksWhenAnEmailWasTyped()
     {

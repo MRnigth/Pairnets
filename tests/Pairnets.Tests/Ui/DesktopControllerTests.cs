@@ -94,6 +94,24 @@ public sealed class DesktopControllerTests
         Assert.Equal(Path.GetFullPath(app.Folder), Path.GetFullPath(Assert.Single(app.Platform.Opened)));
     }
 
+    /// <summary>
+    /// The Mac test (2026-10-24): before signing in, Quick status, Sync now, Open folder and Pause syncing in the menu-bar
+    /// menu did nothing and said nothing. The first item now says "Sign in…" and opens it; the others are greyed out.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task FirstRun_TheMenuSaysSignInAndGreysOutWhatCantWorkYet()
+    {
+        await using var app = await AppUnderTest.StartAsync(signedIn: false);
+        var signIn = await app.WindowAsync("Pairnets – sign in");
+        foreach (var header in new[] { "Sync now", "Open folder", "Pause syncing" })
+            Assert.Throws<CannotPressException>(() => Person.Click(app.TrayItem(header)));
+        Assert.DoesNotContain(app.App.TrayMenu!.Items.OfType<NativeMenuItem>(), i => i.Header == "Quick status…");
+
+        signIn.Close();
+        Person.Click(app.TrayItem("Sign in…"));
+        await app.WindowAsync("Pairnets – sign in");
+    }
+
     [AvaloniaFact]
     public async Task FirstRun_ClickingTheIconAgain_BringsTheSignInForwardInsteadOfOpeningAnother()
     {
@@ -243,7 +261,7 @@ public sealed class DesktopControllerTests
         app.App.HandleFileCommand(new FileManagerCommand(FileManagerAction.WhereItLives, Path.Combine(app.Folder, "Photos")));
         await Wait.Until(() => app.App.Window is { Page: MainPage.Files } w && w.FilesView.Folder == "Photos", "the Files page on Photos");
         await Wait.Until(() => app.MainWindow.FilesView.PlacementMenuOpen, "the choices of where Photos lives");
-        Assert.Equal("On this PC", app.MainWindow.FilesView.PlacementShown);
+        Assert.Equal("On this computer", app.MainWindow.FilesView.PlacementShown);
     }
 
     [AvaloniaFact]

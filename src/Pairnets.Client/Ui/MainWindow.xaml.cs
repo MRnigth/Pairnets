@@ -564,7 +564,7 @@ public partial class MainWindow : Window, IPageHost
 
     public void ShowAttention(IReadOnlyList<AttentionItem> items)
     {
-        AttentionPage.Show(items);
+        AttentionPage.Show(items, _status);
         _attentionCount = items.Count;
         RefreshSide();
         RefreshOverview();

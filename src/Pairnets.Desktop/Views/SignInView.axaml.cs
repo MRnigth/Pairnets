@@ -356,6 +356,7 @@ public partial class SignInView : UserControl
     {
         if (!Nest.LooksLikeEmail(AccountEmailBox.Text))
         {
+            AccountEmailProblem.Text = SignInTexts.EmailProblem(AccountEmailBox.Text);
             AccountEmailProblem.IsVisible = true;
             AccountEmailBox.Focus();
             return;
@@ -364,7 +365,7 @@ public partial class SignInView : UserControl
     }
 
     /// <summary>Accounts are made by signing in: "Make an account" opens the service's sign-in page.</summary>
-    private void OnMakeAccount(object? sender, RoutedEventArgs e) => _openUrl(Relay.LoginUrl(Service));
+    private void OnMakeAccount(object? sender, RoutedEventArgs e) => _openUrl(Relay.SignUpUrl(Service));
 
     /// <summary>The small print under the sign-in buttons: the website's Terms and Privacy Policy.</summary>
     private void OnTerms(object? sender, RoutedEventArgs e) => _openUrl(PairnetsLinks.Terms);

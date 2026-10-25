@@ -259,7 +259,7 @@ public partial class SettingsView : UserControl
     private static string SizeText(string folder, INestFiles? files, IReadOnlyList<NestEntry> tops) =>
         folder.Length == 0 ? FilesPageText.EverythingElseNote
         : files is null ? string.Empty
-        : FilesPageText.SizeLine(tops.FirstOrDefault(e => e.IsFolder && e.Path == folder)?.Size ?? 0, Read(() => files.BytesHere(folder), 0L));
+        : Wording.Computer(FilesPageText.SizeLine(tops.FirstOrDefault(e => e.IsFolder && e.Path == folder)?.Size ?? 0, Read(() => files.BytesHere(folder), 0L)));
 
     /// <summary>
     /// Reads each row's "· all on this PC" line again: a choice frees or downloads its files after it is saved, so the
@@ -285,7 +285,7 @@ public partial class SettingsView : UserControl
         PlacementRows.Children.Clear();
         PlacementRows.IsEnabled = files is not null;
         PlacementRows.Opacity = files is null ? 0.55 : 1;
-        PlacementNote.Text = files is null ? FilesPageText.SettingsOff : FilesPageText.SettingsText.Replace("this PC", "this computer", StringComparison.Ordinal);
+        PlacementNote.Text = files is null ? FilesPageText.SettingsOff : Wording.Computer(FilesPageText.SettingsText);
         var tops = Read(() => files?.List(string.Empty), null) ?? [];
         _sizeLines.Clear();
         foreach (var folder in PlacementFolders)
@@ -310,12 +310,12 @@ public partial class SettingsView : UserControl
             {
                 var button = new RadioButton
                 {
-                    Content = NestFiles.PlacementText(choice),
+                    Content = Wording.Computer(NestFiles.PlacementText(choice)),
                     Classes = { "seg" },
                     GroupName = "placement:" + folder,
                     IsChecked = choice == now,
                 };
-                Avalonia.Automation.AutomationProperties.SetName(button, $"{name}: {NestFiles.PlacementText(choice)}");
+                Avalonia.Automation.AutomationProperties.SetName(button, $"{name}: {Wording.Computer(NestFiles.PlacementText(choice))}");
                 button.IsCheckedChanged += (_, _) =>
                 {
                     if (button.IsChecked == true)
@@ -371,7 +371,7 @@ public partial class SettingsView : UserControl
             PlacementStatusBox.IsVisible = false;
             return;
         }
-        PlacementStatusText.Text = FilesPageText.PlacementStatus(last.Folder, last.Placement, status, last.At, DateTimeOffset.UtcNow).Replace("this PC", "this computer", StringComparison.Ordinal);
+        PlacementStatusText.Text = Wording.Computer(FilesPageText.PlacementStatus(last.Folder, last.Placement, status, last.At, DateTimeOffset.UtcNow));
         PlacementStatusBox.IsVisible = true;
     }
 

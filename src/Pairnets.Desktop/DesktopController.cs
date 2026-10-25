@@ -64,6 +64,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
     private NativeMenu? _trayMenu;
     private NativeMenuItem? _openItem;
     private NativeMenuItem? _statusItem;
+    private NativeMenuItem? _quickItem;
     private NativeMenuItem? _syncItem;
     private NativeMenuItem? _folderItem;
     private NativeMenuItem? _foldersItem;
@@ -209,7 +210,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
     private void CreateTray()
     {
         var menu = new NativeMenu();
-        var quick = new NativeMenuItem("Quick status…");
+        var quick = _quickItem = new NativeMenuItem("Quick status…");
         quick.Click += (_, _) => TogglePanel();
         var open = _openItem = new NativeMenuItem("Open Pairnets");
         open.Click += (_, _) => ShowMainWindow();
@@ -245,6 +246,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
                      new NativeMenuItemSeparator(), settings, log, report, _pauseItem, _autoStartItem, new NativeMenuItemSeparator(), quit })
             menu.Items.Add(item);
         _trayMenu = menu;
+        DrawMenuReady();
         if (!_env.ShowTrayIcon)
             return; // tests: the menu works the same, but no icon appears in the real menu bar or tray
 
@@ -426,7 +428,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
         {
             // Copies removed here because their folder lives on the nest only: never silent.
             var (title, text) = FilesPageText.FreedNotice(r.Freed);
-            Notify("freed", PrefixOf(run) + title, text.Replace("this PC", "this computer", StringComparison.Ordinal), run);
+            Notify("freed", PrefixOf(run) + title, Wording.Computer(text), run);
         }
         else if (r.Outcome == PassOutcome.AuthFailed)
             Notify("auth", PrefixOf(run) + "Sign in to your nest", "Your nest did not accept this computer's sign-in. Open Pairnets and sign in again to keep syncing.", run);
@@ -938,6 +940,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
             _fixItem.IsEnabled = status.FixLabel is not null;
             var paused = nests.Visible ? _settings.Paused : status.Paused;
             _pauseItem!.Header = nests.Visible ? (paused ? "Resume all" : "Pause all") : paused ? "Resume syncing" : "Pause syncing";
+            DrawMenuReady();
             DrawNestMenu(nests);
         }
         if (_window is { IsVisible: true })
@@ -957,6 +960,17 @@ public sealed class DesktopController : ITrayActions, IDisposable
             _panel.ShowActivity(_session?.Activity.Items ?? []);
             _panel.ShowAttention(BuildAttention(status).Count);
         }
+    }
+
+    /// <summary>
+    /// Before this computer is signed in, the menu says what its first item does ("Sign in…", which it opens) and greys
+    /// out what can't work yet: the Mac test (2026-10-24) found Sync now, Open folder and Pause doing nothing, silently.
+    /// </summary>
+    private void DrawMenuReady()
+    {
+        var ready = AnyNestReady && _settings.FirstRunCompleted;
+        _quickItem!.Header = ready ? "Quick status…" : "Sign in…";
+        _syncItem!.IsEnabled = _folderItem!.IsEnabled = _pauseItem!.IsEnabled = ready;
     }
 
     private readonly List<NativeMenuItemBase> _nestItems = [];

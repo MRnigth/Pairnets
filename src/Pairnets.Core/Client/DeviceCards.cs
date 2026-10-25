@@ -156,6 +156,18 @@ public static class DevicesSummary
     public static string Line(IReadOnlyList<DeviceCard> cards) =>
         cards.Count == 0 ? string.Empty : Presences.OnlineCount(cards.Count(c => c.Online), cards.Count);
 
+    /// <summary>
+    /// The Computers page with no computer cards: the nest is too old to list them, the list is on its way, it can't come
+    /// because the nest can't be reached (or syncing is paused before it ever was), or no computer used the nest yet.
+    /// </summary>
+    public static string EmptyText(StatusSnapshot s) =>
+        s.DevicesUnsupported ? "Update your nest to see the computers that use it."
+        : s.Devices is { Count: 0 } ? "No computers have used this nest yet."
+        : s.Devices is not null ? "Loading the computers that use your nest…"
+        : s.ConnectionText == "Not connected" ? "Can't reach your nest right now, so its computers can't be listed. Pairnets keeps trying."
+        : s.Status == RunnerStatus.Paused && !s.IsConnected ? "Syncing is paused, so the computers that use your nest can't be listed now."
+        : "Loading the computers that use your nest…";
+
     /// <summary>"PC-1 is asking to join", "2 computers are asking to join", or null.</summary>
     public static string? JoinText(StatusSnapshot s) => s.JoinRequests.Count switch
     {

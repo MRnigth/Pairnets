@@ -125,6 +125,7 @@ public sealed class TrayController : ITrayActions, IDisposable
         {
             _autoStart.Checked = SafeIsAutoStart();
             _simpleDrawing.Checked = Themes.ThemeManager.SimpleDrawing;
+            DrawMenuReady();
         };
 
         _icon = new Forms.NotifyIcon
@@ -971,6 +972,7 @@ public sealed class TrayController : ITrayActions, IDisposable
         _fixProblem.Text = status.FixLabel ?? "Fix…";
         var paused = nests.Visible ? _settings.Paused : status.Paused;
         _pause.Text = nests.Visible ? (paused ? "Resume all" : "Pause all") : paused ? "Resume syncing" : "Pause syncing";
+        DrawMenuReady();
         DrawNestMenu(nests);
 
         if (_window is { IsVisible: true })
@@ -990,6 +992,16 @@ public sealed class TrayController : ITrayActions, IDisposable
             _panel.ShowActivity(_session?.Activity.Items ?? []);
             _panel.ShowAttention(BuildAttention(status).Count);
         }
+    }
+
+    /// <summary>
+    /// Before this computer is signed in, Sync now, Open folder and Pause are greyed out: they can't do anything yet (the
+    /// Mac test, 2026-10-24, found them doing nothing, silently; the Windows menu is the same).
+    /// </summary>
+    internal void DrawMenuReady()
+    {
+        var ready = AnyNestReady && _settings.FirstRunCompleted;
+        _syncNow.Enabled = _openFolder.Enabled = _pause.Enabled = ready;
     }
 
     private readonly List<Forms.ToolStripItem> _nestItems = [];
