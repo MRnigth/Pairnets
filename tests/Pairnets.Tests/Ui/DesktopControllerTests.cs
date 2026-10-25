@@ -639,7 +639,8 @@ public sealed class DesktopControllerTests
         await using var app = await AppUnderTest.StartAsync(args: [SelfReplace.AfterUpdateArgument]);
         await app.WaitUntilIdleAsync();
         Assert.True(app.App.Window is { IsVisible: true }, "After an update the main window opens again.");
-        Assert.Contains(app.Platform.Notices, n => n.Title == UpdateTexts.UpdatedTitle);
+        // The note is sent off the UI thread (DesktopController.Notify), so it can land a moment after the app is idle.
+        await Wait.Until(() => app.Platform.Notices.Any(n => n.Title == UpdateTexts.UpdatedTitle), "the \"up to date\" note");
     }
 
     [AvaloniaFact]
