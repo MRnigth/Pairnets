@@ -1844,6 +1844,9 @@ change was never seen.
     macOS runners are up to five times slower, and a whole window ran past CI's 10 minutes a test). One press over 2
     minutes, or a part over 9, ends the run with its name instead of a silent hang.
   * Short tests of waiting times (AppActivation, ServerUpdaterStatus) run on their own.
+  * Two window test classes kept a list of every window opened in the whole test run, so from then on no window was
+    freed: 3.4 GB was still in use after the window tests (this is what the macOS runs swapped on, and what made the
+    large-file memory test fail there). Their lists now drop a window once it closes (280 MB left).
   * Not done: starting the thread pool with more threads. It made the large-file memory test fail on macOS (the
     shared buffer pool keeps buffers per thread, and that test counts them).
 * **Four small app bugs found on the way, fixed.**

@@ -35,14 +35,27 @@ public class FilesPageUiTests
 
     private static readonly List<Window> Opened = [];
 
-    static FilesPageUiTests() => Window.WindowOpenedEvent.AddClassHandler(typeof(Window), (sender, _) =>
+    // The pop-ups that are open. A window goes from the list once it closes: kept, every window opened later in the
+    // test run (by any test) stayed in memory, gigabytes by the end on a slow runner.
+    static FilesPageUiTests()
     {
-        lock (Opened)
+        Window.WindowOpenedEvent.AddClassHandler(typeof(Window), (sender, _) =>
         {
-            if (sender is Window w)
-                Opened.Add(w);
-        }
-    });
+            lock (Opened)
+            {
+                if (sender is Window w)
+                    Opened.Add(w);
+            }
+        });
+        Window.WindowClosedEvent.AddClassHandler(typeof(Window), (sender, _) =>
+        {
+            lock (Opened)
+            {
+                if (sender is Window w)
+                    Opened.Remove(w);
+            }
+        });
+    }
 
     private static List<Window> AllWindows()
     {

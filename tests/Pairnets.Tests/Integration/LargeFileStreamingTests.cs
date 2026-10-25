@@ -15,7 +15,7 @@ public sealed class MemoryMeasurements
 
 /// <summary>A file over 100 MB goes up and comes down without being held in memory.</summary>
 [Collection(MemoryMeasurements.Name)]
-public class LargeFileStreamingTests : IAsyncLifetime
+public class LargeFileStreamingTests(Xunit.Abstractions.ITestOutputHelper output) : IAsyncLifetime
 {
     private TestServer _server = null!;
     private Device _desktop = null!;
@@ -23,8 +23,7 @@ public class LargeFileStreamingTests : IAsyncLifetime
 
     public async Task InitializeAsync()
     {
-        // The short stall the tests used to have: a piece sent again on a slow runner leaves its first try's buffers on the
-        // server until the stall ends, and after 30 s those would still count as memory in use.
+        // The short stall this test always ran with (it measures memory; nothing in it waits on a busy machine).
         _server = await TestServer.StartAsync(config: TestServer.ShortStall());
         _desktop = new Device("desktop", _server);
         _laptop = new Device("laptop", _server);
@@ -58,6 +57,9 @@ public class LargeFileStreamingTests : IAsyncLifetime
         Assert.Equal(1, (await _laptop.SyncAsync()).Downloaded);
         Assert.Equal(expected, (await ContentHash.OfFileAsync(_laptop.Full("big.bin"))).Hash);
         Assert.Equal(size, new FileInfo(_laptop.Full("big.bin")).Length);
-        Assert.True(GC.GetTotalMemory(forceFullCollection: true) - before < 64L * 1024 * 1024, "transfer appears to keep the file in memory");
+        var after = GC.GetTotalMemory(forceFullCollection: true);
+        var numbers = $"in use before {before / 1048576} MB, after {after / 1048576} MB, kept {(after - before) / 1048576} MB";
+        output.WriteLine(numbers);
+        Assert.True(after - before < 64L * 1024 * 1024, "transfer appears to keep the file in memory: " + numbers);
     }
 }
