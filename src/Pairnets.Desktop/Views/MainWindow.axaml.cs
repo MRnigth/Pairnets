@@ -175,6 +175,7 @@ public partial class MainWindow : Window
         InitializeComponent();
         _actions = actions;
         Overview.Act += OnOverviewAction;
+        Overview.OfferAnswered += OnNestOfferAnswered;
         Overview.SeeAllActivity += () => Navigate(MainPage.Activity);
         Overview.MoreComputers += () => Navigate(MainPage.Devices);
         ActivityList.ItemsSource = _activityRows;
@@ -442,6 +443,21 @@ public partial class MainWindow : Window
 
     /// <summary>Switches to the "Needs attention" page, or back to the overview (notifications, screenshots).</summary>
     public void ShowAttentionTab(bool attention) => Navigate(attention ? MainPage.Attention : MainPage.Overview);
+
+    /// <summary>"Turn on" or "Not now" on the "Let your nest update by itself?" card.</summary>
+    public event Action<NestAutoUpdateAnswer>? NestOfferAnswered;
+
+    /// <summary>The "Let your nest update by itself?" card at the top of the Overview page, or none.</summary>
+    public void ShowNestOffer(NestAutoUpdateOffer? offer) => Overview.ShowOffer(offer);
+
+    /// <summary>The card's button pressed last (the checks read it).</summary>
+    internal NestAutoUpdateAnswer? NestOfferAnswer { get; private set; }
+
+    private void OnNestOfferAnswered(NestAutoUpdateAnswer answer)
+    {
+        NestOfferAnswer = answer;
+        NestOfferAnswered?.Invoke(answer);
+    }
 
     // ------------------------------------------------------------------ status
 

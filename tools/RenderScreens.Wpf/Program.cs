@@ -372,6 +372,10 @@ public static partial class Program
         Save(window, outDir, $"windows-main-idle-{suffix}.png", print);
         if (window.MapOtherText != "LAPTOP: in sync")
             throw new InvalidOperationException("The overview's picture shows " + window.MapOtherText);
+        // After this app updated itself: "Let your nest update by itself?" at the top of the overview.
+        window.ShowNestOffer(new NestAutoUpdateOffer([new("a", "soro")]));
+        Save(window, outDir, $"windows-main-nest-auto-update-{suffix}.png", print);
+        window.ShowNestOffer(null);
 
         // Several nests: the nest list on the left with Home nest picked, then the All nests page.
         var idle = StatusSnapshot.Initial with { Status = RunnerStatus.Idle, Text = "Up to date", LastSyncAt = now, Server = server, Devices = devices, NestLabel = "Home nest" };

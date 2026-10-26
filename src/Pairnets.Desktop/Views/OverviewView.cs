@@ -31,6 +31,9 @@ public sealed class OverviewView : UserControl
     private readonly TextBlock _needsTitle = new();
     private readonly TextBlock _needsDetail = new();
     private readonly Border _lower = new();
+    private readonly Border _offer = new();
+    private readonly TextBlock _offerTitle = new();
+    private readonly TextBlock _offerDetail = new();
     private readonly HashSet<string> _expanded = [];
     private readonly HashSet<string> _collapsed = [];
     private string _heroSignature = string.Empty;
@@ -57,6 +60,8 @@ public sealed class OverviewView : UserControl
         hubHost.Children.Add(_hub);
         heroStack.Children.Add(hubHost);
         _heroCard.Child = heroStack;
+        BuildOffer();
+        _page.Children.Add(_offer);
         _page.Children.Add(_heroCard);
 
         BuildNeeds();
@@ -69,6 +74,17 @@ public sealed class OverviewView : UserControl
 
     /// <summary>A button of the page was pressed.</summary>
     public event Action<OverviewAction>? Act;
+
+    /// <summary>A button of the "Let your nest update by itself?" card was pressed.</summary>
+    public event Action<NestAutoUpdateAnswer>? OfferAnswered;
+
+    /// <summary>The "Let your nest update by itself?" card at the top of the page, or none.</summary>
+    public void ShowOffer(NestAutoUpdateOffer? offer)
+    {
+        _offer.IsVisible = offer is not null;
+        _offerTitle.Text = offer?.Title ?? string.Empty;
+        _offerDetail.Text = offer?.Detail ?? string.Empty;
+    }
 
     /// <summary>"See all in Activity".</summary>
     public event Action? SeeAllActivity;
@@ -703,6 +719,47 @@ public sealed class OverviewView : UserControl
         row.Children.Add(review);
         _needs.Child = row;
     }
+
+    // ------------------------------------------------------------------ the nest auto-update card
+
+    private void BuildOffer()
+    {
+        _offer.CornerRadius = new CornerRadius(16);
+        _offer.Padding = new Thickness(16, 14, 14, 14);
+        _offer.Margin = new Thickness(0, 0, 0, 16);
+        _offer.IsVisible = false;
+        Paint(_offer, Border.BackgroundProperty, "T.AccentSoft");
+        var row = Columns(Auto, Star, Auto);
+        var icon = Glyph(OverviewIcon.Server, 20, "T.AccentInk", 2);
+        icon.Margin = new Thickness(0, 2, 14, 0);
+        icon.VerticalAlignment = VerticalAlignment.Top;
+        row.Children.Add(icon);
+        var words = new StackPanel { Spacing = 3, VerticalAlignment = VerticalAlignment.Center };
+        _offerTitle.FontWeight = FontWeight.Bold;
+        _offerTitle.FontSize = 15;
+        words.Children.Add(_offerTitle);
+        _offerDetail.TextWrapping = TextWrapping.Wrap;
+        Paint(_offerDetail, TextBlock.ForegroundProperty, "T.Muted");
+        words.Children.Add(_offerDetail);
+        Grid.SetColumn(words, 1);
+        row.Children.Add(words);
+        var buttons = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(16, 0, 0, 0) };
+        var later = new Button { Content = NestAutoUpdateOffer.NotNowLabel, Height = 34, MinHeight = 34, Padding = new Thickness(14, 0, 14, 0), FontWeight = FontWeight.Bold, CornerRadius = new CornerRadius(10) };
+        later.Classes.Add("subtle");
+        later.Click += OnOfferNotNow;
+        buttons.Children.Add(later);
+        var turnOn = new Button { Content = NestAutoUpdateOffer.TurnOnLabel, Height = 34, MinHeight = 34, Padding = new Thickness(16, 0, 16, 0), FontWeight = FontWeight.Bold, CornerRadius = new CornerRadius(10) };
+        turnOn.Classes.Add("accent");
+        turnOn.Click += OnOfferTurnOn;
+        buttons.Children.Add(turnOn);
+        Grid.SetColumn(buttons, 2);
+        row.Children.Add(buttons);
+        _offer.Child = row;
+    }
+
+    private void OnOfferTurnOn(object? sender, RoutedEventArgs e) => OfferAnswered?.Invoke(NestAutoUpdateAnswer.TurnOn);
+
+    private void OnOfferNotNow(object? sender, RoutedEventArgs e) => OfferAnswered?.Invoke(NestAutoUpdateAnswer.NotNow);
 
     // ------------------------------------------------------------------ the cards below
 

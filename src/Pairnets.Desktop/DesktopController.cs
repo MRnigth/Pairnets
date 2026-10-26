@@ -187,6 +187,8 @@ public sealed class DesktopController : ITrayActions, IDisposable
                 _log.LogWarning("Could not refresh start-at-login: {Error}", ex.Message);
             }
         }
+        if (NestAutoUpdateOffer.NoteStart(_settings, PairnetsInfo.ProductVersion))
+            SaveSettings();
         if (!AnyNestReady || !_settings.FirstRunCompleted)
         {
             ShowSignIn();
@@ -948,6 +950,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
             DrawUpdateCard(_window);
             _window.ShowMapSpeed = _settings.ShowMapSpeed;
             _window.ShowNests(nests);
+            _window.ShowNestOffer(NestOffer());
             _window.ShowStatus(status, Nest.Folder, Nest.DeviceName);
             _window.ShowActivity(_session?.Activity.Items ?? []);
             _window.ShowAttention(BuildAttention(status));
@@ -1080,6 +1083,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
                 _settings.SideFolded = folded;
                 SaveSettings();
             };
+            _window.NestOfferAnswered += AnswerNestOffer;
         }
         _window.Show();
         _window.WindowState = WindowState.Normal;
@@ -1552,6 +1556,40 @@ public sealed class DesktopController : ITrayActions, IDisposable
             return;
         }
         ShowServerUpdate(run, info.ServerVersion!, null);
+    }
+
+    /// <summary>
+    /// The "Let your nest update by itself?" card after this app updated itself: the person's own nests that only update
+    /// when asked, except one the "Update your nest" window already asked about this time.
+    /// </summary>
+    internal NestAutoUpdateOffer? NestOffer() =>
+        NestAutoUpdateOffer.For(_settings, _runs.Select(r => r.Settings), PairnetsInfo.ProductVersion,
+            skip: id => _runs.FirstOrDefault(r => r.Id == id)?.ServerPromptShownFor is not null);
+
+    /// <summary>"Turn on" switches "Update the nest by itself" on for each nest the card names (and updates one that is behind now); both buttons put the card away.</summary>
+    private void AnswerNestOffer(NestAutoUpdateAnswer answer)
+    {
+        var offer = NestOffer();
+        _settings.NestAutoUpdateOfferFor = null;
+        if (answer == NestAutoUpdateAnswer.TurnOn && offer is not null)
+        {
+            foreach (var named in offer.Nests)
+            {
+                if (_settings.ForNest(named.Id) is not { } nest)
+                    continue;
+                nest.AutoUpdateServer = true;
+                SaveNest(nest);
+                if (_runs.FirstOrDefault(r => r.Id == named.Id) is { Session: { } session } run && session.Status.Server is { } info && session.ServerNeedsUpdate(info))
+                {
+                    run.ServerPromptShownFor = info.ServerVersion;
+                    _ = UpdateServerQuietlyAsync(run, session, info.ServerVersion!);
+                }
+            }
+            Notify("nest-auto-update", offer.TurnedOn, NestAutoUpdateOffer.TurnedOnDetail);
+        }
+        SaveSettings();
+        _dirty = true;
+        RefreshIfDirty();
     }
 
     private async Task UpdateServerQuietlyAsync(NestRun run, ClientSession session, string serverVersion)

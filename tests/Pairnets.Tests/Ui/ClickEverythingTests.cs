@@ -305,6 +305,7 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
             new("the main window (overview)", s => MainStage(s, w =>
             {
                 w.ShowUpdate("Pairnets 1.0.58 is available", UpdateTexts.ByHand("1.0.52"), UpdateTexts.OpenDownloadPage);
+                w.ShowNestOffer(new NestAutoUpdateOffer([new("a", "soro")]));
                 w.ShowStatus(Idle, "/Users/me/Work", "MacBook");
                 w.ShowActivity(SampleFeed().Items);
                 w.ShowAttention([Attention(s)]);
@@ -591,6 +592,8 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
         s.Expect["OnAddComputer"] = Calls(a, "add-computer");
         s.Expect["OnManageDevices"] = Calls(a, "manage-devices");
         s.Expect["OnReviewAttention"] = OnPage(w, MainPage.Attention);
+        s.Expect["OnOfferTurnOn"] = That(() => w.NestOfferAnswer == NestAutoUpdateAnswer.TurnOn, "the app hear Turn on for the nest update card");
+        s.Expect["OnOfferNotNow"] = That(() => w.NestOfferAnswer == NestAutoUpdateAnswer.NotNow, "the app hear Not now for the nest update card");
         s.Expect["OnSeeAllActivity"] = OnPage(w, MainPage.Activity);
         s.Expect["OnNav:Overview*"] = OnPage(w, MainPage.Overview);
         s.Expect["OnNav:Activity*"] = OnPage(w, MainPage.Activity);
