@@ -10,6 +10,7 @@ import migration6 from "../migrations/0006_friends.sql?raw";
 import migration7 from "../migrations/0007_links.sql?raw";
 import migration8 from "../migrations/0008_crash_reports.sql?raw";
 import migration9 from "../migrations/0009_bug_reports.sql?raw";
+import migration10 from "../migrations/0010_link_sign_in.sql?raw";
 import { b64urlEncode } from "../src/b64";
 import { FakeGoogle } from "./fake-google";
 import { addServer, appSignIn, claim, Harness, lastEmailCode, startServer } from "./helpers";
@@ -97,7 +98,7 @@ describe("schema", () => {
     await runSql(db, migration5);
     await runSql(db, migration6);
     await runSql(db, migration7);
-    for (const m of [migration8, migration9]) await runSql(db, m);
+    for (const m of [migration8, migration9, migration10]) await runSql(db, m);
   });
 
   it("migration 0004 adds the nullable place columns to device_logins and keeps its rows", async () => {
@@ -118,7 +119,7 @@ describe("schema", () => {
       request_country: null,
       request_city: null,
     });
-    for (const m of [migration5, migration6, migration7, migration8, migration9]) await runSql(db, m);
+    for (const m of [migration5, migration6, migration7, migration8, migration9, migration10]) await runSql(db, m);
   });
 
   it("migration 0005 adds the nullable inactive_warned_at to accounts and keeps its rows", async () => {
@@ -128,7 +129,7 @@ describe("schema", () => {
     await db.prepare("INSERT INTO accounts (id, email, created_at, updated_at) VALUES ('acc_testacct000000000000000001', 'you@example.com', 1, 2)").run();
     await runSql(db, migration5);
     expect(await db.prepare("SELECT email, inactive_warned_at FROM accounts").first()).toEqual({ email: "you@example.com", inactive_warned_at: null });
-    for (const m of [migration6, migration7, migration8, migration9]) await runSql(db, m);
+    for (const m of [migration6, migration7, migration8, migration9, migration10]) await runSql(db, m);
   });
 
   it("migration 0006 adds the friends' tables and keeps every row of 0005", async () => {
@@ -176,7 +177,7 @@ describe("schema", () => {
     await db.prepare("UPDATE nest_invites SET decision = 'declined', decided_at = 3").run();
     const indexes = (await db.prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name IN ('nest_members', 'nest_invites') AND name NOT LIKE 'sqlite_%' ORDER BY name").all<{ name: string }>()).results;
     expect(indexes.map((i) => i.name)).toEqual(["nest_invites_expires", "nest_invites_nest", "nest_members_account", "nest_members_synced"]);
-    for (const m of [migration7, migration8, migration9]) await runSql(db, m); // the full schema again, for the tests after this one
+    for (const m of [migration7, migration8, migration9, migration10]) await runSql(db, m); // the full schema again, for the tests after this one
   });
 
   it("migration 0008 adds crash_reports, with no column for who sent a report, and keeps the accounts", async () => {
@@ -189,7 +190,7 @@ describe("schema", () => {
     const columns = (await db.prepare("PRAGMA table_info(crash_reports)").all<{ name: string }>()).results.map((c) => c.name);
     expect(columns.filter((c) => /ip|account|device|nest|email/.test(c))).toEqual([]);
     expect(await db.prepare("SELECT COUNT(*) AS n FROM accounts").first()).toEqual({ n: 1 });
-    await runSql(db, migration9); // the full schema again, for the tests after this one
+    for (const m of [migration9, migration10]) await runSql(db, m); // the full schema again, for the tests after this one
   });
 
   it("migration 0009 adds bug_reports, with no column for who sent a report, and keeps the crash reports", async () => {
@@ -207,6 +208,39 @@ describe("schema", () => {
     expect(columns.sort()).toEqual(["app", "created_at", "id", "note", "report", "system", "version"]);
     expect(columns.filter((c) => /ip|account|device|nest|email/.test(c))).toEqual([]);
     expect(await db.prepare("SELECT COUNT(*) AS n FROM crash_reports").first()).toEqual({ n: 1 });
+    await runSql(db, migration10); // the full schema again, for the tests after this one
+  });
+
+  it("migration 0010 adds the link sign-in columns: old sign-ins are 'poll', one row per link, and no code in clear", async () => {
+    const db = env.DB;
+    for (const t of TABLES) await db.prepare(`DROP TABLE IF EXISTS ${t}`).run();
+    for (const m of [migration, migration2, migration3, migration4, migration5, migration6, migration7, migration8, migration9]) await runSql(db, m);
+    await db
+      .prepare(
+        `INSERT INTO device_logins (id, device_code_hash, user_code, name, status, created_at, expires_at)
+           VALUES ('dvl_testlogin000000000000000001', x'01', 'ABCD2345', 'Laptop', 'pending', 1, 2)`,
+      )
+      .run();
+    await runSql(db, migration10);
+    expect(await db.prepare("SELECT mode, link_hash, code_hash, code_expires_at, tries FROM device_logins").first()).toEqual({
+      mode: "poll",
+      link_hash: null,
+      code_hash: null,
+      code_expires_at: null,
+      tries: 0,
+    });
+    await expect(db.prepare("UPDATE device_logins SET mode = 'other'").run()).rejects.toThrow();
+    const add = (id: string, userCode: string, link: string | null) =>
+      db
+        .prepare(`INSERT INTO device_logins (id, device_code_hash, user_code, name, status, created_at, expires_at, mode, link_hash) VALUES (?1, ?2, ?3, 'PC', 'pending', 1, 2, 'code', ?4)`)
+        .bind(id, new Uint8Array([id.charCodeAt(id.length - 1), 7]), userCode, link === null ? null : new Uint8Array([9, 9, link.length]))
+        .run();
+    await add("dvl_testlogin000000000000000002", "ABCD2346", "aa");
+    await expect(add("dvl_testlogin000000000000000003", "ABCD2347", "bb")).rejects.toThrow(); // the same link twice
+    await add("dvl_testlogin000000000000000004", "ABCD2348", null); // no link: many rows may have none
+    await add("dvl_testlogin000000000000000005", "ABCD2349", null);
+    const columns = (await db.prepare("PRAGMA table_info(device_logins)").all<{ name: string }>()).results.map((c) => c.name);
+    expect(columns.filter((c) => /^(link|code)$/.test(c))).toEqual([]); // only hashes
   });
 
   it("migration 0007 adds an invite's kind (old invites are for a person) and the links table, and keeps every row of 0006", async () => {
@@ -236,7 +270,7 @@ describe("schema", () => {
     expect(indexes.map((i) => i.name)).toEqual(["nest_links_account", "nest_links_to"]);
     await db.prepare("INSERT INTO link_ends (link_id, to_nest, created_at) VALUES ('lnk_testlink00000000000000001', 'nst_testnest000000000000000002', 1)").run();
     await expect(db.prepare("INSERT INTO link_ends (link_id, to_nest, created_at) VALUES ('lnk_testlink00000000000000001', 'nst_testnest000000000000000003', 2)").run()).rejects.toThrow();
-    for (const m of [migration8, migration9]) await runSql(db, m); // the full schema again, for the tests after this one
+    for (const m of [migration8, migration9, migration10]) await runSql(db, m); // the full schema again, for the tests after this one
   });
 
   it("no secret is stored in clear", async () => {
