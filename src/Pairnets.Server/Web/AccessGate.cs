@@ -108,6 +108,7 @@ public static class AccessGate
         }
         return path.StartsWithSegments("/api/update", StringComparison.OrdinalIgnoreCase) // "Update server" and its diagnostics
             || path.StartsWithSegments("/api/people", StringComparison.OrdinalIgnoreCase)
+            || path.StartsWithSegments("/api/settings", StringComparison.OrdinalIgnoreCase) // nest-wide settings ("Before big deletes")
             || path.StartsWithSegments("/api/storage", StringComparison.OrdinalIgnoreCase) // where the nest keeps its files, and moving them
             || path.StartsWithSegments("/api/purge", StringComparison.OrdinalIgnoreCase) // deleting for good, older versions too
             || path.StartsWithSegments("/api/links", StringComparison.OrdinalIgnoreCase) // the owner's linked folders

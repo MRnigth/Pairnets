@@ -208,6 +208,22 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
         return true;
     }
 
+    /// <summary>
+    /// Sets the nest-wide "Before big deletes" (one of <see cref="BigDeleteModes.All"/>) for every computer of the nest.
+    /// False on a nest from before it existed. Only the owner's computers may (403 otherwise).
+    /// </summary>
+    public async Task<bool> SetBigDeletesAsync(string mode, CancellationToken ct)
+    {
+        using var timeout = Linked(ct, TimeSpan.FromSeconds(30));
+        using var resp = await SendAsync(() => new HttpRequestMessage(HttpMethod.Put, "api/settings/big-deletes")
+            { Content = JsonContent.Create(new BigDeletesRequest(mode), options: PairnetsJson.Options) },
+            HttpCompletionOption.ResponseContentRead, timeout, ct).ConfigureAwait(false);
+        if ((int)resp.StatusCode is 404 or 405)
+            return false;
+        await ThrowForStatusAsync(resp).ConfigureAwait(false);
+        return true;
+    }
+
     /// <summary>The server's updater report (Debug mode), or null for a server from before it existed.</summary>
     public async Task<UpdaterDiagnostics?> GetUpdateDiagnosticsAsync(CancellationToken ct)
     {

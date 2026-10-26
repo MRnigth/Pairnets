@@ -31,6 +31,27 @@ public static class Endpoints
                 store.Sealed ? true : null));
         });
 
+        // "Before big deletes" in the apps' Settings: one choice for every computer of the nest (the owner's computers
+        // only, see AccessGate). The others hear it at once and read it again in /api/info.
+        app.MapPut("/api/settings/big-deletes", async (AuthStore auth, IHubContext<SyncHub> hub, BigDeletesRequest? body) =>
+        {
+            if (!BigDeleteModes.IsValid(body?.Mode))
+                return Error(StatusCodes.Status400BadRequest, ErrorCodes.BadRequest, "mode must be one of: " + string.Join(", ", BigDeleteModes.All) + ".");
+            if (auth.BigDeletes != body!.Mode)
+            {
+                auth.BigDeletes = body.Mode!;
+                try
+                {
+                    await hub.Clients.All.SendAsync(SyncHub.NestSettingsChangedMethod, CancellationToken.None);
+                }
+                catch (Exception)
+                {
+                    // The apps also read it every few minutes (/api/info).
+                }
+            }
+            return Json(new BigDeletesRequest(auth.BigDeletes));
+        });
+
         // Who the server thinks this computer is (the apps adopt a name changed on the nest), and who let it in
         // (the apps' account button shows the owner's email and how they signed in).
         app.MapGet("/api/me", (HttpContext ctx, AuthStore auth) => DeviceIdentity.Of(ctx) is { } me
@@ -78,7 +99,7 @@ public static class Endpoints
             var (free, total) = ServerUpdater.DiskSpace(store.Paths.DataDir);
             return Json(new ServerInfo(store.ServerId, store.CurrentVersion, PairnetsInfo.ApiVersion,
                 PairnetsInfo.ProductVersion, free, total, updater.GetStatus(), UploadSessions.PiecesInFlight, auth.NestName, store.HistoryBytes(), mover.CanMove,
-                store.Sealed ? true : null));
+                store.Sealed ? true : null, auth.BigDeletes));
         });
 
         // "Where your nest keeps files" in the apps' Settings: the drives, and how a move goes (asks the root helper

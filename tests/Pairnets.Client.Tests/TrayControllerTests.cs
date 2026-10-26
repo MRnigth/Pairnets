@@ -372,12 +372,18 @@ public sealed class TrayControllerTests
             i => i.Text == "Allow these deletions (100)…" && i.Available);
 
         app.Dialogs.When("f000.txt", MessageBoxResult.Yes);
+        app.Dialogs.Ticked = true; // "Don't ask my other computers"
         await app.Press(app.Tray.Window!, "Allow these deletions (100)…");
         var question = Assert.Single(app.Dialogs.Asked.Items);
         Assert.Equal("Pairnets – allow deletions?", question.Title);
         Assert.Contains("f019.txt", question.Text);
+        Assert.Equal([BigDeleteText.DontAskOthers], app.Dialogs.TicksOffered.Items);
         await app.WaitUntil(() => nest.Store.ReadManifest(null).Entries.Count(e => e.Deleted) == 100, "the 100 deletions to reach the nest", seconds: 90);
         await app.WaitUntil(() => app.Tray.Session!.Status.Status == RunnerStatus.Idle, "syncing to carry on");
+        // The tick set the nest's "Before big deletes": the other computers now follow this one.
+        var auth = nest.Services.GetRequiredService<AuthStore>();
+        await app.WaitUntil(() => auth.BigDeletes == BigDeleteModes.AskWhereDeleted, "the nest's choice to change");
+        await app.WaitUntil(() => app.Tray.Session!.Status.BigDelete is { Count: 100, FromHere: true }, "the big delete to be offered back");
     }
 
     [Fact]

@@ -55,6 +55,7 @@ public sealed partial class ApiTour
             await GoogleAsync();
             await RemovingSignInWaysAsync();
             await NestStorageAsync();
+            await BigDeletesAsync();
             await UpdateServerAsync();
             await NoSecretsInTheLogAsync();
         }
@@ -837,6 +838,22 @@ public sealed partial class ApiTour
         var same = await Read<NestStorage>(Post(_laptopApi, "api/storage/move", new StorageMoveRequest(storage.Current))); // already there: nothing to do
         Assert.Equal(storage.Current, same.Current);
         Assert.NotEqual(StorageMoveStatus.Requested, same.Status?.State);
+    }
+
+    /// <summary>Settings' "Before big deletes": one choice for the whole nest, told to its computers. Set back after.</summary>
+    private async Task BigDeletesAsync()
+    {
+        Step("Before big deletes: the nest's one choice, and its computers are told");
+        await Refused(HttpMethod.Put, "api/settings/big-deletes", json: new BigDeletesRequest(BigDeleteModes.Never));
+        Assert.Equal(BigDeleteModes.AskEverywhere, BigDeleteModes.Or((await Read<ServerInfo>(Get(_laptopApi, "api/info"))).BigDeletes));
+        await Call(_laptopApi, HttpMethod.Put, "api/settings/big-deletes", new BigDeletesRequest("sometimes"), HttpStatusCode.BadRequest);
+        var told = await Listen($"{_laptop.Name}'s push channel (again)", _laptop.Key, _laptop.Name);
+        var set = await Read<BigDeletesRequest>(Call(_laptopApi, HttpMethod.Put, "api/settings/big-deletes", new BigDeletesRequest(BigDeleteModes.AskWhereDeleted)));
+        Assert.Equal(BigDeleteModes.AskWhereDeleted, set.Mode);
+        await told.WaitForAsync(SyncHub.NestSettingsChangedMethod);
+        await told.StopAsync();
+        Assert.Equal(BigDeleteModes.AskWhereDeleted, (await Read<ServerInfo>(Get(_laptopApi, "api/info"))).BigDeletes);
+        await Call(_laptopApi, HttpMethod.Put, "api/settings/big-deletes", new BigDeletesRequest(BigDeleteModes.AskEverywhere));
     }
 
     // ------------------------------------------------------------------ the last step

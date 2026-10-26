@@ -98,6 +98,8 @@ public static partial class Program
                     Stage7.Render(outDir, dark ? "dark" : "light", print);
                 else if (args.Contains("--nest-downloads"))
                     NestDownloadScreens.Render(outDir, dark ? "dark" : "light", print);
+                else if (args.Contains("--big-deletes"))
+                    BigDeleteScreens.Render(outDir, dark ? "dark" : "light", print);
                 else if (args.Contains("--nest-only"))
                     NestOnlyScreens.Render(outDir, dark ? "dark" : "light", print);
                 else if (args.Contains("--stage4"))

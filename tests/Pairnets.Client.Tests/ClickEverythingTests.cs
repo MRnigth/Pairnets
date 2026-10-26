@@ -1002,6 +1002,12 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
         view.ChangeStorageRequested += () => b.Events.Add("ChangeStorageRequested");
         if (canMove)
             view.ShowNestStorage(SampleStorage());
+        view.ShowBigDeletes(BigDeleteModes.AskEverywhere, canChange: true, nestKnows: true);
+        view.BigDeletesChosen += mode =>
+        {
+            b.Events.Add("BigDeletes:" + mode);
+            return Task.FromResult<string?>(null);
+        };
         view.AdvancedExpander.IsExpanded = advancedOpen;
         var host = new Window { Title = "Settings", Width = 700, Height = 560, Content = view };
         ThemeManager.Attach(host);
@@ -1035,6 +1041,8 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
         new(t => t.Element is Expander, "open or close the section (files to ignore, Advanced)", c => ((Expander)c.Target.Element).IsExpanded != c.WasChecked),
         On("Check now", "look for an app update and say what it found", c => View(c).VersionText.Text.Contains("is available", StringComparison.Ordinal), seconds: 20),
         new(t => t.Element is RadioButton { GroupName: "par" }, "choose that many files at the same time", c => ((RadioButton)c.Target.Element).IsChecked == true),
+        new(t => t.Element is RadioButton { GroupName: "bigdel" }, "choose the nest's \"Before big deletes\" for every computer (applied at once)",
+            c => View(c).BigDeletesShown == BigDeleteText.Choices.Single(m => BigDeleteText.Choice(m) == c.Target.Label)),
         new(t => t.Element is RadioButton { GroupName: { } g } && g.StartsWith("placement:", StringComparison.Ordinal), "ask first, then choose where that folder lives (applied at once)",
             c => View(c).PlacementChosen(((RadioButton)c.Target.Element).GroupName["placement:".Length..]) == PlacementNamed(c.Target.Label)),
         On("Choose for a folder inside these… (opens Files)", "ask the app for the Files page", c => c.Bench.Events.Items.Contains("OpenFilesRequested")),

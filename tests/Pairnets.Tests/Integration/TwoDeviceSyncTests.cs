@@ -1,3 +1,4 @@
+using Pairnets.Core;
 using System.Text;
 using Pairnets.Core.Hashing;
 using Pairnets.Core.State;
@@ -234,6 +235,30 @@ public class TwoDeviceSyncTests : IAsyncLifetime
         for (var i = 100; i < 200; i++)
             _desktop.Delete($"f{i:000}.txt");
         Assert.Equal(PassOutcome.Blocked, (await _desktop.SyncAsync()).Outcome);
+    }
+
+    [Fact]
+    public async Task WithAskWhereDeletedTheOtherComputerFollows()
+    {
+        // The nest's "Before big deletes": only the computer where the files were deleted asks.
+        _desktop.Engine.BigDeletes = () => BigDeleteModes.AskWhereDeleted;
+        _laptop.Engine.BigDeletes = () => BigDeleteModes.AskWhereDeleted;
+        for (var i = 0; i < 220; i++)
+            _desktop.Write($"f{i:000}.txt", i.ToString());
+        Completed(await _desktop.SyncUntilQuietAsync());
+        Completed(await _laptop.SyncUntilQuietAsync());
+
+        for (var i = 0; i < 150; i++)
+            _desktop.Delete($"f{i:000}.txt");
+        Assert.Equal(BlockReason.MassDelete, (await _desktop.SyncAsync()).BlockReason); // asked here
+        _desktop.Engine.ApproveBlockedDeletions();
+        Assert.Equal(150, (await _desktop.SyncAsync()).DeletedRemote);
+
+        var r = await _laptop.SyncAsync(); // and not asked again on the laptop
+        Assert.Equal(PassOutcome.Completed, r.Outcome);
+        Assert.Equal(150, r.DeletedLocal);
+        Assert.Equal(70, _laptop.Files().Count);
+        Assert.Equal(150, BigDeleteBatch.Load(_laptop.Engine.State)!.Count);
     }
 
     [Fact]
