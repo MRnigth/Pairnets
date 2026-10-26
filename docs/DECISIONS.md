@@ -1806,6 +1806,25 @@ change was never seen.
   app ("disposed object" in `SyncRunner`). The pre-deploy check hit it once the tests deleted 100 files at a time. A
   late wake-up is now ignored (`SyncRunner.Wake`; the Program Files fix below found the same crash, one fix kept).
 
+## "Before big deletes": one choice for the whole nest (feature/big-delete-setting, 2026-10-26)
+
+* **Asked for:** "a global setting so you don't need to confirm on all devices that you wanna delete 900 files every time".
+  Each computer saw the nest's 900 "deleted" marks as 900 deletions of its own and asked again.
+* **Rule.** A nest-wide choice, kept on the nest (AuthStore `settings`, key `bigDeletes`), read by every computer in
+  `/api/info` (at start, every 5 minutes, and at once on the push `NestSettingsChanged`): *Ask on the computer where I
+  deleted them* (the others follow: incoming deletions never block), *Ask on every computer* (as before, and the
+  default), *Never ask*. Set in Settings ("Your nest" card) or by ticking "Don't ask my other computers" on the delete
+  question. `PUT /api/settings/big-deletes`, the owner's computers only (AccessGate). An older nest has no value: every
+  computer asks, and Settings says to update the nest.
+* **Kept whatever the choice:** an emptied folder (wrong or unplugged drive) always asks; "Put back" on a shared nest
+  never counts.
+* **Undo.** Every big delete (100+ in one pass, asked or not) is remembered on the computer that carried it out
+  (`BigDeleteBatch`, state.db meta). A "Needs you" card and a notification offer **Put them all back**: each file is
+  restored from the nest's history (the version with the same content, else the newest), so it comes back on every
+  computer; files made again since are left alone. This computer's copies are also in the Recycle Bin / Trash, and the
+  nest keeps deleted files 30 days. The restore uses the existing per-file `POST /api/history/restore`, four at a time,
+  so no new nest code is needed for it.
+
 ## A nest folder in C:\Program Files (1.0.61.4.1, 2026-10-23)
 
 * **Refused when it is chosen.** Windows lets only programs with admin rights save in C:\Program Files,

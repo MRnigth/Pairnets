@@ -531,6 +531,7 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
 
         var session = new ClientSession(settings, token, state, api, engine, runner, clock, loggers.CreateLogger("Pairnets.Session"), trash, loggers);
         engine.NestFull = () => session.Status.ServerSpaceLow;
+        engine.BigDeletes = () => session.Status.Server?.BigDeletes;
         session.Wire();
         if (Directory.Exists(Path.Combine(stateDir, "opened")))
             _ = session.Files; // files opened from the nest before: changes still waiting are saved back
@@ -542,6 +543,7 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
             ServerUrl = string.IsNullOrWhiteSpace(settings.ServerUrl) ? null : settings.ServerUrl,
             NestLabel = settings.NestLabel,
             Access = engine.Access,
+            BigDelete = BigDeleteBatch.Load(state) is { Done: false } last && clock.GetUtcNow() - last.At < HistoryQuery.Retention ? last : null,
             NestOnlyFolders = settings.Placement
                 .Where(p => p.Value == FilePlacement.NestOnly && PlacementMap.Allowed(p.Key, p.Value))
                 .Select(p => PlacementMap.NormalizeFolder(p.Key))
@@ -719,6 +721,12 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
             _ = RefreshDevicesAsync();
         };
         Runner.NestRenamed += name => _ = RefreshServerInfoAsync(); // the name comes back in /api/info
+        Runner.NestSettingsChanged += () => _ = RefreshServerInfoAsync(); // "Before big deletes" comes back in /api/info
+        Engine.BigDeleteCarriedOut += batch =>
+        {
+            Update(s => s with { BigDelete = batch });
+            Activity.Add(ActivityKind.Info, null, BigDeleteText.Done(batch), _clock);
+        };
         Runner.RemoteChangeReceived += (device, _) =>
         {
             if (string.Equals(device, Settings.DeviceName, StringComparison.OrdinalIgnoreCase))
@@ -1281,6 +1289,108 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
         Activity.Add(ActivityKind.Info, path, $"Restored {PathRules.FileName(path)} (the version from {Format.Moment(version.StoredAtUtc, _clock.GetUtcNow())})", _clock);
         Runner.RequestSync("restored", full: true);
         return null;
+    }
+
+    // ------------------------------------------------------------------ big deletes
+
+    /// <summary>The nest-wide "Before big deletes" as this computer knows it; asks everywhere until the nest says otherwise.</summary>
+    public string BigDeletes => BigDeleteModes.Or(Status.Server?.BigDeletes);
+
+    /// <summary>Whether this nest knows "Before big deletes" (nests from before it leave it out of /api/info).</summary>
+    public bool NestKnowsBigDeletes => Status.Server?.BigDeletes is not null;
+
+    /// <summary>Whether this computer may change "Before big deletes" (the owner's computers; not on a nest shared with it).</summary>
+    public bool CanChangeBigDeletes => NestKnowsBigDeletes && Engine.Access.IsOwner;
+
+    /// <summary>Sets "Before big deletes" for every computer of the nest. Returns null on success, or what went wrong.</summary>
+    public async Task<string?> SetBigDeletesAsync(string mode, CancellationToken ct = default)
+    {
+        if (!BigDeleteModes.IsValid(mode))
+            return "Unknown choice.";
+        try
+        {
+            if (!await Api.SetBigDeletesAsync(mode, ct).ConfigureAwait(false))
+                return "Update the nest to use this.";
+        }
+        catch (Exception ex) when (ex is PairnetsNetworkException or PairnetsAuthException or PairnetsProtocolException)
+        {
+            return "The nest did not take it. " + FriendlyErrors.Describe(ex);
+        }
+        Update(s => s.Server is { } info ? s with { Server = info with { BigDeletes = mode } } : s);
+        Activity.Add(ActivityKind.Info, null, "Before big deletes: " + BigDeleteText.Choice(mode), _clock);
+        return null;
+    }
+
+    /// <summary>"Close" on the big-delete notice: it is not offered again (History still has every file).</summary>
+    public void DismissBigDelete()
+    {
+        if (Status.BigDelete is not { } batch)
+            return;
+        BigDeleteBatch.Save(State, batch with { Done = true });
+        Update(s => s with { BigDelete = null });
+    }
+
+    /// <summary>
+    /// "Put them all back": restores every file of the last big delete from the nest's history (the version it had when
+    /// it was deleted, else the newest kept), then syncs, so they come back on every computer. Files made again since
+    /// are left alone. Reports (done, total) as it goes.
+    /// </summary>
+    public async Task<BigDeleteRestore> PutBigDeleteBackAsync(IProgress<(int Done, int Total)>? progress = null, CancellationToken ct = default)
+    {
+        if (Status.BigDelete is not { } batch)
+            return new BigDeleteRestore(0, 0, 0, null);
+        IReadOnlyDictionary<string, ManifestEntry> entries;
+        try
+        {
+            var manifest = await Api.GetManifestAsync(null, ct).ConfigureAwait(false);
+            entries = manifest.Entries.GroupBy(e => e.Path, StringComparer.Ordinal).ToDictionary(g => g.Key, g => g.Last(), StringComparer.Ordinal);
+        }
+        catch (Exception ex) when (ex is PairnetsNetworkException or PairnetsAuthException or PairnetsProtocolException)
+        {
+            return new BigDeleteRestore(0, 0, batch.Count, "Could not reach the nest. " + FriendlyErrors.Describe(ex));
+        }
+        int done = 0, restored = 0, skipped = 0, failed = 0;
+        using var gate = new SemaphoreSlim(4);
+        var work = batch.Files.Select(async file =>
+        {
+            await gate.WaitAsync(ct).ConfigureAwait(false);
+            try
+            {
+                if (entries.TryGetValue(file.Path, out var now) && !now.Deleted)
+                {
+                    Interlocked.Increment(ref skipped); // made again (or never deleted): left as it is
+                    return;
+                }
+                var versions = await Api.GetHistoryAsync(file.Path, ct).ConfigureAwait(false);
+                var version = versions.FirstOrDefault(v => file.Hash is { } h && v.Hash8.Length > 0 && h.StartsWith(v.Hash8, StringComparison.OrdinalIgnoreCase))
+                    ?? versions.OrderByDescending(v => v.StoredAtUtc).FirstOrDefault();
+                if (version is not null && (await Api.RestoreAsync(file.Path, version.Id, ct).ConfigureAwait(false)).Outcome == ApiOutcome.Ok)
+                    Interlocked.Increment(ref restored);
+                else
+                    Interlocked.Increment(ref failed);
+            }
+            catch (Exception ex) when (ex is PairnetsNetworkException or PairnetsAuthException or PairnetsProtocolException)
+            {
+                Interlocked.Increment(ref failed);
+            }
+            finally
+            {
+                gate.Release();
+                progress?.Report((Interlocked.Increment(ref done), batch.Count));
+            }
+        }).ToList();
+        await Task.WhenAll(work).ConfigureAwait(false);
+        if (failed == 0)
+        {
+            BigDeleteBatch.Save(State, batch with { Done = true });
+            Update(s => s with { BigDelete = null });
+        }
+        if (restored > 0)
+        {
+            Activity.Add(ActivityKind.Info, null, BigDeleteText.PutBack(restored), _clock);
+            Runner.RequestSync("put-back-big-delete", full: true);
+        }
+        return new BigDeleteRestore(restored, skipped, failed, failed == 0 ? null : BigDeleteText.NotAllBack(failed));
     }
 
     public async ValueTask DisposeAsync()

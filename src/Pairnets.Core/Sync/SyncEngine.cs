@@ -85,6 +85,15 @@ public sealed class SyncEngine
     /// computer until the nest has room. Null: not known (copies are freed; they are safely on the nest).
     /// </summary>
     public Func<bool>? NestFull { get; set; }
+
+    /// <summary>
+    /// The nest-wide "Before big deletes" (<see cref="BigDeleteModes"/>), read at every pass; null or unknown: ask.
+    /// An emptied folder asks whatever it says.
+    /// </summary>
+    public Func<string?>? BigDeletes { get; set; }
+
+    /// <summary>Raised when a pass is about to carry out a big delete (100 or more files), asked or not (on a background thread).</summary>
+    public event Action<BigDeleteBatch>? BigDeleteCarriedOut;
     private volatile NestAccess _access;
     private volatile bool _putBackRequested;
 
@@ -525,7 +534,12 @@ public sealed class SyncEngine
         var limit = _options.MassDeleteThreshold;
         var folderEmpty = tracked > 0 && scan.FileCount == 0;
         var approval = _state.ConsumeApproval();
-        if (deleteLocal >= limit || deleteRemote >= limit || (folderEmpty && wanted.Count > 0))
+        // "Before big deletes" for the whole nest: deletions that came from the nest (another computer deleted them)
+        // can follow without a question here; an emptied folder (an unplugged drive?) always asks.
+        var mode = BigDeleteModes.Or(BigDeletes?.Invoke());
+        var askLocal = mode == BigDeleteModes.AskEverywhere && deleteLocal >= limit;
+        var askRemote = mode != BigDeleteModes.Never && deleteRemote >= limit;
+        if (askLocal || askRemote || (folderEmpty && wanted.Count > 0))
         {
             if (approval is null || !wanted.IsSubsetOf(approval))
             {
@@ -540,7 +554,11 @@ public sealed class SyncEngine
             }
             _log.LogWarning("Executing {Count} deletion(s) approved by the user", wanted.Count);
         }
+        else if (deleteLocal >= limit || deleteRemote >= limit)
+            _log.LogWarning("Executing {Count} deletion(s) without asking (the nest's \"Before big deletes\" is {Mode})", wanted.Count, mode);
         _state.ClearPendingDeletes();
+        if (deleteLocal >= limit || deleteRemote >= limit)
+            NoteBigDelete(plan, deleteRemote >= limit);
         await DropStaleTransfersAsync(plan, scan).ConfigureAwait(false);
 
         // ---- 6. Execute. Deletions first so file/folder replacements never collide.
@@ -593,6 +611,26 @@ public sealed class SyncEngine
             await RunLimitedAsync(phase.ToList(), parallel, item => ExecuteIsolatedAsync(item, ctx, ct), ct).ConfigureAwait(false);
         }
         Progress?.Invoke(new SyncProgress(null, null, 0, 0, ctx.FilesDone, ctx.FilesTotal));
+    }
+
+    /// <summary>Remembers a big delete (see <see cref="BigDeleteBatch"/>), so the app can offer to put it all back.</summary>
+    private void NoteBigDelete(List<PlannedAction> plan, bool fromHere)
+    {
+        var files = plan
+            .Where(p => !p.PutBack && p.Action is SyncAction.DeleteLocal or SyncAction.DeleteRemote)
+            .Select(p => new BigDeleteFile(p.Path, p.Base ?? p.Local ?? p.Server))
+            .OrderBy(f => f.Path, StringComparer.Ordinal)
+            .ToList();
+        var batch = new BigDeleteBatch(_clock.GetUtcNow(), fromHere, files);
+        try
+        {
+            BigDeleteBatch.Save(_state, batch);
+        }
+        catch (Exception ex)
+        {
+            _log.LogWarning(ex, "Could not remember the big delete for \"Put them all back\"");
+        }
+        BigDeleteCarriedOut?.Invoke(batch);
     }
 
     /// <summary>Runs one planned action; a problem with one file never aborts the pass.</summary>

@@ -114,6 +114,12 @@ public sealed record StatusSnapshot(
     /// <summary>The first files a blocked pass would delete (the Overview lists a few; <see cref="PendingDeletes"/> is how many in all).</summary>
     public IReadOnlyList<string> PendingDeletePaths { get; init; } = [];
 
+    /// <summary>
+    /// The last big delete carried out here (100 or more files), while "Put them all back" can still be offered; null
+    /// when there is none, it was put back or the notice was closed.
+    /// </summary>
+    public BigDeleteBatch? BigDelete { get; init; }
+
     /// <summary>Who this computer belongs to on the nest (email, how they signed in), or null when not known.</summary>
     public AccountInfo? Account { get; init; }
 

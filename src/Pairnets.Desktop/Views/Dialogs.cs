@@ -22,6 +22,17 @@ public static class Dialogs
         await ShowAsync(owner, title, text, [yes, no], danger) == yes;
 
     /// <summary>
+    /// <see cref="ConfirmAsync"/> with a tick box above the buttons (<paramref name="tick"/>, none when null): Ticked says
+    /// whether it was ticked when <paramref name="yes"/> was pressed.
+    /// </summary>
+    public static async Task<(bool Yes, bool Ticked)> ConfirmWithTickAsync(Window? owner, string title, string text, string yes, string no, string? tick, bool danger = false)
+    {
+        var box = tick is null ? null : new CheckBox { Content = tick, Name = "DialogTick" };
+        var pressed = await ShowAsync(owner, title, text, [yes, no], danger, box) == yes;
+        return (pressed, pressed && box?.IsChecked == true);
+    }
+
+    /// <summary>
     /// Puts text on the clipboard; false when it can't (no clipboard, or another app holds it). Never throws, so a
     /// busy clipboard doesn't end up in the crash handler and the bug report (as the Windows app's CopyText).
     /// </summary>
@@ -228,7 +239,7 @@ public static class Dialogs
     }
 
     /// <summary>A message with buttons; the last (No, Cancel, OK) is the safe one, pressed by Enter and Esc and focused.</summary>
-    private static async Task<string?> ShowAsync(Window? owner, string title, string text, string[] buttons, bool danger = false)
+    private static async Task<string?> ShowAsync(Window? owner, string title, string text, string[] buttons, bool danger = false, CheckBox? tick = null)
     {
         string? result = null;
         var window = new Window
@@ -265,9 +276,11 @@ public static class Dialogs
             Children =
             {
                 new SelectableTextBlock { Text = text, TextWrapping = Avalonia.Media.TextWrapping.Wrap },
-                row,
             },
         };
+        if (tick is not null)
+            ((StackPanel)window.Content).Children.Add(tick);
+        ((StackPanel)window.Content).Children.Add(row);
         if (owner is { IsVisible: true })
             await window.ShowDialog(owner);
         else

@@ -780,6 +780,12 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
         view.SwitchesChanged += _ => s.Events.Add("switches");
         view.ChangeStorageRequested += () => s.Events.Add("change-storage");
         view.MoveProgramRequested += () => s.Events.Add("move-program");
+        view.ShowBigDeletes(BigDeleteModes.AskEverywhere, canChange: true, nestKnows: true);
+        view.BigDeletesChosen += mode =>
+        {
+            s.Events.Add("big-deletes:" + mode);
+            return Task.FromResult<string?>(null);
+        };
         if (canMove)
         {
             view.ShowNestStorage(NestPlaceFlowTests.Sample());
@@ -796,6 +802,9 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
         // Switches apply at once, without Save (A11); a choice that was already made changes nothing.
         s.Expect["OnSwitchChanged"] = All(Raised(s, "switches"), That(() => view.SwitchesApplied, "the switch apply at once"));
         s.Expect["OnParChanged"] = That(() => view.SwitchesApplied, "the choice apply at once");
+        // "Before big deletes" is the nest's: the choice pressed is the one the nest now has.
+        s.Expect["OnBigDeletesChosen"] = That(() => view.BigDeletesShown == (Screen.Named<RadioButton>(view, "BigAskWhere").IsChecked == true ? BigDeleteModes.AskWhereDeleted
+            : Screen.Named<RadioButton>(view, "BigNever").IsChecked == true ? BigDeleteModes.Never : BigDeleteModes.AskEverywhere), "the nest's choice change at once");
         s.Expect["OnReset"] = Raised(s, "reset");
         s.Expect["OnAddNest"] = Raised(s, "add-nest");
         s.Expect["OnInviteFriend"] = Raised(s, "invite-friend");

@@ -156,6 +156,9 @@ public sealed class SyncRunner : IAsyncDisposable
     /// <summary>The owner renamed the nest on their account page ("NestRenamed" on the push channel): its new name.</summary>
     public event Action<string>? NestRenamed;
 
+    /// <summary>A nest-wide setting changed ("NestSettingsChanged" on the push channel), such as "Before big deletes".</summary>
+    public event Action? NestSettingsChanged;
+
     /// <summary>Another computer has everything up to a server version ("PeerSynced"): its name and that version.</summary>
     public event Action<string, long>? PeerSynced;
 
@@ -801,6 +804,7 @@ public sealed class SyncRunner : IAsyncDisposable
         _hub.On<string, string>("DeviceRemoved", (id, name) => DeviceListChanged?.Invoke(id, name, true));
         _hub.On<string, string>("DeviceRenamed", (id, name) => DeviceListChanged?.Invoke(id, name, false));
         _hub.On<string>(PushNames.NestRenamed, name => NestRenamed?.Invoke(name));
+        _hub.On(PushNames.NestSettingsChanged, () => NestSettingsChanged?.Invoke());
         _hub.On<string, string, string>("PairRequested", (code, name, system) => JoinRequested?.Invoke(code, name, system));
         _hub.On<string, string, string, string>("PairRequestedFrom", (code, name, system, address) => JoinRequestedFrom?.Invoke(code, name, system, address));
         _hub.On<string, bool>("PairDecided", (code, _) => JoinDecided?.Invoke(code));

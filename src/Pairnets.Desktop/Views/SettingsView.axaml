@@ -82,6 +82,23 @@
                             Click="OnChangeStorage" AutomationProperties.Name="Change where your nest keeps files" />
                   </Grid>
                 </StackPanel>
+                <!-- Before big deletes: one choice for every computer of the nest (applied at once, on the nest) -->
+                <StackPanel x:Name="BigDeletesPanel" IsVisible="False" Spacing="14">
+                  <Border Classes="hair" />
+                  <StackPanel Spacing="2">
+                    <TextBlock Text="Before big deletes (100+ files)" FontWeight="SemiBold" TextWrapping="Wrap" />
+                    <TextBlock Classes="t3" TextWrapping="Wrap" Text="One choice for every computer of this nest. An emptied folder always asks." />
+                  </StackPanel>
+                  <StackPanel x:Name="BigDeletesChoices" Spacing="6">
+                    <RadioButton x:Name="BigAskWhere" Classes="pill" GroupName="bigdel" HorizontalAlignment="Left"
+                                 Content="Ask on the computer where I deleted them" IsCheckedChanged="OnBigDeletesChosen" />
+                    <RadioButton x:Name="BigAskEvery" Classes="pill" GroupName="bigdel" HorizontalAlignment="Left"
+                                 Content="Ask on every computer" IsCheckedChanged="OnBigDeletesChosen" />
+                    <RadioButton x:Name="BigNever" Classes="pill" GroupName="bigdel" HorizontalAlignment="Left"
+                                 Content="Never ask" IsCheckedChanged="OnBigDeletesChosen" />
+                  </StackPanel>
+                  <TextBlock x:Name="BigDeletesDetail" Classes="t3" TextWrapping="Wrap" />
+                </StackPanel>
               </StackPanel>
             </Border>
 

@@ -864,6 +864,19 @@ public sealed class TrayController : ITrayActions, IDisposable
         StartNest(run, token);
     }
 
+    /// <summary>"Put them all back" on the big-delete card: restores the whole delete from the nest, on every computer.</summary>
+    private async void PutBigDeleteBack()
+    {
+        if (_session is not { } session || session.Status.BigDelete is not { } big)
+            return;
+        if (!Dialogs.Confirm(_window is { IsVisible: true } ? _window : null, BigDeleteText.PutBackQuestion(big), "Pairnets – put them back?", BigDeleteText.PutBackButton))
+            return;
+        var done = await session.PutBigDeleteBackAsync();
+        Dialogs.Ask(_window is { IsVisible: true } ? _window : null, BigDeleteText.PutBackResult(done), "Pairnets", MessageBoxButton.OK,
+            done.Error is null ? MessageBoxImage.Information : MessageBoxImage.Warning);
+        _dirty = true;
+    }
+
     /// <summary>"Use StudyPC" on the name offer: renames this computer on its nest; the session then saves the new name.</summary>
     private async void UseOwnName(NameOffer offer)
     {
@@ -1079,6 +1092,10 @@ public sealed class TrayController : ITrayActions, IDisposable
         if (status.HeldBack.Count > 0 && _session is { } holding)
             items.Add(new AttentionItem(ShareText.HeldBackTitle(status.HeldBack.Count), ShareText.HeldBackDetail(status.Access, status.NestTitle, status.HeldBack),
                 ShareText.PutBack(status.Access), holding.PutBackHeldBack, SecondLabel: ShareText.KeepMine, Second: holding.KeepHeldBack));
+        // A big delete went through (asked or not): everything can be put back in one go while the nest keeps it.
+        if (status.BigDelete is { } big)
+            items.Add(new AttentionItem(BigDeleteText.Done(big), BigDeleteText.Safe, BigDeleteText.PutBackButton, PutBigDeleteBack, At: big.At,
+                SecondLabel: BigDeleteText.CloseLabel, Second: () => _session?.DismissBigDelete()));
         if (status.FixLabel is not null)
             items.Add(new AttentionItem("Syncing is paused until you decide", _session.Status.Text, status.FixLabel, FixBlocked));
         foreach (var w in _session.Warnings())
@@ -1107,6 +1124,13 @@ public sealed class TrayController : ITrayActions, IDisposable
                 : result.BlockReason == BlockReason.SignInRequired ? "Sign in to your nest" : "Pairnets paused syncing";
             Toast("blocked:" + result.BlockReason, PrefixOf(run) + title, result.Message ?? result.BlockReason.ToString(),
                 result.BlockReason == BlockReason.SignedOut ? Forms.ToolTipIcon.Error : Forms.ToolTipIcon.Warning, () => Picked(FixBlocked), run);
+        }
+        else if (result.DeletedLocal >= BigDeleteText.Threshold || result.DeletedRemote >= BigDeleteText.Threshold)
+        {
+            // A big delete went through (perhaps without asking, as the nest's "Before big deletes" says): never silent.
+            var count = result.DeletedLocal + result.DeletedRemote;
+            Toast("bigdelete", PrefixOf(run) + BigDeleteText.ToastTitle(count), BigDeleteText.Safe + " " + BigDeleteText.ToastHint,
+                Forms.ToolTipIcon.Info, () => Picked(() => ShowMainWindow(MainPage.Attention)), run);
         }
         else if (result.Freed > 0)
         {
@@ -1317,8 +1341,13 @@ public sealed class TrayController : ITrayActions, IDisposable
             case BlockReason.FolderEmpty:
                 if (_session.PendingDeletes().Count is > 0 and var pending
                     && Dialogs.Confirm(_window is { IsVisible: true } ? _window : null, _session.DescribePendingDeletes(), "Pairnets – allow deletions?",
-                        OverviewModel.DeleteButtons(pending).Yes, OverviewModel.DeleteButtons(pending).No))
-                    _session.ApproveDeletions();
+                        OverviewModel.DeleteButtons(pending).Yes, OverviewModel.DeleteButtons(pending).No, BigDeleteText.TickFor(_session), out var others))
+                {
+                    var session = _session;
+                    session.ApproveDeletions();
+                    if (others)
+                        _ = session.SetBigDeletesAsync(BigDeleteModes.AskWhereDeleted); // the other computers follow this one
+                }
                 break;
             case BlockReason.ForeignMarker:
                 if (Dialogs.Ask(null, $"{Nest.Folder} was synced by Pairnets before, but this computer has no record of it (for example after reinstalling).\n\n" +
@@ -1463,6 +1492,8 @@ public sealed class TrayController : ITrayActions, IDisposable
         view.OpenLinkRequested += Shell;
         view.Cancelled += () => _window?.Navigate(MainPage.Overview);
         view.ChangeStorageRequested += () => ShowNestPlace(view);
+        view.ShowBigDeletes(_session?.BigDeletes, _session?.CanChangeBigDeletes == true, _session?.NestKnowsBigDeletes == true, _session is not null);
+        view.BigDeletesChosen += mode => _session is { } s ? s.SetBigDeletesAsync(mode) : Task.FromResult<string?>("Not connected to the nest.");
         _window.ShowSettingsPage(view);
         _ = FillNestStorageAsync(view);
     }

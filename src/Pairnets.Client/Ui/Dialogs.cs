@@ -46,6 +46,9 @@ public static class Dialogs
         /// <summary>The files "Add files" adds, or null for Cancel.</summary>
         IReadOnlyList<string>? OpenFiles(string title) => null;
 
+        /// <summary>Whether the tick box under a question (<see cref="Confirm(Window?, string, string, string, string, string?, out bool)"/>) is ticked.</summary>
+        bool Tick(string tick) => false;
+
         /// <summary>Opens one of the app's own windows (<see cref="ShowWindow"/>) without waiting for it to close.</summary>
         void Show(Window window) => window.Show();
     }
@@ -71,10 +74,35 @@ public static class Dialogs
     /// Asks a question whose buttons say what they do ("Delete 37 files" / "Cancel"), not Yes/No. True for
     /// <paramref name="yes"/>. Cancel is the default button (Enter and Esc), so a hurried key press changes nothing.
     /// </summary>
-    public static bool Confirm(Window? owner, string text, string title, string yes, string no = "Cancel")
+    public static bool Confirm(Window? owner, string text, string title, string yes, string no = "Cancel") =>
+        Confirm(owner, text, title, yes, no, null, out _);
+
+    /// <summary>
+    /// <see cref="Confirm(Window?, string, string, string, string)"/> with a tick box above the buttons
+    /// (<paramref name="tick"/>, none when null): <paramref name="ticked"/> says whether it was ticked when the yes button was pressed.
+    /// </summary>
+    public static bool Confirm(Window? owner, string text, string title, string yes, string no, string? tick, out bool ticked)
     {
+        ticked = false;
         if (Responder is { } responder)
-            return responder.Answer(new Question(text, title, MessageBoxButton.YesNo, MessageBoxImage.Warning)) == MessageBoxResult.Yes;
+        {
+            var yesPressed = responder.Answer(new Question(text, title, MessageBoxButton.YesNo, MessageBoxImage.Warning)) == MessageBoxResult.Yes;
+            ticked = yesPressed && tick is not null && responder.Tick(tick);
+            return yesPressed;
+        }
+        var window = ConfirmWindow(owner, text, title, yes, no, tick, out var box, out var noButton);
+        window.Loaded += (_, _) => noButton.Focus();
+        var answer = window.ShowDialog() == true;
+        ticked = answer && box?.IsChecked == true;
+        return answer;
+    }
+
+    /// <summary>The window of <see cref="Confirm(Window?, string, string, string, string, string?, out bool)"/>, not shown (screenshots).</summary>
+    public static Window ConfirmPreview(string text, string title, string yes, string no, string? tick) =>
+        ConfirmWindow(null, text, title, yes, no, tick, out _, out _);
+
+    private static Window ConfirmWindow(Window? owner, string text, string title, string yes, string no, string? tick, out CheckBox? box, out Button noButton)
+    {
         var window = new Window
         {
             Title = title,
@@ -91,7 +119,7 @@ public static class Dialogs
         yesButton.SetResourceReference(FrameworkElement.StyleProperty, "SubtleButton");
         yesButton.SetResourceReference(Control.ForegroundProperty, "T.BadText");
         yesButton.Click += (_, _) => window.DialogResult = true;
-        var noButton = new Button { Content = no, MinWidth = 90, Padding = new Thickness(16, 0, 16, 0), IsDefault = true, IsCancel = true };
+        noButton = new Button { Content = no, MinWidth = 90, Padding = new Thickness(16, 0, 16, 0), IsDefault = true, IsCancel = true };
         noButton.SetResourceReference(FrameworkElement.StyleProperty, "SubtleButton");
         var buttons = new System.Windows.Controls.StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 18, 0, 0) };
         buttons.Children.Add(yesButton);
@@ -109,10 +137,16 @@ public static class Dialogs
         body.SetResourceReference(Control.ForegroundProperty, "T.Text");
         var content = new System.Windows.Controls.StackPanel { Margin = new Thickness(22, 20, 22, 18) };
         content.Children.Add(body);
+        box = null;
+        if (tick is not null)
+        {
+            box = new CheckBox { Content = tick, Margin = new Thickness(0, 14, 0, 0) };
+            box.SetResourceReference(Control.ForegroundProperty, "T.Text");
+            content.Children.Add(box);
+        }
         content.Children.Add(buttons);
         window.Content = content;
-        window.Loaded += (_, _) => noButton.Focus();
-        return window.ShowDialog() == true;
+        return window;
     }
 
     /// <summary>Shows one of the app's own windows as a dialog and waits until it closes (in tests: opens it and goes on).</summary>

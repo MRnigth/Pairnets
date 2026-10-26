@@ -183,6 +183,17 @@ internal sealed class DialogScript : Dialogs.IResponder
     /// <summary>Every question with buttons, whole (its points too).</summary>
     public Log<Dialogs.Choice> Choices { get; } = new();
 
+    /// <summary>The tick boxes offered under a question, and whether they are ticked (<see cref="Ticked"/>).</summary>
+    public Log<string> TicksOffered { get; } = new();
+
+    public bool Ticked { get; set; }
+
+    public bool Tick(string tick)
+    {
+        TicksOffered.Add(tick);
+        return Ticked;
+    }
+
     public string? Choose(Dialogs.Choice choice)
     {
         Popups.Add(choice.Title);

@@ -30,6 +30,7 @@ public sealed class SyncHub(BatchRegistry batches, SyncedRegistry synced, Servic
     public const string PeerTransferMethod = "PeerTransfer";
     public const string PeerSyncedMethod = "PeerSynced";
     public const string NestRenamedMethod = PushNames.NestRenamed;
+    public const string NestSettingsChangedMethod = PushNames.NestSettingsChanged;
 
     /// <summary>The connections that hear every "Changed": all but friends' computers.</summary>
     public const string EveryChangeGroup = "every-change";

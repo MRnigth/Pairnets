@@ -30,7 +30,8 @@ public sealed record ErrorBody(string Code, string? Message = null);
 /// <see cref="NestName"/>: the name the owner gave the nest on their account page (missing until they did, and on
 /// nests that are not linked to an account). <see cref="CanMoveStorage"/>: the nest can move its files to another drive
 /// when an app asks (<c>GET /api/storage</c>); missing on older nests, so false. <see cref="Sealed"/>: true on an encrypted nest (docs/ENCRYPTION.md),
-/// missing otherwise.
+/// missing otherwise. <see cref="BigDeletes"/>: the nest-wide choice "Before big deletes" (see <see cref="BigDeleteModes"/>);
+/// missing on older nests, so every computer asks.
 /// </summary>
 public sealed record ServerInfo(
     string ServerId,
@@ -44,7 +45,34 @@ public sealed record ServerInfo(
     string? NestName = null,
     long? HistoryBytes = null,
     bool? CanMoveStorage = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? Sealed = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? Sealed = null,
+    string? BigDeletes = null);
+
+/// <summary>
+/// "Before big deletes (100+ files)", one choice for the whole nest (kept on the nest, read in /api/info, changed with
+/// <c>PUT /api/settings/big-deletes</c> from the owner's computers). An emptied folder always asks, whatever the choice.
+/// </summary>
+public static class BigDeleteModes
+{
+    /// <summary>Every computer asks before it deletes 100 or more files (as before; also on older nests).</summary>
+    public const string AskEverywhere = "askEverywhere";
+
+    /// <summary>Only the computer where the files were deleted asks; the others follow what the nest says.</summary>
+    public const string AskWhereDeleted = "askWhereDeleted";
+
+    /// <summary>No computer asks (an emptied folder still does).</summary>
+    public const string Never = "never";
+
+    public static readonly IReadOnlyList<string> All = [AskEverywhere, AskWhereDeleted, Never];
+
+    public static bool IsValid(string? mode) => mode is AskEverywhere or AskWhereDeleted or Never;
+
+    /// <summary>The choice to use: an unknown or missing one asks everywhere.</summary>
+    public static string Or(string? mode) => IsValid(mode) ? mode! : AskEverywhere;
+}
+
+/// <summary>Body of <c>PUT /api/settings/big-deletes</c>.</summary>
+public sealed record BigDeletesRequest(string? Mode);
 
 /// <summary>The server's self-updater. <see cref="State"/>: missing, idle, requested, running, succeeded or failed.</summary>
 public sealed record UpdaterStatus(bool Installed, string State, string? Message = null, DateTimeOffset? At = null);
@@ -328,6 +356,9 @@ public static class PushNames
 
     /// <summary>Server → every app: <c>NestRenamed(name)</c>, the owner renamed the nest on their account page.</summary>
     public const string NestRenamed = "NestRenamed";
+
+    /// <summary>Server → every app: <c>NestSettingsChanged()</c>, a nest-wide setting changed (read it again in /api/info).</summary>
+    public const string NestSettingsChanged = "NestSettingsChanged";
 }
 
 /// <summary>HTTP header names used by Pairnets.</summary>

@@ -229,6 +229,29 @@ public sealed class FriendAccessTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task BeforeBigDeletesIsOneChoiceTheOwnerMakes()
+    {
+        var desk = _server.MintKey("DESK");
+        using var deskHttp = _server.RawHttp(desk.Key);
+        var (_, _, anna) = Friend("ANNA-PC", CanChange());
+        using var annaHttp = anna;
+
+        // Until the owner chooses, every computer asks (and every computer reads the choice).
+        Assert.Equal(BigDeleteModes.AskEverywhere, (await anna.GetFromJsonAsync<ServerInfo>("api/info", PairnetsJson.Options))!.BigDeletes);
+
+        await AssertRefusedAsync(anna.PutAsJsonAsync("api/settings/big-deletes", new BigDeletesRequest(BigDeleteModes.Never), PairnetsJson.Options),
+            AccessGate.OwnerOnly, "the nest's \"Before big deletes\"");
+        Assert.Equal(HttpStatusCode.BadRequest, (await deskHttp.PutAsJsonAsync("api/settings/big-deletes", new BigDeletesRequest("sometimes"), PairnetsJson.Options)).StatusCode);
+        Assert.Equal(BigDeleteModes.AskEverywhere, Auth.BigDeletes);
+
+        var set = await deskHttp.PutAsJsonAsync("api/settings/big-deletes", new BigDeletesRequest(BigDeleteModes.AskWhereDeleted), PairnetsJson.Options);
+        Assert.Equal(HttpStatusCode.OK, set.StatusCode);
+        Assert.Equal(BigDeleteModes.AskWhereDeleted, Auth.BigDeletes);
+        Assert.Equal(BigDeleteModes.AskWhereDeleted, (await anna.GetFromJsonAsync<ServerInfo>("api/info", PairnetsJson.Options))!.BigDeletes);
+        Assert.Equal(BigDeleteModes.AskWhereDeleted, (await _owner.GetFromJsonAsync<ServerInfo>("api/info", PairnetsJson.Options))!.BigDeletes);
+    }
+
+    [Fact]
     public async Task AFriendRenamesAndLeavesWithItsOwnComputer()
     {
         var (id, _, anna) = Friend("ANNA-PC", ViewOnly("Photos"));

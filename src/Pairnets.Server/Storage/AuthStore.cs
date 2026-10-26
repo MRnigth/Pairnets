@@ -59,6 +59,8 @@ public sealed partial class AuthStore
 
     public const string SettingNestName = "nestName";
 
+    public const string SettingBigDeletes = "bigDeletes";
+
     public const int MaxNameLength = 64;
 
     private readonly string _connectionString;
@@ -414,6 +416,13 @@ public sealed partial class AuthStore
     {
         get => GetSetting(SettingNestName) is { Length: > 0 } name ? name : null;
         set => SetSetting(SettingNestName, PlainText.Clean(value, MaxNameLength));
+    }
+
+    /// <summary>"Before big deletes" for every computer of the nest (<see cref="BigDeleteModes"/>); asks everywhere until changed.</summary>
+    public string BigDeletes
+    {
+        get => BigDeleteModes.Or(GetSetting(SettingBigDeletes));
+        set => SetSetting(SettingBigDeletes, BigDeleteModes.Or(value));
     }
 
     public string? GetSetting(string key)

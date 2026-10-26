@@ -171,6 +171,46 @@ public class ClientSessionTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task ABigDeleteWithoutAskingCanAllBePutBack()
+    {
+        for (var i = 0; i < 110; i++)
+        {
+            var path = Path.Combine(_folder.Path, $"f{i:000}.txt");
+            File.WriteAllText(path, "file " + i);
+            File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddMinutes(-1)); // all 110 in the first pass
+        }
+        await using var session = Start();
+        await WaitUntil(() => _server.Store.ReadManifest(null).Entries.Count == 110 && session.Status.Status == RunnerStatus.Idle, "first sync");
+        await WaitUntil(() => session.NestKnowsBigDeletes, "the nest's \"Before big deletes\"");
+        Assert.Equal(BigDeleteModes.AskEverywhere, session.BigDeletes);
+        Assert.True(session.CanChangeBigDeletes);
+
+        // "Never ask": 100 deleted here go through at once, and are remembered.
+        Assert.Null(await session.SetBigDeletesAsync(BigDeleteModes.Never));
+        Assert.Equal(BigDeleteModes.Never, session.BigDeletes);
+        for (var i = 0; i < 100; i++)
+            File.Delete(Path.Combine(_folder.Path, $"f{i:000}.txt"));
+        session.SyncNow();
+        await WaitUntil(() => _server.Store.ReadManifest(null).Entries.Count(e => e.Deleted) == 100, "the 100 deletions on the nest");
+        await WaitUntil(() => session.Status.BigDelete is { Count: 100, FromHere: true }, "the big delete to be remembered");
+        Assert.Contains(session.Activity.Items, i => i.Text.StartsWith("100 files deleted", StringComparison.Ordinal));
+
+        // One file was made again since: it is left as it is.
+        File.WriteAllText(Path.Combine(_folder.Path, "f000.txt"), "made again");
+        session.SyncNow();
+        await WaitUntil(() => _server.Store.ReadManifest(null).Entries.Any(e => e.Path == "f000.txt" && !e.Deleted), "the new f000.txt on the nest");
+        await WaitUntil(() => session.Status.Status == RunnerStatus.Idle, "idle");
+
+        var done = await session.PutBigDeleteBackAsync();
+        Assert.Equal((99, 1, 0, null), (done.Restored, done.Skipped, done.Failed, done.Error));
+        Assert.Null(session.Status.BigDelete);
+        Assert.Equal(0, _server.Store.ReadManifest(null).Entries.Count(e => e.Deleted));
+        await WaitUntil(() => File.Exists(Path.Combine(_folder.Path, "f099.txt")), "the files back on this computer");
+        Assert.Equal("file 42", File.ReadAllText(Path.Combine(_folder.Path, "f042.txt")));
+        Assert.Equal("made again", File.ReadAllText(Path.Combine(_folder.Path, "f000.txt")));
+    }
+
+    [Fact]
     public async Task MovedFolderCheckUsesTheMarker()
     {
         await using var session = Start();

@@ -717,6 +717,59 @@ public partial class SettingsView : UserControl
     /// <summary>The row's line as shown (tests), or null while it is hidden.</summary>
     internal string? StorageLine => StoragePanel.Visibility == Visibility.Visible ? StorageText.Text : null;
 
+    /// <summary>A choice under "Before big deletes": the controller sets it on the nest; returns null, or what went wrong.</summary>
+    public event Func<string, Task<string?>>? BigDeletesChosen;
+
+    private bool _showingBigDeletes;
+    private string _bigDeletes = BigDeleteModes.AskEverywhere;
+
+    /// <summary>
+    /// "Before big deletes" in the nest card: the nest's choice, which the owner's computers can change (a shared nest, or
+    /// an older nest that does not know it: shown, not changeable). Hidden when not connected.
+    /// </summary>
+    public void ShowBigDeletes(string? mode, bool canChange, bool nestKnows, bool connected = true)
+    {
+        _showingBigDeletes = true;
+        try
+        {
+            _bigDeletes = BigDeleteModes.Or(mode);
+            BigDeletesPanel.Visibility = connected ? Visibility.Visible : Visibility.Collapsed;
+            BigAskWhere.IsChecked = _bigDeletes == BigDeleteModes.AskWhereDeleted;
+            BigAskEvery.IsChecked = _bigDeletes == BigDeleteModes.AskEverywhere;
+            BigNever.IsChecked = _bigDeletes == BigDeleteModes.Never;
+            BigDeletesChoices.IsEnabled = canChange;
+            BigDeletesDetail.Text = !nestKnows ? BigDeleteText.OlderNest
+                : !canChange ? BigDeleteText.OwnerOnly + " " + BigDeleteText.ChoiceDetail(_bigDeletes)
+                : BigDeleteText.ChoiceDetail(_bigDeletes);
+        }
+        finally
+        {
+            _showingBigDeletes = false;
+        }
+    }
+
+    /// <summary>The choice shown (tests).</summary>
+    internal string BigDeletesShown => _bigDeletes;
+
+    private async void OnBigDeletesChosen(object sender, RoutedEventArgs e)
+    {
+        if (_showingBigDeletes || BigDeletesChosen is not { } chosen)
+            return;
+        var mode = sender == BigAskWhere ? BigDeleteModes.AskWhereDeleted : sender == BigNever ? BigDeleteModes.Never : BigDeleteModes.AskEverywhere;
+        if (mode == _bigDeletes)
+            return;
+        var before = _bigDeletes;
+        BigDeletesDetail.Text = BigDeleteText.ChoiceDetail(mode);
+        var problem = await chosen(mode);
+        if (problem is null)
+            _bigDeletes = mode;
+        else
+        {
+            ShowBigDeletes(before, canChange: true, nestKnows: true);
+            BigDeletesDetail.Text = problem;
+        }
+    }
+
     private void OnShowAddress(object sender, RoutedEventArgs e)
     {
         AddressFields.Visibility = Visibility.Visible;
