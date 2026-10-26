@@ -134,6 +134,18 @@ public sealed class SiteTests
     }
 
     [Fact]
+    public void TheTermsCoverTheOfficialAppsAndBetaBuilds_AndGetShPointsAtThem()
+    {
+        // The apps' sign-in line, get.sh and the beta channel choice (pairnets.app/terms/#beta) all lean on these sections.
+        var terms = File.ReadAllText(Path.Combine(Root, "terms", "index.html"));
+        Assert.Contains("<h2 id=\"apps\">", terms);
+        Assert.Contains("<h2 id=\"beta\">", terms);
+        Assert.DoesNotContain("They only cover the account service", terms);
+        Assert.Contains("https://pairnets.app/terms/", File.ReadAllText(Path.Combine(RepoRoot, "deploy", "get.sh")));
+        Assert.Equal("https://pairnets.app/terms/", PairnetsLinks.Terms);
+    }
+
+    [Fact]
     public void ThePrivacyPolicyAndTheTermsSayWhoRunsPairnetsAndHowToReachThem()
     {
         foreach (var page in new[] { "privacy", "terms" })

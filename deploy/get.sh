@@ -75,6 +75,8 @@ WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 command -v curl >/dev/null || [[ -n "${PAIRNETS_BASE_URL:-}" ]] || die "curl is required"
 
+info "by installing Pairnets you agree to its terms: https://pairnets.app/terms/"
+
 case "$MODE" in
   server)
     [[ "$(uname -s)" == Linux ]] || die "the server runs on Linux (Ubuntu)"
