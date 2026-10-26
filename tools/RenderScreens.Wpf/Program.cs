@@ -512,6 +512,9 @@ public static partial class Program
         const string page = "https://sync.pairnets.app/app?code=KQ7M-4PXD&method=email";
         signIn.SignIn!.ShowAccount(new AccountSignInState(PairingStage.Waiting, "KQ7M-4PXD", page, DateTimeOffset.UtcNow.AddMinutes(9).AddSeconds(41)), openBrowser: false);
         Save(signIn, outDir, $"windows-sign-in-browser-{suffix}.png", print);
+        signIn.SignIn.ShowAccount(new AccountSignInState(PairingStage.Waiting, VerifyUrl: "https://sync.pairnets.app/app/link?r=pnr_8kq2w7xm4v9hd3tz6rbn5c1fyjpa0segu2wqXb7Lm9Pt",
+            ExpiresAt: DateTimeOffset.UtcNow.AddMinutes(15), ByLink: true), openBrowser: false);
+        Save(signIn, outDir, $"windows-sign-in-link-{suffix}.png", print);
         signIn.SignIn.ShowAccount(new AccountSignInState(PairingStage.Waiting, "KQ7M-4PXD", page, DateTimeOffset.UtcNow.AddMinutes(30),
             AccountSignIn.NoNestMessage, NoNest: true, AccountEmail: "maria@example.com"), openBrowser: false);
         Save(signIn, outDir, $"windows-sign-in-no-nest-{suffix}.png", print);

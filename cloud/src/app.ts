@@ -25,7 +25,7 @@ import {
   patchNestRoute,
   signedInRoute,
 } from "./routes/account";
-import { appApproveRoute, appLogoutRoute, appPageRoute, appPollRoute, appRequestRoute, appStartRoute } from "./routes/apps";
+import { appApproveRoute, appLinkPageRoute, appLogoutRoute, appPageRoute, appPollRoute, appRedeemRoute, appRequestRoute, appStartRoute } from "./routes/apps";
 import { claimRoute } from "./routes/claim";
 import { bugReportListRoute, bugReportRoute, MAX_BUGREPORT_BODY } from "./routes/bugreport";
 import { crashListRoute, crashRoute, MAX_CRASH_BODY } from "./routes/crash";
@@ -81,6 +81,7 @@ export const ORIGIN_EXEMPT = new Set([
   "/v1/heartbeat",
   "/v1/app/start",
   "/v1/app/poll",
+  "/v1/app/redeem",
   "/v1/app/logout",
   "/v1/servers/start",
   "/v1/servers/poll",
@@ -126,6 +127,7 @@ const API_ROUTES: Route[] = [
   { method: "GET", pattern: /^\/v1\/app\/requests\/([^/]+)$/, handler: appRequestRoute },
   { method: "POST", pattern: /^\/v1\/app\/approve$/, handler: appApproveRoute },
   { method: "POST", pattern: /^\/v1\/app\/poll$/, handler: appPollRoute },
+  { method: "POST", pattern: /^\/v1\/app\/redeem$/, handler: appRedeemRoute },
   { method: "POST", pattern: /^\/v1\/app\/logout$/, handler: appLogoutRoute },
   { method: "POST", pattern: /^\/v1\/servers\/start$/, handler: serverStartRoute },
   { method: "GET", pattern: /^\/v1\/servers\/requests\/([^/]+)$/, handler: serverRequestRoute },
@@ -161,6 +163,7 @@ const PAGE_ROUTES: Route[] = [
   { method: "GET", pattern: /^\/login\/google\/callback$/, handler: googleCallbackRoute },
   { method: "GET", pattern: /^\/account$/, handler: accountPageRoute },
   { method: "GET", pattern: /^\/app$/, handler: appPageRoute },
+  { method: "GET", pattern: /^\/app\/link$/, handler: appLinkPageRoute },
   { method: "GET", pattern: /^\/add$/, handler: addPageRoute },
   { method: "GET", pattern: /^\/invite$/, handler: invitePageRoute },
   { method: "GET", pattern: /^\/nest-login$/, handler: nestLoginRoute },

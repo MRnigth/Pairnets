@@ -2051,3 +2051,25 @@ in a personal Gmail, build "Download my data", keep the Ko-fi name.
   open-source code. No paperwork.
 * **Private papers** live in a private folder on the owner's PC (never in the repo): the record of processing (GDPR art.
   30), the data-leak checklist (art. 33/34) and the lawyer's open points.
+## Sign in the app with a link and a code (2026-10-26)
+
+The owner wanted what Claude Code does when its browser can't open: the app shows a long sign-in link with a Copy button,
+you open it in any browser (this computer, a phone, a friend's, while working on a Linux box with no screen), sign in
+there, and paste the long code that browser shows back into the app. Design A was chosen (design page:
+claude.ai/artifact/HBPbgkDE5mqh8vWePHCQue): a separate "Sign in with a link" screen, reached from "Finish in your
+browser" ("Browser didn't open? Use a sign-in link instead"). Today's one-click sign-in stays as it is.
+
+* **Only the code finishes it.** A link sign-in (`device_logins.mode = 'code'`) is never handed over by the app's poll,
+  so pressing Allow on a link a stranger sent lets nobody in unless the code is sent to them too. The page warns before
+  Allow (who asked and from where, "if a stranger sent you this link, press No") and after ("never send this code to
+  someone you don't know"), and the usual "a computer was allowed" email goes out.
+* **Times (the owner, 2026-10-26):** the link must be allowed within 15 minutes, the code pasted within 5 minutes of
+  Allow, and 5 wrong codes stop the sign-in. Both are used once. Only SHA-256 hashes of the link and the code are kept.
+* **The code** is 32 characters (28 random, about 140 bits, plus a 4-character check), shown as 8 groups of 4. The
+  check lets the app catch a typo before sending, and a typo the Worker sees is not counted as a wrong try.
+* **A nest is needed.** A link sign-in can't wait for a nest to be set up (the code runs out first), so an account
+  with no nest is told to set one up first.
+* **The page never opens pairnets://** after Allow on a link: the app is usually on another computer.
+* **Not done:** showing the link screen by itself when no browser could be opened (the apps can't tell today: opening
+  a page reports nothing back); the same screen in the nest installer (`get.sh`) for server boxes; the guest pass from the first
+  design (parked).

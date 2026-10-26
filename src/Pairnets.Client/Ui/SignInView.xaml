@@ -200,6 +200,31 @@
             </StackPanel>
           </Border>
           <TextBlock x:Name="AccountExpiresText" Style="{StaticResource MutedSmall}" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,8,0,0" />
+          <!-- The way out when the browser didn't open here, or the sign-in happens on another computer or a phone -->
+          <Button x:Name="AccountUseLinkButton" Style="{StaticResource LinkButton}" HorizontalAlignment="Center" Margin="0,14,0,0" Click="OnAccountUseLink">
+            <TextBlock Text="Browser didn't open? Use a sign-in link instead" Foreground="{DynamicResource T.AccentInk}" TextDecorations="Underline"
+                       TextWrapping="Wrap" TextAlignment="Center" />
+          </Button>
+        </StackPanel>
+
+        <!-- 2b. Sign in with a link: the long link to open in any browser, and the long code that browser shows after Allow -->
+        <StackPanel x:Name="AccountLinkStep" Margin="0,18,0,0" Visibility="Collapsed">
+          <TextBlock Style="{StaticResource FieldLabel}" Text="1. Open this link in any browser" />
+          <Grid>
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBox x:Name="AccountLinkBox" Style="{StaticResource Input}" Padding="4,0" IsReadOnly="True" FontFamily="Cascadia Mono, Consolas, Menlo, monospace" FontSize="12" />
+            <Button x:Name="AccountLinkCopyButton" Grid.Column="1" Style="{StaticResource SubtleButton}" Content="Copy" Padding="16,0" Margin="8,0,0,0" Click="OnAccountLinkCopy" />
+          </Grid>
+          <TextBlock x:Name="AccountLinkHint" Style="{StaticResource MutedSmall}" Margin="2,6,0,0" TextWrapping="Wrap"
+                     Text="On this computer, your phone, or the browser of someone you trust. It works once, for 15 minutes." />
+          <TextBlock Style="{StaticResource FieldLabel}" Margin="0,18,0,8" TextWrapping="Wrap" Text="2. Sign in there, press Allow, and paste the code it shows" />
+          <TextBox x:Name="AccountLinkCodeBox" Style="{StaticResource Input}" Padding="4,0" FontFamily="Cascadia Mono, Consolas, Menlo, monospace" FontSize="14" />
+          <TextBlock x:Name="AccountLinkProblem" Style="{StaticResource MutedSmall}" Foreground="{DynamicResource T.BadText}" FontWeight="SemiBold" Margin="2,8,0,0"
+                     TextWrapping="Wrap" Visibility="Collapsed" />
+          <Button x:Name="AccountLinkContinueButton" Style="{StaticResource BigAccent}" Content="Continue" Margin="0,14,0,0" Click="OnAccountLinkContinue" />
         </StackPanel>
 
         <!-- 3. Allowed, but the account has no nest yet: how to set one up, until it has one -->
@@ -493,6 +518,9 @@
         <Button x:Name="AccountOpenAgainButton" Style="{StaticResource BigSecondary}" HorizontalAlignment="Center" Content="Open the page again" Padding="18,0" Margin="0,0,8,0"
                 Click="OnAccountOpenAgain" />
         <Button x:Name="AccountCancelButton" Style="{StaticResource QuietButton}" Content="Cancel" Padding="18,0" Click="OnAccountCancel" />
+      </StackPanel>
+      <StackPanel x:Name="AccountLinkFooter" Orientation="Horizontal" HorizontalAlignment="Center" Visibility="Collapsed">
+        <Button x:Name="AccountLinkBackButton" Style="{StaticResource QuietButton}" Content="Back" Padding="18,0" Click="OnAccountLinkBack" />
       </StackPanel>
       <Border x:Name="NoNestFooter" BorderBrush="{DynamicResource T.Border}" BorderThickness="0,1,0,0" Padding="0,8,0,0" Visibility="Collapsed">
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">

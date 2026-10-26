@@ -943,6 +943,8 @@ const APP_STYLE = String.raw`
 .q-have-note { font-size: 13px; }
 .q-page .q-choice input { flex-shrink: 0; width: 16px; height: 16px; margin: 0; padding: 0; accent-color: var(--q-primary); }
 .q-note { margin: 14px 0 0; padding: 12px 14px; border-radius: 12px; background: var(--q-warn-soft); color: var(--q-warn); font-size: 13.5px; }
+.q-longcode { margin: 22px 0 0; padding: 16px 12px; border: 1px solid var(--q-line); border-radius: 14px; background: var(--q-card); display: grid; grid-template-columns: repeat(4, auto); justify-content: center; gap: 6px 16px; font-family: var(--mono); font-size: 22px; font-weight: 600; letter-spacing: 0.06em; font-variant-numeric: tabular-nums; user-select: all; }
+.q-longcode .q-check { color: var(--q-accent); }
 .q-note b { font-weight: 600; }
 .q-error { margin: 14px 0 0; padding: 12px 14px; border-radius: 12px; background: var(--q-bad-soft); color: var(--q-bad); font-size: 14px; }
 
@@ -1024,7 +1026,9 @@ const LOGO_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="120" height="12
 `;
 
 // The "Sign in an app?" page (pages.ts appPage). Allow or "This isn't me" swaps in that answer's own screen. An error
-// says what went wrong in plain words and leaves both buttons working, so the person can simply try again.
+// says what went wrong in plain words and leaves both buttons working, so the person can simply try again. Opened from
+// a sign-in link (data-link), Allow brings the long code to paste into the app; the page then checks every few seconds
+// and says when the computer is signed in.
 const APP_JS = String.raw`(function () {
   "use strict";
   var box = document.getElementById("app-request");
@@ -1032,8 +1036,11 @@ const APP_JS = String.raw`(function () {
   var deny = document.getElementById("deny");
   if (!box || !allow || !deny) return;
   var code = box.getAttribute("data-code");
+  var link = box.getAttribute("data-link");
+  var request = box.getAttribute("data-request");
+  var here = link ? "/app/link?r=" + link : "/app?code=" + code;
   var error = document.getElementById("app-error");
-  var SCREENS = ["ask", "allowed", "allowed-nonest", "refused", "expired"];
+  var SCREENS = ["ask", "longcode", "allowed", "allowed-nonest", "refused", "expired"];
   var SAY = {
     not_found: "Pairnets could not find this sign-in or that nest any more. Reload the page and try again.",
     bad_request: "That did not work. Reload the page and try again.",
@@ -1075,6 +1082,32 @@ const APP_JS = String.raw`(function () {
     if (system === "Linux") return /Linux|X11/.test(ua) && !/CrOS/.test(ua);
     return false;
   }
+  // The long code, in its 8 groups, and a Copy button for all of it.
+  function showLongCode(text) {
+    var groups = text.split("-");
+    for (var i = 0; i < groups.length; i++) {
+      var g = document.getElementById("long-code-" + (i + 1));
+      if (g) g.textContent = groups[i];
+    }
+    var copy = document.getElementById("copy-code");
+    if (copy) copy.addEventListener("click", function () {
+      var clip = navigator.clipboard;
+      if (!clip || !clip.writeText) return;
+      clip.writeText(text).then(function () { copy.textContent = "Copied"; }, function () {});
+    });
+    show("longcode");
+    setTimeout(watch, 4000);
+  }
+  // Until the app has used the code: signed in, stopped (No, or too many wrong codes) or run out.
+  function watch() {
+    pnApi("GET", "/v1/app/requests/" + request).then(function (res) {
+      var st = res.body && res.body.status;
+      if (res.ok && st === "delivered") { show("allowed"); return; }
+      if (res.ok && st === "denied") { show("refused"); return; }
+      if (res.status === 404) { show("expired"); return; }
+      setTimeout(watch, 4000);
+    });
+  }
   function chosenNest() {
     var radios = document.getElementsByName("nest");
     for (var i = 0; i < radios.length; i++) if (radios[i].checked) return radios[i];
@@ -1083,7 +1116,7 @@ const APP_JS = String.raw`(function () {
   function answer(approve, button) {
     if (busy) return;
     error.hidden = true;
-    var body = { userCode: code, approve: approve };
+    var body = link ? { link: link, approve: approve } : { userCode: code, approve: approve };
     var label = null;
     if (approve) {
       if (document.getElementsByName("nest").length) {
@@ -1099,13 +1132,14 @@ const APP_JS = String.raw`(function () {
     pnApi("POST", "/v1/app/approve", body).then(function (res) {
       var err = res.body && res.body.error;
       if (err === "unauthorized" || err === "reauth_required") {
-        location.href = "/login?" + (err === "reauth_required" ? "reauth=1&" : "") + "next=" + encodeURIComponent("/app?code=" + code);
+        location.href = "/login?" + (err === "reauth_required" ? "reauth=1&" : "") + "next=" + encodeURIComponent(here);
         return;
       }
       if (res.ok) {
         if (!approve) { show("refused"); return; }
         var field = document.getElementById("allowed-nest");
         if (field && label) field.textContent = label;
+        if (link) { if (res.body && res.body.code) showLongCode(res.body.code); return; }
         show(body.nestId ? "allowed" : "allowed-nonest");
         if (body.nestId && sameComputer()) setTimeout(function () { location.href = "pairnets://signed-in"; }, 600);
         return;

@@ -24,6 +24,9 @@ internal enum SignInStep
     /// <summary>"Finish in your browser": the code, until the computer is allowed.</summary>
     AccountWait,
 
+    /// <summary>"Sign in with a link": the long link to open anywhere, and a box for the code that browser shows.</summary>
+    AccountLink,
+
     /// <summary>Allowed, but the account has no nest yet.</summary>
     NoNest,
 
@@ -55,6 +58,7 @@ public partial class SignInView : UserControl
     private NestCheck? _check;
     private PairingState? _state;
     private AccountSignInState? _account;
+    private AccountSignIn? _linkFlow;
     private AccountSignInResult? _accountResult;
     private Uri? _nest;
     private string? _method;
@@ -139,7 +143,7 @@ public partial class SignInView : UserControl
     /// True while closing the window would throw something away: waiting for the browser, or an email typed in.
     /// (An email filled in from the saved account does not count.)
     /// </summary>
-    internal bool InProgress => Step is SignInStep.AccountWait or SignInStep.Wait || _typedSomething;
+    internal bool InProgress => Step is SignInStep.AccountWait or SignInStep.AccountLink or SignInStep.Wait || _typedSomething;
 
     /// <summary>The step on show.</summary>
     internal SignInStep Step { get; private set; }
@@ -164,12 +168,14 @@ public partial class SignInView : UserControl
         Step = step;
         AccountStep.IsVisible = step == SignInStep.Account;
         AccountWaitStep.IsVisible = step == SignInStep.AccountWait;
+        AccountLinkStep.IsVisible = step == SignInStep.AccountLink;
         NoNestStep.IsVisible = step == SignInStep.NoNest;
         WelcomeStep.IsVisible = step == SignInStep.Address;
         WaitStep.IsVisible = step == SignInStep.Wait;
         FolderStep.IsVisible = step == SignInStep.Folder;
         AccountFooter.IsVisible = AccountStep.IsVisible;
         AccountWaitFooter.IsVisible = AccountWaitStep.IsVisible;
+        AccountLinkFooter.IsVisible = AccountLinkStep.IsVisible;
         NoNestFooter.IsVisible = NoNestStep.IsVisible;
         AddressFooter.IsVisible = WelcomeStep.IsVisible;
         Motion.Set(AccountRing, "spin", step == SignInStep.AccountWait);
@@ -198,6 +204,12 @@ public partial class SignInView : UserControl
                 Picture.ShowIcon(Icon("I.Browser")!, PictureTone.Accent);
                 Say("Finish in your browser", null); // the intro sits in the step itself (it names the page)
                 Foot("Only computers you allow can get into your nest.");
+                break;
+            case SignInStep.AccountLink:
+                DrawSteps(3);
+                Picture.ShowIcon(Icon("I.Browser")!, PictureTone.Accent);
+                Say("Sign in with a link", null);
+                Foot("Never paste a code someone else sent you.");
                 break;
             case SignInStep.NoNest:
                 DrawSteps(3);
@@ -400,6 +412,22 @@ public partial class SignInView : UserControl
         ShowStep(SignInStep.Address);
     }
 
+    /// <summary>"Use a sign-in link": the browser sign-in stops, and a link sign-in starts (nothing is opened here).</summary>
+    private void StartLink()
+    {
+        _accountStop?.Cancel();
+        var stop = _accountStop = new CancellationTokenSource();
+        var flow = _linkFlow = new AccountSignIn(ThisName(), service: Service, joined: _adding?.Joined, byLink: true);
+        flow.Changed += s => Dispatcher.UIThread.Post(() =>
+        {
+            if (!stop.IsCancellationRequested)
+                ShowAccount(s);
+        });
+        AccountLinkCodeBox.Text = string.Empty;
+        ShowAccount(new AccountSignInState(PairingStage.Starting, ByLink: true));
+        _ = Task.Run(() => flow.RunAsync(stop.Token));
+    }
+
     private void StartAccount(string method, string? email)
     {
         _accountStop?.Cancel();
@@ -432,6 +460,11 @@ public partial class SignInView : UserControl
             ShowAccountStep(AccountOutcome(state));
             return;
         }
+        if (state.ByLink)
+        {
+            ShowLink(state);
+            return;
+        }
         if (state.Stage == PairingStage.Waiting && openBrowser && !_accountBrowserOpened && state.VerifyUrl is { } link)
         {
             _accountBrowserOpened = true;
@@ -457,9 +490,24 @@ public partial class SignInView : UserControl
         DrawWaiting();
     }
 
+    /// <summary>The link step: the link once Pairnets gave it (Copy and Continue wait for it), and the code box.</summary>
+    private void ShowLink(AccountSignInState state)
+    {
+        _clock.Stop();
+        var link = state.VerifyUrl;
+        AccountLinkBox.Text = link ?? "Asking Pairnets for a link…";
+        AccountLinkCopyButton.IsEnabled = link is not null;
+        AccountLinkCopyButton.Content = "Copy";
+        AccountLinkContinueButton.IsEnabled = link is not null;
+        AccountLinkProblem.IsVisible = false;
+        if (Step != SignInStep.AccountLink)
+            ShowStep(SignInStep.AccountLink);
+    }
+
     /// <summary>Why an account sign-in ended without this computer getting in, for the first step.</summary>
     private static string AccountOutcome(AccountSignInState state) => state.Stage switch
     {
+        _ when state.ByLink && state.Message is { } why => why,
         PairingStage.Denied => "This computer was turned down in the browser. If that was a mistake, try again and press Allow.",
         PairingStage.Expired when state.NoNest => "Pairnets stopped waiting for your nest after 30 minutes. Sign in again once your nest is set up.",
         PairingStage.Expired => "The code expired before this computer was allowed (codes last 10 minutes). Try again.",
@@ -471,6 +519,35 @@ public partial class SignInView : UserControl
         if (_account?.VerifyUrl is { } link)
             _openUrl(link);
     }
+
+    private void OnAccountUseLink(object? sender, RoutedEventArgs e) => StartLink();
+
+    private async void OnAccountLinkCopy(object? sender, RoutedEventArgs e)
+    {
+        if (_account is { ByLink: true, VerifyUrl: { } link } && await Dialogs.CopyTextAsync(TopLevel.GetTopLevel(this), link))
+            AccountLinkCopyButton.Content = "Copied";
+    }
+
+    /// <summary>"Continue": the pasted code goes to Pairnets. Signed in moves on to the folder; stopped goes back to the start.</summary>
+    private async void OnAccountLinkContinue(object? sender, RoutedEventArgs e)
+    {
+        if (_linkFlow is not { } flow)
+            return;
+        AccountLinkContinueButton.IsEnabled = false;
+        AccountLinkProblem.IsVisible = false;
+        var answer = await flow.RedeemAsync(AccountLinkCodeBox.Text);
+        if (Step != SignInStep.AccountLink || answer.Done || answer.Over)
+            return; // the flow's own change draws what comes next
+        AccountLinkContinueButton.IsEnabled = true;
+        if (answer.Message is { } problem)
+        {
+            AccountLinkProblem.Text = problem;
+            AccountLinkProblem.IsVisible = true;
+        }
+    }
+
+    /// <summary>"Back" from the link step: it stops, and back to the first step.</summary>
+    private void OnAccountLinkBack(object? sender, RoutedEventArgs e) => ShowAccountStep(null);
 
     /// <summary>"Cancel" while waiting, "Sign out" while there is no nest yet: stop, and back to the first step.</summary>
     private void OnAccountCancel(object? sender, RoutedEventArgs e) => ShowAccountStep(null);

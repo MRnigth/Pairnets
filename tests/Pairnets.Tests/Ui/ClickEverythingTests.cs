@@ -482,6 +482,19 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
             new("the sign-in window (finish in your browser)", s => AccountStage(s, view =>
                 view.ShowAccount(new AccountSignInState(PairingStage.Waiting, FakeSyncService.UserCode, AccountLink, DateTimeOffset.UtcNow.AddMinutes(9)),
                     openBrowser: false))),
+            new("the sign-in window (sign in with a link)", async s =>
+            {
+                SignInView? shown = null;
+                await AccountStage(s, view =>
+                {
+                    shown = view;
+                    view.ShowAccount(new AccountSignInState(PairingStage.Waiting, FakeSyncService.UserCode, AccountLink, DateTimeOffset.UtcNow.AddMinutes(9)),
+                        openBrowser: false);
+                    Person.Click(Screen.Named<Button>(view, "AccountUseLinkButton"));
+                });
+                await Wait.Until(() => Screen.Named<TextBox>(shown!, "AccountLinkBox").Text?.Contains("/app/link?r=pnr_", StringComparison.Ordinal) == true,
+                    "the sign-in link to show");
+            }),
             new("the sign-in window (signed in, no nest yet)", s => AccountStage(s, view =>
                 view.ShowAccount(new AccountSignInState(PairingStage.Waiting, FakeSyncService.UserCode, AccountLink, DateTimeOffset.UtcNow.AddMinutes(29),
                     NoNest: true, AccountEmail: FakeSyncService.Email), openBrowser: false))),
@@ -978,6 +991,14 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
         s.Expect["OnAccountOpenAgain"] = That(() => s.Opened.SequenceEqual([AccountLink]), "the service's page open again");
         s.Expect["OnAccountCancel"] = That(() => view.Step == SignInStep.Account, "the Pairnets account step show again");
         s.Expect["OnShowMeHow"] = That(() => s.Opened.SequenceEqual([origin + "/account"]), "the account page open");
+        string LinkShown() => Screen.Named<TextBox>(view, "AccountLinkBox").Text ?? string.Empty;
+        s.Expect["OnAccountUseLink"] = That(() => view.Step == SignInStep.AccountLink && LinkShown().StartsWith(origin + "/app/link?r=pnr_", StringComparison.Ordinal)
+            && s.Opened.Count == 0, "\"Sign in with a link\" show the service's sign-in link, with nothing opened");
+        s.Expect["OnAccountLinkCopy"] = All(That(() => Screen.Named<Button>(view, "AccountLinkCopyButton").Content as string == "Copied", "the button say \"Copied\""),
+            Clipboard(window, LinkShown));
+        s.Expect["OnAccountLinkContinue"] = That(() => Screen.Named<TextBlock>(view, "AccountLinkProblem") is { IsVisible: true } problem
+            && problem.Text == "Paste the code the browser shows after you press Allow.", "the box ask for the code (none was pasted)");
+        s.Expect["OnAccountLinkBack"] = That(() => view.Step == SignInStep.Account, "the Pairnets account step show again");
         return Task.CompletedTask;
     }
 

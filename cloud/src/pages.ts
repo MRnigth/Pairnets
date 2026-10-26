@@ -444,6 +444,11 @@ export interface AppRequestView {
   place: string | null;
   /** When the page is drawn ("asked 2 min ago", "the code works for 8 more minutes"). */
   now: number;
+  /**
+   * A sign-in link's secret (the link's ?r=, CONTRACT.md 6.9): the page answers by it instead of the user code, shows
+   * no short code to compare, and after Allow shows the long code to paste into the app. Absent or null: today's page.
+   */
+  link?: string | null;
 }
 
 export interface ServerChoice {
@@ -512,7 +517,10 @@ function codeForm(label: string): string {
 function askScreen(req: AppRequestView, servers: ServerChoice[]): string {
   const name = e(req.name);
   let nest: string;
-  if (!servers.length) {
+  if (!servers.length && req.link) {
+    // A link sign-in's code is pasted within minutes: too soon to set up a nest, so it can't wait for one.
+    nest = `<p class="q-note"><b>You don't have a nest yet.</b> Set one up in your account first, then start again in Pairnets on ${name}.</p>`;
+  } else if (!servers.length) {
     nest = `<p class="q-note"><b>You don't have a nest yet.</b> Allow ${name} now and it waits. Next you set up your nest, and ${name} joins it by itself.</p>`;
   } else if (servers.length === 1) {
     const only = servers[0];
@@ -555,6 +563,24 @@ ${options}
     .filter((f): f is string => !!f)
     .map((f) => e(f))
     .join(" · ");
+  if (req.link) {
+    return screen(
+      "ask",
+      true,
+      `<span class="q-badge">${icon("computer")}</span>
+<h1 id="screen-ask-title" tabindex="-1">Allow ${name} to sign in?</h1>
+<p class="q-lead">You opened a sign-in link from Pairnets on a computer called <b>${name}</b>. It is asking to use your Pairnets account.</p>
+${where}
+<p class="q-note">Only allow this if you are at that computer, or you are helping someone you know. If a stranger sent you this link, press No.</p>
+${nest}
+<p class="q-error" id="app-error" role="alert" hidden></p>
+<div class="q-actions">
+<button type="button" class="q-btn q-primary" id="approve"${servers.length ? "" : " disabled"}>Allow and show the code</button>
+<button type="button" class="q-btn q-ghost" id="deny">No, this isn't me</button>
+</div>
+<details class="q-more"><summary>Details</summary><p>${facts.replace("the code works", "the link works")}</p></details>`,
+    );
+  }
   return screen(
     "ask",
     true,
@@ -627,6 +653,15 @@ ${earlier ? `<p class="q-earlier">You said no to this ${e(earlier)}.</p>` : ""}
 }
 
 function expiredScreen(req: AppRequestView): string {
+  if (req.link) {
+    return screen(
+      "expired",
+      false,
+      `<span class="q-badge q-warn">${icon("clock")}</span>
+<h1 id="screen-expired-title" tabindex="-1">This link has run out</h1>
+<p class="q-lead">Sign-in links work for 15 minutes. In Pairnets on ${e(req.name)}, start again to get a new link.</p>`,
+    );
+  }
   return screen(
     "expired",
     false,
@@ -635,6 +670,50 @@ function expiredScreen(req: AppRequestView): string {
 <p class="q-lead">Codes work for 10 minutes. In Pairnets on ${e(req.name)}, start signing in again to get a new one.</p>
 ${codeForm("Got a new code? Type it here")}`,
   );
+}
+
+/**
+ * After Allow on a sign-in link: the long code, 8 groups of 4 (app.js puts them in; the page never holds the code), the
+ * last group being the check. The page then watches the sign-in and moves on to "signed in" once the app used the code.
+ */
+function longCodeScreen(req: AppRequestView): string {
+  const name = e(req.name);
+  const groups = Array.from({ length: 8 }, (_, i) => `<span id="long-code-${i + 1}"${i === 7 ? ' class="q-check"' : ""}></span>`).join("");
+  return screen(
+    "longcode",
+    false,
+    `<span class="q-badge">${icon("lock")}</span>
+<h1 id="screen-longcode-title" tabindex="-1">Paste this code into Pairnets</h1>
+<p class="q-lead">On <b>${name}</b>, in the box under <b>Sign in with a link</b>.</p>
+<p class="q-longcode" id="long-code" aria-label="The code">${groups}</p>
+<div class="q-actions"><button type="button" class="q-btn q-primary" id="copy-code">Copy code</button></div>
+<p class="q-fine">It works once, for 5 minutes. This page says when ${name} is signed in.</p>
+<p class="q-error">Never send this code to someone you don't know. Whoever pastes it gets into your nest. Pairnets never asks you for it.</p>`,
+  );
+}
+
+/** A reload after Allow, while the code is still to be pasted: the code itself is never shown twice. */
+function longCodeShownScreen(req: AppRequestView, earlier: string | null): string {
+  const name = e(req.name);
+  return screen(
+    "longcode-shown",
+    true,
+    `<span class="q-badge">${icon("lock")}</span>
+<h1 id="screen-longcode-shown-title" tabindex="-1">Paste the code into Pairnets on ${name}</h1>
+<p class="q-lead">The code was shown once, when you pressed Allow${earlier ? ` (${e(earlier)})` : ""}. It works for 5 minutes.</p>
+<p class="q-fine">Lost it? In Pairnets on ${name}, press Back and start again with a new link.</p>`,
+  );
+}
+
+/** A sign-in link that doesn't find a sign-in: run out, used, cut short, or someone else's that was answered. */
+export function appLinkGonePage(): string {
+  const inner = `<span class="q-badge q-warn">${icon("clock")}</span>
+<h1 id="screen-gone-title">This sign-in link doesn't work</h1>
+<p class="q-lead">It may have run out (links work for 15 minutes), it was already used, or only part of it was copied. In Pairnets, start again with a new link.</p>
+<div class="q-actions"><a class="q-btn q-ghost" href="/account">Go to your account</a></div>`;
+  return layout("This sign-in link doesn't work", `<div class="q-col">
+${screen("gone", true, inner)}
+</div>`, { styles: ["app.css"], bodyClass: "q-page" });
 }
 
 /** /app with no code, or a code that is unknown, ran out, or belongs to someone else's answered sign-in. */
@@ -660,15 +739,23 @@ export function appPage(req: AppRequestView | null, typed: string | null, server
   const noNest = answered ? req.nestId === null : servers.length === 0;
   const earlier = answered && req.decidedAt !== null ? ago(Math.max(0, req.now - req.decidedAt)) : null;
 
+  // A link sign-in that was allowed but whose code is not used yet.
+  const codeWaiting = !!req.link && req.status === "approved";
+
   const screens: string[] = [];
   if (!answered) screens.push(askScreen(req, servers));
-  if (!answered || allowed) screens.push(noNest ? allowedNoNestScreen(req, earlier, answered) : allowedScreen(req, nest, earlier, answered));
+  if (!answered && req.link) screens.push(longCodeScreen(req));
+  if (codeWaiting) screens.push(longCodeShownScreen(req, earlier));
+  if (!answered || allowed) screens.push(noNest ? allowedNoNestScreen(req, earlier, answered && !codeWaiting) : allowedScreen(req, nest, earlier, answered && !codeWaiting));
   if (!answered || !allowed) screens.push(refusedScreen(req, earlier, answered));
   if (!answered) screens.push(expiredScreen(req));
 
-  const attrs = [`id="app-request"`, `class="q-col"`, `data-code="${e(displayUserCode(req.userCode))}"`, `data-system="${e(req.system ?? "")}"`];
+  const attrs = [`id="app-request"`, `class="q-col"`];
+  if (req.link) attrs.push(`data-link="${e(req.link)}"`, `data-request="${e(displayUserCode(req.userCode))}"`);
+  else attrs.push(`data-code="${e(displayUserCode(req.userCode))}"`);
+  attrs.push(`data-system="${e(req.system ?? "")}"`);
   if (!answered && servers.length === 1) attrs.push(`data-nest="${e(servers[0].id)}"`);
-  const title = !answered ? `Allow ${req.name} to sign in?` : allowed ? `${req.name} is signed in` : `${req.name} was not let in`;
+  const title = !answered ? `Allow ${req.name} to sign in?` : codeWaiting ? `Paste the code into Pairnets` : allowed ? `${req.name} is signed in` : `${req.name} was not let in`;
   return layout(title, `<div ${attrs.join(" ")}>\n${screens.join("\n")}\n</div>`, {
     scripts: answered ? [] : ["app.js"],
     styles: ["app.css"],

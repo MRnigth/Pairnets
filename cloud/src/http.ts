@@ -52,6 +52,10 @@ export type ErrorCode =
   | "own_nest"
   | "already_member"
   | "cancelled"
+  | "not_allowed_yet"
+  | "code_typo"
+  | "code_expired"
+  | "stopped"
   | "server_error";
 
 export const MESSAGES: Record<ErrorCode, string> = {
@@ -92,6 +96,10 @@ export const MESSAGES: Record<ErrorCode, string> = {
   own_nest: "This is your own nest.",
   already_member: "You already have this nest.",
   cancelled: "This invite was cancelled.",
+  not_allowed_yet: "Open the link, sign in and press Allow first. Then paste the code it shows.",
+  code_typo: "That isn't the whole code, or it has a typo. Copy all of it from the browser and try again.",
+  code_expired: "That code has run out. Codes work for 5 minutes. Start again with a new link.",
+  stopped: "This sign-in was stopped. Start again with a new link.",
   server_error: "Something went wrong on our side.",
 };
 

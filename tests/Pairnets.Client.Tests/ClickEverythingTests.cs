@@ -1113,6 +1113,17 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
         yield return new Screen(name, "finish in your browser", SignInWindow, (b, w) => Wpf.Ui(() =>
             SignIn(w).ShowAccount(new AccountSignInState(PairingStage.Waiting, FakeSyncService.UserCode, AccountLink, DateTimeOffset.UtcNow.AddMinutes(9)),
                 openBrowser: false)), Modal: true);
+        yield return new Screen(name, "sign in with a link", SignInWindow, async (b, w) =>
+        {
+            await Wpf.Ui(() =>
+            {
+                SignIn(w).ShowAccount(new AccountSignInState(PairingStage.Waiting, FakeSyncService.UserCode, AccountLink, DateTimeOffset.UtcNow.AddMinutes(9)),
+                    openBrowser: false);
+                SignIn(w).AccountUseLinkButton.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+            });
+            await Wpf.WaitUntil(() => SignIn(w).AccountLinkBox.Text.StartsWith($"{ServiceOrigin}/app/link?r=pnr_", StringComparison.Ordinal), "the sign-in link",
+                TimeSpan.FromSeconds(15));
+        }, Modal: true);
         yield return new Screen(name, "signed in, no nest yet", SignInWindow, (b, w) => Wpf.Ui(() =>
             SignIn(w).ShowAccount(new AccountSignInState(PairingStage.Waiting, FakeSyncService.UserCode, AccountLink, DateTimeOffset.UtcNow.AddMinutes(29),
                 NoNest: true, AccountEmail: FakeSyncService.Email), openBrowser: false)), Modal: true);
@@ -1171,6 +1182,15 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
     private IReadOnlyList<Rule> SignInRules =>
     [
         Switch,
+        // Sign in with a link (before the rules by label: its buttons say "Continue", "Copy" and "Back" too).
+        new(t => t.Handlers.Contains("SignInView.OnAccountUseLink"), "stop the browser sign-in and show a sign-in link to copy, opening nothing",
+            c => OnStep(c, SignInStep.AccountLink) && SignIn(c.Window).AccountLinkBox.Text.StartsWith($"{ServiceOrigin}/app/link?r=pnr_", StringComparison.Ordinal)
+                && c.Bench.Opened.Items.Count == 0, Seconds: 15),
+        new(t => t.Handlers.Contains("SignInView.OnAccountLinkCopy"), "copy the sign-in link and say so",
+            c => c.Bench.Script.Copied.Items.Contains(SignIn(c.Window).AccountLinkBox.Text) && (string)SignIn(c.Window).AccountLinkCopyButton.Content == "Copied"),
+        new(t => t.Handlers.Contains("SignInView.OnAccountLinkContinue"), "ask for the code from the browser (none was pasted)",
+            c => SignIn(c.Window).AccountLinkProblem is { IsVisible: true, Text: "Paste the code the browser shows after you press Allow." }),
+        new(t => t.Handlers.Contains("SignInView.OnAccountLinkBack"), "stop the link and go back to the Pairnets account step", c => OnStep(c, SignInStep.Account)),
         // The first step: a Pairnets account (sync.pairnets.app, here its stand-in).
         new(t => t.Handlers.Contains("SignInView.OnAccountGoogle"), "ask Pairnets for a code and open its Google sign-in in the browser",
             OpensTheAccountPage("google"), Seconds: 15),
