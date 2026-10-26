@@ -77,6 +77,7 @@ public sealed class AppUnderTest : IAsyncDisposable
                 DeviceName = app.Device.Name,
                 Folder = app.Folder,
                 FirstRunCompleted = true,
+                LastRunVersion = PairnetsInfo.ProductVersion, // not just updated: no "Let your nest update by itself?" card
             });
         }
         else if (rememberedWhenSignedOut is not null)

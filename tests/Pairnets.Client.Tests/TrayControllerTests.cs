@@ -210,6 +210,49 @@ public sealed class TrayControllerTests
     }
 
     [Fact]
+    public async Task AfterAnUpdate_TheOverviewSuggestsLettingTheNestUpdateItself()
+    {
+        await using var nest = await TestServer.StartWithWebsiteAsync();
+        // The app ran an older version before: this start is the first after an update.
+        await using var app = await TrayHarness.CreateAsync(nest, watchFolder: false, settings: s => s.LastRunVersion = "0.9.0");
+        await app.StartAsync();
+        await app.WaitUntil(() => app.SavedSettings.NestAutoUpdateOfferFor == PairnetsInfo.ProductVersion, "the card to be due");
+        var window = app.Tray.Window!;
+
+        await app.Press(window, NestAutoUpdateOffer.TurnOnLabel);
+        await app.WaitUntil(() => app.SavedSettings.AutoUpdateServer, "\"update the nest by itself\" to be saved");
+        Assert.Null(app.SavedSettings.NestAutoUpdateOfferFor); // answered: not again until the next update
+        await app.WaitUntil(() => app.Notifications.Items.Any(n => n.Title.EndsWith(" now updates by itself", StringComparison.Ordinal)), "the note that it is on");
+        Assert.False(await app.Wpf.Ui(() => Visible(window, "Let your nest update by itself?")), "The card stayed after Turn on.");
+    }
+
+    [Fact]
+    public async Task AfterAnUpdate_NotNowPutsTheCardAwayWithoutChangingTheNest()
+    {
+        await using var nest = await TestServer.StartWithWebsiteAsync();
+        await using var app = await TrayHarness.CreateAsync(nest, watchFolder: false, settings: s => s.LastRunVersion = "0.9.0");
+        await app.StartAsync();
+        var window = app.Tray.Window!;
+        await app.WaitUntil(() => Visible(window, "Let your nest update by itself?"), "the card on the overview");
+
+        await app.Press(window, NestAutoUpdateOffer.NotNowLabel);
+        await app.WaitUntil(() => app.SavedSettings.NestAutoUpdateOfferFor is null, "the answer to be saved");
+        Assert.False(app.SavedSettings.AutoUpdateServer);
+        Assert.False(await app.Wpf.Ui(() => Visible(window, "Let your nest update by itself?")), "The card stayed after Not now.");
+    }
+
+    /// <summary>A text shown in <paramref name="root"/> (on the UI thread).</summary>
+    private static bool Visible(DependencyObject root, string text)
+    {
+        if (root is TextBlock { IsVisible: true } block && block.Text == text)
+            return true;
+        for (var i = 0; i < System.Windows.Media.VisualTreeHelper.GetChildrenCount(root); i++)
+            if (Visible(System.Windows.Media.VisualTreeHelper.GetChild(root, i), text))
+                return true;
+        return false;
+    }
+
+    [Fact]
     public async Task SyncNow_UploadsAFile()
     {
         await using var nest = await TestServer.StartWithWebsiteAsync();

@@ -746,6 +746,8 @@ public partial class SettingsView : UserControl
                 NotifyAttention = _original.NotifyAttention,
                 NotifyUpdates = _original.NotifyUpdates,
                 NameOfferAnswered = _original.NameOfferAnswered,
+                LastRunVersion = _original.LastRunVersion,
+                NestAutoUpdateOfferFor = _original.NestAutoUpdateOfferFor,
             };
             if (OwnKey.NameNotSaved(_original, deviceId, DeviceName(), deviceName) is { } note)
                 await Dialogs.InfoAsync(Owner, "Pairnets", note);

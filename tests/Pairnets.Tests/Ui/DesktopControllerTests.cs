@@ -662,6 +662,57 @@ public sealed class DesktopControllerTests
     }
 
     [AvaloniaFact]
+    public async Task AfterAnUpdate_TheOverviewSuggestsLettingTheNestUpdateItself_TurnOnKeepsIt()
+    {
+        // The app ran an older version before: this start is the first after an update.
+        await using var app = await AppUnderTest.StartAsync(beforeStart: env =>
+        {
+            var settings = SettingsStore.Load(env.SettingsPath);
+            settings.LastRunVersion = "0.9.0"; // older than this build
+            SettingsStore.Save(env.SettingsPath, settings);
+        });
+        await app.WaitUntilIdleAsync();
+        Assert.Equal(PairnetsInfo.ProductVersion, SettingsStore.Load(app.Env.SettingsPath).NestAutoUpdateOfferFor);
+        app.App.ShowMainWindow();
+        var main = app.MainWindow;
+        app.App.RefreshNow();
+        var turnOn = await Wait.For(() => Screen.All<Button>(main).FirstOrDefault(b => b.IsEffectivelyVisible && Screen.Describe(b) == NestAutoUpdateOffer.TurnOnLabel),
+            "the \"Let your nest update by itself?\" card on the overview");
+        Assert.Contains(Screen.All<TextBlock>(main), t => t.IsEffectivelyVisible && t.Text == "Let your nest update by itself?");
+
+        Person.Click(turnOn);
+        await Wait.Until(() => SettingsStore.Load(app.Env.SettingsPath).AutoUpdateServer, "\"update the nest by itself\" to be saved");
+        var saved = SettingsStore.Load(app.Env.SettingsPath);
+        Assert.Null(saved.NestAutoUpdateOfferFor); // answered: not again until the next update
+        Assert.Equal(PairnetsInfo.ProductVersion, saved.LastRunVersion);
+        app.App.RefreshNow();
+        Assert.DoesNotContain(Screen.All<TextBlock>(main), t => t.IsEffectivelyVisible && t.Text == "Let your nest update by itself?");
+        await Wait.Until(() => app.Platform.Notices.Any(n => n.Title.EndsWith(" now updates by itself", StringComparison.Ordinal)), "the note that it is on");
+    }
+
+    [AvaloniaFact]
+    public async Task AfterAnUpdate_NotNowPutsTheCardAwayWithoutChangingTheNest()
+    {
+        await using var app = await AppUnderTest.StartAsync(beforeStart: env =>
+        {
+            var settings = SettingsStore.Load(env.SettingsPath);
+            settings.LastRunVersion = "0.9.0"; // older than this build
+            SettingsStore.Save(env.SettingsPath, settings);
+        });
+        await app.WaitUntilIdleAsync();
+        app.App.ShowMainWindow();
+        var main = app.MainWindow;
+        app.App.RefreshNow();
+        var notNow = await Wait.For(() => Screen.All<Button>(main).FirstOrDefault(b => b.IsEffectivelyVisible && Screen.Describe(b) == NestAutoUpdateOffer.NotNowLabel),
+            "the \"Let your nest update by itself?\" card on the overview");
+        Person.Click(notNow);
+        await Wait.Until(() => SettingsStore.Load(app.Env.SettingsPath).NestAutoUpdateOfferFor is null, "the answer to be saved");
+        Assert.False(SettingsStore.Load(app.Env.SettingsPath).AutoUpdateServer);
+        app.App.RefreshNow();
+        Assert.DoesNotContain(Screen.All<TextBlock>(main), t => t.IsEffectivelyVisible && t.Text == "Let your nest update by itself?");
+    }
+
+    [AvaloniaFact]
     public async Task AppUpdate_ThatFails_SaysWhyAndOffersToTryAgain_NeverTheBrowser()
     {
         await using var app = await AppUnderTest.StartAsync(releaseVersion: "99.0.0");

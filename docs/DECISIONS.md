@@ -1940,3 +1940,19 @@ that finished while the computer was off). Planned for 1.0.61.5, built on top of
   space, name clash, cancel, encrypted nest, the app's done note once), the API tour, and the click-everything tests
   of both apps (the card's buttons and the "Let the nest download it" window). The Mac/Linux click test now spreads the
   main window's scenes evenly over its 10 parts (a 21st scene had left the last parts empty).
+
+## "Let your nest update by itself?" after an app update (2026-10-26)
+
+The owner wanted a nudge after Pairnets updates itself, so security fixes reach the nest too. Three looks were drawn from
+both apps (a pop-up window, a card on Overview, a card on Needs you); he picked the card at the top of Overview.
+
+* **When.** The apps remember the version that last ran (`LastRunVersion`). The first start of a different version marks
+  the card as due (`NestAutoUpdateOfferFor`); that catches every way of updating, including an installer run by hand.
+  A computer set up before this was remembered counts as updated; a fresh install does not. The card stays over
+  restarts until it is answered.
+* **Which nests.** Only the person's own nests that still wait to be asked ("Update the nest by itself" off): a friend's
+  nest can't be updated from here (`/api/update` is owner-only). A nest the "Update your nest" window asked about this
+  time is left out, since that window has the same switch. Several nests go in one card.
+* **Buttons.** Turn on switches "Update the nest by itself" on for each named nest (nothing changes on the nest itself)
+  and updates one that is behind right away; a notice says so. Not now puts the card away. Both last until the next
+  app update. There is no "Don't ask again": it comes back at most once per update and Settings has the switch.

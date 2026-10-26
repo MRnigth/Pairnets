@@ -547,6 +547,7 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
             main.ShowActivity(Rows());
             main.ShowAttention(Attention(b));
             main.ShowUpdate("Pairnets 1.0.58 is available", "You have 1.0.52.", "Update now");
+            main.ShowNestOffer(new NestAutoUpdateOffer([new("a", "soro")]));
             main.ShowStatus(StatusSnapshot.Initial with
             {
                 Status = RunnerStatus.Syncing, Text = "Syncing", LastSyncAt = Now.AddMinutes(-1), Server = OlderServer, Devices = Devices,
@@ -942,6 +943,10 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
         On("Keep my files", "keep syncing stopped and open the folder to check it", Called("OpenFolder")),
         On("Download now anyway", "stop waiting for the other computer", Called("DownloadNow")),
         On("Review", "show the Needs attention page", OnPage(MainPage.Attention)),
+        new(t => t.Label == NestAutoUpdateOffer.TurnOnLabel && Window.GetWindow(t.Element) is MainWindow, "tell the app to let the nest update by itself",
+            c => ((MainWindow)c.Window).NestOfferAnswer == NestAutoUpdateAnswer.TurnOn),
+        new(t => t.Label == NestAutoUpdateOffer.NotNowLabel && Window.GetWindow(t.Element) is MainWindow, "put the nest update card away",
+            c => ((MainWindow)c.Window).NestOfferAnswer == NestAutoUpdateAnswer.NotNow),
         On(["Update nest…", "Check for update"], "open the server update window", Called("UpdateServer")),
         On(["See all", "See all in Activity"], "show the Activity page", OnPage(MainPage.Activity)),
         On("See the full list", "show the Needs attention page", OnPage(MainPage.Attention)),

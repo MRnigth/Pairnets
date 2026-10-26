@@ -610,6 +610,10 @@ public class DesktopUiTests
         window.ShowAttentionTab(false);
         window.ShowStatus(StatusSnapshot.Initial with { Status = RunnerStatus.Idle, Text = "Up to date", LastSyncAt = now, Server = server, Devices = devices }, "/Users/me/Work", "MacBook");
         Save(window, outDir, $"main-window-idle-{suffix}.png");
+        // After this app updated itself: "Let your nest update by itself?" at the top of the overview.
+        window.ShowNestOffer(new NestAutoUpdateOffer([new("a", "soro")]));
+        Save(window, outDir, $"main-window-nest-auto-update-{suffix}.png");
+        window.ShowNestOffer(null);
 
         // This computer can't reach the nest: the others show when they were last seen.
         window.ShowStatus(StatusSnapshot.Initial with { Status = RunnerStatus.Offline, Text = "Offline: timeout", LastSyncAt = now.AddMinutes(-70), Devices = devices }, "/Users/me/Work", "MacBook");

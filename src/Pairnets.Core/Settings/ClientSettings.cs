@@ -147,6 +147,15 @@ public sealed partial class ClientSettings
     /// <summary>A server version the user chose not to be reminded about ("Don't ask for this version").</summary>
     public string? SkippedServerVersion { get; set; }
 
+    /// <summary>The Pairnets version that last ran here, so the next start can tell it was updated (<see cref="Client.NestAutoUpdateOffer"/>).</summary>
+    public string? LastRunVersion { get; set; }
+
+    /// <summary>
+    /// The app version that updated itself here and still shows the "Let your nest update by itself?" card; null once it
+    /// was answered (Turn on or Not now), so the card stays until then, also over restarts.
+    /// </summary>
+    public string? NestAutoUpdateOfferFor { get; set; }
+
     /// <summary>Debug mode: more detail in the log, and the server's update log in the update window.</summary>
     public bool DebugMode { get; set; }
 
