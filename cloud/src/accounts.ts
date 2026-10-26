@@ -9,6 +9,19 @@ import { noteLinkEnds } from "./routes/links";
 export type Provider = "google" | "email";
 
 /**
+ * The Terms of service in force: the "Last updated" date of pairnets.app/terms (a site test checks they match). Signing
+ * in says "By continuing, you agree to the Terms", so each sign-in records this version on the account (migration 0010).
+ */
+export const TERMS_VERSION = "2026-10-26";
+
+/** Records that the account agreed to TERMS_VERSION now, unless it already had. */
+async function noteTerms(ctx: Ctx, accountId: string): Promise<void> {
+  await ctx.env.DB.prepare("UPDATE accounts SET terms_version = ?1, terms_accepted_at = ?2 WHERE id = ?3 AND terms_version IS NOT ?1")
+    .bind(TERMS_VERSION, ctx.now, accountId)
+    .run();
+}
+
+/**
  * Deletes an account and everything stored about it ("Delete account", and accounts unused for a year, inactive.ts).
  * Returns the tunnel ids of its relayed servers: their rows go with the account, and the caller runs the router,
  * which drops their links and deletes the tunnels (the hourly cron deletes any tunnel left over).
@@ -49,6 +62,12 @@ export async function deleteAccountRows(ctx: Ctx, id: string, email: string): Pr
  * `email` must already be ASCII-lowercased.
  */
 export async function accountForIdentity(ctx: Ctx, provider: Provider, subject: string, email: string): Promise<string> {
+  const id = await settleAccount(ctx, provider, subject, email);
+  await noteTerms(ctx, id);
+  return id;
+}
+
+async function settleAccount(ctx: Ctx, provider: Provider, subject: string, email: string): Promise<string> {
   for (let attempt = 0; attempt < 2; attempt++) {
     const existing = await ctx.env.DB.prepare("SELECT account_id FROM identities WHERE provider = ?1 AND subject = ?2")
       .bind(provider, subject)

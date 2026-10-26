@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { TABLES } from "./setup";
+import { TERMS_VERSION } from "../src/accounts";
 import { FakeGoogle } from "./fake-google";
 import { Harness, linkNest } from "./helpers";
 
@@ -195,5 +196,33 @@ describe("account", () => {
     expect((await other.call("GET", "/v1/nests")).json.nests).toHaveLength(1);
     expect((await b.call("GET", "/v1/me")).status).toBe(401);
     expect((await nest.heartbeat()).status).toBe(410);
+  });
+  it("GET /v1/me/export gives everything about the account as a file, without secrets", async () => {
+    const { h, b, accountId } = await setup();
+    await linkNest(h, b);
+    expect((await b.call("PATCH", "/v1/me", { body: { username: "Oskar" } })).status).toBe(200);
+    const r = await b.call("GET", "/v1/me/export");
+    expect(r.status).toBe(200);
+    expect(r.headers.get("Content-Disposition")).toMatch(/^attachment; filename="pairnets-my-data-\d{4}-\d{2}-\d{2}\.json"$/);
+    expect(r.json.account.id).toBe(accountId);
+    expect(r.json.account.email).toBe("you@example.com");
+    expect(r.json.account.username).toBe("Oskar");
+    expect(r.json.account.terms_version).toBe(TERMS_VERSION);
+    expect(r.json.account.terms_accepted_at).toMatch(/^\d{4}-/);
+    expect(r.json.signInMethods[0].provider).toBe("email");
+    expect(r.json.signedInBrowsersAndApps.length).toBeGreaterThan(0);
+    expect(r.json.nests).toHaveLength(1);
+    expect(r.json.activityLog.map((a: { event: string }) => a.event)).toContain("username_changed");
+    expect(r.text).not.toMatch(/token_hash|code_hash|binding_hash|device_code_hash|key_version/);
+    expect(r.text).not.toMatch(/"token"/);
+    // Signed out: refused. The download is written down in the activity log.
+    expect((await h.browser("203.0.113.3").call("GET", "/v1/me/export")).status).toBe(401);
+    expect((await b.call("GET", "/v1/me/export")).json.activityLog.map((a: { event: string }) => a.event)).toContain("data_exported");
+  });
+
+  it("the account page has a Download my data link", async () => {
+    const { b } = await setup();
+    const page = await b.call("GET", "/account");
+    expect(page.text).toContain('href="/v1/me/export"');
   });
 });

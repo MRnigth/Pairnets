@@ -1029,7 +1029,7 @@ public class DesktopUiTests
             (view.GuidelinesLink, "https://pairnets.app/guidelines/"),
             (view.CookiesLink, "https://pairnets.app/cookies/"),
             (view.SecurityLink, "https://pairnets.app/security/"),
-            (view.LicensesLink, "https://pairnets.app/licenses/"),
+            (view.LicensesLink, Pairnets.Core.ThirdPartyNotices.CopyPath), // the licence texts the app carries
             (view.DeleteAccountLink, "https://pairnets.app/delete-account/"),
         };
         Assert.Equal(expected.Length, view.AboutLinks.Children.Count); // a new link needs a line here too

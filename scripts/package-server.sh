@@ -40,6 +40,7 @@ if [[ -d "$SOURCE" ]]; then
      "$REPO"/deploy/pairnets.env.example "$REPO"/deploy/pairnets-link.sh "$REPO"/deploy/place.sh \
      "$REPO"/deploy/pairnets-place.service "$REPO"/deploy/pairnets-place.path "$PKG"/
   cp "$REPO"/docs/DEPLOY.md "$PKG"/DEPLOY.md
+  cp "$REPO"/deploy/THIRD-PARTY-NOTICES.txt "$REPO"/LICENSE "$PKG"/ # the licence texts must go along with the program
 else
   tar -xzf "$SOURCE" -C "$STAGE"
   [[ -f "$PKG/pairnets-server" && -f "$PKG/install.sh" ]] || die "$SOURCE is not a server package"
