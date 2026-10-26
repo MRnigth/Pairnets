@@ -160,7 +160,7 @@ public partial class NestFilesView : UserControl
     {
         var files = Files;
         OfflineBanner.IsVisible = files is { NestOffline: true };
-        OfflineRun.Text = FilesPageText.OfflineText;
+        OfflineRun.Text = Wording.Computer(FilesPageText.OfflineText);
         AddFilesButton.IsEnabled = files is { NestOffline: false };
         if (!IsEffectivelyVisible)
             return;
@@ -178,7 +178,7 @@ public partial class NestFilesView : UserControl
         _rows.Clear();
         DrawCrumbs();
         OfflineBanner.IsVisible = files is { NestOffline: true };
-        OfflineRun.Text = FilesPageText.OfflineText;
+        OfflineRun.Text = Wording.Computer(FilesPageText.OfflineText);
         AddFilesButton.IsEnabled = files is { NestOffline: false };
         PlacementButton.IsEnabled = files is not null;
         if (files is null)
@@ -202,14 +202,14 @@ public partial class NestFilesView : UserControl
         ShowEmpty(_rows.Count > 0 ? null : search.Length > 0 ? FilesPageText.NoMatch : FilesPageText.Empty);
         var placement = files.PlacementOf(_folder);
         PickNestOnly.IsVisible = PlacementMap.Allowed(_folder, FilePlacement.NestOnly);
-        PlacementText.Text = NestFiles.PlacementText(placement);
+        PlacementText.Text = Wording.Computer(NestFiles.PlacementText(placement));
         PlacementIcon.Data = Visuals.Resource<Geometry>(WhereIconConverter.Key(placement));
         PlacementIcon.Stroke = Visuals.Resource<IBrush>(WhereBrushConverter.Key(placement));
         LivesLabel.Text = _folder.Length == 0 ? "Your files live" : "This folder lives";
         var total = search.Length > 0 ? _rows.Sum(r => r.Entry.Size) : files.List(_folder).Sum(e => e.Size);
         FooterText.Text = search.Length > 0
             ? $"{Format.Count(_rows.Count)} {(_rows.Count == 1 ? "file" : "files")} found · {Format.Bytes(total)}"
-            : FilesPageText.Footer(total, files.BytesHere(_folder));
+            : Wording.Computer(FilesPageText.Footer(total, files.BytesHere(_folder)));
     }
 
     private void ShowEmpty(string? text)
@@ -254,10 +254,10 @@ public partial class NestFilesView : UserControl
         var here = files.BytesHere(_folder);
         foreach (var (item, placement) in new[] { (PickOnThisPc, FilePlacement.OnThisPc), (PickOnDemand, FilePlacement.OnDemand), (PickNestOnly, FilePlacement.NestOnly) })
         {
-            var title = new TextBlock { Text = NestFiles.PlacementText(placement) + (placement == now ? "  ✓" : string.Empty), FontWeight = FontWeight.Bold };
-            var line = new TextBlock { Text = FilesPageText.ChoiceText(placement, here), Classes = { "t3" }, TextWrapping = TextWrapping.Wrap, MaxWidth = 320 };
+            var title = new TextBlock { Text = Wording.Computer(NestFiles.PlacementText(placement)) + (placement == now ? "  ✓" : string.Empty), FontWeight = FontWeight.Bold };
+            var line = new TextBlock { Text = Wording.Computer(FilesPageText.ChoiceText(placement, here)), Classes = { "t3" }, TextWrapping = TextWrapping.Wrap, MaxWidth = 320 };
             item.Header = new StackPanel { Margin = new Thickness(0, 4), Children = { title, line } };
-            Avalonia.Automation.AutomationProperties.SetName(item, NestFiles.PlacementText(placement));
+            Avalonia.Automation.AutomationProperties.SetName(item, Wording.Computer(NestFiles.PlacementText(placement)));
         }
         // The top of the nest is the whole Pairnets folder: never nest only (that is chosen per folder).
         PickNestOnly.IsVisible = PlacementMap.Allowed(_folder, FilePlacement.NestOnly);
@@ -290,7 +290,7 @@ public partial class NestFilesView : UserControl
             || !await Dialogs.ConfirmAwayAsync(Owner, folder, now, placement, files.BytesHere(folder), FilesPageText.Affects(files.List(folder), folder, now)))
             return false;
         files.SetPlacement(folder, placement);
-        Say($"{FilesPageText.FolderName(folder)}: {NestFiles.PlacementText(placement)}. Pairnets moves the files now.", ok: true);
+        Say($"{FilesPageText.FolderName(folder)}: {Wording.Computer(NestFiles.PlacementText(placement))}. Pairnets moves the files now.", ok: true);
         Dispatcher.UIThread.Post(Refresh, DispatcherPriority.Background);
         return true;
     }

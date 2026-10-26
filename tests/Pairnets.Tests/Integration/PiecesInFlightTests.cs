@@ -177,6 +177,7 @@ public class PiecesInFlightTests : IAsyncLifetime
         private int _now;
         public int MostAtOnce;
         public readonly List<string> PieceUris = [];
+        public readonly List<string> Answers = [];
 
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
@@ -191,6 +192,8 @@ public class PiecesInFlightTests : IAsyncLifetime
             try
             {
                 var resp = await base.SendAsync(request, cancellationToken);
+                lock (PieceUris)
+                    Answers.Add($"{request.RequestUri!.Query} {(int)resp.StatusCode}");
                 await Task.Delay(delay, cancellationToken);
                 return resp;
             }
@@ -222,7 +225,7 @@ public class PiecesInFlightTests : IAsyncLifetime
         Assert.Equal(data.Length, sentBytes);
         Assert.Equal(data.Length, lastProgress);
         Assert.Equal(2, watcher.MostAtOnce);
-        Assert.Equal(7, watcher.PieceUris.Count);
+        Assert.True(watcher.PieceUris.Count == 7, "7 pieces, each sent once: " + string.Join(", ", watcher.Answers));
         Assert.Contains(watcher.PieceUris, q => q.Contains("turn=wait", StringComparison.Ordinal));
         Assert.Equal(data, await File.ReadAllBytesAsync(Path.Combine(_server.Paths.Files, "big.bin")));
         Assert.Equal(0, _server.Uploads.Count);

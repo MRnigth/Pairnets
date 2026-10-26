@@ -90,6 +90,24 @@ public sealed class TrayControllerTests
         await started.WaitAsync(TimeSpan.FromSeconds(30));
     }
 
+    /// <summary>Before signing in, Sync now, Open folder and Pause syncing can't do anything yet: they are greyed out
+    /// (the Mac test, 2026-10-24, found them silent; the Windows menu is the same).</summary>
+    [Fact]
+    public async Task FirstRun_TheMenuGreysOutWhatCantWorkYet()
+    {
+        await using var app = await TrayHarness.CreateAsync();
+        var started = app.StartFirstRun();
+        var signIn = await app.Showing<SettingsWindow>("the sign-in window on the first start");
+        await app.OpenMenu();
+        foreach (var item in new[] { "Sync now", "Open folder", "Pause syncing" })
+        {
+            var e = await Assert.ThrowsAsync<Xunit.Sdk.XunitException>(() => app.Menu(item));
+            Assert.Contains("greyed out", e.Message);
+        }
+        await app.Wpf.Ui(signIn.Close);
+        await started.WaitAsync(TimeSpan.FromSeconds(30));
+    }
+
     [Fact]
     public async Task FirstRun_Escape_ClosesAnIdleSignIn_ButAsksWhenAnEmailWasTyped()
     {
@@ -290,9 +308,14 @@ public sealed class TrayControllerTests
         await using var nest = await TestServer.StartWithWebsiteAsync();
         await using var app = await TrayHarness.CreateAsync(nest);
         for (var i = 0; i < 110; i++)
-            File.WriteAllText(Path.Combine(app.Folder, $"f{i:000}.txt"), i.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        {
+            var path = Path.Combine(app.Folder, $"f{i:000}.txt");
+            File.WriteAllText(path, i.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddMinutes(-1)); // all in one pass, not the ones written last 2 s later
+        }
         await app.StartAsync();
-        await app.WaitUntil(() => nest.Store.ReadManifest(null).Entries.Count(e => !e.Deleted) == 110, "the 110 files to reach the nest");
+        // Generous: 110 uploads on a busy test machine (this test is about the question, not the speed).
+        await app.WaitUntil(() => nest.Store.ReadManifest(null).Entries.Count(e => !e.Deleted) == 110, "the 110 files to reach the nest", seconds: 120);
         await app.SyncedOnce();
 
         // 100 deletions in one go are held back (fewer are just done).
@@ -310,7 +333,7 @@ public sealed class TrayControllerTests
         var question = Assert.Single(app.Dialogs.Asked.Items);
         Assert.Equal("Pairnets – allow deletions?", question.Title);
         Assert.Contains("f019.txt", question.Text);
-        await app.WaitUntil(() => nest.Store.ReadManifest(null).Entries.Count(e => e.Deleted) == 100, "the 100 deletions to reach the nest");
+        await app.WaitUntil(() => nest.Store.ReadManifest(null).Entries.Count(e => e.Deleted) == 100, "the 100 deletions to reach the nest", seconds: 90);
         await app.WaitUntil(() => app.Tray.Session!.Status.Status == RunnerStatus.Idle, "syncing to carry on");
     }
 

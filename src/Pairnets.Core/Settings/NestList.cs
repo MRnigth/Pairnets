@@ -169,9 +169,14 @@ public sealed partial class ClientSettings
         OtherNests.RemoveAll(n => n.Id == id);
     }
 
-    /// <summary>Why <paramref name="folder"/> can't be <paramref name="nestId"/>'s folder (another nest's folder, or inside or around one), or null.</summary>
-    public string? FolderProblem(string folder, string? nestId) =>
-        NestFolders.Problem(folder, Nests().Where(n => n.NestId != nestId).Select(n => (Client.NestNames.Title(n, this), n.Folder)));
+    /// <summary>
+    /// Why <paramref name="folder"/> can't be <paramref name="nestId"/>'s folder (another nest's folder, inside or around one,
+    /// or a folder Pairnets may not save in, see <see cref="SyncFolderCheck"/>), or null. <paramref name="suggested"/> is
+    /// the folder the words offer instead.
+    /// </summary>
+    public string? FolderProblem(string folder, string? nestId, string? suggested = null) =>
+        NestFolders.Problem(folder, Nests().Where(n => n.NestId != nestId).Select(n => (Client.NestNames.Title(n, this), n.Folder)))
+        ?? SyncFolderCheck.Problem(folder, suggested);
 
     private static NestProfile Read(ClientSettings s) => new()
     {

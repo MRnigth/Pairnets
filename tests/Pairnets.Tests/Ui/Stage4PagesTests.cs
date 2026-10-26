@@ -14,6 +14,7 @@ using Pairnets.Desktop.Views;
 namespace Pairnets.Tests.Ui;
 
 /// <summary>The pages of the "new look" stage 4 in the Mac/Linux app: Activity, Needs you, History, Devices, Settings and Account.</summary>
+[Collection(AvaloniaUi.Name)]
 public class Stage4PagesTests
 {
     private static ActivityFeed SampleFeed(DateTimeOffset now)

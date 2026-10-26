@@ -34,6 +34,8 @@ public class LiveSpeedTests : IAsyncLifetime
         if (heard is not null)
             hub.On<string, TransferReport>(PushNames.PeerTransfer, heard);
         await hub.StartAsync();
+        // Registered on the server once a call is handled (StartAsync can return a moment before), so it hears the next report.
+        await hub.InvokeAsync("Synced", -1L);
         return hub;
     }
 
@@ -46,7 +48,7 @@ public class LiveSpeedTests : IAsyncLifetime
                 got.Add((name, report));
         }, async match =>
         {
-            var deadline = DateTime.UtcNow.AddSeconds(15);
+            var deadline = DateTime.UtcNow.AddSeconds(60); // a busy test machine
             while (DateTime.UtcNow < deadline)
             {
                 lock (got)
@@ -170,7 +172,11 @@ public class LiveSpeedTests : IAsyncLifetime
         using var folder = new TempDir("live-session");
         using var stateBase = new TempDir("live-session-state");
         for (var i = 0; i < 10; i++)
-            await File.WriteAllBytesAsync(Path.Combine(folder.Path, $"photo-{i}.jpg"), new byte[64 * 1024]);
+        {
+            var photo = Path.Combine(folder.Path, $"photo-{i}.jpg");
+            await File.WriteAllBytesAsync(photo, new byte[64 * 1024]);
+            File.SetLastWriteTimeUtc(photo, DateTime.UtcNow.AddMinutes(-1)); // all 10 in the first pass (none "still being written")
+        }
         var (heard, next) = Listener();
         await using var other = await ConnectAsync(_server.MintKey("PC-2").Key, heard);
 

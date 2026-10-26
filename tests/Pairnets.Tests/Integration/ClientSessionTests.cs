@@ -47,7 +47,7 @@ public class ClientSessionTests : IAsyncLifetime
 
     private static async Task WaitUntil(Func<bool> condition, string what)
     {
-        var deadline = DateTime.UtcNow.AddSeconds(30); // slow CI runners
+        var deadline = DateTime.UtcNow.AddSeconds(90); // slow CI runners: a first sync of 100+ files can take a while
         while (!condition())
         {
             if (DateTime.UtcNow > deadline)
@@ -149,7 +149,11 @@ public class ClientSessionTests : IAsyncLifetime
     public async Task BlockedDeletionsAreDescribedAndCanBeApproved()
     {
         for (var i = 0; i < 110; i++)
-            File.WriteAllText(Path.Combine(_folder.Path, $"f{i:000}.txt"), i.ToString());
+        {
+            var path = Path.Combine(_folder.Path, $"f{i:000}.txt");
+            File.WriteAllText(path, i.ToString());
+            File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddMinutes(-1)); // all 110 in the first pass
+        }
         await using (var first = Start())
             await WaitUntil(() => _server.Store.ReadManifest(null).Entries.Count == 110 && first.Status.Status == RunnerStatus.Idle, "first sync");
 

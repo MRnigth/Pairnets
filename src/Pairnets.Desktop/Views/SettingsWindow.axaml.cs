@@ -34,6 +34,9 @@ public partial class SettingsWindow : Window
             Close();
         };
         Host.Content = SignIn;
+        // Sized to the content once (520×640), then free to resize: the steps follow the window. Left fixed, a narrower
+        // window cut the content off on both sides (the Mac test, 2026-10-24: the logo read "airnets").
+        Opened += (_, _) => FollowTheWindow();
         KeyDown += async (_, e) =>
         {
             if (e.Key != Avalonia.Input.Key.Escape)
@@ -43,6 +46,17 @@ public partial class SettingsWindow : Window
             if (!SignIn.InProgress || await Dialogs.ConfirmAsync(this, "Pairnets", "Stop signing in?"))
                 Close();
         };
+    }
+
+    /// <summary>Keeps the size it opened at, and lets the steps take the window's size from now on.</summary>
+    internal void FollowTheWindow()
+    {
+        var size = ClientSize;
+        SizeToContent = SizeToContent.Manual;
+        Width = size.Width;
+        Height = size.Height;
+        Host.Width = double.NaN;
+        Host.Height = double.NaN;
     }
 
     /// <summary>The sign-in steps.</summary>

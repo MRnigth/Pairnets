@@ -184,12 +184,15 @@ public sealed class DeviceKeyTests : IAsyncLifetime
             return Task.CompletedTask;
         };
         await hub.StartAsync();
+        // StartAsync returns once the handshake is answered, which can be before the server has registered the
+        // connection; a call is only handled after that, so after this one the removal is sure to find it.
+        await hub.InvokeAsync(nameof(SyncHub.Synced), -1L);
 
         using var desktopApi = _server.Client("DESKTOP", desktop.Key);
         await desktopApi.RemoveDeviceAsync(laptop.Id, CancellationToken.None);
 
-        Assert.Equal((laptop.Id, "LAPTOP"), await removedMessage.Task.WaitAsync(TimeSpan.FromSeconds(10)));
-        await closed.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.Equal((laptop.Id, "LAPTOP"), await removedMessage.Task.WaitAsync(TimeSpan.FromSeconds(30)));
+        await closed.Task.WaitAsync(TimeSpan.FromSeconds(30));
         var reconnect = await Assert.ThrowsAsync<HttpRequestException>(() => hub.StartAsync());
         Assert.Equal(HttpStatusCode.Unauthorized, reconnect.StatusCode);
     }

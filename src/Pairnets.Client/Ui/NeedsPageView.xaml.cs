@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using Pairnets.Core.Client;
+using Pairnets.Core.Sync;
 
 namespace Pairnets.Client.Ui;
 
@@ -29,15 +30,11 @@ public partial class NeedsPageView : UserControl
 
     public bool ShowsCalmState => CalmState.Visibility == Visibility.Visible;
 
-    public void Show(IReadOnlyList<AttentionItem> items)
+    /// <param name="status">The nest's state: the line under the title only says "keeps syncing" while it does.</param>
+    public void Show(IReadOnlyList<AttentionItem> items, StatusSnapshot? status = null)
     {
         _items = items.ToList();
-        Subtitle.Text = items.Count switch
-        {
-            0 => "Nothing is waiting for you. Everything is syncing.",
-            1 => "1 thing only you can decide. Everything else keeps syncing meanwhile.",
-            _ => $"{items.Count} things only you can decide. Everything else keeps syncing meanwhile.",
-        };
+        Subtitle.Text = NeedsYouText.Subtitle(items.Count, status ?? StatusSnapshot.Initial with { Status = RunnerStatus.Idle });
         Cards.Children.Clear();
         foreach (var item in items)
             Cards.Children.Add(Card(item));

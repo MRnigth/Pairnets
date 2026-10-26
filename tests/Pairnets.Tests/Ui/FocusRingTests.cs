@@ -13,6 +13,7 @@ namespace Pairnets.Tests.Ui;
 /// Keyboard users see where they are: both apps draw the same 2 px ring in the dark accent ink (T.AccentInk) around
 /// the control that has the keyboard focus (design review N1, 2026-10-19).
 /// </summary>
+[Collection(AvaloniaUi.Name)]
 public class FocusRingTests
 {
     [AvaloniaFact]

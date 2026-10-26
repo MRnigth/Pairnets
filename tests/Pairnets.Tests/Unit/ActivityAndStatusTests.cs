@@ -182,6 +182,47 @@ public class FormatTests
         Assert.Equal("Offline", info.Secondary);
     }
 
+    /// <summary>The Mac test (2026-10-24): "Needs you" said "Everything keeps syncing" with every nest paused.</summary>
+    [Fact]
+    public void NeedsYouOnlySaysKeepsSyncingWhileItDoes()
+    {
+        var idle = StatusSnapshot.Initial with { Status = RunnerStatus.Idle };
+        var paused = StatusSnapshot.Initial with { Status = RunnerStatus.Paused, Paused = true };
+        var offline = StatusSnapshot.Initial with { Status = RunnerStatus.Offline, Text = "Offline: timeout" };
+        Assert.Equal("Nothing needs a decision right now. Everything keeps syncing.", NeedsYouText.Subtitle(0, idle));
+        Assert.Equal("3 things only you can decide. Everything else keeps syncing meanwhile.", NeedsYouText.Subtitle(3, idle));
+        Assert.Equal("Nothing needs a decision right now. Syncing is paused.", NeedsYouText.Subtitle(0, paused));
+        Assert.Equal("1 thing only you can decide. Syncing is paused.", NeedsYouText.Subtitle(1, paused));
+        Assert.Equal("Nothing needs a decision right now. Pairnets keeps trying to reach your nest.", NeedsYouText.Subtitle(0, offline));
+    }
+
+    /// <summary>The Mac test (2026-10-24): "Computers" stayed on "Loading…" while the nest could not be reached.</summary>
+    [Fact]
+    public void ComputersSayWhyTheListIsNotThere()
+    {
+        Assert.Equal("Loading the computers that use your nest…", DevicesSummary.EmptyText(StatusSnapshot.Initial with { Status = RunnerStatus.Syncing }));
+        Assert.StartsWith("Can't reach your nest right now", DevicesSummary.EmptyText(StatusSnapshot.Initial with { Status = RunnerStatus.Offline, Text = "Offline: timeout" }));
+        Assert.StartsWith("Syncing is paused", DevicesSummary.EmptyText(StatusSnapshot.Initial with { Status = RunnerStatus.Paused, Paused = true }));
+        Assert.Equal("No computers have used this nest yet.", DevicesSummary.EmptyText(StatusSnapshot.Initial with { Status = RunnerStatus.Offline, Devices = [] }));
+    }
+
+    /// <summary>The Mac test (2026-10-24): "notaneail" got "Type your email address first.".</summary>
+    [Fact]
+    public void TheEmailBoxSaysWhatIsWrong()
+    {
+        Assert.Equal("Type your email address first.", SignInTexts.EmailProblem("  "));
+        Assert.Equal("That doesn't look like an email address. Check it and try again.", SignInTexts.EmailProblem("notaneail"));
+    }
+
+    /// <summary>The Mac test (2026-10-24): "Cannot reach the server; retrying. Pairnets cannot reach the ser…".</summary>
+    [Fact]
+    public void TheOfflineLineDoesNotSayItTwice()
+    {
+        Assert.Equal("Cannot reach the server; retrying.", ClientSession.OfflineActivityText(Pairnets.Core.Api.FriendlyErrors.Offline));
+        Assert.Equal("Cannot reach the server; retrying.", ClientSession.OfflineActivityText(null));
+        Assert.Equal("Cannot reach the server; retrying. The connection timed out.", ClientSession.OfflineActivityText("The connection timed out."));
+    }
+
     [Fact]
     public void TransferTexts()
     {

@@ -64,8 +64,11 @@ public sealed class DesktopController : ITrayActions, IDisposable
     private NativeMenu? _trayMenu;
     private NativeMenuItem? _openItem;
     private NativeMenuItem? _statusItem;
+    private NativeMenuItem? _quickItem;
     private NativeMenuItem? _syncItem;
     private NativeMenuItem? _folderItem;
+    private NativeMenuItem? _foldersItem;
+    private readonly NativeMenu _foldersMenu = new();
     private NativeMenuItem? _fixItem;
     private NativeMenuItem? _pauseItem;
     private NativeMenuItem? _autoStartItem;
@@ -207,7 +210,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
     private void CreateTray()
     {
         var menu = new NativeMenu();
-        var quick = new NativeMenuItem("Quick status…");
+        var quick = _quickItem = new NativeMenuItem("Quick status…");
         quick.Click += (_, _) => TogglePanel();
         var open = _openItem = new NativeMenuItem("Open Pairnets");
         open.Click += (_, _) => ShowMainWindow();
@@ -221,11 +224,10 @@ public sealed class DesktopController : ITrayActions, IDisposable
                 SyncNow();
         };
         var folder = _folderItem = new NativeMenuItem("Open folder");
-        folder.Click += (_, _) =>
-        {
-            if (folder.Menu is null)
-                OpenFolder();
-        };
+        folder.Click += (_, _) => OpenFolder();
+        // Several nests: "Open folder" lists their folders instead. Its own row with one sub-menu kept for good: the macOS
+        // menu bar throws when an item's sub-menu is swapped for another ("The menu being updated does not match").
+        _foldersItem = new NativeMenuItem("Open folder") { Menu = _foldersMenu, IsVisible = false };
         _fixItem = new NativeMenuItem("No action needed") { IsEnabled = false };
         _fixItem.Click += (_, _) => FixBlocked();
         var settings = new NativeMenuItem("Settings…");
@@ -240,10 +242,11 @@ public sealed class DesktopController : ITrayActions, IDisposable
         _autoStartItem.Click += (_, _) => SetAutoStart(!SafeIsAutoStart());
         var quit = new NativeMenuItem("Quit Pairnets");
         quit.Click += (_, _) => Quit();
-        foreach (var item in new NativeMenuItemBase[] { quick, open, _statusItem, new NativeMenuItemSeparator(), sync, folder, _fixItem,
+        foreach (var item in new NativeMenuItemBase[] { quick, open, _statusItem, new NativeMenuItemSeparator(), sync, folder, _foldersItem, _fixItem,
                      new NativeMenuItemSeparator(), settings, log, report, _pauseItem, _autoStartItem, new NativeMenuItemSeparator(), quit })
             menu.Items.Add(item);
         _trayMenu = menu;
+        DrawMenuReady();
         if (!_env.ShowTrayIcon)
             return; // tests: the menu works the same, but no icon appears in the real menu bar or tray
 
@@ -430,7 +433,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
         {
             // Copies removed here because their folder lives on the nest only: never silent.
             var (title, text) = FilesPageText.FreedNotice(r.Freed);
-            Notify("freed", PrefixOf(run) + title, text.Replace("this PC", "this computer", StringComparison.Ordinal), run);
+            Notify("freed", PrefixOf(run) + title, Wording.Computer(text), run);
         }
         else if (r.Outcome == PassOutcome.AuthFailed)
             Notify("auth", PrefixOf(run) + "Sign in to your nest", "Your nest did not accept this computer's sign-in. Open Pairnets and sign in again to keep syncing.", run);
@@ -942,6 +945,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
             _fixItem.IsEnabled = status.FixLabel is not null;
             var paused = nests.Visible ? _settings.Paused : status.Paused;
             _pauseItem!.Header = nests.Visible ? (paused ? "Resume all" : "Pause all") : paused ? "Resume syncing" : "Pause syncing";
+            DrawMenuReady();
             DrawNestMenu(nests);
         }
         if (_window is { IsVisible: true })
@@ -963,6 +967,17 @@ public sealed class DesktopController : ITrayActions, IDisposable
         }
     }
 
+    /// <summary>
+    /// Before this computer is signed in, the menu says what its first item does ("Sign in…", which it opens) and greys
+    /// out what can't work yet: the Mac test (2026-10-24) found Sync now, Open folder and Pause doing nothing, silently.
+    /// </summary>
+    private void DrawMenuReady()
+    {
+        var ready = AnyNestReady && _settings.FirstRunCompleted;
+        _quickItem!.Header = ready ? "Quick status…" : "Sign in…";
+        _syncItem!.IsEnabled = _folderItem!.IsEnabled = _pauseItem!.IsEnabled = ready;
+    }
+
     private readonly List<NativeMenuItemBase> _nestItems = [];
     private string? _drawnNestMenu;
 
@@ -970,7 +985,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
     /// Several nests: the tray menu lists each nest with its state under "Open Pairnets" (a click opens the app on it),
     /// and "Open folder" opens a list of the nests' folders. With one nest the menu is as before.
     /// </summary>
-    private void DrawNestMenu(NestListModel nests)
+    internal void DrawNestMenu(NestListModel nests)
     {
         var key = nests.Visible ? string.Join("|", nests.Rows.Select(r => r.Id + r.Title + r.Text + r.Dot)) : "";
         if (key == _drawnNestMenu || _trayMenu is not { } menu)
@@ -981,11 +996,12 @@ public sealed class DesktopController : ITrayActions, IDisposable
         _nestItems.Clear();
         _statusItem!.IsVisible = !nests.Visible;
         _syncItem!.Header = nests.Visible ? "Sync all now" : "Sync now";
-        _folderItem!.Menu = null;
+        _folderItem!.IsVisible = !nests.Visible;
+        _foldersItem!.IsVisible = nests.Visible;
+        _foldersMenu.Items.Clear();
         if (!nests.Visible)
             return;
         var at = menu.Items.IndexOf(_openItem!) + 1;
-        var folders = new NativeMenu();
         foreach (var row in nests.Rows)
         {
             var id = row.Id;
@@ -1006,9 +1022,8 @@ public sealed class DesktopController : ITrayActions, IDisposable
                 if (_runs.FirstOrDefault(r => r.Id == id) is { } run)
                     OpenFolder(run);
             };
-            folders.Items.Add(folder);
+            _foldersMenu.Items.Add(folder);
         }
-        _folderItem.Menu = folders;
         var add = new NativeMenuItem("Add a nest…");
         add.Click += (_, _) => AddNest();
         menu.Items.Insert(at, add);
@@ -1277,12 +1292,37 @@ public sealed class DesktopController : ITrayActions, IDisposable
             case BlockReason.MarkerMismatch:
                 await LocateFolderAsync(status.Text);
                 break;
+            case BlockReason.FolderNotWritable:
+                await ChooseAnotherFolderAsync();
+                break;
             case BlockReason.SignedOut:
             case BlockReason.SignInRequired:
                 ShowSignIn();
                 break;
         }
         _dirty = true;
+    }
+
+    /// <summary>
+    /// "Choose another folder…" for a folder Pairnets may not save in (/usr, C:\Program Files...): the nest starts over in
+    /// the new folder (its files come down; nothing is deleted on either side) and the old folder is left as it is.
+    /// </summary>
+    private async Task ChooseAnotherFolderAsync()
+    {
+        var host = _window ?? new MainWindow(this);
+        if (await Dialogs.PickFolderAsync(host, "Choose a folder of your own for this nest") is not { } folder || _session is null)
+            return;
+        if (_settings.FolderProblem(folder, Nest.NestId) is { } error)
+        {
+            await Dialogs.InfoAsync(_window, "Pairnets", error);
+            return;
+        }
+        StopSession();
+        var nest = Nest;
+        nest.Folder = folder;
+        SaveNest(nest);
+        StartSession(null);
+        UpdateFileManagerEntry();
     }
 
     private async Task LocateFolderAsync(string message)

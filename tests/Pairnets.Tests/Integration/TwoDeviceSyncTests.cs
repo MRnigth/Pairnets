@@ -147,7 +147,7 @@ public class TwoDeviceSyncTests : IAsyncLifetime
             _desktop.Write($"d{i % 3}/f{i}.txt", "content " + i);
             _laptop.Write($"d{i % 3}/f{i}.txt", "content " + i);
         }
-        await _desktop.SyncAsync();
+        Completed(await _desktop.SyncUntilQuietAsync());
         var r = await _laptop.SyncAsync();
         Completed(r);
         Assert.Equal(0, r.Changes);
@@ -202,8 +202,9 @@ public class TwoDeviceSyncTests : IAsyncLifetime
     {
         for (var i = 0; i < 220; i++)
             _desktop.Write($"f{i:000}.txt", i.ToString());
-        await _desktop.SyncAsync();
-        await _laptop.SyncAsync();
+        Completed(await _desktop.SyncUntilQuietAsync());
+        Completed(await _laptop.SyncUntilQuietAsync());
+        Assert.Equal(220, _laptop.Files().Count);
 
         // 100 or more deletions on one side are blocked.
         for (var i = 0; i < 100; i++)
@@ -240,7 +241,7 @@ public class TwoDeviceSyncTests : IAsyncLifetime
     {
         for (var i = 0; i < 110; i++)
             _desktop.Write($"f{i:000}.txt", i.ToString());
-        await _desktop.SyncAsync();
+        Completed(await _desktop.SyncUntilQuietAsync());
         for (var i = 0; i < 100; i++)
             _desktop.Delete($"f{i:000}.txt");
         Assert.Equal(PassOutcome.Blocked, (await _desktop.SyncAsync()).Outcome);
@@ -286,6 +287,26 @@ public class TwoDeviceSyncTests : IAsyncLifetime
         Directory.Delete(_desktop.Folder, true);
         Directory.Move(moved, _desktop.Folder);
         Completed(await _desktop.SyncAsync());
+    }
+
+    [Fact]
+    public async Task AFolderPairnetsMayNotSaveInStopsCalmlyAndAsksForAnother()
+    {
+        // A folder like C:\Program Files\Sync: the files can be read, but nothing can be saved there.
+        _desktop.Write("a.txt", "a");
+        PassResult r;
+        using (var denied = WriteDenied.On(_desktop.Folder))
+        {
+            if (denied is null)
+                return; // this account may save anywhere (root on Linux): nothing to check
+            r = await _desktop.SyncAsync();
+            Assert.Equal(PassOutcome.Blocked, r.Outcome);
+            Assert.Equal(BlockReason.FolderNotWritable, r.BlockReason);
+            Assert.Contains("Choose another folder", r.Message);
+            Assert.Empty(_server.Store.ReadManifest(null).Entries);
+        }
+        Completed(await _desktop.SyncAsync());
+        Assert.Contains(_server.Store.ReadManifest(null).Entries, e => e.Path == "a.txt");
     }
 
     [Fact]
@@ -385,6 +406,7 @@ public class TwoDeviceSyncTests : IAsyncLifetime
         }
         _desktop.Hooks.BeforeTransfer = Track;
         var up = await _desktop.SyncAsync();
+        Completed(up);
         Assert.Equal(24, up.Uploaded);
         Assert.Equal(4, peak);
 

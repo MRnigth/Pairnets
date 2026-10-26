@@ -109,11 +109,14 @@ public sealed class SignInFlowTests : IAsyncLifetime
                 waiting.TrySetResult(s);
         };
         var run = flow.RunAsync(CancellationToken.None);
-        var shown = await waiting.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        // Generous for a busy test machine; and if the flow ends before it waits, say how instead of timing out.
+        if (await Task.WhenAny(waiting.Task, run).WaitAsync(TimeSpan.FromSeconds(60)) == run)
+            Assert.Fail($"The flow ended before it waited: {(await run).Stage}");
+        var shown = await waiting.Task;
         using var owner = await Owner();
         await owner.PostAsync($"web/api/pair/{shown.Code}/deny", null);
 
-        var done = await run.WaitAsync(TimeSpan.FromSeconds(10));
+        var done = await run.WaitAsync(TimeSpan.FromSeconds(60));
 
         Assert.Equal(PairingStage.Denied, done.Stage);
         Assert.Null(done.Grant);

@@ -59,14 +59,17 @@ const LOGIN_ERRORS: Record<string, string> = {
   google_expired: "That Google sign-in took too long or was started in another browser. Try again.",
 };
 
-export function loginPage(opts: { next: string; reauth: boolean; error: string | null; siteKey: string }): string {
+// `fresh`: opened from the apps' "Make an account" (/login?new=1). Accounts are made by signing in, so it is the same page
+// with a title for someone new.
+export function loginPage(opts: { next: string; reauth: boolean; error: string | null; siteKey: string; fresh?: boolean }): string {
   const googleHref = `/login/google?next=${encodeURIComponent(opts.next)}${opts.reauth ? "&reauth=1" : ""}`;
   const error = opts.error && LOGIN_ERRORS[opts.error] ? `<p class="error" role="alert">${e(LOGIN_ERRORS[opts.error])}</p>` : "";
   const reauth = opts.reauth ? `<p class="notice">For your safety, sign in again to do this.</p>` : "";
+  const fresh = opts.fresh && !opts.reauth;
   return layout(
-    "Sign in",
+    fresh ? "Make an account" : "Sign in",
     `<section class="card">
-<h1>Sign in to Pairnets</h1>
+<h1>${fresh ? "Make your Pairnets account" : "Sign in to Pairnets"}</h1>
 ${reauth}${error}
 <p><a class="button wide" id="google" href="${e(googleHref)}">Continue with Google</a></p>
 <p class="or">or get a sign-in link by email</p>

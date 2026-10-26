@@ -157,6 +157,15 @@ public class NestMapModelTests
         Assert.Equal(NestLineKind.Idle, m.Others[0].Kind);
     }
 
+    /// <summary>The Mac test (2026-10-24): a paused nest that was never reached showed "online" with a green dot.</summary>
+    [Fact]
+    public void Paused_NeverReached_IsNotOnline()
+    {
+        var m = Map(StatusSnapshot.Initial with { Status = RunnerStatus.Paused, Text = "Paused", Paused = true });
+        Assert.Equal(NestMapState.Paused, m.State);
+        Assert.Equal((NestDot.Off, "not connected"), (m.NestDot, m.NestSub));
+    }
+
     [Theory]
     [InlineData(BlockReason.FolderMissing)]
     [InlineData(BlockReason.MarkerMissing)]

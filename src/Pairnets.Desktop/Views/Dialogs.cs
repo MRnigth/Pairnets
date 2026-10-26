@@ -131,7 +131,8 @@ public static class Dialogs
         if (!FilesPageText.AsksFirst(from, to))
             return true;
         var question = FilesPageText.AwayQuestion(folder, to, bytesHere, affects);
-        return await ChooseAsync(owner, question.Title, question.Text, question.Points, "Cancel", question.Button) == question.Button;
+        return await ChooseAsync(owner, Wording.Computer(question.Title), Wording.Computer(question.Text), [.. question.Points.Select(Wording.Computer)],
+            "Cancel", question.Button) == question.Button;
     }
 
     /// <summary>Asks where to save a copy of a file; null for Cancel. The tests answer it themselves.</summary>

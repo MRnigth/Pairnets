@@ -7,6 +7,7 @@ using Pairnets.Desktop.Views;
 namespace Pairnets.Tests.Ui;
 
 /// <summary>The back and forward buttons above every page of the Mac/Linux app (the same as the Windows app).</summary>
+[Collection(AvaloniaUi.Name)]
 public class BackButtonUiTests
 {
     [AvaloniaFact]

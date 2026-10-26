@@ -76,16 +76,37 @@ public class NestFilesTests : IAsyncLifetime
 
     private string Here(string rel) => Path.Combine(_folder.Path, rel.Replace('/', Path.DirectorySeparatorChar));
 
-    private string? OnNest(string path) =>
-        _server.Store.ReadManifest(null).Entries.FirstOrDefault(e => e.Path == path && !e.Deleted) is { } e
-            ? File.ReadAllText(Path.Combine(_server.Paths.Files, path.Replace('/', Path.DirectorySeparatorChar)))
-            : null;
+    // Read straight from the nest's folder: while the nest stores a new version the file is gone (or busy) for a
+    // moment, so a read that fails is tried again.
+    private string? OnNest(string path)
+    {
+        for (var attempt = 1; ; attempt++)
+        {
+            if (_server.Store.ReadManifest(null).Entries.FirstOrDefault(e => e.Path == path && !e.Deleted) is null)
+                return null;
+            try
+            {
+                return File.ReadAllText(Path.Combine(_server.Paths.Files, path.Replace('/', Path.DirectorySeparatorChar)));
+            }
+            catch (IOException) when (attempt < 50)
+            {
+                Thread.Sleep(50);
+            }
+        }
+    }
+
+    /// <summary>What a folder here still holds (for a message), or "nothing" once it is gone or empty.</summary>
+    private string Inside(string folder) =>
+        Directory.Exists(Here(folder))
+            ? string.Join(", ", Directory.EnumerateFileSystemEntries(Here(folder), "*", new EnumerationOptions { RecurseSubdirectories = true, AttributesToSkip = 0 })
+                .Select(e => Path.GetRelativePath(_folder.Path, e))) is { Length: > 0 } all ? all : "nothing (empty)"
+            : "nothing";
 
     private async Task OnTheNestAsync(params (string Path, string Content)[] files)
     {
         foreach (var (path, content) in files)
             _other.Write(path, content);
-        Assert.Equal(PassOutcome.Completed, (await _other.SyncAsync()).Outcome);
+        Assert.Equal(PassOutcome.Completed, (await _other.SyncUntilQuietAsync()).Outcome);
     }
 
     [Fact]
@@ -110,6 +131,29 @@ public class NestFilesTests : IAsyncLifetime
         Assert.Equal(["Photos"], session.Files.Folders());
         Assert.Equal(0, session.Files.BytesHere("Photos"));
         Assert.Equal(5, session.Files.BytesHere(""));
+    }
+
+    /// <summary>
+    /// Crash report 11eae5385eec (Windows app 1.0.61): Settings › "Where your files live" read the nest's list after the
+    /// nest had stopped and its list's database was closed. The pages now get an empty list instead of an error.
+    /// </summary>
+    [Fact]
+    public async Task AfterTheNestStopped_TheListsAreEmptyInsteadOfFailing()
+    {
+        await OnTheNestAsync(("Photos/beach.jpg", "beach"), ("notes.txt", "notes"));
+        var session = Start();
+        await WaitIdle(session);
+        var files = session.Files;
+        Assert.NotEmpty(files.List(""));
+
+        await session.DisposeAsync();
+
+        Assert.Empty(files.List(""));
+        Assert.Empty(files.Folders());
+        Assert.Empty(files.Search("beach"));
+        Assert.Equal(0, files.BytesHere(""));
+        Assert.Equal(0, files.BytesOnNest());
+        Assert.Empty(files.Biggest());
     }
 
     [Fact]
@@ -235,13 +279,40 @@ public class NestFilesTests : IAsyncLifetime
         await WaitIdle(session);
 
         Assert.True((await session.Files.RenameAsync("Trip", "Trip 2")).Ok);
+        // Mostly at once; a file another program had open (a virus scanner) follows with the sync the rename starts.
+        await WaitUntil(() => !Directory.Exists(Here("Trip")) && File.Exists(Here("Trip 2/a.txt")) && File.Exists(Here("Trip 2/day 1/b.txt")),
+            "the folder here under its new name, and none left under the old one");
         Assert.Equal("b", File.ReadAllText(Here("Trip 2/day 1/b.txt")));
-        Assert.False(Directory.Exists(Here("Trip")));
 
         await WaitUntil(() => session.Status.Status == RunnerStatus.Idle, "idle");
         Assert.True((await session.Files.DeleteAsync("Trip 2")).Ok);
-        Assert.False(Directory.Exists(Here("Trip 2")));
+        Assert.False(Directory.Exists(Here("Trip 2")), "still here: " + Inside("Trip 2"));
         Assert.Null(OnNest("Trip 2/a.txt"));
+    }
+
+    /// <summary>
+    /// Renamed while another program has the file here open (on Windows it can't move then): it used to stay under its
+    /// old name as a file Pairnets no longer knew, and the next sync sent it back to the nest under that name.
+    /// </summary>
+    [Fact]
+    public async Task AFileOpenElsewhereDuringARenameNeverComesBackUnderItsOldName()
+    {
+        await OnTheNestAsync(("Trip/a.txt", "a"));
+        await using var session = Start();
+        await WaitUntil(() => File.Exists(Here("Trip/a.txt")), "the download");
+        await WaitIdle(session);
+
+        using (new FileStream(Here("Trip/a.txt"), FileMode.Open, FileAccess.Read, FileShare.None)) // for as long as the rename tries
+        {
+            var renamed = await session.Files.RenameAsync("Trip/a.txt", "b.txt");
+            Assert.True(renamed.Ok, renamed.Problem);
+        }
+        session.Runner.RequestSync("test");
+
+        await WaitUntil(() => File.Exists(Here("Trip/b.txt")) && !File.Exists(Here("Trip/a.txt")), "the file here under its new name");
+        await WaitUntil(() => session.Status.Status == RunnerStatus.Idle, "idle");
+        Assert.Null(OnNest("Trip/a.txt"));
+        Assert.Equal("a", OnNest("Trip/b.txt"));
     }
 
     [Fact]

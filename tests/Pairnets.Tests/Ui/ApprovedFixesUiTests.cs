@@ -13,6 +13,7 @@ namespace Pairnets.Tests.Ui;
 /// The approved design fixes of the first batch, in the Mac/Linux app: the header's Sync now follows the state (A1), the
 /// keyboard shortcuts and the Mac menu bar (A4), the page tiles under the computers (A12) and the failed update's reason (A13).
 /// </summary>
+[Collection(AvaloniaUi.Name)]
 public class ApprovedFixesUiTests
 {
     private static readonly ServerInfo Server = new("id", 1, 1, PairnetsInfo.ProductVersion, 412L << 30, 1L << 40);

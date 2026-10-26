@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Interactivity;
@@ -15,6 +16,7 @@ namespace Pairnets.Tests.Ui;
 /// The sign-in window's account steps in the Mac/Linux app (the Windows app is the same, page for page), driven by
 /// pressing their buttons against a stand-in Pairnets service: sign in → finish in the browser → no nest yet → the folder.
 /// </summary>
+[Collection(AvaloniaUi.Name)]
 public class AccountSignInUiTests
 {
     /// <summary>Keeps the key readable, so the test can see what would be saved.</summary>
@@ -64,6 +66,38 @@ public class AccountSignInUiTests
             if (DateTime.UtcNow > until)
                 Assert.Fail("Timed out waiting for " + what);
             Thread.Sleep(20);
+        }
+    }
+
+    /// <summary>
+    /// The Mac test (2026-10-24): made narrower than it opens, the window cut its steps off on both sides (the logo read
+    /// "airnets", the buttons ran into the edges). At its smallest everything still fits.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task TheSmallestWindowStillFitsTheFirstStep()
+    {
+        await using var service = await FakeSyncService.StartAsync();
+        using var window = new Harness(service);
+        var host = window.Host;
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(520, host.ClientSize.Width, 0);
+        Assert.Equal(640, host.ClientSize.Height, 0);
+
+        host.Width = host.MinWidth;
+        host.Height = host.MinHeight;
+        for (var i = 0; i < 3; i++)
+        {
+            Dispatcher.UIThread.RunJobs();
+            host.UpdateLayout();
+        }
+        Assert.Equal(host.MinWidth, host.ClientSize.Width, 0);
+        var logo = Screen.All<TextBlock>(window.View).Single(t => t.Text == "Pairnets");
+        var buttons = new Control[] { logo, window.View.AccountGoogleButton, window.View.AccountEmailBox, window.View.AccountEmailButton };
+        foreach (var c in buttons)
+        {
+            var at = c.TranslatePoint(default, host)!.Value;
+            Assert.True(at.X >= 0 && at.X + c.Bounds.Width <= host.ClientSize.Width + 0.5,
+                $"{c.Name ?? c.GetType().Name} runs off the window: {at.X:0}..{at.X + c.Bounds.Width:0} of {host.ClientSize.Width:0}");
         }
     }
 
@@ -130,8 +164,20 @@ public class AccountSignInUiTests
         // No address yet: the email button says so and stays on the first step.
         Click(view.AccountEmailButton);
         Assert.True(view.AccountEmailProblem.IsVisible);
+        Assert.Equal("Type your email address first.", view.AccountEmailProblem.Text);
         Assert.Equal(SignInStep.Account, view.Step);
         Assert.Empty(window.Opened);
+
+        // Something that is no email address: it says that (the Mac test, 2026-10-24, got "Type your email address first.").
+        view.AccountEmailBox.Text = "notaneail";
+        Dispatcher.UIThread.RunJobs(); // TextChanged arrives through the dispatcher
+        Click(view.AccountEmailButton);
+        Assert.True(view.AccountEmailProblem.IsVisible);
+        Assert.Equal("That doesn't look like an email address. Check it and try again.", view.AccountEmailProblem.Text);
+        Assert.Equal(SignInStep.Account, view.Step);
+        Assert.Empty(window.Opened);
+        view.AccountEmailBox.Text = string.Empty;
+        Dispatcher.UIThread.RunJobs();
 
         // Google, then Cancel while waiting for the browser.
         service.AfterScript = "pending";
@@ -145,8 +191,11 @@ public class AccountSignInUiTests
         Click(view.AccountCancelButton);
         Assert.Equal(SignInStep.Account, view.Step);
         Assert.False(view.AccountOutcomeBox.IsVisible);
-        var polls = service.Polls;
+        // A poll already on its way when Cancel was pressed may still land: counted from after that.
         Thread.Sleep(300);
+        Dispatcher.UIThread.RunJobs();
+        var polls = service.Polls;
+        Thread.Sleep(600);
         Dispatcher.UIThread.RunJobs();
         Assert.Equal(polls, service.Polls); // the sign-in stopped asking
         Assert.Equal(SignInStep.Account, view.Step);
@@ -164,7 +213,7 @@ public class AccountSignInUiTests
 
         // "Make an account": accounts are made by signing in.
         Click(view.MakeAccountButton);
-        Assert.Equal($"{origin}/login", window.Opened.Last());
+        Assert.Equal($"{origin}/login?new=1", window.Opened.Last());
     }
 
     [AvaloniaFact]

@@ -554,6 +554,7 @@ public sealed record StatusSnapshot(
             RunnerStatus.Blocked when BlockReason == BlockReason.SignedOut => "Signed out of your nest",
             RunnerStatus.Blocked when BlockReason == BlockReason.SignedOutByYou => "Signed out",
             RunnerStatus.Blocked when BlockReason == BlockReason.SignInRequired => "Sign in to your nest",
+            RunnerStatus.Blocked when BlockReason == BlockReason.FolderNotWritable => "Can't save in your folder",
             RunnerStatus.Blocked => "Needs your decision",
             _ => "Problem",
         };
@@ -626,6 +627,7 @@ public sealed record StatusSnapshot(
         BlockReason.MassDelete or BlockReason.FolderEmpty => $"Allow these deletions ({PendingDeletes})…",
         BlockReason.FolderMissing or BlockReason.MarkerMissing or BlockReason.MarkerMismatch => "Locate the sync folder…",
         BlockReason.ForeignMarker => "Confirm this folder…",
+        BlockReason.FolderNotWritable => "Choose another folder…",
         BlockReason.ServerChanged or BlockReason.ServerRolledBack => "Re-link to this server…",
         BlockReason.SignedOut => "Sign in again…",
         BlockReason.SignInRequired => "Sign in with your browser…",
