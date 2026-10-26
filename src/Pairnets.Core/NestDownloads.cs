@@ -1,7 +1,7 @@
 namespace Pairnets.Core;
 
 /// <summary>
-/// One link the nest downloads by itself (1.0.61.5): the owner pastes it in an app, the nest fetches the file into its own
+/// One link the nest downloads by itself (1.0.61.8): the owner pastes it in an app, the nest fetches the file into its own
 /// folders, and the owner's computers may be off meanwhile. <see cref="State"/> is queued, running, done or failed.
 /// <see cref="Source"/> is only the website's name ("releases.ubuntu.com"): the full link stays on the nest, since links
 /// often carry private tokens. <see cref="Name"/> is the file's name once known, <see cref="Folder"/> the nest folder it goes

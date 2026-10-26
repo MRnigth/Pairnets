@@ -8,7 +8,7 @@ using Pairnets.Desktop.Views;
 namespace Pairnets.Tests.Ui;
 
 /// <summary>
-/// Pictures of "Downloads on the nest" (1.0.61.5) as the Windows tool draws them (tools/RenderScreens.Wpf --nest-downloads):
+/// Pictures of "Downloads on the nest" (1.0.61.8) as the Windows tool draws them (tools/RenderScreens.Wpf --nest-downloads):
 /// the Computers page with a running, a waiting, a finished and a stopped download, the empty card, the encrypted nest, and
 /// the "Download a link on the nest" window. Written when PAIRNETS_SCREENSHOT_DIR is set.
 /// </summary>
@@ -50,11 +50,11 @@ public class NestDownloadScreenshotTests
     private static void Render(string? outDir, string suffix)
     {
         var utc = DateTimeOffset.UtcNow;
-        var server = new ServerInfo("id", 1, 1, "1.0.61.5", 412L << 30, 1L << 40);
+        var server = new ServerInfo("id", 1, 1, "1.0.61.8", 412L << 30, 1L << 40);
         IReadOnlyList<DeviceInfo> devices =
         [
-            new("DESKTOP", utc.AddDays(-30), utc, true, "1.0.61.5", "Linux", utc.AddMinutes(-5), "d1", "desktop"),
-            new("LAPTOP", utc.AddDays(-30), utc.AddHours(-8), false, "1.0.61.5", "Windows", utc.AddHours(-8), "d2", "laptop"),
+            new("DESKTOP", utc.AddDays(-30), utc, true, "1.0.61.8", "Linux", utc.AddMinutes(-5), "d1", "desktop"),
+            new("LAPTOP", utc.AddDays(-30), utc.AddHours(-8), false, "1.0.61.8", "Windows", utc.AddHours(-8), "d2", "laptop"),
         ];
         var idle = StatusSnapshot.Initial with
         {

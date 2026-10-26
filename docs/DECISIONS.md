@@ -1904,3 +1904,39 @@ both had them:
   before it.
 * **Activity.** "Cannot reach the server; retrying." no longer adds the same sentence again when the reason is only the
   general "Pairnets cannot reach the server…".
+
+## The nest downloads a link for you (1.0.61.8, 2026-10-26)
+
+The owner pastes a download link in the app (Computers page › **Downloads on the nest** › **Add a link…**) and picks a
+nest folder ("Downloads" unless changed). The nest downloads the file by itself, so the computer can be turned off; the
+finished file syncs like any other file (online-only and nest-only settings apply). While a computer is on, the card
+shows percent, speed and time left, and a finished download gives a notification and an Activity line once (also one
+that finished while the computer was off). Planned for 1.0.61.5, built on top of 1.0.61.7.
+
+* **Owner only.** `/api/downloads` is on the AccessGate owner-only list: a friend's computer gets 403 `owner_only`, and
+  the card shows only on the owner's computers.
+* **Only web links, never the nest's own network.** Only http:// and https://. The nest refuses to connect to loopback,
+  private (10/8, 172.16/12, 192.168/16), 100.64/10 (Tailscale, carrier NAT), link-local (169.254/16 with the cloud
+  metadata address, fe80::/10), unique-local, multicast and "this network" addresses. The check is on the address the
+  nest actually connects to (`SafeHttp`, a `ConnectCallback`), so a name that points inside fails too, and so does every
+  redirect (followed by hand, at most 10).
+* **Disk.** The nest always keeps 5 GB free: an announced size that doesn't fit is refused at once, an unknown size
+  stops at the line. No other size limit.
+* **Steady.** 2 downloads at once; up to 20 are listed (waiting, running and finished together). The half-done file is
+  `tmp/dl-<id>.part` and the list is `downloads.json`; after a nest restart it carries on with Range/If-Range when the
+  website allows, else starts that file over. A dropped connection is tried again 5 times, waiting longer each time.
+  Cancel deletes the half-done file. Finished and stopped rows (and a stopped one's file) go after 7 days.
+* **Where it lands.** The name comes from the website or the link, made safe; a taken name becomes "name (2).iso", so
+  nothing is overwritten. The file appears in the nest only when complete, and the apps hear of it at once.
+* **Privacy.** The nest's log and the list name only the website ("releases.ubuntu.com"), never the full link.
+* **Older nest.** The card says "Update your nest to let it download links for you" (404 from the nest).
+* **Encrypted nest (the owner, 2026-10-23).** Allowed, but the file is stored on the nest **not** end-to-end encrypted, in a
+  holding spot (`held/<id>/`) apart from the encrypted files; the rest of the nest stays encrypted. The window warns in
+  amber before Start ("This file won't be end-to-end encrypted on the nest. Everything else stays encrypted.") and the
+  row says "not end-to-end encrypted". **Not built yet:** a computer fetching it (`GET /api/downloads/{id}/file`),
+  locking it and putting it in place like a file it adds. That needs encryption phase B (the apps can't encrypt yet);
+  until then no app turns encryption on, so no real nest reaches this path.
+* **Tests.** `NestDownloadTests` (owner only, blocked addresses and redirects, resume after a cut and a restart, free
+  space, name clash, cancel, encrypted nest, the app's done note once), the API tour, and the click-everything tests
+  of both apps (the card's buttons and the "Let the nest download it" window). The Mac/Linux click test now spreads the
+  main window's scenes evenly over its 10 parts (a 21st scene had left the last parts empty).

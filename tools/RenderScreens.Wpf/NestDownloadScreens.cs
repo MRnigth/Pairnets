@@ -5,7 +5,7 @@ using Pairnets.Core.Sync;
 
 namespace Pairnets.Tools;
 
-/// <summary>1.0.61.5: "Downloads on the nest" on the Computers page, and the "Download a link on the nest" window.</summary>
+/// <summary>1.0.61.8: "Downloads on the nest" on the Computers page, and the "Download a link on the nest" window.</summary>
 internal static class NestDownloadScreens
 {
     /// <summary>A running, a waiting, a finished and a stopped download (the pictures of both apps use the same).</summary>
@@ -32,11 +32,11 @@ internal static class NestDownloadScreens
     public static void Render(string outDir, string suffix, bool print)
     {
         var utc = DateTimeOffset.UtcNow;
-        var server = new ServerInfo("id", 1, 1, "1.0.61.5", 412L << 30, 1L << 40);
+        var server = new ServerInfo("id", 1, 1, "1.0.61.8", 412L << 30, 1L << 40);
         IReadOnlyList<DeviceInfo> devices =
         [
-            new("DESKTOP", utc.AddDays(-30), utc, true, "1.0.61.5", "Windows", utc.AddMinutes(-5), "d1", "desktop"),
-            new("LAPTOP", utc.AddDays(-30), utc.AddHours(-8), false, "1.0.61.5", "Windows", utc.AddHours(-8), "d2", "laptop"),
+            new("DESKTOP", utc.AddDays(-30), utc, true, "1.0.61.8", "Windows", utc.AddMinutes(-5), "d1", "desktop"),
+            new("LAPTOP", utc.AddDays(-30), utc.AddHours(-8), false, "1.0.61.8", "Windows", utc.AddHours(-8), "d2", "laptop"),
         ];
         var idle = StatusSnapshot.Initial with
         {

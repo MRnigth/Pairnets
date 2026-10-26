@@ -174,7 +174,7 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
         await RefreshDownloadsAsync().ConfigureAwait(false);
     }
 
-    // ------------------------------------------------------------------ downloads on the nest (1.0.61.5)
+    // ------------------------------------------------------------------ downloads on the nest (1.0.61.8)
 
     private HashSet<string>? _downloadsSeen;
     private int _downloadsRefreshing;

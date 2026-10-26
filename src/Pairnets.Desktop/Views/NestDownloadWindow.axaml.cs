@@ -6,7 +6,7 @@ using Pairnets.Core.Client;
 namespace Pairnets.Desktop.Views;
 
 /// <summary>
-/// "Download a link on the nest" (1.0.61.5): the link and the nest folder it goes in ("Downloads" unless changed), then
+/// "Download a link on the nest" (1.0.61.8): the link and the nest folder it goes in ("Downloads" unless changed), then
 /// Start download hands it to the nest, which downloads it by itself. The window closes once the nest took it.
 /// </summary>
 public partial class NestDownloadWindow : Window

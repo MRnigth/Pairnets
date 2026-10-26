@@ -208,6 +208,9 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
     [AvaloniaFact]
     public async Task TheInviteWindow_EveryButtonDoesWhatItSays() => Pass(await RunAsync("invite"));
 
+    [AvaloniaFact]
+    public async Task TheNestDownloadWindow_EveryButtonDoesWhatItSays() => Pass(await RunAsync("nest download"));
+
     /// <summary>Every handler an AXAML file names ran at least once in the runs above.</summary>
     /// <summary>
     /// Every button in the main window and the tray panel, in every state, has a name screen readers read out. A button
@@ -374,6 +377,11 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
                 w.ShowStatus(OwnersNestWithFriends, "/Users/me/Work", "MacBook");
                 w.Navigate(MainPage.Devices);
             })),
+            new("the main window (Devices page with downloads on the nest)", s => MainStage(s, w =>
+            {
+                w.ShowStatus(Idle with { NestDownloads = NestDownloads }, "/Users/me/Work", "MacBook");
+                w.Navigate(MainPage.Devices);
+            })),
             new("the main window (Needs you page with changes held back on a nest shared to view)", s => MainStage(s, w =>
             {
                 w.ShowAttention([new AttentionItem("3 changes stay on this computer", "Your edits to trip.jpg aren't sent.", "Put back Anna's version",
@@ -503,6 +511,12 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
             new("the send crash report window", SendCrashStage),
             new("the bug report window with sending on", BugReportSendStage),
             new("the send bug report window", SendBugReportStage),
+        ],
+        ["nest download"] =
+        [
+            new("the nest download window (a link pasted)", s => NestDownloadStage(s, DownloadLink, sealedNest: false)),
+            new("the nest download window (a link that isn't a web link)", s => NestDownloadStage(s, "ftp://example.com/file.iso", sealedNest: false)),
+            new("the nest download window (on an encrypted nest)", s => NestDownloadStage(s, DownloadLink, sealedNest: true)),
         ],
         ["invite"] =
         [
@@ -637,6 +651,12 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
         s.Expect["OnRestore"] = That(() => a.Samples.Restored.Count == 1 && w.RestoreText.StartsWith("Restored.", StringComparison.Ordinal), "that version come back",
             () => $"{a.Samples.Restored.Count} restored, it says \"{w.RestoreText}\"");
         s.Expect["OnInviteFriend"] = Calls(a, "invite-friend");
+        s.Expect["OnAddDownload"] = Calls(a, "add-download");
+        s.Expect["OnCancelDownload"] = That(() => a.Calls is ["cancel-download:dl_run"] or ["cancel-download:dl_wait"], "that download stop on the nest");
+        s.Expect["OnRetryDownload"] = Calls(a, "retry-download:dl_stop");
+        s.Expect["OnClearDownload"] = Calls(a, "forget-download:dl_done");
+        s.Expect["OnRemoveDownload"] = That(() => a.Calls is ["forget-download:dl_held"] or ["forget-download:dl_stop"], "that download come off the list");
+        s.Expect["OnShowDownload"] = OnPage(w, MainPage.Files);
         s.Expect["OnPersonChange"] = Calls(a, "people");
         s.Expect["OnPersonRemove"] = Calls(a, "people");
         s.Expect["OnPersonDecline"] = Calls(a, "people");
@@ -962,6 +982,45 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
         s.Expect["OnClose"] = That(() => !window.IsVisible, "the window close");
     }
 
+    private const string DownloadLink = "https://releases.ubuntu.com/24.04/ubuntu.iso";
+
+    /// <summary>The nest's downloads: one running, one waiting, one finished, one held on an encrypted nest, one stopped.</summary>
+    private static NestDownloadList NestDownloads
+    {
+        get
+        {
+            var utc = DateTimeOffset.UtcNow;
+            return new NestDownloadList(
+            [
+                new("dl_run", "releases.ubuntu.com", "ubuntu.iso", "Downloads", NestDownload.Running, 2_480_000_000, 6_200_000_000, 13_000_000, utc.AddMinutes(-3)),
+                new("dl_wait", "cdimage.debian.org", "debian.iso", "Downloads", NestDownload.Queued, 0, null, 0, utc.AddMinutes(-2)),
+                new("dl_done", "download.blender.org", "bunny.mp4", "Films", NestDownload.Done, 1_065_000_000, 1_065_000_000, 0, utc.AddHours(-3),
+                    utc.AddHours(-2), "Films/bunny.mp4"),
+                new("dl_held", "example.org", "held.zip", "Downloads", NestDownload.Done, 1_000, 1_000, 0, utc.AddHours(-3), utc.AddHours(-2), Plain: true),
+                new("dl_stop", "example.com", "old-backup.zip", "Downloads", NestDownload.Failed, 0, null, 0, utc.AddDays(-1), utc.AddDays(-1),
+                    Error: NestDownloadErrors.NotFound),
+            ], NestDownloadRules.AtOnce);
+        }
+    }
+
+    /// <summary>"Let the nest download it" with <paramref name="link"/> pasted; Change… picks Films, and the nest takes any link.</summary>
+    private static Task NestDownloadStage(Stage s, string link, bool sealedNest)
+    {
+        var window = s.Show(new NestDownloadWindow((url, folder) =>
+        {
+            s.Events.Add($"download {url} into {folder}");
+            return Task.FromResult<string?>(null);
+        }, _ => Task.FromResult<string?>("Films")) { Link = link, Sealed = sealedNest });
+        Assert.Equal(sealedNest, window.Sealed);
+        s.Expect["OnLinkChanged"] = That(() => window.Link == "test" && window.ProblemText.Length == 0, "the typed link be taken and no problem show");
+        s.Expect["OnChangeFolder"] = That(() => window.Folder == "Films", "the picked nest folder be used");
+        s.Expect["OnStart"] = link == DownloadLink
+            ? That(() => s.Events.SequenceEqual([$"download {DownloadLink} into Downloads"]) && window.Started && !window.IsVisible, "the link go to the nest and the window close")
+            : That(() => s.Events.Count == 0 && window.ProblemText.Length > 0 && window.IsVisible, "it say the link isn't a web link");
+        s.Expect["OnCancel"] = That(() => s.Events.Count == 0 && !window.IsVisible, "the window close without asking the nest");
+        return Task.CompletedTask;
+    }
+
     private const string FriendsNest = "nst_0123456789abcdefghjkmnpqrs";
 
     /// <summary>The owner's computer on a nest reached through Pairnets, shared with two friends and with someone waiting to be let in.</summary>
@@ -1172,10 +1231,12 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
         if (part > 0)
             await RunAsync(group, part - 1);
         var scenes = Groups[group];
-        var size = (scenes.Length + PartsOf(group) - 1) / PartsOf(group);
+        // Spread evenly (21 scenes in 10 parts: 2 or 3 each), so no part is left without a scene.
+        var from = part * scenes.Length / PartsOf(group);
+        var to = (part + 1) * scenes.Length / PartsOf(group);
         if (!fixture.Pressed.TryGetValue(group, out var done))
             fixture.Pressed[group] = done = [];
-        return await PressGroupAsync(scenes.Skip(part * size).Take(size).ToArray(), done);
+        return await PressGroupAsync(scenes[from..to], done);
     }
 
     private async Task<ClickReport> PressGroupAsync(Scene[] scenes, HashSet<string> done)

@@ -7,7 +7,7 @@ namespace Pairnets.Server.Services;
 public sealed class BlockedAddressException(string host) : IOException($"{host} points inside the nest's own network.");
 
 /// <summary>
-/// The web client of nest downloads (1.0.61.5). A link the owner pastes must never make the nest read its own network: the
+/// The web client of nest downloads (1.0.61.8). A link the owner pastes must never make the nest read its own network: the
 /// nest itself, the home network, a Tailscale-style 100.64/10 address or a cloud host's metadata address
 /// (169.254.169.254). The check runs on the address the client actually connects to, after the name is looked up, so a
 /// name that points inside fails too, and so does every redirect (they are followed by hand, see <see cref="NestDownloader"/>).

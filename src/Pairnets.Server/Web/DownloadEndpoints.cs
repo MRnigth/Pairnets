@@ -4,7 +4,7 @@ using Pairnets.Server.Services;
 namespace Pairnets.Server.Web;
 
 /// <summary>
-/// "Downloads on the nest" (1.0.61.5): the owner's computers hand the nest a link and it downloads the file by itself
+/// "Downloads on the nest" (1.0.61.8): the owner's computers hand the nest a link and it downloads the file by itself
 /// (<see cref="NestDownloader"/>). Only the owner: <see cref="AccessGate"/> answers a friend's computer 403 <c>owner_only</c>.
 /// <list type="bullet">
 /// <item><c>GET /api/downloads</c>: the list (<see cref="NestDownloadList"/>).</item>

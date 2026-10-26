@@ -13,7 +13,7 @@ using Pairnets.Server.Web;
 namespace Pairnets.Server.Services;
 
 /// <summary>
-/// Downloads the links the owner gives the nest (1.0.61.5, docs/DECISIONS.md "The nest downloads a link for you"), so the
+/// Downloads the links the owner gives the nest (1.0.61.8, docs/DECISIONS.md "The nest downloads a link for you"), so the
 /// owner's computers may be off meanwhile:
 /// <list type="bullet">
 /// <item><see cref="NestDownloadRules.AtOnce"/> run at once, the rest wait; <see cref="NestDownloadRules.MaxKept"/> are listed at most.</item>

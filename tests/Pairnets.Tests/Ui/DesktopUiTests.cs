@@ -109,6 +109,14 @@ public sealed class SampleActions : ITrayActions
 
     public void OpenPeople() => Calls.Add("people");
 
+    public void AddDownload() => Calls.Add("add-download");
+
+    public void CancelDownload(string id) => Calls.Add("cancel-download:" + id);
+
+    public void RetryDownload(string id) => Calls.Add("retry-download:" + id);
+
+    public void ForgetDownload(string id) => Calls.Add("forget-download:" + id);
+
     public Dictionary<NoticeKind, bool> Notify { get; } = [];
 
     public bool Notifies(NoticeKind kind) => Notify.GetValueOrDefault(kind, true);

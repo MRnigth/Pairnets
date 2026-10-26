@@ -12,7 +12,7 @@ using Pairnets.Tests.Infrastructure;
 namespace Pairnets.Tests.Integration;
 
 /// <summary>
-/// The nest downloads a link for you (1.0.61.5): the owner's computer hands over a link, the nest fetches it into its own
+/// The nest downloads a link for you (1.0.61.8): the owner's computer hands over a link, the nest fetches it into its own
 /// folders and the file syncs like any other. Only from the web (never the nest's own network), never past the free-space
 /// line, carrying on after a dropped connection or a restart, and the half-done file goes on Cancel.
 /// </summary>

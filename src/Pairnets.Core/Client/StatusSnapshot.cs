@@ -421,7 +421,7 @@ public sealed record StatusSnapshot(
     /// </summary>
     public PeopleAnswer? People { get; init; }
 
-    // ---- links the nest downloads by itself (1.0.61.5)
+    // ---- links the nest downloads by itself (1.0.61.8)
 
     /// <summary>The nest's downloads (the Computers page's "Downloads on the nest"), or null: not read yet, or not the owner's computer.</summary>
     public NestDownloadList? NestDownloads { get; init; }

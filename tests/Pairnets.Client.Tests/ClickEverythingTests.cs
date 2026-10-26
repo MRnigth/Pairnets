@@ -231,6 +231,18 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
         [new FriendRequestEntry("inv_oskar", "Oskar Nilsson", "oskar.n@example.com", "view", ["Music"])]),
     };
 
+    /// <summary>The nest's downloads: one running, one waiting, one finished, one stopped, and one held on an encrypted nest.</summary>
+    private static NestDownloadList NestDownloads => new(
+    [
+        new("dl_run", "releases.ubuntu.com", "ubuntu.iso", "Downloads", NestDownload.Running, 2_480_000_000, 6_200_000_000, 13_000_000, Utc.AddMinutes(-3)),
+        new("dl_wait", "cdimage.debian.org", "debian.iso", "Downloads", NestDownload.Queued, 0, null, 0, Utc.AddMinutes(-2)),
+        new("dl_done", "download.blender.org", "bunny.mp4", "Films", NestDownload.Done, 1_065_000_000, 1_065_000_000, 0, Utc.AddHours(-3),
+            Utc.AddHours(-2), "Films/bunny.mp4"),
+        new("dl_held", "example.org", "held.zip", "Downloads", NestDownload.Done, 1_000, 1_000, 0, Utc.AddHours(-3), Utc.AddHours(-2), Plain: true),
+        new("dl_stop", "example.com", "old-backup.zip", "Downloads", NestDownload.Failed, 0, null, 0, Utc.AddDays(-1), Utc.AddDays(-1),
+            Error: NestDownloadErrors.NotFound),
+    ], NestDownloadRules.AtOnce);
+
     private const string ConflictTitle = "Conflict copy: report (conflict LAPTOP).docx";
     private const string JoinTitle = "LAPTOP-2 (Windows) wants to join";
 
@@ -267,6 +279,9 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
     public Task InviteWindow_EveryButtonWorks() => Expect(fixture.Run("invite", () => PressEverything(InviteScreens(), InviteRules)));
 
     [Fact]
+    public Task NestDownloadWindow_EveryButtonWorks() => Expect(fixture.Run("nest download", () => PressEverything(NestDownloadScreens(), DownloadWindowRules)));
+
+    [Fact]
     public Task TrayMenu_EveryItemWorks() => Expect(fixture.Run("tray menu", PressTheTrayMenu));
 
     /// <summary>The guard: nothing in the XAML, and nothing in the tray menu, goes unpressed.</summary>
@@ -275,7 +290,8 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
     {
         // Run every window first (each runs once, whichever test asks first).
         foreach (var run in new Func<Task>[] { TrayPanel_EveryButtonWorks, MainWindow_EveryButtonWorks, Settings_EveryButtonWorks, SignIn_EveryButtonWorks,
-                     ServerUpdateWindow_EveryButtonWorks, NestPlaceWindow_EveryButtonWorks, BugReportWindow_EveryButtonWorks, InviteWindow_EveryButtonWorks, TrayMenu_EveryItemWorks })
+                     ServerUpdateWindow_EveryButtonWorks, NestPlaceWindow_EveryButtonWorks, BugReportWindow_EveryButtonWorks, InviteWindow_EveryButtonWorks, NestDownloadWindow_EveryButtonWorks,
+                     TrayMenu_EveryItemWorks })
         {
             try
             {
@@ -690,6 +706,13 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
             main.ShowStatus(OwnersNestWithFriends, FolderPath, "DESKTOP");
             main.Navigate(MainPage.Devices);
         }));
+        yield return new Screen(name, "the Devices page with downloads on the nest", NewMainWindow, (b, w) => Wpf.Ui(() =>
+        {
+            var main = (MainWindow)w;
+            main.ShowStatus(StatusSnapshot.Initial with { Status = RunnerStatus.Idle, Text = "Up to date", Server = CurrentServer, Devices = Devices, NestDownloads = NestDownloads },
+                FolderPath, "DESKTOP");
+            main.Navigate(MainPage.Devices);
+        }));
         yield return new Screen(name, "the Needs you page with changes held back on a nest shared to view", NewMainWindow, (b, w) => Wpf.Ui(() =>
         {
             var main = (MainWindow)w;
@@ -862,6 +885,14 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
         new(t => t.Element is Button && t.Label.StartsWith("Show all ", StringComparison.Ordinal), "show every file of the folder",
             c => !Presser.Find(c.Window).Any(x => x.Label.StartsWith("Show all ", StringComparison.Ordinal))),
         On("Open your folder", "open the synced folder", Called("OpenFolder")),
+        // Downloads on the nest (before "Clear" of the Activity page: a finished download has one too).
+        new(t => t.Element.Name == "AddLinkButton", "open the window that hands the nest a link", Called("AddDownload")),
+        new(t => t.Handlers.Contains("DevicesPageView.OnCancelDownload"), "stop that download on the nest",
+            c => c.Item is NestDownloadRow row && Called($"CancelDownload({row.Id})")(c)),
+        new(t => t.Handlers.Contains("DevicesPageView.OnRetryDownload"), "try that download again", c => Called("RetryDownload(dl_stop)")(c)),
+        new(t => t.Handlers.Contains("DevicesPageView.OnClearDownload") || t.Handlers.Contains("DevicesPageView.OnRemoveDownload"), "take that download off the list",
+            c => c.Item is NestDownloadRow row && Called($"ForgetDownload({row.Id})")(c)),
+        new(t => t.Handlers.Contains("DevicesPageView.OnShowDownload"), "show the Files page at the folder it went in", OnPage(MainPage.Files)),
         On("Clear", "ask, then empty the activity list", Called("ClearActivity")),
 
         // Needs you and the Devices page.
@@ -1342,6 +1373,38 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
             c => c.Bench.Opened.Items is [var link] && c.Bench.Closed
                 && (link == $"https://sync.pairnets.app/account?invite={FriendsNest}&access=view"
                     || (c.Window.Title == "Invite a friend to Photos" && link == $"https://sync.pairnets.app/account?invite={FriendsNest}&folders=Photos&access=view"))),
+    ];
+
+    // ------------------------------------------------------------------ the "Let the nest download it" window
+
+    private const string DownloadLink = "https://releases.ubuntu.com/24.04/ubuntu.iso";
+
+    private static IEnumerable<Screen> NestDownloadScreens()
+    {
+        const string name = "the nest download window";
+        static Window Build(Bench b, string link, bool sealedNest) => new NestDownloadWindow(
+            (url, folder) =>
+            {
+                b.Opened.Add($"download {url} into {folder}");
+                return Task.FromResult<string?>(null);
+            },
+            _ => "Films") { Link = link, Sealed = sealedNest };
+        yield return new Screen(name, "a link pasted", b => Build(b, DownloadLink, sealedNest: false));
+        yield return new Screen(name, "a link that isn't a web link", b => Build(b, "ftp://example.com/file.iso", sealedNest: false));
+        yield return new Screen(name, "on an encrypted nest", b => Build(b, DownloadLink, sealedNest: true),
+            (_, w) => Wpf.Ui(() => Assert.True(((NestDownloadWindow)w).Sealed, "the warning should show")));
+    }
+
+    private static readonly IReadOnlyList<Rule> DownloadWindowRules =
+    [
+        new(t => t.Element.Name == "LinkBox", "take the typed link and drop the old problem",
+            c => ((NestDownloadWindow)c.Window) is { Link: Presser.TypedText, ProblemText: "" }),
+        new(t => t.Element.Name == "ChangeButton", "pick another nest folder", c => ((NestDownloadWindow)c.Window).Folder == "Films"),
+        new(t => t.Element.Name == "StartButton", "hand the link to the nest and close (or say what is wrong with the link)",
+            c => ((NestDownloadWindow)c.Window).Link == DownloadLink
+                ? c.Bench.Opened.Items is [$"download {DownloadLink} into Downloads"] && c.Bench.Closed && ((NestDownloadWindow)c.Window).Started
+                : c.Bench.Opened.Items.Count == 0 && ((NestDownloadWindow)c.Window).ProblemText.Length > 0),
+        new(t => t.Element.Name == "CancelButton", "close the window without asking the nest", c => c.Bench.Closed && c.Bench.Opened.Items.Count == 0),
     ];
 
     // ------------------------------------------------------------------ the tray menu and icon (the real tray controller)

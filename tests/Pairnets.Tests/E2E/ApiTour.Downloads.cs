@@ -11,7 +11,7 @@ namespace Pairnets.Tests.E2E;
 public sealed partial class ApiTour
 {
     /// <summary>
-    /// Downloads on the nest (1.0.61.5). On the tour's own nest the walk takes the routes through what the nest refuses (not
+    /// Downloads on the nest (1.0.61.8). On the tour's own nest the walk takes the routes through what the nest refuses (not
     /// a web link, an address inside its own network, a download it doesn't know): an installed nest can't reach a test
     /// website, and never downloads from this computer's own addresses anyway. The real downloads run on a second nest
     /// inside the test process, with a test website, like <see cref="FriendsAsync"/>. NestDownloadTests covers every case.

@@ -12,7 +12,7 @@ using Pairnets.Server.Services;
 namespace Pairnets.Tests.Infrastructure;
 
 /// <summary>
-/// A website on a local port for nest downloads (1.0.61.5). Its port is let through the nest's address check
+/// A website on a local port for nest downloads (1.0.61.8). Its port is let through the nest's address check
 /// (<see cref="NestDownloader.TestPorts"/>) while it runs; every other local port stays blocked.
 /// <list type="bullet">
 /// <item><c>/files/{name}</c>: <see cref="Files"/>, with an ETag and Range; 404 for one not there.</item>

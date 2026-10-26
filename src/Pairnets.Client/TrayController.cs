@@ -1250,7 +1250,7 @@ public sealed class TrayController : ITrayActions, IDisposable
     public Task<bool> SetDeviceIcon(string id, string icon) =>
         _session is { } session ? session.SetDeviceIconAsync(id, icon) : Task.FromResult(false);
 
-    // ------------------------------------------------------------------ downloads on the nest (1.0.61.5)
+    // ------------------------------------------------------------------ downloads on the nest (1.0.61.8)
 
     private NestDownloadWindow? _downloadWindow;
 

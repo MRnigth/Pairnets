@@ -842,7 +842,7 @@
                 </StackPanel>
               </Border>
 
-              <!-- Downloads on the nest (1.0.61.5): links the nest downloads by itself, so this computer may be off meanwhile.
+              <!-- Downloads on the nest (1.0.61.8): links the nest downloads by itself, so this computer may be off meanwhile.
                    Only on the owner's computers; see NestDownloadsSection. -->
               <StackPanel x:Name="DownloadsPanel" Spacing="10" IsVisible="False">
                 <Grid ColumnDefinitions="Auto,*,Auto" Height="38" Margin="4,6,0,0">

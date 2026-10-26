@@ -269,7 +269,7 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
         return await ReadJsonAsync<PeopleAnswer>(resp, timeout, ct).ConfigureAwait(false);
     }
 
-    // ------------------------------------------------------------------ downloads on the nest (1.0.61.5)
+    // ------------------------------------------------------------------ downloads on the nest (1.0.61.8)
 
     /// <summary>The nest's downloads (only the owner's computers may ask). Null for a nest from before nest downloads.</summary>
     public async Task<NestDownloadList?> GetDownloadsAsync(CancellationToken ct)

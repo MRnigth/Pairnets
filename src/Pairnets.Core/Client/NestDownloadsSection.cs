@@ -57,7 +57,7 @@ public sealed record NestDownloadRow(string Id, string Name, string Line, string
 }
 
 /// <summary>
-/// "Downloads on the nest" on the owner's Computers page (1.0.61.5): paste a link, and the nest downloads the file into one
+/// "Downloads on the nest" on the owner's Computers page (1.0.61.8): paste a link, and the nest downloads the file into one
 /// of its folders by itself, so this computer may be switched off meanwhile. A heading with a summary and "Add a link…",
 /// then one row per download from <c>GET /api/downloads</c>. Hidden for friends and linked nests (only the owner may make
 /// the nest download); an older nest says to update it, an encrypted one that it can't. Both apps draw this model.
