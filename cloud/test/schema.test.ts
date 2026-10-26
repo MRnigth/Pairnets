@@ -213,7 +213,7 @@ describe("schema", () => {
     expect(columns.sort()).toEqual(["app", "created_at", "id", "note", "report", "system", "version"]);
     expect(columns.filter((c) => /ip|account|device|nest|email/.test(c))).toEqual([]);
     expect(await db.prepare("SELECT COUNT(*) AS n FROM crash_reports").first()).toEqual({ n: 1 });
-    await runSql(db, migration10); // the full schema again, for the tests after this one
+    for (const m of [migration10, migration11, migration12]) await runSql(db, m); // the full schema again, for the tests after this one
   });
 
   it("migration 0010 adds the nullable terms columns to accounts and keeps its rows", async () => {
@@ -223,7 +223,7 @@ describe("schema", () => {
     await db.prepare("INSERT INTO accounts (id, email, created_at, updated_at) VALUES ('acc_testacct000000000000000001', 'you@example.com', 1, 2)").run();
     await runSql(db, migration10);
     expect(await db.prepare("SELECT email, terms_version, terms_accepted_at FROM accounts").first()).toEqual({ email: "you@example.com", terms_version: null, terms_accepted_at: null });
-    await runSql(db, migration11); // the full schema again, for the tests after this one
+    for (const m of [migration11, migration12]) await runSql(db, m); // the full schema again, for the tests after this one
   });
 
   it("migration 0011 adds the link sign-in columns: old sign-ins are 'poll', one row per link, and no code in clear", async () => {
