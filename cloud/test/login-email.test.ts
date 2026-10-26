@@ -6,6 +6,18 @@ function askLink(b: ReturnType<Harness["browser"]>, email: string, next?: string
 }
 
 describe("login-email", () => {
+  it("the apps' Make an account opens the sign-in page titled for a new account", async () => {
+    const h = await Harness.create();
+    const b = h.browser();
+    const fresh = await b.call("GET", "/login?new=1");
+    expect(fresh.status).toBe(200);
+    expect(fresh.text).toContain("<h1>Make your Pairnets account</h1>");
+    expect(fresh.text).toContain('id="google"');
+    const plain = await b.call("GET", "/login");
+    expect(plain.text).toContain("<h1>Sign in to Pairnets</h1>");
+    expect(plain.text).not.toContain("Make your Pairnets account");
+  });
+
   it("signs in with the emailed link in the same browser", async () => {
     const h = await Harness.create();
     const b = h.browser();

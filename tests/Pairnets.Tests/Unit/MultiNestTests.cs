@@ -203,6 +203,26 @@ public class MultiNestTests
         Assert.False(one.Visible); // with one nest the left side looks as it always did
     }
 
+    /// <summary>The Mac test (2026-10-24): "2 nests · all up to date" while both nests said "can't reach it", then "paused".</summary>
+    [Fact]
+    public void AllNestsSaysAllUpToDateOnlyWhenEveryNestIs()
+    {
+        var s = OneNest();
+        s.AddNest(NestAt(s, "https://work.example.com/", "D:\\Work", "W", "Work nest"));
+        var nests = s.Nests();
+        var idle = StatusSnapshot.Initial with { Status = RunnerStatus.Idle, Text = "Up to date" };
+        var offline = StatusSnapshot.Initial with { Status = RunnerStatus.Offline, Text = "Offline: timeout" };
+        var paused = StatusSnapshot.Initial with { Status = RunnerStatus.Paused, Text = "Paused", Paused = true };
+        string Sub(StatusSnapshot a, StatusSnapshot b) => NestListModel.Build(s, [(nests[0], a), (nests[1], b)], null).AllSub;
+
+        Assert.Equal("2 nests · all up to date", Sub(idle, idle));
+        Assert.Equal("2 nests · none can be reached", Sub(offline, offline));
+        Assert.Equal("2 nests · 1 can't be reached", Sub(idle, offline));
+        Assert.Equal("2 nests · all paused", Sub(paused, paused));
+        Assert.Equal("2 nests · 1 paused", Sub(paused, idle));
+        Assert.Equal("2 nests · 1 can't be reached", Sub(paused, offline));
+    }
+
     [Fact]
     public void NestsWithoutANameAreToldApart()
     {

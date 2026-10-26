@@ -759,9 +759,9 @@ Pairnets is built so that losing or silently overwriting your files should be im
   another program such as Word). Pairnets tries again shortly.
 * **The server never really deletes anything.** Every replaced or deleted file goes to history:
   30 days, and always at least the last 5 versions of each file.
-* **Big deletions need your OK.** If one sync would delete more than 20 % of your files, or more
-  than 50 files, Pairnets stops and asks first. With few files in the folder, even one or two
-  deletions can trigger this; that is deliberate.
+* **Big deletions need your OK.** If one sync would delete 100 files or more, Pairnets stops and
+  asks first. Fewer are just deleted (they go to the Recycle Bin / Trash, and the nest keeps them in
+  History for 30 days).
 * **The hidden `.pairnets-marker` file** in your folder proves it is the right folder. If it is
   missing, or the folder is suddenly empty (an unplugged drive, a wrong path), Pairnets stops and
   asks. It never reads that as "the user deleted everything".

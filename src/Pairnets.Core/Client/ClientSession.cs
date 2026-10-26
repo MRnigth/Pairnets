@@ -760,7 +760,7 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
                     Activity.Add(ActivityKind.Blocked, null, r.Message ?? r.BlockReason.ToString(), _clock);
                     break;
                 case PassOutcome.Offline when Activity.Items.FirstOrDefault()?.Kind != ActivityKind.Offline:
-                    Activity.Add(ActivityKind.Offline, null, "Cannot reach the server; retrying. " + r.Message, _clock);
+                    Activity.Add(ActivityKind.Offline, null, OfflineActivityText(r.Message), _clock);
                     break;
                 case PassOutcome.AuthFailed:
                     Activity.Add(ActivityKind.Error, null, "The server rejected the token. Open Settings and enter it again.", _clock);
@@ -894,6 +894,12 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
     }
 
     // ------------------------------------------------------------------ actions for the UI
+
+    /// <summary>The Activity line when the nest can't be reached: "Cannot reach the server; retrying.", with the reason
+    /// unless it only says the same again ("Pairnets cannot reach the server. Check that …").</summary>
+    internal static string OfflineActivityText(string? reason) =>
+        string.IsNullOrWhiteSpace(reason) || reason.StartsWith("Pairnets cannot reach the server", StringComparison.Ordinal)
+            ? "Cannot reach the server; retrying." : "Cannot reach the server; retrying. " + reason;
 
     public void SyncNow() => Runner.RequestSync("manual", full: true);
 

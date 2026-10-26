@@ -17,6 +17,7 @@ namespace Pairnets.Tests.Ui;
 /// speed pill on the map running under the nest, the Activity filters on two lines, and the side's "Other computers"
 /// heading under "can't check now".
 /// </summary>
+[Collection(AvaloniaUi.Name)]
 public class NarrowWindowTests
 {
     private static readonly DateTimeOffset Now = DateTimeOffset.UtcNow;

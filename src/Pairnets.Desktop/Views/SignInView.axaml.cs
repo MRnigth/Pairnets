@@ -356,6 +356,7 @@ public partial class SignInView : UserControl
     {
         if (!Nest.LooksLikeEmail(AccountEmailBox.Text))
         {
+            AccountEmailProblem.Text = SignInTexts.EmailProblem(AccountEmailBox.Text);
             AccountEmailProblem.IsVisible = true;
             AccountEmailBox.Focus();
             return;
@@ -364,7 +365,7 @@ public partial class SignInView : UserControl
     }
 
     /// <summary>Accounts are made by signing in: "Make an account" opens the service's sign-in page.</summary>
-    private void OnMakeAccount(object? sender, RoutedEventArgs e) => _openUrl(Relay.LoginUrl(Service));
+    private void OnMakeAccount(object? sender, RoutedEventArgs e) => _openUrl(Relay.SignUpUrl(Service));
 
     /// <summary>The small print under the sign-in buttons: the website's Terms and Privacy Policy.</summary>
     private void OnTerms(object? sender, RoutedEventArgs e) => _openUrl(PairnetsLinks.Terms);
@@ -719,6 +720,7 @@ public partial class SignInView : UserControl
         Avalonia.Automation.AutomationProperties.SetName(FolderBox, FolderLabel.Text);
         FolderHereText.Text = FolderChoiceText.OnlyHere(access);
         ShowFolderProblem(null);
+        _nestName = nestName;
         if (_adding is null)
             return;
         FolderBox.Text = _adding.SuggestedFolder(nestName);
@@ -726,10 +728,31 @@ public partial class SignInView : UserControl
             ShowFolderProblem($"This computer already syncs {same}. Go back and pick another nest.");
     }
 
-    private void ShowFolderProblem(string? problem)
+    private void ShowFolderProblem(string? problem, string? suggested = null)
     {
         FolderProblemBox.IsVisible = problem is not null;
         FolderProblemText.Text = problem ?? string.Empty;
+        _suggestedFolder = problem is null || string.Equals(suggested, (FolderBox.Text ?? string.Empty).Trim(), StringComparison.OrdinalIgnoreCase) ? null : suggested;
+        UseSuggestedButton.IsVisible = _suggestedFolder is not null;
+        UseSuggestedText.Text = _suggestedFolder is null ? string.Empty : $"Use {_suggestedFolder} instead";
+    }
+
+    /// <summary>The nest's name on the folder step (for the folder offered instead).</summary>
+    private string? _nestName;
+
+    /// <summary>The folder offered under a folder that can't be used, or null.</summary>
+    private string? _suggestedFolder;
+
+    /// <summary>The folder to offer instead of one that can't be used: the new nest's own (when adding one), else Pairnets in the home folder.</summary>
+    private string SuggestedInstead() =>
+        _adding is not null && _nestName is { } name ? _adding.SuggestedFolder(name) : SyncFolderCheck.DefaultFolder;
+
+    private void OnUseSuggested(object? sender, RoutedEventArgs e)
+    {
+        if (_suggestedFolder is not { } folder)
+            return;
+        FolderBox.Text = folder;
+        ShowFolderProblem(null);
     }
 
     /// <summary>Signed in with the account: on to the folder, for the nest the account chose.</summary>
@@ -751,7 +774,19 @@ public partial class SignInView : UserControl
     private async void OnBrowse(object? sender, RoutedEventArgs e)
     {
         if (await Dialogs.PickFolderAsync(Owner, "Choose the folder to keep in sync") is { } path)
+        {
             FolderBox.Text = path;
+            FolderUsable(path); // says it at once when the folder can't be used, not only on Start
+        }
+    }
+
+    /// <summary>Shows why <paramref name="folder"/> can't be used (with a folder to use instead); true when it can.</summary>
+    private bool FolderUsable(string folder)
+    {
+        var suggested = SuggestedInstead();
+        var problem = _adding is not null ? _adding.FolderProblem(folder, suggested) : SyncFolderCheck.Problem(folder, suggested);
+        ShowFolderProblem(problem, suggested);
+        return problem is null;
     }
 
     private async void OnStart(object? sender, RoutedEventArgs e)
@@ -766,11 +801,12 @@ public partial class SignInView : UserControl
             await Dialogs.InfoAsync(Owner, "Pairnets", "Choose the folder to keep in sync.");
             return;
         }
-        var problem = _adding?.AlreadySynced(nest) is { } same
-            ? $"This computer already syncs {same}. Go back and pick another nest."
-            : _adding?.FolderProblem(folder);
-        ShowFolderProblem(problem);
-        if (problem is not null)
+        if (_adding?.AlreadySynced(nest) is { } same)
+        {
+            ShowFolderProblem($"This computer already syncs {same}. Go back and pick another nest.");
+            return;
+        }
+        if (!FolderUsable(folder))
             return;
         StartButton.IsEnabled = false;
         try

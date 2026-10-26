@@ -431,11 +431,16 @@
           <!-- The folder is this computer's own: a friend's folder on their computer stays where it is -->
           <TextBlock x:Name="FolderHereText" Style="{StaticResource SoftText}" Margin="4,6,4,0" TextWrapping="Wrap"
                      Text="Only on this computer. Your other computers keep their own folders." />
-          <!-- Several nests: this folder is another nest's, or inside or around one -->
+          <!-- This folder is another nest's (or inside or around one), or one Pairnets may not save in (C:\Program Files...) -->
           <Border x:Name="FolderProblemBox" Background="{DynamicResource T.BadPill}" CornerRadius="11" Padding="12,10" Margin="0,8,0,0" Visibility="Collapsed">
             <StackPanel Orientation="Horizontal">
               <ui:LineIcon Width="15" Height="15" StrokeThickness="2" Stroke="{DynamicResource T.BadText}" Margin="0,1,8,0" VerticalAlignment="Top" Data="{StaticResource I.Info}" />
-              <TextBlock x:Name="FolderProblemText" Foreground="{DynamicResource T.BadText}" FontSize="12.5" TextWrapping="Wrap" MaxWidth="340" LineHeight="17" />
+              <StackPanel>
+                <TextBlock x:Name="FolderProblemText" Foreground="{DynamicResource T.BadText}" FontSize="12.5" TextWrapping="Wrap" MaxWidth="340" LineHeight="17" />
+                <Button x:Name="UseSuggestedButton" Style="{StaticResource LinkButton}" HorizontalAlignment="Left" Padding="0,2" Margin="0,6,0,0" Visibility="Collapsed" Click="OnUseSuggested">
+                  <TextBlock x:Name="UseSuggestedText" Foreground="{DynamicResource T.BadText}" FontSize="12.5" FontWeight="SemiBold" TextDecorations="Underline" TextWrapping="Wrap" MaxWidth="340" />
+                </Button>
+              </StackPanel>
             </StackPanel>
           </Border>
           <Border Style="{StaticResource RowCard}" Margin="0,10,0,0">

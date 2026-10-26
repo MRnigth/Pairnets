@@ -203,7 +203,7 @@ public partial class MainWindow : Window
         NestFilesPage.Host = CleanupPage.Host = this;
         WirePages();
         WireShortcuts();
-        AttentionSubtitle.Text = AttentionSubtitleText(0);
+        AttentionSubtitle.Text = NeedsYouText.Subtitle(0, _status with { Status = Pairnets.Core.Sync.RunnerStatus.Idle });
         RefreshSide();
         UpdatePanels();
     }
@@ -430,7 +430,7 @@ public partial class MainWindow : Window
         _fullShowing = true;
         try
         {
-            var room = (FilesPageText.FreeLine(_status.Server) + " " + FilesPageText.FullSaving).Trim();
+            var room = Wording.Computer(FilesPageText.FreeLine(_status.Server) + " " + FilesPageText.FullSaving).Trim();
             if (await Dialogs.ChooseAsync(IsVisible ? this : null, FilesPageText.FullTitle, FilesPageText.FullText, [room], FilesPageText.HelpMeCleanUp, "OK")
                 == FilesPageText.HelpMeCleanUp)
                 ShowCleanup();
@@ -562,12 +562,7 @@ public partial class MainWindow : Window
         var join = DevicesSummary.JoinText(s);
         JoinChip.IsVisible = join is not null;
         JoinChipText.Text = join ?? string.Empty;
-        if (s.DevicesUnsupported)
-            DevicesEmptyText.Text = "Update your nest to see the computers that use it.";
-        else if (s.Devices is null)
-            DevicesEmptyText.Text = "Loading the computers that use your nest…";
-        else if (s.Devices.Count == 0)
-            DevicesEmptyText.Text = "No computers have used this nest yet.";
+        DevicesEmptyText.Text = DevicesSummary.EmptyText(s);
 
         DrawPeople(PeopleSection.From(s));
         var cards = DeviceCard.From(s, ThisDevice, DateTimeOffset.UtcNow);
@@ -673,16 +668,9 @@ public partial class MainWindow : Window
         _attentionCount = items.Count;
         RefreshSide();
         RefreshOverview();
-        AttentionSubtitle.Text = AttentionSubtitleText(items.Count);
+        AttentionSubtitle.Text = NeedsYouText.Subtitle(items.Count, _status);
         UpdatePanels();
     }
-
-    private static string AttentionSubtitleText(int count) => count switch
-    {
-        0 => "Nothing needs a decision right now. Everything keeps syncing.",
-        1 => "1 thing only you can decide. Everything else keeps syncing meanwhile.",
-        _ => $"{count} things only you can decide. Everything else keeps syncing meanwhile.",
-    };
 
     private void UpdatePanels()
     {

@@ -125,7 +125,7 @@ public sealed class NestFiles : INestFiles
         var prefix = folder.Length == 0 ? string.Empty : folder + "/";
         var folders = new Dictionary<string, (long Size, int Files, long Changed)>(StringComparer.Ordinal);
         var files = new List<NestEntry>();
-        foreach (var e in _session.State.LoadRemote().Values)
+        foreach (var e in Remote())
         {
             if (e.Deleted || !e.Path.StartsWith(prefix, StringComparison.Ordinal))
                 continue;
@@ -152,7 +152,7 @@ public sealed class NestFiles : INestFiles
     public IReadOnlyList<string> Folders(int depth = 1)
     {
         var set = new SortedSet<string>(StringComparer.CurrentCultureIgnoreCase);
-        foreach (var e in _session.State.LoadRemote().Values)
+        foreach (var e in Remote())
         {
             if (e.Deleted)
                 continue;
@@ -169,7 +169,7 @@ public sealed class NestFiles : INestFiles
         text = text.Trim();
         if (text.Length == 0)
             return [];
-        return _session.State.LoadRemote().Values
+        return Remote()
             .Where(e => !e.Deleted && e.Hash is not null && e.Path.Contains(text, StringComparison.OrdinalIgnoreCase))
             .OrderBy(e => e.Path, StringComparer.CurrentCultureIgnoreCase)
             .Take(max)
@@ -183,12 +183,29 @@ public sealed class NestFiles : INestFiles
         folder = PlacementMap.NormalizeFolder(folder);
         var prefix = folder.Length == 0 ? string.Empty : folder + "/";
         long bytes = 0;
-        foreach (var e in _session.State.LoadRemote().Values)
+        foreach (var e in Remote())
         {
             if (!e.Deleted && e.Path.StartsWith(prefix, StringComparison.Ordinal) && WhereNow(e.Path) == FileWhere.Here)
                 bytes += e.Size;
         }
         return bytes;
+    }
+
+    /// <summary>
+    /// This computer's copy of the nest's list, for the pages that show it. Empty once the nest has stopped (its session
+    /// closed the list's database while a page still shows): the page draws nothing instead of failing (crash 11eae5385eec).
+    /// </summary>
+    private IEnumerable<ManifestEntry> Remote()
+    {
+        try
+        {
+            return _session.State.LoadRemote().Values;
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or ObjectDisposedException)
+        {
+            _log.LogDebug("The nest's list is closed (the nest stopped): {Message}", ex.Message);
+            return [];
+        }
     }
 
     private static DateTimeOffset Moment(long ms) => DateTimeOffset.FromUnixTimeMilliseconds(Math.Max(0, ms));
@@ -357,6 +374,7 @@ public sealed class NestFiles : INestFiles
         if (moves.Count == 0)
             return NestResult.Fail("This is no longer on your nest.");
         var caseOnly = PathRules.CaseKey(from) == PathRules.CaseKey(to);
+        var finished = false;
         try
         {
             foreach (var (entry, target) in moves)
@@ -377,6 +395,7 @@ public sealed class NestFiles : INestFiles
                 if (!moved.Ok)
                     return moved;
             }
+            finished = true;
         }
         catch (Exception ex) when (ex is PairnetsNetworkException or PairnetsAuthException or PairnetsProtocolException)
         {
@@ -384,10 +403,11 @@ public sealed class NestFiles : INestFiles
         }
         finally
         {
+            // The empty folder goes before the sync is asked for: a pass reading it while it is removed keeps it on Windows.
+            if (finished && !caseOnly)
+                await RemoveEmptyFolderAsync(from).ConfigureAwait(false);
             _session.Runner.RequestSync("moved on the Files page");
         }
-        if (!caseOnly)
-            RemoveEmptyFolder(from);
         _session.Activity.Add(ActivityKind.Info, to, $"Moved {PathRules.FileName(from)} to {to}", _clock);
         return NestResult.Done;
     }
@@ -414,7 +434,10 @@ public sealed class NestFiles : INestFiles
 
     /// <summary>
     /// The copy here follows a move on the nest: a file here moves along (the next sync records it), a placeholder is
-    /// removed (the next sync places one at the new name).
+    /// removed (the next sync places one at the new name). It is forgotten under its old name only once it has moved:
+    /// a file another program has open (on Windows it can't move then) stays as it was, still known under that name, so
+    /// the next sync sees the name gone from the nest and fetches the new one instead of sending it back. It is not
+    /// tried again: a sync pass may already be fetching the new name, and a late move would land on top of it.
     /// </summary>
     private void FollowHere(string from, string to)
     {
@@ -424,13 +447,13 @@ public sealed class NestFiles : INestFiles
         {
             if (WhereNow(from) == FileWhere.IconOnly)
             {
-                _session.State.RemoveFile(from);
                 File.Delete(source);
+                _session.State.RemoveFile(from);
                 return;
             }
             Directory.CreateDirectory(Path.GetDirectoryName(target)!);
-            _session.State.RemoveFile(from);
             File.Move(source, target, overwrite: false);
+            _session.State.RemoveFile(from);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -438,22 +461,38 @@ public sealed class NestFiles : INestFiles
         }
     }
 
+    private const int FolderRemoveAttempts = 10;
+    private static readonly TimeSpan FolderRemoveRetry = TimeSpan.FromMilliseconds(100);
+
     /// <summary>
     /// After a folder was deleted or moved away on the nest and its files went from here, the folder here (and the
     /// empty folders in it) goes too, so no empty shell stays in the Pairnets folder. Anything still in it (a file the
-    /// nest did not know, a link) keeps it.
+    /// nest did not know, a link) keeps it. A folder another program (a pass started by the file watcher, Explorer, a
+    /// virus scanner) is reading for a moment is tried again a few times: on Windows it can't go, or only goes once that
+    /// program lets go of it.
     /// </summary>
-    private void RemoveEmptyFolder(string path)
+    private async Task RemoveEmptyFolderAsync(string path)
     {
-        if (Local(path) is not { } full || !Directory.Exists(full))
+        if (Local(path) is not { } full)
             return;
-        try
+        for (var attempt = 1; Directory.Exists(full); attempt++)
         {
-            RemoveIfEmpty(new DirectoryInfo(full));
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            _log.LogInformation("The empty folder {Path} stays here: {Error}", path, ex.Message);
+            try
+            {
+                if (!RemoveIfEmpty(new DirectoryInfo(full)))
+                    return; // something is still in it
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                if (attempt >= FolderRemoveAttempts)
+                {
+                    _log.LogInformation("The empty folder {Path} stays here: {Error}", path, ex.Message);
+                    return;
+                }
+            }
+            if (attempt >= FolderRemoveAttempts)
+                return;
+            await Task.Delay(FolderRemoveRetry).ConfigureAwait(false);
         }
 
         static bool RemoveIfEmpty(DirectoryInfo dir)
@@ -479,6 +518,7 @@ public sealed class NestFiles : INestFiles
         var files = FilesUnder(path);
         if (files.Count == 0)
             return NestResult.Fail("This is no longer on your nest.");
+        var finished = false;
         try
         {
             foreach (var entry in files)
@@ -494,6 +534,7 @@ public sealed class NestFiles : INestFiles
                     _session.Trash.Delete(here);
                 }
             }
+            finished = true;
         }
         catch (Exception ex) when (ex is PairnetsNetworkException or PairnetsAuthException or PairnetsProtocolException or IOException or UnauthorizedAccessException)
         {
@@ -501,9 +542,11 @@ public sealed class NestFiles : INestFiles
         }
         finally
         {
+            // As for a move: the empty folder first, then the sync.
+            if (finished)
+                await RemoveEmptyFolderAsync(path).ConfigureAwait(false);
             _session.Runner.RequestSync("deleted on the Files page");
         }
-        RemoveEmptyFolder(path);
         _session.Activity.Add(ActivityKind.DeletedOnServer, path, $"Deleted on the nest: {path} (it can be restored from History)", _clock);
         return NestResult.Done;
     }
@@ -536,7 +579,7 @@ public sealed class NestFiles : INestFiles
     };
 
     /// <summary>The space each kind of file takes on the nest, biggest first (kinds with no files left out).</summary>
-    public IReadOnlyList<(FileKind Kind, long Bytes)> KindTotals() => _session.State.LoadRemote().Values
+    public IReadOnlyList<(FileKind Kind, long Bytes)> KindTotals() => Remote()
         .Where(e => !e.Deleted)
         .GroupBy(e => KindOf(e.Path))
         .Select(g => (g.Key, g.Sum(e => e.Size)))
@@ -544,7 +587,7 @@ public sealed class NestFiles : INestFiles
         .ToList();
 
     /// <summary>The biggest files on the nest (of one kind, or all), biggest first.</summary>
-    public IReadOnlyList<NestEntry> Biggest(FileKind? kind = null, int max = 50) => _session.State.LoadRemote().Values
+    public IReadOnlyList<NestEntry> Biggest(FileKind? kind = null, int max = 50) => Remote()
         .Where(e => !e.Deleted && e.Hash is not null && (kind is null || KindOf(e.Path) == kind))
         .OrderByDescending(e => e.Size)
         .ThenBy(e => e.Path, StringComparer.Ordinal)
@@ -553,7 +596,7 @@ public sealed class NestFiles : INestFiles
         .ToList();
 
     /// <summary>The space all files on the nest take now (older versions and deleted files not counted).</summary>
-    public long BytesOnNest() => _session.State.LoadRemote().Values.Where(e => !e.Deleted).Sum(e => e.Size);
+    public long BytesOnNest() => Remote().Where(e => !e.Deleted).Sum(e => e.Size);
 
     /// <summary>The space older versions and deleted files take on the nest (null when the nest doesn't say).</summary>
     public long? HistoryBytes => _session.Status.Server?.HistoryBytes;

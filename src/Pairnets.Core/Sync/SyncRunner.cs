@@ -473,8 +473,8 @@ public sealed class SyncRunner : IAsyncDisposable
     }
 
     /// <summary>
-    /// Wakes the loop. A folder-watcher event can still arrive after the runner was disposed (the nest stopped, or its
-    /// folder changed): it then does nothing, instead of ending the app with an error on a background thread.
+    /// Wakes the loop. A watcher event already on its way when the runner is disposed (a nest stopped or moved) lands
+    /// here after the semaphore is gone; there is nothing left to wake then, and it must not take the app down.
     /// </summary>
     private void Wake()
     {
@@ -747,6 +747,7 @@ public sealed class SyncRunner : IAsyncDisposable
         if (rel.Equals(PathRules.TempFolderName, StringComparison.OrdinalIgnoreCase)
             || rel.StartsWith(PathRules.TempFolderName + "/", StringComparison.OrdinalIgnoreCase)
             || rel.Equals(PathRules.MarkerFileName, StringComparison.OrdinalIgnoreCase)
+            || rel.Equals(PathRules.ProbeFileName, StringComparison.OrdinalIgnoreCase)
             || rel.Equals(Legacy.TetherNames.TempFolderName, StringComparison.OrdinalIgnoreCase)
             || rel.StartsWith(Legacy.TetherNames.TempFolderName + "/", StringComparison.OrdinalIgnoreCase)
             || rel.Equals(Legacy.TetherNames.MarkerFileName, StringComparison.OrdinalIgnoreCase))

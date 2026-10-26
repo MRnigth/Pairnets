@@ -18,6 +18,7 @@ namespace Pairnets.Tests.Ui;
 /// computer's line like on this one's), and the sign-in email box starts its text right after the envelope. Pictures are
 /// written when PAIRNETS_SCREENSHOT_DIR is set.
 /// </summary>
+[Collection(AvaloniaUi.Name)]
 public class MapBalanceTests
 {
     private const string Me = "DESKTOP-7K2M9QX";

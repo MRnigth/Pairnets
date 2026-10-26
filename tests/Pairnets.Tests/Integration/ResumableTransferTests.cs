@@ -22,7 +22,7 @@ public class ResumableTransferTests : IAsyncLifetime
 
     public async Task InitializeAsync()
     {
-        _server = await TestServer.StartAsync();
+        _server = await TestServer.StartAsync(config: TestServer.ShortStall()); // pieces that go quiet are part of these tests
         _proxy = new ChaosProxy(_server.Port);
     }
 

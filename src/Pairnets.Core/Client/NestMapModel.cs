@@ -132,7 +132,8 @@ public sealed record NestMapModel(
             NestMapState.SignedOut => (NestLineKind.Bad, "signed out", NestDot.Bad, NestDot.Bad),
             NestMapState.SignedOutByYou => (NestLineKind.Next, "signed out", NestDot.Off, NestDot.Off),
             NestMapState.Offline => (NestLineKind.Unreachable, "can’t reach", NestDot.Off, NestDot.Bad),
-            NestMapState.Paused => (NestLineKind.Next, "paused", NestDot.Off, NestDot.Ok),
+            // Paused stops the checks: the nest is only "online" when it was reached before (the Mac test: never reached).
+            NestMapState.Paused => (NestLineKind.Next, "paused", NestDot.Off, s.IsConnected ? NestDot.Ok : NestDot.Off),
             _ => (NestLineKind.Warn, "folder missing", NestDot.Warn, NestDot.Ok),
         };
 
@@ -141,6 +142,7 @@ public sealed record NestMapModel(
             NestMapState.Offline => "can’t reach it",
             NestMapState.SignedOut => "removed this one",
             NestMapState.SignedOutByYou => "signed out",
+            NestMapState.Paused when !s.IsConnected => "not connected",
             _ => s.Server?.DiskFreeBytes is { } free ? Format.Bytes(free) + " free" : "online",
         };
 

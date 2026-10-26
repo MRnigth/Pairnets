@@ -1,3 +1,4 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
@@ -14,6 +15,7 @@ namespace Pairnets.Tests.Ui;
 /// The Files page ("All files" and "Deleted"), Clean up, the pop-ups of "Where your files live" and the Settings card in
 /// the Mac/Linux app, headless, with the nest's files in memory.
 /// </summary>
+[Collection(AvaloniaUi.Name)]
 public class FilesPageUiTests
 {
     private static readonly ServerInfo Server = new("id", 1, 1, "1.0.60", 3L << 30, 1L << 40);
@@ -34,14 +36,27 @@ public class FilesPageUiTests
 
     private static readonly List<Window> Opened = [];
 
-    static FilesPageUiTests() => Window.WindowOpenedEvent.AddClassHandler(typeof(Window), (sender, _) =>
+    // The pop-ups that are open. A window goes from the list once it closes: kept, every window opened later in the
+    // test run (by any test) stayed in memory, gigabytes by the end on a slow runner.
+    static FilesPageUiTests()
     {
-        lock (Opened)
+        Window.WindowOpenedEvent.AddClassHandler(typeof(Window), (sender, _) =>
         {
-            if (sender is Window w)
-                Opened.Add(w);
-        }
-    });
+            lock (Opened)
+            {
+                if (sender is Window w)
+                    Opened.Add(w);
+            }
+        });
+        Window.WindowClosedEvent.AddClassHandler(typeof(Window), (sender, _) =>
+        {
+            lock (Opened)
+            {
+                if (sender is Window w)
+                    Opened.Remove(w);
+            }
+        });
+    }
 
     private static List<Window> AllWindows()
     {
@@ -59,7 +74,7 @@ public class FilesPageUiTests
         Assert.Equal(["Documents", "Photos", "Videos", "notes.txt"], page.Rows.Select(r => r.Name));
         Assert.Equal(["Your nest"], page.CrumbTexts);
         Assert.Equal("Only on the nest", page.Rows.Single(r => r.Name == "Photos").WhereText);
-        Assert.Equal(FilesPageText.Footer(nest.BytesOnNest(), nest.BytesHere(string.Empty)), page.FooterLine);
+        Assert.Equal(Wording.Computer(FilesPageText.Footer(nest.BytesOnNest(), nest.BytesHere(string.Empty))), page.FooterLine);
 
         await page.OpenAsync(page.Rows.Single(r => r.Name == "Documents"));
         Assert.Equal("Documents", page.Folder);
@@ -73,6 +88,29 @@ public class FilesPageUiTests
         page.SearchText = "2025";
         Dispatcher.UIThread.RunJobs();
         Assert.Equal("2025.pdf", Assert.Single(page.Rows).Name);
+        window.Close();
+    }
+
+    /// <summary>
+    /// The Mac test (2026-10-24): the Files page said "On this PC" on a Mac, and the hint under the list ran off the right
+    /// edge instead of wrapping. This app (Mac and Linux) says "this computer"; the hint wraps inside the page.
+    /// </summary>
+    [AvaloniaFact]
+    public void TheFilesPage_SaysThisComputer_AndItsHintWraps()
+    {
+        var (window, _, _) = Open();
+        window.Navigate(MainPage.Files);
+        Dispatcher.UIThread.RunJobs();
+        window.UpdateLayout();
+        var page = window.FilesView;
+        Assert.Equal("On this computer", page.PlacementShown);
+        Assert.EndsWith("of it on this computer", page.FooterLine);
+        Assert.DoesNotContain(Screen.All<TextBlock>(page), t => t.IsEffectivelyVisible && (t.Text ?? "").Contains("this PC", StringComparison.Ordinal));
+
+        var hint = page.DropHintText;
+        var right = hint.TranslatePoint(new Avalonia.Point(hint.Bounds.Width, 0), page)!.Value.X;
+        Assert.True(right <= page.Bounds.Width + 0.5, $"the hint ends at {right:0}, past the page's {page.Bounds.Width:0}");
+        Assert.True(hint.TextLayout.Width <= hint.Bounds.Width + 0.5, "the hint is cut off instead of wrapping");
         window.Close();
     }
 
@@ -176,7 +214,7 @@ public class FilesPageUiTests
         var view = new SettingsView(settings, new MemorySecrets(), autoStart: false, files: nest) { FilesSource = () => nest };
         var host = new Window { Content = view, Width = 900, Height = 780 };
         host.Show();
-        Assert.EndsWith("all on this PC", view.PlacementSizeShown("Documents"));
+        Assert.EndsWith("all on this computer", view.PlacementSizeShown("Documents"));
 
         var choosing = view.ChoosePlacementAsync("Documents", FilePlacement.NestOnly);
         var question = await Wait.For(() => AllWindows().FirstOrDefault(w => w != host && w.IsVisible && w.Title == "Keep Documents only on your nest?"), "the question");
@@ -188,7 +226,7 @@ public class FilesPageUiTests
         nest.Put("Documents/report.docx", 2_400_000, now, here: false);
         nest.Put("Documents/taxes/2025.pdf", 800_000, now, here: false);
         view.ShowPlacementStatus(StatusSnapshot.Initial with { Status = RunnerStatus.Idle, Text = "Up to date" });
-        Assert.Equal(FilesPageText.SizeLine(nest.List(string.Empty).Single(e => e.Path == "Documents").Size, 0), view.PlacementSizeShown("Documents"));
+        Assert.Equal(Wording.Computer(FilesPageText.SizeLine(nest.List(string.Empty).Single(e => e.Path == "Documents").Size, 0)), view.PlacementSizeShown("Documents"));
         host.Close();
     }
 
@@ -251,7 +289,7 @@ public class FilesPageUiTests
         host.Show();
 
         Assert.DoesNotContain("Only on the nest", Offered(view, ""));
-        Assert.Contains("On this PC", Offered(view, ""));
+        Assert.Contains("On this computer", Offered(view, ""));
         Assert.Contains("Only on the nest", Offered(view, "Videos"));
 
         // Asked for anyway: nothing is asked, saved or applied.

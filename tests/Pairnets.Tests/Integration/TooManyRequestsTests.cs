@@ -100,8 +100,11 @@ public class TooManyRequestsTests : IAsyncLifetime
         // While held, nothing new went out (requests already on their way when the first 429 came may still arrive)...
         var first = log.First(e => e.Status == 429).At;
         Assert.DoesNotContain(log, e => e.At > first + TimeSpan.FromMilliseconds(100) && e.At < first + TimeSpan.FromMilliseconds(900));
-        // ...and afterwards they went one at a time.
-        Assert.All(log.Where(e => e.At > first + TimeSpan.FromSeconds(1)), e => Assert.Equal(1, e.Running));
+        // ...and afterwards they went one at a time, for as long as the lowered limit holds (on a slow machine the
+        // pass can outlast it, and then two at a time again is right).
+        var lastRefused = log.Last(e => e.Status == 429).At;
+        Assert.All(log.Where(e => e.At > first + TimeSpan.FromSeconds(1) && e.At < lastRefused + BackPressure.RecoverStep),
+            e => Assert.Equal(1, e.Running));
 
         // The app said it was slowed down, and that it went on again.
         await WaitUntil(() => { lock (heard) return heard.Count >= 2 && heard[^1] is null; });

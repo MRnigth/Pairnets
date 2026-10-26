@@ -12,6 +12,7 @@ namespace Pairnets.Tests.Ui;
 /// The Overview in every state of the new look (Content, Ov-*.dc.html, Many-B), light and dark. Pictures are written when
 /// PAIRNETS_SCREENSHOT_DIR is set; otherwise it only checks that each state draws and says what it should.
 /// </summary>
+[Collection(AvaloniaUi.Name)]
 public class OverviewScreenshotTests
 {
     private const double MB = 1 << 20;

@@ -324,11 +324,8 @@ public sealed class CloudFolderTests : IDisposable
         await Task.Delay(3000);
         Assert.Contains(nest.Store.ReadManifest(null).Entries, e => e.Path == "notes.txt" && !e.Deleted);
         Assert.Equal("notes, version two, longer", ReadElsewhere(renamed));
-        // Once it is here, it syncs under its new name. (In a folder this small, taking the old name away on the nest
-        // is "1 of 3 files deleted", which Pairnets' safety stop asks about first, as it does for any rename here.)
-        session.SyncNow();
-        Assert.True(SpinWait.SpinUntil(() => session.PendingDeletes().Count > 0, TimeSpan.FromSeconds(30)), "the rename was not seen");
-        session.ApproveDeletions();
+        // Once it is here, it syncs under its new name, and the old name goes on the nest (one deletion: no question,
+        // the safety stop asks from 100).
         session.SyncNow();
         Assert.True(SpinWait.SpinUntil(() => nest.Store.ReadManifest(null).Entries.Any(e => e.Path == "notes renamed.txt" && !e.Deleted), TimeSpan.FromSeconds(30)),
             "the renamed file was not uploaded under its new name. Status: " + session.Status.Text
@@ -337,6 +334,8 @@ public sealed class CloudFolderTests : IDisposable
             + "\nState: " + State(renamed) + " online=" + cloud.IsCloudOnly(renamed)
             + "\nNest: " + string.Join("; ", nest.Store.ReadManifest(null).Entries.Select(e => e.Path + (e.Deleted ? " (deleted)" : "")))
             + "\nLog: " + Log());
+        Assert.True(SpinWait.SpinUntil(() => nest.Store.ReadManifest(null).Entries.Any(e => e.Path == "notes.txt" && e.Deleted), TimeSpan.FromSeconds(30)),
+            "the old name was not taken away on the nest");
     }
 
     [CloudFact]

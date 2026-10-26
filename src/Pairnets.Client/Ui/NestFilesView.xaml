@@ -193,10 +193,15 @@
         <Button x:Name="ChangeFolderLink" Style="{StaticResource PgLink}" Padding="6,2" Margin="4,0,0,0" FontSize="13" Content="Change…"
                 AutomationProperties.Name="Change where this nest is saved on this computer" Click="OnChangeFolder" />
       </StackPanel>
-      <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
-        <ui:LineIcon Width="15" Height="15" Margin="0,0,8,0" StrokeThickness="1.9" Stroke="{DynamicResource T.Muted}" Data="{StaticResource I.InfoCircle}" />
-        <TextBlock Style="{StaticResource PgSmall}" FontSize="13" TextWrapping="Wrap" Text="Drop files here to put them on your nest. Double-click a file to open it: changes you save go back to your nest." />
-      </StackPanel>
+      <!-- A grid, not a row: a row gives the text all the room it asks for, so it ran off the page instead of wrapping -->
+      <Grid Margin="0,6,0,0">
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="Auto" />
+          <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+        <ui:LineIcon Width="15" Height="15" Margin="0,1,8,0" VerticalAlignment="Top" StrokeThickness="1.9" Stroke="{DynamicResource T.Muted}" Data="{StaticResource I.InfoCircle}" />
+        <TextBlock x:Name="DropHintText" Grid.Column="1" Style="{StaticResource PgSmall}" FontSize="13" TextWrapping="Wrap" Text="Drop files here to put them on your nest. Double-click a file to open it: changes you save go back to your nest." />
+      </Grid>
     </StackPanel>
   </Grid>
 </UserControl>

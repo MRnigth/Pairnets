@@ -150,7 +150,8 @@ public class TetherMigrationTests
     {
         await using var server = await TestServer.StartAsync();
         using var http = server.RawHttp(server.Token);
-        await http.PutAsync("api/file?path=a.txt&base=none&mtime=1700000000000", new StringContent("a"));
+        var put = await http.PutAsync("api/file?path=a.txt&base=none&mtime=1700000000000", new StringContent("a"));
+        Assert.Equal(HttpStatusCode.OK, put.StatusCode);
 
         var manifest = await http.GetAsync("api/manifest");
         Assert.Equal(manifest.Headers.GetValues(PairnetsHeaders.ServerId), manifest.Headers.GetValues(TetherNames.ServerIdHeader));

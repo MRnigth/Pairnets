@@ -12,6 +12,7 @@ using Pairnets.Desktop.Views;
 namespace Pairnets.Tests.Ui;
 
 /// <summary>Stage 6 on the macOS/Linux app: the icon chooser, and a computer's chosen icon wherever it is drawn.</summary>
+[Collection(AvaloniaUi.Name)]
 public class DeviceIconUiTests
 {
     private static readonly DateTimeOffset Utc = DateTimeOffset.UtcNow;

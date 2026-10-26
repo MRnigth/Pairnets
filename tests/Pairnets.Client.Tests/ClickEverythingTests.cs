@@ -1102,6 +1102,13 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
             SignIn(w).ShowFolderStep(fixture.Grant, fixture.Nest.Url);
             SignIn(w).Folder = b.Dir;
         }), Modal: true, Answers: s => s.AgreeToEverything());
+        yield return new Screen(name, "a folder in Program Files", SignInWindow, (_, w) => Wpf.Ui(() =>
+        {
+            SignIn(w).ShowFolderStep(fixture.Grant, fixture.Nest.Url);
+            SignIn(w).Folder = Path.Combine(SyncFolderCheck.SystemFolders()[0], "Pairnets nest");
+            SignIn(w).StartButton.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+            Assert.True(SignIn(w).UseSuggestedButton.Visibility == Visibility.Visible, "the folder step to refuse a system folder and offer another");
+        }), Modal: true);
     }
 
     private static Func<Check, bool> OpensTheNest(string? method) => c =>
@@ -1123,7 +1130,7 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
             OpensTheAccountPage("google"), Seconds: 15),
         new(t => t.Handlers.Contains("SignInView.OnAccountEmail"), "ask Pairnets for a code and open its email sign-in in the browser",
             OpensTheAccountPage("email"), Seconds: 15),
-        On("Make an account", "open the service's sign-in page", c => c.Bench.Opened.Items.SequenceEqual([$"{ServiceOrigin}/login"])),
+        On("Make an account", "open the service's sign-in page", c => c.Bench.Opened.Items.SequenceEqual([$"{ServiceOrigin}/login?new=1"])),
         On("Terms", "open the Terms on pairnets.app", c => c.Bench.Opened.Items.SequenceEqual([PairnetsLinks.Terms])),
         On("Privacy Policy", "open the Privacy Policy on pairnets.app", c => c.Bench.Opened.Items.SequenceEqual([PairnetsLinks.Privacy])),
         On(["I run my own nest on my own domain: use its address", "I run my own nest: use its address"], "go to the step for a nest's own address",
@@ -1148,6 +1155,8 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
             c => SignIn(c.Window) is { WaitStep.IsVisible: true, RetryButton.IsVisible: false } && c.Bench.Opened.Items.Any(l => l.Contains("/link?code=", StringComparison.Ordinal)),
             seconds: 15),
         On(["Browse…", "Choose…"], "let you choose the folder and show it", c => SignIn(c.Window).FolderBox.Text == c.Bench.Script.Folder),
+        new(t => t.Handlers.Contains("SignInView.OnUseSuggested"), "fill in the folder offered instead of one in Program Files",
+            c => SignIn(c.Window) is { FolderProblemBox.IsVisible: false } view && view.FolderBox.Text == SyncFolderCheck.DefaultFolder),
         On("Start syncing", "finish signing in and close the window", c => ((SettingsWindow)c.Window).Result is { DeviceId: not null } && c.Bench.Closed, seconds: 20),
     ];
 

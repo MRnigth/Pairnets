@@ -47,7 +47,7 @@ public class ClientSessionTests : IAsyncLifetime
 
     private static async Task WaitUntil(Func<bool> condition, string what)
     {
-        var deadline = DateTime.UtcNow.AddSeconds(30); // slow CI runners
+        var deadline = DateTime.UtcNow.AddSeconds(90); // slow CI runners: a first sync of 100+ files can take a while
         while (!condition())
         {
             if (DateTime.UtcNow > deadline)
@@ -148,22 +148,26 @@ public class ClientSessionTests : IAsyncLifetime
     [Fact]
     public async Task BlockedDeletionsAreDescribedAndCanBeApproved()
     {
-        for (var i = 0; i < 10; i++)
-            File.WriteAllText(Path.Combine(_folder.Path, $"f{i}.txt"), i.ToString());
+        for (var i = 0; i < 110; i++)
+        {
+            var path = Path.Combine(_folder.Path, $"f{i:000}.txt");
+            File.WriteAllText(path, i.ToString());
+            File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddMinutes(-1)); // all 110 in the first pass
+        }
         await using (var first = Start())
-            await WaitUntil(() => _server.Store.ReadManifest(null).Entries.Count == 10 && first.Status.Status == RunnerStatus.Idle, "first sync");
+            await WaitUntil(() => _server.Store.ReadManifest(null).Entries.Count == 110 && first.Status.Status == RunnerStatus.Idle, "first sync");
 
-        for (var i = 0; i < 5; i++)
-            File.Delete(Path.Combine(_folder.Path, $"f{i}.txt"));
+        for (var i = 0; i < 100; i++)
+            File.Delete(Path.Combine(_folder.Path, $"f{i:000}.txt"));
         await using var session = Start();
         await WaitUntil(() => session.Status.Status == RunnerStatus.Blocked, "blocked");
         Assert.Equal(BlockReason.MassDelete, session.Status.BlockReason);
-        Assert.Equal("Allow these deletions (5)…", session.Status.FixLabel);
-        Assert.Contains("server: f0.txt", session.DescribePendingDeletes());
+        Assert.Equal("Allow these deletions (100)…", session.Status.FixLabel);
+        Assert.Contains("server: f000.txt", session.DescribePendingDeletes());
         Assert.Contains(session.Activity.Items, i => i.Kind == ActivityKind.Blocked);
 
-        Assert.Equal(5, session.ApproveDeletions());
-        await WaitUntil(() => _server.Store.ReadManifest(null).Entries.Count(e => e.Deleted) == 5, "deletions");
+        Assert.Equal(100, session.ApproveDeletions());
+        await WaitUntil(() => _server.Store.ReadManifest(null).Entries.Count(e => e.Deleted) == 100, "deletions");
     }
 
     [Fact]

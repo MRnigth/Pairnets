@@ -97,7 +97,7 @@ Mtimes never decide anything; they only let the scanner skip re-hashing unchange
    changed files. Files modified in the last 2 s, locked, or changing while hashed are *unknown*
    this pass: never uploaded and never treated as deleted.
 4. **Plan**: `Decide(L, S, B)` for the union of local, server and base paths.
-5. **Mass-delete guard**: if the pass would delete more than `min(20 % of tracked files, 50)` on
+5. **Mass-delete guard**: if the pass would delete 100 files or more on
    either side, or the folder is empty, nothing runs and the user is asked. "Allow these
    deletions" approves exactly one pass and only the listed deletions.
 6. **Execute** (deletes first, then conflicts, uploads, downloads). Per-file errors are isolated;

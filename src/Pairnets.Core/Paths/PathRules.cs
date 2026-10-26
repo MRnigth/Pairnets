@@ -33,6 +33,9 @@ public static class PathRules
     /// <summary>Name of the marker file in the root of the sync folder.</summary>
     public const string MarkerFileName = ".pairnets-marker";
 
+    /// <summary>Name of the test file Pairnets writes and removes at once in the root to see that it may save files there.</summary>
+    public const string ProbeFileName = ".pairnets-write-test";
+
     private static readonly HashSet<string> ReservedDeviceNames = new(StringComparer.OrdinalIgnoreCase)
     {
         "CON", "PRN", "AUX", "NUL", "CONIN$", "CONOUT$",
@@ -112,6 +115,7 @@ public static class PathRules
             || string.Equals(segment, Legacy.TetherNames.TempFolderName, StringComparison.OrdinalIgnoreCase))
             return PathProblem.ReservedName;
         if (isRoot && isLast && (string.Equals(segment, MarkerFileName, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(segment, ProbeFileName, StringComparison.OrdinalIgnoreCase)
             || string.Equals(segment, Legacy.TetherNames.MarkerFileName, StringComparison.OrdinalIgnoreCase)))
             return PathProblem.ReservedName;
 

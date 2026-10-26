@@ -25,6 +25,8 @@ public class RunnerTests : IAsyncLifetime
         await _server.DisposeAsync();
     }
 
+    // The waits are generous (60 s): on a busy test machine a pass over 100 files can take many seconds. None of these
+    // tests is about how fast something happens; "quickly" below means long before the hourly pass.
     private static async Task WaitUntil(Func<bool> condition, TimeSpan timeout, string what)
     {
         var deadline = DateTime.UtcNow + timeout;
@@ -45,53 +47,53 @@ public class RunnerTests : IAsyncLifetime
         desktop.PassCompleted += r => { lock (desktopReports) desktopReports.Add(r); };
         desktop.RemoteChangeReceived += (device, _) => { if (device == "desktop") Interlocked.Increment(ref desktopEchoes); };
         var laptop = _laptop.StartRunner();
-        await WaitUntil(() => desktop.HubConnected && laptop.HubConnected, TimeSpan.FromSeconds(15), "hub connections");
-        await WaitUntil(() => desktop.LastSyncAt is not null && laptop.LastSyncAt is not null, TimeSpan.FromSeconds(15), "startup passes");
+        await WaitUntil(() => desktop.HubConnected && laptop.HubConnected, TimeSpan.FromSeconds(60), "hub connections");
+        await WaitUntil(() => desktop.LastSyncAt is not null && laptop.LastSyncAt is not null, TimeSpan.FromSeconds(60), "startup passes");
 
         _desktop.Write("pushed.txt", "hello from desktop");
-        await WaitUntil(() => _laptop.Exists("pushed.txt"), TimeSpan.FromSeconds(5), "laptop to receive the file");
+        await WaitUntil(() => _laptop.Exists("pushed.txt"), TimeSpan.FromSeconds(60), "laptop to receive the file");
         Assert.Equal("hello from desktop", _laptop.Read("pushed.txt"));
 
         // The desktop heard its own change echoed back but did not run a pass for it.
-        await WaitUntil(() => Volatile.Read(ref desktopEchoes) > 0, TimeSpan.FromSeconds(5), "echo");
+        await WaitUntil(() => Volatile.Read(ref desktopEchoes) > 0, TimeSpan.FromSeconds(60), "echo");
         await Task.Delay(500);
         lock (desktopReports)
             Assert.DoesNotContain(desktopReports, r => r.Reasons.Contains("remote-change"));
 
         // And the other way round.
         _laptop.Write("back.txt", "hello from laptop");
-        await WaitUntil(() => _desktop.Exists("back.txt"), TimeSpan.FromSeconds(5), "desktop to receive the file");
+        await WaitUntil(() => _desktop.Exists("back.txt"), TimeSpan.FromSeconds(60), "desktop to receive the file");
     }
 
     [Fact]
     public async Task RunnerGoesOfflineAndRecoversWithoutLosingLocalChanges()
     {
         var runner = _desktop.StartRunner();
-        await WaitUntil(() => runner.LastSyncAt is not null, TimeSpan.FromSeconds(15), "first pass");
+        await WaitUntil(() => runner.LastSyncAt is not null, TimeSpan.FromSeconds(60), "first pass");
         var port = _server.Port;
         await _server.StopAsync();
 
         _desktop.Write("offline-edit.txt", "written while offline");
-        await WaitUntil(() => runner.Status == RunnerStatus.Offline, TimeSpan.FromSeconds(10), "offline status");
+        await WaitUntil(() => runner.Status == RunnerStatus.Offline, TimeSpan.FromSeconds(60), "offline status");
 
         await _server.RestartAsync();
         Assert.Equal(port, _server.Port);
-        await WaitUntil(() => _server.Store.Manifest.Get("offline-edit.txt") is not null, TimeSpan.FromSeconds(15), "upload after reconnect");
-        await WaitUntil(() => runner.Status == RunnerStatus.Idle, TimeSpan.FromSeconds(10), "idle status");
+        await WaitUntil(() => _server.Store.Manifest.Get("offline-edit.txt") is not null, TimeSpan.FromSeconds(60), "upload after reconnect");
+        await WaitUntil(() => runner.Status == RunnerStatus.Idle, TimeSpan.FromSeconds(60), "idle status");
     }
 
     [Fact]
     public async Task BlockedPassReportsBlockedStatusAndApprovalRuns()
     {
-        for (var i = 0; i < 10; i++)
-            _desktop.Write($"f{i}.txt", "x");
-        await _desktop.SyncAsync();
-        for (var i = 0; i < 5; i++)
-            _desktop.Delete($"f{i}.txt");
+        for (var i = 0; i < 110; i++)
+            _desktop.Write($"f{i:000}.txt", "x");
+        Assert.Equal(PassOutcome.Completed, (await _desktop.SyncUntilQuietAsync()).Outcome);
+        for (var i = 0; i < 100; i++)
+            _desktop.Delete($"f{i:000}.txt");
         var runner = _desktop.StartRunner();
-        await WaitUntil(() => runner.Status == RunnerStatus.Blocked, TimeSpan.FromSeconds(10), "blocked status");
-        Assert.Equal(5, runner.ApproveDeletions());
-        await WaitUntil(() => _server.Store.ReadManifest(null).Entries.Count(e => e.Deleted) == 5, TimeSpan.FromSeconds(10), "approved deletions");
+        await WaitUntil(() => runner.Status == RunnerStatus.Blocked, TimeSpan.FromSeconds(60), "blocked status");
+        Assert.Equal(100, runner.ApproveDeletions());
+        await WaitUntil(() => _server.Store.ReadManifest(null).Entries.Count(e => e.Deleted) == 100, TimeSpan.FromSeconds(60), "approved deletions");
     }
 
     [Fact]
@@ -99,18 +101,18 @@ public class RunnerTests : IAsyncLifetime
     {
         for (var i = 0; i < 12; i++)
             _desktop.Write($"c{i}.txt", i.ToString());
-        await _desktop.SyncAsync();
+        Assert.Equal(PassOutcome.Completed, (await _desktop.SyncUntilQuietAsync()).Outcome);
         var announced = 0;
         var runner = _laptop.StartRunner();
         runner.CatchUpCompleted += n => Interlocked.Exchange(ref announced, n);
-        await WaitUntil(() => Volatile.Read(ref announced) == 12, TimeSpan.FromSeconds(15), "catch-up event");
+        await WaitUntil(() => Volatile.Read(ref announced) == 12, TimeSpan.FromSeconds(60), "catch-up event");
     }
 
     [Fact]
     public async Task PauseStopsARunningPassAndResumeFinishesIt()
     {
         var runner = _desktop.StartRunner();
-        await WaitUntil(() => runner.LastSyncAt is not null, TimeSpan.FromSeconds(15), "first pass");
+        await WaitUntil(() => runner.LastSyncAt is not null, TimeSpan.FromSeconds(60), "first pass");
 
         var started = 0;
         _desktop.Hooks.BeforeTransfer = async (_, _) =>
@@ -121,7 +123,7 @@ public class RunnerTests : IAsyncLifetime
         for (var i = 0; i < 60; i++)
             _desktop.Write($"many/f{i:00}.txt", "file " + i);
         runner.RequestSync("test");
-        await WaitUntil(() => Volatile.Read(ref started) >= 8, TimeSpan.FromSeconds(15), "uploads to start");
+        await WaitUntil(() => Volatile.Read(ref started) >= 8, TimeSpan.FromSeconds(60), "uploads to start");
 
         runner.Pause();
         Assert.Equal(RunnerStatus.Paused, runner.Status);
@@ -150,20 +152,20 @@ public class RunnerTests : IAsyncLifetime
 
         _desktop.Hooks.BeforeTransfer = null;
         runner.Resume();
-        await WaitUntil(() => _server.Store.ReadManifest(null).Entries.Count == 60, TimeSpan.FromSeconds(20), "all uploads after resume");
-        await WaitUntil(() => runner.Status == RunnerStatus.Idle, TimeSpan.FromSeconds(10), "idle status");
+        await WaitUntil(() => _server.Store.ReadManifest(null).Entries.Count == 60, TimeSpan.FromSeconds(60), "all uploads after resume");
+        await WaitUntil(() => runner.Status == RunnerStatus.Idle, TimeSpan.FromSeconds(60), "idle status");
     }
 
     [Fact]
     public async Task QuickPauseResumeNeverLeavesTheWrongStatusOnScreen()
     {
         var runner = _desktop.StartRunner();
-        await WaitUntil(() => runner.LastSyncAt is not null, TimeSpan.FromSeconds(15), "first pass");
+        await WaitUntil(() => runner.LastSyncAt is not null, TimeSpan.FromSeconds(60), "first pass");
         _desktop.Hooks.BeforeTransfer = async (_, _) => await Task.Delay(150); // a slow link: passes take a while to stop
         for (var i = 0; i < 40; i++)
             _desktop.Write($"q/f{i:00}.txt", "file " + i);
         runner.RequestSync("test");
-        await WaitUntil(() => runner.Status == RunnerStatus.Syncing, TimeSpan.FromSeconds(15), "the pass to start");
+        await WaitUntil(() => runner.Status == RunnerStatus.Syncing, TimeSpan.FromSeconds(60), "the pass to start");
 
         // Pause, Resume, Pause in a row: it ends paused, whatever the stopping pass shows meanwhile.
         runner.Pause();
@@ -174,7 +176,7 @@ public class RunnerTests : IAsyncLifetime
 
         // Resume, and Pause + Resume while that pass is still stopping: "Paused" never stays, and the work gets done.
         runner.Resume();
-        await WaitUntil(() => runner.Status == RunnerStatus.Syncing, TimeSpan.FromSeconds(15), "the pass after resume");
+        await WaitUntil(() => runner.Status == RunnerStatus.Syncing, TimeSpan.FromSeconds(60), "the pass after resume");
         var shown = new List<RunnerStatus>();
         runner.Pause();
         runner.StatusChanged += (status, _) =>
@@ -185,8 +187,8 @@ public class RunnerTests : IAsyncLifetime
         runner.Resume();
         _desktop.Hooks.BeforeTransfer = null;
         await WaitUntil(() => _server.Store.ReadManifest(null).Entries.Count(e => e.Path.StartsWith("q/", StringComparison.Ordinal)) == 40,
-            TimeSpan.FromSeconds(30), "all uploads");
-        await WaitUntil(() => runner.Status == RunnerStatus.Idle && runner.StatusText == "Up to date", TimeSpan.FromSeconds(15), "up to date");
+            TimeSpan.FromSeconds(60), "all uploads");
+        await WaitUntil(() => runner.Status == RunnerStatus.Idle && runner.StatusText == "Up to date", TimeSpan.FromSeconds(60), "up to date");
         lock (shown)
             Assert.DoesNotContain(RunnerStatus.Paused, shown);
     }
@@ -212,8 +214,8 @@ public class RunnerTests : IAsyncLifetime
     {
         var desktop = _desktop.StartRunner(tweak: SmallBatches);
         var laptop = _laptop.StartRunner(tweak: SmallBatches);
-        await WaitUntil(() => desktop.HubConnected && laptop.HubConnected, TimeSpan.FromSeconds(15), "hub connections");
-        await WaitUntil(() => desktop.LastSyncAt is not null && laptop.LastSyncAt is not null, TimeSpan.FromSeconds(15), "startup passes");
+        await WaitUntil(() => desktop.HubConnected && laptop.HubConnected, TimeSpan.FromSeconds(60), "hub connections");
+        await WaitUntil(() => desktop.LastSyncAt is not null && laptop.LastSyncAt is not null, TimeSpan.FromSeconds(60), "startup passes");
         return (desktop, laptop);
     }
 
@@ -227,15 +229,18 @@ public class RunnerTests : IAsyncLifetime
         laptop.PeerWaitChanged += w => { if (w is not null) sawWait = w; };
 
         _desktop.Hooks.BeforeTransfer = (_, _) => Task.Delay(80);
+        // Paused while the files are written: on a slow machine the folder watcher would otherwise start a pass
+        // half-way, and that pass would announce only part of the batch.
+        desktop.Pause();
         for (var i = 0; i < 30; i++)
             _desktop.Write($"batch/f{i:00}.txt", "batch " + i);
-        desktop.RequestSync("test");
+        desktop.Resume();
 
         await WaitUntil(() => _server.Store.ReadManifest(null).Entries.Count(e => e.Path.StartsWith("batch/", StringComparison.Ordinal)) == 30,
-            TimeSpan.FromSeconds(20), "desktop to upload the batch");
-        await WaitUntil(() => Enumerable.Range(0, 30).All(i => _laptop.Exists($"batch/f{i:00}.txt")), TimeSpan.FromSeconds(15), "laptop to download it");
+            TimeSpan.FromSeconds(60), "desktop to upload the batch");
+        await WaitUntil(() => Enumerable.Range(0, 30).All(i => _laptop.Exists($"batch/f{i:00}.txt")), TimeSpan.FromSeconds(60), "laptop to download it");
         // The files land on disk before the pass reports, so wait for the report too.
-        await WaitUntil(() => { lock (downloadsPerPass) return downloadsPerPass.Sum() >= 30; }, TimeSpan.FromSeconds(10), "laptop's pass report");
+        await WaitUntil(() => { lock (downloadsPerPass) return downloadsPerPass.Sum() >= 30; }, TimeSpan.FromSeconds(60), "laptop's pass report");
 
         Assert.NotNull(sawWait);
         Assert.Equal("desktop", sawWait!.Device);
@@ -258,21 +263,23 @@ public class RunnerTests : IAsyncLifetime
 
         var big = new byte[900 * 1024];
         Random.Shared.NextBytes(big);
+        desktop.Pause(); // no pass half-way through writing the batch (see above)
         _desktop.WriteBytes("batch/00-big.bin", big);
         for (var i = 1; i <= 10; i++)
             _desktop.Write($"batch/f{i:00}.txt", "batch " + i);
-        desktop.RequestSync("test");
+        desktop.Resume();
 
         await WaitUntil(() => _laptop.Exists("batch/00-big.bin") && Enumerable.Range(1, 10).All(i => _laptop.Exists($"batch/f{i:00}.txt")),
-            TimeSpan.FromSeconds(30), "laptop to download the batch");
-        await WaitUntil(() => { lock (passes) return passes.Sum(p => p.Downloaded) >= 11; }, TimeSpan.FromSeconds(10), "laptop's pass report");
+            TimeSpan.FromSeconds(60), "laptop to download the batch");
+        await WaitUntil(() => { lock (passes) return passes.Sum(p => p.Downloaded) >= 11; }, TimeSpan.FromSeconds(60), "laptop's pass report");
         lock (passes)
             Assert.True(passes.Any(p => p.Downloaded == 11), "in one go, not in pieces: " + string.Join(" | ", passes.Select(p => $"{p.Downloaded} ({p.Reasons})")));
     }
 
     [Fact]
-    public async Task AWatcherEventAfterTheRunnerStoppedDoesNothing()
+    public async Task AWakeThatArrivesAfterTheRunnerIsGoneIsIgnored()
     {
+        // A folder watcher event already on its way when a nest stops used to crash the app.
         var runner = new SyncRunner(_laptop.Engine, new RunnerOptions
         {
             ServerUrl = _laptop.Url, Token = _laptop.Token, DeviceId = "laptop", EnableHub = false, EnableWatcher = false,
@@ -343,20 +350,21 @@ public class RunnerTests : IAsyncLifetime
             if (Interlocked.Increment(ref started) > 8)
                 await gate.Task; // the desktop's connection "hangs" after a few files
         };
+        desktop.Pause(); // no pass half-way through writing the batch (see above)
         for (var i = 0; i < 20; i++)
             _desktop.Write($"slow/f{i:00}.txt", "slow " + i);
-        desktop.RequestSync("test");
+        desktop.Resume();
 
-        await WaitUntil(() => laptop.WaitingFor is not null, TimeSpan.FromSeconds(10), "laptop to start waiting");
+        await WaitUntil(() => laptop.WaitingFor is not null, TimeSpan.FromSeconds(60), "laptop to start waiting");
         // Nothing arrives for 2 s: the laptop stops waiting and fetches what is already there.
-        await WaitUntil(() => laptop.WaitingFor is null, TimeSpan.FromSeconds(10), "quiet timeout");
+        await WaitUntil(() => laptop.WaitingFor is null, TimeSpan.FromSeconds(60), "quiet timeout");
         var onServer = _server.Store.ReadManifest(null).Entries.Count(e => e.Path.StartsWith("slow/", StringComparison.Ordinal));
         Assert.InRange(onServer, 1, 19);
         await WaitUntil(() => Directory.Exists(_laptop.Full("slow")) && Directory.EnumerateFiles(_laptop.Full("slow")).Count() >= onServer,
-            TimeSpan.FromSeconds(10), "laptop to download the files already on the server");
+            TimeSpan.FromSeconds(60), "laptop to download the files already on the server");
 
         gate.SetResult();
-        await WaitUntil(() => Enumerable.Range(0, 20).All(i => _laptop.Exists($"slow/f{i:00}.txt")), TimeSpan.FromSeconds(20), "the rest");
+        await WaitUntil(() => Enumerable.Range(0, 20).All(i => _laptop.Exists($"slow/f{i:00}.txt")), TimeSpan.FromSeconds(60), "the rest");
     }
 
     [Fact]
@@ -365,13 +373,14 @@ public class RunnerTests : IAsyncLifetime
         var (desktop, laptop) = await StartBothAsync();
         var gate = new TaskCompletionSource();
         _desktop.Hooks.BeforeTransfer = (_, _) => gate.Task;
+        desktop.Pause(); // no pass half-way through writing the batch (see above)
         for (var i = 0; i < 12; i++)
             _desktop.Write($"held/f{i:00}.txt", "held " + i);
-        desktop.RequestSync("test");
-        await WaitUntil(() => laptop.WaitingFor is not null, TimeSpan.FromSeconds(10), "laptop to start waiting");
+        desktop.Resume();
+        await WaitUntil(() => laptop.WaitingFor is not null, TimeSpan.FromSeconds(60), "laptop to start waiting");
         laptop.ReleaseHold();
         Assert.Null(laptop.WaitingFor);
         gate.SetResult();
-        await WaitUntil(() => Enumerable.Range(0, 12).All(i => _laptop.Exists($"held/f{i:00}.txt")), TimeSpan.FromSeconds(20), "all files");
+        await WaitUntil(() => Enumerable.Range(0, 12).All(i => _laptop.Exists($"held/f{i:00}.txt")), TimeSpan.FromSeconds(60), "all files");
     }
 }

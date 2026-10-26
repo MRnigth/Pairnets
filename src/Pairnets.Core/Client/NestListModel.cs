@@ -68,11 +68,29 @@ public sealed record NestListModel(IReadOnlyList<NestListRow> Rows, string AllSu
             rows.Add(new NestListRow(nest.NestId ?? "", title, nest.Folder, text, sub, dot, tone, s.IconStatus,
                 percent, nest.NestId == selectedId, nest.DeviceName ?? "", nest.AccountEmail, shared));
         }
-        var syncing = rows.Count(r => r.Icon == RunnerStatus.Syncing);
+        return new NestListModel(rows, AllSubOf(rows), selectedId is null || rows.All(r => !r.Selected), WorstOf(rows.Select(r => r.Icon)));
+    }
+
+    /// <summary>
+    /// "2 nests · 1 syncing" under "All nests": what needs you first, then syncing, then nests that can't be reached, are
+    /// paused or signed out. "all up to date" only when every nest is.
+    /// </summary>
+    private static string AllSubOf(IReadOnlyList<NestListRow> rows)
+    {
+        string Some(int n, string what) => n == rows.Count && n > 1 ? "all " + what : $"{n} {what}";
         var needs = rows.Count(r => r.Icon is RunnerStatus.Error or RunnerStatus.Blocked);
-        var allSub = (rows.Count == 1 ? "1 nest" : $"{rows.Count} nests")
-            + (needs > 0 ? $" · {needs} need{(needs == 1 ? "s" : "")} you" : syncing > 0 ? $" · {syncing} syncing" : " · all up to date");
-        return new NestListModel(rows, allSub, selectedId is null || rows.All(r => !r.Selected), WorstOf(rows.Select(r => r.Icon)));
+        var syncing = rows.Count(r => r.Icon == RunnerStatus.Syncing);
+        var signedOut = rows.Count(r => r.Icon == RunnerStatus.Offline && r.Text == "signed out");
+        var unreachable = rows.Count(r => r.Icon == RunnerStatus.Offline) - signedOut;
+        var paused = rows.Count(r => r.Icon == RunnerStatus.Paused);
+        var state = needs > 0 ? $"{needs} need{(needs == 1 ? "s" : "")} you"
+            : syncing > 0 ? $"{syncing} syncing"
+            : unreachable > 0 ? (unreachable == rows.Count && unreachable > 1 ? "none can be reached" : $"{unreachable} can't be reached")
+            : paused > 0 ? Some(paused, "paused")
+            : signedOut > 0 ? Some(signedOut, "signed out")
+            : rows.All(r => r.Icon == RunnerStatus.Idle) ? "all up to date"
+            : null;
+        return (rows.Count == 1 ? "1 nest" : $"{rows.Count} nests") + (state is null ? "" : " · " + state);
     }
 
     /// <summary>The state that wins on the tray icon: an error, then blocked, then can't reach, then paused, then syncing, then up to date.</summary>
