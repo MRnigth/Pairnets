@@ -1,6 +1,7 @@
 // Reads a shell command the way bash or PowerShell would and lists every part of it that could deploy
-// Pairnets: pushing main or a v* tag (= a release), merging a pull request into main, making a GitHub release,
-// running the release workflow, a Cloudflare deploy, or installing/updating a real server over ssh.
+// Pairnets: pushing main, a beta/* branch or a v* tag (= a release), merging a pull request into main or a beta/*
+// branch, making a GitHub release, running the release workflow, a Cloudflare deploy, or installing/updating a real
+// server over ssh.
 //
 // Pure: no files, no git, no network. deploy-gate.mjs turns what this finds into the commits that need a
 // passed pre-deploy check. When in doubt it says "deploy": a false alarm costs a minute, a missed release

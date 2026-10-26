@@ -89,7 +89,8 @@ public sealed class FakeReleaseFeed : IAsyncDisposable
         return feed;
     }
 
-    private byte[] VersionJson() => Encoding.UTF8.GetBytes($"{{\"version\":\"{Version}\",\"commit\":\"test\"}}\n");
+    // As the release workflow writes it since beta updates: a stable release says so (an unlabelled one past 1.0.61 is refused).
+    private byte[] VersionJson() => Encoding.UTF8.GetBytes($"{{\"version\":\"{Version}\",\"commit\":\"test\",\"channel\":\"stable\",\"build\":1}}\n");
 
     /// <summary>SHA256SUMS.txt as the release workflow writes it: the installer and version.json.</summary>
     private byte[] Sums()

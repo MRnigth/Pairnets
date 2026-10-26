@@ -118,8 +118,8 @@ public partial class SettingsView : UserControl
         AutoServerBox.IsChecked = current.AutoUpdateServer;
         DebugBox.IsChecked = current.DebugMode;
         ServerVersionText.Text = serverVersionText ?? "Your nest: not connected yet";
-        AppVersionText.Text = "Pairnets " + PairnetsInfo.ProductVersion;
-        FooterText.Text = $"Pairnets {PairnetsInfo.ProductVersion} for Windows"
+        AppVersionText.Text = "Pairnets " + PairnetsInfo.DisplayVersion;
+        FooterText.Text = $"Pairnets {PairnetsInfo.DisplayVersion} for Windows"
             + (serverVersionText?.Replace("Nest ", string.Empty, StringComparison.Ordinal) is { Length: > 0 } nestVersion && connected ? " · your nest runs " + nestVersion : string.Empty);
         StayText.Text = $"Your files in {(string.IsNullOrWhiteSpace(current.Folder) ? "your folder" : current.Folder)} stay where they are.";
         FolderBox.TextChanged += (_, _) => StayText.Text = $"Your files in {(string.IsNullOrWhiteSpace(FolderBox.Text) ? "your folder" : FolderBox.Text.Trim())} stay where they are.";
@@ -133,6 +133,7 @@ public partial class SettingsView : UserControl
         DownLimitValue.Text = Number(current.DownloadLimitMBps is > 0 ? current.DownloadLimitMBps.Value : 10);
         ShowVersion(null);
         _applied = current.Clone();
+        ShowBeta(current);
         WireSwitches();
     }
 
@@ -156,6 +157,8 @@ public partial class SettingsView : UserControl
         }
         foreach (var choice in new[] { Par1, Par2, Par4, Par8 })
             choice.Checked += OnSwitchChanged;
+        foreach (var choice in new[] { BetaOff, BetaPublic, BetaDeveloper })
+            choice.Checked += OnBetaChanged;
         // A speed limit's number applies when it is left (or Enter): a number it cannot read waits for Save, which says why.
         foreach (var value in new[] { UpLimitValue, DownLimitValue })
         {
@@ -180,7 +183,8 @@ public partial class SettingsView : UserControl
         && a.DebugMode == (DebugBox.IsChecked == true) && a.EffectiveParallelTransfers == ParallelChoice()
         && (a.UploadLimitMBps is not null) == (UpLimitBox.IsChecked == true) && (a.DownloadLimitMBps is not null) == (DownLimitBox.IsChecked == true)
         && a.ShowInFileManager == (ExplorerBox.IsChecked == true) && a.ExplorerRightClick == (RightClickBox.IsChecked == true)
-        && a.CloudFolder == CloudChoice() && !SettingsSwitches.PlacementChanged(a, new ClientSettings { Placement = _placement });
+        && a.CloudFolder == CloudChoice() && !SettingsSwitches.PlacementChanged(a, new ClientSettings { Placement = _placement })
+        && ReleaseChannel.Normalize(a.BetaChannel) == BetaChoice();
 
     private void ApplySwitches()
     {
@@ -207,6 +211,62 @@ public partial class SettingsView : UserControl
         _applied = next;
         SwitchesChanged?.Invoke(next);
     }
+
+    // ------------------------------------------------------------------ beta updates
+
+    private bool _drawingBeta;
+
+    /// <summary>The Beta updates choice the buttons show (Off is stable).</summary>
+    private string BetaChoice() =>
+        BetaDeveloper.IsChecked == true ? ReleaseChannel.DeveloperBeta : BetaPublic.IsChecked == true ? ReleaseChannel.PublicBeta : ReleaseChannel.Stable;
+
+    /// <summary>
+    /// Shows Beta updates for <paramref name="settings"/>: what the owner's nest said about the beta program, this computer's
+    /// choice, and, after a step down, that it waits for a newer build. Also called when the nest or the account page changed it.
+    /// </summary>
+    public void ShowBeta(ClientSettings settings)
+    {
+        _drawingBeta = true;
+        try
+        {
+            var shown = settings.EffectiveChannel;
+            (shown == ReleaseChannel.DeveloperBeta ? BetaDeveloper : shown == ReleaseChannel.PublicBeta ? BetaPublic : BetaOff).IsChecked = true;
+            BetaPublic.IsEnabled = BetaUpdates.CanChoose(settings, ReleaseChannel.PublicBeta);
+            BetaDeveloper.IsEnabled = BetaUpdates.CanChoose(settings, ReleaseChannel.DeveloperBeta);
+            BetaDeveloper.ToolTip = settings.BetaProgram is { Member: true } && !BetaDeveloper.IsEnabled ? BetaTexts.DeveloperOnlyInvited : null;
+            BetaText.Text = BetaTexts.Explain(settings);
+            BetaJoinButton.Visibility = BetaTexts.NeedsJoin(settings) ? Visibility.Visible : Visibility.Collapsed;
+            var beta = PairnetsInfo.ThisRelease.IsBeta || ReleaseChannel.IsBeta(shown);
+            BetaFeedbackButton.Visibility = BetaFeedbackHint.Visibility = beta ? Visibility.Visible : Visibility.Collapsed;
+            UpdateCadenceText.Text = (ReleaseChannel.IsBeta(shown) ? "Looks every 2 hours on a beta." : "Looks once a day.") + " You choose when to install.";
+            var waiting = _updates?.Waiting ?? (_updates?.HeldBackForData == true ? UpdateTexts.HeldBackForData : null);
+            BetaWaiting.Text = waiting ?? string.Empty;
+            BetaWaiting.Visibility = waiting is null ? Visibility.Collapsed : Visibility.Visible;
+            if (_applied is not null)
+            {
+                _applied.BetaChannel = settings.BetaChannel;
+                _applied.BetaChannelAt = settings.BetaChannelAt;
+                _applied.BetaProgram = settings.BetaProgram;
+            }
+        }
+        finally
+        {
+            _drawingBeta = false;
+        }
+    }
+
+    private void OnBetaChanged(object sender, RoutedEventArgs e)
+    {
+        if (_drawingBeta || !IsInitialized || _applied is null || ReleaseChannel.Normalize(_applied.BetaChannel) == BetaChoice())
+            return;
+        var next = _applied.Clone();
+        BetaUpdates.Choose(next, BetaChoice(), DateTimeOffset.UtcNow);
+        _applied = next;
+        SwitchesChanged?.Invoke(next);
+        ShowBeta(next);
+    }
+
+    private void OnBetaJoin(object sender, RoutedEventArgs e) => OpenLinkRequested?.Invoke(PairnetsLinks.BetaProgram);
 
     private static bool Same(ClientSettings a, ClientSettings b) =>
         a.StartWithWindows == b.StartWithWindows && a.CheckForUpdates == b.CheckForUpdates && a.WaitForPeerBatches == b.WaitForPeerBatches
@@ -235,7 +295,7 @@ public partial class SettingsView : UserControl
     /// <summary>"You have 1.0.52 · checked 19:41", or the outcome of "Check now" ("Up to date · checked 19:41").</summary>
     public void ShowVersion(string? outcome)
     {
-        var text = outcome is { Length: > 0 } ? char.ToUpperInvariant(outcome[0]) + outcome[1..] : "You have " + PairnetsInfo.ProductVersion;
+        var text = outcome is { Length: > 0 } ? char.ToUpperInvariant(outcome[0]) + outcome[1..] : "You have " + PairnetsInfo.DisplayVersion;
         if (_updates?.LastChecked is { } at)
             text += " · checked " + at.ToLocalTime().ToString("HH:mm", CultureInfo.InvariantCulture);
         VersionText.Text = text;
@@ -250,8 +310,9 @@ public partial class SettingsView : UserControl
         ShowVersion("checking…");
         var found = await _updates.CheckNowAsync(CancellationToken.None);
         ShowVersion(found is null ? "up to date"
-            : found.Signed ? $"version {found.Version} is available"
-            : $"version {found.Version} isn't signed by Pairnets, so it won't be installed");
+            : found.Signed ? $"version {found.Display} is available"
+            : $"version {found.Display} isn't signed by Pairnets, so it won't be installed");
+        ShowBeta(_applied ?? _original);
         CheckNowButton.IsEnabled = true;
     }
 

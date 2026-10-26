@@ -51,8 +51,14 @@ public static class SettingsSwitches
         next.ParallelTransfers = from.ParallelTransfers;
         next.UploadLimitMBps = Limit(from.UploadLimitMBps);
         next.DownloadLimitMBps = Limit(from.DownloadLimitMBps);
+        next.BetaChannel = from.BetaChannel;
+        next.BetaChannelAt = from.BetaChannelAt;
         return next;
     }
+
+    /// <summary>True when the Beta updates choice differs (the app looks for that channel's builds and tells its own nests).</summary>
+    public static bool BetaChanged(ClientSettings before, ClientSettings after) =>
+        before.BetaChannel != after.BetaChannel || before.BetaChannelAt != after.BetaChannelAt;
 
     /// <summary>
     /// <paramref name="all"/> after Save on one nest's Settings page (or a new sign-in), <paramref name="saved"/>: the

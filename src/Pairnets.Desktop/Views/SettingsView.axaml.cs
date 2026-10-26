@@ -126,9 +126,9 @@ public partial class SettingsView : UserControl
         MapSpeedBox.IsChecked = current.ShowMapSpeed;
         AutoServerBox.IsChecked = current.AutoUpdateServer;
         DebugBox.IsChecked = current.DebugMode;
-        ServerVersionText.Text = $"Pairnets {PairnetsInfo.ProductVersion} for {SystemName()}"
+        ServerVersionText.Text = $"Pairnets {PairnetsInfo.DisplayVersion} for {SystemName()}"
             + (serverVersionText is { } v ? " · your nest runs " + (v.StartsWith("Nest ", StringComparison.Ordinal) ? v["Nest ".Length..] : v) : " · not connected to your nest yet");
-        AppVersionText.Text = "Pairnets " + PairnetsInfo.ProductVersion;
+        AppVersionText.Text = "Pairnets " + PairnetsInfo.DisplayVersion;
         StartOverNote.Text = $"Your files in {(string.IsNullOrWhiteSpace(current.Folder) ? "your sync folder" : current.Folder)} stay where they are.";
         (current.EffectiveParallelTransfers switch { 1 => Par1, 2 => Par2, 8 => Par8, _ => Par4 }).IsChecked = true;
         UpLimitBox.IsChecked = current.UploadLimitMBps is > 0;
@@ -146,6 +146,7 @@ public partial class SettingsView : UserControl
         ShowIgnoreCount();
         _applied = current.Clone();
         _applied.StartWithWindows = autoStart;
+        ShowBeta(current);
         WireSwitches();
     }
 
@@ -166,6 +167,8 @@ public partial class SettingsView : UserControl
             box.IsCheckedChanged += OnSwitchChanged;
         foreach (var par in new[] { Par1, Par2, Par4, Par8 })
             par.IsCheckedChanged += OnParChanged;
+        foreach (var choice in new[] { BetaOff, BetaPublic, BetaDeveloper })
+            choice.IsCheckedChanged += OnBetaChanged;
         // A speed limit's number applies when it is left (or Enter): a number it cannot read waits for Save.
         foreach (var value in new[] { UpLimitValue, DownLimitValue })
         {
@@ -192,7 +195,65 @@ public partial class SettingsView : UserControl
         && a.DebugMode == (DebugBox.IsChecked == true) && a.EffectiveParallelTransfers == ParallelChoice()
         && (a.UploadLimitMBps is not null) == (UpLimitBox.IsChecked == true) && (a.DownloadLimitMBps is not null) == (DownLimitBox.IsChecked == true)
         && a.ShowInFileManager == (FileManagerBox.IsChecked == true) && a.ExplorerRightClick == (RightClickBox.IsChecked == true)
-        && a.CloudFolder == CloudChoice(a) && !SettingsSwitches.PlacementChanged(a, new ClientSettings { Placement = _placement });
+        && a.CloudFolder == CloudChoice(a) && !SettingsSwitches.PlacementChanged(a, new ClientSettings { Placement = _placement })
+        && ReleaseChannel.Normalize(a.BetaChannel) == BetaChoice();
+
+    // ------------------------------------------------------------------ beta updates
+
+    private bool _drawingBeta;
+
+    /// <summary>The Beta updates choice the buttons show (Off is stable).</summary>
+    private string BetaChoice() =>
+        BetaDeveloper.IsChecked == true ? ReleaseChannel.DeveloperBeta : BetaPublic.IsChecked == true ? ReleaseChannel.PublicBeta : ReleaseChannel.Stable;
+
+    /// <summary>
+    /// Shows Beta updates for <paramref name="settings"/>: what the owner's nest said about the beta program, this computer's
+    /// choice, and, after a step down, that it waits for a newer build. Also called when the nest or the account page changed it.
+    /// </summary>
+    public void ShowBeta(ClientSettings settings)
+    {
+        _drawingBeta = true;
+        try
+        {
+            var shown = settings.EffectiveChannel;
+            (shown == ReleaseChannel.DeveloperBeta ? BetaDeveloper : shown == ReleaseChannel.PublicBeta ? BetaPublic : BetaOff).IsChecked = true;
+            BetaPublic.IsEnabled = BetaUpdates.CanChoose(settings, ReleaseChannel.PublicBeta);
+            BetaDeveloper.IsEnabled = BetaUpdates.CanChoose(settings, ReleaseChannel.DeveloperBeta);
+            ToolTip.SetTip(BetaDeveloper, settings.BetaProgram is { Member: true } && !BetaDeveloper.IsEnabled ? BetaTexts.DeveloperOnlyInvited : null);
+            BetaText.Text = BetaTexts.Explain(settings);
+            BetaJoinButton.IsVisible = BetaTexts.NeedsJoin(settings);
+            var beta = PairnetsInfo.ThisRelease.IsBeta || ReleaseChannel.IsBeta(shown);
+            BetaFeedbackButton.IsVisible = BetaFeedbackHint.IsVisible = beta;
+            UpdateCadenceText.Text = (ReleaseChannel.IsBeta(shown) ? "Looks when Pairnets starts and every 2 hours on a beta." : "Looks when Pairnets starts and once a day.")
+                + " You choose when to install.";
+            var waiting = _updates?.Waiting ?? (_updates?.HeldBackForData == true ? UpdateTexts.HeldBackForData : null);
+            BetaWaiting.Text = waiting ?? string.Empty;
+            BetaWaiting.IsVisible = waiting is not null;
+            if (_applied is not null)
+            {
+                _applied.BetaChannel = settings.BetaChannel;
+                _applied.BetaChannelAt = settings.BetaChannelAt;
+                _applied.BetaProgram = settings.BetaProgram;
+            }
+        }
+        finally
+        {
+            _drawingBeta = false;
+        }
+    }
+
+    private void OnBetaChanged(object? sender, RoutedEventArgs e)
+    {
+        if (_drawingBeta || sender is not RadioButton { IsChecked: true } || _applied is null || ReleaseChannel.Normalize(_applied.BetaChannel) == BetaChoice())
+            return;
+        var next = _applied.Clone();
+        BetaUpdates.Choose(next, BetaChoice(), DateTimeOffset.UtcNow);
+        _applied = next;
+        SwitchesChanged?.Invoke(next);
+        ShowBeta(next);
+    }
+
+    private void OnBetaJoin(object? sender, RoutedEventArgs e) => OpenLinkRequested?.Invoke(PairnetsLinks.BetaProgram);
 
     private void ApplySwitches()
     {
@@ -462,8 +523,10 @@ public partial class SettingsView : UserControl
         ShowVersion("checking…");
         var found = await _updates.CheckNowAsync(CancellationToken.None);
         ShowVersion(found is null ? "up to date"
-            : found.Signed ? $"version {found.Version} is available"
-            : $"version {found.Version} isn't signed by Pairnets, so it won't be installed");
+            : found.Signed ? $"version {found.Display} is available"
+            : $"version {found.Display} isn't signed by Pairnets, so it won't be installed");
+        if (_applied is not null)
+            ShowBeta(_applied);
         CheckNowButton.IsEnabled = true;
     }
 

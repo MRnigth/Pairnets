@@ -52,7 +52,14 @@
           <!-- Top: logo, fold, account -->
           <Grid ColumnDefinitions="Auto,*,Auto,Auto" Margin="4,0,0,0">
             <Image x:Name="AppIcon" Source="avares://Pairnets/Assets/pairnets-icon-256.png" Width="30" Height="30" Margin="0,0,8,0" />
-            <TextBlock Grid.Column="1" Text="Pairnets" FontSize="16" FontWeight="ExtraBold" VerticalAlignment="Center" />
+            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Spacing="8">
+              <TextBlock Text="Pairnets" FontSize="16" FontWeight="ExtraBold" VerticalAlignment="Center" />
+              <!-- On a beta build: which beta (shown from code) -->
+              <Border x:Name="BetaTag" Padding="8,2" CornerRadius="10" VerticalAlignment="Center" IsVisible="False"
+                      Background="{DynamicResource T.AccentSoft}">
+                <TextBlock x:Name="BetaTagText" FontSize="11.5" FontWeight="SemiBold" Foreground="{DynamicResource T.AccentInk}" />
+              </Border>
+            </StackPanel>
             <Button x:Name="FoldButton" Grid.Column="2" Classes="RoundIconButton" Width="32" Height="32" Margin="0,0,8,0"
                     ToolTip.Tip="Fold into the dock" AutomationProperties.Name="Fold into the dock" Click="OnFoldSide">
               <v:LineIcon Classes="icon" Width="16" Height="16" StrokeThickness="2.2" Stroke="{DynamicResource T.Muted}" Data="{StaticResource I.FoldLeft}" />

@@ -3,6 +3,7 @@ using System.Net.Http.Headers;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 
 namespace Pairnets.Core.Client;
@@ -109,7 +110,10 @@ public static class BugReportSender
         if (cleanNote is { Length: > MaxNote })
             cleanNote = cleanNote[..MaxNote];
         var system = $"{RuntimeInformation.OSDescription} ({RuntimeInformation.OSArchitecture}), .NET {Environment.Version}";
-        return JsonSerializer.Serialize(new SentReport(Cut(app, 40), PairnetsInfo.ProductVersion, Cut(system, 200), prepared, cleanNote), Json);
+        // A beta build says which beta and build, so beta feedback stands out on the reports page; a stable one sends neither.
+        var beta = PairnetsInfo.ThisRelease.IsBeta;
+        return JsonSerializer.Serialize(new SentReport(Cut(app, 40), PairnetsInfo.ProductVersion, Cut(system, 200), prepared, cleanNote,
+            beta ? PairnetsInfo.Channel : null, beta ? PairnetsInfo.Build : null), Json);
     }
 
     private static string Cut(string text, int max) => text.Length <= max ? text : text[..max];
@@ -143,7 +147,9 @@ public static class BugReportSender
         return null;
     }
 
-    private sealed record SentReport(string App, string Version, string System, string Report, string? Note);
+    private sealed record SentReport(string App, string Version, string System, string Report, string? Note,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Channel = null,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? Build = null);
 }
 
 /// <summary>The words of "Send bug report" in "Report a bug" and its send window, the same in both apps.</summary>
@@ -155,10 +161,11 @@ public static class SendReportText
     public const string SentTitle = "Thank you. The bug report was sent.";
     public const string SentText = "We'll look at it. Only the cleaned report and your note went out.";
 
-    public const string Title = "Send bug report";
-    public const string Heading = "Send this bug report to us?";
+    // A beta build sends the same report as beta feedback: it carries the channel and build (see BugReport), so it stands out.
+    public static string Title => PairnetsInfo.ThisRelease.IsBeta ? "Send beta feedback" : "Send bug report";
+    public static string Heading => PairnetsInfo.ThisRelease.IsBeta ? "Send this beta feedback to us?" : "Send this bug report to us?";
     public const string Explanation = "This is exactly what will be sent to Pairnets. Your file, folder and computer names, web addresses and emails were taken out.";
-    public const string NoteLabel = "What went wrong? (optional)";
+    public static string NoteLabel => PairnetsInfo.ThisRelease.IsBeta ? "What did you notice? (optional)" : "What went wrong? (optional)";
     public const string Promise = "Only this and your note are sent. No files, token, email or account. Your IP address is not stored.";
 
     /// <summary>The green chip at the top of "Report a bug": what was sent so far.</summary>

@@ -104,7 +104,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
         _fileLog.Minimum = _settings.DebugMode ? LogLevel.Debug : LogLevel.Information; // Debug mode: more detail in the log
         _refresh = new DispatcherTimer(TimeSpan.FromMilliseconds(250), DispatcherPriority.Background, (_, _) => RefreshIfDirty());
         _package = UpdatePackage.ForThisComputer(installedCopy: false); // (no installer looks after the Mac and Linux app)
-        _updates = new UpdateService(_env.CreateUpdateChecker(), PairnetsInfo.ProductVersion, _package.Asset);
+        _updates = new UpdateService(_env.CreateUpdateChecker(), PairnetsInfo.ThisRelease, _package.Asset);
         _updates.UpdateAvailable += u =>
         {
             _updateDismissed = false;
@@ -112,7 +112,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
             _dirty = true;
             if (!u.Signed)
                 return; // (the banner says it was not installed; no "update available" notice for it)
-            Notify("update:" + u.Version, "Pairnets update available", $"Version {u.Version} is ready. Open Pairnets to update.");
+            Notify("update:" + u.Display, "Pairnets update available", $"Version {u.Display} is ready. Open Pairnets to update.");
         };
     }
 
@@ -171,6 +171,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
         }).GetTask(), _env.ActivationPipeName);
         CreateTray();
         _refresh.Start();
+        _updates.SetChannel(_settings.EffectiveChannel);
         _updates.SetEnabled(_settings.CheckForUpdates);
         // Pairnets had to close after an error since it last ran: say so once (the card is in "Report a bug").
         if (CrashCards.TakeNewCloses(_env.CrashesDir).Count > 0)
@@ -201,7 +202,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
         {
             // Updated itself from the window's "Update now": open the window again, with a note that it worked.
             ShowMainWindow();
-            Notify("updated", UpdateTexts.UpdatedTitle, UpdateTexts.Updated(PairnetsInfo.ProductVersion));
+            Notify("updated", UpdateTexts.UpdatedTitle, UpdateTexts.Updated(PairnetsInfo.DisplayVersion));
         }
         else if (!args.Contains(AppActivation.AutoStartArgument))
             ShowMainWindow();
@@ -406,6 +407,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
             $"{w.Path}: {w.Message}", run);
         session.PassCompleted += r => OnPassCompleted(run, r);
         session.ServerInfoChanged += info => Dispatcher.UIThread.Post(() => OnServerInfo(run, session, info));
+        session.BetaHeard += info => Dispatcher.UIThread.Post(() => OnBetaHeard(session, info));
         session.AccountChanged += (next, token) => Dispatcher.UIThread.Post(() => OnAccountChanged(run, session, next, token));
         session.Files.Opened.NestFullWhileSaving += path => Dispatcher.UIThread.Post(() =>
         {
@@ -445,6 +447,51 @@ public sealed class DesktopController : ITrayActions, IDisposable
         }
         else if (r.Outcome == PassOutcome.AuthFailed)
             Notify("auth", PrefixOf(run) + "Sign in to your nest", "Your nest did not accept this computer's sign-in. Open Pairnets and sign in again to keep syncing.", run);
+    }
+
+    // ------------------------------------------------------------------ beta updates
+
+    /// <summary>The owner's own nest, reached with this computer's own key: the only kind that decides Beta updates.</summary>
+    private static bool OwnNest(ClientSession session) => session.Engine.Access.IsOwner && session.Settings.HasOwnKey;
+
+    /// <summary>
+    /// A nest said what it knows about the beta program (every few minutes): take in a choice made on the account page, or
+    /// send this computer's newer one. A nest that says nothing changes nothing (<see cref="BetaUpdates.Heard"/>).
+    /// </summary>
+    private void OnBetaHeard(ClientSession session, BetaInfo? info)
+    {
+        var next = _settings.Clone();
+        var (changed, sendOurs) = BetaUpdates.Heard(next, info);
+        if (changed)
+            UseBetaSettings(next);
+        if (sendOurs && OwnNest(session))
+            _ = SendBetaAsync(session);
+    }
+
+    private async Task SendBetaAsync(ClientSession session)
+    {
+        var next = _settings.Clone();
+        if (await BetaUpdates.SendAsync(next, session.Api, CancellationToken.None))
+            Dispatcher.UIThread.Post(() =>
+            {
+                var current = _settings.Clone();
+                current.BetaChannel = next.BetaChannel;
+                current.BetaChannelAt = next.BetaChannelAt;
+                current.BetaProgram = next.BetaProgram;
+                UseBetaSettings(current);
+            });
+    }
+
+    /// <summary>Saves new Beta updates values, follows the channel they give, and shows them on an open Settings page.</summary>
+    private void UseBetaSettings(ClientSettings next)
+    {
+        _settings = next;
+        SaveSettings();
+        foreach (var run in _runs)
+            run.Settings = _settings.ForNest(run.Id) ?? run.Settings;
+        _updates.SetChannel(_settings.EffectiveChannel);
+        _settingsView?.ShowBeta(_settings);
+        _dirty = true;
     }
 
     // ------------------------------------------------------------------ the file manager
@@ -1531,15 +1578,15 @@ public sealed class DesktopController : ITrayActions, IDisposable
         if (_updates.Available is not { } update || _updateDismissed)
             window.ShowUpdate(null, string.Empty, string.Empty);
         else if (!update.Signed)
-            window.ShowUpdate($"Pairnets {update.Version} could not be installed", UpdateProblem.NotSigned.Reason, UpdateProblem.NotSigned.ButtonText);
+            window.ShowUpdate($"Pairnets {update.Display} could not be installed", UpdateProblem.NotSigned.Reason, UpdateProblem.NotSigned.ButtonText);
         else if (_updateError is { } problem)
-            window.ShowUpdate($"Pairnets {update.Version} could not be installed", problem.Reason, problem.ButtonText);
+            window.ShowUpdate($"Pairnets {update.Display} could not be installed", problem.Reason, problem.ButtonText);
         else if (_updateProgress is { } p)
-            window.ShowUpdate($"Downloading Pairnets {update.Version}…", "Syncing continues while it downloads.", UpdateTexts.UpdateNow, p, busy: true);
+            window.ShowUpdate($"Downloading Pairnets {update.Display}…", "Syncing continues while it downloads.", UpdateTexts.UpdateNow, p, busy: true);
         else if (_package.Method == UpdateMethod.ByHand)
-            window.ShowUpdate($"Pairnets {update.Version} is available", UpdateTexts.ByHand(PairnetsInfo.ProductVersion), UpdateTexts.OpenDownloadPage);
+            window.ShowUpdate(UpdateTexts.Available(update), UpdateTexts.ByHand(PairnetsInfo.DisplayVersion), UpdateTexts.OpenDownloadPage);
         else
-            window.ShowUpdate($"Pairnets {update.Version} is available", UpdateTexts.Ready(PairnetsInfo.ProductVersion), UpdateTexts.UpdateNow);
+            window.ShowUpdate(UpdateTexts.Available(update), UpdateTexts.Ready(PairnetsInfo.DisplayVersion), UpdateTexts.UpdateNow);
     }
 
     /// <summary>
@@ -1775,6 +1822,12 @@ public sealed class DesktopController : ITrayActions, IDisposable
             SetAutoStart(next.StartWithWindows);
         if (before.CheckForUpdates != next.CheckForUpdates)
             _updates.SetEnabled(next.CheckForUpdates);
+        if (SettingsSwitches.BetaChanged(before, next))
+        {
+            _updates.SetChannel(next.EffectiveChannel);
+            foreach (var session in _runs.Select(r => r.Session).OfType<ClientSession>().Where(OwnNest))
+                _ = SendBetaAsync(session);
+        }
         foreach (var run in _runs)
             run.Settings = _settings.ForNest(run.Id) ?? run.Settings;
         if (_runs.Any(r => r.Session is not null))

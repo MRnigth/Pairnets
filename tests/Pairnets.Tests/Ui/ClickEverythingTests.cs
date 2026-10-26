@@ -893,6 +893,9 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
         // "Before big deletes" is the nest's: the choice pressed is the one the nest now has.
         s.Expect["OnBigDeletesChosen"] = That(() => view.BigDeletesShown == (Screen.Named<RadioButton>(view, "BigAskWhere").IsChecked == true ? BigDeleteModes.AskWhereDeleted
             : Screen.Named<RadioButton>(view, "BigNever").IsChecked == true ? BigDeleteModes.Never : BigDeleteModes.AskEverywhere), "the nest's choice change at once");
+        // Beta updates: the account has not joined, so only Off can be picked and the account page is one press away.
+        s.Expect["OnBetaChanged"] = That(() => view.SwitchesApplied, "the beta choice apply at once");
+        s.Expect["OnBetaJoin"] = That(() => s.Opened.SequenceEqual([PairnetsLinks.BetaProgram]), "the beta program on the account page open in the browser");
         s.Expect["OnReset"] = Raised(s, "reset");
         s.Expect["OnAddNest"] = Raised(s, "add-nest");
         s.Expect["OnInviteFriend"] = Raised(s, "invite-friend");

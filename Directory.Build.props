@@ -12,5 +12,12 @@
     <InvariantGlobalization Condition="'$(InvariantGlobalization)' == ''">false</InvariantGlobalization>
     <!-- No telemetry, no source-link network fetches at build time. -->
     <EnableSourceLink>false</EnableSourceLink>
+    <!-- The channel this build is for and its release run (release.yml passes both); a local build is stable, build 0. -->
+    <PairnetsChannel Condition="'$(PairnetsChannel)' == ''">stable</PairnetsChannel>
+    <PairnetsBuild Condition="'$(PairnetsBuild)' == ''">0</PairnetsBuild>
   </PropertyGroup>
+  <ItemGroup>
+    <AssemblyMetadata Include="PairnetsChannel" Value="$(PairnetsChannel)" />
+    <AssemblyMetadata Include="PairnetsBuild" Value="$(PairnetsBuild)" />
+  </ItemGroup>
 </Project>

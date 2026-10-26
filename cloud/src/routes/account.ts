@@ -26,6 +26,7 @@ import { deleteAccountRows } from "../accounts";
 import { inviteLink, peopleOf, sharedNestsOf } from "./friends";
 import { linksOfAccount } from "./links";
 import { serversOf } from "./servers";
+import { betaRow, betaView } from "./beta";
 
 /** Nests per account, both kinds together (pending ones count), unless wrangler.toml's MAX_NESTS_PER_ACCOUNT says otherwise. */
 export const MAX_NESTS_PER_ACCOUNT = 4;
@@ -70,6 +71,8 @@ export interface NestRow {
   mode: "url" | "relay";
   tunnel_id: string | null;
   routed_version: number | null;
+  /** The owner's beta rev this nest was last told (routes/beta.ts). */
+  beta_rev_pushed: number;
 }
 
 export function isOnline(n: NestRow, now: number): boolean {
@@ -210,6 +213,7 @@ export async function accountPageRoute(ctx: Ctx): Promise<Response> {
         folders: parseFolders(x.member.folders),
       })),
       invite,
+      beta: betaView(ctx, await betaRow(ctx, s.accountId)),
       sessions: sessions.map((r) => ({
         id: r.id,
         kind: r.kind,

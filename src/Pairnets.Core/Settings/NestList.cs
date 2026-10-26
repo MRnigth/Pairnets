@@ -1,4 +1,6 @@
 using System.Security.Cryptography;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Pairnets.Core.Client;
 using Pairnets.Core.Sync;
 
@@ -53,8 +55,13 @@ public sealed class NestProfile
         copy.ExtraIgnore = [.. ExtraIgnore];
         copy.Placement = new Dictionary<string, FilePlacement>(Placement ?? [], StringComparer.Ordinal);
         copy.SharedFolders = SharedFolders is null ? null : [.. SharedFolders];
+        copy.Unknown = Unknown is null ? null : new Dictionary<string, JsonElement>(Unknown);
         return copy;
     }
+
+    /// <summary>Fields a newer Pairnets wrote that this one does not know: kept as they are, so going back to it loses nothing.</summary>
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement>? Unknown { get; set; }
 }
 
 public sealed partial class ClientSettings

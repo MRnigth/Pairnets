@@ -29,8 +29,8 @@ describe("the account's servers", () => {
         serverVersion: "1.0.48",
         freeBytes: 123456789,
         devices: [
-          { id: expect.any(String), name: "Laptop", system: "Windows 11", createdAt: expect.any(String), lastSeen: null, access: "owner", personId: null },
-          { id: expect.any(String), name: "Desktop", system: "Windows 11", createdAt: expect.any(String), lastSeen: null, access: "owner", personId: null },
+          { id: expect.any(String), name: "Laptop", system: "Windows 11", createdAt: expect.any(String), lastSeen: null, access: "owner", personId: null, beta: null, app: null },
+          { id: expect.any(String), name: "Desktop", system: "Windows 11", createdAt: expect.any(String), lastSeen: null, access: "owner", personId: null, beta: null, app: null },
         ],
         lastSeenAt: "2026-10-09T00:00:12Z",
         friends: true,

@@ -2,7 +2,7 @@
 
 import { assetUrl } from "./assets";
 import { escapeHtml as e } from "./http";
-import { displayUserCode, emailName, iso, MAX_USERNAME } from "./formats";
+import { BETA_MIN_APP, displayUserCode, emailName, iso, MAX_USERNAME } from "./formats";
 
 interface LayoutOptions {
   scripts?: string[];
@@ -116,6 +116,27 @@ export interface AccountView {
   shared?: SharedView[];
   /** /account?invite=nst_…&folders=…&access=…: that nest's invite form is drawn open and filled in (the apps hand over to it). */
   invite?: { nestId: string; folders: string[] | null; access: "view" | "edit" } | null;
+  /** The beta program (routes/beta.ts); absent: the section is drawn as for someone who has not joined. */
+  beta?: BetaPageView;
+}
+
+/** The account's place in the beta program, as GET /v1/beta answers it (joinedAt in seconds here). */
+export interface BetaPageView {
+  member: boolean;
+  joinedAt: number | null;
+  termsVersion: string | null;
+  termsCurrent: string;
+  /** The approved betas the computers may use (none while removed or on older terms). */
+  channels: ("public-beta" | "developer-beta")[];
+  /** The betas signed up for, and those of them still waiting for approval. */
+  requested: ("public-beta" | "developer-beta")[];
+  pending: ("public-beta" | "developer-beta")[];
+  /** Removed by an admin; blockedSignup: the betas signed up for again since then (waiting for them). */
+  blocked: boolean;
+  blockedSignup: ("public-beta" | "developer-beta")[];
+  /** Sign-ups are approved at once (BETA_AUTO_APPROVE). */
+  autoApprove: boolean;
+  needsNewTerms: boolean;
 }
 
 /** A relayed server; the page's script fills in online, version, free space and computers from GET /v1/servers. */
@@ -323,6 +344,102 @@ ${rows}
 </section>`;
 }
 
+/** "26 October 2026" for a terms version "2026-10-26". */
+function termsDay(version: string): string {
+  const d = new Date(`${version}T00:00:00Z`);
+  return Number.isNaN(d.getTime()) ? version : d.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
+}
+
+/** "26.10.2026". */
+function shortDay(sec: number): string {
+  const d = new Date(sec * 1000);
+  const two = (n: number) => String(n).padStart(2, "0");
+  return `${two(d.getUTCDate())}.${two(d.getUTCMonth() + 1)}.${d.getUTCFullYear()}`;
+}
+
+const BETA_WORDS = { "public-beta": "Public beta", "developer-beta": "Developer beta" } as const;
+
+/** "Public beta and Developer beta". */
+function betaList(list: BetaPageView["channels"]): string {
+  return list.map((c) => BETA_WORDS[c]).join(" and ");
+}
+
+/** The terms tick box and the button that sends it; `asked` (no tick boxes for the betas) names what it signs up for. */
+function betaTerms(b: BetaPageView, button: string, asked: BetaPageView["channels"] | null = null): string {
+  return `<div class="terms"><label class="choice"><input type="checkbox" id="beta-terms" data-field="beta-terms"><span>I agree to the <a href="/beta-terms">Pairnets beta terms</a>. Beta versions can have bugs, so keep a copy of anything you can't lose.</span></label></div>
+<button type="button" class="join" data-action="beta-join" data-terms-version="${e(b.termsCurrent)}"${asked ? ` data-asked="${e(asked.join(" "))}"` : ""} disabled>${button}</button>`;
+}
+
+const BETA_STATUS = `<p class="status" data-field="beta-status" role="status" hidden></p>`;
+
+/** The sign-up form: which betas (Public beta ticked), the terms, Send sign-up, and who sees what. */
+function betaSignup(b: BetaPageView): string {
+  const pick = (c: keyof typeof BETA_WORDS, checked: boolean, said: string) =>
+    `<label class="choice"><input type="checkbox" data-field="beta-pick" value="${c}"${checked ? " checked" : ""}><span><b>${BETA_WORDS[c]}</b><span class="muted">${said}</span></span></label>`;
+  return `<form class="signup" data-field="beta-form">
+<fieldset>
+<legend>Sign me up for</legend>
+${pick("public-beta", true, "Versions that are nearly ready, a few days before everyone else.")}
+${pick("developer-beta", false, "The newest work, often the same day. Expect rough edges.")}
+</fieldset>
+${betaTerms(b, "Send sign-up")}
+<p class="muted signup-note">${b.autoApprove ? "Sign-ups are approved at once." : "Sign-ups are looked at by hand."} The maker of Pairnets can see who is in the beta and which of their computers use it.</p>
+${BETA_STATUS}
+</form>`;
+}
+
+/**
+ * The beta program. Not signed up: the sign-up form. Signed up: what was asked for and approved, one row per own computer
+ * (account.js fills them from GET /v1/servers) with its choice, and Leave. New terms since: agree to them first. Removed
+ * by an admin: says so, and a new sign-up waits for approval.
+ */
+function betaSection(b: BetaPageView): string {
+  const channels = e(b.channels.join(" "));
+  if (!b.member) {
+    return `<section class="card" id="beta" data-channels="">
+<h2>Beta program</h2>
+<p>Try new versions of Pairnets before everyone else, on the computers you choose. Sign up here once, then turn on <strong>Beta updates</strong> in Settings on each computer.</p>
+${betaSignup(b)}
+</section>`;
+  }
+  const leave = `<div class="leave"><button type="button" class="danger" data-action="beta-leave">Leave the beta program</button>
+<p class="muted">Every computer goes back to Off. Each keeps its beta until the next normal version is newer, then moves onto it. Nothing is removed.</p></div>`;
+  if (b.blocked) {
+    return `<section class="card" id="beta" data-joined data-blocked data-channels="">
+<h2>Beta program</h2>
+<p>You were removed from the beta program. A new sign-up waits for approval.</p>
+${b.blockedSignup.length ? `<p class="muted">Your sign-up for ${betaList(b.blockedSignup)} is waiting for approval.</p>` : betaSignup(b)}
+</section>`;
+  }
+  const head = `<h2>Beta program <span class="pill online">signed up</span></h2>`;
+  const attrs = `id="beta" data-joined data-channels="${channels}" data-min-app="${e(BETA_MIN_APP)}"`;
+  if (b.needsNewTerms) {
+    return `<section class="card" ${attrs}>
+${head}
+<p class="muted">The beta terms changed on ${e(termsDay(b.termsCurrent))}${b.termsVersion ? ` (you agreed to the ones of ${e(termsDay(b.termsVersion))})` : ""}. Agree to the new terms to keep getting beta updates; until then your computers get only normal versions.</p>
+${betaTerms(b, "Agree to the new beta terms", b.requested.length ? b.requested : ["public-beta"])}
+${BETA_STATUS}
+${leave}
+</section>`;
+  }
+  const approvedAll = b.pending.length === 0 ? (b.autoApprove ? ", approved at once" : ", approved") : "";
+  const waiting = b.pending.map((c) => `<p class="notice" data-field="beta-waiting">${BETA_WORDS[c]}: waiting for approval.</p>`).join("\n");
+  const other = (["public-beta", "developer-beta"] as const).find((c) => !b.requested.includes(c));
+  const more =
+    other && b.requested.length === 1
+      ? `<p><button type="button" class="secondary" data-action="beta-add" data-channel="${other}" data-terms-version="${e(b.termsCurrent)}">Also sign up for ${BETA_WORDS[other]}</button></p>`
+      : "";
+  return `<section class="card" ${attrs}>
+${head}
+<p class="muted">Signed up on ${b.joinedAt !== null ? e(shortDay(b.joinedAt)) : ""} for ${betaList(b.requested)}${approvedAll}. Beta terms of ${e(termsDay(b.termsVersion ?? b.termsCurrent))}. Each computer chooses in its own Settings › Updates › Beta updates; you can change it here too.</p>
+${waiting}
+${more}
+<ul class="list beta-list" id="beta-list"><li class="muted">Loading...</li></ul>
+${BETA_STATUS}
+${leave}
+</section>`;
+}
+
 export function accountPage(v: AccountView): string {
   const servers = v.servers.length
     ? v.servers
@@ -392,6 +509,7 @@ ${
 }
 <p class="muted">To add a nest: on the Linux computer that will keep your files, run <code>curl -fsSL https://pairnets.app/get.sh | sudo bash</code>. It shows a link and a code: open the link and choose Add this nest. Then, on each computer, install Pairnets and choose Continue with email (or Google) with this account.</p>
 </section>
+${v.beta ? betaSection(v.beta) : ""}
 ${linksSection(v.links)}
 ${sharedSection(v.shared ?? [])}
 <details class="card"${v.nests.length ? " open" : ""}>

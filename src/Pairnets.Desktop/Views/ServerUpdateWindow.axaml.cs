@@ -55,7 +55,7 @@ public partial class ServerUpdateWindow : Window
             NestVersionText.Text = "older";
             SetBadge(PictureTone.Accent, "I.Nest", "S.Orange", up: true, bob: true);
         }
-        else if (UpdateChecker.ServerIsOlder(serverVersion, appVersion))
+        else if (UpdateChecker.ServerIsOlder(serverVersion, appVersion == PairnetsInfo.ProductVersion ? PairnetsInfo.StableBaseVersion : appVersion))
         {
             Heading.Text = "This app is newer than your nest";
             Explanation.Text = "Update the nest to match, so both sides have the same fixes.";

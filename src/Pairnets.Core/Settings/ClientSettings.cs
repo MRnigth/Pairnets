@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Pairnets.Core.Sync;
 
 namespace Pairnets.Core.Settings;
@@ -168,6 +169,32 @@ public sealed partial class ClientSettings
     /// <summary>Show a notification when a new Pairnets version is out or the server was updated.</summary>
     public bool NotifyUpdates { get; set; } = true;
 
+    /// <summary>
+    /// Beta updates (Settings › Updates): the channel this computer follows, "public-beta" or "developer-beta"; null is Off.
+    /// Chosen here or on the account page, whichever was last (<see cref="BetaChannelAt"/>). It only counts while
+    /// <see cref="BetaProgram"/> allows it.
+    /// </summary>
+    public string? BetaChannel { get; set; }
+
+    /// <summary>When <see cref="BetaChannel"/> was chosen; null for a computer that never chose.</summary>
+    public DateTimeOffset? BetaChannelAt { get; set; }
+
+    /// <summary>
+    /// What the owner's own nest last said about the beta program; null when no nest ever said (an older nest, or not yet
+    /// heard): then nothing changes, the last choice is kept.
+    /// </summary>
+    public BetaInfo? BetaProgram { get; set; }
+
+    /// <summary>The channel updates come from now: the choice when the beta program allows it, otherwise stable.</summary>
+    public string EffectiveChannel =>
+        ReleaseChannel.IsBeta(BetaChannel) && BetaProgram is { Member: true, Channels: { } allowed } && allowed.Contains(BetaChannel!)
+            ? BetaChannel!
+            : ReleaseChannel.Stable;
+
+    /// <summary>Fields a newer Pairnets wrote that this one does not know: kept as they are, so going back to it loses nothing.</summary>
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement>? Unknown { get; set; }
+
     /// <summary><see cref="ParallelTransfers"/> limited to the offered choices.</summary>
     public int EffectiveParallelTransfers => ParallelTransfers is 1 or 2 or 4 or 8 ? ParallelTransfers : 4;
 
@@ -203,6 +230,7 @@ public sealed partial class ClientSettings
         copy.Placement = new Dictionary<string, FilePlacement>(Placement, StringComparer.Ordinal);
         copy.SharedFolders = SharedFolders is null ? null : [.. SharedFolders];
         copy.OtherNests = [.. OtherNests.Select(n => n.Clone())];
+        copy.Unknown = Unknown is null ? null : new Dictionary<string, JsonElement>(Unknown);
         return copy;
     }
 }

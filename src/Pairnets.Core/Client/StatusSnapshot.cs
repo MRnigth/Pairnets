@@ -475,7 +475,7 @@ public sealed record StatusSnapshot(
 
     /// <summary>True when the server runs an older release than this app (or is too old to say).</summary>
     public bool ServerIsOlder => Server is not null
-        && (Server.ServerVersion is not { Length: > 0 } v || UpdateChecker.ServerIsOlder(v, PairnetsInfo.ProductVersion));
+        && (Server.ServerVersion is not { Length: > 0 } v || UpdateChecker.ServerIsOlder(v, PairnetsInfo.StableBaseVersion));
 
     /// <summary>The label of the button next to the server version.</summary>
     public string ServerUpdateButtonText => ServerIsOlder ? "Update nest…" : "Check for update";

@@ -38,9 +38,9 @@ public class ReleaseSigningTests
     public void BothReleaseJobsSignBeforePublishing()
     {
         var workflow = File.ReadAllText(RepoPaths.Of(".github", "workflows", "release.yml")).ReplaceLineEndings("\n");
-        Assert.Equal(2, Regex.Matches(workflow, @"run: bash scripts/sign-release\.sh release-files").Count);
-        Assert.Equal(2, Regex.Matches(workflow, @"RELEASE_SIGNING_KEY: \$\{\{ secrets\.RELEASE_SIGNING_KEY \}\}").Count);
-        foreach (var publish in new[] { "- name: Publish release", "- name: Replace the \"latest\" release" })
+        Assert.Equal(3, Regex.Matches(workflow, @"run: bash scripts/sign-release\.sh release-files").Count);
+        Assert.Equal(3, Regex.Matches(workflow, @"RELEASE_SIGNING_KEY: \$\{\{ secrets\.RELEASE_SIGNING_KEY \}\}").Count);
+        foreach (var publish in new[] { "- name: Publish release", "- name: Replace the \"latest\" release", "- name: Replace the beta release" })
             Assert.True(workflow.LastIndexOf("sign-release.sh", workflow.IndexOf(publish, StringComparison.Ordinal), StringComparison.Ordinal) > 0,
                 $"no signing before \"{publish}\"");
     }

@@ -1,3 +1,6 @@
+using System.Globalization;
+using System.Reflection;
+
 namespace Pairnets.Core;
 
 /// <summary>Product-wide constants shared by the server and the client.</summary>
@@ -26,8 +29,35 @@ public static class PairnetsInfo
     /// </summary>
     public static string ProductVersion { get; } = FormatVersion(typeof(PairnetsInfo).Assembly.GetName().Version);
 
-    /// <summary>"1.0.38; Windows": sent to the server so its Devices list shows each computer's app and system.</summary>
-    public static string ClientDescription { get; } = $"{ProductVersion}; {SystemName()}";
+    /// <summary>The channel this build was made for (<see cref="ReleaseChannel"/>); a local build says stable.</summary>
+    public static string Channel { get; } = ReleaseChannel.Normalize(Metadata("PairnetsChannel"));
+
+    /// <summary>The release run this build came from; 0 for a local build.</summary>
+    public static int Build { get; } = int.TryParse(Metadata("PairnetsBuild"), NumberStyles.None, CultureInfo.InvariantCulture, out var b) ? b : 0;
+
+    /// <summary>This build, for comparing with releases.</summary>
+    public static ReleaseVersion ThisRelease { get; } = new(typeof(PairnetsInfo).Assembly.GetName().Version ?? new Version(0, 0, 0, 0), Channel, Build);
+
+    /// <summary>"1.0.61.8", or "1.0.61.8 Public beta 3" on a beta: the version as the apps and the account page show it.</summary>
+    public static string DisplayVersion => ThisRelease.Display;
+
+    /// <summary>
+    /// The stable release a beta build follows ("1.0.61.7" for a 1.0.61.8 beta, which is numbered as the next stable), or
+    /// <see cref="ProductVersion"/> on a stable build. A nest only runs stable releases, so a beta app compares it with this.
+    /// </summary>
+    public static string StableBaseVersion => ThisRelease.IsBeta ? FormatVersion(PreviousNumber(ThisRelease.Number)) : ProductVersion;
+
+    /// <summary>"1.0.38; Windows" ("1.0.61.8 Public beta 3; Windows" on a beta): sent to the server so its Devices list shows each computer's app and system.</summary>
+    public static string ClientDescription { get; } = $"{DisplayVersion}; {SystemName()}";
+
+    private static string? Metadata(string key) =>
+        typeof(PairnetsInfo).Assembly.GetCustomAttributes<AssemblyMetadataAttribute>().FirstOrDefault(a => a.Key == key)?.Value;
+
+    /// <summary>1.0.61.8 → 1.0.61.7, 1.0.61.1 → 1.0.61, 1.0.62 → 1.0.61.</summary>
+    internal static Version PreviousNumber(Version v) =>
+        v.Revision > 1 ? new Version(v.Major, v.Minor, v.Build, v.Revision - 1)
+        : v.Revision == 1 ? new Version(v.Major, v.Minor, v.Build)
+        : v.Build > 0 ? new Version(v.Major, v.Minor, v.Build - 1) : v;
 
     private static string SystemName() =>
         OperatingSystem.IsWindows() ? "Windows" : OperatingSystem.IsMacOS() ? "macOS" : OperatingSystem.IsLinux() ? "Linux" : "other";

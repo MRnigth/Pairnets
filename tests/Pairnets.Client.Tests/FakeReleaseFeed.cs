@@ -98,7 +98,8 @@ public sealed class FakeReleaseFeed : IAsyncDisposable
             : Pairnets.Tests.Infrastructure.TestUpdatePackages.Make(ZipName, app);
         string Listed(byte[] file) =>
             Convert.ToHexString(SHA256.HashData(tampered ? Encoding.UTF8.GetBytes("a different file") : file)).ToLowerInvariant();
-        var versionJson = Encoding.UTF8.GetBytes($"{{\"version\":\"{version}\",\"commit\":\"0000000\"}}\n");
+        // As the release workflow writes it since beta updates: a stable release says so (an unlabelled one past 1.0.61 is refused).
+        var versionJson = Encoding.UTF8.GetBytes($"{{\"version\":\"{version}\",\"commit\":\"0000000\",\"channel\":\"stable\",\"build\":1}}\n");
         var sums = Encoding.UTF8.GetBytes($"{Listed(asset)}  {AssetName}\n{Listed(zip)}  {ZipName}\n"
             + $"{Convert.ToHexString(SHA256.HashData(versionJson)).ToLowerInvariant()}  version.json\n");
         return new Release(version, asset, app, zip, versionJson, sums, signed ? Pairnets.Tests.Infrastructure.TestReleaseKey.Sign(sums) : null);

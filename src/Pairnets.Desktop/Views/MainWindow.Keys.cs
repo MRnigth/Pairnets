@@ -207,5 +207,5 @@ public partial class MainWindow
     }
 
     private async void ShowAbout() =>
-        await Dialogs.InfoAsync(this, "About Pairnets", $"Pairnets {PairnetsInfo.ProductVersion}\n\n{PairnetsLinks.AboutLine}");
+        await Dialogs.InfoAsync(this, "About Pairnets", $"Pairnets {PairnetsInfo.DisplayVersion}\n\n{PairnetsLinks.AboutLine}");
 }

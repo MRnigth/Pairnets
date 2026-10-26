@@ -57,6 +57,7 @@ public static class PairnetsServerHost
         builder.Services.AddSingleton<TlsCertificateStore>();
         builder.Services.AddSingleton(sp => new AuthStore(sp.GetRequiredService<ServerPaths>()));
         builder.Services.AddSingleton<DeviceKeys>();
+        builder.Services.AddSingleton<NestBeta>();
         builder.Services.AddSingleton<FriendRequests>();
         builder.Services.AddSingleton<FriendConnections>();
         builder.Services.AddSingleton(sp => new RelaySignature(sp.GetRequiredService<SyncOptions>()));

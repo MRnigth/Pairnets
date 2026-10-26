@@ -206,7 +206,7 @@
                 <Grid ColumnDefinitions="*,Auto">
                   <StackPanel VerticalAlignment="Center">
                     <TextBlock Text="Check for updates by itself" FontWeight="SemiBold" TextWrapping="Wrap" />
-                    <TextBlock Classes="t3" TextWrapping="Wrap" Text="Looks when Pairnets starts and once a day. You choose when to install." />
+                    <TextBlock x:Name="UpdateCadenceText" Classes="t3" TextWrapping="Wrap" Text="Looks when Pairnets starts and once a day. You choose when to install." />
                   </StackPanel>
                   <ToggleSwitch x:Name="UpdateBox" Grid.Column="1" Classes="bare" OnContent="Check for updates by itself" OffContent="Check for updates by itself" />
                 </Grid>
@@ -222,6 +222,27 @@
                     </Button>
                   </Grid>
                 </Border>
+                <Border Classes="hair" />
+                <!-- Beta updates: chosen here per computer, once the account joined the beta program on its account page -->
+                <StackPanel x:Name="BetaPanel" Spacing="10">
+                  <StackPanel>
+                    <TextBlock Text="Beta updates" FontWeight="SemiBold" />
+                    <TextBlock x:Name="BetaText" Classes="t3" TextWrapping="Wrap" />
+                  </StackPanel>
+                  <Border Classes="numsegs" HorizontalAlignment="Left">
+                    <StackPanel Orientation="Horizontal">
+                      <RadioButton x:Name="BetaOff" Classes="pill" GroupName="beta" Content="Off" AutomationProperties.Name="Beta updates off" />
+                      <RadioButton x:Name="BetaPublic" Classes="pill" GroupName="beta" Content="Public beta" />
+                      <RadioButton x:Name="BetaDeveloper" Classes="pill" GroupName="beta" Content="Developer beta" />
+                    </StackPanel>
+                  </Border>
+                  <TextBlock x:Name="BetaWaiting" Classes="t3" TextWrapping="Wrap" IsVisible="False" />
+                  <StackPanel Orientation="Horizontal" Spacing="10">
+                    <Button x:Name="BetaJoinButton" Classes="small" FontWeight="Bold" Content="Open account page" Click="OnBetaJoin" />
+                    <Button x:Name="BetaFeedbackButton" Classes="small" FontWeight="Bold" Content="Send beta feedback" Click="OnReportBug" />
+                    <TextBlock x:Name="BetaFeedbackHint" Classes="t3" VerticalAlignment="Center" Text="Found something odd? Tell us." />
+                  </StackPanel>
+                </StackPanel>
                 <Border Classes="hair" />
                 <Grid ColumnDefinitions="*,Auto">
                   <StackPanel VerticalAlignment="Center">

@@ -212,7 +212,58 @@ test('git pre-push', () => {
   run(repo, 'tag', '-d', 'v1.0.0');
 });
 
-const hasPowerShell = spawnSync(process.platform === 'win32' ? 'powershell.exe' : 'pwsh', ['-NoProfile', '-Command', 'exit 0'], { windowsHide: true }).status === 0;
+test('a push to a beta branch is a deploy like a push to main', async () => {
+  run(repo, 'checkout', '-q', 'feature');
+  const sha = commit(repo, 'g.txt', 'g');
+  run(repo, 'branch', '-q', 'beta/public');
+  const zero = '0'.repeat(40);
+  try {
+    assert.equal(gate.betaBranch('refs/heads/beta/public'), 'beta/public');
+    assert.equal(gate.betaBranch('heads/beta/developer'), 'beta/developer');
+    assert.equal(gate.betaBranch('beta-not'), null);
+    assert.equal(gate.betaBranch('refs/tags/beta/x'), null);
+    assert.deepEqual(targets('git push origin beta/public'), ['beta']);
+    assert.deepEqual(targets('git push origin HEAD:beta/developer'), ['beta']);
+    assert.deepEqual(targets('git push origin feature:refs/heads/beta/public'), ['beta']);
+    assert.deepEqual(targets('git push -u origin +HEAD:beta/public'), ['beta']);
+    assert.deepEqual(targets('git push origin feature:beta-not'), []);
+    assert.deepEqual(targets('git push origin :beta/public'), [], 'deleting a beta branch deploys nothing');
+    assert.ok(targets('git push --all origin').includes('beta'));
+    assert.ok(targets('git push origin "refs/heads/*:refs/heads/*"').includes('beta'));
+    assert.ok(targets('git push origin "refs/heads/*:refs/heads/beta/*"').includes('beta'), 'any branch pushed under beta/');
+    assert.deepEqual(targets('git push origin "refs/heads/feat*:refs/heads/other/*"'), []);
+    run(repo, 'branch', '-q', '--set-upstream-to=origin/main');
+    run(repo, 'push', '-q', 'origin', 'beta/public');
+    run(repo, 'branch', '-q', '--set-upstream-to=origin/beta/public');
+    run(repo, 'config', 'push.default', 'upstream');
+    assert.deepEqual(targets('git push'), ['beta']);
+    run(repo, 'config', '--unset', 'push.default');
+    run(repo, 'branch', '-q', '--unset-upstream');
+
+    const blocked = await hook('git push origin HEAD:beta/public');
+    assert.equal(blocked.code, 2);
+    assert.match(blocked.err, /does not have the pre-deploy check yet|did not pass/);
+    stamp(sha);
+    assert.equal((await hook('git push origin HEAD:beta/public')).code, 0);
+    assert.equal((await hook('git push --no-verify origin HEAD:beta/public')).code, 2);
+
+    const quiet = (fn) => {
+      const e = gate.io.err;
+      gate.io.err = () => true;
+      try { return fn(); } finally { gate.io.err = e; }
+    };
+    const newer = commit(repo, 'h.txt', 'h');
+    assert.equal(quiet(() => gate.prePush([`refs/heads/feature ${newer} refs/heads/beta/developer ${zero}`], repo)), 1);
+    assert.equal(quiet(() => gate.prePush([`(delete) ${zero} refs/heads/beta/developer ${newer}`], repo)), 0);
+    assert.equal(quiet(() => gate.prePush([`refs/heads/feature ${newer} refs/heads/beta-not ${zero}`], repo)), 0);
+    stamp(newer);
+    assert.equal(quiet(() => gate.prePush([`refs/heads/feature ${newer} refs/heads/beta/developer ${zero}`], repo)), 0);
+  } finally {
+    run(repo, 'branch', '-q', '-D', 'beta/public');
+  }
+});
+
+const hasPowerShell =spawnSync(process.platform === 'win32' ? 'powershell.exe' : 'pwsh', ['-NoProfile', '-Command', 'exit 0'], { windowsHide: true }).status === 0;
 
 test('the check is the commit\'s own runner, and its result decides', { skip: !hasPowerShell && 'no PowerShell here' }, async () => {
   // A stand-in runner with the real one's contract: -Repo, -Commit, -SummaryFile; a pass record on success.
