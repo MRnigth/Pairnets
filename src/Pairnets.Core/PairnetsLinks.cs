@@ -27,7 +27,7 @@ public static class PairnetsLinks
     /// <summary>"Made by MRnigth in Denmark": who runs Pairnets, as the website's footer and legal pages say.</summary>
     public const string MadeBy = "Made by MRnigth in Denmark";
 
-    /// <summary>"Pairnets 1.0.58 · © 2026 Pairnets · MIT licence · Made by MRnigth in Denmark" (Settings → About Pairnets).</summary>
+    /// <summary>"Pairnets 1.0.58 · © 2026 MRnigth · MIT licence · Made by MRnigth in Denmark" (Settings → About Pairnets).</summary>
     public static string AboutLine =>
         $"{PairnetsInfo.ProductName} {PairnetsInfo.ProductVersion} · {PairnetsInfo.Copyright} · MIT licence · {MadeBy}";
 }

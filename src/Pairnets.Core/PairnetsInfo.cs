@@ -9,7 +9,7 @@ public static class PairnetsInfo
     public const string ProductName = "Pairnets";
 
     /// <summary>Shown wherever the product names itself, e.g. the Settings version line.</summary>
-    public const string Copyright = "© 2026 Pairnets";
+    public const string Copyright = "© 2026 MRnigth";
 
     /// <summary>Version of the HTTP API contract between client and server.</summary>
     public const int ApiVersion = 1;
