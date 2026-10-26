@@ -32,6 +32,9 @@ public sealed class TestServer : IAsyncDisposable
         _https = https;
     }
 
+    /// <summary>Config for tests of the upload stall itself: the server gives up after 2 s without data.</summary>
+    public static Dictionary<string, string?> ShortStall(string timeout = "00:00:02") => new() { ["Sync:UploadStallTimeout"] = timeout };
+
     public string DataDir { get; }
 
     public string Token { get; }
@@ -91,7 +94,9 @@ public sealed class TestServer : IAsyncDisposable
             ["Sync:Token"] = Token,
             ["Sync:DataDir"] = DataDir,
             ["Sync:PurgeInitialDelay"] = "01:00:00",
-            ["Sync:UploadStallTimeout"] = "00:00:02",
+            // Long enough for a busy test machine, where a whole second can pass between the bytes of one small upload;
+            // a 408 would end the whole pass "Offline". Tests of the stall itself use ShortStall.
+            ["Sync:UploadStallTimeout"] = "00:00:30",
         };
         if (_https)
             settings["Sync:HttpsUrl"] = $"https://127.0.0.1:{_httpsPort}";
@@ -102,6 +107,8 @@ public sealed class TestServer : IAsyncDisposable
         {
             builder.Configuration.AddInMemoryCollection(settings);
             builder.WebHost.UseUrls($"http://127.0.0.1:{port}");
+            // Kestrel's own minimum upload speed has the same effect as a short stall timeout on a busy machine.
+            builder.WebHost.ConfigureKestrel(k => k.Limits.MinRequestBodyDataRate = null);
             builder.Logging.ClearProviders();
             builder.Logging.SetMinimumLevel(LogLevel.Debug);
             builder.Logging.AddProvider(Logs);

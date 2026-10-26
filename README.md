@@ -130,7 +130,7 @@ in the background.
   last 5 per file). To get one back, open **History** in the Pairnets window, pick the file and click
   **Restore** (or use the maintenance commands in [DEPLOY.md](docs/DEPLOY.md#4-maintenance-commands)).
 * **Safety stops.** Pairnets pauses and asks before:
-  * deleting more than 20 % of your files (or more than 50) in one go;
+  * deleting 100 files or more in one go;
   * syncing a folder that is suddenly empty or missing its hidden `.pairnets-marker` file (an
     unplugged drive or a wrong path must not look like "I deleted everything");
   * syncing with a server that was replaced or restored from a backup.

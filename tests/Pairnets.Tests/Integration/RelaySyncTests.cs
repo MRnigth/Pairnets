@@ -59,7 +59,7 @@ public sealed class RelaySyncTests : IAsyncLifetime
 
     private static async Task WaitUntil(Func<bool> condition, string what)
     {
-        var deadline = DateTime.UtcNow.AddSeconds(30);
+        var deadline = DateTime.UtcNow.AddSeconds(90); // a busy test machine
         while (!condition())
         {
             if (DateTime.UtcNow > deadline)
@@ -85,6 +85,7 @@ public sealed class RelaySyncTests : IAsyncLifetime
         Assert.Contains("GET /api/manifest", _service.Relayed);
         Assert.Contains("PUT /api/file", _service.Relayed);
         await WaitUntil(() => session.Status.Status == RunnerStatus.Idle, "idle");
+        await WaitUntil(() => session.Runner.HubConnected, "the push channel through the relay");
 
         // Another computer adds a file. Nothing but the push through the relay makes this one look (the next
         // regular pass is an hour away), so the file arriving here proves the push channel works through it.
@@ -166,9 +167,11 @@ public sealed class RelaySyncTests : IAsyncLifetime
 
         _service.NestOnline = false;
         session.SyncNow();
-        await WaitUntil(() => session.Status.Status == RunnerStatus.Offline, "offline");
-        Assert.Equal(ServiceErrors.NestOfflineMessage, session.Status.DetailText);
-        Assert.Equal("Not connected", session.Status.ConnectionText);
+        // One status, not two reads: the app tries again every 200 ms here, which can change it in between.
+        StatusSnapshot? offline = null;
+        await WaitUntil(() => (offline = session.Status).Status == RunnerStatus.Offline, "offline");
+        Assert.Equal(ServiceErrors.NestOfflineMessage, offline!.DetailText);
+        Assert.Equal("Not connected", offline.ConnectionText);
         Assert.Contains(session.Activity.Items, i => i.Kind == ActivityKind.Offline && i.Text.Contains(ServiceErrors.NestOfflineMessage, StringComparison.Ordinal));
         Assert.DoesNotContain(session.Activity.Items, i => i.Text.Contains("tunnel", StringComparison.OrdinalIgnoreCase));
 

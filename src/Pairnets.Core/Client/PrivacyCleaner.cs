@@ -23,8 +23,9 @@ public static class PrivacyCleaner
     private static readonly Regex FrameFile = new(@"(\)\s+in\s+)[^\r\n]*[\\/]([^\\/\r\n]+\.cs:line\s+\d+)", Options);
     private static readonly Regex Url = new(@"\b[a-z][a-z0-9+.\-]*://[^\s'""<>]+", Options);
     private static readonly Regex Email = new(@"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}", Options);
-    // Quoted text in error messages is data (a path, a file name, a value); parameter names stay.
-    private static readonly Regex SingleQuoted = new(@"(?<!Parameter )'[^'\r\n]*'", Options);
+    // Quoted text in error messages is data (a path, a file name, a value); parameter names stay. An apostrophe in a word
+    // ("Task's", "can't") is no quote: taking it for one hid most of a message ("A Task'<text>'menu'))").
+    private static readonly Regex SingleQuoted = new(@"(?<!Parameter )(?<![A-Za-z0-9])'(?:[^'\r\n]|'(?=[A-Za-z]))*'(?![A-Za-z0-9])", Options);
     private static readonly Regex DoubleQuoted = new(@"""[^""\r\n]*""", Options);
     private static readonly Regex DrivePath = new(@"\b[A-Za-z]:[\\/][^\s'""<>|]*", Options);
     private static readonly Regex UncPath = new(@"\\\\[^\s'""<>|]+", Options);

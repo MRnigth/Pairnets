@@ -18,10 +18,9 @@ what cannot lose or silently overwrite data.
 
 ## Sync semantics
 
-* **Mass-delete guard, literal rule.** A pass is blocked when it would delete more than
-  `min(20 % of tracked files, 50)` on either side, with no minimum floor (your choice). In small
-  folders this means even one or two deletions need "Allow these deletions". Tracked = files with
-  an agreed base.
+* **Mass-delete guard: 100 files.** A pass is blocked when it would delete 100 files or more on
+  either side; fewer are just deleted, however big a part of the nest that is. (Until 1.0.61.4 it was
+  `min(20 % of tracked files, 50)` with no floor; see "Ask about deletions only from 100 files" below.)
 * **Allow-once scope.** An approval covers exactly the next pass and only the deletions that were
   listed. If more deletions appear, the pass is blocked again.
 * **Empty folder.** If the folder is empty while files are tracked, the pass is blocked (it
@@ -1790,3 +1789,118 @@ change was never seen.
   not by redrawing the rows, so the choice buttons don't jump while the sync frees or downloads.
 * **pairnets.app/favicon.ico** was already in `site/` on main (8a40637); the live site still 404s only because Pages
   serves an older branch. No code change: it needs a Pages deploy.
+
+## Ask about deletions only from 100 files (1.0.61.4.1, 2026-10-23)
+
+* **Rule.** Asked for: "if it's under 100 files don't ask for perms to delete the files". A sync now stops with "Allow these
+  deletions" only when it would delete 100 or more files on one side (this computer, or the nest) in one go. The old
+  20 %-of-the-nest part is gone completely, and no "more than half" guard replaces it: that would bring the question back
+  for every small nest. One setting, `EngineOptions.MassDeleteThreshold` (100), replaces `MassDeleteFraction` and
+  `MassDeleteMax`.
+* **Kept:** the empty-folder guard (every file gone while the nest still has some, usually a wrong or unplugged drive),
+  allow-once, and both apps' question and buttons, which did not change.
+* **Risk, accepted:** a small nest can lose all but its last file without a question, e.g. 50 files deleted on another
+  computer. They are not lost for good: on this computer they go to the Recycle Bin / Trash, and the nest keeps deleted
+  files in History for 30 days.
+* **Found on the way:** a file event (or timer) already on its way when the sync runner closes used to crash the whole
+  app ("disposed object" in `SyncRunner`). The pre-deploy check hit it once the tests deleted 100 files at a time. A
+  late wake-up is now ignored (`SyncRunner.Wake`; the Program Files fix below found the same crash, one fix kept).
+
+## A nest folder in C:\Program Files (1.0.61.4.1, 2026-10-23)
+
+* **Refused when it is chosen.** Windows lets only programs with admin rights save in C:\Program Files,
+  C:\Program Files (x86) and C:\Windows (on Mac/Linux /usr, /bin, /sbin, /etc, /lib, /System...), and Pairnets runs as
+  the person. Both sign-in screens and Settings now refuse such a folder, and any folder a quick test file can't be saved
+  in, with words that name it and a folder to use instead (Pairnets in the home folder, or the new nest's own); the
+  sign-in screens add "Use … instead". `SyncFolderCheck` in Core, reached through `ClientSettings.FolderProblem`.
+* **The Settings window no longer crashes** when it can't make a new folder: making it was outside the error handling.
+* **A folder chosen before** is not refused by Settings (the folder in use isn't re-checked there). The sync stops instead
+  with `BlockReason.FolderNotWritable` ("Can't save in your folder", button "Choose another folder…") when it can't
+  write its marker, or the folder is a system folder it can't save in, rather than failing every pass. The new folder
+  starts fresh (a merge: nothing is deleted on either side); the old folder is left as it was. Run as admin, a Program
+  Files folder that works keeps working.
+* **The test file** `.pairnets-write-test` is written and removed at once; it is reserved and ignored like the marker.
+
+## Steady tests on slow runners (2026-10-24)
+
+* **Why.** Nearly every CI and release run failed on one test, a different one each time. 76 failed jobs over the last
+  60 runs came down to a few causes in the test setup, not in sync.
+* **No false 408s.** The test server gave up on an upload after 2 s without bytes, and Kestrel's own minimum upload speed
+  applied too. On a busy runner one small upload then got a 408, the app read it as "server unreachable", and the whole
+  pass ended Offline (so 111 of 220 files arrived, and so on). The test server now waits 30 s and has no minimum speed.
+  Only the tests of the stall itself (ServerApi, ResumableTransfer, FaultInjection) still use a short stall
+  (`TestServer.ShortStall`).
+* **The rules for tests.**
+  * A setup pass that is not what the test is about goes through `Device.SyncUntilQuietAsync`, which also runs an
+    Offline pass again, and it is checked. A pass under test stays one pass.
+  * Files written just before an app starts are backdated, so the 2 s "still being written" window doesn't split them
+    over two passes.
+  * Waits for something that happens eventually get generous deadlines (60–120 s). They never replace a check of how
+    soon something happens. "Quickly" means long before the hourly pass.
+  * A test that listens on the push channel makes one hub call after connecting, so the server has registered it.
+  * A batch is written while the runner is paused, so the file watcher doesn't start a pass half-way through it.
+  * The Avalonia window tests take turns (collection "Avalonia UI"): they share one UI thread and close each other's
+    windows. ClickEverything presses the main window and the Settings page in parts of two states (one test each;
+    macOS runners are up to five times slower, and a whole window ran past CI's 10 minutes a test). One press over 2
+    minutes, or a part over 9, ends the run with its name instead of a silent hang.
+  * Short tests of waiting times (AppActivation, ServerUpdaterStatus) run on their own.
+  * Two window test classes kept a list of every window opened in the whole test run, so from then on no window was
+    freed: 3.4 GB was still in use after the window tests (this is what the macOS runs swapped on, and what made the
+    large-file memory test fail there). Their lists now drop a window once it closes (280 MB left).
+  * Not done: starting the thread pool with more threads. It made the large-file memory test fail on macOS (the
+    shared buffer pool keeps buffers per thread, and that test counts them).
+* **Four small app bugs found on the way, fixed.**
+  * The nest could say "The updater stopped without reporting a result" for an update that had just worked: it read
+    status.json before the request file, which update.sh deletes after writing its result. It now reads them in the
+    order they happen, and reads a status.json that is being replaced again instead of taking it for no result.
+  * Renaming or deleting a folder on the Files page asked for a sync before removing the empty folder here, so on
+    Windows that pass could keep the empty folder. The folder now goes first, tried again a few times while something
+    has it open. A file there that is open elsewhere is forgotten under its old name only once it has moved. It used
+    to be forgotten first, so a move that failed left a "new" file that the next sync sent back to the nest under the
+    old name. Now it stays known under that name and the next sync fetches the new one. Its move is not tried again:
+    a sync pass may already be fetching the new name, and a late move landing on top of it made a conflict copy.
+  * **Still open (not fixed here):** a sync pass the file watcher starts in the middle of a folder rename on the Files
+    page can read this computer before a file moved here and the nest after it moved there. It then fetches the file
+    while the move puts it there too, which leaves a conflict copy with the same content. The fix is to hold sync
+    passes while a Files-page move runs; that is a change to the sync runner, for its own branch.
+  * Updating a placeholder that another program had open for a moment (Explorer, a virus scanner) downloaded the whole
+    file instead, and marking a just-written file synced (then freeing it) waited for a later check. Both are now tried
+    again a few times first.
+  * A linked nest whose owner shared more folders while a link pass was running: that pass then wrote its old place
+    back over the restart that sharing more makes, so the new folders' older files never came in. A pass now moves
+    the cursors only while the link is as it found it (same cursors, access and folders); otherwise the next pass
+    starts from the beginning, as it should.
+* **Not changed (noted):** one slow upload still makes a whole pass Offline in the real app, with its backoff. A
+  per-file "try again next pass" would be kinder, but it is a separate change.
+
+## Small Mac fixes from the Mac test (2026-10-25)
+
+The Mac test of 1.0.61.4 (macOS VM, 2026-10-24) found small things that said the wrong thing. Fixed in both apps where
+both had them:
+
+* **"All nests" line.** "all up to date" only when every nest is. Otherwise, first what needs you, then syncing, then
+  "1 can't be reached" / "none can be reached", then "1 paused" / "all paused", then signed out.
+* **A paused nest on the map.** Pausing stops all checks, so the map can't know whether the nest is there now. It stays
+  "online" (green) only when the nest was reached before; a nest never reached shows a grey dot and "not connected"
+  (it said "online" with a green dot).
+* **The sign-in window (Mac/Linux).** It opens at 520×640 and then lets its steps follow the window, as the Windows app
+  already did; before, the steps kept 520 px and a narrower window cut them off on both sides ("airnets").
+* **Wrong email.** Something typed that isn't an email address gets "That doesn't look like an email address" instead of
+  "Type your email address first."
+* **"this computer" in the Mac/Linux app.** The shared texts keep "this PC" (the Windows app's word); the Mac/Linux app
+  turns it into "this computer" wherever the Files page, the Settings "Where your files live" rows, the "move files
+  away" question, the nest-full pop-up and the "freed" notice show it (`Wording.Computer`). The hint under the Files
+  list wraps (a grid, not a row) in both apps.
+* **Crash cards.** The privacy cleaner took the apostrophe in "Task's" for a quote and hid most of an
+  AggregateException's message. An apostrophe inside a word is no quote now; a quoted name with an apostrophe in it
+  ('Bob's notes.txt') is still hidden whole.
+* **Needs you / Computers.** "Everything keeps syncing" only while it does ("Syncing is paused." / "Pairnets keeps trying
+  to reach your nest."). Computers says why the list isn't there when the nest can't be reached (or syncing was paused
+  before it ever was) instead of "Loading…" for ever. Both apps now use the same words for these.
+* **The menu before signing in.** Sync now, Open folder and Pause are greyed out until a nest is set up (they did
+  nothing); on Mac/Linux the first item reads "Sign in…" (it already opened the sign-in).
+* **Make an account.** The apps open `/login?new=1`; the website titles that page "Make your Pairnets account". An older
+  Worker ignores the flag (still "Sign in to Pairnets"), so this needs the next Worker deploy to show; nothing breaks
+  before it.
+* **Activity.** "Cannot reach the server; retrying." no longer adds the same sentence again when the reason is only the
+  general "Pairnets cannot reach the server…".

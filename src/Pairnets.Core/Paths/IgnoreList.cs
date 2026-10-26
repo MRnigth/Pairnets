@@ -18,7 +18,7 @@ public sealed class IgnoreList
     [
         "~$*", "*.tmp", "*.temp", "*.swp", "*.swo", "*~", ".~lock.*#",
         "Thumbs.db", "desktop.ini", ".DS_Store", "*.crdownload", "*.part",
-        ".git/", PathRules.TempFolderName + "/", PathRules.MarkerFileName,
+        ".git/", PathRules.TempFolderName + "/", PathRules.MarkerFileName, PathRules.ProbeFileName,
         Legacy.TetherNames.TempFolderName + "/", Legacy.TetherNames.MarkerFileName,
     ];
 

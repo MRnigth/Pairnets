@@ -30,7 +30,6 @@ public class SharedNestEngineTests : IDisposable
             Folder = _folder.Path,
             DeviceName = "ANNA-LAPTOP",
             StabilityWindow = TimeSpan.Zero,
-            MassDeleteFraction = 1.0, // these nests hold two or three files: one deletion is not a mass delete here
             Access = NestAccess.Read("view", null, "Oskar Nilsson", "Home nest"),
         }, _api, _state);
     }

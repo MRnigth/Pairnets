@@ -15,18 +15,32 @@ namespace Pairnets.Tests.Ui;
 /// whole-folder row without "Only on the nest"), the questions naming what a choice changes, the line under the card while
 /// files come back, and the Overview's nest-only folders. Written when PAIRNETS_SCREENSHOT_DIR is set.
 /// </summary>
+[Collection(AvaloniaUi.Name)]
 public class NestOnlyScreenshotTests
 {
     private static readonly List<Window> Opened = [];
 
-    static NestOnlyScreenshotTests() => Window.WindowOpenedEvent.AddClassHandler(typeof(Window), (sender, _) =>
+    // The pop-ups that are open. A window goes from the list once it closes: kept, every window opened later in the
+    // test run (by any test) stayed in memory, gigabytes by the end on a slow runner.
+    static NestOnlyScreenshotTests()
     {
-        lock (Opened)
+        Window.WindowOpenedEvent.AddClassHandler(typeof(Window), (sender, _) =>
         {
-            if (sender is Window w)
-                Opened.Add(w);
-        }
-    });
+            lock (Opened)
+            {
+                if (sender is Window w)
+                    Opened.Add(w);
+            }
+        });
+        Window.WindowClosedEvent.AddClassHandler(typeof(Window), (sender, _) =>
+        {
+            lock (Opened)
+            {
+                if (sender is Window w)
+                    Opened.Remove(w);
+            }
+        });
+    }
 
     private static Task<Window> PopupAsync(Window owner, string title) => Wait.For(() =>
     {

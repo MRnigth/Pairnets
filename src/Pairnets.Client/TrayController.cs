@@ -125,6 +125,7 @@ public sealed class TrayController : ITrayActions, IDisposable
         {
             _autoStart.Checked = SafeIsAutoStart();
             _simpleDrawing.Checked = Themes.ThemeManager.SimpleDrawing;
+            DrawMenuReady();
         };
 
         _icon = new Forms.NotifyIcon
@@ -971,6 +972,7 @@ public sealed class TrayController : ITrayActions, IDisposable
         _fixProblem.Text = status.FixLabel ?? "Fix…";
         var paused = nests.Visible ? _settings.Paused : status.Paused;
         _pause.Text = nests.Visible ? (paused ? "Resume all" : "Pause all") : paused ? "Resume syncing" : "Pause syncing";
+        DrawMenuReady();
         DrawNestMenu(nests);
 
         if (_window is { IsVisible: true })
@@ -990,6 +992,16 @@ public sealed class TrayController : ITrayActions, IDisposable
             _panel.ShowActivity(_session?.Activity.Items ?? []);
             _panel.ShowAttention(BuildAttention(status).Count);
         }
+    }
+
+    /// <summary>
+    /// Before this computer is signed in, Sync now, Open folder and Pause are greyed out: they can't do anything yet (the
+    /// Mac test, 2026-10-24, found them doing nothing, silently; the Windows menu is the same).
+    /// </summary>
+    internal void DrawMenuReady()
+    {
+        var ready = AnyNestReady && _settings.FirstRunCompleted;
+        _syncNow.Enabled = _openFolder.Enabled = _pause.Enabled = ready;
     }
 
     private readonly List<Forms.ToolStripItem> _nestItems = [];
@@ -1325,6 +1337,9 @@ public sealed class TrayController : ITrayActions, IDisposable
             case BlockReason.MarkerMismatch:
                 LocateFolder(status.Text);
                 break;
+            case BlockReason.FolderNotWritable:
+                ChooseAnotherFolder();
+                break;
             case BlockReason.SignedOut:
             case BlockReason.SignInRequired:
                 ShowSettings(firstRun: true);
@@ -1355,6 +1370,27 @@ public sealed class TrayController : ITrayActions, IDisposable
         {
             Dialogs.Ask(null, FriendlyErrors.Describe(ex), "Pairnets", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
+        var nest = Nest;
+        nest.Folder = folder;
+        SaveNest(nest);
+        StartSession(null);
+        UpdateExplorerEntry();
+    }
+
+    /// <summary>
+    /// "Choose another folder…" for a folder Pairnets may not save in (C:\Program Files...): the nest starts over in the
+    /// new folder (its files come down; nothing is deleted on either side) and the old folder is left as it is.
+    /// </summary>
+    private void ChooseAnotherFolder()
+    {
+        if (Dialogs.PickFolder(null, "Choose a folder of your own for this nest", SyncFolderCheck.DefaultFolder) is not { } folder || _session is null)
+            return;
+        if (_settings.FolderProblem(folder, Nest.NestId) is { } error)
+        {
+            Dialogs.Ask(null, error, "Pairnets", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+        StopSession();
         var nest = Nest;
         nest.Folder = folder;
         SaveNest(nest);

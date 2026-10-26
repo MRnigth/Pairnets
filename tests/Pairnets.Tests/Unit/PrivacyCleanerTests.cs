@@ -88,6 +88,18 @@ public class PrivacyCleanerTests
         Assert.Equal("Needs System.Text.Json, Version=8.0.0.0", PrivacyCleaner.Clean("Needs System.Text.Json, Version=8.0.0.0"));
     }
 
+    /// <summary>The Mac test's second crash card (2026-10-24) read "A Task'&lt;text&gt;'menu'))": the apostrophe in "Task's"
+    /// was taken for a quote.</summary>
+    [Fact]
+    public void AnApostropheInAWordIsNoQuote()
+    {
+        const string message = "A Task's exception(s) were not observed either by Waiting on the Task or accessing its Exception property. "
+            + "As a result, the unobserved exception was rethrown by the finalizer thread. (The menu being updated does not match. (Parameter 'menu'))";
+        Assert.Equal(message, PrivacyCleaner.Clean(message));
+        Assert.Equal("It can't open '<text>' now", PrivacyCleaner.Clean("It can't open 'Bob's notes.txt' now"));
+        Assert.Equal("Could not open '<text>' or '<text>'", PrivacyCleaner.Clean("Could not open 'a' or 'b'"));
+    }
+
     [Fact]
     public void HideSecretsLeavesEverythingElse()
     {

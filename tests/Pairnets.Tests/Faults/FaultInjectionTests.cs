@@ -17,7 +17,8 @@ public class FaultInjectionTests : IAsyncLifetime
 
     public async Task InitializeAsync()
     {
-        _server = await TestServer.StartAsync();
+        // Short enough for WaitForEmptyTmp when a cut is not seen (macOS), long enough that a busy machine is no cut.
+        _server = await TestServer.StartAsync(config: TestServer.ShortStall("00:00:10"));
         _proxy = new ChaosProxy(_server.Port);
     }
 
@@ -48,7 +49,7 @@ public class FaultInjectionTests : IAsyncLifetime
     /// <summary>
     /// The server deletes an aborted upload's temp file as soon as it notices the dead connection:
     /// immediately on a TCP reset, or (if the reset is not seen, as happens on macOS runners) when the
-    /// upload stall timeout fires (2 s in tests). The deadline leaves room for slow runners.
+    /// upload stall timeout fires (10 s here). The deadline leaves room for slow runners.
     /// </summary>
     private static async Task WaitForEmptyTmp(string dir)
     {

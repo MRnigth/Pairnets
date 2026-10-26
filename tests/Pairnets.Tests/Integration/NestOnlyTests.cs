@@ -102,7 +102,7 @@ public class NestOnlyTests : IAsyncLifetime
         // More files than the mass-delete guard allows, all freed at once, and the folder ends up empty.
         for (var i = 0; i < 80; i++)
             _laptop.Write($"Photos/f{i:00}.txt", "content " + i);
-        Completed(await _laptop.SyncAsync());
+        Completed(await _laptop.SyncUntilQuietAsync());
 
         _laptop.Place(("Photos", FilePlacement.NestOnly));
         var pass = Completed(await _laptop.SyncAsync());

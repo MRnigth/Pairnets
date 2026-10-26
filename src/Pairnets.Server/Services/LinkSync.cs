@@ -58,10 +58,10 @@ public sealed class LinkSync(SyncStore store, LinkStore links, IHubContext<SyncH
             if (refused is not null)
             {
                 // Not "in step": the file is tried again at every pass (the local cursor stays), and the folder says why.
-                links.Record(link.Id, LinkState.Problem, refused, manifest.ServerId, settledAll ? manifest.Version : null);
+                links.Record(link.Id, LinkState.Problem, refused, manifest.ServerId, settledAll ? manifest.Version : null, passedFrom: link);
                 return new LinkPassResult(LinkState.Problem, pulled, pushed, refused);
             }
-            links.Record(link.Id, LinkState.InStep, null, manifest.ServerId, settledAll ? manifest.Version : null, localVersion);
+            links.Record(link.Id, LinkState.InStep, null, manifest.ServerId, settledAll ? manifest.Version : null, localVersion, link);
             return new LinkPassResult(LinkState.InStep, pulled, pushed);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)

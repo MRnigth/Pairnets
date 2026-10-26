@@ -18,6 +18,11 @@ public static class SignInTexts
     public static string RenameFailed(string name) =>
         $"Your nest could not rename this computer, so it stays {name}. You can rename it later on the Settings page, under \"This computer's name\".";
 
+    /// <summary>Under the email box when "Continue with email" can't go on: nothing typed, or not an email address.</summary>
+    public static string EmailProblem(string? typed) => string.IsNullOrWhiteSpace(typed)
+        ? "Type your email address first."
+        : "That doesn't look like an email address. Check it and try again.";
+
     public static bool SigningInAgain(ClientSettings current) =>
         !string.IsNullOrWhiteSpace(current.ServerUrl) && !string.IsNullOrWhiteSpace(current.Folder)
         && !string.IsNullOrWhiteSpace(current.DeviceName) && string.IsNullOrWhiteSpace(current.ProtectedToken);

@@ -44,8 +44,15 @@ public sealed class ServerUpdater(ServerPaths paths, SyncOptions options, TimePr
     {
         if (!Installed)
             return new UpdaterStatus(false, "missing", "This server was installed before self-update existed. Update it once by hand.");
-        var (status, writtenAt) = ReadStatusFile();
+        // Read in the order things happen, newest last: the last request, then its file, then status.json. update.sh
+        // writes its result before it deletes the request file, so a request file found gone means status.json already
+        // has the result. (Read the other way round, an update that had just finished could read as one that stopped
+        // without a result: the old status, then no request file.)
+        DateTimeOffset? lastRequest;
+        lock (_gate)
+            lastRequest = _lastRequest;
         var requestedAt = FileTime(RequestFile);
+        var (status, writtenAt) = ReadStatusFile();
         if (requestedAt is { } asked)
         {
             // update.sh keeps the request file until it ends, so a status written since the request is this run's progress.
@@ -56,11 +63,11 @@ public sealed class ServerUpdater(ServerPaths paths, SyncOptions options, TimePr
                     $"The updater did not start within {StartTimeout.TotalSeconds:0} seconds. On the server run: sudo systemctl reset-failed pairnets-update.path pairnets-update.service && sudo systemctl restart pairnets-update.path", asked);
             return new UpdaterStatus(true, "requested", "Waiting for the updater to start.", asked);
         }
-        if (status is not null && (_lastRequest is not { } last || writtenAt >= last - TimeSpan.FromSeconds(1)))
+        if (status is not null && (lastRequest is not { } last || writtenAt >= last - TimeSpan.FromSeconds(1)))
             return status;
-        if (_lastRequest is not null)
+        if (lastRequest is not null)
             return new UpdaterStatus(true, "failed",
-                "The updater stopped without reporting a result. Turn on Debug mode in the app to see its log.", _lastRequest);
+                "The updater stopped without reporting a result. Turn on Debug mode in the app to see its log.", lastRequest);
         return new UpdaterStatus(true, "idle");
     }
 
@@ -154,20 +161,30 @@ public sealed class ServerUpdater(ServerPaths paths, SyncOptions options, TimePr
 
     private (UpdaterStatus? Status, DateTimeOffset? WrittenAt) ReadStatusFile()
     {
-        try
+        // Caught just while update.sh puts a new one in place (where that is not one atomic step, as on Windows), the
+        // file can't be read for a moment: read again, as "no status" could mean "stopped without a result".
+        for (var attempt = 1; ; attempt++)
         {
-            if (File.Exists(StatusFile))
+            try
             {
-                var status = JsonSerializer.Deserialize<UpdaterStatus>(File.ReadAllText(StatusFile), PairnetsJson.Options);
-                if (status is not null)
-                    return (status with { Installed = true }, FileTime(StatusFile));
+                if (File.Exists(StatusFile))
+                {
+                    var status = JsonSerializer.Deserialize<UpdaterStatus>(File.ReadAllText(StatusFile), PairnetsJson.Options);
+                    if (status is not null)
+                        return (status with { Installed = true }, FileTime(StatusFile));
+                }
+                return (null, null);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException && attempt < 5)
+            {
+                Thread.Sleep(10);
+            }
+            catch (Exception ex) when (ex is IOException or JsonException or UnauthorizedAccessException)
+            {
+                // A half-written status reads as none; the next read sees the full one.
+                return (null, null);
             }
         }
-        catch (Exception ex) when (ex is IOException or JsonException or UnauthorizedAccessException)
-        {
-            // A half-written status reads as none; the next read sees the full one.
-        }
-        return (null, null);
     }
 
     /// <summary>When the file was last written, or null when it is not there.</summary>

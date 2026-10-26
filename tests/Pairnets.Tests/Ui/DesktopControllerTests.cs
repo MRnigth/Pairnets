@@ -23,6 +23,7 @@ namespace Pairnets.Tests.Ui;
 /// only through its windows, its tray menu and the nest's website, as a person would. The Windows app's tests
 /// (tests/Pairnets.Client.Tests) use the same scenario names.
 /// </summary>
+[Collection(AvaloniaUi.Name)]
 public sealed class DesktopControllerTests
 {
     // ------------------------------------------------------------------ first run
@@ -91,6 +92,24 @@ public sealed class DesktopControllerTests
         app.App.RevealFile("gone/away.txt");
         Assert.Single(app.Platform.Revealed);
         Assert.Equal(Path.GetFullPath(app.Folder), Path.GetFullPath(Assert.Single(app.Platform.Opened)));
+    }
+
+    /// <summary>
+    /// The Mac test (2026-10-24): before signing in, Quick status, Sync now, Open folder and Pause syncing in the menu-bar
+    /// menu did nothing and said nothing. The first item now says "Sign in…" and opens it; the others are greyed out.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task FirstRun_TheMenuSaysSignInAndGreysOutWhatCantWorkYet()
+    {
+        await using var app = await AppUnderTest.StartAsync(signedIn: false);
+        var signIn = await app.WindowAsync("Pairnets – sign in");
+        foreach (var header in new[] { "Sync now", "Open folder", "Pause syncing" })
+            Assert.Throws<CannotPressException>(() => Person.Click(app.TrayItem(header)));
+        Assert.DoesNotContain(app.App.TrayMenu!.Items.OfType<NativeMenuItem>(), i => i.Header == "Quick status…");
+
+        signIn.Close();
+        Person.Click(app.TrayItem("Sign in…"));
+        await app.WindowAsync("Pairnets – sign in");
     }
 
     [AvaloniaFact]
@@ -242,7 +261,7 @@ public sealed class DesktopControllerTests
         app.App.HandleFileCommand(new FileManagerCommand(FileManagerAction.WhereItLives, Path.Combine(app.Folder, "Photos")));
         await Wait.Until(() => app.App.Window is { Page: MainPage.Files } w && w.FilesView.Folder == "Photos", "the Files page on Photos");
         await Wait.Until(() => app.MainWindow.FilesView.PlacementMenuOpen, "the choices of where Photos lives");
-        Assert.Equal("On this PC", app.MainWindow.FilesView.PlacementShown);
+        Assert.Equal("On this computer", app.MainWindow.FilesView.PlacementShown);
     }
 
     [AvaloniaFact]
@@ -315,37 +334,42 @@ public sealed class DesktopControllerTests
         await using var app = await AppUnderTest.StartAsync();
         await app.WaitUntilIdleAsync();
         var main = app.MainWindow;
-        for (var i = 1; i <= 6; i++)
-            File.WriteAllText(Path.Combine(app.Folder, $"file{i}.txt"), $"file {i}");
+        for (var i = 0; i < 210; i++)
+        {
+            var path = Path.Combine(app.Folder, $"file{i:000}.txt");
+            File.WriteAllText(path, $"file {i}");
+            File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddMinutes(-1)); // all in one pass, not the ones written last 2 s later
+        }
         PressSyncNow(app, main);
-        await app.WaitForNestAsync(f => f.Count == 6, "the six files to reach the nest");
+        // Generous: 210 uploads on a busy test machine (this test is about the question, not the speed).
+        await app.WaitForNestAsync(f => f.Count == 210, "the 210 files to reach the nest", seconds: 120);
         await app.WaitUntilIdleAsync();
 
-        // Deleting two of six (more than a fifth) blocks the pass until someone decides.
-        File.Delete(Path.Combine(app.Folder, "file1.txt"));
-        File.Delete(Path.Combine(app.Folder, "file2.txt"));
+        // Deleting 100 at once blocks the pass until someone decides (fewer are just done).
+        for (var i = 0; i < 100; i++)
+            File.Delete(Path.Combine(app.Folder, $"file{i:000}.txt"));
         PressSyncNow(app, main);
-        await Wait.Until(() => app.App.Session!.Status is { Status: RunnerStatus.Blocked, BlockReason: BlockReason.MassDelete }, "the deletions to be blocked");
+        await Wait.Until(() => app.App.Session!.Status is { Status: RunnerStatus.Blocked, BlockReason: BlockReason.MassDelete }, "the deletions to be blocked", seconds: 60);
         await Wait.Until(() => app.Platform.Notices.Any(n => n.Title == "Deletions blocked"), "a \"Deletions blocked\" notification");
-        Assert.Equal(6, (await app.NestFilesAsync()).Count); // nothing was deleted on the nest
+        Assert.Equal(210, (await app.NestFilesAsync()).Count); // nothing was deleted on the nest
         app.App.RefreshNow();
-        Assert.True(app.TrayItem("Allow these deletions (2)…").IsEnabled);
+        Assert.True(app.TrayItem("Allow these deletions (100)…").IsEnabled);
 
-        Person.Click(Screen.Find<Button>(main, "Allow these deletions (2)…"));
+        Person.Click(Screen.Find<Button>(main, "Allow these deletions (100)…"));
         var question = await app.DialogAsync("Pairnets – allow deletions?");
-        Assert.Contains("file1.txt", AppUnderTest.TextOf(question));
-        await app.AnswerAsync("Pairnets – allow deletions?", "Delete 2 files"); // the buttons say what they do, not Yes/No
-        await app.WaitForNestAsync(f => f.Count == 4 && !f.ContainsKey("file1.txt"), "the two deletions to reach the nest");
+        Assert.Contains("file000.txt", AppUnderTest.TextOf(question));
+        await app.AnswerAsync("Pairnets – allow deletions?", "Delete 100 files"); // the buttons say what they do, not Yes/No
+        await app.WaitForNestAsync(f => f.Count == 110 && !f.ContainsKey("file000.txt"), "the 100 deletions to reach the nest", seconds: 90);
         await app.WaitUntilIdleAsync();
 
         // Again, decided from the tray menu this time.
-        File.Delete(Path.Combine(app.Folder, "file3.txt"));
-        File.Delete(Path.Combine(app.Folder, "file4.txt"));
+        for (var i = 100; i < 200; i++)
+            File.Delete(Path.Combine(app.Folder, $"file{i:000}.txt"));
         Person.Click(app.TrayItem("Sync now"));
-        await Wait.Until(() => app.App.Session!.Status.BlockReason == BlockReason.MassDelete, "the second deletions to be blocked");
-        Person.Click(app.TrayItem("Allow these deletions (2)…"));
-        await app.AnswerAsync("Pairnets – allow deletions?", "Delete 2 files"); // the buttons say what they do, not Yes/No
-        await app.WaitForNestAsync(f => f.Count == 2, "the second deletions to reach the nest");
+        await Wait.Until(() => app.App.Session!.Status.BlockReason == BlockReason.MassDelete, "the second deletions to be blocked", seconds: 60);
+        Person.Click(app.TrayItem("Allow these deletions (100)…"));
+        await app.AnswerAsync("Pairnets – allow deletions?", "Delete 100 files"); // the buttons say what they do, not Yes/No
+        await app.WaitForNestAsync(f => f.Count == 10, "the second deletions to reach the nest", seconds: 90);
         Assert.Equal("No action needed", app.TrayItem("No action needed").Header);
     }
 
@@ -633,7 +657,8 @@ public sealed class DesktopControllerTests
         await using var app = await AppUnderTest.StartAsync(args: [SelfReplace.AfterUpdateArgument]);
         await app.WaitUntilIdleAsync();
         Assert.True(app.App.Window is { IsVisible: true }, "After an update the main window opens again.");
-        Assert.Contains(app.Platform.Notices, n => n.Title == UpdateTexts.UpdatedTitle);
+        // The note is sent off the UI thread (DesktopController.Notify), so it can land a moment after the app is idle.
+        await Wait.Until(() => app.Platform.Notices.Any(n => n.Title == UpdateTexts.UpdatedTitle), "the \"up to date\" note");
     }
 
     [AvaloniaFact]
@@ -864,9 +889,45 @@ public sealed class DesktopControllerTests
         Press("Quit Pairnets");
         Assert.Equal(1, app.Desktop.ShutdownCount);
 
-        var never = app.App.TrayMenu!.Items.OfType<NativeMenuItem>().Where(i => i is not NativeMenuItemSeparator && !pressed.Contains(i))
+        var never = app.App.TrayMenu!.Items.OfType<NativeMenuItem>().Where(i => i is not NativeMenuItemSeparator && i.IsVisible && !pressed.Contains(i))
             .Select(i => "\"" + i.Header + "\"").ToList();
         Assert.True(never.Count == 0, "Never pressed in the tray menu: " + string.Join(", ", never));
+    }
+
+    /// <summary>
+    /// Crash report 8736b8c213c4 (Mac app 1.0.61.4): with several nests the tray menu was drawn again on every status change
+    /// with a new "Open folder" sub-menu, and the macOS menu bar throws when an item's sub-menu is swapped for another. The
+    /// folders' sub-menu is now made once and only refilled.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task TrayMenu_SeveralNests_KeepsOneFolderSubMenu()
+    {
+        await using var app = await AppUnderTest.StartAsync();
+        await app.WaitUntilIdleAsync();
+        static NestListRow Row(string id, string title, string text) =>
+            new(id, title, Path.Combine(Path.GetTempPath(), title), text, title + " · " + text, SideDot.Ok, SideTone.Neutral,
+                RunnerStatus.Idle, null, false, "PC", null);
+        NestListModel Nests(params NestListRow[] rows) => new(rows, rows.Length + " nests", true, RunnerStatus.Idle);
+        List<NativeMenuItem> Rows(string header) =>
+            app.App.TrayMenu!.Items.OfType<NativeMenuItem>().Where(i => i.Header == header).ToList();
+
+        app.App.DrawNestMenu(Nests(Row("a", "Home", "up to date"), Row("b", "Work", "syncing 10%")));
+        var subMenu = Rows("Open folder").Single(i => i.IsVisible).Menu;
+        Assert.NotNull(subMenu);
+        Assert.Equal(["Home", "Work"], subMenu!.Items.OfType<NativeMenuItem>().Select(i => i.Header));
+
+        // A nest's state changes and a third nest comes: the same sub-menu, filled again.
+        app.App.DrawNestMenu(Nests(Row("a", "Home", "up to date"), Row("b", "Work", "syncing 60%"), Row("c", "Photos", "up to date")));
+        var shown = Rows("Open folder").Single(i => i.IsVisible);
+        Assert.Same(subMenu, shown.Menu);
+        Assert.Equal(["Home", "Work", "Photos"], subMenu.Items.OfType<NativeMenuItem>().Select(i => i.Header));
+
+        // Back to one nest: the plain "Open folder" row, and no item's sub-menu is ever set to another.
+        app.App.DrawNestMenu(Nests(Row("a", "Home", "up to date")));
+        shown = Rows("Open folder").Single(i => i.IsVisible);
+        Assert.Null(shown.Menu);
+        Assert.Same(subMenu, Rows("Open folder").Single(i => !i.IsVisible).Menu);
+        Assert.Empty(subMenu.Items);
     }
 
     /// <summary>The file's text, or null while another process (the app writing it) holds it open.</summary>

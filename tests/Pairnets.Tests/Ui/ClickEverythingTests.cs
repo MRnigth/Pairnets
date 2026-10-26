@@ -48,6 +48,9 @@ public sealed class ClickEverythingFixture : IAsyncLifetime
 
     internal Dictionary<string, Task<ClickReport>> Runs { get; } = [];
 
+    /// <summary>What each group has pressed so far (shared by its parts).</summary>
+    internal Dictionary<string, HashSet<string>> Pressed { get; } = [];
+
     public async Task InitializeAsync()
     {
         Directory.CreateDirectory(Folder);
@@ -166,20 +169,26 @@ public sealed class Stage : IAsyncDisposable
 /// button that cannot be clicked (hidden or covered) all fail in plain English. Last, a guard checks that every
 /// handler the AXAML files name was pressed.
 /// </summary>
+[Collection(AvaloniaUi.Name)]
+[TestCaseOrderer("Pairnets.Tests.Ui.HandlerGuardLast", "Pairnets.Tests")]
 public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOutputHelper output) : IClassFixture<ClickEverythingFixture>
 {
     private sealed record Scene(string Where, Func<Stage, Task> Arrange);
 
     // ------------------------------------------------------------------ the tests
 
-    [AvaloniaFact]
-    public async Task TheMainWindow_EveryButtonDoesWhatItSays() => Pass(await RunAsync("main window"));
+    // The main window and the Settings page in parts of two states each, one test per part: a whole window in one test
+    // took over the 10 minutes CI gives a test on the slower macOS runners (they are up to five times slower).
+    [AvaloniaTheory]
+    [InlineData(1), InlineData(2), InlineData(3), InlineData(4), InlineData(5), InlineData(6), InlineData(7), InlineData(8), InlineData(9), InlineData(10)]
+    public async Task TheMainWindow_EveryButtonDoesWhatItSays(int part) => Pass(await RunAsync("main window", part - 1));
 
     [AvaloniaFact]
     public async Task TheTrayPanel_EveryButtonDoesWhatItSays() => Pass(await RunAsync("tray panel"));
 
-    [AvaloniaFact]
-    public async Task TheSettingsPage_EveryButtonDoesWhatItSays() => Pass(await RunAsync("settings"));
+    [AvaloniaTheory]
+    [InlineData(1), InlineData(2), InlineData(3)]
+    public async Task TheSettingsPage_EveryButtonDoesWhatItSays(int part) => Pass(await RunAsync("settings", part - 1));
 
     [AvaloniaFact]
     public async Task TheSignInWindow_EveryButtonDoesWhatItSays() => Pass(await RunAsync("sign-in"));
@@ -227,7 +236,10 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
     {
         var pressed = new HashSet<string>();
         foreach (var group in Groups.Keys)
-            pressed.UnionWith((await RunAsync(group)).Pressed);
+        {
+            for (var part = 0; part < PartsOf(group); part++)
+                pressed.UnionWith((await RunAsync(group, part)).Pressed);
+        }
         var never = AxamlHandlers()
             .Where(h => !pressed.Contains($"{h.View}.{h.Handler}"))
             .Select(h => $"The button {h.Handler} in {h.View}.axaml is never pressed by a test.")
@@ -442,6 +454,13 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
                 view.Folder = fixture.Folder;
                 return Task.CompletedTask;
             })),
+            new("the sign-in window (a folder in Program Files)", s => SignInStage(s, async view =>
+            {
+                view.ShowFolderStep(fixture.Website.MintKey("MACBOOK-" + Guid.NewGuid().ToString("N")[..6]), fixture.Website.Url);
+                view.Folder = Path.Combine(SyncFolderCheck.SystemFolders()[0], "Pairnets nest");
+                Person.Click(Screen.Named<Button>(view, "StartButton"));
+                await Wait.Until(() => Screen.Named<Button>(view, "UseSuggestedButton").IsEffectivelyVisible, "the folder step to refuse a system folder and offer another");
+            })),
         ],
         ["server update"] =
         [
@@ -652,7 +671,7 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
         s.Expect["OnCleanUp"] = That(() => w.CleanupShown, "Clean up your nest show");
         s.Expect["OnAddFiles"] = That(() => NestCalled("add:"), "the chosen file be added");
         s.Expect["OnPlacementMenu"] = That(() => w.FilesView.PlacementMenuOpen, "the choices of where the folder lives show");
-        s.Expect["OnPickPlacement:On this PC*"] = That(() => nest.Calls.Count == 0 && nest.PlacementOf(startFolder) == FilePlacement.OnThisPc, "the folder stay on this computer");
+        s.Expect["OnPickPlacement:On this computer*"] = That(() => nest.Calls.Count == 0 && nest.PlacementOf(startFolder) == FilePlacement.OnThisPc, "the folder stay on this computer");
         s.Expect["OnPickPlacement:On-Demand*"] = That(() => Asked(s, "Make "), "the question before files leave this computer show");
         s.Expect["OnPickPlacement:Only on the nest*"] = That(() => Asked(s, "Keep "), "the question before files leave this computer show");
         s.Expect["OnRowMore"] = That(() => w.FilesView.RowMenuOpen, "the row's menu open");
@@ -665,7 +684,7 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
         s.Expect[":Where this folder lives"] = That(() => true, "its three choices show");
         s.Expect["OnRowInvite"] = That(() => s.Actions.Calls.Any(c => c.StartsWith("invite-to:", StringComparison.Ordinal) && !c.Contains('/')),
             "the invite window open with that top-level folder ticked");
-        s.Expect["OnRowPlace:On this PC"] = That(() => nest.Calls.All(c => c.StartsWith("place:", StringComparison.Ordinal) && c.EndsWith(":OnThisPc", StringComparison.Ordinal)),
+        s.Expect["OnRowPlace:On this computer"] = That(() => nest.Calls.All(c => c.StartsWith("place:", StringComparison.Ordinal) && c.EndsWith(":OnThisPc", StringComparison.Ordinal)),
             "the folder come back to this computer (nothing to ask)");
         s.Expect["OnRowPlace:On-Demand"] = That(() => Asked(s, "Make ") || nest.Calls.Count == 0, "the question before files leave this computer show");
         s.Expect["OnRowPlace:Only on the nest"] = That(() => Asked(s, "Keep ") || nest.Calls.Count == 0, "the question before files leave this computer show");
@@ -784,7 +803,7 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
         s.Expect["OnCancel"] = Raised(s, "cancelled");
         s.Expect["OnReportBug"] = Raised(s, "report-bug");
         s.Expect["OnPlacementLink"] = Raised(s, "open-files");
-        s.Expect[":On this PC"] = That(() => view.PlacementChosen(string.Empty) == FilePlacement.OnThisPc, "everything stay on this computer");
+        s.Expect[":On this computer"] = That(() => view.PlacementChosen(string.Empty) == FilePlacement.OnThisPc, "everything stay on this computer");
         s.Expect[":On-Demand"] = That(() => Asked(s, "Make "), "the question before files leave this computer show");
         s.Expect[":Only on the nest"] = That(() => Asked(s, "Keep "), "the question before files leave this computer show");
         s.Expect["OnToggleAdvanced"] = That(() => Screen.Named<Button>(view, "ResetButton").IsEffectivelyVisible != advancedOpen, "the Advanced part (Start over) open or close");
@@ -842,6 +861,8 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
         s.Expect["OnBackToAccount"] = That(() => view.Step == SignInStep.Account, "the Pairnets account step show");
         s.Expect["OnRetry"] = That(() => Waiting() && Screen.Named<TextBlock>(view, "CodeText").Text != shownCode, "a new code show");
         s.Expect["OnBrowse"] = That(() => view.Folder == fixture.PickedFolder, "the picked folder fill the field");
+        s.Expect["OnUseSuggested"] = That(() => view.Folder == SyncFolderCheck.DefaultFolder && !Screen.Named<Border>(view, "FolderProblemBox").IsVisible,
+            "the offered folder fill the field");
         s.Expect["OnCheck"] = That(() => view.Step == SignInStep.Address && Screen.Named<Border>(view, "FoundCard").IsEffectivelyVisible, "the nest be found");
         s.Expect["OnChange"] = That(() => !Screen.Named<Border>(view, "FoundCard").IsEffectivelyVisible && Screen.Named<TextBox>(view, "AddressBox").IsEffectivelyVisible,
             "the name field show again");
@@ -865,7 +886,7 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
             $"\"Finish in your browser\" show, with the service's page open ({method})");
         s.Expect["OnAccountGoogle"] = OpensTheAccountPage("google");
         s.Expect["OnAccountEmail"] = OpensTheAccountPage("email&email=owner%40example.com");
-        s.Expect["OnMakeAccount"] = That(() => s.Opened.SequenceEqual([origin + "/login"]), "the service's sign-in page open");
+        s.Expect["OnMakeAccount"] = That(() => s.Opened.SequenceEqual([origin + "/login?new=1"]), "the service's sign-in page open");
         s.Expect["OnTerms"] = That(() => s.Opened.SequenceEqual([PairnetsLinks.Terms]), "the Terms open");
         s.Expect["OnPrivacy"] = That(() => s.Opened.SequenceEqual([PairnetsLinks.Privacy]), "the Privacy Policy open");
         s.Expect["OnOwnNest"] = That(() => view.Step == SignInStep.Address, "the step for a nest's own address show");
@@ -1131,21 +1152,47 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
         public IEnumerable<string> HandlerNames => Handlers.Select(h => h[(h.LastIndexOf('.') + 1)..]).Where(n => n.StartsWith("On", StringComparison.Ordinal));
     }
 
-    private Task<ClickReport> RunAsync(string group)
+    private static int PartsOf(string group) => group switch { "main window" => 10, "settings" => 3, _ => 1 };
+
+    /// <summary>
+    /// Presses through one part of a group's scenes, once per test run (the handler guard reuses it). The parts before
+    /// it run first and share what was pressed, so each control is pressed once, as with the group in one go. (A
+    /// control is pressed in the first state that shows it; pressed again in a later state it may do nothing new.)
+    /// </summary>
+    private Task<ClickReport> RunAsync(string group, int part = 0)
     {
-        if (!fixture.Runs.TryGetValue(group, out var run))
-            fixture.Runs[group] = run = PressGroupAsync(Groups[group]);
+        var key = $"{group} {part}";
+        if (!fixture.Runs.TryGetValue(key, out var run))
+            fixture.Runs[key] = run = RunPartAsync(group, part);
         return run;
     }
 
-    private async Task<ClickReport> PressGroupAsync(Scene[] scenes)
+    private async Task<ClickReport> RunPartAsync(string group, int part)
+    {
+        if (part > 0)
+            await RunAsync(group, part - 1);
+        var scenes = Groups[group];
+        var size = (scenes.Length + PartsOf(group) - 1) / PartsOf(group);
+        if (!fixture.Pressed.TryGetValue(group, out var done))
+            fixture.Pressed[group] = done = [];
+        return await PressGroupAsync(scenes.Skip(part * size).Take(size).ToArray(), done);
+    }
+
+    private async Task<ClickReport> PressGroupAsync(Scene[] scenes, HashSet<string> done)
     {
         var report = new ClickReport();
         var picker = Dialogs.FolderPicker;
         Dialogs.FolderPicker = (_, _) => Task.FromResult<string?>(fixture.PickedFolder);
         try
         {
-            var done = new HashSet<string>(); // a control shared by several states is pressed once
+            // done: a control shared by several states is pressed once
+            var recent = new Queue<string>();
+            // The whole group, not one press: on a slow runner it takes minutes, but never this long.
+            using var groupWatchdog = new Watchdog(() =>
+            {
+                lock (recent)
+                    return $"the group ({report.Presses} presses, the last: {string.Join(" | ", recent)})";
+            }, TimeSpan.FromMinutes(9));
             foreach (var scene in scenes)
             {
                 var queue = new Queue<string[]>();
@@ -1159,8 +1206,21 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
                 }
                 while (queue.TryDequeue(out var path))
                 {
-                    if (done.Add(string.Join(" > ", path)))
-                        await PressPathAsync(scene, path, queue, report);
+                    var key = string.Join(" > ", path);
+                    if (path.Length > MaxMenuDepth)
+                    {
+                        report.Problems.Add($"On {scene.Where}, menus keep opening menus: {key}.");
+                        continue;
+                    }
+                    if (!done.Add(key))
+                        continue;
+                    lock (recent)
+                    {
+                        recent.Enqueue($"{scene.Where}: {key}");
+                        if (recent.Count > 8)
+                            recent.Dequeue();
+                    }
+                    await PressPathAsync(scene, path, queue, report);
                 }
             }
         }
@@ -1181,6 +1241,7 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
             e.Handled = true;
         };
         var label = path[^1];
+        using var watchdog = new Watchdog(() => $"pressing {string.Join(" > ", path)} on {scene.Where}", TimeSpan.FromMinutes(2));
         var stage = new Stage(scene.Where);
         Dispatcher.UIThread.UnhandledException += onCrash;
         try
@@ -1244,6 +1305,25 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
             await stage.DisposeAsync();
         }
     }
+
+    /// <summary>
+    /// Ends the test run at once, naming the press, when one press takes minutes (the UI thread is stuck), instead of
+    /// the silent 10-minute hang that CI's blame timeout ends with a dump. It runs on a pool thread, so it fires even then.
+    /// </summary>
+    private sealed class Watchdog(Func<string> what, TimeSpan limit) : IDisposable
+    {
+        private readonly Timer _timer = new(_ =>
+        {
+            var message = $"ClickEverythingTests: {what()} did not finish in {limit.TotalMinutes:0} minutes.";
+            Console.Error.WriteLine(message); // FailFast's own text does not always reach the CI log
+            Environment.FailFast(message);
+        }, null, limit, Timeout.InfiniteTimeSpan);
+
+        public void Dispose() => _timer.Dispose();
+    }
+
+    /// <summary>A menu in a menu in a menu is as deep as the app goes.</summary>
+    private const int MaxMenuDepth = 4;
 
     /// <summary>What pressing <paramref name="target"/> should do; null (with the reason noted) when nobody said.</summary>
     private static Check? CheckFor(Stage stage, Pressable target, ClickReport report)
@@ -1371,4 +1451,22 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
         XamlText.Views(RepoPaths.Of("src", "Pairnets.Desktop", "Views"), ".axaml")
             .SelectMany(v => v.Value.Select(h => (v.Key, h)))
             .OrderBy(h => h.Key, StringComparer.Ordinal);
+}
+
+/// <summary>
+/// The order of the ClickEverything tests: the main window's parts after the rest, each window's parts in turn (a part
+/// first runs the ones before it), and the handler guard last, so it reuses their runs instead of pressing everything
+/// again within one test.
+/// </summary>
+public sealed class HandlerGuardLast : Xunit.Sdk.ITestCaseOrderer
+{
+    public IEnumerable<TTestCase> OrderTestCases<TTestCase>(IEnumerable<TTestCase> testCases) where TTestCase : ITestCase =>
+        testCases.OrderBy(t => t.TestMethod.Method.Name switch
+            {
+                nameof(ClickEverythingTests.EveryHandlerInTheAxamlIsPressedByATest) => 2,
+                var name when name.StartsWith("TheMainWindow_", StringComparison.Ordinal) => 1,
+                _ => 0,
+            })
+            .ThenBy(t => t.TestMethod.Method.Name, StringComparer.Ordinal)
+            .ThenBy(t => t.TestMethodArguments is [int part] ? part : 0);
 }

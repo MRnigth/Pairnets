@@ -39,6 +39,12 @@ public enum BlockReason
 
     /// <summary>Signed out on purpose from this computer's own Sign out button: nothing is wrong, nothing syncs.</summary>
     SignedOutByYou,
+
+    /// <summary>
+    /// Pairnets may not save files in the folder (C:\Program Files and other folders the system protects): pick another
+    /// folder. Nothing in the folder is touched.
+    /// </summary>
+    FolderNotWritable,
 }
 
 /// <summary>What a running pass is doing now, so the apps can say it instead of a bare "Syncing".</summary>
@@ -169,11 +175,8 @@ public sealed class EngineOptions
     public TimeSpan StabilityWindow { get; init; } = TimeSpan.FromSeconds(2);
     public TimeSpan RacyWindow { get; init; } = TimeSpan.FromSeconds(2);
 
-    /// <summary>Block when a pass would delete more than this fraction of tracked files on one side...</summary>
-    public double MassDeleteFraction { get; init; } = 0.20;
-
-    /// <summary>...or more than this many files, whichever limit is smaller.</summary>
-    public int MassDeleteMax { get; init; } = 50;
+    /// <summary>Block (and ask) when a pass would delete this many files or more on one side; fewer are just deleted.</summary>
+    public int MassDeleteThreshold { get; init; } = 100;
 
     /// <summary>
     /// Uploads (and downloads) run this many at a time. Each small file costs a network round trip,

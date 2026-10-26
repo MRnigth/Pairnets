@@ -448,7 +448,7 @@ public sealed class SyncRunner : IAsyncDisposable
             _fullRequested |= full;
             _pendingReasons.Add(reason);
         }
-        _wake.Release();
+        Wake();
     }
 
     /// <summary>Debounced request from the file watcher: waits for quiet, but never longer than the max delay.</summary>
@@ -469,7 +469,22 @@ public sealed class SyncRunner : IAsyncDisposable
                 _dueAt = due;
             _pendingReasons.Add("watcher");
         }
-        _wake.Release();
+        Wake();
+    }
+
+    /// <summary>
+    /// Wakes the loop. A watcher event already on its way when the runner is disposed (a nest stopped or moved) lands
+    /// here after the semaphore is gone; there is nothing left to wake then, and it must not take the app down.
+    /// </summary>
+    private void Wake()
+    {
+        try
+        {
+            _wake.Release();
+        }
+        catch (ObjectDisposedException)
+        {
+        }
     }
 
     /// <summary>Call after the computer resumes from sleep: catch up with a full pass.</summary>
@@ -732,6 +747,7 @@ public sealed class SyncRunner : IAsyncDisposable
         if (rel.Equals(PathRules.TempFolderName, StringComparison.OrdinalIgnoreCase)
             || rel.StartsWith(PathRules.TempFolderName + "/", StringComparison.OrdinalIgnoreCase)
             || rel.Equals(PathRules.MarkerFileName, StringComparison.OrdinalIgnoreCase)
+            || rel.Equals(PathRules.ProbeFileName, StringComparison.OrdinalIgnoreCase)
             || rel.Equals(Legacy.TetherNames.TempFolderName, StringComparison.OrdinalIgnoreCase)
             || rel.StartsWith(Legacy.TetherNames.TempFolderName + "/", StringComparison.OrdinalIgnoreCase)
             || rel.Equals(Legacy.TetherNames.MarkerFileName, StringComparison.OrdinalIgnoreCase))

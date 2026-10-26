@@ -224,17 +224,28 @@ public sealed class LinkStore
     /// <summary>Ends a link: the key is forgotten at once; the folder and its files stay.</summary>
     public bool Unlink(string id) => Update(id, "key = NULL, state = 'Unlinked'");
 
-    /// <summary>A pass finished (<paramref name="error"/> null) or stopped; the cursors only move after a finished pass.</summary>
-    public void Record(string id, LinkState state, string? error, string? remoteServerId = null, long? remoteCursor = null, long? localCursor = null)
+    /// <summary>
+    /// A pass finished (<paramref name="error"/> null) or stopped; the cursors only move after a finished pass, and only
+    /// when the link is still as the pass found it (<paramref name="passedFrom"/>): shared more meanwhile (see
+    /// <see cref="Rewind"/>), the pass did not look at the new folders, so moving the cursors would skip their files.
+    /// </summary>
+    public void Record(string id, LinkState state, string? error, string? remoteServerId = null, long? remoteCursor = null, long? localCursor = null,
+        NestLink? passedFrom = null)
     {
         var now = _clock.GetUtcNow().ToUnixTimeMilliseconds();
-        Update(id, """
+        const string unchanged = "($from = 0 OR (remoteCursor = $rc0 AND localCursor = $lc0 AND access = $a0 AND folders IS $f0))";
+        Update(id, $"""
             state = CASE WHEN state = 'Unlinked' THEN state ELSE $s END, lastError = $e,
             lastInStepMs = CASE WHEN $s = 'InStep' THEN $now ELSE lastInStepMs END,
-            remoteServerId = COALESCE($sid, remoteServerId), remoteCursor = COALESCE($rc, remoteCursor), localCursor = COALESCE($lc, localCursor)
+            remoteServerId = COALESCE($sid, remoteServerId),
+            remoteCursor = CASE WHEN {unchanged} THEN COALESCE($rc, remoteCursor) ELSE remoteCursor END,
+            localCursor = CASE WHEN {unchanged} THEN COALESCE($lc, localCursor) ELSE localCursor END
             """,
             ("$s", state.ToString()), ("$e", (object?)error ?? DBNull.Value), ("$now", now), ("$sid", (object?)remoteServerId ?? DBNull.Value),
-            ("$rc", (object?)remoteCursor ?? DBNull.Value), ("$lc", (object?)localCursor ?? DBNull.Value));
+            ("$rc", (object?)remoteCursor ?? DBNull.Value), ("$lc", (object?)localCursor ?? DBNull.Value),
+            ("$from", passedFrom is null ? 0 : 1), ("$rc0", passedFrom?.RemoteCursor ?? 0), ("$lc0", passedFrom?.LocalCursor ?? 0),
+            ("$a0", passedFrom?.Access.ToString() ?? string.Empty),
+            ("$f0", passedFrom?.Folders is { } folders ? JsonSerializer.Serialize(folders) : (object)DBNull.Value));
     }
 
     /// <summary>

@@ -360,6 +360,14 @@ public sealed class SyncEngine
             return;
         }
 
+        // A folder the system keeps for itself (C:\Program Files...) where this computer may not save: stop calmly and
+        // ask for another folder, instead of failing every pass on the first file. Run as admin, it works and goes on.
+        if (Pairnets.Core.Settings.SyncFolderCheck.SystemFolderOf(Root) is not null && !Pairnets.Core.Settings.SyncFolderCheck.CanWrite(Root))
+        {
+            Block(result, BlockReason.FolderNotWritable, NotWritableMessage);
+            return;
+        }
+
         // A folder synced as Tether: its marker becomes Pairnets' (same folder id), so nothing is blocked.
         Legacy.TetherMigration.MigrateSyncFolder(Root);
         var tracked = _state.CountTracked();
@@ -373,7 +381,16 @@ public sealed class SyncEngine
                     "This folder was already synced by Pairnets with a different state. Confirm before syncing it again.");
                 return;
             }
-            stateMarker = CreateMarker();
+            try
+            {
+                stateMarker = CreateMarker();
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                _log.LogWarning("Cannot write the marker in {Folder}: {Error}", Root, ex.Message);
+                Block(result, BlockReason.FolderNotWritable, NotWritableMessage);
+                return;
+            }
         }
         else if (fileMarker is null)
         {
@@ -505,10 +522,10 @@ public sealed class SyncEngine
             .ToHashSet();
         var deleteLocal = wanted.Count(w => w.Side == DeleteSide.Local);
         var deleteRemote = wanted.Count - deleteLocal;
-        var limit = Math.Min(_options.MassDeleteFraction * tracked, _options.MassDeleteMax);
+        var limit = _options.MassDeleteThreshold;
         var folderEmpty = tracked > 0 && scan.FileCount == 0;
         var approval = _state.ConsumeApproval();
-        if (deleteLocal > limit || deleteRemote > limit || (folderEmpty && wanted.Count > 0))
+        if (deleteLocal >= limit || deleteRemote >= limit || (folderEmpty && wanted.Count > 0))
         {
             if (approval is null || !wanted.IsSubsetOf(approval))
             {
@@ -1450,6 +1467,12 @@ public sealed class SyncEngine
             }
         }
     }
+
+    private string NotWritableMessage =>
+        $"Pairnets can't save files in {Root}. " + (Pairnets.Core.Settings.SyncFolderCheck.SystemFolderOf(Root) is not null && OperatingSystem.IsWindows()
+            ? "Windows protects this folder: only programs with admin rights can save there. "
+            : "This computer doesn't allow it. ")
+        + "Choose another folder for this nest; nothing in this one is changed.";
 
     private string CreateMarker()
     {

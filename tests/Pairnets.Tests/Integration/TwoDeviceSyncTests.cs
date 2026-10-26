@@ -147,7 +147,7 @@ public class TwoDeviceSyncTests : IAsyncLifetime
             _desktop.Write($"d{i % 3}/f{i}.txt", "content " + i);
             _laptop.Write($"d{i % 3}/f{i}.txt", "content " + i);
         }
-        await _desktop.SyncAsync();
+        Completed(await _desktop.SyncUntilQuietAsync());
         var r = await _laptop.SyncAsync();
         Completed(r);
         Assert.Equal(0, r.Changes);
@@ -200,55 +200,56 @@ public class TwoDeviceSyncTests : IAsyncLifetime
     [Fact]
     public async Task MassDeleteIsBlockedUntilAllowedOnce()
     {
-        for (var i = 0; i < 20; i++)
-            _desktop.Write($"f{i:00}.txt", i.ToString());
-        await _desktop.SyncAsync();
-        await _laptop.SyncAsync();
+        for (var i = 0; i < 220; i++)
+            _desktop.Write($"f{i:000}.txt", i.ToString());
+        Completed(await _desktop.SyncUntilQuietAsync());
+        Completed(await _laptop.SyncUntilQuietAsync());
+        Assert.Equal(220, _laptop.Files().Count);
 
-        // 20 tracked: more than min(4, 50) deletions on one side is blocked.
-        for (var i = 0; i < 10; i++)
-            _desktop.Delete($"f{i:00}.txt");
+        // 100 or more deletions on one side are blocked.
+        for (var i = 0; i < 100; i++)
+            _desktop.Delete($"f{i:000}.txt");
         var r = await _desktop.SyncAsync();
         Assert.Equal(PassOutcome.Blocked, r.Outcome);
         Assert.Equal(BlockReason.MassDelete, r.BlockReason);
-        Assert.Equal(10, r.BlockedDeletes.Count);
+        Assert.Equal(100, r.BlockedDeletes.Count);
         Assert.All(r.BlockedDeletes, d => Assert.Equal(DeleteSide.Remote, d.Side));
-        Assert.Equal(20, _server.Store.ReadManifest(null).Entries.Count(e => !e.Deleted));
+        Assert.Equal(220, _server.Store.ReadManifest(null).Entries.Count(e => !e.Deleted));
         Assert.Equal(PassOutcome.Blocked, (await _desktop.SyncAsync()).Outcome); // still blocked
 
-        Assert.Equal(10, _desktop.Engine.ApproveBlockedDeletions());
+        Assert.Equal(100, _desktop.Engine.ApproveBlockedDeletions());
         r = await _desktop.SyncAsync();
-        Assert.Equal(10, r.DeletedRemote);
+        Assert.Equal(100, r.DeletedRemote);
 
-        // The laptop now sees 10 server deletions out of 20 tracked: blocked on its side too.
+        // The laptop now sees 100 server deletions: blocked on its side too.
         r = await _laptop.SyncAsync();
         Assert.Equal(BlockReason.MassDelete, r.BlockReason);
         Assert.All(r.BlockedDeletes, d => Assert.Equal(DeleteSide.Local, d.Side));
-        Assert.Equal(20, _laptop.Files().Count);
+        Assert.Equal(220, _laptop.Files().Count);
         _laptop.Engine.ApproveBlockedDeletions();
         r = await _laptop.SyncAsync();
-        Assert.Equal(10, r.DeletedLocal);
+        Assert.Equal(100, r.DeletedLocal);
 
         // The approval covered exactly one pass.
-        for (var i = 10; i < 20; i++)
-            _desktop.Delete($"f{i:00}.txt");
+        for (var i = 100; i < 200; i++)
+            _desktop.Delete($"f{i:000}.txt");
         Assert.Equal(PassOutcome.Blocked, (await _desktop.SyncAsync()).Outcome);
     }
 
     [Fact]
     public async Task ApprovalDoesNotCoverNewDeletions()
     {
-        for (var i = 0; i < 10; i++)
-            _desktop.Write($"f{i}.txt", i.ToString());
-        await _desktop.SyncAsync();
-        for (var i = 0; i < 3; i++)
-            _desktop.Delete($"f{i}.txt");
+        for (var i = 0; i < 110; i++)
+            _desktop.Write($"f{i:000}.txt", i.ToString());
+        Completed(await _desktop.SyncUntilQuietAsync());
+        for (var i = 0; i < 100; i++)
+            _desktop.Delete($"f{i:000}.txt");
         Assert.Equal(PassOutcome.Blocked, (await _desktop.SyncAsync()).Outcome);
         _desktop.Engine.ApproveBlockedDeletions();
-        _desktop.Delete("f5.txt"); // not part of what the user approved
+        _desktop.Delete("f105.txt"); // not part of what the user approved
         var r = await _desktop.SyncAsync();
         Assert.Equal(PassOutcome.Blocked, r.Outcome);
-        Assert.Equal(4, r.BlockedDeletes.Count);
+        Assert.Equal(101, r.BlockedDeletes.Count);
     }
 
     [Fact]
@@ -286,6 +287,26 @@ public class TwoDeviceSyncTests : IAsyncLifetime
         Directory.Delete(_desktop.Folder, true);
         Directory.Move(moved, _desktop.Folder);
         Completed(await _desktop.SyncAsync());
+    }
+
+    [Fact]
+    public async Task AFolderPairnetsMayNotSaveInStopsCalmlyAndAsksForAnother()
+    {
+        // A folder like C:\Program Files\Sync: the files can be read, but nothing can be saved there.
+        _desktop.Write("a.txt", "a");
+        PassResult r;
+        using (var denied = WriteDenied.On(_desktop.Folder))
+        {
+            if (denied is null)
+                return; // this account may save anywhere (root on Linux): nothing to check
+            r = await _desktop.SyncAsync();
+            Assert.Equal(PassOutcome.Blocked, r.Outcome);
+            Assert.Equal(BlockReason.FolderNotWritable, r.BlockReason);
+            Assert.Contains("Choose another folder", r.Message);
+            Assert.Empty(_server.Store.ReadManifest(null).Entries);
+        }
+        Completed(await _desktop.SyncAsync());
+        Assert.Contains(_server.Store.ReadManifest(null).Entries, e => e.Path == "a.txt");
     }
 
     [Fact]
@@ -385,6 +406,7 @@ public class TwoDeviceSyncTests : IAsyncLifetime
         }
         _desktop.Hooks.BeforeTransfer = Track;
         var up = await _desktop.SyncAsync();
+        Completed(up);
         Assert.Equal(24, up.Uploaded);
         Assert.Equal(4, peak);
 
