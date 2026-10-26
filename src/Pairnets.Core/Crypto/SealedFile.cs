@@ -18,7 +18,7 @@ public sealed class SealedHeader
     public const int Size = 89;
     private const int BoundLength = 29;
     private static ReadOnlySpan<byte> Magic => "PNE1"u8;
-    private const byte Version = 1;
+    internal const byte Version = 1;
 
     private readonly byte[] _bytes;
 

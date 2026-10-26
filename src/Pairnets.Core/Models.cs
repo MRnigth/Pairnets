@@ -30,7 +30,8 @@ public sealed record ErrorBody(string Code, string? Message = null);
 /// <see cref="NestName"/>: the name the owner gave the nest on their account page (missing until they did, and on
 /// nests that are not linked to an account). <see cref="CanMoveStorage"/>: the nest can move its files to another drive
 /// when an app asks (<c>GET /api/storage</c>); missing on older nests, so false. <see cref="Sealed"/>: true on an encrypted nest (docs/ENCRYPTION.md),
-/// missing otherwise.
+/// missing otherwise. <see cref="BigDeletes"/>: the nest-wide choice "Before big deletes" (see <see cref="BigDeleteModes"/>);
+/// missing on older nests, so every computer asks.
 /// </summary>
 public sealed record ServerInfo(
     string ServerId,
@@ -44,7 +45,34 @@ public sealed record ServerInfo(
     string? NestName = null,
     long? HistoryBytes = null,
     bool? CanMoveStorage = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? Sealed = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? Sealed = null,
+    string? BigDeletes = null);
+
+/// <summary>
+/// "Before big deletes (100+ files)", one choice for the whole nest (kept on the nest, read in /api/info, changed with
+/// <c>PUT /api/settings/big-deletes</c> from the owner's computers). An emptied folder always asks, whatever the choice.
+/// </summary>
+public static class BigDeleteModes
+{
+    /// <summary>Every computer asks before it deletes 100 or more files (as before; also on older nests).</summary>
+    public const string AskEverywhere = "askEverywhere";
+
+    /// <summary>Only the computer where the files were deleted asks; the others follow what the nest says.</summary>
+    public const string AskWhereDeleted = "askWhereDeleted";
+
+    /// <summary>No computer asks (an emptied folder still does).</summary>
+    public const string Never = "never";
+
+    public static readonly IReadOnlyList<string> All = [AskEverywhere, AskWhereDeleted, Never];
+
+    public static bool IsValid(string? mode) => mode is AskEverywhere or AskWhereDeleted or Never;
+
+    /// <summary>The choice to use: an unknown or missing one asks everywhere.</summary>
+    public static string Or(string? mode) => IsValid(mode) ? mode! : AskEverywhere;
+}
+
+/// <summary>Body of <c>PUT /api/settings/big-deletes</c>.</summary>
+public sealed record BigDeletesRequest(string? Mode);
 
 /// <summary>The server's self-updater. <see cref="State"/>: missing, idle, requested, running, succeeded or failed.</summary>
 public sealed record UpdaterStatus(bool Installed, string State, string? Message = null, DateTimeOffset? At = null);
@@ -158,11 +186,36 @@ public sealed record RelayHello(string NestId, string ServiceUrl);
 public sealed record SignInMethods(bool Password, bool Passkeys, bool Email, bool Google);
 
 /// <summary>Answer of <c>GET /api/me</c>: who the server thinks this computer is. For a computer with its own key it also says who let it in: the owner's email, how they signed in ("google", "email", "passkey", "password", ...) and when. Null when not known, and from older servers.</summary>
-public sealed record DeviceMe(string? Id, string Name, string Kind, string? Email = null, string? Method = null, DateTimeOffset? Added = null)
+/// <para>Beta updates (docs/DECISIONS.md, "Beta updates"): <see cref="Beta"/> says whether the owner's account joined the beta
+/// program and what this computer chose. Only the owner's own nest sends it to the owner's own computers; older nests send none.</para>
+public sealed record DeviceMe(string? Id, string Name, string Kind, string? Email = null, string? Method = null, DateTimeOffset? Added = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] BetaInfo? Beta = null)
 {
     public const string KindDeviceKey = "device-key";
     public const string KindSharedToken = "shared-token";
 }
+
+/// <summary>
+/// This computer's beta choice as the nest keeps it: <see cref="Channel"/> is "off", "public-beta" or "developer-beta";
+/// <see cref="At"/> is when it was made and <see cref="By"/> where ("app", or "web" for the account page). The newest wins.
+/// </summary>
+public sealed record BetaChoice(string Channel, DateTimeOffset At, string? By = null);
+
+/// <summary>
+/// The beta program as the owner's nest passes it on (<c>GET /api/me</c>): whether the account joined, the terms it agreed
+/// to, the channels it may choose, and this computer's choice. <see cref="Reason"/> says why a computer cannot choose
+/// ("friend", "shared-password", "not-linked"); null when it can.
+/// </summary>
+public sealed record BetaInfo(bool Member, string? TermsVersion = null, IReadOnlyList<string>? Channels = null, BetaChoice? Choice = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Reason = null)
+{
+    public const string ReasonFriend = "friend";
+    public const string ReasonSharedPassword = "shared-password";
+    public const string ReasonNotLinked = "not-linked";
+}
+
+/// <summary>Body of <c>PUT /api/devices/me/beta</c>: the choice made in this computer's Settings.</summary>
+public sealed record BetaChoiceRequest(string Channel, DateTimeOffset At);
 
 /// <summary>
 /// A folder of this nest kept in step with another account's nest (GET /api/links; docs/DECISIONS.md, "4 nests per
@@ -328,6 +381,9 @@ public static class PushNames
 
     /// <summary>Server → every app: <c>NestRenamed(name)</c>, the owner renamed the nest on their account page.</summary>
     public const string NestRenamed = "NestRenamed";
+
+    /// <summary>Server → every app: <c>NestSettingsChanged()</c>, a nest-wide setting changed (read it again in /api/info).</summary>
+    public const string NestSettingsChanged = "NestSettingsChanged";
 }
 
 /// <summary>HTTP header names used by Pairnets.</summary>

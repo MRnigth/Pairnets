@@ -107,7 +107,19 @@ public sealed class SampleActions : ITrayActions
 
     public void InviteFriendTo(string folder) => Calls.Add("invite-to:" + folder);
 
+    public string? LocalFolder { get; set; } = "/home/me/Pairnets";
+
+    public void ChangeLocalFolder() => Calls.Add("change-folder");
+
     public void OpenPeople() => Calls.Add("people");
+
+    public void AddDownload() => Calls.Add("add-download");
+
+    public void CancelDownload(string id) => Calls.Add("cancel-download:" + id);
+
+    public void RetryDownload(string id) => Calls.Add("retry-download:" + id);
+
+    public void ForgetDownload(string id) => Calls.Add("forget-download:" + id);
 
     public Dictionary<NoticeKind, bool> Notify { get; } = [];
 
@@ -602,6 +614,10 @@ public class DesktopUiTests
         window.ShowAttentionTab(false);
         window.ShowStatus(StatusSnapshot.Initial with { Status = RunnerStatus.Idle, Text = "Up to date", LastSyncAt = now, Server = server, Devices = devices }, "/Users/me/Work", "MacBook");
         Save(window, outDir, $"main-window-idle-{suffix}.png");
+        // After this app updated itself: "Let your nest update by itself?" at the top of the overview.
+        window.ShowNestOffer(new NestAutoUpdateOffer([new("a", "soro")]));
+        Save(window, outDir, $"main-window-nest-auto-update-{suffix}.png");
+        window.ShowNestOffer(null);
 
         // This computer can't reach the nest: the others show when they were last seen.
         window.ShowStatus(StatusSnapshot.Initial with { Status = RunnerStatus.Offline, Text = "Offline: timeout", LastSyncAt = now.AddMinutes(-70), Devices = devices }, "/Users/me/Work", "MacBook");
@@ -732,6 +748,9 @@ public class DesktopUiTests
         const string page = "https://sync.pairnets.app/app?code=KQ7M-4PXD&method=email";
         signIn.SignIn.ShowAccount(new AccountSignInState(PairingStage.Waiting, "KQ7M-4PXD", page, DateTimeOffset.UtcNow.AddMinutes(9).AddSeconds(41)), openBrowser: false);
         Save(signIn, outDir, $"sign-in-browser-{suffix}.png");
+        signIn.SignIn.ShowAccount(new AccountSignInState(PairingStage.Waiting, VerifyUrl: "https://sync.pairnets.app/app/link?r=pnr_8kq2w7xm4v9hd3tz6rbn5c1fyjpa0segu2wqXb7Lm9Pt",
+            ExpiresAt: DateTimeOffset.UtcNow.AddMinutes(15), ByLink: true), openBrowser: false);
+        Save(signIn, outDir, $"sign-in-link-{suffix}.png");
         signIn.SignIn.ShowAccount(new AccountSignInState(PairingStage.Waiting, "KQ7M-4PXD", page, DateTimeOffset.UtcNow.AddMinutes(30),
             AccountSignIn.NoNestMessage, NoNest: true, AccountEmail: "maria@example.com"), openBrowser: false);
         Save(signIn, outDir, $"sign-in-no-nest-{suffix}.png");
@@ -1029,7 +1048,7 @@ public class DesktopUiTests
             (view.GuidelinesLink, "https://pairnets.app/guidelines/"),
             (view.CookiesLink, "https://pairnets.app/cookies/"),
             (view.SecurityLink, "https://pairnets.app/security/"),
-            (view.LicensesLink, "https://pairnets.app/licenses/"),
+            (view.LicensesLink, Pairnets.Core.ThirdPartyNotices.CopyPath), // the licence texts the app carries
             (view.DeleteAccountLink, "https://pairnets.app/delete-account/"),
         };
         Assert.Equal(expected.Length, view.AboutLinks.Children.Count); // a new link needs a line here too

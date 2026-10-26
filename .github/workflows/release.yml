@@ -5,10 +5,13 @@ name: Release
 # packages always have fixed links: https://github.com/<owner>/<repo>/releases/download/latest/<file>
 # Only a v* tag's release is ever GitHub's "Latest release" (releases/latest/download), which the apps,
 # update.sh and get.sh update from: "Latest build" is a pre-release and never marked latest.
+# A push to beta/public or beta/developer replaces the rolling pre-release public-beta or developer-beta: the beta
+# feeds (docs/DECISIONS.md, "Beta channels"). Every version.json says which channel it is for; the apps only take a
+# release whose channel is the feed they asked, so main's "Latest build" (channel main) is never installed.
 on:
   push:
     tags: ["v*"]
-    branches: [main]
+    branches: [main, beta/public, beta/developer]
     # The Worker (cloud/) and the website (site/) deploy on their own; a change to only those is not an app update.
     paths-ignore: ["cloud/**", "site/**"]
   release:
@@ -27,20 +30,38 @@ env:
   DOTNET_NOLOGO: 1
 
 jobs:
+  # One version, channel and build for every package and version.json of this run (scripts/release-version.sh):
+  # a v* tag = its number (stable); beta/public, beta/developer = the newest v* tag plus one in its last part (so it
+  # needs every tag: fetch-depth 0); anything else (main) = 1.0.<run number>, channel main.
+  version:
+    name: Version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      # The first four numbers of a five-number version (1.0.61.10.1 -> 1.0.61.10): dotnet, Windows and macOS take no more.
+      file: ${{ steps.v.outputs.file }}
+      channel: ${{ steps.v.outputs.channel }}
+      build: ${{ steps.v.outputs.build }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Version
+        id: v
+        shell: bash
+        run: |
+          bash scripts/release-version.sh | tee -a "$GITHUB_OUTPUT"
+          bash scripts/data-versions.sh
+
   server:
     name: Server (linux-x64)
+    needs: [version]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 8.0.x
-      - name: Version
-        id: v
-        shell: bash
-        run: |
-          # version = the release number (1.0.61.8.1), file = its first four numbers (dotnet, Windows and macOS take no more)
-          bash scripts/release-version.sh "$GITHUB_REF" "${{ github.run_number }}" | tee -a "$GITHUB_OUTPUT"
       - name: Chromium for the website tests
         run: |
           if [ -d tests/Pairnets.Browser.Tests ]; then
@@ -55,10 +76,12 @@ jobs:
         run: >
           dotnet publish src/Pairnets.Server/Pairnets.Server.csproj -c Release -r linux-x64 --self-contained true
           -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=false -p:DebugType=none
-          -p:Version=${{ steps.v.outputs.file }} -p:InformationalVersion=${{ steps.v.outputs.version }} -o dist/pairnets-server-linux-x64
+          -p:Version=${{ needs.version.outputs.file }} -p:InformationalVersion=${{ needs.version.outputs.version }}
+          -p:PairnetsChannel=${{ needs.version.outputs.channel }}
+          -p:PairnetsBuild=${{ needs.version.outputs.build }} -o dist/pairnets-server-linux-x64
       - name: Package
         # The same script makes the package for the pre-deploy check (scripts/pre-deploy.ps1).
-        run: bash scripts/package-server.sh dist/pairnets-server-linux-x64 "${{ steps.v.outputs.version }}" dist
+        run: bash scripts/package-server.sh dist/pairnets-server-linux-x64 "${{ needs.version.outputs.version }}" dist
       - uses: actions/upload-artifact@v4
         with:
           name: server
@@ -66,18 +89,13 @@ jobs:
 
   client:
     name: Client (win-x64)
+    needs: [version]
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 8.0.x
-      - name: Version
-        id: v
-        shell: bash
-        run: |
-          # version = the release number (1.0.61.8.1), file = its first four numbers (dotnet, Windows and macOS take no more)
-          bash scripts/release-version.sh "$GITHUB_REF" "${{ github.run_number }}" | tee -a "$GITHUB_OUTPUT"
       - name: Test the Windows app
         shell: pwsh
         run: |
@@ -89,20 +107,23 @@ jobs:
         run: >
           dotnet publish src/Pairnets.Client/Pairnets.Client.csproj -c Release -r win-x64 --self-contained true
           -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none
-          -p:Version=${{ steps.v.outputs.file }} -p:InformationalVersion=${{ steps.v.outputs.version }} -o publish/client
+          -p:Version=${{ needs.version.outputs.file }} -p:InformationalVersion=${{ needs.version.outputs.version }}
+          -p:PairnetsChannel=${{ needs.version.outputs.channel }}
+          -p:PairnetsBuild=${{ needs.version.outputs.build }} -o publish/client
       - name: Zip
         shell: pwsh
         run: |
-          Copy-Item deploy/README-client.txt publish/client/
+          Copy-Item deploy/README-client.txt, deploy/THIRD-PARTY-NOTICES.txt publish/client/
+          Copy-Item LICENSE publish/client/LICENSE.txt
           New-Item -ItemType Directory -Force dist | Out-Null
-          Compress-Archive -Path publish/client/Pairnets.exe, publish/client/README-client.txt -DestinationPath dist/pairnets-client-win-x64.zip
+          Compress-Archive -Path publish/client/Pairnets.exe, publish/client/README-client.txt, publish/client/THIRD-PARTY-NOTICES.txt, publish/client/LICENSE.txt -DestinationPath dist/pairnets-client-win-x64.zip
       - name: Installer (optional)
         continue-on-error: true
         shell: pwsh
         run: |
           $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
           if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress | Out-Null }
-          & $iscc "/DAppVersion=${{ steps.v.outputs.version }}" "/DFileVersion=${{ steps.v.outputs.file }}" "/DSourceDir=$PWD\publish\client" "/O$PWD\dist" deploy\installer\pairnets.iss
+          & $iscc "/DAppVersion=${{ needs.version.outputs.version }}" "/DFileVersion=${{ needs.version.outputs.file }}" "/DSourceDir=$PWD\publish\client" "/O$PWD\dist" deploy\installer\pairnets.iss
           if ($LASTEXITCODE -ne 0) { throw "ISCC failed" }
       - uses: actions/upload-artifact@v4
         with:
@@ -111,27 +132,25 @@ jobs:
 
   desktop-linux:
     name: Desktop app (linux-x64)
+    needs: [version]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 8.0.x
-      - name: Version
-        id: v
-        shell: bash
-        run: |
-          # version = the release number (1.0.61.8.1), file = its first four numbers (dotnet, Windows and macOS take no more)
-          bash scripts/release-version.sh "$GITHUB_REF" "${{ github.run_number }}" | tee -a "$GITHUB_OUTPUT"
       - name: Publish
         run: >
           dotnet publish src/Pairnets.Desktop/Pairnets.Desktop.csproj -c Release -r linux-x64 --self-contained true
           -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none
-          -p:Version=${{ steps.v.outputs.file }} -p:InformationalVersion=${{ steps.v.outputs.version }} -o dist/pairnets-desktop-linux-x64
+          -p:Version=${{ needs.version.outputs.file }} -p:InformationalVersion=${{ needs.version.outputs.version }}
+          -p:PairnetsChannel=${{ needs.version.outputs.channel }}
+          -p:PairnetsBuild=${{ needs.version.outputs.build }} -o dist/pairnets-desktop-linux-x64
       - name: Package
         run: |
           cp deploy/linux-desktop/install-desktop.sh dist/pairnets-desktop-linux-x64/
           cp assets/pairnets-icon-256.png dist/pairnets-desktop-linux-x64/pairnets.png
+          cp deploy/THIRD-PARTY-NOTICES.txt LICENSE dist/pairnets-desktop-linux-x64/
           chmod +x dist/pairnets-desktop-linux-x64/install-desktop.sh dist/pairnets-desktop-linux-x64/Pairnets
           tar -C dist -czf dist/pairnets-desktop-linux-x64.tar.gz pairnets-desktop-linux-x64
       - uses: actions/upload-artifact@v4
@@ -141,25 +160,22 @@ jobs:
 
   macos:
     name: Desktop app (macOS)
+    needs: [version]
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 8.0.x
-      - name: Version
-        id: v
-        shell: bash
-        run: |
-          # version = the release number (1.0.61.8.1), file = its first four numbers (dotnet, Windows and macOS take no more)
-          bash scripts/release-version.sh "$GITHUB_REF" "${{ github.run_number }}" | tee -a "$GITHUB_OUTPUT"
       - name: Publish and bundle
         run: |
           mkdir -p dist
           for arch in arm64 x64; do
             dotnet publish src/Pairnets.Desktop/Pairnets.Desktop.csproj -c Release -r osx-$arch --self-contained true \
-              -p:DebugType=none -p:Version=${{ steps.v.outputs.file }} -p:InformationalVersion=${{ steps.v.outputs.version }} -o publish/mac-$arch
-            bash deploy/macos/make-app.sh publish/mac-$arch ${{ steps.v.outputs.version }} $arch dist
+              -p:DebugType=none -p:Version=${{ needs.version.outputs.file }} -p:InformationalVersion=${{ needs.version.outputs.version }} \
+              -p:PairnetsChannel=${{ needs.version.outputs.channel }} \
+              -p:PairnetsBuild=${{ needs.version.outputs.build }} -o publish/mac-$arch
+            bash deploy/macos/make-app.sh publish/mac-$arch ${{ needs.version.outputs.version }} $arch dist
           done
           ls -la dist
       - uses: actions/upload-artifact@v4
@@ -268,7 +284,7 @@ jobs:
   release:
     name: GitHub release
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [server, client, desktop-linux, macos, linux-install]
+    needs: [version, server, client, desktop-linux, macos, linux-install]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -284,10 +300,16 @@ jobs:
         run: cp deploy/get.sh release-files/get.sh
       - name: Version file (read by the apps' update check)
         shell: bash
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+          FILE: ${{ needs.version.outputs.file }}
+          CHANNEL: ${{ needs.version.outputs.channel }}
+          BUILD: ${{ needs.version.outputs.build }}
         run: |
-          # "version": at most four numbers, all that apps up to 1.0.61.7 can read; "release": the full number newer apps use.
-          eval "$(bash scripts/release-version.sh "$GITHUB_REF" "${{ github.run_number }}")"
-          printf '{"version":"%s","release":"%s","commit":"%s"}\n' "$file" "$version" "$GITHUB_SHA" > release-files/version.json
+          # The apps take a release only when its channel is the feed they asked for (never "main"), and when none of its
+          # data versions (scripts/data-versions.sh) is lower than their own. SHA256SUMS.txt lists this file, so it is signed.
+          data="$(bash scripts/data-versions.sh)"
+          printf '{"version":"%s","release":"%s","commit":"%s","channel":"%s","build":%d,"data":%s}\n' "$FILE" "$VERSION" "$GITHUB_SHA" "$CHANNEL" "$BUILD" "$data" > release-files/version.json
           cat release-files/version.json
       - name: Checksums
         working-directory: release-files
@@ -316,7 +338,7 @@ jobs:
   latest:
     name: Latest build (main)
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    needs: [server, client, desktop-linux, macos, linux-install]
+    needs: [version, server, client, desktop-linux, macos, linux-install]
     runs-on: ubuntu-latest
     concurrency:
       group: latest-build
@@ -335,10 +357,16 @@ jobs:
         run: cp deploy/get.sh release-files/get.sh
       - name: Version file (read by the apps' update check)
         shell: bash
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+          FILE: ${{ needs.version.outputs.file }}
+          CHANNEL: ${{ needs.version.outputs.channel }}
+          BUILD: ${{ needs.version.outputs.build }}
         run: |
-          # "version": at most four numbers, all that apps up to 1.0.61.7 can read; "release": the full number newer apps use.
-          eval "$(bash scripts/release-version.sh "$GITHUB_REF" "${{ github.run_number }}")"
-          printf '{"version":"%s","release":"%s","commit":"%s"}\n' "$file" "$version" "$GITHUB_SHA" > release-files/version.json
+          # The apps take a release only when its channel is the feed they asked for (never "main"), and when none of its
+          # data versions (scripts/data-versions.sh) is lower than their own. SHA256SUMS.txt lists this file, so it is signed.
+          data="$(bash scripts/data-versions.sh)"
+          printf '{"version":"%s","release":"%s","commit":"%s","channel":"%s","build":%d,"data":%s}\n' "$FILE" "$VERSION" "$GITHUB_SHA" "$CHANNEL" "$BUILD" "$data" > release-files/version.json
           cat release-files/version.json
       - name: Checksums
         working-directory: release-files
@@ -358,6 +386,7 @@ jobs:
         run: |
           # Never GitHub's "Latest release": a pre-release marked not latest, so releases/latest/download (what the apps,
           # update.sh and get.sh read) only ever serves a v* tag's version. Its own links use the tag name: download/latest/.
+          # Its version.json says "channel":"main", which no app installs, also from a beta feed.
           gh release delete latest --repo "$GITHUB_REPOSITORY" --cleanup-tag --yes || true
           gh release create latest release-files/* --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --latest=false \
             --title "Latest build" \
@@ -367,6 +396,75 @@ jobs:
           * Mac: Pairnets-macos-arm64.dmg (Apple silicon) or Pairnets-macos-x64.dmg (Intel)
           * Linux desktop: pairnets-desktop-linux-x64.tar.gz
           * Server: pairnets-server-linux-x64.tar.gz
+
+          Check downloads against SHA256SUMS.txt. SHA256SUMS.txt.sig is its signature by the Pairnets release key
+          (deploy/release-signing.pub): openssl dgst -sha256 -verify release-signing.pub -signature SHA256SUMS.txt.sig SHA256SUMS.txt"
+
+  # The beta feeds: a push to beta/public or beta/developer replaces the rolling pre-release public-beta or
+  # developer-beta (the tag is the channel). Same files, names and signing key as a release; never GitHub's latest.
+  beta:
+    name: Beta (${{ github.ref_name }})
+    if: startsWith(github.ref, 'refs/heads/beta/') && github.event_name == 'push'
+    needs: [version, server, client, desktop-linux, macos, linux-install]
+    runs-on: ubuntu-latest
+    concurrency:
+      group: beta-${{ github.ref_name }}
+      cancel-in-progress: false
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      # The packages go in their own folder: the checkout already has an assets/ folder (icons, fonts) that
+      # must not end up among the release files.
+      - uses: actions/download-artifact@v4
+        with:
+          path: release-files
+          merge-multiple: true
+      - name: Server installer (pairnets.app/get.sh points at this copy, not at main)
+        run: cp deploy/get.sh release-files/get.sh
+      - name: Version file (read by the apps' update check)
+        shell: bash
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+          FILE: ${{ needs.version.outputs.file }}
+          CHANNEL: ${{ needs.version.outputs.channel }}
+          BUILD: ${{ needs.version.outputs.build }}
+        run: |
+          # The apps take a release only when its channel is the feed they asked for (never "main"), and when none of its
+          # data versions (scripts/data-versions.sh) is lower than their own. SHA256SUMS.txt lists this file, so it is signed.
+          data="$(bash scripts/data-versions.sh)"
+          printf '{"version":"%s","release":"%s","commit":"%s","channel":"%s","build":%d,"data":%s}\n' "$FILE" "$VERSION" "$GITHUB_SHA" "$CHANNEL" "$BUILD" "$data" > release-files/version.json
+          cat release-files/version.json
+      - name: Checksums
+        working-directory: release-files
+        run: |
+          # Every release file is a plain file; a folder here would also break the upload below.
+          dirs="$(find . -mindepth 1 -maxdepth 1 ! -type f)"
+          if [ -n "$dirs" ]; then echo "::error::not a plain file, cannot be a release file: $dirs"; exit 1; fi
+          find . -maxdepth 1 -type f ! -name 'SHA256SUMS.txt*' -printf '%P\0' | sort -z | xargs -0 sha256sum > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+      - name: Sign the checksums (the apps, update.sh and get.sh only install a signed release)
+        env:
+          RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
+        run: bash scripts/sign-release.sh release-files
+      - name: Replace the beta release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.version.outputs.version }}
+          CHANNEL: ${{ needs.version.outputs.channel }}
+          BUILD: ${{ needs.version.outputs.build }}
+        run: |
+          case "$CHANNEL" in
+            public-beta) title="Public beta $VERSION (build $BUILD)"; who="computers on Public beta" ;;
+            developer-beta) title="Developer beta $VERSION (build $BUILD)"; who="computers on Developer beta" ;;
+            *) echo "::error::not a beta channel: $CHANNEL"; exit 1 ;;
+          esac
+          # Never GitHub's "Latest release": --prerelease --latest=false, like "Latest build". The tag is the channel.
+          gh release delete "$CHANNEL" --repo "$GITHUB_REPOSITORY" --cleanup-tag --yes || true
+          gh release create "$CHANNEL" release-files/* --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --latest=false \
+            --title "$title" \
+            --notes "$title, built automatically from the newest commit on $GITHUB_REF_NAME (${GITHUB_SHA::7}). Pairnets on
+          $who updates to it by itself; it is a test version, not a finished one.
 
           Check downloads against SHA256SUMS.txt. SHA256SUMS.txt.sig is its signature by the Pairnets release key
           (deploy/release-signing.pub): openssl dgst -sha256 -verify release-signing.pub -signature SHA256SUMS.txt.sig SHA256SUMS.txt"

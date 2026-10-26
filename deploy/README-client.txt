@@ -32,4 +32,4 @@ Settings: %AppData%\Pairnets\settings.json
 Help:     https://pairnets.app/help
 Full documentation: https://github.com/MRnigth/Pairnets#readme
 
-(c) 2026 Pairnets - MIT licence
+(c) 2026 MRnigth - MIT licence

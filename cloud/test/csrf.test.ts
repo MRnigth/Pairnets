@@ -17,6 +17,10 @@ const MUTATIONS: [string, string][] = [
   ["POST", "/v1/servers/approve"],
   ["DELETE", "/v1/servers/nst_testnest000000000000000001"],
   ["DELETE", "/v1/servers/nst_testnest000000000000000001/devices/dev1"],
+  ["PUT", "/v1/servers/nst_testnest000000000000000001/devices/dev1/beta"],
+  ["POST", "/v1/beta/join"],
+  ["POST", "/v1/beta/leave"],
+  ["POST", "/admin/beta/acc_testacct000000000000000001/remove"],
   ["PUT", "/v1/me"],
   ["POST", "/account"],
   ["POST", "/login"],
@@ -43,6 +47,7 @@ describe("csrf", () => {
       [
         "/v1/app/logout",
         "/v1/app/poll",
+        "/v1/app/redeem",
         "/v1/app/start",
         "/v1/claim",
         "/v1/crash",
@@ -59,6 +64,7 @@ describe("csrf", () => {
     expect((await c.call("POST", "/v1/claim", { body: {} })).status).toBe(400);
     expect((await c.call("POST", "/v1/app/start", { body: { name: "Laptop" } })).status).toBe(200);
     expect((await c.call("POST", "/v1/app/poll", { body: { deviceCode: "x" } })).status).toBe(400);
+    expect((await c.call("POST", "/v1/app/redeem", { body: { deviceCode: "x", code: "y" } })).status).toBe(400);
     expect((await c.call("POST", "/v1/app/logout")).status).toBe(204);
     expect((await c.call("POST", "/v1/heartbeat", { body: {} })).status).toBe(410);
     expect((await c.call("POST", "/v1/nest/confirm", { body: {} })).status).toBe(410);

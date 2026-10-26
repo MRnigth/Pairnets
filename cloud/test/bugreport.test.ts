@@ -35,7 +35,7 @@ describe("POST /v1/bugreport", () => {
     expect(res.status).toBe(204);
     const rows = await h.query("SELECT * FROM bug_reports");
     expect(rows).toHaveLength(1);
-    expect(Object.keys(rows[0]).sort()).toEqual(["app", "created_at", "id", "note", "report", "system", "version"]);
+    expect(Object.keys(rows[0]).sort()).toEqual(["app", "build", "channel", "created_at", "id", "note", "report", "system", "version"]);
     expect(rows[0]).toMatchObject({ app: "Windows app", version: "1.0.61", report: REPORT, note: "The folder went empty after I moved it" });
     expect(JSON.stringify(rows)).not.toContain("198.51.100.20");
     const mails = h.mailer.to(ADMIN);

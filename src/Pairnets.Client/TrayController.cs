@@ -93,7 +93,7 @@ public sealed class TrayController : ITrayActions, IDisposable
         UpgradeSettings();
         TakeSetupChoices();
         _package = UpdatePackage.ForThisComputer(IsInstalledCopy);
-        _updates = new UpdateService(env.CreateUpdateChecker(), PairnetsInfo.ProductVersion, _package.Asset);
+        _updates = new UpdateService(env.CreateUpdateChecker(), PairnetsInfo.ThisRelease, _package.Asset);
         _fileLog.Minimum = _settings.DebugMode ? LogLevel.Debug : LogLevel.Information; // Debug mode: more detail in the log
         StartSimpleDrawing();
 
@@ -250,10 +250,13 @@ public sealed class TrayController : ITrayActions, IDisposable
             _dirty = true;
             if (!u.Signed)
                 return; // (the banner says it was not installed; no "update available" toast for it)
-            Toast("update:" + u.Version, "Pairnets update available", $"Version {u.Version} is ready. Open Pairnets to update.", Forms.ToolTipIcon.Info, ShowMainWindow);
+            Toast("update:" + u.Display, "Pairnets update available", $"Version {u.Display} is ready. Open Pairnets to update.", Forms.ToolTipIcon.Info, ShowMainWindow);
         });
+        _updates.SetChannel(_settings.EffectiveChannel);
         _updates.SetEnabled(_settings.CheckForUpdates);
         NoticeLastClose();
+        if (NestAutoUpdateOffer.NoteStart(_settings, PairnetsInfo.ProductVersion))
+            SettingsStore.Save(_env.SettingsPath, _settings);
         if (!AnyNestReady || !_settings.FirstRunCompleted)
         {
             ShowSettings(firstRun: true);
@@ -266,7 +269,7 @@ public sealed class TrayController : ITrayActions, IDisposable
         {
             // Updated itself from the window's "Update now": open the window again, with a note that it worked.
             ShowMainWindow();
-            Toast("updated", UpdateTexts.UpdatedTitle, UpdateTexts.Updated(PairnetsInfo.ProductVersion), Forms.ToolTipIcon.Info, ShowMainWindow);
+            Toast("updated", UpdateTexts.UpdatedTitle, UpdateTexts.Updated(PairnetsInfo.DisplayVersion), Forms.ToolTipIcon.Info, ShowMainWindow);
         }
         else if (!Arguments.Contains(AppActivation.AutoStartArgument))
             ShowMainWindow();
@@ -357,7 +360,18 @@ public sealed class TrayController : ITrayActions, IDisposable
         session.PassCompleted += r => RunOnUi(() => OnPassCompleted(run, r));
         session.CatchUpCompleted += n => RunOnUi(() => Toast("catchup", PrefixOf(run) + "Pairnets is up to date",
             $"Synced {n} change(s) made while this computer was away.", Forms.ToolTipIcon.Info, () => ShowNest(run), run));
+        session.DownloadFinished += d => RunOnUi(() =>
+        {
+            var (title, text) = NestDownloadsSection.DoneNote(d);
+            Toast("download:" + d.Id, PrefixOf(run) + title, text, Forms.ToolTipIcon.Info, () =>
+            {
+                ShowNest(run);
+                if (!d.Plain)
+                    _window?.ShowFilesAt(d.Folder);
+            }, run);
+        });
         session.ServerInfoChanged += info => RunOnUi(() => OnServerInfo(run, session, info));
+        session.BetaHeard += info => RunOnUi(() => OnBetaHeard(session, info));
         session.AccountChanged += (next, token) => RunOnUi(() => OnAccountChanged(run, session, next, token));
         session.Files.Opened.NestFullWhileSaving += _ => RunOnUi(() =>
         {
@@ -572,6 +586,16 @@ public sealed class TrayController : ITrayActions, IDisposable
 
     /// <summary>"Invite a friend to this folder…" on the Files page: the invite window with that folder ticked.</summary>
     public void InviteFriendTo(string folder) => OpenInvite(folder);
+
+    /// <summary>Where the shown nest is saved on this computer, for the Files page's "Saved in …" line.</summary>
+    public string? LocalFolder => string.IsNullOrWhiteSpace(Nest.Folder) ? null : Nest.Folder;
+
+    /// <summary>"Change…" beside "Saved in …" on the Files page: Settings, at the folder row (the change is saved there).</summary>
+    public void ChangeLocalFolder()
+    {
+        ShowMainWindow(MainPage.Settings);
+        _settingsView?.ShowFolderRow();
+    }
 
     private void OpenInvite(string? startFolder)
     {
@@ -864,6 +888,19 @@ public sealed class TrayController : ITrayActions, IDisposable
         StartNest(run, token);
     }
 
+    /// <summary>"Put them all back" on the big-delete card: restores the whole delete from the nest, on every computer.</summary>
+    private async void PutBigDeleteBack()
+    {
+        if (_session is not { } session || session.Status.BigDelete is not { } big)
+            return;
+        if (!Dialogs.Confirm(_window is { IsVisible: true } ? _window : null, BigDeleteText.PutBackQuestion(big), "Pairnets – put them back?", BigDeleteText.PutBackButton))
+            return;
+        var done = await session.PutBigDeleteBackAsync();
+        Dialogs.Ask(_window is { IsVisible: true } ? _window : null, BigDeleteText.PutBackResult(done), "Pairnets", MessageBoxButton.OK,
+            done.Error is null ? MessageBoxImage.Information : MessageBoxImage.Warning);
+        _dirty = true;
+    }
+
     /// <summary>"Use StudyPC" on the name offer: renames this computer on its nest; the session then saves the new name.</summary>
     private async void UseOwnName(NameOffer offer)
     {
@@ -980,6 +1017,7 @@ public sealed class TrayController : ITrayActions, IDisposable
             DrawUpdateBanner();
             _window.ShowMapSpeed = _settings.ShowMapSpeed;
             _window.ShowNests(nests);
+            _window.ShowNestOffer(NestOffer());
             _window.ShowStatus(status, Nest.Folder, Nest.DeviceName);
             _window.ShowActivity(_session?.Activity.Items ?? []);
             _window.ShowAttention(BuildAttention(status));
@@ -1079,6 +1117,10 @@ public sealed class TrayController : ITrayActions, IDisposable
         if (status.HeldBack.Count > 0 && _session is { } holding)
             items.Add(new AttentionItem(ShareText.HeldBackTitle(status.HeldBack.Count), ShareText.HeldBackDetail(status.Access, status.NestTitle, status.HeldBack),
                 ShareText.PutBack(status.Access), holding.PutBackHeldBack, SecondLabel: ShareText.KeepMine, Second: holding.KeepHeldBack));
+        // A big delete went through (asked or not): everything can be put back in one go while the nest keeps it.
+        if (status.BigDelete is { } big)
+            items.Add(new AttentionItem(BigDeleteText.Done(big), BigDeleteText.Safe, BigDeleteText.PutBackButton, PutBigDeleteBack, At: big.At,
+                SecondLabel: BigDeleteText.CloseLabel, Second: () => _session?.DismissBigDelete()));
         if (status.FixLabel is not null)
             items.Add(new AttentionItem("Syncing is paused until you decide", _session.Status.Text, status.FixLabel, FixBlocked));
         foreach (var w in _session.Warnings())
@@ -1107,6 +1149,13 @@ public sealed class TrayController : ITrayActions, IDisposable
                 : result.BlockReason == BlockReason.SignInRequired ? "Sign in to your nest" : "Pairnets paused syncing";
             Toast("blocked:" + result.BlockReason, PrefixOf(run) + title, result.Message ?? result.BlockReason.ToString(),
                 result.BlockReason == BlockReason.SignedOut ? Forms.ToolTipIcon.Error : Forms.ToolTipIcon.Warning, () => Picked(FixBlocked), run);
+        }
+        else if (result.DeletedLocal >= BigDeleteText.Threshold || result.DeletedRemote >= BigDeleteText.Threshold)
+        {
+            // A big delete went through (perhaps without asking, as the nest's "Before big deletes" says): never silent.
+            var count = result.DeletedLocal + result.DeletedRemote;
+            Toast("bigdelete", PrefixOf(run) + BigDeleteText.ToastTitle(count), BigDeleteText.Safe + " " + BigDeleteText.ToastHint,
+                Forms.ToolTipIcon.Info, () => Picked(() => ShowMainWindow(MainPage.Attention)), run);
         }
         else if (result.Freed > 0)
         {
@@ -1159,6 +1208,7 @@ public sealed class TrayController : ITrayActions, IDisposable
                 _settings.SideFolded = folded;
                 SettingsStore.Save(_env.SettingsPath, _settings);
             };
+            _window.NestOfferAnswered += AnswerNestOffer;
         }
         _window.Show();
         if (_window.WindowState == WindowState.Minimized)
@@ -1240,6 +1290,51 @@ public sealed class TrayController : ITrayActions, IDisposable
     public Task<bool> SetDeviceIcon(string id, string icon) =>
         _session is { } session ? session.SetDeviceIconAsync(id, icon) : Task.FromResult(false);
 
+    // ------------------------------------------------------------------ downloads on the nest (1.0.61.8)
+
+    private NestDownloadWindow? _downloadWindow;
+
+    /// <summary>"Add a link…": the window that hands a link to the picked nest, which downloads it by itself.</summary>
+    void IMainActions.AddDownload()
+    {
+        if (_session is not { } session)
+            return;
+        if (_downloadWindow is { } open)
+        {
+            open.Activate();
+            return;
+        }
+        var window = new NestDownloadWindow(session.StartDownloadAsync, from => PickDownloadFolder(session))
+        {
+            Owner = _window is { IsVisible: true } ? _window : null,
+            Sealed = session.Status.NestDownloads?.Sealed == true,
+        };
+        _downloadWindow = window;
+        try
+        {
+            window.ShowDialog();
+        }
+        finally
+        {
+            _downloadWindow = null;
+        }
+    }
+
+    /// <summary>"Change…" in the download window: the nest's folders, as in "Move to…" on the Files page.</summary>
+    private string? PickDownloadFolder(ClientSession session)
+    {
+        var choices = NestDownloadsSection.FolderChoices(session.Files.Folders(depth: 10));
+        return Dialogs.PickOne(_downloadWindow, "Save the download in…", "Choose the folder on your nest:", choices, "Choose") is { } pick
+            ? NestDownloadsSection.FolderOfChoice(pick)
+            : null;
+    }
+
+    void IMainActions.CancelDownload(string id) => _ = _session?.CancelDownloadAsync(id);
+
+    void IMainActions.RetryDownload(string id) => _ = _session?.RetryDownloadAsync(id);
+
+    void IMainActions.ForgetDownload(string id) => _ = _session?.CancelDownloadAsync(id);
+
     /// <summary>The quick-look panel next to the taskbar; a second click on the icon closes it.</summary>
     private void TogglePanel()
     {
@@ -1317,8 +1412,13 @@ public sealed class TrayController : ITrayActions, IDisposable
             case BlockReason.FolderEmpty:
                 if (_session.PendingDeletes().Count is > 0 and var pending
                     && Dialogs.Confirm(_window is { IsVisible: true } ? _window : null, _session.DescribePendingDeletes(), "Pairnets – allow deletions?",
-                        OverviewModel.DeleteButtons(pending).Yes, OverviewModel.DeleteButtons(pending).No))
-                    _session.ApproveDeletions();
+                        OverviewModel.DeleteButtons(pending).Yes, OverviewModel.DeleteButtons(pending).No, BigDeleteText.TickFor(_session), out var others))
+                {
+                    var session = _session;
+                    session.ApproveDeletions();
+                    if (others)
+                        _ = session.SetBigDeletesAsync(BigDeleteModes.AskWhereDeleted); // the other computers follow this one
+                }
                 break;
             case BlockReason.ForeignMarker:
                 if (Dialogs.Ask(null, $"{Nest.Folder} was synced by Pairnets before, but this computer has no record of it (for example after reinstalling).\n\n" +
@@ -1463,6 +1563,8 @@ public sealed class TrayController : ITrayActions, IDisposable
         view.OpenLinkRequested += Shell;
         view.Cancelled += () => _window?.Navigate(MainPage.Overview);
         view.ChangeStorageRequested += () => ShowNestPlace(view);
+        view.ShowBigDeletes(_session?.BigDeletes, _session?.CanChangeBigDeletes == true, _session?.NestKnowsBigDeletes == true, _session is not null);
+        view.BigDeletesChosen += mode => _session is { } s ? s.SetBigDeletesAsync(mode) : Task.FromResult<string?>("Not connected to the nest.");
         _window.ShowSettingsPage(view);
         _ = FillNestStorageAsync(view);
     }
@@ -1525,6 +1627,12 @@ public sealed class TrayController : ITrayActions, IDisposable
             SetAutoStart(next.StartWithWindows);
         if (before.CheckForUpdates != next.CheckForUpdates)
             _updates.SetEnabled(next.CheckForUpdates);
+        if (SettingsSwitches.BetaChanged(before, next))
+        {
+            _updates.SetChannel(next.EffectiveChannel);
+            foreach (var session in _runs.Select(r => r.Session).OfType<ClientSession>().Where(OwnNest))
+                _ = SendBetaAsync(session);
+        }
         foreach (var run in _runs)
             run.Settings = _settings.ForNest(run.Id) ?? run.Settings;
         if (_runs.Any(r => r.Session is not null))
@@ -1604,6 +1712,51 @@ public sealed class TrayController : ITrayActions, IDisposable
             StartAll();
     }
 
+    // ------------------------------------------------------------------ beta updates
+
+    /// <summary>The owner's own nest, reached with this computer's own key: the only kind that decides Beta updates.</summary>
+    private static bool OwnNest(ClientSession session) => session.Engine.Access.IsOwner && session.Settings.HasOwnKey;
+
+    /// <summary>
+    /// A nest said what it knows about the beta program (every few minutes): take in a choice made on the account page, or
+    /// send this computer's newer one. A nest that says nothing changes nothing (<see cref="BetaUpdates.Heard"/>).
+    /// </summary>
+    private void OnBetaHeard(ClientSession session, BetaInfo? info)
+    {
+        var next = _settings.Clone();
+        var (changed, sendOurs) = BetaUpdates.Heard(next, info);
+        if (changed)
+            UseBetaSettings(next);
+        if (sendOurs && OwnNest(session))
+            _ = SendBetaAsync(session);
+    }
+
+    private async Task SendBetaAsync(ClientSession session)
+    {
+        var next = _settings.Clone();
+        if (await BetaUpdates.SendAsync(next, session.Api, CancellationToken.None))
+            RunOnUi(() =>
+            {
+                var current = _settings.Clone();
+                current.BetaChannel = next.BetaChannel;
+                current.BetaChannelAt = next.BetaChannelAt;
+                current.BetaProgram = next.BetaProgram;
+                UseBetaSettings(current);
+            });
+    }
+
+    /// <summary>Saves new Beta updates values, follows the channel they give, and shows them on an open Settings page.</summary>
+    private void UseBetaSettings(ClientSettings next)
+    {
+        _settings = next;
+        SettingsStore.Save(_env.SettingsPath, _settings);
+        foreach (var run in _runs)
+            run.Settings = _settings.ForNest(run.Id) ?? run.Settings;
+        _updates.SetChannel(_settings.EffectiveChannel);
+        _settingsView?.ShowBeta(_settings);
+        _dirty = true;
+    }
+
     // ------------------------------------------------------------------ updates and the server
 
     private void DrawUpdateBanner()
@@ -1618,13 +1771,13 @@ public sealed class TrayController : ITrayActions, IDisposable
         // A failed update says why in one line; its button is the next step (none for a release Pairnets did not sign),
         // and the X puts the card away.
         if (!update.Signed)
-            _window.ShowUpdate($"Pairnets {update.Version} could not be installed", UpdateProblem.NotSigned.Reason, UpdateProblem.NotSigned.ButtonText);
+            _window.ShowUpdate($"Pairnets {update.Display} could not be installed", UpdateProblem.NotSigned.Reason, UpdateProblem.NotSigned.ButtonText);
         else if (_updateError is { } problem)
-            _window.ShowUpdate($"Pairnets {update.Version} could not be installed", problem.Reason, problem.ButtonText);
+            _window.ShowUpdate($"Pairnets {update.Display} could not be installed", problem.Reason, problem.ButtonText);
         else if (_updateProgress is { } p)
-            _window.ShowUpdate($"Downloading Pairnets {update.Version}…", "Syncing continues while it downloads.", UpdateTexts.UpdateNow, p, busy: true);
+            _window.ShowUpdate($"Downloading Pairnets {update.Display}…", "Syncing continues while it downloads.", UpdateTexts.UpdateNow, p, busy: true);
         else
-            _window.ShowUpdate($"Pairnets {update.Version} is available", UpdateTexts.Ready(PairnetsInfo.ProductVersion), UpdateTexts.UpdateNow);
+            _window.ShowUpdate(UpdateTexts.Available(update), UpdateTexts.Ready(PairnetsInfo.DisplayVersion), UpdateTexts.UpdateNow);
     }
 
     /// <summary>True when this Pairnets.exe was put there by PairnetsSetup.exe (so the installer can replace it).</summary>
@@ -1750,6 +1903,40 @@ public sealed class TrayController : ITrayActions, IDisposable
             return;
         }
         ShowServerUpdate(run, info.ServerVersion!, null);
+    }
+
+    /// <summary>
+    /// The "Let your nest update by itself?" card after this app updated itself: the person's own nests that only update
+    /// when asked, except one the "Update your nest" window already asked about this time.
+    /// </summary>
+    internal NestAutoUpdateOffer? NestOffer() =>
+        NestAutoUpdateOffer.For(_settings, _runs.Select(r => r.Settings), PairnetsInfo.ProductVersion,
+            skip: id => _runs.FirstOrDefault(r => r.Id == id)?.ServerPromptShownFor is not null);
+
+    /// <summary>"Turn on" switches "Update the nest by itself" on for each nest the card names (and updates one that is behind now); both buttons put the card away.</summary>
+    private void AnswerNestOffer(NestAutoUpdateAnswer answer)
+    {
+        var offer = NestOffer();
+        _settings.NestAutoUpdateOfferFor = null;
+        if (answer == NestAutoUpdateAnswer.TurnOn && offer is not null)
+        {
+            foreach (var named in offer.Nests)
+            {
+                if (_settings.ForNest(named.Id) is not { } nest)
+                    continue;
+                nest.AutoUpdateServer = true;
+                SaveNest(nest);
+                if (_runs.FirstOrDefault(r => r.Id == named.Id) is { Session: { } session } run && session.Status.Server is { } info && session.ServerNeedsUpdate(info))
+                {
+                    run.ServerPromptShownFor = info.ServerVersion;
+                    UpdateServerQuietly(run, session, info.ServerVersion!);
+                }
+            }
+            Toast("nest-auto-update", offer.TurnedOn, NestAutoUpdateOffer.TurnedOnDetail, Forms.ToolTipIcon.Info, ShowMainWindow);
+        }
+        SettingsStore.Save(_env.SettingsPath, _settings);
+        _dirty = true;
+        RefreshIfDirty();
     }
 
     private async void UpdateServerQuietly(NestRun run, ClientSession session, string serverVersion)

@@ -12,7 +12,7 @@ namespace Pairnets.Server.Web;
 /// path it was started for).</item>
 /// <item>What only the owner does gets 403 <c>owner_only</c>: removing or renaming another computer, updating the
 /// server, turning on encryption or replacing its recovery envelope, taking a computer's key envelope away, the People
-/// list. Its own computer it may rename, give an icon or remove ("Leave").</item>
+/// list, nest downloads. Its own computer it may rename, give an icon or remove ("Leave").</item>
 /// <item>On an encrypted nest it may only have the whole nest (the paths are ids there); one with folders gets
 /// <c>not_shared</c> for everything but what it needs to find that out and leave.</item>
 /// <item>A folder that came in through a linked nest (<see cref="LinkStore.LinkedInFolders"/>) is never shared on, even
@@ -108,21 +108,24 @@ public static class AccessGate
         }
         return path.StartsWithSegments("/api/update", StringComparison.OrdinalIgnoreCase) // "Update server" and its diagnostics
             || path.StartsWithSegments("/api/people", StringComparison.OrdinalIgnoreCase)
+            || path.StartsWithSegments("/api/settings", StringComparison.OrdinalIgnoreCase) // nest-wide settings ("Before big deletes")
             || path.StartsWithSegments("/api/storage", StringComparison.OrdinalIgnoreCase) // where the nest keeps its files, and moving them
             || path.StartsWithSegments("/api/purge", StringComparison.OrdinalIgnoreCase) // deleting for good, older versions too
             || path.StartsWithSegments("/api/links", StringComparison.OrdinalIgnoreCase) // the owner's linked folders
+            || path.StartsWithSegments("/api/downloads", StringComparison.OrdinalIgnoreCase) // links the nest downloads by itself
             || path.StartsWithSegments("/api/offers", StringComparison.OrdinalIgnoreCase) // nests shared with the owner's account, and by whom
             || path.StartsWithSegments("/api/keys/seal", StringComparison.OrdinalIgnoreCase)
             || (HttpMethods.IsPut(method) && path.StartsWithSegments("/api/keys/recovery", StringComparison.OrdinalIgnoreCase))
             || (HttpMethods.IsDelete(method) && path.StartsWithSegments("/api/keys/envelopes", StringComparison.OrdinalIgnoreCase));
     }
 
-    /// <summary>Everything that changes files: PUT and DELETE /api/file, every /api/upload call, moving, restoring a version.</summary>
+    /// <summary>Everything that changes files: PUT and DELETE /api/file, every /api/upload call, moving, restoring a version, a nest download.</summary>
     private static bool IsWrite(PathString path, string method) =>
         (path.StartsWithSegments("/api/file", StringComparison.OrdinalIgnoreCase) && (HttpMethods.IsPut(method) || HttpMethods.IsDelete(method)))
         || path.StartsWithSegments("/api/upload", StringComparison.OrdinalIgnoreCase)
         || path.StartsWithSegments("/api/move", StringComparison.OrdinalIgnoreCase)
-        || path.StartsWithSegments("/api/history/restore", StringComparison.OrdinalIgnoreCase);
+        || path.StartsWithSegments("/api/history/restore", StringComparison.OrdinalIgnoreCase)
+        || (path.StartsWithSegments("/api/downloads", StringComparison.OrdinalIgnoreCase) && !HttpMethods.IsGet(method));
 
     /// <summary>The files a request is about: both ends of a move, else the one <see cref="SharedPathOf"/> names.</summary>
     private static IEnumerable<SharedPath> SharedPathsOf(HttpContext ctx)

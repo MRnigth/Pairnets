@@ -154,6 +154,7 @@ internal sealed class TrayHarness : IAsyncDisposable
             Folder = Folder,
             FirstRunCompleted = true,
             CheckForUpdates = false,
+            LastRunVersion = PairnetsInfo.ProductVersion, // not just updated: no "Let your nest update by itself?" card
         };
         tweak?.Invoke(saved);
         SettingsStore.Save(Env.SettingsPath, saved);

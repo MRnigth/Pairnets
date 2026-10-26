@@ -1806,6 +1806,25 @@ change was never seen.
   app ("disposed object" in `SyncRunner`). The pre-deploy check hit it once the tests deleted 100 files at a time. A
   late wake-up is now ignored (`SyncRunner.Wake`; the Program Files fix below found the same crash, one fix kept).
 
+## "Before big deletes": one choice for the whole nest (feature/big-delete-setting, 2026-10-26)
+
+* **Asked for:** "a global setting so you don't need to confirm on all devices that you wanna delete 900 files every time".
+  Each computer saw the nest's 900 "deleted" marks as 900 deletions of its own and asked again.
+* **Rule.** A nest-wide choice, kept on the nest (AuthStore `settings`, key `bigDeletes`), read by every computer in
+  `/api/info` (at start, every 5 minutes, and at once on the push `NestSettingsChanged`): *Ask on the computer where I
+  deleted them* (the others follow: incoming deletions never block), *Ask on every computer* (as before, and the
+  default), *Never ask*. Set in Settings ("Your nest" card) or by ticking "Don't ask my other computers" on the delete
+  question. `PUT /api/settings/big-deletes`, the owner's computers only (AccessGate). An older nest has no value: every
+  computer asks, and Settings says to update the nest.
+* **Kept whatever the choice:** an emptied folder (wrong or unplugged drive) always asks; "Put back" on a shared nest
+  never counts.
+* **Undo.** Every big delete (100+ in one pass, asked or not) is remembered on the computer that carried it out
+  (`BigDeleteBatch`, state.db meta). A "Needs you" card and a notification offer **Put them all back**: each file is
+  restored from the nest's history (the version with the same content, else the newest), so it comes back on every
+  computer; files made again since are left alone. This computer's copies are also in the Recycle Bin / Trash, and the
+  nest keeps deleted files 30 days. The restore uses the existing per-file `POST /api/history/restore`, four at a time,
+  so no new nest code is needed for it.
+
 ## A nest folder in C:\Program Files (1.0.61.4.1, 2026-10-23)
 
 * **Refused when it is chosen.** Windows lets only programs with admin rights save in C:\Program Files,
@@ -1905,28 +1924,269 @@ both had them:
 * **Activity.** "Cannot reach the server; retrying." no longer adds the same sentence again when the reason is only the
   general "Pairnets cannot reach the server…".
 
-## Five-number versions: 1.0.61.8.1 … 1.0.61.999.999 (2026-10-26)
+## The nest downloads a link for you (1.0.61.8, 2026-10-26)
 
-Releases can now have a fifth number, so the 1.0.61 line can go on (tag `v1.0.61.8.1`). A five-number tag used to stop
-the build: dotnet (and Windows' file version, macOS' bundle version) take at most four numbers, and the apps compared
-versions with System.Version, which has four too.
+The owner pastes a download link in the app (Computers page › **Downloads on the nest** › **Add a link…**) and picks a
+nest folder ("Downloads" unless changed). The nest downloads the file by itself, so the computer can be turned off; the
+finished file syncs like any other file (online-only and nest-only settings apply). While a computer is on, the card
+shows percent, speed and time left, and a finished download gives a notification and an Activity line once (also one
+that finished while the computer was off). Planned for 1.0.61.5, built on top of 1.0.61.7.
 
-* **Two numbers per release** (`scripts/release-version.sh`, used by every job of release.yml): the *release number*
-  (`version=`, 1.0.61.8.1) for the tag, the server's VERSION file, the installer's AppVersion, macOS'
-  CFBundleShortVersionString and `-p:InformationalVersion`; and its first four numbers (`file=`, 1.0.61.8) for
-  `-p:Version`, the Windows file version and CFBundleVersion. Each number is at most 65534 (the Windows limit).
-* **The apps call themselves by the release number**: `PairnetsInfo.ProductVersion` reads the informational version
-  (without "+commit"; `IncludeSourceRevisionInInformationalVersion` is off), falling back to the assembly version.
-  `ReleaseVersion` compares 2 to 5 numbers, number by number (1.0.61.8 < 1.0.61.8.1 < 1.0.61.9); `UpdateChecker` uses
-  it instead of System.Version.
-* **version.json has both**: `{"version":"1.0.61.8","release":"1.0.61.8.1",...}`. Apps up to 1.0.61.7 read only
+* **Owner only.** `/api/downloads` is on the AccessGate owner-only list: a friend's computer gets 403 `owner_only`, and
+  the card shows only on the owner's computers.
+* **Only web links, never the nest's own network.** Only http:// and https://. The nest refuses to connect to loopback,
+  private (10/8, 172.16/12, 192.168/16), 100.64/10 (Tailscale, carrier NAT), link-local (169.254/16 with the cloud
+  metadata address, fe80::/10), unique-local, multicast and "this network" addresses. The check is on the address the
+  nest actually connects to (`SafeHttp`, a `ConnectCallback`), so a name that points inside fails too, and so does every
+  redirect (followed by hand, at most 10).
+* **Disk.** The nest always keeps 5 GB free: an announced size that doesn't fit is refused at once, an unknown size
+  stops at the line. No other size limit.
+* **Steady.** 2 downloads at once; up to 20 are listed (waiting, running and finished together). The half-done file is
+  `tmp/dl-<id>.part` and the list is `downloads.json`; after a nest restart it carries on with Range/If-Range when the
+  website allows, else starts that file over. A dropped connection is tried again 5 times, waiting longer each time.
+  Cancel deletes the half-done file. Finished and stopped rows (and a stopped one's file) go after 7 days.
+* **Where it lands.** The name comes from the website or the link, made safe; a taken name becomes "name (2).iso", so
+  nothing is overwritten. The file appears in the nest only when complete, and the apps hear of it at once.
+* **Privacy.** The nest's log and the list name only the website ("releases.ubuntu.com"), never the full link.
+* **Older nest.** The card says "Update your nest to let it download links for you" (404 from the nest).
+* **Encrypted nest (the owner, 2026-10-23).** Allowed, but the file is stored on the nest **not** end-to-end encrypted, in a
+  holding spot (`held/<id>/`) apart from the encrypted files; the rest of the nest stays encrypted. The window warns in
+  amber before Start ("This file won't be end-to-end encrypted on the nest. Everything else stays encrypted.") and the
+  row says "not end-to-end encrypted". **Not built yet:** a computer fetching it (`GET /api/downloads/{id}/file`),
+  locking it and putting it in place like a file it adds. That needs encryption phase B (the apps can't encrypt yet);
+  until then no app turns encryption on, so no real nest reaches this path.
+* **Tests.** `NestDownloadTests` (owner only, blocked addresses and redirects, resume after a cut and a restart, free
+  space, name clash, cancel, encrypted nest, the app's done note once), the API tour, and the click-everything tests
+  of both apps (the card's buttons and the "Let the nest download it" window). The Mac/Linux click test now spreads the
+  main window's scenes evenly over its 10 parts (a 21st scene had left the last parts empty).
+
+## "Let your nest update by itself?" after an app update (2026-10-26)
+
+The owner wanted a nudge after Pairnets updates itself, so security fixes reach the nest too. Three looks were drawn from
+both apps (a pop-up window, a card on Overview, a card on Needs you); he picked the card at the top of Overview.
+
+* **When.** The apps remember the version that last ran (`LastRunVersion`). The first start of a different version marks
+  the card as due (`NestAutoUpdateOfferFor`); that catches every way of updating, including an installer run by hand.
+  A computer set up before this was remembered counts as updated; a fresh install does not. The card stays over
+  restarts until it is answered.
+* **Which nests.** Only the person's own nests that still wait to be asked ("Update the nest by itself" off): a friend's
+  nest can't be updated from here (`/api/update` is owner-only). A nest the "Update your nest" window asked about this
+  time is left out, since that window has the same switch. Several nests go in one card.
+* **Buttons.** Turn on switches "Update the nest by itself" on for each named nest (nothing changes on the nest itself)
+  and updates one that is behind right away; a notice says so. Not now puts the card away. Both last until the next
+  app update. There is no "Don't ask again": it comes back at most once per update and Settings has the switch.
+
+## Where a nest is saved on this computer (invited nests too, 2026-10-23)
+
+* **Your own choice, per computer.** A nest's folder is only this computer's setting: it is never sent to the nest, so
+  choosing or changing it on a friend's nest never moves the friend's folder (or your other computers' folders). The
+  add window's folder step, the Settings folder row and the question before a change all say so in words
+  (`FolderChoiceText`); the old "This folder stays the same on all your computers" was wrong and is gone.
+* **A new folder starts fresh, it doesn't move files.** Save with another folder first asks (new folder fills from the
+  nest and is merged with what is in it; the old folder stays as it is but no longer syncs; delete it yourself). Moving
+  the files instead was left out: On-Demand and nest-only files are placeholders that a move would download or break,
+  and a move between drives can stop half-way. It can come later as its own choice.
+* **The Files page shows "Saved in … · Change…"**, which opens Settings at the folder row; the change is saved there, so
+  the folder checks (another nest's folder, and the protected-folder check of fix/program-files-folder through
+  `ClientSettings.FolderProblem`) stay in one place.
+* **A Settings save keeps a friend's nest theirs.** The saved nest now carries its access, shared folders and owner's
+  name; before, any Save on a friend's nest forgot whose it was until the nest was signed in to again.
+* Linked-nest invites ("From Oskar – …" inside your own nest) live in your nest's folder and get no place of their own.
+
+## Legal check fixes (2026-10-26)
+
+A legal check of the pages against the code (the checklist is outside the repo). The owner's choices: no paid items (no
+c/o address, CVR, app signing or trademark), keep "MRnigth" + support@pairnets.app, say plainly that support mail sits
+in a personal Gmail, build "Download my data", keep the Ko-fi name.
+
+* **Pages now match the code.** They now cover:
+  * join requests' rough place (country and city);
+  * the 4-nest limit;
+  * join requests kept up to 30 days;
+  * support mail in MRnigth's own Gmail, with no processing agreement;
+  * "Download my data".
+
+  The footer line "Only computers you have allowed can get in" now reads "allowed on your account", since the
+  service can allow a computer too. The privacy page no longer says "We can't see it" of the nest.
+* **Who runs Pairnets.** Only the name "MRnigth" is published. The privacy, terms and contact pages say that
+  authorities, and anyone who needs it for a legal claim or a data request, can get the full name and postal address by
+  email. A lawyer should confirm this is enough.
+* **Digital Services Act.** Terms section 11 gives:
+  * support@ as the single point of contact for users and authorities (English or Danish);
+  * how to report illegal content;
+  * what can be done (Pairnets can't see or remove files on a nest);
+  * reasons and appeals, always decided by a person.
+
+  The Guidelines and the Contact page link to it. Pairnets is treated as mostly a mere conduit: files are on users'
+  own nests.
+* **"Download my data"** (`GET /v1/me/export`, a button on the account page). It returns a JSON file of every row
+  about the account. Left out on purpose:
+  * hashes of tokens, codes and keys (secrets, not information about the person);
+  * crash and bug reports (they can't be tied to anyone).
+
+  Other people show only as the name and email the account page already shows. Each export writes `data_exported` to
+  the activity log.
+* **Terms acceptance.** Migration 0010 adds `accounts.terms_version` and `terms_accepted_at`. Each sign-in records
+  `TERMS_VERSION` (`cloud/src/accounts.ts`). A site test makes it equal the Terms page's "Last updated" date, so
+  changing the Terms date means changing the constant, and the next sign-in records the new one.
+  **Deploy order:** run migration 0010 before the Worker.
+* **Licence texts in every download.** `deploy/THIRD-PARTY-NOTICES.txt`, made by `scripts/make-notices.sh` from
+  `deploy/notices/` and the NuGet cache, holds:
+  * Pairnets' MIT licence;
+  * the list of parts;
+  * the MIT, Apache 2.0, OFL and Inno Setup texts;
+  * the SkiaSharp/HarfBuzzSharp native, .NET runtime and ASP.NET Core notices.
+
+  It goes into:
+  * the Windows installer and zip, with LICENSE.txt;
+  * the Mac app's Resources;
+  * the Linux app;
+  * the nest package.
+
+  Core embeds it. Settings → About → "Open-source licences" writes a copy to the temp folder and opens it (the
+  website's page if that fails). A test checks that every shipped package in Directory.Packages.props is listed.
+* **Export control.** The apps use only the standard cryptography built into .NET (AES-GCM, ECDH and ECDSA P-256,
+  SHA-256, TLS). They are open source and anyone can download them. The EU dual-use rules (Regulation 2021/821, the
+  general software and public-domain notes) exempt that, and US rules need no notice for standard crypto in public
+  open-source code. No paperwork.
+* **Private papers** live in a private folder on the owner's PC (never in the repo): the record of processing (GDPR art.
+  30), the data-leak checklist (art. 33/34) and the lawyer's open points.
+## Sign in the app with a link and a code (2026-10-26)
+
+The owner wanted what Claude Code does when its browser can't open: the app shows a long sign-in link with a Copy button,
+you open it in any browser (this computer, a phone, a friend's, while working on a Linux box with no screen), sign in
+there, and paste the long code that browser shows back into the app. Design A was chosen (design page:
+claude.ai/artifact/HBPbgkDE5mqh8vWePHCQue): a separate "Sign in with a link" screen, reached from "Finish in your
+browser" ("Browser didn't open? Use a sign-in link instead"). Today's one-click sign-in stays as it is.
+
+* **Only the code finishes it.** A link sign-in (`device_logins.mode = 'code'`) is never handed over by the app's poll,
+  so pressing Allow on a link a stranger sent lets nobody in unless the code is sent to them too. The page warns before
+  Allow (who asked and from where, "if a stranger sent you this link, press No") and after ("never send this code to
+  someone you don't know"), and the usual "a computer was allowed" email goes out.
+* **Times (the owner, 2026-10-26):** the link must be allowed within 15 minutes, the code pasted within 5 minutes of
+  Allow, and 5 wrong codes stop the sign-in. Both are used once. Only SHA-256 hashes of the link and the code are kept.
+* **The code** is 32 characters (28 random, about 140 bits, plus a 4-character check), shown as 8 groups of 4. The
+  check lets the app catch a typo before sending, and a typo the Worker sees is not counted as a wrong try.
+* **A nest is needed.** A link sign-in can't wait for a nest to be set up (the code runs out first), so an account
+  with no nest is told to set one up first.
+* **The page never opens pairnets://** after Allow on a link: the app is usually on another computer.
+* **Not done:** showing the link screen by itself when no browser could be opened (the apps can't tell today: opening
+  a page reports nothing back); the same screen in the nest installer (`get.sh`) for server boxes; the guest pass from the first
+  design (parked).
+## Beta channels: how beta releases are made (2026-10-26)
+
+Pairnets gets two beta channels next to the normal releases: **Public beta** (versions that are nearly ready) and
+**Developer beta** (the newest work), for any Pairnets account that signs up and agrees to the beta terms. The account, the nest and the apps' side are
+in "Beta updates: the account, the nest and the apps" below; this part is how the releases are made (`.github/workflows/release.yml`).
+
+* **Three feeds, same files.** Stable stays `releases/latest/download/` (`v*` tags, unchanged). A push to branch
+  `beta/public` replaces the pre-release with tag `public-beta`; a push to `beta/developer` replaces `developer-beta`.
+  Both are made with `--prerelease --latest=false`, so neither ever becomes GitHub's "Latest release" (see "Only tagged
+  versions are GitHub's Latest release"). They have the same file names as a release and are signed with the same key.
+  Each beta job has its own concurrency group, so two pushes to one branch never replace the release at the same time.
+* **A beta's version is the next stable number.** The newest `v*` tag with its last part one higher: after `v1.0.61.7`
+  the betas are 1.0.61.8; after a three-part tag like `v1.0.60` they get a fourth part, 1.0.60.1. Tags that are not
+  three or four numbers are skipped (never five parts: they break dotnet). Every build of that beta has the same
+  version; the build number (GitHub's run number) tells them apart: "1.0.61.8 Public beta 12". When 1.0.61.8 is
+  released as a tag, the next betas are 1.0.61.9, and the stable 1.0.61.8 is newer than every 1.0.61.8 beta (stable
+  beats a beta of the same number). The workflow needs every tag for this (`fetch-depth: 0` in its version job).
+* **One version per run.** A `version` job runs `scripts/release-version.sh` once and every other job takes its
+  `version`, `channel` and `build` (`needs.version.outputs`), so the packages, the installer, the Mac app and
+  version.json can never disagree. The apps get them as `-p:Version=… -p:PairnetsChannel=… -p:PairnetsBuild=…`.
+* **version.json says which channel it is for**: `{"version","commit","channel","build","data"}`, with `channel`
+  `stable`, `public-beta`, `developer-beta` or `main`. It is listed in the signed SHA256SUMS.txt, so it cannot be
+  changed. An app takes a release only when its `channel` is the feed it asked for. Without that, a beta copied into the
+  stable feed (or a mistake in a tag) would be installed by everyone; with it, a file in the wrong place is refused.
+* **Main's "Latest build" says `"channel":"main"`.** It keeps 1.0.<run number>, which is higher than every release, so
+  an app that took it would never update again (that happened with 1.0.68). No app asks for the `main` channel, so no
+  app ever installs it, from any feed. It stays a download for testing by hand.
+* **`data` keeps old apps from reading new data.** `scripts/data-versions.sh` reads `SettingsUpgrades.Current`,
+  `StateDb.SchemaVersion` and the sealed-file `Version` from the code (`{"settings":2,"state":2,"sealed":1}`); a test
+  pins the same patterns against `DataVersions.Current`, and the script fails when one is not found. An app never
+  installs a build with a lower number than its own, so leaving a beta waits for a stable release that reads
+  everything the beta wrote. Releases from before this have no `data` and count as today's numbers.
+* **A push to `beta/*` is a deploy.** The deploy gate (`scripts/deploy-gate/`) treats it exactly like a push to main:
+  `git push` to `beta/…` (also `HEAD:beta/…`, `--all`, patterns and an upstream that is a beta branch), the git
+  pre-push hook, and `gh pr merge` into a beta branch all need a passed pre-deploy check of that commit. Deleting a
+  beta branch is not a deploy.
+* **Only the repository admin may push to `beta/*` (set by hand on GitHub).** Settings › Rules › Rulesets › New ruleset › New branch
+  ruleset: name `Beta channels`, enforcement **Active**, bypass list **Repository admin** (Add bypass), target branches
+  **Include by pattern** `beta/*`, rules **Restrict creations**, **Restrict updates**, **Restrict deletions** and
+  **Block force pushes**. The workflow is not affected: it only makes the `public-beta` / `developer-beta` tags.
+
+## Beta updates: the account, the nest and the apps (2026-10-26)
+
+The owner asked for "the beta thing like how Apple does it": join once on a website, then choose per device. A second
+opinion (chat 305) shaped the safety rules below.
+
+* **Sign up once, on the account page.** sync.pairnets.app/account has a "Beta program" sign-up form: pick Public and/or
+  Developer beta, tick the beta terms (`BETA_TERMS_VERSION`, the text at /beta-terms is the EULA chat's) and press
+  "Send sign-up". The Worker keeps the sign-up in D1 (`beta_members`, migration 0012; 0010 and 0011 belong to other
+  branches) with its time and terms version. While `BETA_AUTO_APPROVE` is "1" (the default) every sign-up is approved
+  at once, for both betas; set it to "0" and sign-ups wait for an approval on /admin/beta. New terms: the account agrees
+  again before betas resume. "Leave the beta program" sets every own computer back to Off.
+* **The owner sees who is on it** on /admin/beta (the same lock as the crash and bug report pages: accounts in the
+  `ADMIN_EMAILS` secret, so no address is in the repository): who signed up, for which beta and when, and which of their
+  computers are on a beta now, with app version, build and last seen. That table is read live from each member's nest
+  when the page opens; nothing more about the computers is stored. "Remove from the beta" sets the account's computers
+  back to Off; a new sign-up from a removed account waits for the owner ("Let back in").
+* **The sign-up reaches the computers only through the owner's own nest.** The apps keep no account token, so the Worker
+  tells the owner's nest (signed ra1 `PUT /api/relay/beta`, at once and again by the hourly cron when a nest missed it).
+  The nest keeps it, and each own computer's choice, as two rows of its settings table (no database change) and tells
+  only the owner's own computers, checked by their own key, in `GET /api/me`. A friend's nest, the shared password and a
+  nest not linked to an account never decide anything; the app says why the choice is greyed out.
+* **The choice lives on the computer**, in Settings › Updates › Beta updates (Off / Public beta / Developer beta), in
+  both apps. The account page shows each computer's choice and can change it (`PUT /api/relay/devices/{id}/beta`); the
+  newest choice wins (`BetaUpdates.Heard`). A nest that says nothing (offline, older) changes nothing: the last choice
+  is kept. The app checks the nest every 5 minutes and right after a change on the account page.
+* **The app reads the stable feed and, on a beta, its beta feed too, and takes the newest build it may install**
+  (`UpdateChecker.Judge`): signed, `channel` in the signed version.json equal to the feed, newer (number, then stable
+  before a beta of the same number, then build), and its `data` not lower than this build's. A version.json without a
+  channel counts as stable only up to 1.0.61.x, so main's "Latest build" is never taken. A beta looks every 2 hours.
+* **Never backwards.** Off (or Developer → Public) waits for a build that is newer on the lower channel; the app says
+  "Waiting for the next Public beta" or "You keep 1.0.61.8 Developer beta 12 until the next normal version is newer".
+  There is no "Go back now". The next stable must contain everything the beta changed in data formats.
+* **Unknown settings survive.** `[JsonExtensionData]` on the settings (and each nest's), so a field a beta added is kept
+  by an older build that saves the file.
+* **One spelling:** "1.0.61.8 Public beta 3" in Settings, the update card, About, the bug report and the nest's
+  computers list. A beta build shows a "Public beta" label next to "Pairnets" and "This one · Public beta". A beta app
+  compares its nest with the stable release it follows (`PairnetsInfo.StableBaseVersion`), so it does not ask a stable
+  nest to "update" to a version update.sh can never fetch.
+* **Feedback** is the existing Send bug report: on a beta it is titled "Send beta feedback", the report carries
+  `Channel:` and the build, and /v1/bugreport stores both, so /admin/reports marks beta reports.
+* **The nest stays on stable for now** (one nest serves every computer, friends' included, and can never go back).
+* **Channel support reaches computers through one normal stable release first**: older apps only read
+  releases/latest and never see a beta. That release also carries the data check, the kept settings fields and the
+  `channel` rule, which closes the "Latest build" hole.
+* **The first app that knows beta updates is one constant**, `BETA_MIN_APP` in `cloud/src/formats.ts` (now
+  "1.0.61.9"; 1.0.61.8 is the nest-downloads release). The account page greys out the choice for computers running an
+  older app. Set it to the version of the stable release that ships beta updates, before that Worker goes live.
+
+## Five-number versions: 1.0.61.10.1 … 1.0.61.999.999 (2026-10-26)
+
+Releases can have a fifth number, so the 1.0.61 line can go on without ever having to become 1.0.62 (tag
+`v1.0.61.10.1`). A five-number tag used to stop the build: dotnet (and Windows' file version, macOS' bundle version) take
+at most four numbers, and the apps compared versions with System.Version, which has four too. Releases keep counting
+with four numbers (1.0.61.10, .11, …) until a fifth is wanted.
+
+* **Two numbers per release** (`scripts/release-version.sh`, the release workflow's Version job): the *release number*
+  (`version=`, 1.0.61.10.1) for the tag, the server's VERSION file, the installer's AppVersion, macOS'
+  CFBundleShortVersionString and `-p:InformationalVersion`; and its first four numbers (`file=`, 1.0.61.10) for
+  `-p:Version`, the Windows file version and CFBundleVersion. Each number is at most 65534 (the Windows limit). Betas
+  follow a five-number tag the same way (newest v1.0.61.10.3 → beta 1.0.61.10.4).
+* **The apps call themselves by the release number**: `PairnetsInfo.ProductVersion` and `ThisRelease` read the
+  informational version (without "+commit"; `IncludeSourceRevisionInInformationalVersion` is off), falling back to the
+  assembly version. `VersionNumber` holds 2 to 5 numbers and compares them number by number (1.0.61.10 < 1.0.61.10.1 <
+  1.0.61.11); `ReleaseVersion.Number` (the beta channels' ordering) is one.
+* **version.json has both**: `{"version":"1.0.61.10","release":"1.0.61.10.1",...}`. Apps up to 1.0.61.9 read only
   `version` and cannot read five numbers; the first four are enough for them to see the release as newer and install it.
-  Their prompt says "1.0.61.8" for that one update. From 1.0.61.8 on the apps read `release` (`version` when it is absent).
-* **Order of releases**: 1.0.61.8 (four numbers, with this change) comes out first. release-version.sh refuses a
-  five-number tag whose first four numbers are below 1.0.61.8: apps up to 1.0.61.7 would see nothing newer and never
-  update again.
+  Their prompt says "1.0.61.10" for that one update. From 1.0.61.10 on the apps read `release` (`version` when it is
+  absent).
+* **Order of releases**: 1.0.61.10 (four numbers, with this change) comes out first. release-version.sh refuses a
+  five-number version whose first four numbers are below 1.0.61.10: apps up to 1.0.61.9 would see nothing newer and
+  never update again.
 * **Nests**: update.sh compares with `sort -V`, which already handles five numbers, so nests on any version update.
-  An app up to 1.0.61.7 can't read a five-number nest version: it just doesn't say the nest is out of date, and after
+  An app up to 1.0.61.9 can't read a five-number nest version: it just doesn't say the nest is out of date, and after
   updating a nest it shows the updater's "Updated from X to Y". pairnets-link.sh accepts five numbers.
 * **Pre-deploy** builds its packages as 1.0.65000.1.1 (file version 1.0.65000.1), so the whole check, the nest update
   from feed 1 to feed 2 (1.0.65000.1.2) included, runs on five numbers, and checks that Pairnets.exe calls itself that.

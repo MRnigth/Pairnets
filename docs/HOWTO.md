@@ -650,6 +650,13 @@ and files never move between nests.
 * **Stop syncing one:** open the nest, then Settings › **Stop syncing <nest> here** › **Stop syncing…**. This computer is signed out of that
   nest and stops syncing it; the files stay in its folder and on the nest. Your other nests keep syncing.
 
+### Let the nest download a file for you
+
+On the **Computers** page, under **Downloads on the nest**, press **Add a link…**, paste the link of a file (http:// or
+https://) and press **Start download**. It goes in the nest's **Downloads** folder unless you press **Change…**. The nest
+downloads it by itself, so you can turn this computer off; the file is there when you come back and syncs like any
+other file. Only the nest's owner sees this. On an encrypted nest the downloaded file is not end-to-end encrypted.
+
 ---
 
 ### The emails your nest sends

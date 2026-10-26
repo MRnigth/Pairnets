@@ -57,6 +57,7 @@ public static class PairnetsServerHost
         builder.Services.AddSingleton<TlsCertificateStore>();
         builder.Services.AddSingleton(sp => new AuthStore(sp.GetRequiredService<ServerPaths>()));
         builder.Services.AddSingleton<DeviceKeys>();
+        builder.Services.AddSingleton<NestBeta>();
         builder.Services.AddSingleton<FriendRequests>();
         builder.Services.AddSingleton<FriendConnections>();
         builder.Services.AddSingleton(sp => new RelaySignature(sp.GetRequiredService<SyncOptions>()));
@@ -86,6 +87,8 @@ public static class PairnetsServerHost
         builder.Services.AddSingleton<LinkSync>();
         builder.Services.AddSingleton<NestLinkWorker>();
         builder.Services.AddHostedService(sp => sp.GetRequiredService<NestLinkWorker>());
+        builder.Services.AddSingleton<NestDownloader>();
+        builder.Services.AddHostedService(sp => sp.GetRequiredService<NestDownloader>());
         builder.Services.Configure<HostOptions>(o => o.ShutdownTimeout = TimeSpan.FromSeconds(60));
         builder.WebHost.ConfigureKestrel(k =>
         {
@@ -143,6 +146,7 @@ public static class PairnetsServerHost
         PairingEndpoints.Map(app);
         RelayEndpoints.Map(app);
         LinkEndpoints.Map(app);
+        DownloadEndpoints.Map(app);
         WebUi.Map(app);
         WebEndpoints.Map(app);
         app.Lifetime.ApplicationStopped.Register(store.Dispose);

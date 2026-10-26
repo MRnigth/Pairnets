@@ -48,7 +48,7 @@ public sealed record PartialDownload(string Path, string TmpName, string Server,
 /// </summary>
 public sealed class StateDb : IDisposable
 {
-    private const int SchemaVersion = 2;
+    internal const int SchemaVersion = 2;
 
     public const string MetaMarker = "marker";
     public const string MetaServerId = "serverId";

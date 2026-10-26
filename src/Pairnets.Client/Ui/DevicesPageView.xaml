@@ -85,6 +85,119 @@
         </StackPanel>
       </Border>
 
+      <!-- Downloads on the nest (1.0.61.8): links the nest downloads by itself, so this computer may be off meanwhile.
+           Only on the owner's computers; see NestDownloadsSection. -->
+      <StackPanel x:Name="DownloadsPanel" Visibility="Collapsed">
+        <Grid Margin="4,22,0,0" Height="38">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="Auto" />
+          </Grid.ColumnDefinitions>
+          <TextBlock Text="Downloads on the nest" FontSize="16" FontWeight="ExtraBold" VerticalAlignment="Center" />
+          <TextBlock x:Name="DownloadsSummary" Grid.Column="1" Style="{StaticResource PgSmall}" Margin="12,0,0,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+          <Button x:Name="AddLinkButton" Grid.Column="2" Style="{StaticResource PgButton}" VerticalAlignment="Center" Foreground="{DynamicResource T.AccentInk}" Click="OnAddDownload">
+            <StackPanel Orientation="Horizontal">
+              <ui:LineIcon Width="16" Height="16" Margin="0,0,8,0" StrokeThickness="2" Stroke="{DynamicResource T.AccentInk}" Data="{StaticResource I.Download}" />
+              <TextBlock Text="Add a link…" VerticalAlignment="Center" />
+            </StackPanel>
+          </Button>
+        </Grid>
+        <Border x:Name="DownloadsCard" Style="{StaticResource PgCard}" Margin="0,10,0,0" ClipToBounds="True">
+          <ItemsControl x:Name="DownloadsList" Focusable="False">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <Border BorderThickness="0,0,0,1" BorderBrush="{DynamicResource T.Border}" Padding="20,14">
+                  <Grid>
+                    <Grid.ColumnDefinitions>
+                      <ColumnDefinition Width="Auto" />
+                      <ColumnDefinition Width="*" />
+                      <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <Border x:Name="Circle" Width="40" Height="40" CornerRadius="20" Margin="0,0,14,0" VerticalAlignment="Top" Background="{DynamicResource T.AccentSoft}">
+                      <ui:LineIcon x:Name="RowIcon" Width="19" Height="19" StrokeThickness="2" Stroke="{DynamicResource T.AccentInk}" Data="{StaticResource I.Download}" />
+                    </Border>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                      <Grid>
+                        <Grid.ColumnDefinitions>
+                          <ColumnDefinition Width="Auto" />
+                          <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="{Binding Name}" FontSize="15" FontWeight="ExtraBold" TextTrimming="CharacterEllipsis" ToolTip="{Binding Name}" />
+                        <TextBlock Grid.Column="1" Text="{Binding Source}" Style="{StaticResource PgSmall}" Margin="10,0,0,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                      </Grid>
+                      <ProgressBar x:Name="Bar" Style="{StaticResource RoundProgress}" Height="6" Minimum="0" Maximum="100" Margin="0,8,0,6"
+                                   Value="{Binding PercentValue, Mode=OneWay}" Visibility="Collapsed" />
+                      <TextBlock x:Name="LineText" Text="{Binding Line}" Style="{StaticResource PgSmall}" TextTrimming="CharacterEllipsis" ToolTip="{Binding Line}" />
+                    </StackPanel>
+                    <StackPanel x:Name="BusyButtons" Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="14,0,0,0" Visibility="Collapsed">
+                      <Button Style="{StaticResource PgButton}" Height="34" Content="Cancel" ToolTip="Stops it and deletes the half-done file"
+                              AutomationProperties.Name="{Binding CancelLabel}" Click="OnCancelDownload" />
+                    </StackPanel>
+                    <StackPanel x:Name="DoneButtons" Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="14,0,0,0" Visibility="Collapsed">
+                      <Button Style="{StaticResource PgChipButton}" Height="34" Content="Show in Files" AutomationProperties.Name="{Binding ShowLabel}" Click="OnShowDownload" />
+                      <Button Style="{StaticResource PgLink}" Margin="12,0,0,0" VerticalAlignment="Center" FontSize="13" Content="Clear" ToolTip="Takes it off this list; the file stays"
+                              AutomationProperties.Name="{Binding ClearLabel}" Click="OnClearDownload" />
+                    </StackPanel>
+                    <StackPanel x:Name="HeldButtons" Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="14,0,0,0" Visibility="Collapsed">
+                      <Button Style="{StaticResource PgLink}" VerticalAlignment="Center" FontSize="13" Foreground="{DynamicResource T.BadText}" Content="Remove"
+                              ToolTip="Deletes it from the nest's holding spot" AutomationProperties.Name="{Binding RemoveLabel}" Click="OnRemoveDownload" />
+                    </StackPanel>
+                    <StackPanel x:Name="FailedButtons" Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="14,0,0,0" Visibility="Collapsed">
+                      <Button Style="{StaticResource PgChipButton}" Height="34" Content="Try again" AutomationProperties.Name="{Binding RetryLabel}" Click="OnRetryDownload" />
+                      <Button Style="{StaticResource PgLink}" Margin="12,0,0,0" VerticalAlignment="Center" FontSize="13" Foreground="{DynamicResource T.BadText}" Content="Remove"
+                              AutomationProperties.Name="{Binding RemoveLabel}" Click="OnRemoveDownload" />
+                    </StackPanel>
+                  </Grid>
+                </Border>
+                <DataTemplate.Triggers>
+                  <DataTrigger Binding="{Binding HasPercent}" Value="True">
+                    <Setter TargetName="Bar" Property="Visibility" Value="Visible" />
+                  </DataTrigger>
+                  <DataTrigger Binding="{Binding CanCancel}" Value="True">
+                    <Setter TargetName="BusyButtons" Property="Visibility" Value="Visible" />
+                  </DataTrigger>
+                  <DataTrigger Binding="{Binding IsWaiting}" Value="True">
+                    <Setter TargetName="Circle" Property="Background" Value="{DynamicResource T.Chip}" />
+                    <Setter TargetName="RowIcon" Property="Stroke" Value="{DynamicResource T.Muted}" />
+                    <Setter TargetName="RowIcon" Property="Data" Value="{StaticResource I.Clock}" />
+                  </DataTrigger>
+                  <DataTrigger Binding="{Binding IsDone}" Value="True">
+                    <Setter TargetName="DoneButtons" Property="Visibility" Value="Visible" />
+                    <Setter TargetName="Circle" Property="Background" Value="{DynamicResource T.OkPill}" />
+                    <Setter TargetName="RowIcon" Property="Stroke" Value="{DynamicResource T.OkText}" />
+                    <Setter TargetName="RowIcon" Property="Data" Value="{StaticResource I.Check}" />
+                    <Setter TargetName="LineText" Property="Foreground" Value="{DynamicResource T.OkText}" />
+                  </DataTrigger>
+                  <DataTrigger Binding="{Binding IsHeld}" Value="True">
+                    <Setter TargetName="HeldButtons" Property="Visibility" Value="Visible" />
+                    <Setter TargetName="Circle" Property="Background" Value="{DynamicResource T.WarnPill}" />
+                    <Setter TargetName="RowIcon" Property="Stroke" Value="{DynamicResource T.WarnText}" />
+                    <Setter TargetName="RowIcon" Property="Data" Value="{StaticResource I.Shield}" />
+                    <Setter TargetName="LineText" Property="Foreground" Value="{DynamicResource T.WarnText}" />
+                  </DataTrigger>
+                  <DataTrigger Binding="{Binding IsFailed}" Value="True">
+                    <Setter TargetName="FailedButtons" Property="Visibility" Value="Visible" />
+                    <Setter TargetName="Circle" Property="Background" Value="{DynamicResource T.BadPill}" />
+                    <Setter TargetName="RowIcon" Property="Stroke" Value="{DynamicResource T.BadText}" />
+                    <Setter TargetName="RowIcon" Property="Data" Value="{StaticResource I.Warning}" />
+                    <Setter TargetName="LineText" Property="Foreground" Value="{DynamicResource T.BadText}" />
+                  </DataTrigger>
+                </DataTemplate.Triggers>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </Border>
+        <Grid x:Name="DownloadsNoteRow" Margin="4,10,0,0">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="*" />
+          </Grid.ColumnDefinitions>
+          <ui:LineIcon Width="16" Height="16" Margin="0,1,8,0" VerticalAlignment="Top" StrokeThickness="1.9" Stroke="{DynamicResource T.Muted}" Data="{StaticResource I.InfoCircle}" />
+          <TextBlock x:Name="DownloadsNote" Grid.Column="1" Style="{StaticResource PgSub}" Margin="0" FontSize="13" TextWrapping="Wrap" />
+        </Grid>
+      </StackPanel>
+
       <!-- Computers -->
       <Grid Margin="4,16,0,0" Height="32">
         <Grid.ColumnDefinitions>

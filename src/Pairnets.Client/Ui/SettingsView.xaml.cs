@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using System.Windows.Threading;
 using Pairnets.Client.Themes;
 using Pairnets.Core;
 using Pairnets.Core.Api;
@@ -70,6 +71,7 @@ public partial class SettingsView : UserControl
         _original = current;
         _protector = protector;
         _folderProblem = folderProblem;
+        _nestTitle = nestTitle ?? current.NestLabel;
         if (nestCount > 1 && nestTitle is not null)
         {
             // Several nests: the nest card, the folder and the name are this nest's; the switches are for all of them.
@@ -99,6 +101,10 @@ public partial class SettingsView : UserControl
         }
         ServerUrlBox.Text = current.ServerUrl ?? string.Empty;
         FolderBox.Text = current.Folder ?? string.Empty;
+        // The folder is this computer's own: never sent to the nest, so a friend's folder on their computer stays put.
+        FolderLabel.Text = FolderChoiceText.FieldLabel(nestTitle ?? current.NestLabel);
+        System.Windows.Automation.AutomationProperties.SetName(FolderBox, FolderLabel.Text);
+        FolderHereText.Text = FolderChoiceText.OnlyHere(current.ShareAccess());
         DeviceBox.Text = current.DeviceName ?? ComputerName.Default();
         IgnoreBox.Text = string.Join(Environment.NewLine, current.ExtraIgnore);
         AutoStartBox.IsChecked = current.StartWithWindows;
@@ -112,8 +118,8 @@ public partial class SettingsView : UserControl
         AutoServerBox.IsChecked = current.AutoUpdateServer;
         DebugBox.IsChecked = current.DebugMode;
         ServerVersionText.Text = serverVersionText ?? "Your nest: not connected yet";
-        AppVersionText.Text = "Pairnets " + PairnetsInfo.ProductVersion;
-        FooterText.Text = $"Pairnets {PairnetsInfo.ProductVersion} for Windows"
+        AppVersionText.Text = "Pairnets " + PairnetsInfo.DisplayVersion;
+        FooterText.Text = $"Pairnets {PairnetsInfo.DisplayVersion} for Windows"
             + (serverVersionText?.Replace("Nest ", string.Empty, StringComparison.Ordinal) is { Length: > 0 } nestVersion && connected ? " · your nest runs " + nestVersion : string.Empty);
         StayText.Text = $"Your files in {(string.IsNullOrWhiteSpace(current.Folder) ? "your folder" : current.Folder)} stay where they are.";
         FolderBox.TextChanged += (_, _) => StayText.Text = $"Your files in {(string.IsNullOrWhiteSpace(FolderBox.Text) ? "your folder" : FolderBox.Text.Trim())} stay where they are.";
@@ -127,6 +133,7 @@ public partial class SettingsView : UserControl
         DownLimitValue.Text = Number(current.DownloadLimitMBps is > 0 ? current.DownloadLimitMBps.Value : 10);
         ShowVersion(null);
         _applied = current.Clone();
+        ShowBeta(current);
         WireSwitches();
     }
 
@@ -150,6 +157,8 @@ public partial class SettingsView : UserControl
         }
         foreach (var choice in new[] { Par1, Par2, Par4, Par8 })
             choice.Checked += OnSwitchChanged;
+        foreach (var choice in new[] { BetaOff, BetaPublic, BetaDeveloper })
+            choice.Checked += OnBetaChanged;
         // A speed limit's number applies when it is left (or Enter): a number it cannot read waits for Save, which says why.
         foreach (var value in new[] { UpLimitValue, DownLimitValue })
         {
@@ -174,7 +183,8 @@ public partial class SettingsView : UserControl
         && a.DebugMode == (DebugBox.IsChecked == true) && a.EffectiveParallelTransfers == ParallelChoice()
         && (a.UploadLimitMBps is not null) == (UpLimitBox.IsChecked == true) && (a.DownloadLimitMBps is not null) == (DownLimitBox.IsChecked == true)
         && a.ShowInFileManager == (ExplorerBox.IsChecked == true) && a.ExplorerRightClick == (RightClickBox.IsChecked == true)
-        && a.CloudFolder == CloudChoice() && !SettingsSwitches.PlacementChanged(a, new ClientSettings { Placement = _placement });
+        && a.CloudFolder == CloudChoice() && !SettingsSwitches.PlacementChanged(a, new ClientSettings { Placement = _placement })
+        && ReleaseChannel.Normalize(a.BetaChannel) == BetaChoice();
 
     private void ApplySwitches()
     {
@@ -201,6 +211,62 @@ public partial class SettingsView : UserControl
         _applied = next;
         SwitchesChanged?.Invoke(next);
     }
+
+    // ------------------------------------------------------------------ beta updates
+
+    private bool _drawingBeta;
+
+    /// <summary>The Beta updates choice the buttons show (Off is stable).</summary>
+    private string BetaChoice() =>
+        BetaDeveloper.IsChecked == true ? ReleaseChannel.DeveloperBeta : BetaPublic.IsChecked == true ? ReleaseChannel.PublicBeta : ReleaseChannel.Stable;
+
+    /// <summary>
+    /// Shows Beta updates for <paramref name="settings"/>: what the owner's nest said about the beta program, this computer's
+    /// choice, and, after a step down, that it waits for a newer build. Also called when the nest or the account page changed it.
+    /// </summary>
+    public void ShowBeta(ClientSettings settings)
+    {
+        _drawingBeta = true;
+        try
+        {
+            var shown = settings.EffectiveChannel;
+            (shown == ReleaseChannel.DeveloperBeta ? BetaDeveloper : shown == ReleaseChannel.PublicBeta ? BetaPublic : BetaOff).IsChecked = true;
+            BetaPublic.IsEnabled = BetaUpdates.CanChoose(settings, ReleaseChannel.PublicBeta);
+            BetaDeveloper.IsEnabled = BetaUpdates.CanChoose(settings, ReleaseChannel.DeveloperBeta);
+            BetaDeveloper.ToolTip = settings.BetaProgram is { Member: true } && !BetaDeveloper.IsEnabled ? BetaTexts.DeveloperOnlyInvited : null;
+            BetaText.Text = BetaTexts.Explain(settings);
+            BetaJoinButton.Visibility = BetaTexts.NeedsJoin(settings) ? Visibility.Visible : Visibility.Collapsed;
+            var beta = PairnetsInfo.ThisRelease.IsBeta || ReleaseChannel.IsBeta(shown);
+            BetaFeedbackButton.Visibility = BetaFeedbackHint.Visibility = beta ? Visibility.Visible : Visibility.Collapsed;
+            UpdateCadenceText.Text = (ReleaseChannel.IsBeta(shown) ? "Looks every 2 hours on a beta." : "Looks once a day.") + " You choose when to install.";
+            var waiting = _updates?.Waiting ?? (_updates?.HeldBackForData == true ? UpdateTexts.HeldBackForData : null);
+            BetaWaiting.Text = waiting ?? string.Empty;
+            BetaWaiting.Visibility = waiting is null ? Visibility.Collapsed : Visibility.Visible;
+            if (_applied is not null)
+            {
+                _applied.BetaChannel = settings.BetaChannel;
+                _applied.BetaChannelAt = settings.BetaChannelAt;
+                _applied.BetaProgram = settings.BetaProgram;
+            }
+        }
+        finally
+        {
+            _drawingBeta = false;
+        }
+    }
+
+    private void OnBetaChanged(object sender, RoutedEventArgs e)
+    {
+        if (_drawingBeta || !IsInitialized || _applied is null || ReleaseChannel.Normalize(_applied.BetaChannel) == BetaChoice())
+            return;
+        var next = _applied.Clone();
+        BetaUpdates.Choose(next, BetaChoice(), DateTimeOffset.UtcNow);
+        _applied = next;
+        SwitchesChanged?.Invoke(next);
+        ShowBeta(next);
+    }
+
+    private void OnBetaJoin(object sender, RoutedEventArgs e) => OpenLinkRequested?.Invoke(PairnetsLinks.BetaProgram);
 
     private static bool Same(ClientSettings a, ClientSettings b) =>
         a.StartWithWindows == b.StartWithWindows && a.CheckForUpdates == b.CheckForUpdates && a.WaitForPeerBatches == b.WaitForPeerBatches
@@ -229,7 +295,7 @@ public partial class SettingsView : UserControl
     /// <summary>"You have 1.0.52 · checked 19:41", or the outcome of "Check now" ("Up to date · checked 19:41").</summary>
     public void ShowVersion(string? outcome)
     {
-        var text = outcome is { Length: > 0 } ? char.ToUpperInvariant(outcome[0]) + outcome[1..] : "You have " + PairnetsInfo.ProductVersion;
+        var text = outcome is { Length: > 0 } ? char.ToUpperInvariant(outcome[0]) + outcome[1..] : "You have " + PairnetsInfo.DisplayVersion;
         if (_updates?.LastChecked is { } at)
             text += " · checked " + at.ToLocalTime().ToString("HH:mm", CultureInfo.InvariantCulture);
         VersionText.Text = text;
@@ -244,8 +310,9 @@ public partial class SettingsView : UserControl
         ShowVersion("checking…");
         var found = await _updates.CheckNowAsync(CancellationToken.None);
         ShowVersion(found is null ? "up to date"
-            : found.Signed ? $"version {found.Version} is available"
-            : $"version {found.Version} isn't signed by Pairnets, so it won't be installed");
+            : found.Signed ? $"version {found.Display} is available"
+            : $"version {found.Display} isn't signed by Pairnets, so it won't be installed");
+        ShowBeta(_applied ?? _original);
         CheckNowButton.IsEnabled = true;
     }
 
@@ -453,6 +520,15 @@ public partial class SettingsView : UserControl
         }
     }
 
+    /// <summary>"Change…" on the Files page: the folder row is scrolled to and its box focused.</summary>
+    public void ShowFolderRow() =>
+        Dispatcher.BeginInvoke(DispatcherPriority.Loaded, () =>
+        {
+            FolderBox.BringIntoView();
+            FolderBox.Focus();
+            FolderBox.SelectAll();
+        });
+
     private void OnBrowse(object sender, RoutedEventArgs e)
     {
         if (Dialogs.PickFolder(Owner, "Choose the folder to keep in sync", FolderBox.Text) is { } folder)
@@ -532,6 +608,12 @@ public partial class SettingsView : UserControl
             Fail(problem);
             return;
         }
+        // Another folder: said first what happens (the new one fills from the nest, the old one is kept as it is).
+        if (FolderChoiceText.IsChange(_original.Folder, folder)
+            && Dialogs.Choose(Owner, FolderChoiceText.ChangeTitle(_nestTitle, folder), string.Empty,
+                FolderChoiceText.ChangePoints(_original.ShareAccess(), _original.Folder), FolderChoiceText.Cancel, FolderChoiceText.SaveHere)
+            != FolderChoiceText.SaveHere)
+            return;
         if (!Directory.Exists(folder))
         {
             if (Ask($"The folder {folder} does not exist. Create it?", "Pairnets", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
@@ -601,6 +683,12 @@ public partial class SettingsView : UserControl
                 NotifyAttention = _original.NotifyAttention,
                 NotifyUpdates = _original.NotifyUpdates,
                 NameOfferAnswered = _original.NameOfferAnswered,
+                LastRunVersion = _original.LastRunVersion,
+                NestAutoUpdateOfferFor = _original.NestAutoUpdateOfferFor,
+                // A friend's nest stays theirs: whose it is and what this computer may do there are kept.
+                Access = _original.Access,
+                SharedFolders = _original.SharedFolders is null ? null : [.. _original.SharedFolders],
+                SharedBy = _original.SharedBy,
             };
             if (OwnKey.NameNotSaved(_original, deviceId, DeviceName(), deviceName) is { } note)
                 Fail(note);
@@ -656,6 +744,7 @@ public partial class SettingsView : UserControl
     private void OnReset(object sender, RoutedEventArgs e) => ResetRequested?.Invoke();
 
     private readonly Func<string, string?>? _folderProblem;
+    private readonly string? _nestTitle;
 
     /// <summary>Where this nest's key is saved outside the settings file (Mac, Linux): see <see cref="ClientSettings.KeySlotFor"/>.</summary>
     public string? KeySlot { get; init; }
@@ -695,7 +784,8 @@ public partial class SettingsView : UserControl
     private void OnAboutLink(object sender, RoutedEventArgs e)
     {
         if (sender is Button { CommandParameter: string url })
-            OpenLinkRequested?.Invoke(url);
+            // "Open-source licences" opens the licence texts the app carries, not only the website's list.
+            OpenLinkRequested?.Invoke(url == PairnetsLinks.Licenses ? ThirdPartyNotices.OpenTarget() : url);
     }
 
     /// <summary>"Change…" next to where the nest keeps its files: the controller opens the window with the nest's drives.</summary>
@@ -716,6 +806,59 @@ public partial class SettingsView : UserControl
 
     /// <summary>The row's line as shown (tests), or null while it is hidden.</summary>
     internal string? StorageLine => StoragePanel.Visibility == Visibility.Visible ? StorageText.Text : null;
+
+    /// <summary>A choice under "Before big deletes": the controller sets it on the nest; returns null, or what went wrong.</summary>
+    public event Func<string, Task<string?>>? BigDeletesChosen;
+
+    private bool _showingBigDeletes;
+    private string _bigDeletes = BigDeleteModes.AskEverywhere;
+
+    /// <summary>
+    /// "Before big deletes" in the nest card: the nest's choice, which the owner's computers can change (a shared nest, or
+    /// an older nest that does not know it: shown, not changeable). Hidden when not connected.
+    /// </summary>
+    public void ShowBigDeletes(string? mode, bool canChange, bool nestKnows, bool connected = true)
+    {
+        _showingBigDeletes = true;
+        try
+        {
+            _bigDeletes = BigDeleteModes.Or(mode);
+            BigDeletesPanel.Visibility = connected ? Visibility.Visible : Visibility.Collapsed;
+            BigAskWhere.IsChecked = _bigDeletes == BigDeleteModes.AskWhereDeleted;
+            BigAskEvery.IsChecked = _bigDeletes == BigDeleteModes.AskEverywhere;
+            BigNever.IsChecked = _bigDeletes == BigDeleteModes.Never;
+            BigDeletesChoices.IsEnabled = canChange;
+            BigDeletesDetail.Text = !nestKnows ? BigDeleteText.OlderNest
+                : !canChange ? BigDeleteText.OwnerOnly + " " + BigDeleteText.ChoiceDetail(_bigDeletes)
+                : BigDeleteText.ChoiceDetail(_bigDeletes);
+        }
+        finally
+        {
+            _showingBigDeletes = false;
+        }
+    }
+
+    /// <summary>The choice shown (tests).</summary>
+    internal string BigDeletesShown => _bigDeletes;
+
+    private async void OnBigDeletesChosen(object sender, RoutedEventArgs e)
+    {
+        if (_showingBigDeletes || BigDeletesChosen is not { } chosen)
+            return;
+        var mode = sender == BigAskWhere ? BigDeleteModes.AskWhereDeleted : sender == BigNever ? BigDeleteModes.Never : BigDeleteModes.AskEverywhere;
+        if (mode == _bigDeletes)
+            return;
+        var before = _bigDeletes;
+        BigDeletesDetail.Text = BigDeleteText.ChoiceDetail(mode);
+        var problem = await chosen(mode);
+        if (problem is null)
+            _bigDeletes = mode;
+        else
+        {
+            ShowBigDeletes(before, canChange: true, nestKnows: true);
+            BigDeletesDetail.Text = problem;
+        }
+    }
 
     private void OnShowAddress(object sender, RoutedEventArgs e)
     {

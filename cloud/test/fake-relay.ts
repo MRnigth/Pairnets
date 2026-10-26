@@ -183,6 +183,17 @@ export interface FakeDevice {
   folders: string[] | null;
   person: string | null;
   personId: string | null;
+  /** The beta program: the computer's choice ({channel, at, by}) and its app's version text, as the nest keeps them. */
+  beta?: { channel: string; at: string; by: "app" | "web" } | null;
+  app?: string | null;
+}
+
+/** What the service last told the nest about its owner's beta program (PUT /api/relay/beta). */
+export interface FakeBeta {
+  member: boolean;
+  termsVersion: string | null;
+  channels: string[];
+  rev: number;
 }
 
 /** A person waiting for the owner's answer, as the service last told the nest (PUT /api/relay/requests). */
@@ -262,6 +273,10 @@ export class FakeNestServer {
   topFolders: { name: string; bytes: number; files: number }[] | null = [];
   /** The nests shared with the owner's account, as last PUT; null until the service sent a list. */
   offers: unknown[] | null = null;
+  /** Knows the beta program: PUT /api/relay/beta, beta and app in the devices list, PUT /api/relay/devices/{id}/beta. */
+  betaSupported = true;
+  /** The owner's beta program as last told (the highest rev wins); null until told. */
+  beta: FakeBeta | null = null;
 
   constructor(
     readonly nestId: string,
@@ -377,7 +392,8 @@ export class FakeNestServer {
       return jsonResp(200, {
         devices: [...this.devices.values()].map((d) => {
           const base = { id: d.id, name: d.name, system: d.system, createdAt: d.createdAt, lastSeen: d.lastSeen };
-          return friends ? { ...base, access: d.access, folders: d.folders, person: d.person, personId: d.personId } : base;
+          const withBeta = this.betaSupported ? { ...base, beta: d.beta ?? null, app: d.app ?? null } : base;
+          return friends ? { ...withBeta, access: d.access, folders: d.folders, person: d.person, personId: d.personId } : withBeta;
         }),
       });
     }
@@ -450,6 +466,10 @@ export class FakeNestServer {
       this.offers = b.offers;
       return jsonResp(200, { offers: b.offers });
     }
+    if (this.betaSupported && !this.old) {
+      const beta = this.betaAdmin(req.method, p, bytes);
+      if (beta) return beta;
+    }
     const m = /^\/api\/relay\/devices\/([^/]+)$/.exec(p);
     if (req.method === "DELETE" && m) {
       return this.devices.delete(decodeURIComponent(m[1])) ? jsonResp(200, { removed: true }) : jsonResp(404, { error: "not_found" });
@@ -471,6 +491,26 @@ export class FakeNestServer {
       return jsonResp(200, { name });
     }
     return jsonResp(404, { error: "not_found" });
+  }
+
+  /** The beta program's admin routes (designs/beta-channels/CONTRACT.md); null for any other path. */
+  private betaAdmin(method: string, p: string, bytes: Uint8Array): Response | null {
+    if (method === "PUT" && p === "/api/relay/beta") {
+      const b = JSON.parse(new TextDecoder().decode(bytes)) as FakeBeta;
+      if (typeof b.member !== "boolean" || !Array.isArray(b.channels) || typeof b.rev !== "number") return jsonResp(400, { error: "bad_request" });
+      if (!this.beta || b.rev >= this.beta.rev) this.beta = { member: b.member, termsVersion: b.termsVersion, channels: b.channels, rev: b.rev };
+      return jsonResp(200, { rev: this.beta.rev });
+    }
+    const one = /^\/api\/relay\/devices\/([^/]+)\/beta$/.exec(p);
+    if (method !== "PUT" || !one) return null;
+    const b = JSON.parse(new TextDecoder().decode(bytes)) as { channel?: unknown };
+    if (b.channel !== "off" && b.channel !== "public-beta" && b.channel !== "developer-beta") return jsonResp(400, { error: "bad_request" });
+    const d = this.devices.get(decodeURIComponent(one[1]));
+    if (!d) return jsonResp(404, { error: "no_device" });
+    if (d.personId) return jsonResp(409, { error: "not_owner_device" });
+    if (b.channel !== "off" && !(this.beta?.member && this.beta.channels.includes(b.channel))) return jsonResp(409, { error: "not_allowed" });
+    d.beta = { channel: b.channel, at: new Date(this.clock.now * 1000).toISOString(), by: "web" };
+    return jsonResp(200, d.beta);
   }
 
   /** /api/relay/links on the joining side (C#: LinkEndpoints). */

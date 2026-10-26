@@ -82,6 +82,23 @@
                             Click="OnChangeStorage" AutomationProperties.Name="Change where your nest keeps files" />
                   </Grid>
                 </StackPanel>
+                <!-- Before big deletes: one choice for every computer of the nest (applied at once, on the nest) -->
+                <StackPanel x:Name="BigDeletesPanel" IsVisible="False" Spacing="14">
+                  <Border Classes="hair" />
+                  <StackPanel Spacing="2">
+                    <TextBlock Text="Before big deletes (100+ files)" FontWeight="SemiBold" TextWrapping="Wrap" />
+                    <TextBlock Classes="t3" TextWrapping="Wrap" Text="One choice for every computer of this nest. An emptied folder always asks." />
+                  </StackPanel>
+                  <StackPanel x:Name="BigDeletesChoices" Spacing="6">
+                    <RadioButton x:Name="BigAskWhere" Classes="pill" GroupName="bigdel" HorizontalAlignment="Left"
+                                 Content="Ask on the computer where I deleted them" IsCheckedChanged="OnBigDeletesChosen" />
+                    <RadioButton x:Name="BigAskEvery" Classes="pill" GroupName="bigdel" HorizontalAlignment="Left"
+                                 Content="Ask on every computer" IsCheckedChanged="OnBigDeletesChosen" />
+                    <RadioButton x:Name="BigNever" Classes="pill" GroupName="bigdel" HorizontalAlignment="Left"
+                                 Content="Never ask" IsCheckedChanged="OnBigDeletesChosen" />
+                  </StackPanel>
+                  <TextBlock x:Name="BigDeletesDetail" Classes="t3" TextWrapping="Wrap" />
+                </StackPanel>
               </StackPanel>
             </Border>
 
@@ -93,7 +110,7 @@
                   <TextBlock Classes="stitle" Text="This computer" VerticalAlignment="Center" />
                 </StackPanel>
                 <StackPanel Spacing="6">
-                  <TextBlock FontSize="13" FontWeight="Bold" Text="Folder to keep in sync" />
+                  <TextBlock x:Name="FolderLabel" FontSize="13" FontWeight="Bold" TextWrapping="Wrap" Text="Folder to keep in sync" />
                   <Grid ColumnDefinitions="*,Auto">
                     <TextBox x:Name="FolderBox" Classes="field" Height="38" MinHeight="38" CornerRadius="11" Watermark="Choose a folder…">
                       <TextBox.InnerLeftContent>
@@ -102,6 +119,7 @@
                     </TextBox>
                     <Button Grid.Column="1" Classes="chipbtn" Height="38" Margin="8,0,0,0" Content="Change…" Click="OnBrowse" />
                   </Grid>
+                  <TextBlock x:Name="FolderHereText" Classes="t3" TextWrapping="Wrap" Text="Only on this computer. Your other computers keep their own folders." />
                 </StackPanel>
                 <StackPanel Spacing="6">
                   <TextBlock FontSize="13" FontWeight="Bold" Text="This computer's name" />
@@ -188,7 +206,7 @@
                 <Grid ColumnDefinitions="*,Auto">
                   <StackPanel VerticalAlignment="Center">
                     <TextBlock Text="Check for updates by itself" FontWeight="SemiBold" TextWrapping="Wrap" />
-                    <TextBlock Classes="t3" TextWrapping="Wrap" Text="Looks when Pairnets starts and once a day. You choose when to install." />
+                    <TextBlock x:Name="UpdateCadenceText" Classes="t3" TextWrapping="Wrap" Text="Looks when Pairnets starts and once a day. You choose when to install." />
                   </StackPanel>
                   <ToggleSwitch x:Name="UpdateBox" Grid.Column="1" Classes="bare" OnContent="Check for updates by itself" OffContent="Check for updates by itself" />
                 </Grid>
@@ -204,6 +222,27 @@
                     </Button>
                   </Grid>
                 </Border>
+                <Border Classes="hair" />
+                <!-- Beta updates: chosen here per computer, once the account joined the beta program on its account page -->
+                <StackPanel x:Name="BetaPanel" Spacing="10">
+                  <StackPanel>
+                    <TextBlock Text="Beta updates" FontWeight="SemiBold" />
+                    <TextBlock x:Name="BetaText" Classes="t3" TextWrapping="Wrap" />
+                  </StackPanel>
+                  <Border Classes="numsegs" HorizontalAlignment="Left">
+                    <StackPanel Orientation="Horizontal">
+                      <RadioButton x:Name="BetaOff" Classes="pill" GroupName="beta" Content="Off" AutomationProperties.Name="Beta updates off" />
+                      <RadioButton x:Name="BetaPublic" Classes="pill" GroupName="beta" Content="Public beta" />
+                      <RadioButton x:Name="BetaDeveloper" Classes="pill" GroupName="beta" Content="Developer beta" />
+                    </StackPanel>
+                  </Border>
+                  <TextBlock x:Name="BetaWaiting" Classes="t3" TextWrapping="Wrap" IsVisible="False" />
+                  <StackPanel Orientation="Horizontal" Spacing="10">
+                    <Button x:Name="BetaJoinButton" Classes="small" FontWeight="Bold" Content="Open account page" Click="OnBetaJoin" />
+                    <Button x:Name="BetaFeedbackButton" Classes="small" FontWeight="Bold" Content="Send beta feedback" Click="OnReportBug" />
+                    <TextBlock x:Name="BetaFeedbackHint" Classes="t3" VerticalAlignment="Center" Text="Found something odd? Tell us." />
+                  </StackPanel>
+                </StackPanel>
                 <Border Classes="hair" />
                 <Grid ColumnDefinitions="*,Auto">
                   <StackPanel VerticalAlignment="Center">

@@ -189,6 +189,23 @@
                             VerticalAlignment="Center" Click="OnChangeStorage" AutomationProperties.Name="Change where your nest keeps files" />
                   </Grid>
                 </StackPanel>
+
+                <!-- Before big deletes: one choice for every computer of the nest (applied at once, on the nest) -->
+                <StackPanel x:Name="BigDeletesPanel" Visibility="Collapsed">
+                  <Border Style="{StaticResource PgHair}" Margin="0,14" />
+                  <TextBlock Style="{StaticResource RowTitle}" Text="Before big deletes (100+ files)" />
+                  <TextBlock Style="{StaticResource PgSmall}" TextWrapping="Wrap" Margin="0,2,0,10"
+                             Text="One choice for every computer of this nest. An emptied folder always asks." />
+                  <StackPanel x:Name="BigDeletesChoices">
+                    <RadioButton x:Name="BigAskWhere" Style="{StaticResource PgPill}" GroupName="bigdel" HorizontalAlignment="Left" Margin="0,0,0,6"
+                                 Content="Ask on the computer where I deleted them" Checked="OnBigDeletesChosen" />
+                    <RadioButton x:Name="BigAskEvery" Style="{StaticResource PgPill}" GroupName="bigdel" HorizontalAlignment="Left" Margin="0,0,0,6"
+                                 Content="Ask on every computer" Checked="OnBigDeletesChosen" />
+                    <RadioButton x:Name="BigNever" Style="{StaticResource PgPill}" GroupName="bigdel" HorizontalAlignment="Left" Margin="0,0,0,6"
+                                 Content="Never ask" Checked="OnBigDeletesChosen" />
+                  </StackPanel>
+                  <TextBlock x:Name="BigDeletesDetail" Style="{StaticResource PgSmall}" TextWrapping="Wrap" Margin="0,2,0,0" />
+                </StackPanel>
               </StackPanel>
             </Border>
 
@@ -200,7 +217,7 @@
                   <TextBlock Style="{StaticResource PgCardTitle}" Text="This computer" VerticalAlignment="Center" />
                 </StackPanel>
                 <StackPanel Margin="0,14,0,0">
-                  <TextBlock FontSize="13" FontWeight="Bold" Margin="0,0,0,6" Text="Folder to keep in sync" />
+                  <TextBlock x:Name="FolderLabel" FontSize="13" FontWeight="Bold" Margin="0,0,0,6" TextWrapping="Wrap" Text="Folder to keep in sync" />
                   <Grid>
                     <Grid.ColumnDefinitions>
                       <ColumnDefinition Width="*" />
@@ -213,6 +230,8 @@
                     </Grid>
                     <Button Grid.Column="1" Style="{StaticResource PgChipButton}" Height="38" Content="Change…" Margin="8,0,0,0" Click="OnBrowse" />
                   </Grid>
+                  <TextBlock x:Name="FolderHereText" Style="{StaticResource PgSmall}" Margin="0,6,0,0" TextWrapping="Wrap"
+                             Text="Only on this computer. Your other computers keep their own folders." />
                 </StackPanel>
                 <StackPanel Margin="0,14,0,0">
                   <TextBlock FontSize="13" FontWeight="Bold" Margin="0,0,0,6" Text="This computer's name" />
@@ -319,7 +338,7 @@
                   </Grid.ColumnDefinitions>
                   <StackPanel VerticalAlignment="Center">
                     <TextBlock Style="{StaticResource RowTitle}" Text="Check for updates by itself" />
-                    <TextBlock Style="{StaticResource PgSmall}" TextWrapping="Wrap" Text="Looks once a day. You choose when to install." />
+                    <TextBlock x:Name="UpdateCadenceText" Style="{StaticResource PgSmall}" TextWrapping="Wrap" Text="Looks once a day. You choose when to install." />
                   </StackPanel>
                   <CheckBox x:Name="UpdateBox" Grid.Column="1" Style="{StaticResource PgSwitch}" Margin="16,0,0,0" AutomationProperties.Name="Check for updates by itself" />
                 </Grid>
@@ -340,6 +359,26 @@
                     </Button>
                   </Grid>
                 </Border>
+                <Border Style="{StaticResource PgHair}" Margin="0,14" />
+                <!-- Beta updates: chosen here per computer, once the account joined the beta program on its account page -->
+                <StackPanel x:Name="BetaPanel">
+                  <TextBlock Style="{StaticResource RowTitle}" Text="Beta updates" />
+                  <TextBlock x:Name="BetaText" Style="{StaticResource PgSmall}" TextWrapping="Wrap" />
+                  <Border HorizontalAlignment="Left" Margin="0,10,0,0" CornerRadius="11" Padding="2" BorderThickness="1"
+                          Background="{DynamicResource T.Chip}" BorderBrush="{DynamicResource T.Border}">
+                    <StackPanel Orientation="Horizontal">
+                      <RadioButton x:Name="BetaOff" Style="{StaticResource PgSeg}" GroupName="beta" Width="Auto" AutomationProperties.Name="Beta updates off"><TextBlock Text="Off" Margin="12,0" /></RadioButton>
+                      <RadioButton x:Name="BetaPublic" Style="{StaticResource PgSeg}" GroupName="beta" Width="Auto" AutomationProperties.Name="Public beta"><TextBlock Text="Public beta" Margin="12,0" /></RadioButton>
+                      <RadioButton x:Name="BetaDeveloper" Style="{StaticResource PgSeg}" GroupName="beta" Width="Auto" AutomationProperties.Name="Developer beta"><TextBlock Text="Developer beta" Margin="12,0" /></RadioButton>
+                    </StackPanel>
+                  </Border>
+                  <TextBlock x:Name="BetaWaiting" Style="{StaticResource PgSmall}" TextWrapping="Wrap" Margin="0,10,0,0" Visibility="Collapsed" />
+                  <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                    <Button x:Name="BetaJoinButton" Style="{StaticResource PgSmallButton}" Height="30" Content="Open account page" Click="OnBetaJoin" />
+                    <Button x:Name="BetaFeedbackButton" Style="{StaticResource PgSmallButton}" Height="30" Content="Send beta feedback" Click="OnReportBug" />
+                    <TextBlock x:Name="BetaFeedbackHint" Style="{StaticResource PgSmall}" Margin="10,0,0,0" VerticalAlignment="Center" Text="Found something odd? Tell us." />
+                  </StackPanel>
+                </StackPanel>
                 <Border Style="{StaticResource PgHair}" Margin="0,14" />
                 <Grid>
                   <Grid.ColumnDefinitions>

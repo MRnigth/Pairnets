@@ -96,6 +96,10 @@ public static partial class Program
                     InviteFolder.Render(outDir, dark ? "dark" : "light", print);
                 else if (args.Contains("--stage7"))
                     Stage7.Render(outDir, dark ? "dark" : "light", print);
+                else if (args.Contains("--nest-downloads"))
+                    NestDownloadScreens.Render(outDir, dark ? "dark" : "light", print);
+                else if (args.Contains("--big-deletes"))
+                    BigDeleteScreens.Render(outDir, dark ? "dark" : "light", print);
                 else if (args.Contains("--nest-only"))
                     NestOnlyScreens.Render(outDir, dark ? "dark" : "light", print);
                 else if (args.Contains("--stage4"))
@@ -372,6 +376,10 @@ public static partial class Program
         Save(window, outDir, $"windows-main-idle-{suffix}.png", print);
         if (window.MapOtherText != "LAPTOP: in sync")
             throw new InvalidOperationException("The overview's picture shows " + window.MapOtherText);
+        // After this app updated itself: "Let your nest update by itself?" at the top of the overview.
+        window.ShowNestOffer(new NestAutoUpdateOffer([new("a", "soro")]));
+        Save(window, outDir, $"windows-main-nest-auto-update-{suffix}.png", print);
+        window.ShowNestOffer(null);
 
         // Several nests: the nest list on the left with Home nest picked, then the All nests page.
         var idle = StatusSnapshot.Initial with { Status = RunnerStatus.Idle, Text = "Up to date", LastSyncAt = now, Server = server, Devices = devices, NestLabel = "Home nest" };
@@ -504,6 +512,9 @@ public static partial class Program
         const string page = "https://sync.pairnets.app/app?code=KQ7M-4PXD&method=email";
         signIn.SignIn!.ShowAccount(new AccountSignInState(PairingStage.Waiting, "KQ7M-4PXD", page, DateTimeOffset.UtcNow.AddMinutes(9).AddSeconds(41)), openBrowser: false);
         Save(signIn, outDir, $"windows-sign-in-browser-{suffix}.png", print);
+        signIn.SignIn.ShowAccount(new AccountSignInState(PairingStage.Waiting, VerifyUrl: "https://sync.pairnets.app/app/link?r=pnr_8kq2w7xm4v9hd3tz6rbn5c1fyjpa0segu2wqXb7Lm9Pt",
+            ExpiresAt: DateTimeOffset.UtcNow.AddMinutes(15), ByLink: true), openBrowser: false);
+        Save(signIn, outDir, $"windows-sign-in-link-{suffix}.png", print);
         signIn.SignIn.ShowAccount(new AccountSignInState(PairingStage.Waiting, "KQ7M-4PXD", page, DateTimeOffset.UtcNow.AddMinutes(30),
             AccountSignIn.NoNestMessage, NoNest: true, AccountEmail: "maria@example.com"), openBrowser: false);
         Save(signIn, outDir, $"windows-sign-in-no-nest-{suffix}.png", print);

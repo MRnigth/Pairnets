@@ -48,7 +48,7 @@ public partial class ServerUpdateWindow : Window
             NestVersion.Text = "older";
             VersionsText.Text = $"old version → {appVersion}";
         }
-        else if (UpdateChecker.ServerIsOlder(serverVersion, appVersion))
+        else if (UpdateChecker.ServerIsOlder(serverVersion, appVersion == PairnetsInfo.ProductVersion ? PairnetsInfo.StableBaseVersion : appVersion))
         {
             Explanation.Text = "Update the nest to match, so both sides have the same fixes.";
             NestVersion.Text = serverVersion;

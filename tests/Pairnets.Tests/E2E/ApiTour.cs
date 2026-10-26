@@ -33,6 +33,7 @@ public sealed partial class ApiTour : IAsyncDisposable
         new("GET", "/api/me"),
         new("DELETE", "/api/devices/{id}"),
         new("PATCH", "/api/devices/me"),
+        new("PUT", "/api/devices/me/beta"),
         new("PATCH", "/api/devices/{id}/icon"),
         new("GET", "/api/info"),
         new("POST", "/api/update"),
@@ -40,6 +41,7 @@ public sealed partial class ApiTour : IAsyncDisposable
         new("GET", "/api/update/diagnostics"),
         new("GET", "/api/storage"),
         new("POST", "/api/storage/move"),
+        new("PUT", "/api/settings/big-deletes"),
         new("GET", "/api/manifest"),
         new("GET", "/api/file"),
         new("PUT", "/api/file"),
@@ -87,6 +89,8 @@ public sealed partial class ApiTour : IAsyncDisposable
         new("PATCH", "/api/relay/devices/{id}"),
         new("DELETE", "/api/relay/devices/{id}"),
         new("PUT", "/api/relay/name"),
+        new("PUT", "/api/relay/beta"),
+        new("PUT", "/api/relay/devices/{id}/beta"),
         new("PATCH", "/api/relay/people/{personId}"),
         new("DELETE", "/api/relay/people/{personId}"),
         new("PUT", "/api/relay/requests"),
@@ -100,6 +104,13 @@ public sealed partial class ApiTour : IAsyncDisposable
         new("PUT", "/api/relay/offers/"),
         new("GET", "/api/links"),
         new("GET", "/api/offers"),
+
+        // Downloads on the nest (Web/DownloadEndpoints.cs).
+        new("GET", "/api/downloads"),
+        new("POST", "/api/downloads"),
+        new("DELETE", "/api/downloads/{id}"),
+        new("POST", "/api/downloads/{id}/retry"),
+        new("GET", "/api/downloads/{id}/file"),
 
         // The website's pages (Web/WebUi.cs).
         new("GET", "/"),
@@ -163,6 +174,7 @@ public sealed partial class ApiTour : IAsyncDisposable
         SyncHub.NestRenamedMethod,
         SyncHub.KeyRequestedMethod,
         SyncHub.NestSealedMethod,
+        SyncHub.NestSettingsChangedMethod,
         PairingEndpoints.PairRequestedMethod,
         PairingEndpoints.PairRequestedFromMethod,
         PairingEndpoints.PairDecidedMethod,

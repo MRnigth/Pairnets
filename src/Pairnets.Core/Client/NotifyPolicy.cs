@@ -14,7 +14,7 @@ public enum NoticeKind
     /// <summary>A new Pairnets version, or the server was updated.</summary>
     Update,
 
-    /// <summary>Plain news ("caught up after being away"): always shown.</summary>
+    /// <summary>Plain news ("caught up after being away", "a download finished on the nest"): always shown.</summary>
     Info,
 }
 
@@ -24,7 +24,7 @@ public static class NotifyPolicy
     public static NoticeKind KindOf(string key) =>
         key.StartsWith("join:", StringComparison.Ordinal) ? NoticeKind.JoinRequest
         : key.StartsWith("update:", StringComparison.Ordinal) || key == "server-updated" || key == "updated" ? NoticeKind.Update
-        : key == "catchup" ? NoticeKind.Info
+        : key == "catchup" || key.StartsWith("download:", StringComparison.Ordinal) ? NoticeKind.Info
         : NoticeKind.Attention;
 
     public static bool Allows(ClientSettings settings, string key) => KindOf(key) switch

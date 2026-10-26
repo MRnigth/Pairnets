@@ -2,7 +2,7 @@
 
 import { assetUrl } from "./assets";
 import { escapeHtml as e } from "./http";
-import { displayUserCode, emailName, iso, MAX_USERNAME } from "./formats";
+import { BETA_MIN_APP, displayUserCode, emailName, iso, MAX_USERNAME } from "./formats";
 
 interface LayoutOptions {
   scripts?: string[];
@@ -116,6 +116,27 @@ export interface AccountView {
   shared?: SharedView[];
   /** /account?invite=nst_…&folders=…&access=…: that nest's invite form is drawn open and filled in (the apps hand over to it). */
   invite?: { nestId: string; folders: string[] | null; access: "view" | "edit" } | null;
+  /** The beta program (routes/beta.ts); absent: the section is drawn as for someone who has not joined. */
+  beta?: BetaPageView;
+}
+
+/** The account's place in the beta program, as GET /v1/beta answers it (joinedAt in seconds here). */
+export interface BetaPageView {
+  member: boolean;
+  joinedAt: number | null;
+  termsVersion: string | null;
+  termsCurrent: string;
+  /** The approved betas the computers may use (none while removed or on older terms). */
+  channels: ("public-beta" | "developer-beta")[];
+  /** The betas signed up for, and those of them still waiting for approval. */
+  requested: ("public-beta" | "developer-beta")[];
+  pending: ("public-beta" | "developer-beta")[];
+  /** Removed by an admin; blockedSignup: the betas signed up for again since then (waiting for them). */
+  blocked: boolean;
+  blockedSignup: ("public-beta" | "developer-beta")[];
+  /** Sign-ups are approved at once (BETA_AUTO_APPROVE). */
+  autoApprove: boolean;
+  needsNewTerms: boolean;
 }
 
 /** A relayed server; the page's script fills in online, version, free space and computers from GET /v1/servers. */
@@ -323,6 +344,102 @@ ${rows}
 </section>`;
 }
 
+/** "26 October 2026" for a terms version "2026-10-26". */
+function termsDay(version: string): string {
+  const d = new Date(`${version}T00:00:00Z`);
+  return Number.isNaN(d.getTime()) ? version : d.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
+}
+
+/** "26.10.2026". */
+function shortDay(sec: number): string {
+  const d = new Date(sec * 1000);
+  const two = (n: number) => String(n).padStart(2, "0");
+  return `${two(d.getUTCDate())}.${two(d.getUTCMonth() + 1)}.${d.getUTCFullYear()}`;
+}
+
+const BETA_WORDS = { "public-beta": "Public beta", "developer-beta": "Developer beta" } as const;
+
+/** "Public beta and Developer beta". */
+function betaList(list: BetaPageView["channels"]): string {
+  return list.map((c) => BETA_WORDS[c]).join(" and ");
+}
+
+/** The terms tick box and the button that sends it; `asked` (no tick boxes for the betas) names what it signs up for. */
+function betaTerms(b: BetaPageView, button: string, asked: BetaPageView["channels"] | null = null): string {
+  return `<div class="terms"><label class="choice"><input type="checkbox" id="beta-terms" data-field="beta-terms"><span>I agree to the <a href="/beta-terms">Pairnets beta terms</a>. Beta versions can have bugs, so keep a copy of anything you can't lose.</span></label></div>
+<button type="button" class="join" data-action="beta-join" data-terms-version="${e(b.termsCurrent)}"${asked ? ` data-asked="${e(asked.join(" "))}"` : ""} disabled>${button}</button>`;
+}
+
+const BETA_STATUS = `<p class="status" data-field="beta-status" role="status" hidden></p>`;
+
+/** The sign-up form: which betas (Public beta ticked), the terms, Send sign-up, and who sees what. */
+function betaSignup(b: BetaPageView): string {
+  const pick = (c: keyof typeof BETA_WORDS, checked: boolean, said: string) =>
+    `<label class="choice"><input type="checkbox" data-field="beta-pick" value="${c}"${checked ? " checked" : ""}><span><b>${BETA_WORDS[c]}</b><span class="muted">${said}</span></span></label>`;
+  return `<form class="signup" data-field="beta-form">
+<fieldset>
+<legend>Sign me up for</legend>
+${pick("public-beta", true, "Versions that are nearly ready, a few days before everyone else.")}
+${pick("developer-beta", false, "The newest work, often the same day. Expect rough edges.")}
+</fieldset>
+${betaTerms(b, "Send sign-up")}
+<p class="muted signup-note">${b.autoApprove ? "Sign-ups are approved at once." : "Sign-ups are looked at by hand."} The maker of Pairnets can see who is in the beta and which of their computers use it.</p>
+${BETA_STATUS}
+</form>`;
+}
+
+/**
+ * The beta program. Not signed up: the sign-up form. Signed up: what was asked for and approved, one row per own computer
+ * (account.js fills them from GET /v1/servers) with its choice, and Leave. New terms since: agree to them first. Removed
+ * by an admin: says so, and a new sign-up waits for approval.
+ */
+function betaSection(b: BetaPageView): string {
+  const channels = e(b.channels.join(" "));
+  if (!b.member) {
+    return `<section class="card" id="beta" data-channels="">
+<h2>Beta program</h2>
+<p>Try new versions of Pairnets before everyone else, on the computers you choose. Sign up here once, then turn on <strong>Beta updates</strong> in Settings on each computer.</p>
+${betaSignup(b)}
+</section>`;
+  }
+  const leave = `<div class="leave"><button type="button" class="danger" data-action="beta-leave">Leave the beta program</button>
+<p class="muted">Every computer goes back to Off. Each keeps its beta until the next normal version is newer, then moves onto it. Nothing is removed.</p></div>`;
+  if (b.blocked) {
+    return `<section class="card" id="beta" data-joined data-blocked data-channels="">
+<h2>Beta program</h2>
+<p>You were removed from the beta program. A new sign-up waits for approval.</p>
+${b.blockedSignup.length ? `<p class="muted">Your sign-up for ${betaList(b.blockedSignup)} is waiting for approval.</p>` : betaSignup(b)}
+</section>`;
+  }
+  const head = `<h2>Beta program <span class="pill online">signed up</span></h2>`;
+  const attrs = `id="beta" data-joined data-channels="${channels}" data-min-app="${e(BETA_MIN_APP)}"`;
+  if (b.needsNewTerms) {
+    return `<section class="card" ${attrs}>
+${head}
+<p class="muted">The beta terms changed on ${e(termsDay(b.termsCurrent))}${b.termsVersion ? ` (you agreed to the ones of ${e(termsDay(b.termsVersion))})` : ""}. Agree to the new terms to keep getting beta updates; until then your computers get only normal versions.</p>
+${betaTerms(b, "Agree to the new beta terms", b.requested.length ? b.requested : ["public-beta"])}
+${BETA_STATUS}
+${leave}
+</section>`;
+  }
+  const approvedAll = b.pending.length === 0 ? (b.autoApprove ? ", approved at once" : ", approved") : "";
+  const waiting = b.pending.map((c) => `<p class="notice" data-field="beta-waiting">${BETA_WORDS[c]}: waiting for approval.</p>`).join("\n");
+  const other = (["public-beta", "developer-beta"] as const).find((c) => !b.requested.includes(c));
+  const more =
+    other && b.requested.length === 1
+      ? `<p><button type="button" class="secondary" data-action="beta-add" data-channel="${other}" data-terms-version="${e(b.termsCurrent)}">Also sign up for ${BETA_WORDS[other]}</button></p>`
+      : "";
+  return `<section class="card" ${attrs}>
+${head}
+<p class="muted">Signed up on ${b.joinedAt !== null ? e(shortDay(b.joinedAt)) : ""} for ${betaList(b.requested)}${approvedAll}. Beta terms of ${e(termsDay(b.termsVersion ?? b.termsCurrent))}. Each computer chooses in its own Settings › Updates › Beta updates; you can change it here too.</p>
+${waiting}
+${more}
+<ul class="list beta-list" id="beta-list"><li class="muted">Loading...</li></ul>
+${BETA_STATUS}
+${leave}
+</section>`;
+}
+
 export function accountPage(v: AccountView): string {
   const servers = v.servers.length
     ? v.servers
@@ -392,6 +509,7 @@ ${
 }
 <p class="muted">To add a nest: on the Linux computer that will keep your files, run <code>curl -fsSL https://pairnets.app/get.sh | sudo bash</code>. It shows a link and a code: open the link and choose Add this nest. Then, on each computer, install Pairnets and choose Continue with email (or Google) with this account.</p>
 </section>
+${v.beta ? betaSection(v.beta) : ""}
 ${linksSection(v.links)}
 ${sharedSection(v.shared ?? [])}
 <details class="card"${v.nests.length ? " open" : ""}>
@@ -413,6 +531,11 @@ ${nests}
 <ul class="list" id="sessions">
 ${sessions}
 </ul>
+</section>
+<section class="card">
+<h2>Your data</h2>
+<p>Download a copy of everything Pairnets stores about your account, as a JSON file. Your files are not in it: they are only on your own nest and computers.</p>
+<p><a class="button secondary" id="export-data" href="/v1/me/export" download>Download my data</a></p>
 </section>
 <section class="card">
 <h2>Delete account</h2>
@@ -439,6 +562,11 @@ export interface AppRequestView {
   place: string | null;
   /** When the page is drawn ("asked 2 min ago", "the code works for 8 more minutes"). */
   now: number;
+  /**
+   * A sign-in link's secret (the link's ?r=, CONTRACT.md 6.9): the page answers by it instead of the user code, shows
+   * no short code to compare, and after Allow shows the long code to paste into the app. Absent or null: today's page.
+   */
+  link?: string | null;
 }
 
 export interface ServerChoice {
@@ -507,7 +635,10 @@ function codeForm(label: string): string {
 function askScreen(req: AppRequestView, servers: ServerChoice[]): string {
   const name = e(req.name);
   let nest: string;
-  if (!servers.length) {
+  if (!servers.length && req.link) {
+    // A link sign-in's code is pasted within minutes: too soon to set up a nest, so it can't wait for one.
+    nest = `<p class="q-note"><b>You don't have a nest yet.</b> Set one up in your account first, then start again in Pairnets on ${name}.</p>`;
+  } else if (!servers.length) {
     nest = `<p class="q-note"><b>You don't have a nest yet.</b> Allow ${name} now and it waits. Next you set up your nest, and ${name} joins it by itself.</p>`;
   } else if (servers.length === 1) {
     const only = servers[0];
@@ -550,6 +681,24 @@ ${options}
     .filter((f): f is string => !!f)
     .map((f) => e(f))
     .join(" · ");
+  if (req.link) {
+    return screen(
+      "ask",
+      true,
+      `<span class="q-badge">${icon("computer")}</span>
+<h1 id="screen-ask-title" tabindex="-1">Allow ${name} to sign in?</h1>
+<p class="q-lead">You opened a sign-in link from Pairnets on a computer called <b>${name}</b>. It is asking to use your Pairnets account.</p>
+${where}
+<p class="q-note">Only allow this if you are at that computer, or you are helping someone you know. If a stranger sent you this link, press No.</p>
+${nest}
+<p class="q-error" id="app-error" role="alert" hidden></p>
+<div class="q-actions">
+<button type="button" class="q-btn q-primary" id="approve"${servers.length ? "" : " disabled"}>Allow and show the code</button>
+<button type="button" class="q-btn q-ghost" id="deny">No, this isn't me</button>
+</div>
+<details class="q-more"><summary>Details</summary><p>${facts.replace("the code works", "the link works")}</p></details>`,
+    );
+  }
   return screen(
     "ask",
     true,
@@ -622,6 +771,15 @@ ${earlier ? `<p class="q-earlier">You said no to this ${e(earlier)}.</p>` : ""}
 }
 
 function expiredScreen(req: AppRequestView): string {
+  if (req.link) {
+    return screen(
+      "expired",
+      false,
+      `<span class="q-badge q-warn">${icon("clock")}</span>
+<h1 id="screen-expired-title" tabindex="-1">This link has run out</h1>
+<p class="q-lead">Sign-in links work for 15 minutes. In Pairnets on ${e(req.name)}, start again to get a new link.</p>`,
+    );
+  }
   return screen(
     "expired",
     false,
@@ -630,6 +788,50 @@ function expiredScreen(req: AppRequestView): string {
 <p class="q-lead">Codes work for 10 minutes. In Pairnets on ${e(req.name)}, start signing in again to get a new one.</p>
 ${codeForm("Got a new code? Type it here")}`,
   );
+}
+
+/**
+ * After Allow on a sign-in link: the long code, 8 groups of 4 (app.js puts them in; the page never holds the code), the
+ * last group being the check. The page then watches the sign-in and moves on to "signed in" once the app used the code.
+ */
+function longCodeScreen(req: AppRequestView): string {
+  const name = e(req.name);
+  const groups = Array.from({ length: 8 }, (_, i) => `<span id="long-code-${i + 1}"${i === 7 ? ' class="q-check"' : ""}></span>`).join("");
+  return screen(
+    "longcode",
+    false,
+    `<span class="q-badge">${icon("lock")}</span>
+<h1 id="screen-longcode-title" tabindex="-1">Paste this code into Pairnets</h1>
+<p class="q-lead">On <b>${name}</b>, in the box under <b>Sign in with a link</b>.</p>
+<p class="q-longcode" id="long-code" aria-label="The code">${groups}</p>
+<div class="q-actions"><button type="button" class="q-btn q-primary" id="copy-code">Copy code</button></div>
+<p class="q-fine">It works once, for 5 minutes. This page says when ${name} is signed in.</p>
+<p class="q-error">Never send this code to someone you don't know. Whoever pastes it gets into your nest. Pairnets never asks you for it.</p>`,
+  );
+}
+
+/** A reload after Allow, while the code is still to be pasted: the code itself is never shown twice. */
+function longCodeShownScreen(req: AppRequestView, earlier: string | null): string {
+  const name = e(req.name);
+  return screen(
+    "longcode-shown",
+    true,
+    `<span class="q-badge">${icon("lock")}</span>
+<h1 id="screen-longcode-shown-title" tabindex="-1">Paste the code into Pairnets on ${name}</h1>
+<p class="q-lead">The code was shown once, when you pressed Allow${earlier ? ` (${e(earlier)})` : ""}. It works for 5 minutes.</p>
+<p class="q-fine">Lost it? In Pairnets on ${name}, press Back and start again with a new link.</p>`,
+  );
+}
+
+/** A sign-in link that doesn't find a sign-in: run out, used, cut short, or someone else's that was answered. */
+export function appLinkGonePage(): string {
+  const inner = `<span class="q-badge q-warn">${icon("clock")}</span>
+<h1 id="screen-gone-title">This sign-in link doesn't work</h1>
+<p class="q-lead">It may have run out (links work for 15 minutes), it was already used, or only part of it was copied. In Pairnets, start again with a new link.</p>
+<div class="q-actions"><a class="q-btn q-ghost" href="/account">Go to your account</a></div>`;
+  return layout("This sign-in link doesn't work", `<div class="q-col">
+${screen("gone", true, inner)}
+</div>`, { styles: ["app.css"], bodyClass: "q-page" });
 }
 
 /** /app with no code, or a code that is unknown, ran out, or belongs to someone else's answered sign-in. */
@@ -655,15 +857,23 @@ export function appPage(req: AppRequestView | null, typed: string | null, server
   const noNest = answered ? req.nestId === null : servers.length === 0;
   const earlier = answered && req.decidedAt !== null ? ago(Math.max(0, req.now - req.decidedAt)) : null;
 
+  // A link sign-in that was allowed but whose code is not used yet.
+  const codeWaiting = !!req.link && req.status === "approved";
+
   const screens: string[] = [];
   if (!answered) screens.push(askScreen(req, servers));
-  if (!answered || allowed) screens.push(noNest ? allowedNoNestScreen(req, earlier, answered) : allowedScreen(req, nest, earlier, answered));
+  if (!answered && req.link) screens.push(longCodeScreen(req));
+  if (codeWaiting) screens.push(longCodeShownScreen(req, earlier));
+  if (!answered || allowed) screens.push(noNest ? allowedNoNestScreen(req, earlier, answered && !codeWaiting) : allowedScreen(req, nest, earlier, answered && !codeWaiting));
   if (!answered || !allowed) screens.push(refusedScreen(req, earlier, answered));
   if (!answered) screens.push(expiredScreen(req));
 
-  const attrs = [`id="app-request"`, `class="q-col"`, `data-code="${e(displayUserCode(req.userCode))}"`, `data-system="${e(req.system ?? "")}"`];
+  const attrs = [`id="app-request"`, `class="q-col"`];
+  if (req.link) attrs.push(`data-link="${e(req.link)}"`, `data-request="${e(displayUserCode(req.userCode))}"`);
+  else attrs.push(`data-code="${e(displayUserCode(req.userCode))}"`);
+  attrs.push(`data-system="${e(req.system ?? "")}"`);
   if (!answered && servers.length === 1) attrs.push(`data-nest="${e(servers[0].id)}"`);
-  const title = !answered ? `Allow ${req.name} to sign in?` : allowed ? `${req.name} is signed in` : `${req.name} was not let in`;
+  const title = !answered ? `Allow ${req.name} to sign in?` : codeWaiting ? `Paste the code into Pairnets` : allowed ? `${req.name} is signed in` : `${req.name} was not let in`;
   return layout(title, `<div ${attrs.join(" ")}>\n${screens.join("\n")}\n</div>`, {
     scripts: answered ? [] : ["app.js"],
     styles: ["app.css"],

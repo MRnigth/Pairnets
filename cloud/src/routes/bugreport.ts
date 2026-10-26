@@ -44,7 +44,13 @@ function text(v: unknown, max: number, optional: boolean): string | null {
   return s;
 }
 
-/** POST /v1/bugreport: {"app", "version", "system", "report", "note": "…" | null}. 204 when kept. */
+/** The app's update channel (designs/beta-channels/CONTRACT.md); anything else is ignored. */
+const CHANNELS = ["stable", "public-beta", "developer-beta", "main"];
+
+/**
+ * POST /v1/bugreport: {"app", "version", "system", "report", "note": "…" | null, "channel"?, "build"?}. 204 when kept. An
+ * unknown channel or a build that is not a whole number is dropped, not refused.
+ */
 export async function bugReportRoute(ctx: Ctx): Promise<Response> {
   const body = jsonBody(ctx);
   const version = typeof body.version === "string" && VERSION_RE.test(body.version) ? body.version : null;
@@ -53,14 +59,16 @@ export async function bugReportRoute(ctx: Ctx): Promise<Response> {
   const system = line(body.system, 200);
   const report = text(body.report, MAX_REPORT, false)!;
   const note = text(body.note, MAX_NOTE, true);
+  const channel = typeof body.channel === "string" && CHANNELS.includes(body.channel) ? body.channel : null;
+  const build = typeof body.build === "number" && Number.isSafeInteger(body.build) && body.build >= 0 && body.build <= 1e9 ? body.build : null;
 
   await enforce(ctx, "bugreport", ctx.ipKey, PER_ADDRESS_PER_HOUR, HOUR);
   await enforce(ctx, "bugreport-all", "service", ALL_PER_DAY, DAY);
 
   const row = await ctx.env.DB.prepare(
-    "INSERT INTO bug_reports (app, version, system, report, note, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6) RETURNING id",
+    "INSERT INTO bug_reports (app, version, system, report, note, created_at, channel, build) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8) RETURNING id",
   )
-    .bind(app, version, system, report, note, ctx.now)
+    .bind(app, version, system, report, note, ctx.now, channel, build)
     .first<{ id: number }>();
   if (row) await mailAdmins(ctx, row.id, app, version, note);
   return new Response(null, { status: 204 });
@@ -87,6 +95,14 @@ interface ReportRow {
   report: string;
   note: string | null;
   created_at: number;
+  channel: string | null;
+  build: number | null;
+}
+
+/** " · beta public-beta build 3" for a report from a beta build. */
+function betaMark(r: ReportRow): string {
+  if (r.channel !== "public-beta" && r.channel !== "developer-beta") return "";
+  return ` · <b class="beta">beta</b> ${e(r.channel)}${r.build !== null ? ` build ${r.build}` : ""}`;
 }
 
 function when(sec: number): string {
@@ -101,7 +117,7 @@ export async function bugReportListRoute(ctx: Ctx): Promise<Response> {
   const items = rows
     .map(
       (r) => `<section class="card">
-<h2>Bug report #${r.id} <span class="muted">· ${e(r.app)} ${e(r.version)} · ${e(when(r.created_at))}</span></h2>
+<h2>Bug report #${r.id} <span class="muted">· ${e(r.app)} ${e(r.version)}${betaMark(r)} · ${e(when(r.created_at))}</span></h2>
 <p>${r.note ? `<b>They wrote:</b> ${e(r.note)}` : `<span class="muted">No note.</span>`}</p>
 <p class="muted">${e(r.system)}</p>
 <details><summary>The report</summary><pre>${e(r.report)}</pre></details>

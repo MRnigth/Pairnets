@@ -177,6 +177,27 @@
             </StackPanel>
           </Border>
           <TextBlock x:Name="AccountExpiresText" Classes="muted small" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,8,0,0" />
+          <!-- The way out when the browser didn't open here, or the sign-in happens on another computer or a phone -->
+          <Button x:Name="AccountUseLinkButton" Classes="link" HorizontalAlignment="Center" Margin="0,14,0,0" Click="OnAccountUseLink">
+            <TextBlock Text="Browser didn't open? Use a sign-in link instead" Foreground="{DynamicResource T.AccentInk}" TextDecorations="Underline"
+                       TextWrapping="Wrap" TextAlignment="Center" />
+          </Button>
+        </StackPanel>
+
+        <!-- 2b. Sign in with a link: the long link to open in any browser, and the long code that browser shows after Allow -->
+        <StackPanel x:Name="AccountLinkStep" Margin="0,18,0,0" IsVisible="False">
+          <TextBlock Classes="fieldlabel" Text="1. Open this link in any browser" />
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBox x:Name="AccountLinkBox" IsReadOnly="True" FontFamily="Menlo, Consolas, DejaVu Sans Mono, monospace" FontSize="12" />
+            <Button x:Name="AccountLinkCopyButton" Grid.Column="1" Classes="subtle" Content="Copy" Padding="16,0" Margin="8,0,0,0" Click="OnAccountLinkCopy" />
+          </Grid>
+          <TextBlock x:Name="AccountLinkHint" Classes="muted small" Margin="2,6,0,0" TextWrapping="Wrap"
+                     Text="On this computer, your phone, or the browser of someone you trust. It works once, for 15 minutes." />
+          <TextBlock Classes="fieldlabel" Margin="0,18,0,8" TextWrapping="Wrap" Text="2. Sign in there, press Allow, and paste the code it shows" />
+          <TextBox x:Name="AccountLinkCodeBox" FontFamily="Menlo, Consolas, DejaVu Sans Mono, monospace" FontSize="14" Watermark="XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX" />
+          <TextBlock x:Name="AccountLinkProblem" Classes="muted small" Foreground="{DynamicResource T.BadText}" FontWeight="SemiBold" Margin="2,8,0,0"
+                     TextWrapping="Wrap" IsVisible="False" />
+          <Button x:Name="AccountLinkContinueButton" Classes="accent big" Content="Continue" Margin="0,14,0,0" Click="OnAccountLinkContinue" />
         </StackPanel>
 
         <!-- 3. Allowed, but the account has no nest yet: how to set one up, until it has one -->
@@ -374,13 +395,16 @@
                 <v:LineIcon Width="20" Height="20" StrokeThickness="1.8" Stroke="{DynamicResource T.Folder}" Data="{StaticResource I.Folder}" />
               </Border>
               <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                <TextBlock Classes="SoftText" FontSize="12" Text="Folder on this computer" />
+                <TextBlock x:Name="FolderLabel" Classes="SoftText" FontSize="12" Text="Folder on this computer" TextWrapping="Wrap" />
                 <TextBox x:Name="FolderBox" BorderThickness="0" Background="Transparent" MinHeight="0" Watermark="Choose a folder…"
                          FontSize="15" FontWeight="ExtraBold" Padding="0" Margin="0,1,0,0" />
               </StackPanel>
               <Button Grid.Column="2" Classes="SecondaryButton" Content="Choose…" MinHeight="36" Margin="10,0,0,0" Click="OnBrowse" />
             </Grid>
           </Border>
+          <!-- The folder is this computer's own: a friend's folder on their computer stays where it is -->
+          <TextBlock x:Name="FolderHereText" Classes="SoftText" FontSize="12" Margin="4,6,4,0" TextWrapping="Wrap"
+                     Text="Only on this computer. Your other computers keep their own folders." />
           <!-- This folder is another nest's (or inside or around one), or one Pairnets may not save in (C:\Program Files...) -->
           <Border x:Name="FolderProblemBox" Background="{DynamicResource T.BadPill}" CornerRadius="11" Padding="12,10" Margin="0,8,0,0" IsVisible="False">
             <StackPanel Orientation="Horizontal">
@@ -437,6 +461,9 @@
         <Button x:Name="AccountOpenAgainButton" Classes="subtle big" HorizontalAlignment="Center" Content="Open the page again" Padding="18,0" Margin="0,0,8,0"
                 Click="OnAccountOpenAgain" />
         <Button x:Name="AccountCancelButton" Classes="flat quiet" Content="Cancel" Padding="18,0" Click="OnAccountCancel" />
+      </StackPanel>
+      <StackPanel x:Name="AccountLinkFooter" Orientation="Horizontal" HorizontalAlignment="Center" IsVisible="False">
+        <Button x:Name="AccountLinkBackButton" Classes="flat quiet" Content="Back" Padding="18,0" Click="OnAccountLinkBack" />
       </StackPanel>
       <Border x:Name="NoNestFooter" BorderBrush="{DynamicResource T.Border}" BorderThickness="0,1,0,0" Padding="0,8,0,0" IsVisible="False">
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">

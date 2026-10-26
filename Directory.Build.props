@@ -7,12 +7,19 @@
     <Deterministic>true</Deterministic>
     <Authors>Pairnets contributors</Authors>
     <Product>Pairnets</Product>
-    <Copyright>© 2026 Pairnets. MIT License.</Copyright>
+    <Copyright>© 2026 MRnigth. MIT License.</Copyright>
     <Version>1.0.0</Version>
     <!-- The release number alone (1.0.61.8.1), without "+commit": the apps call themselves by it (PairnetsInfo.ProductVersion). -->
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <InvariantGlobalization Condition="'$(InvariantGlobalization)' == ''">false</InvariantGlobalization>
     <!-- No telemetry, no source-link network fetches at build time. -->
     <EnableSourceLink>false</EnableSourceLink>
+    <!-- The channel this build is for and its release run (release.yml passes both); a local build is stable, build 0. -->
+    <PairnetsChannel Condition="'$(PairnetsChannel)' == ''">stable</PairnetsChannel>
+    <PairnetsBuild Condition="'$(PairnetsBuild)' == ''">0</PairnetsBuild>
   </PropertyGroup>
+  <ItemGroup>
+    <AssemblyMetadata Include="PairnetsChannel" Value="$(PairnetsChannel)" />
+    <AssemblyMetadata Include="PairnetsBuild" Value="$(PairnetsBuild)" />
+  </ItemGroup>
 </Project>

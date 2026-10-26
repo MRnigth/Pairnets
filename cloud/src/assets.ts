@@ -126,6 +126,50 @@ label.choice span .muted { display: block; }
 .folder-ticks { max-height: 440px; overflow-y: auto; }
 .folder-ticks label.choice[data-linked-in] { opacity: .55; }
 .folder-ticks.off { opacity: .45; }
+/* The beta program: words and hairlines, blue only for Send sign-up. */
+.terms label.choice, form.signup label.choice { align-items: flex-start; gap: 12px; max-width: 600px; }
+.terms label.choice input, form.signup label.choice input { margin-top: 6px; accent-color: var(--blue); }
+.terms { font-size: .9375rem; }
+form.signup fieldset { border: none; padding: 0; margin: 0 0 6px; }
+form.signup legend { padding: 0; margin-bottom: 4px; font-weight: 650; color: var(--text); }
+form.signup label.choice b { font-weight: 650; }
+form.signup label.choice .muted { display: block; line-height: 1.45; }
+form.signup .terms { border-top: 1px solid var(--line); margin-top: 12px; padding-top: 12px; }
+form.signup .signup-note { margin-top: 12px; }
+#beta .notice { margin: 0 0 8px; }
+button.join { background: var(--blue); border-color: var(--blue); color: var(--accent-text); margin-top: 14px; }
+button.join:hover:not(:disabled) { background: var(--blue-hover); border-color: var(--blue-hover); }
+.beta-list > li { display: grid; grid-template-columns: 1fr auto; gap: 4px 24px; align-items: center; }
+.beta-list > li.muted { display: block; }
+.beta-list .who { min-width: 0; overflow-wrap: anywhere; }
+.beta-list .note { grid-column: 1 / -1; margin: 2px 0 0; font-size: .9375rem; }
+.beta-list .note.warn { color: var(--warn); }
+select { font: inherit; font-size: 1rem; height: 44px; padding: 0 36px 0 12px; border-radius: 8px; border: 1px solid var(--line);
+  background: var(--bg) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%23656C7A' stroke-width='1.6'/%3E%3C/svg%3E") no-repeat right 12px center;
+  color: var(--text); appearance: none; min-width: 150px; cursor: pointer; }
+select:disabled { opacity: .5; cursor: default; }
+select:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
+.leave { margin-top: 22px; }
+.leave p { margin: 6px 0 0; }
+form.inline { display: inline; }
+form.inline button { margin-top: 0; }
+/* The admin pages: the account pages' look, and a table where the reader compares rows. */
+body.admin main { max-width: 1000px; }
+.facts { display: flex; gap: 28px; flex-wrap: wrap; margin: 6px 0 4px; }
+.facts div { font-size: .9375rem; color: var(--muted); }
+.facts b { display: block; font: 400 2rem/1.1 var(--serif); color: var(--text); }
+.member { display: grid; grid-template-columns: 1fr auto; gap: 2px 20px; align-items: start; }
+.member .what { font-size: .9375rem; color: var(--muted); }
+.member .what b { color: var(--text); font-weight: 600; }
+.member .actions { grid-row: 1 / span 2; grid-column: 2; margin-top: 0; }
+.member.gone strong { color: var(--faint); }
+table { width: 100%; border-collapse: collapse; font-size: .9375rem; }
+th { text-align: left; font-weight: 600; color: var(--faint); padding: 8px 12px 8px 0; border-bottom: 1px solid var(--line); }
+td { padding: 12px 12px 12px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+td .muted { font-size: .875rem; }
+.ch-public { color: var(--accent); font-weight: 600; }
+.ch-dev { color: var(--warn); font-weight: 600; }
+.small-note { font-size: .9375rem; color: var(--muted); margin-top: 10px; }
 .cookie-notice { position: fixed; left: 24px; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); z-index: 20;
   width: 400px; max-width: calc(100% - 48px); background: var(--bg); color: var(--text); border: 1px solid var(--line);
   border-radius: 8px; padding: 16px 18px; font-size: 15px; line-height: 1.5;
@@ -145,6 +189,11 @@ label.choice span .muted { display: block; }
   footer { padding: 56px 16px 32px; }
   .input-row { flex-wrap: wrap; }
   .input-row input { flex-basis: 100%; }
+  .beta-list > li { grid-template-columns: 1fr; }
+  .beta-list select { width: 100%; }
+  .member { grid-template-columns: 1fr; }
+  .member .actions { grid-row: auto; grid-column: 1; }
+  table { display: block; overflow-x: auto; }
   .cookie-notice { left: 16px; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); width: auto; max-width: none; }
 }
 @media print { .cookie-notice { display: none; } }
@@ -728,14 +777,147 @@ const ACCOUNT_JS = String.raw`(function () {
     } else return false;
     return true;
   }
+  // ---- The beta program: joining, leaving, and each own computer's choice (Off, Public beta, Developer beta).
+  var beta = document.getElementById("beta");
+  var betaList = document.getElementById("beta-list");
+  var BETA_WORDS = { "off": "Off", "public-beta": "Public beta", "developer-beta": "Developer beta" };
+  // The first app that knows beta updates (BETA_MIN_APP, from the page); an older one (or one the nest has no version
+  // for) can't take them yet.
+  var BETA_FIRST = ((beta && beta.getAttribute("data-min-app")) || "1.0.61.9").split(".").map(Number).concat([0, 0, 0, 0]).slice(0, 4);
+  function betaReady(app) {
+    var m = /^(\d+)\.(\d+)\.(\d+)(?:\.(\d+))?/.exec(app || "");
+    if (!m) return false;
+    for (var i = 0; i < 4; i++) {
+      var n = Number(m[i + 1] || 0);
+      if (n !== BETA_FIRST[i]) return n > BETA_FIRST[i];
+    }
+    return true;
+  }
+  function betaAllowed() {
+    return ((beta && beta.getAttribute("data-channels")) || "").split(" ").filter(function (c) { return c; });
+  }
+  // The line under a row: what Off means for a computer still on a beta, or why the choice can't be made yet.
+  function betaNote(item, d, value) {
+    Array.prototype.forEach.call(item.querySelectorAll(".note"), function (n) { item.removeChild(n); });
+    var text = "", cls = "note muted";
+    if (!betaReady(d.app)) { text = "Can get beta updates after it updates to the newest Pairnets."; cls = "note warn"; }
+    else if (value === "off" && /beta/i.test(d.app || "")) text = "Beta updates off. It keeps " + d.app + " until the next normal version is newer, then moves onto it by itself.";
+    if (text) item.appendChild(el("p", cls, text));
+  }
+  function betaRow(s, d, many) {
+    var item = el("li");
+    item.setAttribute("data-device", d.id);
+    item.setAttribute("data-server", s.id);
+    var who = el("div", "who");
+    who.appendChild(el("strong", "", d.name || "Computer"));
+    var parts = [];
+    if (d.system) parts.push(d.system);
+    if (d.app) parts.push("Pairnets " + d.app);
+    if (many) parts.push("on " + s.label);
+    if (parts.length) who.appendChild(el("span", "muted", " " + parts.join(" · ")));
+    item.appendChild(who);
+    var current = d.beta && BETA_WORDS[d.beta.channel] ? d.beta.channel : "off";
+    var select = el("select");
+    select.setAttribute("data-field", "beta-channel");
+    select.setAttribute("aria-label", "Beta updates for " + (d.name || "this computer"));
+    var ready = betaReady(d.app);
+    var choices = ready ? ["off"].concat(betaAllowed()) : ["off"];
+    if (choices.indexOf(current) < 0) choices.push(current);
+    choices.forEach(function (c) {
+      var o = el("option", "", BETA_WORDS[c]);
+      o.value = c;
+      o.selected = c === current;
+      select.appendChild(o);
+    });
+    select.disabled = !ready;
+    select.setAttribute("data-was", current);
+    item.appendChild(select);
+    betaNote(item, d, current);
+    select.addEventListener("change", function () {
+      var was = select.getAttribute("data-was");
+      var want = select.value;
+      select.disabled = true;
+      pnApi("PUT", "/v1/servers/" + s.id + "/devices/" + encodeURIComponent(d.id) + "/beta", { channel: want }).then(function (res) {
+        select.disabled = false;
+        if (!res.ok) {
+          if (res.body && (res.body.error === "reauth_required" || res.body.error === "unauthorized")) { ok(res); return; }
+          select.value = was;
+          betaNote(item, d, was);
+          item.appendChild(el("p", "note error", res.body.message || "That did not work. Try again."));
+          return;
+        }
+        select.setAttribute("data-was", res.body.channel);
+        select.value = res.body.channel;
+        betaNote(item, d, res.body.channel);
+      });
+    });
+    return item;
+  }
+  // One row per own computer on each connected nest (friends' computers are theirs to choose). The nest itself stays
+  // on normal versions for now, so it has no row.
+  function fillBeta(list) {
+    if (!betaList) return;
+    while (betaList.firstChild) betaList.removeChild(betaList.firstChild);
+    var many = list.length > 1;
+    list.forEach(function (s) {
+      if (!s.online) {
+        if (s.status !== "pending") betaList.appendChild(el("li", "muted", s.label + " is not connected right now, so its computers aren't listed."));
+        return;
+      }
+      s.devices.filter(function (d) { return !d.personId; }).forEach(function (d) { betaList.appendChild(betaRow(s, d, many)); });
+    });
+    if (!betaList.firstChild) betaList.appendChild(el("li", "muted", "No computers yet. Sign in to Pairnets on a computer with this account."));
+  }
+  // The betas a sign-up asks for: the ticked ones on the form, or what the button names (agreeing to new terms).
+  function betaPicks(button) {
+    var boxes = beta.querySelectorAll("[data-field=beta-pick]");
+    if (!boxes.length) return (button.getAttribute("data-asked") || "").split(" ").filter(function (c) { return c; });
+    return Array.prototype.filter.call(boxes, function (x) { return x.checked; }).map(function (x) { return x.value; });
+  }
+  // Send sign-up waits for the terms tick and at least one beta.
+  if (beta) beta.addEventListener("change", function (ev) {
+    var field = ev.target.getAttribute("data-field");
+    if (field !== "beta-terms" && field !== "beta-pick") return;
+    var join = beta.querySelector("button[data-action=beta-join]");
+    var tick = beta.querySelector("[data-field=beta-terms]");
+    if (join) join.disabled = !(tick && tick.checked) || !betaPicks(join).length;
+  });
+  if (beta) beta.addEventListener("click", function (ev) {
+    var b = ev.target.closest("button[data-action]");
+    if (!b) return;
+    var said = beta.querySelector("[data-field=beta-status]");
+    var action = b.getAttribute("data-action");
+    function answered(res) {
+      b.disabled = false;
+      if (res.body && (res.body.error === "reauth_required" || res.body.error === "unauthorized")) { ok(res); return; }
+      if (!res.ok) { pnShow(said, res.body.message || "That did not work. Try again.", true); return; }
+      location.reload();
+    }
+    if (action === "beta-join") {
+      var tick = beta.querySelector("[data-field=beta-terms]");
+      var picks = betaPicks(b);
+      if (!tick || !tick.checked || !picks.length) return;
+      b.disabled = true;
+      pnApi("POST", "/v1/beta/join", { acceptTerms: true, termsVersion: b.getAttribute("data-terms-version"), channels: picks }).then(answered);
+    } else if (action === "beta-add") {
+      // One more beta, on the terms already agreed to.
+      b.disabled = true;
+      pnApi("POST", "/v1/beta/join", { acceptTerms: true, termsVersion: b.getAttribute("data-terms-version"), channels: [b.getAttribute("data-channel")] }).then(answered);
+    } else if (action === "beta-leave") {
+      if (!confirm("Leave the beta program? Every computer goes back to Off and keeps its beta until the next normal version is newer.")) return;
+      b.disabled = true;
+      pnApi("POST", "/v1/beta/leave").then(answered);
+    }
+  });
   function loadServers() {
-    if (!servers || !servers.querySelector("[data-server]")) return;
+    if ((!servers || !servers.querySelector("[data-server]")) && !betaList) return;
     pnApi("GET", "/v1/servers").then(function (res) {
       if (!ok(res) || !Array.isArray(res.body)) return;
       res.body.forEach(function (s) {
-        var li = servers.querySelector('[data-server="' + s.id + '"]');
+        var li = servers && servers.querySelector('[data-server="' + s.id + '"]');
         if (li) fillServer(li, s);
       });
+      fillBeta(res.body);
     });
   }
   if (servers) servers.addEventListener("click", function (ev) {
@@ -943,6 +1125,8 @@ const APP_STYLE = String.raw`
 .q-have-note { font-size: 13px; }
 .q-page .q-choice input { flex-shrink: 0; width: 16px; height: 16px; margin: 0; padding: 0; accent-color: var(--q-primary); }
 .q-note { margin: 14px 0 0; padding: 12px 14px; border-radius: 12px; background: var(--q-warn-soft); color: var(--q-warn); font-size: 13.5px; }
+.q-longcode { margin: 22px 0 0; padding: 16px 12px; border: 1px solid var(--q-line); border-radius: 14px; background: var(--q-card); display: grid; grid-template-columns: repeat(4, auto); justify-content: center; gap: 6px 16px; font-family: var(--mono); font-size: 22px; font-weight: 600; letter-spacing: 0.06em; font-variant-numeric: tabular-nums; user-select: all; }
+.q-longcode .q-check { color: var(--q-accent); }
 .q-note b { font-weight: 600; }
 .q-error { margin: 14px 0 0; padding: 12px 14px; border-radius: 12px; background: var(--q-bad-soft); color: var(--q-bad); font-size: 14px; }
 
@@ -1024,7 +1208,9 @@ const LOGO_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="120" height="12
 `;
 
 // The "Sign in an app?" page (pages.ts appPage). Allow or "This isn't me" swaps in that answer's own screen. An error
-// says what went wrong in plain words and leaves both buttons working, so the person can simply try again.
+// says what went wrong in plain words and leaves both buttons working, so the person can simply try again. Opened from
+// a sign-in link (data-link), Allow brings the long code to paste into the app; the page then checks every few seconds
+// and says when the computer is signed in.
 const APP_JS = String.raw`(function () {
   "use strict";
   var box = document.getElementById("app-request");
@@ -1032,8 +1218,11 @@ const APP_JS = String.raw`(function () {
   var deny = document.getElementById("deny");
   if (!box || !allow || !deny) return;
   var code = box.getAttribute("data-code");
+  var link = box.getAttribute("data-link");
+  var request = box.getAttribute("data-request");
+  var here = link ? "/app/link?r=" + link : "/app?code=" + code;
   var error = document.getElementById("app-error");
-  var SCREENS = ["ask", "allowed", "allowed-nonest", "refused", "expired"];
+  var SCREENS = ["ask", "longcode", "allowed", "allowed-nonest", "refused", "expired"];
   var SAY = {
     not_found: "Pairnets could not find this sign-in or that nest any more. Reload the page and try again.",
     bad_request: "That did not work. Reload the page and try again.",
@@ -1075,6 +1264,32 @@ const APP_JS = String.raw`(function () {
     if (system === "Linux") return /Linux|X11/.test(ua) && !/CrOS/.test(ua);
     return false;
   }
+  // The long code, in its 8 groups, and a Copy button for all of it.
+  function showLongCode(text) {
+    var groups = text.split("-");
+    for (var i = 0; i < groups.length; i++) {
+      var g = document.getElementById("long-code-" + (i + 1));
+      if (g) g.textContent = groups[i];
+    }
+    var copy = document.getElementById("copy-code");
+    if (copy) copy.addEventListener("click", function () {
+      var clip = navigator.clipboard;
+      if (!clip || !clip.writeText) return;
+      clip.writeText(text).then(function () { copy.textContent = "Copied"; }, function () {});
+    });
+    show("longcode");
+    setTimeout(watch, 4000);
+  }
+  // Until the app has used the code: signed in, stopped (No, or too many wrong codes) or run out.
+  function watch() {
+    pnApi("GET", "/v1/app/requests/" + request).then(function (res) {
+      var st = res.body && res.body.status;
+      if (res.ok && st === "delivered") { show("allowed"); return; }
+      if (res.ok && st === "denied") { show("refused"); return; }
+      if (res.status === 404) { show("expired"); return; }
+      setTimeout(watch, 4000);
+    });
+  }
   function chosenNest() {
     var radios = document.getElementsByName("nest");
     for (var i = 0; i < radios.length; i++) if (radios[i].checked) return radios[i];
@@ -1083,7 +1298,7 @@ const APP_JS = String.raw`(function () {
   function answer(approve, button) {
     if (busy) return;
     error.hidden = true;
-    var body = { userCode: code, approve: approve };
+    var body = link ? { link: link, approve: approve } : { userCode: code, approve: approve };
     var label = null;
     if (approve) {
       if (document.getElementsByName("nest").length) {
@@ -1099,13 +1314,14 @@ const APP_JS = String.raw`(function () {
     pnApi("POST", "/v1/app/approve", body).then(function (res) {
       var err = res.body && res.body.error;
       if (err === "unauthorized" || err === "reauth_required") {
-        location.href = "/login?" + (err === "reauth_required" ? "reauth=1&" : "") + "next=" + encodeURIComponent("/app?code=" + code);
+        location.href = "/login?" + (err === "reauth_required" ? "reauth=1&" : "") + "next=" + encodeURIComponent(here);
         return;
       }
       if (res.ok) {
         if (!approve) { show("refused"); return; }
         var field = document.getElementById("allowed-nest");
         if (field && label) field.textContent = label;
+        if (link) { if (res.body && res.body.code) showLongCode(res.body.code); return; }
         show(body.nestId ? "allowed" : "allowed-nonest");
         if (body.nestId && sameComputer()) setTimeout(function () { location.href = "pairnets://signed-in"; }, 600);
         return;

@@ -285,7 +285,10 @@ public class RunnerTests : IAsyncLifetime
             ServerUrl = _laptop.Url, Token = _laptop.Token, DeviceId = "laptop", EnableHub = false, EnableWatcher = false,
         });
         await runner.DisposeAsync();
-        runner.RequestSync("late");
+
+        // A late folder-watcher event or request (the nest stopped, or its folder changed) must not throw on its thread.
+        runner.RequestSync("watcher");
+        runner.RequestSync("manual", full: true);
     }
 
     [Fact]

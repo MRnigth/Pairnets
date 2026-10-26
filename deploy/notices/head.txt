@@ -1,0 +1,46 @@
+PAIRNETS - THIRD-PARTY NOTICES
+
+Pairnets (the Windows, Mac and Linux apps and the nest software) is open source under the MIT licence:
+
+  Copyright (c) 2026 MRnigth
+
+  Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated
+  documentation files (the "Software"), to deal in the Software without restriction, including without limitation the
+  rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit
+  persons to whom the Software is furnished to do so, subject to the following conditions:
+
+  The above copyright notice and this permission notice shall be included in all copies or substantial portions of the
+  Software.
+
+  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE
+  WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+  COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+  OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+Pairnets is built with the open-source software below. Each part keeps its own copyright and licence; the full licence
+texts follow the list. The same list is at https://pairnets.app/licenses/.
+
+PART                                          USED IN                         COPYRIGHT                                  LICENCE
+.NET 8 runtime, ASP.NET Core (incl. the       All apps and the nest           .NET Foundation and Contributors;          MIT (A), with the
+  SignalR client), WPF, Windows Forms,                                        Microsoft Corporation                      notices in E and F
+  Microsoft.Extensions.*, Microsoft.Data.Sqlite,
+  System.Formats.Cbor, System.Security.Cryptography.ProtectedData,
+  System.IO.Pipelines, System.Memory, System.Threading.Channels
+SQLitePCLRaw (core, provider, bundle,          All apps and the nest           Copyright 2014-2024 SourceGear, LLC        Apache 2.0 (B)
+  lib.e_sqlite3)
+SQLite (inside e_sqlite3)                     All apps and the nest           Public domain (sqlite.org)                 Public domain (C)
+Avalonia (incl. Desktop, Skia, Native,        The Mac and Linux app           Copyright 2013-2026 The AvaloniaUI         MIT (A)
+  FreeDesktop, X11, Themes.Fluent)                                            Project
+SkiaSharp, HarfBuzzSharp                      The Mac and Linux app           Copyright (c) 2015-2016 Xamarin, Inc.;     MIT (A)
+                                                                              Copyright (c) 2017-2018 Microsoft Corp.
+Skia, HarfBuzz and the other parts of the     The Mac and Linux app           See section D                              BSD 3-Clause, MIT and
+  SkiaSharp/HarfBuzzSharp native libraries                                                                               others (D)
+Tmds.DBus.Protocol                            The Linux app                   Copyright Tom Deseyn                       MIT (A)
+MicroCom.Runtime                              The Mac app                     Copyright 2021 Nikita Tsukanov             MIT (A)
+Plus Jakarta Sans (font)                      The apps                        Copyright 2020 The Plus Jakarta Sans       SIL OFL 1.1 (G)
+                                                                              Project Authors
+Inno Setup (the installer's setup program)    PairnetsSetup.exe               Copyright (C) 1997-2026 Jordan Russell,    Inno Setup License (H)
+                                                                              Martijn Laan
+
+The nest's installer also installs cloudflared from Cloudflare's own package source; it is not part of the Pairnets
+download and comes with its own licence (Apache 2.0).

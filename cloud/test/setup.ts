@@ -7,6 +7,7 @@ import { resetGoogleKeyCache } from "../src/google";
 import { resetRelayState } from "../src/relay";
 
 export const TABLES = [
+  "beta_members",
   "link_ends",
   "nest_links",
   "nest_members",

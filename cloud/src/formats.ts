@@ -1,5 +1,7 @@
 // Identifiers and formats, CONTRACT.md section 1 and RELAY.md section 1 (and the `next` rule of section 6.4).
 
+import { B32_UPPER, sha256 } from "./crypto";
+
 export const ACCOUNT_ID_RE = /^acc_[0-9a-hjkmnp-tv-z]{26}$/;
 export const NEST_ID_RE = /^nst_[0-9a-hjkmnp-tv-z]{26}$/;
 export const SESSION_ID_RE = /^ses_[0-9a-hjkmnp-tv-z]{26}$/;
@@ -12,6 +14,9 @@ export const DEVICE_ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
 /** An invite (RELAY.md 10): its id, and the token in its link (pni_ + 32 base32-lower, 160 bits). */
 export const INVITE_ID_RE = /^inv_[0-9a-hjkmnp-tv-z]{26}$/;
 export const INVITE_TOKEN_RE = /^pni_[0-9a-hjkmnp-tv-z]{32}$/;
+
+/** A sign-in link's secret (CONTRACT.md 6.9, "Sign in with a link"): pnr_ + base64url(32 bytes), the link's ?r=. */
+export const LINK_TOKEN_RE = /^pnr_[A-Za-z0-9_-]{43}$/;
 
 const B32_UPPER_RE = /^[0-9ABCDEFGHJKMNPQRSTVWXYZ]+$/;
 
@@ -47,8 +52,40 @@ export function displayUserCode(code: string): string {
   return `${code.slice(0, 4)}-${code.slice(4, 8)}`;
 }
 
+/**
+ * A sign-in link's long code: 28 random characters and a 4-character check, 32 in all, shown as 8 groups of 4. The
+ * check is the first four bytes of SHA-256("pn-lc1
+" + the 28), each taken & 31 into the alphabet, so the apps can
+ * catch a typo before sending (and it doesn't count as a wrong try).
+ */
+export const LINK_CODE_RANDOM = 28;
+
+export async function linkCodeCheck(random: string): Promise<string> {
+  const d = await sha256(`pn-lc1
+${random}`);
+  let s = "";
+  for (let i = 0; i < 4; i++) s += B32_UPPER[d[i] & 31];
+  return s;
+}
+
+/** The 32 characters without hyphens (spaces and hyphens dropped, look-alikes mapped), or null when not that shape. */
+export function normaliseLinkCode(input: unknown): string | null {
+  if (typeof input !== "string" || input.length > 80) return null;
+  const s = mapLookAlikes(stripAndUpper(input.trim()));
+  if (s.length !== LINK_CODE_RANDOM + 4 || !B32_UPPER_RE.test(s)) return null;
+  return s;
+}
+
+export async function linkCodeChecks(code: string): Promise<boolean> {
+  return (await linkCodeCheck(code.slice(0, LINK_CODE_RANDOM))) === code.slice(LINK_CODE_RANDOM);
+}
+
+export function displayLinkCode(code: string): string {
+  return code.match(/.{1,4}/g)!.join("-");
+}
+
 const NEXT_RE =
-  /^\/(account(\?invite=nst_[0-9a-hjkmnp-tv-z]{26}(&[A-Za-z0-9%._~,+=&!*'()-]{0,2000})?)?|app(\?code=[0-9A-Za-z-]{1,16})?|add(\?code=[0-9A-Za-z-]{1,16})?|invite\?t=pni_[0-9a-hjkmnp-tv-z]{32}|nest-login\?[^#\s]{1,600})$/;
+  /^\/(account(\?invite=nst_[0-9a-hjkmnp-tv-z]{26}(&[A-Za-z0-9%._~,+=&!*'()-]{0,2000})?)?|app(\?code=[0-9A-Za-z-]{1,16}|\/link\?r=pnr_[A-Za-z0-9_-]{43})?|add(\?code=[0-9A-Za-z-]{1,16})?|invite\?t=pni_[0-9a-hjkmnp-tv-z]{32}|nest-login\?[^#\s]{1,600})$/;
 
 /**
  * The `next` allow-list (section 6.4, plus RELAY.md's /add?code=, and for friends the invite link /invite?t= and the
@@ -168,6 +205,10 @@ export function cleanLabel(input: unknown): string | null | "invalid" {
 }
 
 /** Usernames are a display name only (never used to sign in), so they need not be unique. */
+// The first Pairnets app that knows beta updates; the account page greys out the choice for older ones. Set it to the
+// version of the release that ships beta updates (docs/DECISIONS.md, "Beta updates: the account, the nest and the apps").
+export const BETA_MIN_APP = "1.0.61.9";
+
 export const MAX_USERNAME = 32;
 
 /** The part of an email address before the @: what an account without a username is called. */

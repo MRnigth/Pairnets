@@ -68,6 +68,7 @@ public static partial class LocalReset
                 var clean = true;
                 foreach (var suffix in new[] { string.Empty, "-wal", "-shm" })
                     clean &= TryDelete(Path.Combine(dir, "state.db" + suffix), problems, missingIsFine: true);
+                clean &= TryDelete(Path.Combine(dir, ClientSession.DownloadsSeenFileName), problems, missingIsFine: true);
                 if (clean && !Directory.EnumerateFileSystemEntries(dir).Any())
                     TryDeleteFolder(dir, problems);
                 if (clean)

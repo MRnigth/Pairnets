@@ -52,7 +52,14 @@
               <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
             <Image x:Name="AppIcon" Width="30" Height="30" Margin="0,0,8,0" />
-            <TextBlock Grid.Column="1" Text="Pairnets" FontSize="16" FontWeight="ExtraBold" VerticalAlignment="Center" />
+            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+              <TextBlock Text="Pairnets" FontSize="16" FontWeight="ExtraBold" VerticalAlignment="Center" />
+              <!-- On a beta build: which beta (shown from code) -->
+              <Border x:Name="BetaTag" Margin="8,0,0,0" Padding="8,2" CornerRadius="10" VerticalAlignment="Center" Visibility="Collapsed"
+                      Background="{DynamicResource T.AccentSoft}">
+                <TextBlock x:Name="BetaTagText" FontSize="11.5" FontWeight="SemiBold" Foreground="{DynamicResource T.AccentInk}" />
+              </Border>
+            </StackPanel>
             <Button x:Name="FoldButton" Grid.Column="2" Style="{StaticResource RoundIconButton}" Width="32" Height="32" MinWidth="32" MinHeight="32"
                     Margin="0,0,8,0" ToolTip="Fold into the dock" AutomationProperties.Name="Fold into the dock" Click="OnFoldSide">
               <ui:LineIcon Width="16" Height="16" StrokeThickness="2.2" Stroke="{DynamicResource T.Muted}" Data="{StaticResource I.FoldLeft}" />

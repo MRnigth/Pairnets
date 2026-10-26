@@ -738,6 +738,10 @@ public sealed class SyncStore : IDisposable
         {
             if (UploadSessions.TryParseFileName(Path.GetFileName(file), out var id) && IsKeptUpload(id, cutoff))
                 continue;
+            // A nest download's half-done file: it carries on after the restart, or "Try again" resumes it for 7 days.
+            if (Services.NestDownloader.IsPartFile(Path.GetFileName(file))
+                && File.GetLastWriteTimeUtc(file) >= _clock.GetUtcNow().UtcDateTime - NestDownloadRules.KeepFor)
+                continue;
             TryDelete(file);
         }
     }

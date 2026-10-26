@@ -208,6 +208,9 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
     [AvaloniaFact]
     public async Task TheInviteWindow_EveryButtonDoesWhatItSays() => Pass(await RunAsync("invite"));
 
+    [AvaloniaFact]
+    public async Task TheNestDownloadWindow_EveryButtonDoesWhatItSays() => Pass(await RunAsync("nest download"));
+
     /// <summary>Every handler an AXAML file names ran at least once in the runs above.</summary>
     /// <summary>
     /// Every button in the main window and the tray panel, in every state, has a name screen readers read out. A button
@@ -289,6 +292,52 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
         Assert.Equal(fixture.Folder, saved.Folder);
     }
 
+    /// <summary>
+    /// Another folder for a friend's nest: Save asks first (the new folder fills from the nest, the old one is kept, the
+    /// friend's folder doesn't change), Cancel keeps everything, and what is saved is still the friend's nest.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task AnotherFolderForAFriendsNestAsksFirstAndKeepsItTheirs()
+    {
+        await using var stage = new Stage("the Settings page of a friend's nest");
+        var view = await SettingsStage(stage, ownKey: true, friends: true);
+        Assert.Equal("Where Work nest is saved on this computer", Screen.Named<TextBlock>(view, "FolderLabel").Text);
+        Assert.Equal("Only on this computer. Oskar's folder on their computer stays where it is.", Screen.Named<TextBlock>(view, "FolderHereText").Text);
+        var elsewhere = Directory.CreateDirectory(Path.Combine(Path.GetTempPath(), "pairnets-elsewhere-" + Guid.NewGuid().ToString("N")[..6])).FullName;
+        stage.Cleanup.Add(() =>
+        {
+            Directory.Delete(elsewhere, recursive: true);
+            return Task.CompletedTask;
+        });
+        Person.Type(Screen.Named<TextBox>(view, "FolderBox"), elsewhere);
+
+        var opened = new List<Window>();
+        using (Window.WindowOpenedEvent.AddClassHandler(typeof(Window), (sender, _) => opened.Add((Window)sender!)))
+        {
+            Person.Click(Screen.Find<Button>(view, "Save"));
+            await Wait.Until(() => opened.Count == 1, "Save to ask before the folder changes");
+            var question = opened[0];
+            Assert.Equal($"Save Work nest in {elsewhere} instead?", question.Title);
+            var words = string.Join(Environment.NewLine, Screen.All<TextBlock>(question).Select(t => t.Text));
+            Assert.Contains(fixture.Folder, words);
+            Assert.Contains("Oskar's folder on their computer doesn't change.", words);
+            Person.Click(Screen.Find<Button>(question, "Cancel"));
+            await Wait.Until(() => !question.IsVisible, "the question to close");
+            Assert.DoesNotContain("saved", stage.Events);
+
+            Person.Click(Screen.Find<Button>(view, "Save"));
+            await Wait.Until(() => opened.Count == 2, "Save to ask again");
+            Person.Click(Screen.Find<Button>(opened[1], "Save it here"));
+            await Wait.Until(() => stage.Events.Contains("saved"), "Save to hand the settings to the app");
+        }
+
+        var saved = view.Result!;
+        Assert.Equal(elsewhere, saved.Folder);
+        Assert.Equal("Oskar", saved.SharedBy);
+        Assert.Equal(NestAccess.View, saved.Access);
+        Assert.Equal(["Trip"], saved.SharedFolders!);
+    }
+
     private void Pass(ClickReport report)
     {
         output.WriteLine($"{report.Presses} presses, {report.Pressed.Count} handlers: {string.Join(", ", report.Pressed.Order())}");
@@ -305,6 +354,7 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
             new("the main window (overview)", s => MainStage(s, w =>
             {
                 w.ShowUpdate("Pairnets 1.0.58 is available", UpdateTexts.ByHand("1.0.52"), UpdateTexts.OpenDownloadPage);
+                w.ShowNestOffer(new NestAutoUpdateOffer([new("a", "soro")]));
                 w.ShowStatus(Idle, "/Users/me/Work", "MacBook");
                 w.ShowActivity(SampleFeed().Items);
                 w.ShowAttention([Attention(s)]);
@@ -374,6 +424,11 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
                 w.ShowStatus(OwnersNestWithFriends, "/Users/me/Work", "MacBook");
                 w.Navigate(MainPage.Devices);
             })),
+            new("the main window (Devices page with downloads on the nest)", s => MainStage(s, w =>
+            {
+                w.ShowStatus(Idle with { NestDownloads = NestDownloads }, "/Users/me/Work", "MacBook");
+                w.Navigate(MainPage.Devices);
+            })),
             new("the main window (Needs you page with changes held back on a nest shared to view)", s => MainStage(s, w =>
             {
                 w.ShowAttention([new AttentionItem("3 changes stay on this computer", "Your edits to trip.jpg aren't sent.", "Put back Anna's version",
@@ -427,6 +482,19 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
             new("the sign-in window (finish in your browser)", s => AccountStage(s, view =>
                 view.ShowAccount(new AccountSignInState(PairingStage.Waiting, FakeSyncService.UserCode, AccountLink, DateTimeOffset.UtcNow.AddMinutes(9)),
                     openBrowser: false))),
+            new("the sign-in window (sign in with a link)", async s =>
+            {
+                SignInView? shown = null;
+                await AccountStage(s, view =>
+                {
+                    shown = view;
+                    view.ShowAccount(new AccountSignInState(PairingStage.Waiting, FakeSyncService.UserCode, AccountLink, DateTimeOffset.UtcNow.AddMinutes(9)),
+                        openBrowser: false);
+                    Person.Click(Screen.Named<Button>(view, "AccountUseLinkButton"));
+                });
+                await Wait.Until(() => Screen.Named<TextBox>(shown!, "AccountLinkBox").Text?.Contains("/app/link?r=pnr_", StringComparison.Ordinal) == true,
+                    "the sign-in link to show");
+            }),
             new("the sign-in window (signed in, no nest yet)", s => AccountStage(s, view =>
                 view.ShowAccount(new AccountSignInState(PairingStage.Waiting, FakeSyncService.UserCode, AccountLink, DateTimeOffset.UtcNow.AddMinutes(29),
                     NoNest: true, AccountEmail: FakeSyncService.Email), openBrowser: false))),
@@ -503,6 +571,12 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
             new("the send crash report window", SendCrashStage),
             new("the bug report window with sending on", BugReportSendStage),
             new("the send bug report window", SendBugReportStage),
+        ],
+        ["nest download"] =
+        [
+            new("the nest download window (a link pasted)", s => NestDownloadStage(s, DownloadLink, sealedNest: false)),
+            new("the nest download window (a link that isn't a web link)", s => NestDownloadStage(s, "ftp://example.com/file.iso", sealedNest: false)),
+            new("the nest download window (on an encrypted nest)", s => NestDownloadStage(s, DownloadLink, sealedNest: true)),
         ],
         ["invite"] =
         [
@@ -591,6 +665,8 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
         s.Expect["OnAddComputer"] = Calls(a, "add-computer");
         s.Expect["OnManageDevices"] = Calls(a, "manage-devices");
         s.Expect["OnReviewAttention"] = OnPage(w, MainPage.Attention);
+        s.Expect["OnOfferTurnOn"] = That(() => w.NestOfferAnswer == NestAutoUpdateAnswer.TurnOn, "the app hear Turn on for the nest update card");
+        s.Expect["OnOfferNotNow"] = That(() => w.NestOfferAnswer == NestAutoUpdateAnswer.NotNow, "the app hear Not now for the nest update card");
         s.Expect["OnSeeAllActivity"] = OnPage(w, MainPage.Activity);
         s.Expect["OnNav:Overview*"] = OnPage(w, MainPage.Overview);
         s.Expect["OnNav:Activity*"] = OnPage(w, MainPage.Activity);
@@ -637,6 +713,12 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
         s.Expect["OnRestore"] = That(() => a.Samples.Restored.Count == 1 && w.RestoreText.StartsWith("Restored.", StringComparison.Ordinal), "that version come back",
             () => $"{a.Samples.Restored.Count} restored, it says \"{w.RestoreText}\"");
         s.Expect["OnInviteFriend"] = Calls(a, "invite-friend");
+        s.Expect["OnAddDownload"] = Calls(a, "add-download");
+        s.Expect["OnCancelDownload"] = That(() => a.Calls is ["cancel-download:dl_run"] or ["cancel-download:dl_wait"], "that download stop on the nest");
+        s.Expect["OnRetryDownload"] = Calls(a, "retry-download:dl_stop");
+        s.Expect["OnClearDownload"] = Calls(a, "forget-download:dl_done");
+        s.Expect["OnRemoveDownload"] = That(() => a.Calls is ["forget-download:dl_held"] or ["forget-download:dl_stop"], "that download come off the list");
+        s.Expect["OnShowDownload"] = OnPage(w, MainPage.Files);
         s.Expect["OnPersonChange"] = Calls(a, "people");
         s.Expect["OnPersonRemove"] = Calls(a, "people");
         s.Expect["OnPersonDecline"] = Calls(a, "people");
@@ -669,6 +751,8 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
             "the deleted files show");
         s.Expect["OnFilesRefresh"] = That(() => w.FilesView.Rows.Count > 0, "the nest's list be read again");
         s.Expect["OnCleanUp"] = That(() => w.CleanupShown, "Clean up your nest show");
+        s.Expect["OnChangeFolder"] = That(() => s.Actions.Calls.Contains("change-folder") && w.FilesView.SavedInLine == "Saved in /home/me/Pairnets",
+            "the Settings folder row open for this nest");
         s.Expect["OnAddFiles"] = That(() => NestCalled("add:"), "the chosen file be added");
         s.Expect["OnPlacementMenu"] = That(() => w.FilesView.PlacementMenuOpen, "the choices of where the folder lives show");
         s.Expect["OnPickPlacement:On this computer*"] = That(() => nest.Calls.Count == 0 && nest.PlacementOf(startFolder) == FilePlacement.OnThisPc, "the folder stay on this computer");
@@ -747,7 +831,8 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
 
     // ------------------------------------------------------------------ settings
 
-    private Task<SettingsView> SettingsStage(Stage s, bool ownKey, bool canMove = false, int nests = 1, bool canInvite = false, bool advancedOpen = false)
+    private Task<SettingsView> SettingsStage(Stage s, bool ownKey, bool canMove = false, int nests = 1, bool canInvite = false, bool advancedOpen = false,
+        bool friends = false)
     {
         var secrets = new MemorySecrets();
         var key = ownKey ? fixture.Nest.MintKey("MACBOOK-" + Guid.NewGuid().ToString("N")[..6]) : null;
@@ -759,6 +844,9 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
             DeviceName = key?.Name ?? "MACBOOK",
             Folder = fixture.Folder,
             FirstRunCompleted = true,
+            Access = friends ? NestAccess.View : null,
+            SharedFolders = friends ? ["Trip"] : null,
+            SharedBy = friends ? "Oskar" : null,
         };
         var updates = new UpdateService(new UpdateChecker(new HttpClient(), fixture.Feed.DownloadBase, fixture.Feed.ReleasePage, FakeReleaseFeed.SigningKey), "1.0.0", fixture.Feed.Asset);
         s.Cleanup.Add(() =>
@@ -780,6 +868,12 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
         view.SwitchesChanged += _ => s.Events.Add("switches");
         view.ChangeStorageRequested += () => s.Events.Add("change-storage");
         view.MoveProgramRequested += () => s.Events.Add("move-program");
+        view.ShowBigDeletes(BigDeleteModes.AskEverywhere, canChange: true, nestKnows: true);
+        view.BigDeletesChosen += mode =>
+        {
+            s.Events.Add("big-deletes:" + mode);
+            return Task.FromResult<string?>(null);
+        };
         if (canMove)
         {
             view.ShowNestStorage(NestPlaceFlowTests.Sample());
@@ -796,6 +890,12 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
         // Switches apply at once, without Save (A11); a choice that was already made changes nothing.
         s.Expect["OnSwitchChanged"] = All(Raised(s, "switches"), That(() => view.SwitchesApplied, "the switch apply at once"));
         s.Expect["OnParChanged"] = That(() => view.SwitchesApplied, "the choice apply at once");
+        // "Before big deletes" is the nest's: the choice pressed is the one the nest now has.
+        s.Expect["OnBigDeletesChosen"] = That(() => view.BigDeletesShown == (Screen.Named<RadioButton>(view, "BigAskWhere").IsChecked == true ? BigDeleteModes.AskWhereDeleted
+            : Screen.Named<RadioButton>(view, "BigNever").IsChecked == true ? BigDeleteModes.Never : BigDeleteModes.AskEverywhere), "the nest's choice change at once");
+        // Beta updates: the account has not joined, so only Off can be picked and the account page is one press away.
+        s.Expect["OnBetaChanged"] = That(() => view.SwitchesApplied, "the beta choice apply at once");
+        s.Expect["OnBetaJoin"] = That(() => s.Opened.SequenceEqual([PairnetsLinks.BetaProgram]), "the beta program on the account page open in the browser");
         s.Expect["OnReset"] = Raised(s, "reset");
         s.Expect["OnAddNest"] = Raised(s, "add-nest");
         s.Expect["OnInviteFriend"] = Raised(s, "invite-friend");
@@ -826,7 +926,7 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
     [
         ("Support Pairnets ♥", PairnetsLinks.Donate), ("Help", PairnetsLinks.Help), ("FAQ", PairnetsLinks.Faq), ("Contact", PairnetsLinks.Contact), ("Privacy", PairnetsLinks.Privacy),
         ("Terms", PairnetsLinks.Terms), ("Guidelines", PairnetsLinks.Guidelines), ("Cookie settings", PairnetsLinks.Cookies),
-        ("Security", PairnetsLinks.Security), ("Open-source licences", PairnetsLinks.Licenses), ("Delete my account", PairnetsLinks.DeleteAccount),
+        ("Security", PairnetsLinks.Security), ("Open-source licences", ThirdPartyNotices.CopyPath), ("Delete my account", PairnetsLinks.DeleteAccount),
     ];
 
     // ------------------------------------------------------------------ sign-in
@@ -894,6 +994,14 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
         s.Expect["OnAccountOpenAgain"] = That(() => s.Opened.SequenceEqual([AccountLink]), "the service's page open again");
         s.Expect["OnAccountCancel"] = That(() => view.Step == SignInStep.Account, "the Pairnets account step show again");
         s.Expect["OnShowMeHow"] = That(() => s.Opened.SequenceEqual([origin + "/account"]), "the account page open");
+        string LinkShown() => Screen.Named<TextBox>(view, "AccountLinkBox").Text ?? string.Empty;
+        s.Expect["OnAccountUseLink"] = That(() => view.Step == SignInStep.AccountLink && LinkShown().StartsWith(origin + "/app/link?r=pnr_", StringComparison.Ordinal)
+            && s.Opened.Count == 0, "\"Sign in with a link\" show the service's sign-in link, with nothing opened");
+        s.Expect["OnAccountLinkCopy"] = All(That(() => Screen.Named<Button>(view, "AccountLinkCopyButton").Content as string == "Copied", "the button say \"Copied\""),
+            Clipboard(window, LinkShown));
+        s.Expect["OnAccountLinkContinue"] = That(() => Screen.Named<TextBlock>(view, "AccountLinkProblem") is { IsVisible: true } problem
+            && problem.Text == "Paste the code the browser shows after you press Allow.", "the box ask for the code (none was pasted)");
+        s.Expect["OnAccountLinkBack"] = That(() => view.Step == SignInStep.Account, "the Pairnets account step show again");
         return Task.CompletedTask;
     }
 
@@ -960,6 +1068,45 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
         s.Expect["OnOpenFile"] = That(() => s.Opened.SequenceEqual([window.SavedPath!]), "the saved report open");
         s.Expect["OnCopy"] = All(Clipboard(window, () => "Pairnets bug report\nline two"), That(() => Screen.Named<TextBlock>(window, "Heading").Text == "Bug report copied", "it say it was copied"));
         s.Expect["OnClose"] = That(() => !window.IsVisible, "the window close");
+    }
+
+    private const string DownloadLink = "https://releases.ubuntu.com/24.04/ubuntu.iso";
+
+    /// <summary>The nest's downloads: one running, one waiting, one finished, one held on an encrypted nest, one stopped.</summary>
+    private static NestDownloadList NestDownloads
+    {
+        get
+        {
+            var utc = DateTimeOffset.UtcNow;
+            return new NestDownloadList(
+            [
+                new("dl_run", "releases.ubuntu.com", "ubuntu.iso", "Downloads", NestDownload.Running, 2_480_000_000, 6_200_000_000, 13_000_000, utc.AddMinutes(-3)),
+                new("dl_wait", "cdimage.debian.org", "debian.iso", "Downloads", NestDownload.Queued, 0, null, 0, utc.AddMinutes(-2)),
+                new("dl_done", "download.blender.org", "bunny.mp4", "Films", NestDownload.Done, 1_065_000_000, 1_065_000_000, 0, utc.AddHours(-3),
+                    utc.AddHours(-2), "Films/bunny.mp4"),
+                new("dl_held", "example.org", "held.zip", "Downloads", NestDownload.Done, 1_000, 1_000, 0, utc.AddHours(-3), utc.AddHours(-2), Plain: true),
+                new("dl_stop", "example.com", "old-backup.zip", "Downloads", NestDownload.Failed, 0, null, 0, utc.AddDays(-1), utc.AddDays(-1),
+                    Error: NestDownloadErrors.NotFound),
+            ], NestDownloadRules.AtOnce);
+        }
+    }
+
+    /// <summary>"Let the nest download it" with <paramref name="link"/> pasted; Change… picks Films, and the nest takes any link.</summary>
+    private static Task NestDownloadStage(Stage s, string link, bool sealedNest)
+    {
+        var window = s.Show(new NestDownloadWindow((url, folder) =>
+        {
+            s.Events.Add($"download {url} into {folder}");
+            return Task.FromResult<string?>(null);
+        }, _ => Task.FromResult<string?>("Films")) { Link = link, Sealed = sealedNest });
+        Assert.Equal(sealedNest, window.Sealed);
+        s.Expect["OnLinkChanged"] = That(() => window.Link == "test" && window.ProblemText.Length == 0, "the typed link be taken and no problem show");
+        s.Expect["OnChangeFolder"] = That(() => window.Folder == "Films", "the picked nest folder be used");
+        s.Expect["OnStart"] = link == DownloadLink
+            ? That(() => s.Events.SequenceEqual([$"download {DownloadLink} into Downloads"]) && window.Started && !window.IsVisible, "the link go to the nest and the window close")
+            : That(() => s.Events.Count == 0 && window.ProblemText.Length > 0 && window.IsVisible, "it say the link isn't a web link");
+        s.Expect["OnCancel"] = That(() => s.Events.Count == 0 && !window.IsVisible, "the window close without asking the nest");
+        return Task.CompletedTask;
     }
 
     private const string FriendsNest = "nst_0123456789abcdefghjkmnpqrs";
@@ -1172,10 +1319,12 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
         if (part > 0)
             await RunAsync(group, part - 1);
         var scenes = Groups[group];
-        var size = (scenes.Length + PartsOf(group) - 1) / PartsOf(group);
+        // Spread evenly (21 scenes in 10 parts: 2 or 3 each), so no part is left without a scene.
+        var from = part * scenes.Length / PartsOf(group);
+        var to = (part + 1) * scenes.Length / PartsOf(group);
         if (!fixture.Pressed.TryGetValue(group, out var done))
             fixture.Pressed[group] = done = [];
-        return await PressGroupAsync(scenes.Skip(part * size).Take(size).ToArray(), done);
+        return await PressGroupAsync(scenes[from..to], done);
     }
 
     private async Task<ClickReport> PressGroupAsync(Scene[] scenes, HashSet<string> done)

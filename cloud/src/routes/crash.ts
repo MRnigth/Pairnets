@@ -182,10 +182,10 @@ export async function adminOnly(ctx: Ctx, path: string): Promise<Response | null
   return null;
 }
 
-/** The two admin pages link to each other. */
-export function adminNav(here: "crashes" | "reports"): string {
-  const link = (to: "crashes" | "reports", text: string) => (to === here ? `<b>${text}</b>` : `<a href="/admin/${to}">${text}</a>`);
-  return `<p class="muted">${link("crashes", "Crash reports")} · ${link("reports", "Bug reports")}</p>`;
+/** The admin pages link to each other. */
+export function adminNav(here: "crashes" | "reports" | "beta"): string {
+  const link = (to: "crashes" | "reports" | "beta", text: string) => (to === here ? `<b>${text}</b>` : `<a href="/admin/${to}">${text}</a>`);
+  return `<p class="muted">${link("crashes", "Crash reports")} · ${link("reports", "Bug reports")} · ${link("beta", "Beta program")}</p>`;
 }
 
 /** GET /admin/crashes: newest first. Only for a signed-in account whose email is in ADMIN_EMAILS; others get 404. */

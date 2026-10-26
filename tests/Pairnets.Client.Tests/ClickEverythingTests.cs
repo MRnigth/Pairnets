@@ -231,6 +231,18 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
         [new FriendRequestEntry("inv_oskar", "Oskar Nilsson", "oskar.n@example.com", "view", ["Music"])]),
     };
 
+    /// <summary>The nest's downloads: one running, one waiting, one finished, one stopped, and one held on an encrypted nest.</summary>
+    private static NestDownloadList NestDownloads => new(
+    [
+        new("dl_run", "releases.ubuntu.com", "ubuntu.iso", "Downloads", NestDownload.Running, 2_480_000_000, 6_200_000_000, 13_000_000, Utc.AddMinutes(-3)),
+        new("dl_wait", "cdimage.debian.org", "debian.iso", "Downloads", NestDownload.Queued, 0, null, 0, Utc.AddMinutes(-2)),
+        new("dl_done", "download.blender.org", "bunny.mp4", "Films", NestDownload.Done, 1_065_000_000, 1_065_000_000, 0, Utc.AddHours(-3),
+            Utc.AddHours(-2), "Films/bunny.mp4"),
+        new("dl_held", "example.org", "held.zip", "Downloads", NestDownload.Done, 1_000, 1_000, 0, Utc.AddHours(-3), Utc.AddHours(-2), Plain: true),
+        new("dl_stop", "example.com", "old-backup.zip", "Downloads", NestDownload.Failed, 0, null, 0, Utc.AddDays(-1), Utc.AddDays(-1),
+            Error: NestDownloadErrors.NotFound),
+    ], NestDownloadRules.AtOnce);
+
     private const string ConflictTitle = "Conflict copy: report (conflict LAPTOP).docx";
     private const string JoinTitle = "LAPTOP-2 (Windows) wants to join";
 
@@ -267,6 +279,9 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
     public Task InviteWindow_EveryButtonWorks() => Expect(fixture.Run("invite", () => PressEverything(InviteScreens(), InviteRules)));
 
     [Fact]
+    public Task NestDownloadWindow_EveryButtonWorks() => Expect(fixture.Run("nest download", () => PressEverything(NestDownloadScreens(), DownloadWindowRules)));
+
+    [Fact]
     public Task TrayMenu_EveryItemWorks() => Expect(fixture.Run("tray menu", PressTheTrayMenu));
 
     /// <summary>The guard: nothing in the XAML, and nothing in the tray menu, goes unpressed.</summary>
@@ -275,7 +290,8 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
     {
         // Run every window first (each runs once, whichever test asks first).
         foreach (var run in new Func<Task>[] { TrayPanel_EveryButtonWorks, MainWindow_EveryButtonWorks, Settings_EveryButtonWorks, SignIn_EveryButtonWorks,
-                     ServerUpdateWindow_EveryButtonWorks, NestPlaceWindow_EveryButtonWorks, BugReportWindow_EveryButtonWorks, InviteWindow_EveryButtonWorks, TrayMenu_EveryItemWorks })
+                     ServerUpdateWindow_EveryButtonWorks, NestPlaceWindow_EveryButtonWorks, BugReportWindow_EveryButtonWorks, InviteWindow_EveryButtonWorks, NestDownloadWindow_EveryButtonWorks,
+                     TrayMenu_EveryItemWorks })
         {
             try
             {
@@ -531,6 +547,7 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
             main.ShowActivity(Rows());
             main.ShowAttention(Attention(b));
             main.ShowUpdate("Pairnets 1.0.58 is available", "You have 1.0.52.", "Update now");
+            main.ShowNestOffer(new NestAutoUpdateOffer([new("a", "soro")]));
             main.ShowStatus(StatusSnapshot.Initial with
             {
                 Status = RunnerStatus.Syncing, Text = "Syncing", LastSyncAt = Now.AddMinutes(-1), Server = OlderServer, Devices = Devices,
@@ -690,6 +707,13 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
             main.ShowStatus(OwnersNestWithFriends, FolderPath, "DESKTOP");
             main.Navigate(MainPage.Devices);
         }));
+        yield return new Screen(name, "the Devices page with downloads on the nest", NewMainWindow, (b, w) => Wpf.Ui(() =>
+        {
+            var main = (MainWindow)w;
+            main.ShowStatus(StatusSnapshot.Initial with { Status = RunnerStatus.Idle, Text = "Up to date", Server = CurrentServer, Devices = Devices, NestDownloads = NestDownloads },
+                FolderPath, "DESKTOP");
+            main.Navigate(MainPage.Devices);
+        }));
         yield return new Screen(name, "the Needs you page with changes held back on a nest shared to view", NewMainWindow, (b, w) => Wpf.Ui(() =>
         {
             var main = (MainWindow)w;
@@ -817,6 +841,8 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
             c => MainOf(c).FilesPane.Rows.Count > 0 && MainOf(c).FilesPane.Rows.All(r => r.Entry.Path.Contains(Presser.TypedText, StringComparison.OrdinalIgnoreCase))),
         new(t => t.Label == "Refresh" && Within<NestFilesView>(t.Element), "read the nest's list again", c => MainOf(c).FilesPane.Rows.Count > 0),
         On("Clean up…", "show Clean up your nest", c => MainOf(c).CleanupShown),
+        new(t => t.Element is Button { Name: "ChangeFolderLink" }, "open the Settings folder row for this nest",
+            c => c.Bench.Actions.Calls.Items.Contains("ChangeLocalFolder") && MainOf(c).FilesPane.SavedInLine == @"Saved in D:\Pairnets"),
         On("Add files", "add the chosen files to this folder", c => NestCalled(c, "add:")),
         new(t => t.Element is Button && Within<WrapPanel>(t.Element) && Within<NestFilesView>(t.Element), "go to that folder",
             c => MainOf(c).FilesPane.Folder == (((Button)c.Target.Element).ToolTip as string is { } tip && tip != "The top of your nest" ? tip : string.Empty)),
@@ -862,6 +888,14 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
         new(t => t.Element is Button && t.Label.StartsWith("Show all ", StringComparison.Ordinal), "show every file of the folder",
             c => !Presser.Find(c.Window).Any(x => x.Label.StartsWith("Show all ", StringComparison.Ordinal))),
         On("Open your folder", "open the synced folder", Called("OpenFolder")),
+        // Downloads on the nest (before "Clear" of the Activity page: a finished download has one too).
+        new(t => t.Element.Name == "AddLinkButton", "open the window that hands the nest a link", Called("AddDownload")),
+        new(t => t.Handlers.Contains("DevicesPageView.OnCancelDownload"), "stop that download on the nest",
+            c => c.Item is NestDownloadRow row && Called($"CancelDownload({row.Id})")(c)),
+        new(t => t.Handlers.Contains("DevicesPageView.OnRetryDownload"), "try that download again", c => Called("RetryDownload(dl_stop)")(c)),
+        new(t => t.Handlers.Contains("DevicesPageView.OnClearDownload") || t.Handlers.Contains("DevicesPageView.OnRemoveDownload"), "take that download off the list",
+            c => c.Item is NestDownloadRow row && Called($"ForgetDownload({row.Id})")(c)),
+        new(t => t.Handlers.Contains("DevicesPageView.OnShowDownload"), "show the Files page at the folder it went in", OnPage(MainPage.Files)),
         On("Clear", "ask, then empty the activity list", Called("ClearActivity")),
 
         // Needs you and the Devices page.
@@ -911,6 +945,10 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
         On("Keep my files", "keep syncing stopped and open the folder to check it", Called("OpenFolder")),
         On("Download now anyway", "stop waiting for the other computer", Called("DownloadNow")),
         On("Review", "show the Needs attention page", OnPage(MainPage.Attention)),
+        new(t => t.Label == NestAutoUpdateOffer.TurnOnLabel && Window.GetWindow(t.Element) is MainWindow, "tell the app to let the nest update by itself",
+            c => ((MainWindow)c.Window).NestOfferAnswer == NestAutoUpdateAnswer.TurnOn),
+        new(t => t.Label == NestAutoUpdateOffer.NotNowLabel && Window.GetWindow(t.Element) is MainWindow, "put the nest update card away",
+            c => ((MainWindow)c.Window).NestOfferAnswer == NestAutoUpdateAnswer.NotNow),
         On(["Update nest…", "Check for update"], "open the server update window", Called("UpdateServer")),
         On(["See all", "See all in Activity"], "show the Activity page", OnPage(MainPage.Activity)),
         On("See the full list", "show the Needs attention page", OnPage(MainPage.Attention)),
@@ -964,6 +1002,12 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
         view.ChangeStorageRequested += () => b.Events.Add("ChangeStorageRequested");
         if (canMove)
             view.ShowNestStorage(SampleStorage());
+        view.ShowBigDeletes(BigDeleteModes.AskEverywhere, canChange: true, nestKnows: true);
+        view.BigDeletesChosen += mode =>
+        {
+            b.Events.Add("BigDeletes:" + mode);
+            return Task.FromResult<string?>(null);
+        };
         view.AdvancedExpander.IsExpanded = advancedOpen;
         var host = new Window { Title = "Settings", Width = 700, Height = 560, Content = view };
         ThemeManager.Attach(host);
@@ -997,6 +1041,11 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
         new(t => t.Element is Expander, "open or close the section (files to ignore, Advanced)", c => ((Expander)c.Target.Element).IsExpanded != c.WasChecked),
         On("Check now", "look for an app update and say what it found", c => View(c).VersionText.Text.Contains("is available", StringComparison.Ordinal), seconds: 20),
         new(t => t.Element is RadioButton { GroupName: "par" }, "choose that many files at the same time", c => ((RadioButton)c.Target.Element).IsChecked == true),
+        new(t => t.Element is RadioButton { GroupName: "bigdel" }, "choose the nest's \"Before big deletes\" for every computer (applied at once)",
+            c => View(c).BigDeletesShown == BigDeleteText.Choices.Single(m => BigDeleteText.Choice(m) == c.Target.Label)),
+        // Beta updates: the account has not joined, so only Off can be picked and the account page is one press away.
+        new(t => t.Element is RadioButton { GroupName: "beta" }, "choose that beta channel (applied at once)", c => ((RadioButton)c.Target.Element).IsChecked == true),
+        On("Open account page", "ask the app to open the beta program on the account page", c => c.Bench.Opened.Items.SequenceEqual([PairnetsLinks.BetaProgram])),
         new(t => t.Element is RadioButton { GroupName: { } g } && g.StartsWith("placement:", StringComparison.Ordinal), "ask first, then choose where that folder lives (applied at once)",
             c => View(c).PlacementChosen(((RadioButton)c.Target.Element).GroupName["placement:".Length..]) == PlacementNamed(c.Target.Label)),
         On("Choose for a folder inside these… (opens Files)", "ask the app for the Files page", c => c.Bench.Events.Items.Contains("OpenFilesRequested")),
@@ -1004,6 +1053,8 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
         On("Add a nest…", "ask the app to sign in to one more nest", c => c.Bench.Events.Items.Contains("AddNestRequested")),
         On("Invite a friend…", "ask the app to open the invite window", c => c.Bench.Events.Items.Contains("InviteFriendRequested")),
         On("Stop syncing…", "ask the app to stop syncing this nest on this computer", c => c.Bench.Events.Items.Contains("LeaveNestRequested")),
+        // "Open-source licences" opens the licence texts the app carries (a copy in the temp folder), not the website.
+        On("Open-source licences", "ask the app to open the licence texts it carries", c => c.Bench.Opened.Items.SequenceEqual([ThirdPartyNotices.CopyPath])),
         new(t => t.Handlers.Contains("SettingsView.OnAboutLink"),"ask the app to open that page of pairnets.app in the browser",
             c => c.Target.Element is Button { CommandParameter: string url } && url.StartsWith(PairnetsLinks.Website, StringComparison.Ordinal)
                 && c.Bench.Opened.Items.SequenceEqual([url])),
@@ -1065,6 +1116,17 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
         yield return new Screen(name, "finish in your browser", SignInWindow, (b, w) => Wpf.Ui(() =>
             SignIn(w).ShowAccount(new AccountSignInState(PairingStage.Waiting, FakeSyncService.UserCode, AccountLink, DateTimeOffset.UtcNow.AddMinutes(9)),
                 openBrowser: false)), Modal: true);
+        yield return new Screen(name, "sign in with a link", SignInWindow, async (b, w) =>
+        {
+            await Wpf.Ui(() =>
+            {
+                SignIn(w).ShowAccount(new AccountSignInState(PairingStage.Waiting, FakeSyncService.UserCode, AccountLink, DateTimeOffset.UtcNow.AddMinutes(9)),
+                    openBrowser: false);
+                SignIn(w).AccountUseLinkButton.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+            });
+            await Wpf.WaitUntil(() => SignIn(w).AccountLinkBox.Text.StartsWith($"{ServiceOrigin}/app/link?r=pnr_", StringComparison.Ordinal), "the sign-in link",
+                TimeSpan.FromSeconds(15));
+        }, Modal: true);
         yield return new Screen(name, "signed in, no nest yet", SignInWindow, (b, w) => Wpf.Ui(() =>
             SignIn(w).ShowAccount(new AccountSignInState(PairingStage.Waiting, FakeSyncService.UserCode, AccountLink, DateTimeOffset.UtcNow.AddMinutes(29),
                 NoNest: true, AccountEmail: FakeSyncService.Email), openBrowser: false)), Modal: true);
@@ -1123,6 +1185,15 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
     private IReadOnlyList<Rule> SignInRules =>
     [
         Switch,
+        // Sign in with a link (before the rules by label: its buttons say "Continue", "Copy" and "Back" too).
+        new(t => t.Handlers.Contains("SignInView.OnAccountUseLink"), "stop the browser sign-in and show a sign-in link to copy, opening nothing",
+            c => OnStep(c, SignInStep.AccountLink) && SignIn(c.Window).AccountLinkBox.Text.StartsWith($"{ServiceOrigin}/app/link?r=pnr_", StringComparison.Ordinal)
+                && c.Bench.Opened.Items.Count == 0, Seconds: 15),
+        new(t => t.Handlers.Contains("SignInView.OnAccountLinkCopy"), "copy the sign-in link and say so",
+            c => c.Bench.Script.Copied.Items.Contains(SignIn(c.Window).AccountLinkBox.Text) && (string)SignIn(c.Window).AccountLinkCopyButton.Content == "Copied"),
+        new(t => t.Handlers.Contains("SignInView.OnAccountLinkContinue"), "ask for the code from the browser (none was pasted)",
+            c => SignIn(c.Window).AccountLinkProblem is { IsVisible: true, Text: "Paste the code the browser shows after you press Allow." }),
+        new(t => t.Handlers.Contains("SignInView.OnAccountLinkBack"), "stop the link and go back to the Pairnets account step", c => OnStep(c, SignInStep.Account)),
         // The first step: a Pairnets account (sync.pairnets.app, here its stand-in).
         new(t => t.Handlers.Contains("SignInView.OnAccountGoogle"), "ask Pairnets for a code and open its Google sign-in in the browser",
             OpensTheAccountPage("google"), Seconds: 15),
@@ -1342,6 +1413,38 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
             c => c.Bench.Opened.Items is [var link] && c.Bench.Closed
                 && (link == $"https://sync.pairnets.app/account?invite={FriendsNest}&access=view"
                     || (c.Window.Title == "Invite a friend to Photos" && link == $"https://sync.pairnets.app/account?invite={FriendsNest}&folders=Photos&access=view"))),
+    ];
+
+    // ------------------------------------------------------------------ the "Let the nest download it" window
+
+    private const string DownloadLink = "https://releases.ubuntu.com/24.04/ubuntu.iso";
+
+    private static IEnumerable<Screen> NestDownloadScreens()
+    {
+        const string name = "the nest download window";
+        static Window Build(Bench b, string link, bool sealedNest) => new NestDownloadWindow(
+            (url, folder) =>
+            {
+                b.Opened.Add($"download {url} into {folder}");
+                return Task.FromResult<string?>(null);
+            },
+            _ => "Films") { Link = link, Sealed = sealedNest };
+        yield return new Screen(name, "a link pasted", b => Build(b, DownloadLink, sealedNest: false));
+        yield return new Screen(name, "a link that isn't a web link", b => Build(b, "ftp://example.com/file.iso", sealedNest: false));
+        yield return new Screen(name, "on an encrypted nest", b => Build(b, DownloadLink, sealedNest: true),
+            (_, w) => Wpf.Ui(() => Assert.True(((NestDownloadWindow)w).Sealed, "the warning should show")));
+    }
+
+    private static readonly IReadOnlyList<Rule> DownloadWindowRules =
+    [
+        new(t => t.Element.Name == "LinkBox", "take the typed link and drop the old problem",
+            c => ((NestDownloadWindow)c.Window) is { Link: Presser.TypedText, ProblemText: "" }),
+        new(t => t.Element.Name == "ChangeButton", "pick another nest folder", c => ((NestDownloadWindow)c.Window).Folder == "Films"),
+        new(t => t.Element.Name == "StartButton", "hand the link to the nest and close (or say what is wrong with the link)",
+            c => ((NestDownloadWindow)c.Window).Link == DownloadLink
+                ? c.Bench.Opened.Items is [$"download {DownloadLink} into Downloads"] && c.Bench.Closed && ((NestDownloadWindow)c.Window).Started
+                : c.Bench.Opened.Items.Count == 0 && ((NestDownloadWindow)c.Window).ProblemText.Length > 0),
+        new(t => t.Element.Name == "CancelButton", "close the window without asking the nest", c => c.Bench.Closed && c.Bench.Opened.Items.Count == 0),
     ];
 
     // ------------------------------------------------------------------ the tray menu and icon (the real tray controller)

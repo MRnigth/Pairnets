@@ -5,7 +5,7 @@
 //
 //   (no arguments)        coding-assistant PreToolUse hook: reads the tool call as JSON on stdin. Exit 0 lets it run,
 //                         exit 2 blocks it (stderr says why). Runs the check itself when a deploy needs one.
-//   --pre-push <remote>   git pre-push hook: refuses to push main or a v* tag without a pass record. Never runs
+//   --pre-push <remote>   git pre-push hook: refuses to push main, a beta/* branch or a v* tag without a pass record. Never runs
 //                         the check (that takes about 15 minutes); it says how to.
 //   --dry-classify        like the hook, but only says what it would do, and blocks anything that deploys.
 //   --status [<commit>]   shows the pass records.
@@ -93,10 +93,20 @@ export function readStamp(sha) {
 // ------------------------------------------------------------------ what a git push updates
 
 const isMainRef = r => r === 'main' || r === 'refs/heads/main' || r === 'heads/main';
+/** "beta/public" for beta/public, heads/beta/public or refs/heads/beta/public; else null. A push to a beta/* branch
+ * publishes a beta release (docs/DECISIONS.md, "Beta channels"), so it is a deploy like a push to main. */
+export const betaBranch = r => /^(?:(?:refs\/)?heads\/)?(beta\/.+)$/.exec(r || '')?.[1] ?? null;
+
+/** The branches here (or only those under <prefix>), with their commits. */
+function localBranches(top, prefix = 'refs/heads/') {
+  return git(top, ['for-each-ref', '--format=%(refname) %(objectname)', prefix]).out.split(/\r?\n/).filter(Boolean)
+    .map(l => l.split(' ')).map(([ref, sha]) => ({ ref, name: ref.replace('refs/heads/', ''), sha }));
+}
 
 /**
- * The deploys a push makes: main updated (with the commit it gets), main deleted, or v* tags pushed.
- * @returns {{kind: 'main'|'tag'|'delete-main'|'unknown', sha?: string, label: string}[]}
+ * The deploys a push makes: main or a beta/* branch updated (with the commit it gets), main deleted, or v* tags pushed.
+ * Deleting a beta branch deploys nothing (its pre-release stays as it is).
+ * @returns {{kind: 'main'|'beta'|'tag'|'delete-main'|'unknown', sha?: string, label: string}[]}
  */
 export function pushTargets(intent, top) {
   const targets = [];
@@ -112,6 +122,7 @@ export function pushTargets(intent, top) {
   if (intent.all || intent.mirror || (specs.length === 0 && pushDefault === 'matching')) {
     if (localMain) targets.push({ kind: 'main', sha: localMain, label: 'main (all branches are pushed)' });
     else if (intent.mirror || intent.prune) targets.push({ kind: 'delete-main', label: 'main would be deleted (no local main)' });
+    for (const b of localBranches(top, 'refs/heads/beta/')) targets.push({ kind: 'beta', sha: b.sha, label: `${b.name} (all branches are pushed)` });
   }
   if (intent.tags || intent.mirror) targets.push(...unpushedReleaseTags(top, remote));
   if (specs.length === 0 && !intent.all && !intent.mirror) {
@@ -127,6 +138,8 @@ export function pushTargets(intent, top) {
           if (r.ok && r.out.includes('/')) dests.add(r.out.slice(r.out.indexOf('/') + 1));
         }
         if ([...dests].some(isMainRef)) targets.push({ kind: 'main', sha: revParse(top, 'HEAD'), label: `main (your branch ${branch.out} pushes there)` });
+        for (const beta of new Set([...dests].map(betaBranch).filter(Boolean)))
+          targets.push({ kind: 'beta', sha: revParse(top, 'HEAD'), label: `${beta} (your branch ${branch.out} pushes there)` });
       }
     }
   }
@@ -146,6 +159,15 @@ export function pushTargets(intent, top) {
     if (src.includes('*')) {
       const pattern = dst ?? src;
       if (localMain && globMatches(pattern, ['refs/heads/main', 'main'])) targets.push({ kind: 'main', sha: localMain, label: `main (pattern ${raw})` });
+      for (const b of localBranches(top)) {
+        for (const name of [b.ref, b.name]) {
+          const star = globCapture(src, name);
+          if (star === null) continue;
+          const beta = betaBranch(dst === null ? name : dst.replace('*', star));
+          if (beta) targets.push({ kind: 'beta', sha: b.sha, label: `${beta} (pattern ${raw})` });
+          break;
+        }
+      }
       if (/tags/.test(pattern)) targets.push(...unpushedReleaseTags(top, remote));
       continue;
     }
@@ -171,12 +193,24 @@ export function pushTargets(intent, top) {
     if (isMainRef(dst)) {
       const sha = revParse(top, `${src}^{commit}`);
       targets.push(sha ? { kind: 'main', sha, label: `main (from ${src})` } : { kind: 'unknown', label: `main (cannot find commit ${src})` });
+    } else if (betaBranch(dst)) {
+      const sha = revParse(top, `${src}^{commit}`);
+      const beta = betaBranch(dst);
+      targets.push(sha ? { kind: 'beta', sha, label: `${beta} (from ${src})` } : { kind: 'unknown', label: `${beta} (cannot find commit ${src})` });
     } else if (releaseTag) {
       const sha = revParse(top, `${src}^{commit}`);
       targets.push(sha ? { kind: 'tag', sha, label: `release tag ${dst.replace(/^(refs\/)?tags\//, '')}` } : { kind: 'unknown', label: `tag ${dst} (cannot find its commit)` });
     }
   }
   return targets;
+}
+
+/** What the * of a refspec pattern stands for in <name>, or null when it does not match. */
+function globCapture(pattern, name) {
+  if (!pattern.includes('*')) return null;
+  const [before, after] = [pattern.slice(0, pattern.indexOf('*')), pattern.slice(pattern.indexOf('*') + 1)];
+  if (name.length < before.length + after.length || !name.startsWith(before) || !name.endsWith(after)) return null;
+  return name.slice(before.length, name.length - after.length);
 }
 
 function globMatches(pattern, names) {
@@ -287,7 +321,7 @@ export async function decide(intents, cwd, command) {
         for (const t of targets.filter(t => t.kind === 'delete-main')) blocks.push(`Blocked: ${t.label}. Deleting main would break every installed app's updates.`);
         for (const t of deploys.filter(t => t.kind === 'unknown')) blocks.push(`Blocked: ${t.label}.`);
         if (deploys.length && (it.noVerify || it.hooksOverride)) {
-          blocks.push('Blocked: this push to main or of a release tag skips git\'s hooks (--no-verify or core.hooksPath). Push without that.');
+          blocks.push('Blocked: this push to main, a beta branch or of a release tag skips git\'s hooks (--no-verify or core.hooksPath). Push without that.');
         }
         for (const t of deploys.filter(t => t.sha)) needs.push({ sha: t.sha, top, why: t.label });
         break;
@@ -301,23 +335,24 @@ export async function decide(intents, cwd, command) {
           break;
         }
         const pr = JSON.parse(view.out);
-        if (pr.baseRefName !== 'main') break;
+        const base = pr.baseRefName;
+        if (base !== 'main' && !betaBranch(base)) break;
         const gitTop = isPairnets(top) ? top : cwdTop;
         if (!isPairnets(gitTop)) {
-          blocks.push('Merging into main is a release; run this from the Pairnets folder so the check can test the pull request.');
+          blocks.push(`Merging into ${base} is a release; run this from the Pairnets folder so the check can test the pull request.`);
           break;
         }
-        git(gitTop, ['fetch', '--quiet', 'origin', 'main', `refs/pull/${pr.number}/head`], 120_000);
-        const mainSha = revParse(gitTop, 'refs/remotes/origin/main');
-        if (!revParse(gitTop, `${pr.headRefOid}^{commit}`) || !mainSha) {
-          blocks.push(`Could not fetch pull request #${pr.number} or main from GitHub, so the merge was stopped.`);
+        git(gitTop, ['fetch', '--quiet', 'origin', base, `refs/pull/${pr.number}/head`], 120_000);
+        const baseSha = revParse(gitTop, `refs/remotes/origin/${base}`);
+        if (!revParse(gitTop, `${pr.headRefOid}^{commit}`) || !baseSha) {
+          blocks.push(`Could not fetch pull request #${pr.number} or ${base} from GitHub, so the merge was stopped.`);
           break;
         }
-        if (!git(gitTop, ['merge-base', '--is-ancestor', mainSha, pr.headRefOid]).ok) {
-          blocks.push(`Pull request #${pr.number} is behind main. Bring main into it first, so the commit that is tested is exactly what lands.`);
+        if (!git(gitTop, ['merge-base', '--is-ancestor', baseSha, pr.headRefOid]).ok) {
+          blocks.push(`Pull request #${pr.number} is behind ${base}. Bring ${base} into it first, so the commit that is tested is exactly what lands.`);
           break;
         }
-        needs.push({ sha: pr.headRefOid, top: gitTop, why: `pull request #${pr.number} merged into main` });
+        needs.push({ sha: pr.headRefOid, top: gitTop, why: `pull request #${pr.number} merged into ${base}` });
         break;
       }
       case 'gh-release': {
@@ -568,7 +603,8 @@ export function prePush(lines, top) {
     if (!remoteRef) continue;
     const toMain = remoteRef === 'refs/heads/main';
     const releaseTag = /^refs\/tags\/v[^/]*$/.test(remoteRef);
-    if (!toMain && !releaseTag) continue;
+    const toBeta = remoteRef.startsWith('refs/heads/') && !!betaBranch(remoteRef);
+    if (!toMain && !releaseTag && !toBeta) continue;
     if (ZERO.test(localSha)) {
       if (toMain) refused.push('main would be deleted; that breaks every installed app\'s updates.');
       continue;
@@ -577,7 +613,7 @@ export function prePush(lines, top) {
     if (!readStamp(sha)) missing.push(`${short(sha)} (${localRef} -> ${remoteRef})`);
   }
   if (!missing.length && !refused.length) return 0;
-  const out = ['Not pushed: pushing main or a v* tag releases Pairnets to every installed app.'];
+  const out = ['Not pushed: pushing main, a beta/* branch or a v* tag releases Pairnets (to every installed app, or to the beta testers).'];
   for (const r of refused) out.push(`- ${r}`);
   if (missing.length) {
     out.push(`These commits have not passed the pre-deploy check: ${missing.join(', ')}.`);

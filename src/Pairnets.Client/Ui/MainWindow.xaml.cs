@@ -133,8 +133,36 @@ public interface IMainActions
     {
     }
 
+    /// <summary>Where the shown nest is saved on this computer (the Files page's "Saved in …" line), or null.</summary>
+    string? LocalFolder => null;
+
+    /// <summary>"Change…" beside "Saved in …" on the Files page: the Settings page, at the folder row.</summary>
+    void ChangeLocalFolder()
+    {
+    }
+
     /// <summary>Change…, Remove, Decline or "Let … in" under People: the account page at this nest's People.</summary>
     void OpenPeople()
+    {
+    }
+
+    /// <summary>"Add a link…" under Downloads on the nest: the window that hands a link to the nest to download.</summary>
+    void AddDownload()
+    {
+    }
+
+    /// <summary>Cancel on a running or waiting nest download: the nest stops it and deletes the half-done file.</summary>
+    void CancelDownload(string id)
+    {
+    }
+
+    /// <summary>Try again on a stopped nest download.</summary>
+    void RetryDownload(string id)
+    {
+    }
+
+    /// <summary>Clear (finished) or Remove (stopped): takes a nest download off the list; a finished file stays in the nest.</summary>
+    void ForgetDownload(string id)
     {
     }
 }
@@ -163,7 +191,13 @@ public partial class MainWindow : Window, IPageHost
         InitializeComponent();
         Icon = AppIcons.WindowIcon;
         _actions = actions;
+        if (PairnetsInfo.ThisRelease.IsBeta)
+        {
+            BetaTagText.Text = ReleaseChannel.DisplayName(PairnetsInfo.Channel);
+            BetaTag.Visibility = Visibility.Visible;
+        }
         Overview.Act += OnOverviewAction;
+        Overview.OfferAnswered += OnNestOfferAnswered;
         Overview.SeeAllActivity += () => Navigate(MainPage.Activity);
         Overview.MoreComputers += () => Navigate(MainPage.Devices);
         ActivityPage.Host = HistoryPage.Host = DevicesPage.Host = AccountPage.Host = NestFilesPage.Host = CleanupPage.Host = this;
@@ -428,6 +462,21 @@ public partial class MainWindow : Window, IPageHost
 
     /// <summary>Switches to the "Needs attention" page, or back to the overview (notifications, screenshots).</summary>
     public void ShowAttentionTab(bool attention) => Navigate(attention ? MainPage.Attention : MainPage.Overview);
+
+    /// <summary>"Turn on" or "Not now" on the "Let your nest update by itself?" card.</summary>
+    public event Action<NestAutoUpdateAnswer>? NestOfferAnswered;
+
+    /// <summary>The "Let your nest update by itself?" card at the top of the Overview page, or none.</summary>
+    public void ShowNestOffer(NestAutoUpdateOffer? offer) => Overview.ShowOffer(offer);
+
+    /// <summary>The card's button pressed last (the checks read it).</summary>
+    internal NestAutoUpdateAnswer? NestOfferAnswer { get; private set; }
+
+    private void OnNestOfferAnswered(NestAutoUpdateAnswer answer)
+    {
+        NestOfferAnswer = answer;
+        NestOfferAnswered?.Invoke(answer);
+    }
 
     // ------------------------------------------------------------------ status
 

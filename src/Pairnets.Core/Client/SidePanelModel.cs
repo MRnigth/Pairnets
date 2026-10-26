@@ -307,6 +307,9 @@ public sealed record SidePanelModel(
                 return new SideThisComputer(name, "This one · " + Doing(s, now), Doing(s, now), SideDot.Ok, SideTone.Accent, s.IsTransferring ? bar ?? 0 : null, icon);
             }
             case Side.Synced:
+                // A beta build says which beta it runs where it would say "up to date"; syncing and problems say what they say.
+                if (PairnetsInfo.ThisRelease.IsBeta)
+                    return Make(ReleaseChannel.DisplayName(PairnetsInfo.Channel), SideDot.Ok, SideTone.Neutral);
                 return Make("up to date", SideDot.Ok, SideTone.Neutral);
             case Side.Waiting:
                 return Make($"waits for {s.WaitingFor!.Device}", SideDot.Ok, SideTone.Neutral);

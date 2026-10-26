@@ -22,7 +22,10 @@ for s in 16 32 128 256 512; do
 done
 iconutil -c icns "$ICONSET" -o "$APP/Contents/Resources/Pairnets.icns"
 
-# CFBundleShortVersionString is the full release number (1.0.61.8.1); CFBundleVersion only its first four numbers.
+# The licence texts must go along with the program (the app also carries them inside, for Settings -> About).
+cp "$ROOT/deploy/THIRD-PARTY-NOTICES.txt" "$ROOT/LICENSE" "$APP/Contents/Resources/"
+
+# CFBundleShortVersionString is the full release number (1.0.61.10.1); CFBundleVersion only its first four numbers.
 BUILD="$(printf '%s' "$VERSION" | cut -d. -f1-4)"
 sed -e "s/__VERSION__/$VERSION/g" -e "s/__BUILD__/$BUILD/g" "$ROOT/deploy/macos/Info.plist" > "$APP/Contents/Info.plist"
 

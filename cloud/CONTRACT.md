@@ -718,7 +718,7 @@ payload `{s: state, n: nonce, v: PKCE verifier, r: next, e: expiry, ra: reauth f
 Every `POST`, `PATCH`, `PUT` or `DELETE` MUST carry `Origin` exactly equal to `PUBLIC_ORIGIN`; missing or different →
 **403** `{error:"bad_origin"}`. Only these paths are exempt, and they MUST NOT read any cookie (they authenticate by
 code, HMAC or Bearer token): `/v1/claim`, `/v1/nest/confirm`, `/v1/nest/unlink`, `/v1/heartbeat`, `/v1/app/start`,
-`/v1/app/poll`, `/v1/app/logout`. Version 2 (`RELAY.md`) adds `/v1/servers/start` and `/v1/servers/poll` (the
+`/v1/app/poll`, `/v1/app/logout`, `/v1/app/redeem` (sign in with a link). Version 2 (`RELAY.md`) adds `/v1/servers/start` and `/v1/servers/poll` (the
 installer, authenticated by its device code). The relay `/n/*` is outside this rule altogether: it reads no cookie, passes
 none on (the `Cookie` header is removed) and is meant for apps, not browsers.
 
@@ -739,7 +739,8 @@ address) and `GET /login/google/callback` (protected by state, nonce, PKCE and t
 | `GET /invite?t=pni_…` | 1.0.61.2 | an invite to a friend's nest (`RELAY.md` §10) |
 
 `next` (everywhere on the service) MUST match `^/(account|app(\?code=[0-9A-Za-z-]{1,16})?|nest-login\?[^#\s]{1,600})$`;
-anything else becomes `/account`. Version 2 adds `/add` and `/add?code=` (same code pattern as `/app`). Friends
+anything else becomes `/account`. Version 2 adds `/add` and `/add?code=` (same code pattern as `/app`). Sign in with a link adds
+`/app/link?r=pnr_[A-Za-z0-9_-]{43}`. Friends
 (`RELAY.md` §10) add `/invite?t=pni_` + 32 base32-lower, and `/account?invite=nst_…` followed by `&` and up to 600
 characters of `A-Z a-z 0-9 % . _ ~ , + = & ! * ' ( ) -` (the apps' hand-over to the invite form).
 
@@ -793,6 +794,7 @@ characters of `A-Z a-z 0-9 % . _ ~ , + = & ! * ' ( ) -` (the apps' hand-over to 
 | `GET /v1/me` | — | 200 `{accountId, email, username, createdAt, identities:[{provider, email, createdAt, lastUsedAt}], session:{id, kind, authTime, amr, recentAuth}, nests:{used, max}}` (`nests`: the account's own nests, both kinds, pending included, and `MAX_NESTS_PER_ACCOUNT`) | 401 `unauthorized` |
 | `PATCH /v1/me` | `{username}`: 1 to 32 characters, or `null`/`""` to clear | 200 like `GET /v1/me`; audit `username_changed` | 400 `bad_request`, 401 `unauthorized` |
 | `DELETE /v1/me` | — | 204, cookie cleared, everything cascades | 401 `unauthorized`, 401 `reauth_required` |
+| `GET /v1/me/export` | — (browser session) | 200 JSON file (`Content-Disposition: attachment`): "Download my data", everything stored about the account (account, sign-in methods, sessions, nests, pending computers and nests, link codes, sharing, invites, linked nests, audit), no token/code/key hashes; audit `data_exported` | 401 `unauthorized` |
 | `GET /v1/signed-in` | — (cookie only, never an app token) | 200 `{signedIn:false}` or `{signedIn:true, name}`: the username, else the part of the email before the @. pairnets.app shows it in its top bar. The only route with CORS: `Access-Control-Allow-Origin` (echoed) and `Access-Control-Allow-Credentials: true` for `https://pairnets.app` and `https://www.pairnets.app` only; `Vary: Origin` always. | — |
 | `GET /v1/nests` | — (session **or** app token) | 200 `{nests:[Nest]}` | 401 `unauthorized` |
 | `POST /v1/nests/claim-codes` | `{label?}` | 201 `{code:"PN-XXXX-XXXX-XXXX", expiresAt, command}` | 401 `reauth_required`, 409 `nest_limit`, 429 `too_many_codes` |
@@ -826,6 +828,7 @@ Limits: at most **4 nests** per account (`MAX_NESTS_PER_ACCOUNT`; nests shared b
 | `invalid_code`, `expired`, `used`, `wrong_browser` | 400 / 400 / 409 / 400 | codes |
 | `bad_url`, `nest_limit`, `too_many_codes` | 400 / 409 / 429 | claim |
 | `already_decided`, `slow_down` | 409 / 429 | app sign-in |
+| `not_allowed_yet`, `stopped`, `code_typo`, `code_expired` | 409 / 400 / 400 / 400 | sign in with a link |
 | `bad_access`, `sealed_whole_only`, `too_many_friends`, `own_nest`, `already_member`, `cancelled`, `used` | 400 / 400 / 409 / 409 / 409 / 409 / 409 | friends (`RELAY.md` §10) |
 | `unlinked`, `bad_signature`, `stale`, `not_confirmed` | 410 / 401 / 401 / 409 | nest-signed requests |
 | `server_error` | 500 | anything unexpected (no details) |
@@ -855,6 +858,37 @@ it away.
 
 With more than one nest the app MUST let the person choose (never pick one silently), showing label and address.
 
+**Sign in with a link** (migration 0011; `docs/DECISIONS.md`, "Sign in the app with a link and a code"). For when the
+app can't open a browser, or the sign-in can't come back to it (another computer, a phone, a Linux box without a
+screen). The app shows a long one-time link; it is opened in any browser, where the person signs in, picks the nest and
+presses Allow; the page then shows a long code, and only that code, pasted into the app, hands over the key. The poll
+never does in this mode, so pressing Allow on a link a stranger sent lets nobody in without the code as well.
+
+1. `POST /v1/app/start` `{name, system?, appVersion?, mode:"code"}` → **200**
+   `{deviceCode:"pcd_…", link:"https://sync.pairnets.app/app/link?r=pnr_…", expiresIn:900}`. `pnr_` + base64url(32
+   bytes); only its SHA-256 is kept (`device_logins.link_hash`). The row still gets a user code (the column needs one),
+   but that code is never shown, never finds the row while it waits (`/app?code=`, `GET /v1/app/requests/`) and can't
+   answer it (`POST /v1/app/approve` with `userCode` → 404). `mode` absent or `"poll"`: today's flow.
+2. `GET /app/link?r=pnr_…`: the `/app` page for that sign-in (session required, else `/login?next=/app/link?r=…`; a
+   sign-in older than 15 minutes is asked for again first). No short code to compare; a warning that a stranger may
+   have sent the link; "Allow and show the code" / "No, this isn't me". An account with no nest can't allow (it is told
+   to set one up first). A link that finds nothing (run out, used, cut short, someone else's) shows "This sign-in link
+   doesn't work".
+3. `POST /v1/app/approve` `{link:"pnr_…", approve, nestId}` (a nest is required) → **200**
+   `{status:"approved", code:"XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX", codeExpiresIn:300}` (the code is shown this
+   once; a reload says it was shown) or `{status:"denied"}`. The code: 28 random characters of the user-code alphabet
+   and a 4-character check (the first four bytes of `SHA-256("pn-lc1\n" + the 28)`, each `& 31` into the alphabet).
+   Only its SHA-256 is kept (`code_hash`), with `code_expires_at` = Allow + 300; the row lives at least that long.
+   The page then checks `GET /v1/app/requests/{userCode}` every 4 s (the page holds the user code) until `delivered`,
+   `denied` or 404.
+4. `POST /v1/app/redeem` `{deviceCode, code}` (no auth; Origin-exempt; per-IP limit) → like an approved poll (§6.9
+   step 3, RELAY.md §6: `{status:"approved", appToken, expiresIn, email, nest, device}`), once. Otherwise:
+   400 `expired` (unknown, not a link sign-in, run out, or already used) · 409 `not_allowed_yet` (not allowed yet) ·
+   400 `stopped` (No was pressed, or the fifth wrong code) · 400 `code_typo` (not 32 characters of the alphabet after
+   dropping spaces and hyphens and mapping I, L → 1 and O → 0, or the check doesn't add up; **not** counted) ·
+   400 `code_expired` · 400 `{error:"invalid_code", message, triesLeft}` (counted; the fifth makes it `stopped`) ·
+   503 `nest_offline` (the same code works again until it runs out) · 429 `slow_down`.
+
 ### 6.10 Rate limits
 
 Fixed windows in D1 (`rate_counters`); the key is the event plus the first 22 characters of
@@ -875,6 +909,7 @@ so no raw IP or address is stored there.
 | claim codes | account | 5 unused at once, 20 / day | 429 `too_many_codes` |
 | `GET /nest-login` | account | 60 / hour | 429 page |
 | `POST /v1/app/start` | IP | 10 / hour | 429 `rate_limited` |
+| `POST /v1/app/redeem` | IP | 30 / hour (and 5 wrong codes per link) | 429 `rate_limited` |
 | `POST /v1/app/poll` | device code | once per `interval` (3 s) | 429 `slow_down` |
 | `POST /v1/heartbeat` | nest | 1 / 60 s | 429 `rate_limited` |
 | `POST /v1/servers/{id}/invites` (`RELAY.md` §10) | account | 20 / day | 429 `rate_limited` |
@@ -913,7 +948,9 @@ All times are Unix seconds. `*_hash` columns are 32-byte BLOBs: SHA-256 of the U
 included). D1 enforces foreign keys, so deleting an account removes everything that belongs to it. Later migrations
 add to it: `0002_relay.sql` (RELAY.md) and `0003_username.sql` (`accounts.username TEXT`; NULL = not set; a display
 name only, not unique, never used to sign in), and `0004_request_place.sql` (`device_logins.request_country` and
-`request_city`, both nullable: where an app's sign-in request came from, shown on the Allow page).
+`request_city`, both nullable: where an app's sign-in request came from, shown on the Allow page). 0005-0009 are
+listed in RELAY.md and DECISIONS.md; `0010_terms.sql` adds `accounts.terms_version` and `terms_accepted_at` (nullable:
+the Terms date each sign-in agreed to, `TERMS_VERSION` in src/accounts.ts).
 
 ```sql
 -- Pairnets Cloud, migration 0001. Additive migrations only from here on.

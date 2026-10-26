@@ -2,17 +2,40 @@
 // person picks which of their servers the computer joins; the first poll after that asks the server for a device key
 // (a signed admin call) and hands it to the app once. The service never stores the device key. A nest a friend let
 // this account in to (RELAY.md 10) is one more choice: its key carries what was shared (access, folders, person).
+//
+// Sign in with a link (CONTRACT.md 6.9): for when the app can't open a browser, or the sign-in can't come back to it.
+// The app starts with mode "code" and shows a long one-time link instead of a short code. The link is opened in any
+// browser; after Allow the page shows a long code, and only that code, pasted into the app (POST /v1/app/redeem),
+// hands over the key. The poll never does in this mode, so pressing Allow on a stranger's link lets nobody in.
 
 import { audit } from "../audit";
 import type { Ctx } from "../context";
-import { B32_UPPER, newId, randomBase32, randomToken } from "../crypto";
-import { cleanText, DEVICE_ID_RE, displayUserCode, dottedEmail, iso, maskEmail, NEST_ID_RE, normaliseUserCode, parseFolders, personName, placeName } from "../formats";
+import { B32_UPPER, newId, randomBase32, randomToken, timingSafeEqual } from "../crypto";
+import {
+  cleanText,
+  DEVICE_ID_RE,
+  displayLinkCode,
+  displayUserCode,
+  dottedEmail,
+  iso,
+  LINK_CODE_RANDOM,
+  LINK_TOKEN_RE,
+  linkCodeCheck,
+  linkCodeChecks,
+  maskEmail,
+  NEST_ID_RE,
+  normaliseLinkCode,
+  normaliseUserCode,
+  parseFolders,
+  personName,
+  placeName,
+} from "../formats";
 import { HttpError, htmlResponse, json, noContent, redirect } from "../http";
 import { adminCall, markReached, NestOffline } from "../nestadmin";
 import { sendNotice } from "../mail";
-import { appPage } from "../pages";
+import { appLinkGonePage, appPage } from "../pages";
 import { enforce, HOUR } from "../ratelimit";
-import { jsonBody } from "../request";
+import { blobBytes, jsonBody } from "../request";
 import { APP_TOKEN_LIFETIME, bearerToken, isRecent, loadBrowserSession, requireBrowser, requireRecent, secretHash, startAppSession } from "../sessions";
 import type { NestRow } from "./account";
 import { memberOf, nestFriendFeatures, sharedNestsOf } from "./friends";
@@ -20,6 +43,12 @@ import { relayUrl, serversOf } from "./servers";
 
 export const DEVICE_LOGIN_LIFETIME = 600;
 export const POLL_INTERVAL = 3;
+/** A sign-in link must be opened, and allowed, within this long. */
+export const LINK_LIFETIME = 900;
+/** The long code works this long after Allow. */
+export const LINK_CODE_LIFETIME = 300;
+/** Wrong codes allowed per link; the last one stops the sign-in. */
+export const LINK_CODE_TRIES = 5;
 /** While the server is being asked for a key, further polls of that login are told to slow down (at most this long). */
 const KEY_REQUEST_HOLD = 10;
 /** A computer allowed while its account had no nest waits this long for one (from the moment it was allowed). */
@@ -45,6 +74,11 @@ interface DeviceLoginRow {
   /** Where the sign-in request came from, as Cloudflare saw it at /v1/app/start: two-letter country and city only. */
   request_country: string | null;
   request_city: string | null;
+  /** 'code': a sign-in link, finished only by the long code (0011). */
+  mode: "poll" | "code";
+  code_hash: unknown;
+  code_expires_at: number | null;
+  tries: number;
 }
 
 /**
@@ -68,18 +102,37 @@ export async function appStartRoute(ctx: Ctx): Promise<Response> {
   if (typeof b.name !== "string" || name === null || name === "invalid" || system === "invalid" || appVersion === "invalid") {
     throw new HttpError(400, "bad_request");
   }
+  if (b.mode !== undefined && b.mode !== "poll" && b.mode !== "code") throw new HttpError(400, "bad_request");
+  const byLink = b.mode === "code";
   const deviceCode = `pcd_${randomToken(32)}`;
+  // A link sign-in still gets a user code (the column needs one), but it is never shown and never finds the request.
+  const link = byLink ? `pnr_${randomToken(32)}` : null;
+  const lifetime = byLink ? LINK_LIFETIME : DEVICE_LOGIN_LIFETIME;
   const place = requestPlace(ctx);
   for (let attempt = 0; attempt < 5; attempt++) {
     const userCode = randomBase32(8, B32_UPPER);
     const r = await ctx.env.DB.prepare(
-      `INSERT INTO device_logins (id, device_code_hash, user_code, name, system, app_version, status, account_id, created_at, expires_at, decided_at, last_poll_at, request_country, request_city)
-       VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'pending', NULL, ?7, ?8, NULL, NULL, ?9, ?10)
+      `INSERT INTO device_logins (id, device_code_hash, user_code, name, system, app_version, status, account_id, created_at, expires_at, decided_at, last_poll_at, request_country, request_city, mode, link_hash)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'pending', NULL, ?7, ?8, NULL, NULL, ?9, ?10, ?11, ?12)
        ON CONFLICT DO NOTHING`,
     )
-      .bind(newId("dvl"), await secretHash(deviceCode), userCode, name, system, appVersion, ctx.now, ctx.now + DEVICE_LOGIN_LIFETIME, place.country, place.city)
+      .bind(
+        newId("dvl"),
+        await secretHash(deviceCode),
+        userCode,
+        name,
+        system,
+        appVersion,
+        ctx.now,
+        ctx.now + lifetime,
+        place.country,
+        place.city,
+        byLink ? "code" : "poll",
+        link ? await secretHash(link) : null,
+      )
       .run();
     if (r.meta.changes !== 1) continue; // that user code is taken right now: pick another
+    if (link) return json(200, { deviceCode, link: `${ctx.env.PUBLIC_ORIGIN}/app/link?r=${link}`, expiresIn: LINK_LIFETIME });
     const shown = displayUserCode(userCode);
     return json(200, {
       deviceCode,
@@ -98,7 +151,20 @@ async function visibleRequest(ctx: Ctx, rawCode: string | null, accountId: strin
   const code = normaliseUserCode(rawCode);
   if (!code) return null;
   const row = await ctx.env.DB.prepare("SELECT * FROM device_logins WHERE user_code = ?1").bind(code).first<DeviceLoginRow>();
+  return visible(ctx, row, accountId, true);
+}
+
+/** The same for a sign-in link (its ?r=). */
+async function visibleLinkRequest(ctx: Ctx, token: string | null, accountId: string): Promise<DeviceLoginRow | null> {
+  if (!token || !LINK_TOKEN_RE.test(token)) return null;
+  const row = await ctx.env.DB.prepare("SELECT * FROM device_logins WHERE link_hash = ?1").bind(await secretHash(token)).first<DeviceLoginRow>();
+  return visible(ctx, row, accountId, false);
+}
+
+/** Found by its user code, a link sign-in waiting for Allow stays hidden: only its link finds it then. */
+function visible(ctx: Ctx, row: DeviceLoginRow | null, accountId: string, byUserCode: boolean): DeviceLoginRow | null {
   if (!row || row.expires_at <= ctx.now) return null;
+  if (row.status === "pending" && byUserCode && row.mode === "code") return null;
   if (row.status !== "pending" && row.account_id !== accountId) return null;
   return row;
 }
@@ -133,10 +199,28 @@ export async function appPageRoute(ctx: Ctx): Promise<Response> {
   if (row && row.status === "pending" && !isRecent(ctx, s)) {
     return redirect(`/login?reauth=1&next=${encodeURIComponent(`/app?code=${displayUserCode(row.user_code)}`)}`);
   }
+  return drawAppPage(ctx, s.accountId, row, typed, null);
+}
+
+// GET /app/link?r=pnr_… (a sign-in link: the same page, and after Allow the long code)
+export async function appLinkPageRoute(ctx: Ctx): Promise<Response> {
+  const raw = ctx.url.searchParams.get("r");
+  const token = raw && LINK_TOKEN_RE.test(raw) ? raw : null;
+  const s = await loadBrowserSession(ctx);
+  if (!s) return redirect(`/login?next=${encodeURIComponent(token ? `/app/link?r=${token}` : "/app")}`);
+  const row = await visibleLinkRequest(ctx, token, s.accountId);
+  if (!row || !token) return htmlResponse(200, appLinkGonePage());
+  if (row.status === "pending" && !isRecent(ctx, s)) {
+    return redirect(`/login?reauth=1&next=${encodeURIComponent(`/app/link?r=${token}`)}`);
+  }
+  return drawAppPage(ctx, s.accountId, row, null, token);
+}
+
+async function drawAppPage(ctx: Ctx, accountId: string, row: DeviceLoginRow | null, typed: string | null, link: string | null): Promise<Response> {
   // Pending: the nests to choose from, its own and then the ones shared with it. Answered: the same, to name the one
   // it joined.
-  const servers = row ? await serversOf(ctx, s.accountId) : [];
-  const shared = row ? await sharedNestsOf(ctx, s.accountId) : [];
+  const servers = row ? await serversOf(ctx, accountId) : [];
+  const shared = row ? await sharedNestsOf(ctx, accountId) : [];
   // The nests the app already syncs (it adds ?have=nst_…,nst_… when adding one more): a hint for the list, nothing more.
   const have = new Set((ctx.url.searchParams.get("have") ?? "").split(",").filter((id) => NEST_ID_RE.test(id)).slice(0, 20));
   return htmlResponse(
@@ -155,6 +239,7 @@ export async function appPageRoute(ctx: Ctx): Promise<Response> {
             nestId: row.nest_id,
             place: placeName(row.request_country, row.request_city),
             now: ctx.now,
+            link,
           }
         : null,
       typed,
@@ -175,17 +260,28 @@ export async function appPageRoute(ctx: Ctx): Promise<Response> {
 export async function appApproveRoute(ctx: Ctx): Promise<Response> {
   const s = await requireBrowser(ctx);
   const b = jsonBody(ctx);
-  if (typeof b.userCode !== "string" || typeof b.approve !== "boolean") throw new HttpError(400, "bad_request");
+  // A sign-in is named by its user code, or (a sign-in link) by the link's secret.
+  const byLink = b.link !== undefined;
+  if ((byLink ? typeof b.link !== "string" : typeof b.userCode !== "string") || typeof b.approve !== "boolean") throw new HttpError(400, "bad_request");
   // Allowing hands the computer a key to the nest: only right after a sign-in (refusing is always fine).
   if (b.approve) requireRecent(ctx, s);
   // The nest this computer joins: required when approving, unless the account has no nest yet. Then the app is told
   // so and waits; the login joins the first nest the account adds (RELAY.md §6, "No nest yet").
   const withoutNest = b.approve && (b.nestId === undefined || b.nestId === null);
   if (b.approve && !withoutNest && (typeof b.nestId !== "string" || !NEST_ID_RE.test(b.nestId))) throw new HttpError(400, "bad_request");
-  const code = normaliseUserCode(b.userCode);
-  if (!code) throw new HttpError(404, "not_found");
-  const row = await ctx.env.DB.prepare("SELECT * FROM device_logins WHERE user_code = ?1").bind(code).first<DeviceLoginRow>();
+  let row: DeviceLoginRow | null;
+  if (byLink) {
+    if (!LINK_TOKEN_RE.test(b.link as string)) throw new HttpError(404, "not_found");
+    row = await ctx.env.DB.prepare("SELECT * FROM device_logins WHERE link_hash = ?1").bind(await secretHash(b.link as string)).first<DeviceLoginRow>();
+  } else {
+    const code = normaliseUserCode(b.userCode);
+    if (!code) throw new HttpError(404, "not_found");
+    // A link sign-in can't be answered by its (never shown) user code.
+    row = await ctx.env.DB.prepare("SELECT * FROM device_logins WHERE user_code = ?1 AND mode = 'poll'").bind(code).first<DeviceLoginRow>();
+  }
   if (!row) throw new HttpError(404, "not_found");
+  // A link sign-in must join a nest now: its code is pasted within minutes, too soon to set one up.
+  if (row.mode === "code" && withoutNest) throw new HttpError(400, "bad_request");
   if (row.status !== "pending") {
     if (row.account_id !== s.accountId) throw new HttpError(404, "not_found");
     throw new HttpError(409, "already_decided");
@@ -205,11 +301,19 @@ export async function appApproveRoute(ctx: Ctx): Promise<Response> {
   }
   const status = b.approve ? "approved" : "denied";
   // A login waiting for a nest gets time to set one up (installing it takes a few minutes).
-  const expires = withoutNest ? Math.max(row.expires_at, ctx.now + NO_NEST_WAIT) : row.expires_at;
+  let expires = withoutNest ? Math.max(row.expires_at, ctx.now + NO_NEST_WAIT) : row.expires_at;
+  // A link sign-in that is allowed gets its long code now (shown once, on this answer), with 5 minutes to paste it.
+  let longCode: string | null = null;
+  if (row.mode === "code" && b.approve) {
+    const random = randomBase32(LINK_CODE_RANDOM, B32_UPPER);
+    longCode = random + (await linkCodeCheck(random));
+    expires = Math.max(expires, ctx.now + LINK_CODE_LIFETIME);
+  }
   const r = await ctx.env.DB.prepare(
-    "UPDATE device_logins SET status = ?1, account_id = ?2, decided_at = ?3, nest_id = ?5, expires_at = ?6 WHERE id = ?4 AND status = 'pending' AND expires_at > ?3",
+    `UPDATE device_logins SET status = ?1, account_id = ?2, decided_at = ?3, nest_id = ?5, expires_at = ?6, code_hash = ?7, code_expires_at = ?8
+     WHERE id = ?4 AND status = 'pending' AND expires_at > ?3`,
   )
-    .bind(status, s.accountId, ctx.now, row.id, nestId, expires)
+    .bind(status, s.accountId, ctx.now, row.id, nestId, expires, longCode ? await secretHash(longCode) : null, longCode ? ctx.now + LINK_CODE_LIFETIME : null)
     .run();
   if (r.meta.changes !== 1) throw new HttpError(409, "already_decided");
   await audit(ctx, b.approve ? "app_approved" : "app_denied", s.accountId, nestId, { name: row.name });
@@ -224,7 +328,7 @@ export async function appApproveRoute(ctx: Ctx): Promise<Response> {
       });
     }
   }
-  return json(200, { status });
+  return json(200, longCode ? { status, code: displayLinkCode(longCode), codeExpiresIn: LINK_CODE_LIFETIME } : { status });
 }
 
 // POST /v1/app/poll
@@ -238,7 +342,8 @@ export async function appPollRoute(ctx: Ctx): Promise<Response> {
   if (!row || row.expires_at <= ctx.now || row.status === "delivered") throw new HttpError(400, "expired");
   // One counted poll per interval (an atomic check, so two polls at once cannot both pass). An approved login holds
   // the slot a little longer while its server is asked for a key, so that key is asked for once at a time.
-  const approved = row.status === "approved" && row.account_id !== null;
+  // A link sign-in is never handed over here: only its code does that (POST /v1/app/redeem).
+  const approved = row.status === "approved" && row.account_id !== null && row.mode === "poll";
   const slot = await ctx.env.DB.prepare("UPDATE device_logins SET last_poll_at = ?1 WHERE id = ?2 AND (last_poll_at IS NULL OR last_poll_at <= ?3)")
     .bind(approved ? ctx.now + KEY_REQUEST_HOLD : ctx.now, row.id, ctx.now - POLL_INTERVAL)
     .run();
@@ -253,6 +358,56 @@ export async function appPollRoute(ctx: Ctx): Promise<Response> {
     }
   }
   return json(200, { status: row.status === "denied" ? "denied" : "pending" });
+}
+
+// POST /v1/app/redeem {deviceCode, code}: a link sign-in's long code, pasted into the app.
+export async function appRedeemRoute(ctx: Ctx): Promise<Response> {
+  await enforce(ctx, "app-redeem", ctx.ipKey, 30, HOUR);
+  const b = jsonBody(ctx);
+  if (typeof b.deviceCode !== "string" || typeof b.code !== "string") throw new HttpError(400, "bad_request");
+  if (!/^pcd_[A-Za-z0-9_-]{43}$/.test(b.deviceCode)) throw new HttpError(400, "expired");
+  const row = await ctx.env.DB.prepare("SELECT * FROM device_logins WHERE device_code_hash = ?1")
+    .bind(await secretHash(b.deviceCode))
+    .first<DeviceLoginRow>();
+  if (!row || row.mode !== "code" || row.expires_at <= ctx.now || row.status === "delivered") throw new HttpError(400, "expired");
+  if (row.status === "denied") throw new HttpError(400, "stopped");
+  if (row.status === "pending") throw new HttpError(409, "not_allowed_yet");
+  // A typo (wrong length, a letter that can't be in a code, or a check that doesn't add up) is not a try.
+  const code = normaliseLinkCode(b.code);
+  if (!code || !(await linkCodeChecks(code))) throw new HttpError(400, "code_typo");
+  if (row.code_expires_at === null || row.code_expires_at <= ctx.now) throw new HttpError(400, "code_expired");
+  if (!timingSafeEqual(new Uint8Array(await secretHash(code)), blobBytes(row.code_hash))) {
+    // Counted atomically; the last allowed try stops the sign-in.
+    await ctx.env.DB.prepare(
+      `UPDATE device_logins SET tries = tries + 1, status = CASE WHEN tries + 1 >= ?2 THEN 'denied' ELSE status END
+       WHERE id = ?1 AND status = 'approved'`,
+    )
+      .bind(row.id, LINK_CODE_TRIES)
+      .run();
+    const now = await ctx.env.DB.prepare("SELECT tries FROM device_logins WHERE id = ?1").bind(row.id).first<{ tries: number }>();
+    const left = LINK_CODE_TRIES - (now?.tries ?? LINK_CODE_TRIES);
+    if (left <= 0) {
+      if (row.account_id) await audit(ctx, "app_link_stopped", row.account_id, row.nest_id, { name: row.name });
+      throw new HttpError(400, "stopped", "That code didn't match 5 times, so this sign-in was stopped. Start again with a new link.");
+    }
+    return json(400, {
+      error: "invalid_code",
+      message: `That code doesn't match. ${left === 1 ? "1 try" : `${left} tries`} left.`,
+      triesLeft: left,
+    });
+  }
+  // The right code: the key is asked for once at a time (the same slot as the poll's).
+  const slot = await ctx.env.DB.prepare("UPDATE device_logins SET last_poll_at = ?1 WHERE id = ?2 AND (last_poll_at IS NULL OR last_poll_at <= ?3)")
+    .bind(ctx.now + KEY_REQUEST_HOLD, row.id, ctx.now - POLL_INTERVAL)
+    .run();
+  if (slot.meta.changes !== 1) throw new HttpError(429, "slow_down", undefined, { "Retry-After": String(POLL_INTERVAL) });
+  try {
+    return await deliver(ctx, row);
+  } catch (e) {
+    // Not delivered (the nest is off, say): the same code works again straight away, until it runs out.
+    await ctx.env.DB.prepare("UPDATE device_logins SET last_poll_at = ?1 WHERE id = ?2 AND status = 'approved'").bind(ctx.now - POLL_INTERVAL, row.id).run();
+    throw e;
+  }
 }
 
 /**

@@ -54,6 +54,8 @@ export interface Env {
    * separated. A secret, so the address is not in the repository. Unset: nobody.
    */
   ADMIN_EMAILS?: string;
+  /** "1": a sign-up for a beta is approved at once (routes/beta.ts); otherwise it waits for an admin on /admin/beta. Unset: "1". */
+  BETA_AUTO_APPROVE?: string;
   /** Test seam for local end-to-end runs (a stand-in Cloudflare API). Never set in production. */
   CF_API_URL?: string;
 }

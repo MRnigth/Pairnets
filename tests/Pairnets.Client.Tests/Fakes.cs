@@ -183,6 +183,17 @@ internal sealed class DialogScript : Dialogs.IResponder
     /// <summary>Every question with buttons, whole (its points too).</summary>
     public Log<Dialogs.Choice> Choices { get; } = new();
 
+    /// <summary>The tick boxes offered under a question, and whether they are ticked (<see cref="Ticked"/>).</summary>
+    public Log<string> TicksOffered { get; } = new();
+
+    public bool Ticked { get; set; }
+
+    public bool Tick(string tick)
+    {
+        TicksOffered.Add(tick);
+        return Ticked;
+    }
+
     public string? Choose(Dialogs.Choice choice)
     {
         Popups.Add(choice.Title);
@@ -312,7 +323,13 @@ public sealed class RecordingActions(IHistorySource? history = null) : ITrayActi
     public void InviteFriend() => Calls.Add(nameof(InviteFriend));
     public bool CanInviteToFolder { get; set; } = true;
     public void InviteFriendTo(string folder) => Calls.Add($"{nameof(InviteFriendTo)}({folder})");
+    public string? LocalFolder { get; set; } = @"D:\Pairnets";
+    public void ChangeLocalFolder() => Calls.Add(nameof(ChangeLocalFolder));
     public void OpenPeople() => Calls.Add(nameof(OpenPeople));
+    public void AddDownload() => Calls.Add(nameof(AddDownload));
+    public void CancelDownload(string id) => Calls.Add($"{nameof(CancelDownload)}({id})");
+    public void RetryDownload(string id) => Calls.Add($"{nameof(RetryDownload)}({id})");
+    public void ForgetDownload(string id) => Calls.Add($"{nameof(ForgetDownload)}({id})");
     public void RevealFile(string syncPath) => Calls.Add($"{nameof(RevealFile)}({syncPath})");
     public void OpenWindow(MainPage page) => Calls.Add($"{nameof(OpenWindow)}({page})");
     public void Quit() => Calls.Add(nameof(Quit));

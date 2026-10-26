@@ -6,10 +6,11 @@
 // days after a warning email (inactive.ts); their relayed servers' tunnels go in the same router run. Friends (RELAY.md
 // 10): invites that ended go (with the email they were sent to), and so do those someone asked with but nobody answered
 // within 30 days; members and invites of a nest that is gone go too; and a nest that missed a change of a friend's
-// access, or a friend's removal, is told again.
+// access, or a friend's removal, is told again. A nest that missed its owner's beta program change is told it (beta.ts).
 
 import type { Ctx } from "./context";
 import { sweepInactive } from "./inactive";
+import { betaCron } from "./routes/beta";
 import { REQUEST_KEEP, retryFriends } from "./routes/friends";
 import { bugReportSweep } from "./routes/bugreport";
 import { crashSweep } from "./routes/crash";
@@ -75,6 +76,7 @@ export async function sweep(ctx: Ctx): Promise<Record<string, number | string | 
   counts.friendsSynced = await retryFriends(ctx);
   counts.linksSettled = await retryLinks(ctx);
   counts.linkEndsTold = await tellLinkEnds(ctx);
+  counts.betaTold = await betaCron(ctx);
 
   const need = await db
     .prepare(

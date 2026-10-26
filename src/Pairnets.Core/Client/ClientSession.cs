@@ -128,6 +128,12 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
     /// <summary>Raised when the server's version, free space or updater state was (re)read.</summary>
     public event Action<ServerInfo>? ServerInfoChanged;
 
+    /// <summary>
+    /// What the nest said about the beta program for this computer (<c>GET /api/me</c>, every few minutes); null from a
+    /// nest from before beta updates. The app takes it in with <see cref="BetaUpdates.Heard"/>.
+    /// </summary>
+    public event Action<BetaInfo?>? BetaHeard;
+
     /// <summary>Reads the server's version, free space and updater state; failures are ignored (offline is shown elsewhere).</summary>
     public async Task<ServerInfo?> RefreshServerInfoAsync()
     {
@@ -171,6 +177,161 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
         {
         }
         await RefreshPeopleAsync().ConfigureAwait(false);
+        await RefreshDownloadsAsync().ConfigureAwait(false);
+    }
+
+    // ------------------------------------------------------------------ downloads on the nest (1.0.61.8)
+
+    private HashSet<string>? _downloadsSeen;
+    private readonly SemaphoreSlim _downloadsRefreshing = new(1, 1);
+
+    /// <summary>
+    /// Raised once for each download the nest finished (also one that finished while this computer was off: the ids already
+    /// told are kept next to the state database), for the note. The Activity line is added here.
+    /// </summary>
+    public event Action<NestDownload>? DownloadFinished;
+
+    /// <summary>The finished downloads already told, next to state.db (<see cref="LocalReset"/> removes it with it).</summary>
+    public const string DownloadsSeenFileName = "downloads-seen.txt";
+
+    private string DownloadsSeenFile => Path.Combine(StateDirectory, DownloadsSeenFileName);
+
+    /// <summary>
+    /// Reads the nest's downloads for the Computers page: with the device list every 30 seconds, and every second while one
+    /// is busy (<see cref="LiveTickAsync"/>). Only the owner's computers have them; an older nest says so
+    /// (<see cref="StatusSnapshot.NestDownloadsUnsupported"/>).
+    /// </summary>
+    /// <param name="fresh">After the owner changed the list: wait for a read already under way, then read again (else it is skipped).</param>
+    public async Task RefreshDownloadsAsync(bool fresh = false)
+    {
+        if (!Engine.Access.IsOwner)
+        {
+            if (Status.NestDownloads is not null || Status.NestDownloadsUnsupported)
+                Update(s => s with { NestDownloads = null, NestDownloadsUnsupported = false });
+            return;
+        }
+        if (fresh)
+            await _downloadsRefreshing.WaitAsync().ConfigureAwait(false);
+        else if (!_downloadsRefreshing.Wait(0))
+            return;
+        try
+        {
+            var list = await Api.GetDownloadsAsync(CancellationToken.None).ConfigureAwait(false);
+            Update(s => s with { NestDownloads = list, NestDownloadsUnsupported = list is null });
+            if (list is not null)
+                TellFinished(list);
+        }
+        catch (PairnetsAuthException ex) when (ex.NeedsSignIn)
+        {
+            NoticeSignedOut();
+        }
+        catch (Exception ex) when (ex is PairnetsNetworkException or PairnetsAuthException or PairnetsProtocolException or ObjectDisposedException or OperationCanceledException)
+        {
+        }
+        finally
+        {
+            _downloadsRefreshing.Release();
+        }
+    }
+
+    /// <summary>Raises <see cref="DownloadFinished"/> for the finished ones not told yet. The first time ever, only those of the last day.</summary>
+    private void TellFinished(NestDownloadList list)
+    {
+        var done = list.Downloads.Where(d => d.State == NestDownload.Done).ToList();
+        List<NestDownload> fresh;
+        lock (_gate)
+        {
+            var firstTime = _downloadsSeen is null && !File.Exists(DownloadsSeenFile);
+            _downloadsSeen ??= ReadSeen();
+            var now = _clock.GetUtcNow();
+            fresh = done.Where(d => !_downloadsSeen.Contains(d.Id) && (!firstTime || now - (d.Finished ?? now) < TimeSpan.FromDays(1))).ToList();
+            var known = list.Downloads.Select(d => d.Id).ToHashSet(StringComparer.Ordinal);
+            var changed = _downloadsSeen.RemoveWhere(id => !known.Contains(id)) > 0;
+            foreach (var d in done)
+                changed |= _downloadsSeen.Add(d.Id);
+            if (changed || firstTime)
+                SaveSeen(_downloadsSeen);
+        }
+        foreach (var d in fresh)
+        {
+            Activity.Add(ActivityKind.Info, d.Path ?? d.Name, NestDownloadsSection.DoneNote(d).Text, _clock);
+            DownloadFinished?.Invoke(d);
+        }
+    }
+
+    private HashSet<string> ReadSeen()
+    {
+        try
+        {
+            return File.Exists(DownloadsSeenFile)
+                ? File.ReadAllLines(DownloadsSeenFile).Where(l => l.Length > 0).ToHashSet(StringComparer.Ordinal)
+                : new HashSet<string>(StringComparer.Ordinal);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return new HashSet<string>(StringComparer.Ordinal);
+        }
+    }
+
+    private void SaveSeen(HashSet<string> seen)
+    {
+        try
+        {
+            File.WriteAllLines(DownloadsSeenFile, seen);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // Told again at worst.
+        }
+    }
+
+    /// <summary>"Start download": null when the nest took it (the list is read again), else what the window says went wrong.</summary>
+    public async Task<string?> StartDownloadAsync(string url, string folder)
+    {
+        string? error;
+        try
+        {
+            (_, error) = await Api.StartDownloadAsync(url, folder, CancellationToken.None).ConfigureAwait(false);
+        }
+        catch (PairnetsAuthException ex) when (ex.NeedsSignIn)
+        {
+            NoticeSignedOut();
+            return FriendlyErrors.NotAllowed;
+        }
+        catch (Exception ex) when (ex is PairnetsNetworkException or PairnetsAuthException or PairnetsProtocolException or ObjectDisposedException or OperationCanceledException)
+        {
+            return "Couldn't reach the nest. Try again in a moment.";
+        }
+        if (error is not null)
+            return NestDownloadErrors.Sentence(error);
+        await RefreshDownloadsAsync(fresh: true).ConfigureAwait(false);
+        return null;
+    }
+
+    /// <summary>Cancel, Clear and Remove: the nest stops it or forgets it; the list is read again. False when that didn't work.</summary>
+    public Task<bool> CancelDownloadAsync(string id) => DownloadCallAsync(ct => Api.CancelDownloadAsync(id, ct));
+
+    /// <summary>"Try again" on a stopped download.</summary>
+    public Task<bool> RetryDownloadAsync(string id) => DownloadCallAsync(ct => Api.RetryDownloadAsync(id, ct));
+
+    private async Task<bool> DownloadCallAsync(Func<CancellationToken, Task<bool>> call)
+    {
+        bool done;
+        try
+        {
+            done = await call(CancellationToken.None).ConfigureAwait(false);
+        }
+        catch (PairnetsAuthException ex) when (ex.NeedsSignIn)
+        {
+            NoticeSignedOut();
+            return false;
+        }
+        catch (Exception ex) when (ex is PairnetsNetworkException or PairnetsAuthException or PairnetsProtocolException or ObjectDisposedException or OperationCanceledException)
+        {
+            return false;
+        }
+        await RefreshDownloadsAsync(fresh: true).ConfigureAwait(false);
+        return done;
     }
 
     // ------------------------------------------------------------------ friends (1.0.61.2)
@@ -343,6 +504,8 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
                 // No more silent key here: a person approves every computer on the nest's website.
                 RequireSignIn();
             }
+            if (!Settings.HasOwnKey)
+                BetaHeard?.Invoke(new BetaInfo(false, Reason: BetaInfo.ReasonSharedPassword)); // only a computer with its own key can get betas
             else if (Settings.HasOwnKey && await Api.GetMeAsync(ct).ConfigureAwait(false) is { } me && me.Id == Settings.DeviceId)
             {
                 // Who let this computer in (the account button); older servers do not say.
@@ -353,6 +516,7 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
                 var links = owner ? await Api.GetLinkedFoldersAsync(ct).ConfigureAwait(false) ?? [] : [];
                 var offers = owner ? await Api.GetSharedNestOffersAsync(ct).ConfigureAwait(false) ?? [] : [];
                 Update(s => s with { Account = account, LinkedFolders = links, SharedOffers = offers });
+                BetaHeard?.Invoke(me.Beta);
                 if (!string.Equals(me.Name, Settings.DeviceName, StringComparison.Ordinal))
                 {
                     (next.DeviceName, changed) = (me.Name, true);
@@ -531,6 +695,7 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
 
         var session = new ClientSession(settings, token, state, api, engine, runner, clock, loggers.CreateLogger("Pairnets.Session"), trash, loggers);
         engine.NestFull = () => session.Status.ServerSpaceLow;
+        engine.BigDeletes = () => session.Status.Server?.BigDeletes;
         session.Wire();
         if (Directory.Exists(Path.Combine(stateDir, "opened")))
             _ = session.Files; // files opened from the nest before: changes still waiting are saved back
@@ -542,6 +707,7 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
             ServerUrl = string.IsNullOrWhiteSpace(settings.ServerUrl) ? null : settings.ServerUrl,
             NestLabel = settings.NestLabel,
             Access = engine.Access,
+            BigDelete = BigDeleteBatch.Load(state) is { Done: false } last && clock.GetUtcNow() - last.At < HistoryQuery.Retention ? last : null,
             NestOnlyFolders = settings.Placement
                 .Where(p => p.Value == FilePlacement.NestOnly && PlacementMap.Allowed(p.Key, p.Value))
                 .Select(p => PlacementMap.NormalizeFolder(p.Key))
@@ -719,6 +885,12 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
             _ = RefreshDevicesAsync();
         };
         Runner.NestRenamed += name => _ = RefreshServerInfoAsync(); // the name comes back in /api/info
+        Runner.NestSettingsChanged += () => _ = RefreshServerInfoAsync(); // "Before big deletes" comes back in /api/info
+        Engine.BigDeleteCarriedOut += batch =>
+        {
+            Update(s => s with { BigDelete = batch });
+            Activity.Add(ActivityKind.Info, null, BigDeleteText.Done(batch), _clock);
+        };
         Runner.RemoteChangeReceived += (device, _) =>
         {
             if (string.Equals(device, Settings.DeviceName, StringComparison.OrdinalIgnoreCase))
@@ -809,6 +981,9 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
                     peers[name] = peers[name] with { Report = null };
                 return next with { Peers = peers };
             });
+
+            if (Status.NestDownloads?.Downloads.Any(d => d.IsBusy) == true)
+                await RefreshDownloadsAsync().ConfigureAwait(false);
 
             var own = Status.OwnLive;
             if (own is not null)
@@ -1062,7 +1237,8 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
     public bool ServerNeedsUpdate(ServerInfo? info = null)
     {
         info ??= Status.Server;
-        return info?.ServerVersion is { } v && UpdateChecker.ServerIsOlder(v, PairnetsInfo.ProductVersion)
+        // A beta app compares with the stable release it follows: a nest only runs stable releases.
+        return info?.ServerVersion is { } v && UpdateChecker.ServerIsOlder(v, PairnetsInfo.StableBaseVersion)
             && !string.Equals(v, Settings.SkippedServerVersion, StringComparison.Ordinal);
     }
 
@@ -1281,6 +1457,108 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
         Activity.Add(ActivityKind.Info, path, $"Restored {PathRules.FileName(path)} (the version from {Format.Moment(version.StoredAtUtc, _clock.GetUtcNow())})", _clock);
         Runner.RequestSync("restored", full: true);
         return null;
+    }
+
+    // ------------------------------------------------------------------ big deletes
+
+    /// <summary>The nest-wide "Before big deletes" as this computer knows it; asks everywhere until the nest says otherwise.</summary>
+    public string BigDeletes => BigDeleteModes.Or(Status.Server?.BigDeletes);
+
+    /// <summary>Whether this nest knows "Before big deletes" (nests from before it leave it out of /api/info).</summary>
+    public bool NestKnowsBigDeletes => Status.Server?.BigDeletes is not null;
+
+    /// <summary>Whether this computer may change "Before big deletes" (the owner's computers; not on a nest shared with it).</summary>
+    public bool CanChangeBigDeletes => NestKnowsBigDeletes && Engine.Access.IsOwner;
+
+    /// <summary>Sets "Before big deletes" for every computer of the nest. Returns null on success, or what went wrong.</summary>
+    public async Task<string?> SetBigDeletesAsync(string mode, CancellationToken ct = default)
+    {
+        if (!BigDeleteModes.IsValid(mode))
+            return "Unknown choice.";
+        try
+        {
+            if (!await Api.SetBigDeletesAsync(mode, ct).ConfigureAwait(false))
+                return "Update the nest to use this.";
+        }
+        catch (Exception ex) when (ex is PairnetsNetworkException or PairnetsAuthException or PairnetsProtocolException)
+        {
+            return "The nest did not take it. " + FriendlyErrors.Describe(ex);
+        }
+        Update(s => s.Server is { } info ? s with { Server = info with { BigDeletes = mode } } : s);
+        Activity.Add(ActivityKind.Info, null, "Before big deletes: " + BigDeleteText.Choice(mode), _clock);
+        return null;
+    }
+
+    /// <summary>"Close" on the big-delete notice: it is not offered again (History still has every file).</summary>
+    public void DismissBigDelete()
+    {
+        if (Status.BigDelete is not { } batch)
+            return;
+        BigDeleteBatch.Save(State, batch with { Done = true });
+        Update(s => s with { BigDelete = null });
+    }
+
+    /// <summary>
+    /// "Put them all back": restores every file of the last big delete from the nest's history (the version it had when
+    /// it was deleted, else the newest kept), then syncs, so they come back on every computer. Files made again since
+    /// are left alone. Reports (done, total) as it goes.
+    /// </summary>
+    public async Task<BigDeleteRestore> PutBigDeleteBackAsync(IProgress<(int Done, int Total)>? progress = null, CancellationToken ct = default)
+    {
+        if (Status.BigDelete is not { } batch)
+            return new BigDeleteRestore(0, 0, 0, null);
+        IReadOnlyDictionary<string, ManifestEntry> entries;
+        try
+        {
+            var manifest = await Api.GetManifestAsync(null, ct).ConfigureAwait(false);
+            entries = manifest.Entries.GroupBy(e => e.Path, StringComparer.Ordinal).ToDictionary(g => g.Key, g => g.Last(), StringComparer.Ordinal);
+        }
+        catch (Exception ex) when (ex is PairnetsNetworkException or PairnetsAuthException or PairnetsProtocolException)
+        {
+            return new BigDeleteRestore(0, 0, batch.Count, "Could not reach the nest. " + FriendlyErrors.Describe(ex));
+        }
+        int done = 0, restored = 0, skipped = 0, failed = 0;
+        using var gate = new SemaphoreSlim(4);
+        var work = batch.Files.Select(async file =>
+        {
+            await gate.WaitAsync(ct).ConfigureAwait(false);
+            try
+            {
+                if (entries.TryGetValue(file.Path, out var now) && !now.Deleted)
+                {
+                    Interlocked.Increment(ref skipped); // made again (or never deleted): left as it is
+                    return;
+                }
+                var versions = await Api.GetHistoryAsync(file.Path, ct).ConfigureAwait(false);
+                var version = versions.FirstOrDefault(v => file.Hash is { } h && v.Hash8.Length > 0 && h.StartsWith(v.Hash8, StringComparison.OrdinalIgnoreCase))
+                    ?? versions.OrderByDescending(v => v.StoredAtUtc).FirstOrDefault();
+                if (version is not null && (await Api.RestoreAsync(file.Path, version.Id, ct).ConfigureAwait(false)).Outcome == ApiOutcome.Ok)
+                    Interlocked.Increment(ref restored);
+                else
+                    Interlocked.Increment(ref failed);
+            }
+            catch (Exception ex) when (ex is PairnetsNetworkException or PairnetsAuthException or PairnetsProtocolException)
+            {
+                Interlocked.Increment(ref failed);
+            }
+            finally
+            {
+                gate.Release();
+                progress?.Report((Interlocked.Increment(ref done), batch.Count));
+            }
+        }).ToList();
+        await Task.WhenAll(work).ConfigureAwait(false);
+        if (failed == 0)
+        {
+            BigDeleteBatch.Save(State, batch with { Done = true });
+            Update(s => s with { BigDelete = null });
+        }
+        if (restored > 0)
+        {
+            Activity.Add(ActivityKind.Info, null, BigDeleteText.PutBack(restored), _clock);
+            Runner.RequestSync("put-back-big-delete", full: true);
+        }
+        return new BigDeleteRestore(restored, skipped, failed, failed == 0 ? null : BigDeleteText.NotAllBack(failed));
     }
 
     public async ValueTask DisposeAsync()

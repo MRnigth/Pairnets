@@ -137,6 +137,13 @@
     <!-- How much is here, and the drop hint -->
     <StackPanel Grid.Row="4" Margin="4,12,0,0" Spacing="6">
       <TextBlock x:Name="FooterText" Classes="t3" FontSize="13" />
+      <!-- Where this nest is saved on this computer, and "Change…" (the Settings folder row) -->
+      <StackPanel x:Name="SavedInRow" Orientation="Horizontal" Spacing="8" IsVisible="False">
+        <v:LineIcon Classes="icon" Width="15" Height="15" StrokeThickness="1.9" Stroke="{DynamicResource T.Folder}" Data="{StaticResource I.Folder}" VerticalAlignment="Center" />
+        <TextBlock x:Name="SavedInText" Classes="t3" FontSize="13" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="520" />
+        <Button x:Name="ChangeFolderLink" Classes="link" FontSize="13" Content="Change…"
+                AutomationProperties.Name="Change where this nest is saved on this computer" Click="OnChangeFolder" />
+      </StackPanel>
       <!-- A grid, not a row: a row gives the text all the room it asks for, so it ran off the page instead of wrapping -->
       <Grid ColumnDefinitions="Auto,*">
         <v:LineIcon Classes="icon muted" Width="15" Height="15" StrokeThickness="1.9" Margin="0,1,8,0" VerticalAlignment="Top" Data="{StaticResource I.InfoCircle}" />

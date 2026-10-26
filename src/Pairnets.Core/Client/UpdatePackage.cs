@@ -70,6 +70,22 @@ public static class UpdateTexts
     public static string Ready(string current) =>
         $"You have {current}. The update takes about 10 seconds and Pairnets restarts by itself. You stay signed in.";
 
+    /// <summary>The update card's title: "Pairnets 1.0.61.8 is available", or "1.0.61.8 Public beta 3 is ready" for a beta.</summary>
+    public static string Available(UpdateInfo update) =>
+        update.Release.IsBeta ? $"{update.Display} is ready" : $"Pairnets {update.Version} is available";
+
+    /// <summary>
+    /// The channel moved down and there is nothing newer on it yet (<see cref="UpdateService.Waiting"/>): the build running
+    /// now stays. Pairnets never goes back to an older version by itself.
+    /// </summary>
+    public static string WaitingFor(string channel, string current) => ReleaseChannel.IsBeta(channel)
+        ? $"Waiting for the next {ReleaseChannel.DisplayName(channel)}. You keep {current} until then."
+        : $"Beta updates are off. You keep {current} until the next normal version is newer, then Pairnets moves onto it by itself. Nothing is removed.";
+
+    /// <summary>A newer build is out but could not read this computer's data (<see cref="UpdateService.HeldBackForData"/>).</summary>
+    public const string HeldBackForData =
+        "A newer version is out, but it can't read this computer's data from the beta yet, so Pairnets waits for the next one.";
+
     /// <summary>The note the new version shows once after updating itself (next to its window, which opens again).</summary>
     public const string UpdatedTitle = "Pairnets is up to date";
 

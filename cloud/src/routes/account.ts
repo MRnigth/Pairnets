@@ -26,6 +26,7 @@ import { deleteAccountRows } from "../accounts";
 import { inviteLink, peopleOf, sharedNestsOf } from "./friends";
 import { linksOfAccount } from "./links";
 import { serversOf } from "./servers";
+import { betaRow, betaView } from "./beta";
 
 /** Nests per account, both kinds together (pending ones count), unless wrangler.toml's MAX_NESTS_PER_ACCOUNT says otherwise. */
 export const MAX_NESTS_PER_ACCOUNT = 4;
@@ -70,6 +71,8 @@ export interface NestRow {
   mode: "url" | "relay";
   tunnel_id: string | null;
   routed_version: number | null;
+  /** The owner's beta rev this nest was last told (routes/beta.ts). */
+  beta_rev_pushed: number;
 }
 
 export function isOnline(n: NestRow, now: number): boolean {
@@ -210,6 +213,7 @@ export async function accountPageRoute(ctx: Ctx): Promise<Response> {
         folders: parseFolders(x.member.folders),
       })),
       invite,
+      beta: betaView(ctx, await betaRow(ctx, s.accountId)),
       sessions: sessions.map((r) => ({
         id: r.id,
         kind: r.kind,
@@ -267,6 +271,90 @@ async function meJson(ctx: Ctx, s: Session, account: AccountRow): Promise<Record
     session: { id: s.id, kind: s.kind, authTime: iso(s.authTime), amr: s.amr, recentAuth: s.kind === "browser" && isRecent(ctx, s) },
     nests: await nestCount(ctx, s.accountId),
   };
+}
+
+/**
+ * GET /v1/me/export: "Download my data" (GDPR articles 15 and 20). Everything stored here about the signed-in account,
+ * as one JSON file. Left out on purpose: token, code and key hashes (secrets, not information about the person), and
+ * crash and bug reports (they hold nothing that says who sent them). Other people's accounts appear only as the name
+ * and email this account already sees on its account page.
+ */
+export async function exportMeRoute(ctx: Ctx): Promise<Response> {
+  const s = await requireBrowser(ctx);
+  const db = ctx.env.DB;
+  const id = s.accountId;
+  const all = async <T = Record<string, unknown>>(sql: string, ...args: unknown[]): Promise<T[]> =>
+    (await db.prepare(sql).bind(...args).all<T>()).results;
+  const account = await db.prepare("SELECT id, email, username, created_at, updated_at, inactive_warned_at, terms_version, terms_accepted_at FROM accounts WHERE id = ?1").bind(id).first<Record<string, unknown>>();
+  if (!account) throw new HttpError(401, "unauthorized");
+  const times = (rows: Record<string, unknown>[]) =>
+    rows.map((r) => Object.fromEntries(Object.entries(r).map(([k, v]) => [k, k.endsWith("_at") && typeof v === "number" ? iso(v) : v])));
+  const person = async (accountId: string | null) => {
+    if (!accountId) return null;
+    const a = await accountRow(ctx, accountId);
+    return a ? { name: personName(a), email: a.email } : { name: "A deleted account", email: null };
+  };
+  const ownNests = await all<{ id: string }>("SELECT id FROM nests WHERE account_id = ?1", id);
+  const ownIds = new Set(ownNests.map((n) => n.id));
+  const members = await all<Record<string, unknown> & { nest_id: string; account_id: string }>(
+    "SELECT nest_id, account_id, access, folders, added_at, removed_at FROM nest_members WHERE account_id = ?1 OR nest_id IN (SELECT id FROM nests WHERE account_id = ?1) ORDER BY added_at",
+    id,
+  );
+  const invites = await all<Record<string, unknown> & { requested_by: string | null }>(
+    `SELECT id, nest_id, kind, email, access, folders, created_at, expires_at, requested_by, requested_at, decided_at, decision, cancelled_at
+     FROM nest_invites WHERE created_by = ?1 OR requested_by = ?1 OR nest_id IN (SELECT id FROM nests WHERE account_id = ?1) ORDER BY created_at`,
+    id,
+  );
+  const body = {
+    about:
+      "Everything Pairnets (sync.pairnets.app) stores about your account. Times are UTC. Your files are not here: they are only on your own nest and computers. See https://pairnets.app/privacy/",
+    exportedAt: iso(ctx.now),
+    account: times([account])[0],
+    signInMethods: times(await all("SELECT provider, subject, email, created_at, last_used_at FROM identities WHERE account_id = ?1 ORDER BY created_at", id)),
+    signedInBrowsersAndApps: times(
+      await all("SELECT id, kind, amr, auth_time AS signed_in_at, created_at, last_seen_at, expires_at, user_agent, device_name FROM sessions WHERE account_id = ?1 ORDER BY created_at", id),
+    ),
+    nests: times(
+      await all(
+        "SELECT id, label, mode, public_url, status, hosted_login, created_at, confirmed_at, last_seen_at, last_version, last_public_host FROM nests WHERE account_id = ?1 ORDER BY created_at",
+        id,
+      ),
+    ),
+    computersAskingToJoin: times(
+      await all("SELECT name, system, app_version, status, nest_id, request_country, request_city, created_at, expires_at, decided_at FROM device_logins WHERE account_id = ?1", id),
+    ),
+    nestsBeingLinked: times(await all("SELECT hostname, server_version, status, nest_id, created_at, expires_at, decided_at FROM server_links WHERE account_id = ?1", id)),
+    linkCodes: times(await all("SELECT label, created_at, expires_at, used_at, nest_id FROM claim_codes WHERE account_id = ?1", id)),
+    sharing: await Promise.all(
+      members.map(async (m) => ({
+        ...times([m])[0],
+        account_id: undefined,
+        direction: ownIds.has(m.nest_id) ? "someone on your nest" : "you on someone's nest",
+        person: m.account_id === id ? "you" : await person(m.account_id),
+        folders: parseFolders(m.folders as string | null),
+      })),
+    ),
+    invites: await Promise.all(
+      invites.map(async (i) => ({
+        ...times([i])[0],
+        requested_by: i.requested_by === null ? null : i.requested_by === id ? "you" : await person(i.requested_by),
+        folders: parseFolders(i.folders as string | null),
+      })),
+    ),
+    linkedNests: times(await all("SELECT id, from_nest, to_nest, status, created_at FROM nest_links WHERE account_id = ?1 OR from_nest IN (SELECT id FROM nests WHERE account_id = ?1)", id)),
+    activityLog: (await all<{ at: number; event: string; nest_id: string | null; detail: string | null }>("SELECT at, event, nest_id, detail FROM audit WHERE account_id = ?1 ORDER BY at", id)).map((a) => ({
+      at: iso(a.at),
+      event: a.event,
+      nest_id: a.nest_id,
+      detail: a.detail ? JSON.parse(a.detail) : null,
+    })),
+  };
+  await audit(ctx, "data_exported", id);
+  const day = new Date(ctx.now * 1000).toISOString().slice(0, 10);
+  return new Response(JSON.stringify(body, null, 2), {
+    status: 200,
+    headers: { "Content-Type": "application/json; charset=utf-8", "Content-Disposition": `attachment; filename="pairnets-my-data-${day}.json"` },
+  });
 }
 
 // DELETE /v1/me

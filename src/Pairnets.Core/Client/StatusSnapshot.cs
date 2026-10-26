@@ -114,6 +114,12 @@ public sealed record StatusSnapshot(
     /// <summary>The first files a blocked pass would delete (the Overview lists a few; <see cref="PendingDeletes"/> is how many in all).</summary>
     public IReadOnlyList<string> PendingDeletePaths { get; init; } = [];
 
+    /// <summary>
+    /// The last big delete carried out here (100 or more files), while "Put them all back" can still be offered; null
+    /// when there is none, it was put back or the notice was closed.
+    /// </summary>
+    public BigDeleteBatch? BigDelete { get; init; }
+
     /// <summary>Who this computer belongs to on the nest (email, how they signed in), or null when not known.</summary>
     public AccountInfo? Account { get; init; }
 
@@ -421,6 +427,14 @@ public sealed record StatusSnapshot(
     /// </summary>
     public PeopleAnswer? People { get; init; }
 
+    // ---- links the nest downloads by itself (1.0.61.8)
+
+    /// <summary>The nest's downloads (the Computers page's "Downloads on the nest"), or null: not read yet, or not the owner's computer.</summary>
+    public NestDownloadList? NestDownloads { get; init; }
+
+    /// <summary>The nest is from before it could download links (it answered 404).</summary>
+    public bool NestDownloadsUnsupported { get; init; }
+
     /// <summary>On a nest shared "View only": the changes made here that stay here (the Needs you card), or none.</summary>
     public IReadOnlyList<string> HeldBack { get; init; } = [];
 
@@ -461,7 +475,7 @@ public sealed record StatusSnapshot(
 
     /// <summary>True when the server runs an older release than this app (or is too old to say).</summary>
     public bool ServerIsOlder => Server is not null
-        && (Server.ServerVersion is not { Length: > 0 } v || UpdateChecker.ServerIsOlder(v, PairnetsInfo.ProductVersion));
+        && (Server.ServerVersion is not { Length: > 0 } v || UpdateChecker.ServerIsOlder(v, PairnetsInfo.StableBaseVersion));
 
     /// <summary>The label of the button next to the server version.</summary>
     public string ServerUpdateButtonText => ServerIsOlder ? "Update nest…" : "Check for update";

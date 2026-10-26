@@ -99,7 +99,10 @@ Mtimes never decide anything; they only let the scanner skip re-hashing unchange
 4. **Plan**: `Decide(L, S, B)` for the union of local, server and base paths.
 5. **Mass-delete guard**: if the pass would delete 100 files or more on
    either side, or the folder is empty, nothing runs and the user is asked. "Allow these
-   deletions" approves exactly one pass and only the listed deletions.
+   deletions" approves exactly one pass and only the listed deletions. The nest-wide "Before big
+   deletes" (`BigDeleteModes`, in `/api/info`) can let deletions that came from the nest (or all of
+   them) through without asking; an emptied folder always asks. Every big delete carried out is
+   remembered (`BigDeleteBatch`) for "Put them all back".
 6. **Execute** (deletes first, then conflicts, uploads, downloads). Per-file errors are isolated;
    network or auth errors abort the pass and the runner retries with backoff.
 

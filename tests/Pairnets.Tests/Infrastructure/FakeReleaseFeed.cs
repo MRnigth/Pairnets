@@ -89,9 +89,12 @@ public sealed class FakeReleaseFeed : IAsyncDisposable
         return feed;
     }
 
-    /// <summary>As release.yml writes it: "version" at most four numbers (for apps up to 1.0.61.7), "release" the full number.</summary>
-    private byte[] VersionJson() => Encoding.UTF8.GetBytes(
-        $"{{\"version\":\"{string.Join('.', Version.Split('.').Take(4))}\",\"release\":\"{Version}\",\"commit\":\"test\"}}\n");
+    /// <summary>
+    /// As the release workflow writes it: "version" at most four numbers (for apps up to 1.0.61.9), "release" the full
+    /// number, and a stable release says so (an unlabelled one past 1.0.61 is refused).
+    /// </summary>
+    private byte[] VersionJson() => Encoding.UTF8.GetBytes($"{{\"version\":\"{string.Join('.', Version.Split('.').Take(4))}\",\"release\":\"{Version}\","
+        + "\"commit\":\"test\",\"channel\":\"stable\",\"build\":1}\n");
 
     /// <summary>SHA256SUMS.txt as the release workflow writes it: the installer and version.json.</summary>
     private byte[] Sums()

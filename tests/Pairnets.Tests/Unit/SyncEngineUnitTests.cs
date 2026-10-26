@@ -1,3 +1,4 @@
+using Pairnets.Core;
 using Pairnets.Core.Paths;
 using Pairnets.Core.State;
 using Pairnets.Core.Sync;
@@ -151,6 +152,61 @@ public class SyncEngineUnitTests : IDisposable
         r = await Pass();
         Assert.Equal(100, r.DeletedRemote);
         Assert.Null(_api.Content("f099.txt"));
+    }
+
+    [Theory]
+    [InlineData(BigDeleteModes.AskEverywhere, true, true)]
+    [InlineData(BigDeleteModes.AskWhereDeleted, false, true)]
+    [InlineData(BigDeleteModes.Never, false, false)]
+    [InlineData(null, true, true)] // an older nest: everywhere asks, as before
+    public async Task BeforeBigDeletesDecidesWhoAsks(string? mode, bool asksForDeletesFromTheNest, bool asksForDeletesMadeHere)
+    {
+        _engine.BigDeletes = () => mode;
+        BigDeleteBatch? noted = null;
+        _engine.BigDeleteCarriedOut += b => noted = b;
+        for (var i = 0; i < 400; i++)
+            Write($"f{i:000}.txt", i.ToString());
+        await Pass();
+
+        // 150 deleted on another computer (the nest marks them deleted): this computer follows, or asks.
+        for (var i = 0; i < 150; i++)
+            _api.Delete($"f{i:000}.txt");
+        var r = await Pass();
+        Assert.Equal(asksForDeletesFromTheNest, r.Outcome == PassOutcome.Blocked);
+        Assert.Equal(asksForDeletesFromTheNest, File.Exists(Local("f000.txt")));
+        if (!asksForDeletesFromTheNest)
+        {
+            Assert.Equal(150, r.DeletedLocal);
+            Assert.Equal((150, false), (noted!.Count, noted.FromHere));
+            Assert.Equal(150, BigDeleteBatch.Load(_engine.State)!.Count); // kept for "Put them all back"
+        }
+        else
+        {
+            Assert.Equal(150, _engine.ApproveBlockedDeletions());
+            Assert.Equal(150, (await Pass()).DeletedLocal);
+        }
+
+        // 150 deleted here: asks unless the nest says never.
+        noted = null;
+        for (var i = 150; i < 300; i++)
+            File.Delete(Local($"f{i:000}.txt"));
+        r = await Pass();
+        Assert.Equal(asksForDeletesMadeHere, r.Outcome == PassOutcome.Blocked);
+        Assert.Equal(asksForDeletesMadeHere, _api.Content("f150.txt") is not null);
+        if (asksForDeletesMadeHere)
+        {
+            _engine.ApproveBlockedDeletions();
+            r = await Pass();
+        }
+        Assert.Equal(150, r.DeletedRemote);
+        Assert.Equal((150, true), (noted!.Count, noted.FromHere));
+
+        // Emptying the whole folder asks whatever the nest says.
+        for (var i = 300; i < 400; i++)
+            File.Delete(Local($"f{i:000}.txt"));
+        r = await Pass();
+        Assert.Equal(BlockReason.FolderEmpty, r.BlockReason);
+        Assert.NotNull(_api.Content("f399.txt"));
     }
 
     [Fact]
