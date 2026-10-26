@@ -235,7 +235,13 @@ describe("schema", () => {
       public_allowed: 0,
       developer_allowed: 0,
       rev: 1,
+      public_requested_at: null,
+      developer_requested_at: null,
+      blocked_at: null,
     });
+    // Nothing about the computers is kept: no column names one.
+    const columns = (await db.prepare("PRAGMA table_info(beta_members)").all<{ name: string }>()).results.map((c) => c.name);
+    expect(columns.filter((c) => /device|computer|nest|app|system/.test(c))).toEqual([]);
     // One row per account; deleting the account takes it with it.
     await expect(db.prepare("INSERT INTO beta_members (account_id, joined_at, terms_version) VALUES ('acc_testacct000000000000000001', 6, '2026-10-26')").run()).rejects.toThrow();
     await db.prepare("DELETE FROM nests").run();
@@ -366,7 +372,7 @@ describe("schema", () => {
     });
 
     // A member of the beta program (it holds no secret, but every table must have a row to look at).
-    expect((await b.call("POST", "/v1/beta/join", { body: { acceptTerms: true, termsVersion: "2026-10-26" } })).status).toBe(200);
+    expect((await b.call("POST", "/v1/beta/join", { body: { acceptTerms: true, termsVersion: "2026-10-26", channels: ["public-beta"] } })).status).toBe(200);
 
     // The server's own secrets.
     secrets.push(h.env.HB_MASTER, h.env.COOKIE_KEY, h.signing.privateJwk.d!, h.env.CF_API_TOKEN);

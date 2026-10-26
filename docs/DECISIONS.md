@@ -1907,8 +1907,8 @@ both had them:
 
 ## Beta channels: how beta releases are made (2026-10-26)
 
-Pairnets gets two beta channels next to the normal releases: **Public beta** (anyone with a Pairnets account who agrees
-to the beta terms) and **Developer beta** (only invited accounts). The account, the nest and the apps' side are
+Pairnets gets two beta channels next to the normal releases: **Public beta** (versions that are nearly ready) and
+**Developer beta** (the newest work), for any Pairnets account that signs up and agrees to the beta terms. The account, the nest and the apps' side are
 in "Beta updates: the account, the nest and the apps" below; this part is how the releases are made (`.github/workflows/release.yml`).
 
 * **Three feeds, same files.** Stable stays `releases/latest/download/` (`v*` tags, unchanged). A push to branch
@@ -1951,11 +1951,17 @@ in "Beta updates: the account, the nest and the apps" below; this part is how th
 The owner asked for "the beta thing like how Apple does it": join once on a website, then choose per device. A second
 opinion (chat 305) shaped the safety rules below.
 
-* **Join once, on the account page.** sync.pairnets.app/account has a "Beta program" section: tick the beta terms
-  (`BETA_TERMS_VERSION`, the text at /beta-terms is the EULA chat's) and press "Join the beta program". The Worker keeps
-  it in D1 (`beta_members`, migration 0012; 0010 and 0011 belong to other branches). Public beta is open to every member while `BETA_PUBLIC_FOR_ALL` is "1";
-  Developer beta only for accounts allowed on /admin/beta. New terms: the account agrees again before betas resume.
-  "Leave the beta program" sets every own computer back to Off.
+* **Sign up once, on the account page.** sync.pairnets.app/account has a "Beta program" sign-up form: pick Public and/or
+  Developer beta, tick the beta terms (`BETA_TERMS_VERSION`, the text at /beta-terms is the EULA chat's) and press
+  "Send sign-up". The Worker keeps the sign-up in D1 (`beta_members`, migration 0012; 0010 and 0011 belong to other
+  branches) with its time and terms version. While `BETA_AUTO_APPROVE` is "1" (the default) every sign-up is approved
+  at once, for both betas; set it to "0" and sign-ups wait for an approval on /admin/beta. New terms: the account agrees
+  again before betas resume. "Leave the beta program" sets every own computer back to Off.
+* **The owner sees who is on it** on /admin/beta (the same lock as the crash and bug report pages: accounts in the
+  `ADMIN_EMAILS` secret, so no address is in the repository): who signed up, for which beta and when, and which of their
+  computers are on a beta now, with app version, build and last seen. That table is read live from each member's nest
+  when the page opens; nothing more about the computers is stored. "Remove from the beta" sets the account's computers
+  back to Off; a new sign-up from a removed account waits for the owner ("Let back in").
 * **The sign-up reaches the computers only through the owner's own nest.** The apps keep no account token, so the Worker
   tells the owner's nest (signed ra1 `PUT /api/relay/beta`, at once and again by the hourly cron when a nest missed it).
   The nest keeps it, and each own computer's choice, as two rows of its settings table (no database change) and tells

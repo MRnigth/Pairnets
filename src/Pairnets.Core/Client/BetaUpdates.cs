@@ -99,7 +99,7 @@ public static class BetaTexts
     public const string Feedback = "Send beta feedback";
     public const string FeedbackHint = "Found something odd? Tell us.";
     public const string OpenAccountPage = "Open account page";
-    public const string DeveloperOnlyInvited = "Developer beta is for invited testers.";
+    public const string DeveloperOnlyInvited = "Sign up for Developer beta on your account page to choose it.";
 
     /// <summary>The line under "Beta updates" in Settings.</summary>
     public static string Explain(ClientSettings settings) => settings.BetaProgram switch
@@ -108,13 +108,13 @@ public static class BetaTexts
         { Reason: BetaInfo.ReasonSharedPassword } =>
             "This computer uses the nest's shared password. Sign in with your Pairnets account to get beta updates.",
         { Reason: not null } => "Beta updates need a nest linked to a Pairnets account.",
-        null => "Join the beta program on your account page first. Then choose here. (Your nest may need updating first.)",
-        { Member: false } => "Join the beta program on your account page first. Then choose here.",
+        null => "Sign up for the beta on your account page first. Then choose here. (Your nest may need updating first.)",
+        { Member: false } => "Sign up for the beta on your account page first. Then choose here.",
         _ when ReleaseChannel.IsBeta(settings.EffectiveChannel) =>
             "New versions before everyone else. Public beta is nearly ready; Developer beta is the newest work.",
         _ => "Off. You can turn it on any time: Public beta is nearly ready; Developer beta is the newest work.",
     };
 
-    /// <summary>True when the "Open account page" button belongs under the choice (the account has not joined yet).</summary>
+    /// <summary>True when the "Open account page" button belongs under the choice (the account has not signed up yet).</summary>
     public static bool NeedsJoin(ClientSettings settings) => settings.BetaProgram is null or { Member: false, Reason: null };
 }

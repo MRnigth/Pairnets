@@ -126,7 +126,16 @@ export interface BetaPageView {
   joinedAt: number | null;
   termsVersion: string | null;
   termsCurrent: string;
+  /** The approved betas the computers may use (none while removed or on older terms). */
   channels: ("public-beta" | "developer-beta")[];
+  /** The betas signed up for, and those of them still waiting for approval. */
+  requested: ("public-beta" | "developer-beta")[];
+  pending: ("public-beta" | "developer-beta")[];
+  /** Removed by an admin; blockedSignup: the betas signed up for again since then (waiting for them). */
+  blocked: boolean;
+  blockedSignup: ("public-beta" | "developer-beta")[];
+  /** Sign-ups are approved at once (BETA_AUTO_APPROVE). */
+  autoApprove: boolean;
   needsNewTerms: boolean;
 }
 
@@ -348,49 +357,85 @@ function shortDay(sec: number): string {
   return `${two(d.getUTCDate())}.${two(d.getUTCMonth() + 1)}.${d.getUTCFullYear()}`;
 }
 
-/** The terms tick box and the button that sends it (joining, or agreeing to new terms). */
-function betaTerms(b: BetaPageView, button: string): string {
+const BETA_WORDS = { "public-beta": "Public beta", "developer-beta": "Developer beta" } as const;
+
+/** "Public beta and Developer beta". */
+function betaList(list: BetaPageView["channels"]): string {
+  return list.map((c) => BETA_WORDS[c]).join(" and ");
+}
+
+/** The terms tick box and the button that sends it; `asked` (no tick boxes for the betas) names what it signs up for. */
+function betaTerms(b: BetaPageView, button: string, asked: BetaPageView["channels"] | null = null): string {
   return `<div class="terms"><label class="choice"><input type="checkbox" id="beta-terms" data-field="beta-terms"><span>I agree to the <a href="/beta-terms">Pairnets beta terms</a>. Beta versions can have bugs, so keep a copy of anything you can't lose.</span></label></div>
-<button type="button" class="join" data-action="beta-join" data-terms-version="${e(b.termsCurrent)}" disabled>${button}</button>
-<p class="status" data-field="beta-status" role="status" hidden></p>`;
+<button type="button" class="join" data-action="beta-join" data-terms-version="${e(b.termsCurrent)}"${asked ? ` data-asked="${e(asked.join(" "))}"` : ""} disabled>${button}</button>`;
+}
+
+const BETA_STATUS = `<p class="status" data-field="beta-status" role="status" hidden></p>`;
+
+/** The sign-up form: which betas (Public beta ticked), the terms, Send sign-up, and who sees what. */
+function betaSignup(b: BetaPageView): string {
+  const pick = (c: keyof typeof BETA_WORDS, checked: boolean, said: string) =>
+    `<label class="choice"><input type="checkbox" data-field="beta-pick" value="${c}"${checked ? " checked" : ""}><span><b>${BETA_WORDS[c]}</b><span class="muted">${said}</span></span></label>`;
+  return `<form class="signup" data-field="beta-form">
+<fieldset>
+<legend>Sign me up for</legend>
+${pick("public-beta", true, "Versions that are nearly ready, a few days before everyone else.")}
+${pick("developer-beta", false, "The newest work, often the same day. Expect rough edges.")}
+</fieldset>
+${betaTerms(b, "Send sign-up")}
+<p class="muted signup-note">${b.autoApprove ? "Sign-ups are approved at once." : "Sign-ups are looked at by hand."} The maker of Pairnets can see who is in the beta and which of their computers use it.</p>
+${BETA_STATUS}
+</form>`;
 }
 
 /**
- * The beta program. Not joined: what the two betas are, the terms and Join. Joined: one row per own computer (account.js
- * fills them from GET /v1/servers) with its choice, and Leave. New terms since joining: agree to them first.
+ * The beta program. Not signed up: the sign-up form. Signed up: what was asked for and approved, one row per own computer
+ * (account.js fills them from GET /v1/servers) with its choice, and Leave. New terms since: agree to them first. Removed
+ * by an admin: says so, and a new sign-up waits for approval.
  */
 function betaSection(b: BetaPageView): string {
   const channels = e(b.channels.join(" "));
   if (!b.member) {
     return `<section class="card" id="beta" data-channels="">
 <h2>Beta program</h2>
-<p>Try new versions of Pairnets before everyone else, on the computers you choose. Join once here, then turn on <strong>Beta updates</strong> in Settings on each computer.</p>
-<ul class="kinds">
-<li><span class="kindword open">Public beta</span>: versions that are nearly ready, a few days before everyone else.</li>
-<li><span class="kindword dev">Developer beta</span>: the newest work, often the same day. Expect rough edges. For invited testers.</li>
-</ul>
-${betaTerms(b, "Join the beta program")}
+<p>Try new versions of Pairnets before everyone else, on the computers you choose. Sign up here once, then turn on <strong>Beta updates</strong> in Settings on each computer.</p>
+${betaSignup(b)}
 </section>`;
   }
   const leave = `<div class="leave"><button type="button" class="danger" data-action="beta-leave">Leave the beta program</button>
 <p class="muted">Every computer goes back to Off. Each keeps its beta until the next normal version is newer, then moves onto it. Nothing is removed.</p></div>`;
-  const head = `<h2>Beta program <span class="pill online">joined</span></h2>`;
+  if (b.blocked) {
+    return `<section class="card" id="beta" data-joined data-blocked data-channels="">
+<h2>Beta program</h2>
+<p>You were removed from the beta program. A new sign-up waits for approval.</p>
+${b.blockedSignup.length ? `<p class="muted">Your sign-up for ${betaList(b.blockedSignup)} is waiting for approval.</p>` : betaSignup(b)}
+</section>`;
+  }
+  const head = `<h2>Beta program <span class="pill online">signed up</span></h2>`;
+  const attrs = `id="beta" data-joined data-channels="${channels}" data-min-app="${e(BETA_MIN_APP)}"`;
   if (b.needsNewTerms) {
-    return `<section class="card" id="beta" data-joined data-channels="${channels}" data-min-app="${e(BETA_MIN_APP)}">
+    return `<section class="card" ${attrs}>
 ${head}
 <p class="muted">The beta terms changed on ${e(termsDay(b.termsCurrent))}${b.termsVersion ? ` (you agreed to the ones of ${e(termsDay(b.termsVersion))})` : ""}. Agree to the new terms to keep getting beta updates; until then your computers get only normal versions.</p>
-${betaTerms(b, "Agree to the new beta terms")}
+${betaTerms(b, "Agree to the new beta terms", b.requested.length ? b.requested : ["public-beta"])}
+${BETA_STATUS}
 ${leave}
 </section>`;
   }
-  const dev = b.channels.includes("developer-beta");
-  const pub = b.channels.includes("public-beta");
-  const open = dev ? "Developer beta is open to you as an invited tester." : pub ? "Developer beta is only for invited testers." : "The betas open to you once you are invited.";
-  return `<section class="card" id="beta" data-joined data-channels="${channels}" data-min-app="${e(BETA_MIN_APP)}">
+  const approvedAll = b.pending.length === 0 ? (b.autoApprove ? ", approved at once" : ", approved") : "";
+  const waiting = b.pending.map((c) => `<p class="notice" data-field="beta-waiting">${BETA_WORDS[c]}: waiting for approval.</p>`).join("\n");
+  const other = (["public-beta", "developer-beta"] as const).find((c) => !b.requested.includes(c));
+  const more =
+    other && b.requested.length === 1
+      ? `<p><button type="button" class="secondary" data-action="beta-add" data-channel="${other}" data-terms-version="${e(b.termsCurrent)}">Also sign up for ${BETA_WORDS[other]}</button></p>`
+      : "";
+  return `<section class="card" ${attrs}>
 ${head}
-<p class="muted">Joined ${b.joinedAt !== null ? e(shortDay(b.joinedAt)) : ""} and agreed to the beta terms of ${e(termsDay(b.termsVersion ?? b.termsCurrent))}. ${open} Each computer chooses in its own Settings › Updates › Beta updates; you can change it here too.</p>
+<p class="muted">Signed up on ${b.joinedAt !== null ? e(shortDay(b.joinedAt)) : ""} for ${betaList(b.requested)}${approvedAll}. Beta terms of ${e(termsDay(b.termsVersion ?? b.termsCurrent))}. Each computer chooses in its own Settings › Updates › Beta updates; you can change it here too.</p>
+${waiting}
+${more}
 <ul class="list beta-list" id="beta-list"><li class="muted">Loading...</li></ul>
-<p class="status" data-field="beta-status" role="status" hidden></p>
+${BETA_STATUS}
 ${leave}
 </section>`;
 }
@@ -464,7 +509,7 @@ ${
 }
 <p class="muted">To add a nest: on the Linux computer that will keep your files, run <code>curl -fsSL https://pairnets.app/get.sh | sudo bash</code>. It shows a link and a code: open the link and choose Add this nest. Then, on each computer, install Pairnets and choose Continue with email (or Google) with this account.</p>
 </section>
-${betaSection(v.beta ?? { member: false, joinedAt: null, termsVersion: null, termsCurrent: "", channels: [], needsNewTerms: false })}
+${v.beta ? betaSection(v.beta) : ""}
 ${linksSection(v.links)}
 ${sharedSection(v.shared ?? [])}
 <details class="card"${v.nests.length ? " open" : ""}>

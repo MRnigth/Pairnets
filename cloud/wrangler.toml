@@ -26,8 +26,8 @@ MAX_NESTS = "900"
 MAX_NESTS_PER_ACCOUNT = "4"
 # "1" = emergency switch: /nest-login refuses and heartbeats answer disableHostedLogin: true.
 HOSTED_LOGIN_DISABLED = "0"
-# "1" = Public beta is open to every member of the beta program; "0" = only to those allowed on /admin/beta.
-BETA_PUBLIC_FOR_ALL = "1"
+# "1" = a sign-up for a beta is approved at once; "0" = it waits for an admin to approve it on /admin/beta.
+BETA_AUTO_APPROVE = "1"
 # Optional test seams (Google's real URLs are the defaults when these are not set):
 # GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 # GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"

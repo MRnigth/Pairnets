@@ -20,7 +20,7 @@ const MUTATIONS: [string, string][] = [
   ["PUT", "/v1/servers/nst_testnest000000000000000001/devices/dev1/beta"],
   ["POST", "/v1/beta/join"],
   ["POST", "/v1/beta/leave"],
-  ["POST", "/admin/beta/acc_testacct000000000000000001/allow-developer"],
+  ["POST", "/admin/beta/acc_testacct000000000000000001/remove"],
   ["PUT", "/v1/me"],
   ["POST", "/account"],
   ["POST", "/login"],

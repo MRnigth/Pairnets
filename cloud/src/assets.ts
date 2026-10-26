@@ -126,14 +126,17 @@ label.choice span .muted { display: block; }
 .folder-ticks { max-height: 440px; overflow-y: auto; }
 .folder-ticks label.choice[data-linked-in] { opacity: .55; }
 .folder-ticks.off { opacity: .45; }
-/* The beta program: words and hairlines, blue only for Join. */
-ul.kinds { margin: 0 0 18px; padding-left: 1.1em; }
-ul.kinds li { margin: 4px 0; }
-.kindword { font-weight: 600; }
-.kindword.open { color: var(--accent); }
-.kindword.dev { color: var(--warn); }
-.terms label.choice { align-items: flex-start; gap: 12px; font-size: .9375rem; max-width: 600px; }
-.terms label.choice input { margin-top: 5px; accent-color: var(--blue); }
+/* The beta program: words and hairlines, blue only for Send sign-up. */
+.terms label.choice, form.signup label.choice { align-items: flex-start; gap: 12px; max-width: 600px; }
+.terms label.choice input, form.signup label.choice input { margin-top: 6px; accent-color: var(--blue); }
+.terms { font-size: .9375rem; }
+form.signup fieldset { border: none; padding: 0; margin: 0 0 6px; }
+form.signup legend { padding: 0; margin-bottom: 4px; font-weight: 650; color: var(--text); }
+form.signup label.choice b { font-weight: 650; }
+form.signup label.choice .muted { display: block; line-height: 1.45; }
+form.signup .terms { border-top: 1px solid var(--line); margin-top: 12px; padding-top: 12px; }
+form.signup .signup-note { margin-top: 12px; }
+#beta .notice { margin: 0 0 8px; }
 button.join { background: var(--blue); border-color: var(--blue); color: var(--accent-text); margin-top: 14px; }
 button.join:hover:not(:disabled) { background: var(--blue-hover); border-color: var(--blue-hover); }
 .beta-list > li { display: grid; grid-template-columns: 1fr auto; gap: 4px 24px; align-items: center; }
@@ -150,6 +153,23 @@ select:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
 .leave p { margin: 6px 0 0; }
 form.inline { display: inline; }
 form.inline button { margin-top: 0; }
+/* The admin pages: the account pages' look, and a table where the reader compares rows. */
+body.admin main { max-width: 1000px; }
+.facts { display: flex; gap: 28px; flex-wrap: wrap; margin: 6px 0 4px; }
+.facts div { font-size: .9375rem; color: var(--muted); }
+.facts b { display: block; font: 400 2rem/1.1 var(--serif); color: var(--text); }
+.member { display: grid; grid-template-columns: 1fr auto; gap: 2px 20px; align-items: start; }
+.member .what { font-size: .9375rem; color: var(--muted); }
+.member .what b { color: var(--text); font-weight: 600; }
+.member .actions { grid-row: 1 / span 2; grid-column: 2; margin-top: 0; }
+.member.gone strong { color: var(--faint); }
+table { width: 100%; border-collapse: collapse; font-size: .9375rem; }
+th { text-align: left; font-weight: 600; color: var(--faint); padding: 8px 12px 8px 0; border-bottom: 1px solid var(--line); }
+td { padding: 12px 12px 12px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+td .muted { font-size: .875rem; }
+.ch-public { color: var(--accent); font-weight: 600; }
+.ch-dev { color: var(--warn); font-weight: 600; }
+.small-note { font-size: .9375rem; color: var(--muted); margin-top: 10px; }
 .cookie-notice { position: fixed; left: 24px; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); z-index: 20;
   width: 400px; max-width: calc(100% - 48px); background: var(--bg); color: var(--text); border: 1px solid var(--line);
   border-radius: 8px; padding: 16px 18px; font-size: 15px; line-height: 1.5;
@@ -171,6 +191,9 @@ form.inline button { margin-top: 0; }
   .input-row input { flex-basis: 100%; }
   .beta-list > li { grid-template-columns: 1fr; }
   .beta-list select { width: 100%; }
+  .member { grid-template-columns: 1fr; }
+  .member .actions { grid-row: auto; grid-column: 1; }
+  table { display: block; overflow-x: auto; }
   .cookie-notice { left: 16px; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); width: auto; max-width: none; }
 }
 @media print { .cookie-notice { display: none; } }
@@ -845,10 +868,19 @@ const ACCOUNT_JS = String.raw`(function () {
     });
     if (!betaList.firstChild) betaList.appendChild(el("li", "muted", "No computers yet. Sign in to Pairnets on a computer with this account."));
   }
+  // The betas a sign-up asks for: the ticked ones on the form, or what the button names (agreeing to new terms).
+  function betaPicks(button) {
+    var boxes = beta.querySelectorAll("[data-field=beta-pick]");
+    if (!boxes.length) return (button.getAttribute("data-asked") || "").split(" ").filter(function (c) { return c; });
+    return Array.prototype.filter.call(boxes, function (x) { return x.checked; }).map(function (x) { return x.value; });
+  }
+  // Send sign-up waits for the terms tick and at least one beta.
   if (beta) beta.addEventListener("change", function (ev) {
-    if (ev.target.getAttribute("data-field") !== "beta-terms") return;
+    var field = ev.target.getAttribute("data-field");
+    if (field !== "beta-terms" && field !== "beta-pick") return;
     var join = beta.querySelector("button[data-action=beta-join]");
-    if (join) join.disabled = !ev.target.checked;
+    var tick = beta.querySelector("[data-field=beta-terms]");
+    if (join) join.disabled = !(tick && tick.checked) || !betaPicks(join).length;
   });
   if (beta) beta.addEventListener("click", function (ev) {
     var b = ev.target.closest("button[data-action]");
@@ -863,9 +895,14 @@ const ACCOUNT_JS = String.raw`(function () {
     }
     if (action === "beta-join") {
       var tick = beta.querySelector("[data-field=beta-terms]");
-      if (!tick || !tick.checked) return;
+      var picks = betaPicks(b);
+      if (!tick || !tick.checked || !picks.length) return;
       b.disabled = true;
-      pnApi("POST", "/v1/beta/join", { acceptTerms: true, termsVersion: b.getAttribute("data-terms-version") }).then(answered);
+      pnApi("POST", "/v1/beta/join", { acceptTerms: true, termsVersion: b.getAttribute("data-terms-version"), channels: picks }).then(answered);
+    } else if (action === "beta-add") {
+      // One more beta, on the terms already agreed to.
+      b.disabled = true;
+      pnApi("POST", "/v1/beta/join", { acceptTerms: true, termsVersion: b.getAttribute("data-terms-version"), channels: [b.getAttribute("data-channel")] }).then(answered);
     } else if (action === "beta-leave") {
       if (!confirm("Leave the beta program? Every computer goes back to Off and keeps its beta until the next normal version is newer.")) return;
       b.disabled = true;

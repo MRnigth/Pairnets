@@ -6,7 +6,8 @@ import type { FakeNestServer } from "./fake-relay";
 import { addServer, appSignIn, type Browser, Harness } from "./helpers";
 
 const ADMIN = "boss@example.com";
-const JOIN = { acceptTerms: true, termsVersion: BETA_TERMS_VERSION };
+const JOIN = { acceptTerms: true, termsVersion: BETA_TERMS_VERSION, channels: ["public-beta"] };
+const BOTH = { ...JOIN, channels: ["public-beta", "developer-beta"] };
 
 /** A signed-in owner with one connected nest and one computer on it. */
 async function setup(env: Parameters<typeof Harness.create>[0] = {}) {
@@ -29,23 +30,33 @@ async function member(h: Harness, accountId: string) {
   return (await h.query("SELECT * FROM beta_members WHERE account_id = ?1", accountId))[0];
 }
 
-describe("joining and leaving the beta program", () => {
-  it("GET /v1/beta: not a member until joined; joining needs the tick and today's terms", async () => {
+const NOT_MEMBER = {
+  member: false,
+  joinedAt: null,
+  termsVersion: null,
+  termsCurrent: BETA_TERMS_VERSION,
+  channels: [],
+  requested: [],
+  pending: [],
+  blocked: false,
+  blockedSignup: [],
+  autoApprove: true,
+  needsNewTerms: false,
+};
+
+describe("signing up for and leaving the beta program", () => {
+  it("GET /v1/beta: not a member until signed up; a sign-up needs the tick, today's terms and at least one known beta", async () => {
     const { h, b, accountId } = await setup();
-    expect((await b.call("GET", "/v1/beta")).json).toEqual({
-      member: false,
-      joinedAt: null,
-      termsVersion: null,
-      termsCurrent: BETA_TERMS_VERSION,
-      channels: [],
-      needsNewTerms: false,
-    });
+    expect((await b.call("GET", "/v1/beta")).json).toEqual(NOT_MEMBER);
     expect((await h.browser("203.0.113.99").call("GET", "/v1/beta")).status).toBe(401);
     expect((await b.call("POST", "/v1/beta/join", { body: { termsVersion: BETA_TERMS_VERSION } })).status).toBe(400);
     expect((await b.call("POST", "/v1/beta/join", { body: { acceptTerms: "yes", termsVersion: BETA_TERMS_VERSION } })).status).toBe(400);
     const stale = await b.call("POST", "/v1/beta/join", { body: { acceptTerms: true, termsVersion: "2026-01-01" } });
     expect(stale.status).toBe(400);
     expect(stale.json.error).toBe("terms_changed");
+    for (const channels of [undefined, [], ["nightly"], ["public-beta", "stable"], "public-beta"]) {
+      expect((await b.call("POST", "/v1/beta/join", { body: { ...JOIN, channels } })).status, JSON.stringify(channels)).toBe(400);
+    }
     expect(await member(h, accountId)).toBeUndefined();
     // Like every other change, it needs our Origin.
     expect((await b.call("POST", "/v1/beta/join", { body: JOIN, origin: "https://evil.example" })).status).toBe(403);
@@ -58,9 +69,41 @@ describe("joining and leaving the beta program", () => {
       termsVersion: BETA_TERMS_VERSION,
       termsCurrent: BETA_TERMS_VERSION,
       channels: ["public-beta"],
+      requested: ["public-beta"],
+      pending: [],
+      blocked: false,
+      blockedSignup: [],
+      autoApprove: true,
       needsNewTerms: false,
     });
-    expect(await member(h, accountId)).toMatchObject({ left_at: null, terms_version: BETA_TERMS_VERSION, public_allowed: 0, developer_allowed: 0, rev: 1 });
+    expect(await member(h, accountId)).toMatchObject({
+      left_at: null,
+      terms_version: BETA_TERMS_VERSION,
+      public_allowed: 1,
+      developer_allowed: 0,
+      public_requested_at: h.clock.now,
+      developer_requested_at: null,
+      blocked_at: null,
+      rev: 1,
+    });
+  });
+
+  it("signing up for both betas approves both at once; the nest may then offer both", async () => {
+    const { h, b, accountId, nest } = await setup();
+    expect((await b.call("POST", "/v1/beta/join", { body: BOTH })).json).toMatchObject({ channels: ["public-beta", "developer-beta"], pending: [] });
+    expect(await member(h, accountId)).toMatchObject({ public_allowed: 1, developer_allowed: 1, developer_requested_at: h.clock.now });
+    expect(nest.beta).toMatchObject({ member: true, channels: ["public-beta", "developer-beta"] });
+  });
+
+  it("signing up later for the other beta adds it and keeps the sign-up date", async () => {
+    const { h, b, accountId, nest } = await setup();
+    await b.call("POST", "/v1/beta/join", { body: JOIN });
+    const joinedAt = h.clock.now;
+    h.advance(3600);
+    const more = await b.call("POST", "/v1/beta/join", { body: { ...JOIN, channels: ["developer-beta"] } });
+    expect(more.json).toMatchObject({ requested: ["public-beta", "developer-beta"], channels: ["public-beta", "developer-beta"] });
+    expect(await member(h, accountId)).toMatchObject({ joined_at: joinedAt, public_requested_at: joinedAt, developer_requested_at: h.clock.now, rev: 2 });
+    expect(nest.beta).toMatchObject({ channels: ["public-beta", "developer-beta"], rev: 2 });
   });
 
   it("joining tells the owner's nest at once, signed, and notes the rev it has", async () => {
@@ -71,10 +114,18 @@ describe("joining and leaving the beta program", () => {
     expect((await h.query("SELECT beta_rev_pushed FROM nests"))[0]).toEqual({ beta_rev_pushed: 1 });
   });
 
-  it("with BETA_PUBLIC_FOR_ALL off, a member gets Public beta only once allowed", async () => {
-    const { b, nest } = await setup({ BETA_PUBLIC_FOR_ALL: "0" });
-    expect((await b.call("POST", "/v1/beta/join", { body: JOIN })).json.channels).toEqual([]);
+  it("with BETA_AUTO_APPROVE off, a sign-up waits for approval and the page says so", async () => {
+    const { h, b, accountId, nest } = await setup({ BETA_AUTO_APPROVE: "0" });
+    const page0 = (await b.call("GET", "/account")).text;
+    expect(page0).toContain("Sign-ups are looked at by hand. The maker of Pairnets can see who is in the beta and which of their computers use it.");
+    const r = await b.call("POST", "/v1/beta/join", { body: BOTH });
+    expect(r.json).toMatchObject({ member: true, channels: [], requested: ["public-beta", "developer-beta"], pending: ["public-beta", "developer-beta"], autoApprove: false });
+    expect(await member(h, accountId)).toMatchObject({ public_allowed: 0, developer_allowed: 0 });
     expect(nest.beta).toMatchObject({ member: true, channels: [] });
+    const page = (await b.call("GET", "/account")).text;
+    expect(page).toContain("Public beta: waiting for approval.");
+    expect(page).toContain("Developer beta: waiting for approval.");
+    expect(page).toContain("Signed up on 09.10.2026 for Public beta and Developer beta. Beta terms of 26 October 2026.");
   });
 
   it("leaving: the nest is told, own computers go back to Off (friends' are left alone); joining again starts afresh", async () => {
@@ -227,15 +278,17 @@ describe("the hourly cron tells nests that missed a change", () => {
 });
 
 describe("the account page's Beta program", () => {
-  it("not joined: the two betas, the terms tick box and a Join button that waits for it; the page keeps its other hooks", async () => {
+  it("not signed up: the sign-up form (Public beta ticked), the terms and Send sign-up; the page keeps its other hooks", async () => {
     const { b } = await setup();
     const page = (await b.call("GET", "/account")).text;
     const section = page.slice(page.indexOf('<section class="card" id="beta"'));
     expect(section).toContain("<h2>Beta program</h2>");
-    expect(section).toContain("Public beta</span>: versions that are nearly ready");
-    expect(section).toContain("For invited testers.");
+    expect(section).toContain("<legend>Sign me up for</legend>");
+    expect(section).toContain('<input type="checkbox" data-field="beta-pick" value="public-beta" checked><span><b>Public beta</b><span class="muted">Versions that are nearly ready, a few days before everyone else.</span></span>');
+    expect(section).toContain('<input type="checkbox" data-field="beta-pick" value="developer-beta"><span><b>Developer beta</b><span class="muted">The newest work, often the same day. Expect rough edges.</span></span>');
     expect(section).toContain('<a href="/beta-terms">Pairnets beta terms</a>');
-    expect(section).toMatch(/<button type="button" class="join" data-action="beta-join" data-terms-version="2026-10-26" disabled>Join the beta program<\/button>/);
+    expect(section).toMatch(/<button type="button" class="join" data-action="beta-join" data-terms-version="2026-10-26" disabled>Send sign-up<\/button>/);
+    expect(section).toContain("Sign-ups are approved at once. The maker of Pairnets can see who is in the beta and which of their computers use it.");
     expect(section).not.toContain("beta-leave");
     // After "Your nest", before the other sections; every older hook is still there.
     expect(page.indexOf('id="servers"')).toBeLessThan(page.indexOf('id="beta"'));
@@ -246,18 +299,26 @@ describe("the account page's Beta program", () => {
     expect(page).not.toMatch(/<script>|style="/);
   });
 
-  it("joined: the joined line, the list the script fills, and Leave", async () => {
-    const { h, b } = await setup();
+  it("signed up: the signed-up line, Also sign up for the other beta, the list the script fills, and Leave", async () => {
+    const { b } = await setup();
     await b.call("POST", "/v1/beta/join", { body: JOIN });
-    await h.env.DB.prepare("UPDATE beta_members SET developer_allowed = 1").run();
     const page = (await b.call("GET", "/account")).text;
-    expect(page).toContain('<h2>Beta program <span class="pill online">joined</span></h2>');
-    expect(page).toContain('data-channels="public-beta developer-beta"');
+    expect(page).toContain('<h2>Beta program <span class="pill online">signed up</span></h2>');
+    expect(page).toContain('data-channels="public-beta"');
     expect(page).toContain(`data-min-app="${BETA_MIN_APP}"`); // the first app that knows beta updates, one constant
-    expect(page).toContain("Joined 09.10.2026 and agreed to the beta terms of 26 October 2026. Developer beta is open to you as an invited tester.");
+    expect(page).toContain(
+      "Signed up on 09.10.2026 for Public beta, approved at once. Beta terms of 26 October 2026. Each computer chooses in its own Settings › Updates › Beta updates; you can change it here too.",
+    );
+    expect(page).toContain('data-action="beta-add" data-channel="developer-beta" data-terms-version="2026-10-26">Also sign up for Developer beta</button>');
     expect(page).toContain('<ul class="list beta-list" id="beta-list">');
     expect(page).toContain('<button type="button" class="danger" data-action="beta-leave">Leave the beta program</button>');
     expect(page).not.toContain('data-action="beta-join"');
+
+    await b.call("POST", "/v1/beta/join", { body: { ...JOIN, channels: ["developer-beta"] } });
+    const both = (await b.call("GET", "/account")).text;
+    expect(both).toContain("for Public beta and Developer beta, approved at once.");
+    expect(both).toContain('data-channels="public-beta developer-beta"');
+    expect(both).not.toContain("beta-add");
   });
 
   it("account.js knows the hooks and the routes", async () => {
@@ -265,7 +326,7 @@ describe("the account page's Beta program", () => {
     const page = (await b.call("GET", "/account")).text;
     const src = /<script src="([^"]*account\.js[^"]*)"/.exec(page)![1];
     const js = (await b.call("GET", src)).text;
-    for (const s of ["beta-join", "beta-leave", "data-field\", \"beta-channel", "/v1/beta/join", "/v1/beta/leave", "\"/beta\"", "Can get beta updates after it updates to the newest Pairnets.", "Beta updates off. It keeps "]) {
+    for (const s of ["beta-join", "beta-add", "beta-pick", "beta-leave", "data-field\", \"beta-channel", "/v1/beta/join", "/v1/beta/leave", "\"/beta\"", "channels: picks", "Can get beta updates after it updates to the newest Pairnets.", "Beta updates off. It keeps "]) {
       expect(js).toContain(s);
     }
     expect(() => new Function(js)).not.toThrow();
@@ -277,34 +338,145 @@ describe("the account page's Beta program", () => {
   });
 });
 
+/** An admin's browser, signed in. */
+async function adminBrowser(h: Harness): Promise<Browser> {
+  const admin = h.browser("203.0.113.80");
+  await admin.signInByEmail(ADMIN);
+  return admin;
+}
+
 describe("/admin/beta", () => {
-  it("lists the members for admins only, and allowing Developer beta reaches the member's nest", async () => {
-    const { h, b, accountId, nest } = await setup();
+  it("is for admins only: 404 for anyone else, the sign-in page for nobody, and a form post from elsewhere is refused", async () => {
+    const { h, b, accountId } = await setup();
     await b.call("POST", "/v1/beta/join", { body: JOIN });
     expect((await b.call("GET", "/admin/beta")).status).toBe(404);
-    expect((await b.call("POST", `/admin/beta/${accountId}/allow-developer`)).status).toBe(404);
+    for (const action of ["approve", "remove", "let-in"]) expect((await b.call("POST", `/admin/beta/${accountId}/${action}`)).status).toBe(404);
+    expect((await h.browser("203.0.113.81").call("GET", "/admin/beta")).location).toBe("/login?next=/admin/beta");
+    const admin = await adminBrowser(h);
+    expect((await admin.call("POST", `/admin/beta/${accountId}/remove`, { origin: "https://evil.example" })).status).toBe(403);
+    expect((await admin.call("POST", `/admin/beta/${accountId}/allow-developer`)).status).toBe(404);
+    expect((await admin.call("POST", "/admin/beta/acc_bad/remove")).status).toBe(404);
+    expect(await member(h, accountId)).toMatchObject({ blocked_at: null, public_allowed: 1 });
+  });
 
-    const admin = h.browser("203.0.113.80");
-    await admin.signInByEmail(ADMIN);
-    const page = await admin.call("GET", "/admin/beta");
-    expect(page.status).toBe(200);
-    expect(page.text).toContain("you@example.com");
-    expect(page.text).toContain(`action="/admin/beta/${accountId}/allow-developer"`);
-    // A form post from elsewhere is refused like any other change.
-    expect((await admin.call("POST", `/admin/beta/${accountId}/allow-developer`, { origin: "https://evil.example" })).status).toBe(403);
+  it("who signed up, and who is using it: read live from each member's nest, an offline one named", async () => {
+    const { h, b, nest, deviceId } = await setup();
+    await b.call("PATCH", "/v1/me", { body: { username: "alex" } });
+    await b.call("POST", "/v1/beta/join", { body: BOTH });
+    const pc = nest.devices.get(deviceId)!;
+    pc.app = "1.0.61.9 Public beta 3";
+    pc.beta = { channel: "public-beta", at: "2026-10-09T00:00:00Z", by: "app" };
+    pc.lastSeen = "2026-10-09T00:05:00Z";
+    // Another computer of the owner's on Off, and a friend's computer on a beta: neither is listed.
+    nest.devices.set("devOff", { ...pc, id: "devOff", key: "pn_off", name: "LAPTOP", beta: { channel: "off", at: "x", by: "app" } });
+    nest.devices.set("devF", { ...pc, id: "devF", key: "pn_friend", name: "Friend-PC", access: "view", personId: "acc_testacct000000000000000009" });
 
-    const set = await admin.call("POST", `/admin/beta/${accountId}/allow-developer`);
-    expect(set.status).toBe(303);
-    expect(set.location).toBe("/admin/beta");
-    expect(await member(h, accountId)).toMatchObject({ developer_allowed: 1, rev: 2 });
-    expect(nest.beta).toMatchObject({ channels: ["public-beta", "developer-beta"], rev: 2 });
-    expect((await b.call("GET", "/v1/beta")).json.channels).toEqual(["public-beta", "developer-beta"]);
-    // The same again changes nothing; an unknown action is 404.
-    await admin.call("POST", `/admin/beta/${accountId}/allow-developer`);
+    const jo = h.browser("203.0.113.71");
+    await jo.signInByEmail("jo@example.net");
+    const joNest = await addServer(h, jo, { label: "jo nest", ip: "198.51.100.62" });
+    await jo.call("GET", "/v1/servers");
+    await jo.call("POST", "/v1/beta/join", { body: JOIN });
+    joNest.running = false;
+
+    const admin = await adminBrowser(h);
+    const page = (await admin.call("GET", "/admin/beta")).text;
+    expect(page).toContain("<div><b>2</b>signed up</div>");
+    expect(page).toContain("<div><b>1</b>computer on a beta</div>");
+    expect(page).toContain("<div><b>0</b>beta reports this week</div>");
+    expect(page).toContain("Sign-ups are approved at once (BETA_AUTO_APPROVE is on). Beta terms of 26 October 2026.");
+    expect(page).toContain('<div><strong>alex</strong> <span class="muted">you@example.com</span></div>');
+    expect(page).toContain("<b>Public beta</b> and <b>Developer beta</b> · signed up today, 00.00 · approved at once · 1 computer on a beta");
+    expect(page).toContain('<div><strong>jo</strong> <span class="muted">jo@example.net</span></div>');
+    expect(page).toContain("<b>Public beta</b> · signed up today, 00.00 · approved at once · no computer on a beta yet");
+    expect(page).toContain(
+      '<tr><td>alex</td><td>StudyPC<div class="muted">Windows 11 · Home nest</div></td><td class="ch-public">Public beta</td><td>1.0.61.9 Public beta 3</td><td>today, 00.05</td></tr>',
+    );
+    expect(page).not.toContain("LAPTOP");
+    expect(page).not.toContain("Friend-PC");
+    expect(page).toContain("Read from each member's nest when this page opens; nothing about the computers is stored here. jo's nest is offline right now.");
+    // Nothing about the computers was kept.
+    expect(JSON.stringify(await h.query("SELECT * FROM beta_members"))).not.toContain("StudyPC");
+  });
+
+  it("remove: the account loses its betas, its nest is told and its computers go back to Off; let back in approves again", async () => {
+    const { h, b, accountId, nest, deviceId } = await setup();
+    await b.call("POST", "/v1/beta/join", { body: BOTH });
+    expect((await b.call("PUT", `/v1/servers/${nest.nestId}/devices/${deviceId}/beta`, { body: { channel: "developer-beta" } })).status).toBe(200);
+    const admin = await adminBrowser(h);
+
+    h.advance(60);
+    const removed = await admin.call("POST", `/admin/beta/${accountId}/remove`);
+    expect(removed.status).toBe(303);
+    expect(removed.location).toBe("/admin/beta");
+    expect(await member(h, accountId)).toMatchObject({ blocked_at: h.clock.now, public_allowed: 0, developer_allowed: 0, rev: 2 });
+    expect(nest.beta).toMatchObject({ member: false, channels: [], rev: 2 });
+    expect(nest.devices.get(deviceId)!.beta).toMatchObject({ channel: "off", by: "web" });
+    expect((await h.query("SELECT event FROM audit WHERE event LIKE 'beta_%' ORDER BY rowid")).map((r) => r.event)).toEqual(["beta_signup", "beta_removed"]);
+    const list = (await admin.call("GET", "/admin/beta")).text;
+    expect(list).toContain("Removed by you on 09.10.2026. A new sign-up from this account waits for you.");
+    expect(list).toContain(`action="/admin/beta/${accountId}/let-in"`);
+    expect(list).toContain("<div><b>0</b>signed up</div>");
+
+    // The account sees it; its new sign-up waits, even with auto-approve on.
+    const page = (await b.call("GET", "/account")).text;
+    expect(page).toContain("You were removed from the beta program. A new sign-up waits for approval.");
+    expect(page).toContain("Send sign-up");
+    expect((await b.call("PUT", `/v1/servers/${nest.nestId}/devices/${deviceId}/beta`, { body: { channel: "public-beta" } })).json.error).toBe("not_allowed");
+    h.advance(60);
+    const again = await b.call("POST", "/v1/beta/join", { body: JOIN });
+    expect(again.json).toMatchObject({ blocked: true, channels: [], blockedSignup: ["public-beta"] });
+    expect(await member(h, accountId)).toMatchObject({ public_allowed: 0, developer_allowed: 0 });
+    expect((await b.call("GET", "/account")).text).toContain("Your sign-up for Public beta is waiting for approval.");
+    expect((await admin.call("GET", "/admin/beta")).text).toContain("Signed up again for <b>Public beta</b>; it waits for you.");
+
+    const back = await admin.call("POST", `/admin/beta/${accountId}/let-in`);
+    expect(back.status).toBe(303);
+    expect(await member(h, accountId)).toMatchObject({ blocked_at: null, public_allowed: 1, developer_allowed: 1 });
+    expect(nest.beta).toMatchObject({ member: true, channels: ["public-beta", "developer-beta"] });
+    // Letting in twice changes nothing more.
+    const rev = (await member(h, accountId)).rev;
+    await admin.call("POST", `/admin/beta/${accountId}/let-in`);
+    expect((await member(h, accountId)).rev).toBe(rev);
+  });
+
+  it("with auto-approve off: a waiting sign-up has Approve, which reaches the nest; let back in leaves it waiting", async () => {
+    const { h, b, accountId, nest } = await setup({ BETA_AUTO_APPROVE: "0" });
+    await b.call("POST", "/v1/beta/join", { body: JOIN });
+    const admin = await adminBrowser(h);
+    const list = (await admin.call("GET", "/admin/beta")).text;
+    expect(list).toContain("Sign-ups wait for you to approve them (BETA_AUTO_APPROVE is off).");
+    expect(list).toContain("<b>Public beta</b> · signed up today, 00.00 · waiting · no computer on a beta yet");
+    expect(list).toContain(`action="/admin/beta/${accountId}/approve"`);
+
+    expect((await admin.call("POST", `/admin/beta/${accountId}/approve`)).status).toBe(303);
+    expect(await member(h, accountId)).toMatchObject({ public_allowed: 1, developer_allowed: 0, rev: 2 });
+    expect(nest.beta).toMatchObject({ member: true, channels: ["public-beta"], rev: 2 });
+    expect((await admin.call("GET", "/admin/beta")).text).toContain("· approved · ");
+    // Nothing waiting any more: approving again changes nothing.
+    await admin.call("POST", `/admin/beta/${accountId}/approve`);
     expect((await member(h, accountId)).rev).toBe(2);
-    expect((await admin.call("POST", `/admin/beta/${accountId}/make-boss`)).status).toBe(404);
-    await admin.call("POST", `/admin/beta/${accountId}/disallow-developer`);
-    expect(nest.beta).toMatchObject({ channels: ["public-beta"], rev: 3 });
+
+    // A second beta asked for later waits on its own.
+    await b.call("POST", "/v1/beta/join", { body: { ...JOIN, channels: ["developer-beta"] } });
+    expect((await b.call("GET", "/v1/beta")).json).toMatchObject({ channels: ["public-beta"], pending: ["developer-beta"] });
+    expect((await b.call("GET", "/account")).text).toContain("Developer beta: waiting for approval.");
+
+    await admin.call("POST", `/admin/beta/${accountId}/remove`);
+    await admin.call("POST", `/admin/beta/${accountId}/let-in`);
+    expect(await member(h, accountId)).toMatchObject({ blocked_at: null, public_allowed: 0, developer_allowed: 0 });
+    await admin.call("POST", `/admin/beta/${accountId}/approve`);
+    expect(await member(h, accountId)).toMatchObject({ public_allowed: 1, developer_allowed: 1 });
+  });
+
+  it("counts beta bug reports of the last week", async () => {
+    const h = await Harness.create({ ADMIN_EMAILS: ADMIN });
+    const report = { app: "Windows app", version: "1.0.61.9", system: "Windows", report: "Pairnets bug report", note: null };
+    await h.client().call("POST", "/v1/bugreport", { body: { ...report, channel: "developer-beta", build: 12 } });
+    h.advance(8 * DAY);
+    await h.client().call("POST", "/v1/bugreport", { body: { ...report, channel: "public-beta", build: 3 } });
+    await h.client().call("POST", "/v1/bugreport", { body: { ...report, channel: "stable" } });
+    const admin = await adminBrowser(h);
+    expect((await admin.call("GET", "/admin/beta")).text).toContain("<div><b>1</b>beta report this week</div>");
   });
 });
 

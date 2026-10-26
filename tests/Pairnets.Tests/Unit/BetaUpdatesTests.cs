@@ -168,7 +168,7 @@ public class BetaUpdatesTests
     {
         var s = new ClientSettings { BetaChannel = ReleaseChannel.DeveloperBeta, BetaChannelAt = T0 };
         BetaUpdates.Heard(s, Joined());
-        Assert.Equal(ReleaseChannel.Stable, s.EffectiveChannel); // Developer beta is for invited testers
+        Assert.Equal(ReleaseChannel.Stable, s.EffectiveChannel); // not signed up for Developer beta
         Assert.False(BetaUpdates.CanChoose(s, ReleaseChannel.DeveloperBeta));
         Assert.True(BetaUpdates.CanChoose(s, ReleaseChannel.PublicBeta));
 
