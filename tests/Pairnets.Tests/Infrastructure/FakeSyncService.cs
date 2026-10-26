@@ -28,6 +28,21 @@ public sealed class FakeSyncService : IAsyncDisposable
 
     public const string UserCode = "ABCD-EFGH";
 
+    /// <summary>The long code a sign-in link's page shows after Allow (its check adds up), as the app gets it pasted.</summary>
+    public const string RightCode = "K7QM-3XWD-R9FA-T2HN-8VCJ-P4GE-M2SB-12A0";
+
+    /// <summary>
+    /// What each /v1/app/redeem answers, in turn, instead of checking the code: "not_allowed_yet", "stopped",
+    /// "code_expired", "expired", "nest_offline", "slow_down", "trouble". Once used up, the code is checked:
+    /// <see cref="RightCode"/> brings the key (once), anything else is a wrong code with the tries left.
+    /// </summary>
+    public ConcurrentQueue<string> RedeemScript { get; } = new();
+
+    /// <summary>The codes the app sent to /v1/app/redeem.</summary>
+    public ConcurrentQueue<string> Redeemed { get; } = new();
+
+    private int _wrong;
+
     private static readonly string[] HopByHop = ["Connection", "Keep-Alive", "Transfer-Encoding", "Upgrade", "Proxy-Connection", "TE", "Trailer"];
 
     private readonly WebApplication _app;
@@ -35,6 +50,7 @@ public sealed class FakeSyncService : IAsyncDisposable
     private readonly HttpClient _forward = new(new SocketsHttpHandler { UseProxy = false, AllowAutoRedirect = false }) { Timeout = Timeout.InfiniteTimeSpan };
     private string? _deviceCode;
     private bool _delivered;
+    private bool _byLink;
     private int _polls;
     private int _hubSockets;
 
@@ -103,6 +119,7 @@ public sealed class FakeSyncService : IAsyncDisposable
         app.UseWebSockets();
         app.MapPost("/v1/app/start", (Delegate)fake.StartAsync);
         app.MapPost("/v1/app/poll", (Delegate)fake.PollAsync);
+        app.MapPost("/v1/app/redeem", (Delegate)fake.RedeemAsync);
         app.MapPost("/v1/app/logout", (HttpContext ctx) =>
         {
             var auth = ctx.Request.Headers.Authorization.ToString();
@@ -127,7 +144,11 @@ public sealed class FakeSyncService : IAsyncDisposable
         Started = await JsonSerializer.DeserializeAsync<JsonElement>(ctx.Request.Body);
         _deviceCode = NewSecret("pcd_");
         _delivered = false;
+        _wrong = 0;
         var origin = Url.GetLeftPart(UriPartial.Authority);
+        _byLink = Started is { } asked && asked.TryGetProperty("mode", out var mode) && mode.ValueKind == JsonValueKind.String && mode.GetString() == "code";
+        if (_byLink)
+            return Results.Json(new { deviceCode = _deviceCode, link = VerificationLink ?? $"{origin}/app/link?r={NewSecret("pnr_")}", expiresIn = 900 });
         return Results.Json(new
         {
             deviceCode = _deviceCode,
@@ -145,6 +166,8 @@ public sealed class FakeSyncService : IAsyncDisposable
         if (_deviceCode is null || !body.TryGetProperty("deviceCode", out var code) || code.GetString() != _deviceCode || _delivered)
             return Error(400, "expired");
         Interlocked.Increment(ref _polls);
+        if (_byLink)
+            return Results.Json(new { status = "pending" }); // a link sign-in is only ever finished by its code
         var step = PollScript.TryDequeue(out var next) ? next : AfterScript;
         switch (step)
         {
@@ -170,23 +193,53 @@ public sealed class FakeSyncService : IAsyncDisposable
                 return Results.Json(new { status = "approved", appToken = token, expiresIn = 3600, email = Email });
             }
             default:
-            {
-                _delivered = true;
-                var name = Started is { } started && started.TryGetProperty("name", out var given) ? given.GetString() ?? "computer" : "computer";
-                var grant = _nest?.MintKey(name) ?? new DeviceKeyGrant("dev-1", name, NewSecret("pn_"));
-                var token = NewSecret("pca_");
-                AppTokens.Enqueue(token);
-                return Results.Json(new
-                {
-                    status = "approved",
-                    appToken = token,
-                    expiresIn = 3600,
-                    email = Email,
-                    nest = new { id = NestId, label = "soro", serverUrl = ServerUrlInAnswer ?? RelayUrl.ToString() },
-                    device = new { id = grant.Id, name = grant.Name, key = grant.Key },
-                });
-            }
+                return Approved();
         }
+    }
+
+    /// <summary>An allowed sign-in's answer, once: a real key from the nest and an account token.</summary>
+    private IResult Approved()
+    {
+        _delivered = true;
+        var name = Started is { } started && started.TryGetProperty("name", out var given) ? given.GetString() ?? "computer" : "computer";
+        var grant = _nest?.MintKey(name) ?? new DeviceKeyGrant("dev-1", name, NewSecret("pn_"));
+        var token = NewSecret("pca_");
+        AppTokens.Enqueue(token);
+        return Results.Json(new
+        {
+            status = "approved",
+            appToken = token,
+            expiresIn = 3600,
+            email = Email,
+            nest = new { id = NestId, label = "soro", serverUrl = ServerUrlInAnswer ?? RelayUrl.ToString() },
+            device = new { id = grant.Id, name = grant.Name, key = grant.Key },
+        });
+    }
+
+    private async Task<IResult> RedeemAsync(HttpContext ctx)
+    {
+        var body = await JsonSerializer.DeserializeAsync<JsonElement>(ctx.Request.Body);
+        if (_deviceCode is null || !_byLink || !body.TryGetProperty("deviceCode", out var device) || device.GetString() != _deviceCode || _delivered)
+            return Error(400, "expired");
+        var code = body.TryGetProperty("code", out var given) ? given.GetString() ?? "" : "";
+        Redeemed.Enqueue(code);
+        if (RedeemScript.TryDequeue(out var step))
+        {
+            return step switch
+            {
+                "not_allowed_yet" => Error(409, "not_allowed_yet"),
+                "stopped" => Error(400, "stopped"),
+                "code_expired" => Error(400, "code_expired"),
+                "expired" => Error(400, "expired"),
+                "nest_offline" => Error(503, "nest_offline", "Your server is not connected right now. Check that it is on."),
+                "slow_down" => Error(429, "slow_down"),
+                _ => Error(500, "server_error"),
+            };
+        }
+        if (code == RightCode.Replace("-", "", StringComparison.Ordinal))
+            return Approved();
+        var left = 5 - ++_wrong;
+        return left <= 0 ? Error(400, "stopped") : Results.Json(new { error = "invalid_code", message = "That code doesn't match.", triesLeft = left }, statusCode: 400);
     }
 
     // ------------------------------------------------------------------ the relay

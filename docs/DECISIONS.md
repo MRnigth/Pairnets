@@ -1911,7 +1911,7 @@ The owner wanted what Claude Code does when its browser can't open: the app show
 you open it in any browser (this computer, a phone, a friend's, while working on a Linux box with no screen), sign in
 there, and paste the long code that browser shows back into the app. Design A was chosen (design page:
 claude.ai/artifact/HBPbgkDE5mqh8vWePHCQue): a separate "Sign in with a link" screen, reached from "Finish in your
-browser" (and shown by itself when no browser could be opened). Today's one-click sign-in stays as it is.
+browser" ("Browser didn't open? Use a sign-in link instead"). Today's one-click sign-in stays as it is.
 
 * **Only the code finishes it.** A link sign-in (`device_logins.mode = 'code'`) is never handed over by the app's poll,
   so pressing Allow on a link a stranger sent lets nobody in unless the code is sent to them too. The page warns before
@@ -1924,5 +1924,6 @@ browser" (and shown by itself when no browser could be opened). Today's one-clic
 * **A nest is needed.** A link sign-in can't wait for a nest to be set up (the code runs out first), so an account
   with no nest is told to set one up first.
 * **The page never opens pairnets://** after Allow on a link: the app is usually on another computer.
-* **Not done:** the same screen in the nest installer (`get.sh`) for server boxes; the guest pass from the first
+* **Not done:** showing the link screen by itself when no browser could be opened (the apps can't tell today: opening
+  a page reports nothing back); the same screen in the nest installer (`get.sh`) for server boxes; the guest pass from the first
   design (parked).

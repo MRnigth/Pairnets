@@ -153,6 +153,73 @@ public class AccountSignInUiTests
         Assert.True(saved.HasOwnKey);
     }
 
+    /// <summary>
+    /// "Browser didn't open, or signing in somewhere else? Use a sign-in link": the long link to copy, and the long code
+    /// from the browser pasted back, checked by the service, then the folder step as with any sign-in.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task SigningInWithALinkAndTheCodeFromTheBrowser()
+    {
+        await using var service = await FakeSyncService.StartAsync();
+        var origin = service.Url.GetLeftPart(UriPartial.Authority);
+        using var window = new Harness(service);
+        var view = window.View;
+        service.AfterScript = "pending";
+        view.AccountEmailBox.Text = "you@example.com";
+        Dispatcher.UIThread.RunJobs();
+        Click(view.AccountEmailButton);
+        WaitFor(() => !window.Opened.IsEmpty, "the browser page");
+
+        Click(view.AccountUseLinkButton);
+        WaitFor(() => view.AccountLinkBox.Text?.StartsWith(origin + "/app/link?r=pnr_", StringComparison.Ordinal) == true, "the sign-in link");
+        Assert.Equal(SignInStep.AccountLink, view.Step);
+        Assert.True(view.InProgress);
+        Assert.Single(window.Opened); // the link is copied, never opened here
+        Assert.True(view.AccountLinkFooter.IsVisible);
+        Thread.Sleep(300);
+        var polls = service.Polls;
+        Thread.Sleep(300);
+        Assert.Equal(polls, service.Polls); // the browser sign-in stopped asking
+
+        // A typo, then a wrong code: said under the box, and Continue works again.
+        view.AccountLinkCodeBox.Text = "K7QM-3XWD";
+        Click(view.AccountLinkContinueButton);
+        WaitFor(() => view.AccountLinkProblem.IsVisible, "the typo note");
+        Assert.Equal("That isn't the whole code, or it has a typo. Copy all of it from the browser and try again.", view.AccountLinkProblem.Text);
+        view.AccountLinkCodeBox.Text = "0000-0000-0000-0000-0000-0000-0000-GMMR";
+        Click(view.AccountLinkContinueButton);
+        WaitFor(() => view.AccountLinkProblem.Text?.EndsWith("4 tries left.", StringComparison.Ordinal) == true, "the wrong-code note");
+        Assert.True(view.AccountLinkContinueButton.IsEnabled);
+
+        view.AccountLinkCodeBox.Text = FakeSyncService.RightCode;
+        Click(view.AccountLinkContinueButton);
+        WaitFor(() => view.Step == SignInStep.Folder, "the folder step");
+        Assert.Equal(FakeSyncService.RightCode.Replace("-", "", StringComparison.Ordinal), service.Redeemed.Last());
+    }
+
+    [AvaloniaFact]
+    public async Task AStoppedLinkGoesBackToTheFirstStepWithTheReason_AndBackLeavesTheLink()
+    {
+        await using var service = await FakeSyncService.StartAsync();
+        using var window = new Harness(service);
+        var view = window.View;
+        view.ShowAccount(new AccountSignInState(PairingStage.Waiting, FakeSyncService.UserCode, "https://example.invalid/app?code=X", DateTimeOffset.UtcNow.AddMinutes(9)), openBrowser: false);
+        Click(view.AccountUseLinkButton);
+        WaitFor(() => view.AccountLinkContinueButton.IsEnabled, "the sign-in link");
+        Click(view.AccountLinkBackButton);
+        Assert.Equal(SignInStep.Account, view.Step);
+
+        view.ShowAccount(new AccountSignInState(PairingStage.Waiting, FakeSyncService.UserCode, "https://example.invalid/app?code=X", DateTimeOffset.UtcNow.AddMinutes(9)), openBrowser: false);
+        Click(view.AccountUseLinkButton);
+        WaitFor(() => view.AccountLinkContinueButton.IsEnabled, "the sign-in link");
+        service.RedeemScript.Enqueue("stopped");
+        view.AccountLinkCodeBox.Text = FakeSyncService.RightCode;
+        Click(view.AccountLinkContinueButton);
+        WaitFor(() => view.Step == SignInStep.Account, "the first step");
+        Assert.True(view.AccountOutcomeBox.IsVisible);
+        Assert.StartsWith("This sign-in was stopped", view.AccountOutcomeText.Text);
+    }
+
     [AvaloniaFact]
     public async Task CancelAndSignOutGoBackToTheFirstStep()
     {

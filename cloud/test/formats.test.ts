@@ -3,6 +3,9 @@ import { b64urlDecodeStrict, b64urlEncode, isStrictB64url } from "../src/b64";
 import { newId, randomBase32, B32_UPPER } from "../src/crypto";
 import {
   ACCOUNT_ID_RE,
+  displayLinkCode,
+  linkCodeChecks,
+  normaliseLinkCode,
   checkPublicUrl,
   cleanLabel,
   cleanText,
@@ -175,5 +178,13 @@ describe("placeName", () => {
     expect(placeName("T1", null)).toBeNull();
     expect(placeName("denmark", null)).toBeNull();
     expect(placeName(null, null)).toBeNull();
+  });
+
+  it("a sign-in link's long code: read like the apps read it, with the same check (tests/Pairnets.Tests/Unit/LinkCodeTests.cs)", async () => {
+    for (const code of ["K7QM3XWDR9FAT2HN8VCJP4GEM2SB12A0", "0000000000000000000000000000GMMR"]) expect(await linkCodeChecks(code)).toBe(true);
+    expect(normaliseLinkCode(" k7qm 3xwd r9fa t2hn 8vcj p4ge m2sb I2AO ")).toBe("K7QM3XWDR9FAT2HN8VCJP4GEM2SB12A0");
+    expect(displayLinkCode("K7QM3XWDR9FAT2HN8VCJP4GEM2SB12A0")).toBe("K7QM-3XWD-R9FA-T2HN-8VCJ-P4GE-M2SB-12A0");
+    expect(await linkCodeChecks("K7QM3XWDR9FAT2HN8VCJP4GEM2SB12A1")).toBe(false);
+    for (const bad of ["", "K7QM3XWDR9FAT2HN8VCJP4GEM2SB12A", "K7QM3XWDR9FAT2HN8VCJP4GEM2SB12AU", 5]) expect(normaliseLinkCode(bad)).toBeNull();
   });
 });

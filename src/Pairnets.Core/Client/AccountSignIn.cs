@@ -39,6 +39,11 @@ public sealed record AccountSignInResult(Uri ServerUrl, string NestId, string Ne
 /// </param>
 /// <param name="AccountEmail">The account's address, known once the computer was allowed.</param>
 /// <param name="Result">Set once <see cref="Stage"/> is <see cref="PairingStage.Approved"/>.</param>
+/// <param name="ByLink">
+/// A sign-in link (<see cref="AccountSignIn"/> made with byLink): <see cref="VerifyUrl"/> is the long link to copy,
+/// there is no <see cref="Code"/>, and only the long code the browser shows, given to
+/// <see cref="AccountSignIn.RedeemAsync"/>, finishes it.
+/// </param>
 public sealed record AccountSignInState(
     PairingStage Stage,
     string? Code = null,
@@ -48,7 +53,8 @@ public sealed record AccountSignInState(
     bool ServerOffline = false,
     AccountSignInResult? Result = null,
     bool NoNest = false,
-    string? AccountEmail = null)
+    string? AccountEmail = null,
+    bool ByLink = false)
 {
     /// <summary>"code expires in 9:41" while waiting.</summary>
     public string ExpiresText(DateTimeOffset now) => PairingState.ExpiresIn(ExpiresAt, now);
@@ -82,6 +88,13 @@ public sealed class AccountSignIn
     private readonly HttpMessageHandler? _handler;
     private readonly TimeSpan? _interval;
     private readonly IReadOnlyList<string> _joined;
+    private readonly bool _byLink;
+
+    /// <summary>A link sign-in, while it waits for its code: the connection and the sign-in it was started as.</summary>
+    private HttpClient? _http;
+    private string? _deviceCode;
+    private readonly TaskCompletionSource _done = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private int _redeeming;
 
     /// <param name="name">This computer's name, as the browser page and later the account page show it.</param>
     /// <param name="method">"email" or "google": the button pressed in the app, so the page starts that way (anything else is left out).</param>
@@ -96,9 +109,16 @@ public sealed class AccountSignIn
     /// The nests this computer already syncs (their nest ids): the browser page shows them as already here, so the
     /// person picks another one when adding a nest (docs/DECISIONS.md, "Several nests at once").
     /// </param>
+    /// <param name="byLink">
+    /// Sign in with a link (CONTRACT.md §6.9): for when the browser didn't open here, or the sign-in happens on another
+    /// computer or a phone. The service gives a long one-time link instead of a code; it is opened anywhere, and after
+    /// Allow the page there shows a long code, pasted here (<see cref="RedeemAsync"/>). Nothing is polled.
+    /// </param>
     public AccountSignIn(string name, string? method = null, Uri? service = null, TimeProvider? clock = null,
-        HttpMessageHandler? handler = null, TimeSpan? interval = null, string? email = null, IEnumerable<string>? joined = null)
+        HttpMessageHandler? handler = null, TimeSpan? interval = null, string? email = null, IEnumerable<string>? joined = null,
+        bool byLink = false)
     {
+        _byLink = byLink;
         _joined = joined?.Where(Relay.IsNestId).Distinct(StringComparer.Ordinal).Take(20).ToList() ?? [];
         _name = CleanName(name);
         _method = method is "email" or "google" ? method : null;
@@ -155,6 +175,9 @@ public sealed class AccountSignIn
             Timeout = Timeout.InfiniteTimeSpan,
         };
         http.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("Pairnets", PairnetsInfo.ProductVersion));
+
+        if (_byLink)
+            return await RunLinkAsync(http, ct).ConfigureAwait(false);
 
         StartAnswer start;
         try
@@ -242,6 +265,150 @@ public sealed class AccountSignIn
         }
         return State;
     }
+
+    /// <summary>
+    /// A link sign-in: asks for the link, shows it, and then waits (without asking anything) until <see cref="RedeemAsync"/>
+    /// finishes it, it is stopped, or the link runs out.
+    /// </summary>
+    private async Task<AccountSignInState> RunLinkAsync(HttpClient http, CancellationToken ct)
+    {
+        LinkStartAnswer start;
+        try
+        {
+            var asked = await SendAsync(http, "v1/app/start", new LinkStartRequest(_name, PairingFlow.SystemName(), PairnetsInfo.ProductVersion, "code"), ct).ConfigureAwait(false);
+            // The link must be the service's own sign-in-link page, so copying it never sends anyone elsewhere.
+            if (asked.Status != HttpStatusCode.OK || asked.Read<LinkStartAnswer>() is not { DeviceCode.Length: > 0, Link.Length: > 0 } answer
+                || !Uri.TryCreate(answer.Link, UriKind.Absolute, out var link) || !Relay.IsServiceAddress(link, _service)
+                || link.AbsolutePath != "/app/link" || link.UserInfo.Length != 0 || link.Fragment.Length != 0)
+                return Set(new(PairingStage.Failed, Message: asked.Status == HttpStatusCode.OK
+                    ? "Pairnets answered with a link this app can't use. Update Pairnets, then try again."
+                    : StartRefused(asked)));
+            start = answer;
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            return State;
+        }
+        catch (PairnetsNetworkException)
+        {
+            return Set(new(PairingStage.Failed, Message: "Can't reach Pairnets. Check that this computer is online, then try again."));
+        }
+
+        var lifetime = TimeSpan.FromSeconds(start.ExpiresIn is > 0 ? start.ExpiresIn.Value : 900);
+        Set(new(PairingStage.Waiting, VerifyUrl: start.Link, ExpiresAt: _clock.GetUtcNow() + lifetime, ByLink: true));
+        _deviceCode = start.DeviceCode;
+        _http = http;
+        try
+        {
+            // Allow (and the 5 minutes for the code) can't outlast the link by much: wait a little past it, then stop.
+            await _done.Task.WaitAsync(lifetime + LinkCodeTime, _clock, ct).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+        }
+        catch (TimeoutException)
+        {
+            if (!State.IsFinished)
+                Set(State with { Stage = PairingStage.Expired, Message = LinkRanOut });
+        }
+        finally
+        {
+            // A redeem on its way finishes first: it uses this connection.
+            while (Volatile.Read(ref _redeeming) != 0)
+                await Task.Delay(20, CancellationToken.None).ConfigureAwait(false);
+            _http = null;
+        }
+        return State;
+    }
+
+    /// <summary>How long the code works after Allow (the service says the same).</summary>
+    private static readonly TimeSpan LinkCodeTime = TimeSpan.FromMinutes(5);
+
+    private const string LinkRanOut = "The sign-in link ran out. Start again to get a new one.";
+
+    /// <summary>What <see cref="RedeemAsync"/> made of a pasted code.</summary>
+    /// <param name="Done">Signed in: <see cref="State"/> is approved.</param>
+    /// <param name="Message">What to say under the box (a typo, a wrong code and the tries left, not allowed yet, ...).</param>
+    /// <param name="Over">
+    /// This sign-in can't be finished any more (stopped, run out): <see cref="State"/> says why and the window goes back.
+    /// </param>
+    public sealed record LinkRedeem(bool Done, string? Message, bool Over);
+
+    /// <summary>
+    /// The long code from the browser, pasted in the app. A typo is caught here (nothing is sent). The service checks
+    /// the code; the right one hands over this computer's key once, like an allowed poll does.
+    /// </summary>
+    public async Task<LinkRedeem> RedeemAsync(string? typed, CancellationToken ct = default)
+    {
+        if (!_byLink)
+            throw new InvalidOperationException("Only a sign-in link takes a code.");
+        if (LinkCode.Read(typed) is not { } code)
+            return new(false, string.IsNullOrWhiteSpace(typed) ? "Paste the code the browser shows after you press Allow." : CodeTypo, false);
+        if (Interlocked.Exchange(ref _redeeming, 1) != 0)
+            return new(false, null, false); // one at a time: the first one's answer counts
+        try
+        {
+            var http = _http;
+            if (http is null || State.IsFinished || _deviceCode is null)
+                return new(false, State.IsFinished ? State.Message : "Wait until the link shows, then try again.", State.IsFinished);
+            Answer answer;
+            try
+            {
+                answer = await SendAsync(http, "v1/app/redeem", new RedeemRequest(_deviceCode, code), ct).ConfigureAwait(false);
+            }
+            catch (PairnetsNetworkException)
+            {
+                return new(false, "Can't reach Pairnets right now. Check that this computer is online, then press Continue again.", false);
+            }
+
+            switch (answer.Status, answer.Error)
+            {
+                case (HttpStatusCode.OK, _) when answer.Read<PollAnswer>() is { Status: "approved" } approved:
+                    var done = await FinishAsync(http, approved).ConfigureAwait(false);
+                    _done.TrySetResult();
+                    return done.Stage == PairingStage.Approved ? new(true, null, false) : new(false, done.Message, true);
+                case (_, "invalid_code"):
+                    var left = answer.Read<WrongCodeAnswer>()?.TriesLeft;
+                    return new(false, left switch
+                    {
+                        1 => "That code doesn't match. Check you copied all of it. 1 try left.",
+                        > 1 => $"That code doesn't match. Check you copied all of it. {left} tries left.",
+                        _ => "That code doesn't match. Check you copied all of it.",
+                    }, false);
+                case (_, "code_typo"):
+                    return new(false, CodeTypo, false);
+                case (_, "not_allowed_yet"):
+                    return new(false, "Open the link, sign in there and press Allow first. Then paste the code it shows.", false);
+                case (_, ServiceErrors.NestOffline):
+                    return new(false, "Allowed, but your nest isn't connected right now. Check that it is on, then press Continue again.", false);
+                case (HttpStatusCode.TooManyRequests, _):
+                    return new(false, "Wait a few seconds, then press Continue again.", false);
+                case (>= HttpStatusCode.InternalServerError, _):
+                    return new(false, "Pairnets is having trouble right now. Press Continue again in a moment.", false);
+                case (_, "stopped"):
+                    return End(PairingStage.Denied, "This sign-in was stopped: No was pressed in the browser, or the code was wrong 5 times. Start again with a new link.");
+                case (_, "code_expired"):
+                    return End(PairingStage.Expired, "The code ran out (codes work for 5 minutes after Allow). Start again with a new link.");
+                case (_, "expired"):
+                    return End(PairingStage.Expired, LinkRanOut);
+                default:
+                    return End(PairingStage.Failed, $"Pairnets refused this sign-in ({answer.Error ?? ((int)answer.Status).ToString(CultureInfo.InvariantCulture)}). Start again with a new link.");
+            }
+        }
+        finally
+        {
+            Volatile.Write(ref _redeeming, 0);
+        }
+
+        LinkRedeem End(PairingStage stage, string message)
+        {
+            Set(State with { Stage = stage, Message = message });
+            _done.TrySetResult();
+            return new(false, message, true);
+        }
+    }
+
+    private const string CodeTypo = "That isn't the whole code, or it has a typo. Copy all of it from the browser and try again.";
 
     /// <summary>How long the service holds a sign-in allowed for an account with no nest (cloud/RELAY.md §6).</summary>
     public static readonly TimeSpan NoNestWait = TimeSpan.FromMinutes(30);
@@ -383,6 +550,14 @@ public sealed class AccountSignIn
     private sealed record StartRequest(string Name, string? System, string? AppVersion);
 
     private sealed record StartAnswer(string? DeviceCode, string? UserCode, string? VerificationUri, string? VerificationUriComplete, int? ExpiresIn, int? Interval);
+
+    private sealed record LinkStartRequest(string Name, string? System, string? AppVersion, string Mode);
+
+    private sealed record LinkStartAnswer(string? DeviceCode, string? Link, int? ExpiresIn);
+
+    private sealed record RedeemRequest(string DeviceCode, string Code);
+
+    private sealed record WrongCodeAnswer(int? TriesLeft);
 
     private sealed record PollRequest(string? DeviceCode);
 
