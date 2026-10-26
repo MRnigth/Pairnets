@@ -150,6 +150,31 @@ public sealed class SiteTests
     }
 
     [Fact]
+    public void TheTermsDateIsTheVersionEachSignInRecords()
+    {
+        // cloud/src/accounts.ts TERMS_VERSION is saved on the account at each sign-in ("By continuing, you agree to the
+        // Terms"), so it must name the Terms that are live: change both together.
+        var terms = File.ReadAllText(Path.Combine(Root, "terms", "index.html"));
+        var shown = Regex.Match(terms, @"Last updated (\d{1,2} [A-Z][a-z]+ 20\d\d)").Groups[1].Value;
+        var date = DateTime.ParseExact(shown, "d MMMM yyyy", System.Globalization.CultureInfo.InvariantCulture);
+        var accounts = File.ReadAllText(Path.Combine(RepoRoot, "cloud", "src", "accounts.ts"));
+        Assert.Contains($"export const TERMS_VERSION = \"{date:yyyy-MM-dd}\";", accounts);
+    }
+
+    [Fact]
+    public void TheLegalPagesNameAContactPointAndHowToReportIllegalContent()
+    {
+        // The EU Digital Services Act: a single point of contact for users and authorities, and a way to report
+        // illegal content (Articles 11, 12, 14 and 16).
+        var terms = File.ReadAllText(Path.Combine(Root, "terms", "index.html"));
+        Assert.Contains("id=\"illegal\"", terms);
+        Assert.Contains("single point of contact", terms);
+        Assert.Contains("“Abuse” in the subject", terms);
+        Assert.Contains("href=\"/terms/#illegal\"", File.ReadAllText(Path.Combine(Root, "contact", "index.html")));
+        Assert.Contains("href=\"/terms/#illegal\"", File.ReadAllText(Path.Combine(Root, "guidelines", "index.html")));
+    }
+
+    [Fact]
     public void SecurityTxtHasAContactAndHasNotRunOut()
     {
         var lines = File.ReadAllLines(Path.Combine(Root, ".well-known", "security.txt"));
