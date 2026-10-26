@@ -793,6 +793,7 @@ characters of `A-Z a-z 0-9 % . _ ~ , + = & ! * ' ( ) -` (the apps' hand-over to 
 | `GET /v1/me` | — | 200 `{accountId, email, username, createdAt, identities:[{provider, email, createdAt, lastUsedAt}], session:{id, kind, authTime, amr, recentAuth}, nests:{used, max}}` (`nests`: the account's own nests, both kinds, pending included, and `MAX_NESTS_PER_ACCOUNT`) | 401 `unauthorized` |
 | `PATCH /v1/me` | `{username}`: 1 to 32 characters, or `null`/`""` to clear | 200 like `GET /v1/me`; audit `username_changed` | 400 `bad_request`, 401 `unauthorized` |
 | `DELETE /v1/me` | — | 204, cookie cleared, everything cascades | 401 `unauthorized`, 401 `reauth_required` |
+| `GET /v1/me/export` | — (browser session) | 200 JSON file (`Content-Disposition: attachment`): "Download my data", everything stored about the account (account, sign-in methods, sessions, nests, pending computers and nests, link codes, sharing, invites, linked nests, audit), no token/code/key hashes; audit `data_exported` | 401 `unauthorized` |
 | `GET /v1/signed-in` | — (cookie only, never an app token) | 200 `{signedIn:false}` or `{signedIn:true, name}`: the username, else the part of the email before the @. pairnets.app shows it in its top bar. The only route with CORS: `Access-Control-Allow-Origin` (echoed) and `Access-Control-Allow-Credentials: true` for `https://pairnets.app` and `https://www.pairnets.app` only; `Vary: Origin` always. | — |
 | `GET /v1/nests` | — (session **or** app token) | 200 `{nests:[Nest]}` | 401 `unauthorized` |
 | `POST /v1/nests/claim-codes` | `{label?}` | 201 `{code:"PN-XXXX-XXXX-XXXX", expiresAt, command}` | 401 `reauth_required`, 409 `nest_limit`, 429 `too_many_codes` |
@@ -913,7 +914,9 @@ All times are Unix seconds. `*_hash` columns are 32-byte BLOBs: SHA-256 of the U
 included). D1 enforces foreign keys, so deleting an account removes everything that belongs to it. Later migrations
 add to it: `0002_relay.sql` (RELAY.md) and `0003_username.sql` (`accounts.username TEXT`; NULL = not set; a display
 name only, not unique, never used to sign in), and `0004_request_place.sql` (`device_logins.request_country` and
-`request_city`, both nullable: where an app's sign-in request came from, shown on the Allow page).
+`request_city`, both nullable: where an app's sign-in request came from, shown on the Allow page). 0005-0009 are
+listed in RELAY.md and DECISIONS.md; `0010_terms.sql` adds `accounts.terms_version` and `terms_accepted_at` (nullable:
+the Terms date each sign-in agreed to, `TERMS_VERSION` in src/accounts.ts).
 
 ```sql
 -- Pairnets Cloud, migration 0001. Additive migrations only from here on.
