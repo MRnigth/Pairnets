@@ -207,7 +207,7 @@ public partial class SignInView : UserControl
             case SignInStep.Folder:
                 DrawSteps(4);
                 Picture.ShowIcon(Visuals.Resource<Geometry>("I.Folder")!, PictureTone.Accent, "T.Folder", StepIcons.Sync, PictureTone.Accent);
-                Say("Choose your folder", "This folder stays the same on all your computers. Files already in it are kept and merged, never replaced.");
+                Say(FolderChoiceText.StepTitle, FolderChoiceText.StepLead);
                 Foot("You can change the folder later in Settings.", Visuals.Resource<Geometry>("I.Settings"));
                 break;
         }
@@ -697,18 +697,22 @@ public partial class SignInView : UserControl
         _nest = nest;
         ShowStep(SignInStep.Folder);
         SignedInText.Text = $"✓ Signed in as {grant.Name}" + (nest is null ? string.Empty : $" on {nest.Host}");
-        DrawNestChoices(grant, nest?.Host ?? "your nest", nest);
+        DrawNestChoices(grant, nest?.Host ?? "your nest", nest, NestAccess.Full);
     }
 
     /// <summary>
     /// The name this computer gets in the nest (it starts as the name the nest recorded), and, when adding a nest, its own
-    /// folder: Pairnets\&lt;nest name&gt;, and a warning when this computer already syncs that nest.
+    /// folder: Pairnets\&lt;nest name&gt;, and a warning when this computer already syncs that nest. The folder is this
+    /// computer's own: on a friend's nest the line under it says the friend's folder stays where it is.
     /// </summary>
-    private void DrawNestChoices(DeviceKeyGrant grant, string nestName, Uri? nest)
+    private void DrawNestChoices(DeviceKeyGrant grant, string nestName, Uri? nest, NestAccess access)
     {
         NameBox.Text = grant.Name;
         NameLabel.Text = $"This computer's name in {nestName}";
         System.Windows.Automation.AutomationProperties.SetName(NameBox, NameLabel.Text);
+        FolderLabel.Text = FolderChoiceText.FieldLabel(nestName);
+        System.Windows.Automation.AutomationProperties.SetName(FolderBox, FolderLabel.Text);
+        FolderHereText.Text = FolderChoiceText.OnlyHere(access);
         ShowFolderProblem(null);
         _nestName = nestName;
         if (_adding is null)
@@ -751,7 +755,7 @@ public partial class SignInView : UserControl
         ShowFolderStep(result.Device, result.ServerUrl);
         _accountResult = result;
         SignedInText.Text = $"✓ Signed in as {result.Device.Name} on {result.NestLabel}";
-        DrawNestChoices(result.Device, result.NestLabel, result.ServerUrl);
+        DrawNestChoices(result.Device, result.NestLabel, result.ServerUrl, result.ShareAccess);
     }
 
     /// <summary>The folder field (screenshot tool).</summary>

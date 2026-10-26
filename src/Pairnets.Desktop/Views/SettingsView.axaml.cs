@@ -75,6 +75,7 @@ public partial class SettingsView : UserControl
         _original = current;
         _protector = protector;
         _folderProblem = folderProblem;
+        _nestTitle = nestTitle ?? current.NestLabel;
         var host = Uri.TryCreate(current.ServerUrl, UriKind.Absolute, out var nest) ? nest.Authority : current.ServerUrl;
         ConnectedPill.IsVisible = serverVersionText is not null;
         if (current.HasOwnKey)
@@ -101,6 +102,10 @@ public partial class SettingsView : UserControl
         ServerUrlBox.Text = current.ServerUrl ?? string.Empty;
         TokenBox.Watermark = current.ProtectedToken is null ? "printed by install.sh" : "(saved – leave empty to keep)";
         FolderBox.Text = current.Folder ?? string.Empty;
+        // The folder is this computer's own: never sent to the nest, so a friend's folder on their computer stays put.
+        FolderLabel.Text = FolderChoiceText.FieldLabel(_nestTitle);
+        Avalonia.Automation.AutomationProperties.SetName(FolderBox, FolderLabel.Text);
+        FolderHereText.Text = FolderChoiceText.OnlyHere(current.ShareAccess());
         DeviceBox.Text = current.DeviceName ?? ComputerName.Default();
         IgnoreBox.Text = string.Join(Environment.NewLine, current.ExtraIgnore);
         AutoStartBox.IsChecked = autoStart;
@@ -497,6 +502,15 @@ public partial class SettingsView : UserControl
     private List<string> Patterns() =>
         (IgnoreBox.Text ?? string.Empty).Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
 
+    /// <summary>"Change…" on the Files page: the folder row is scrolled to and its box focused.</summary>
+    public void ShowFolderRow() =>
+        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        {
+            FolderBox.BringIntoView();
+            FolderBox.Focus();
+            FolderBox.SelectAll();
+        }, Avalonia.Threading.DispatcherPriority.Loaded);
+
     private async void OnBrowse(object? sender, RoutedEventArgs e)
     {
         if (await Dialogs.PickFolderAsync(Owner, "Choose the folder to keep in sync") is { } path)
@@ -564,6 +578,7 @@ public partial class SettingsView : UserControl
     private void OnReset(object? sender, RoutedEventArgs e) => ResetRequested?.Invoke();
 
     private readonly Func<string, string?>? _folderProblem;
+    private readonly string? _nestTitle;
 
     /// <summary>Where this nest's key is saved outside the settings file (Mac, Linux): see <see cref="ClientSettings.KeySlotFor"/>.</summary>
     public string? KeySlot { get; init; }
@@ -676,6 +691,12 @@ public partial class SettingsView : UserControl
             await Dialogs.InfoAsync(Owner, "Pairnets", problem);
             return;
         }
+        // Another folder: said first what happens (the new one fills from the nest, the old one is kept as it is).
+        if (FolderChoiceText.IsChange(_original.Folder, folder)
+            && await Dialogs.ChooseAsync(Owner, FolderChoiceText.ChangeTitle(_nestTitle, folder), string.Empty,
+                FolderChoiceText.ChangePoints(_original.ShareAccess(), _original.Folder), FolderChoiceText.Cancel, FolderChoiceText.SaveHere)
+            != FolderChoiceText.SaveHere)
+            return;
         if (!Directory.Exists(folder))
         {
             if (!await Dialogs.ConfirmAsync(Owner, "Pairnets", $"The folder {folder} does not exist. Create it?"))
@@ -748,6 +769,10 @@ public partial class SettingsView : UserControl
                 NameOfferAnswered = _original.NameOfferAnswered,
                 LastRunVersion = _original.LastRunVersion,
                 NestAutoUpdateOfferFor = _original.NestAutoUpdateOfferFor,
+                // A friend's nest stays theirs: whose it is and what this computer may do there are kept.
+                Access = _original.Access,
+                SharedFolders = _original.SharedFolders is null ? null : [.. _original.SharedFolders],
+                SharedBy = _original.SharedBy,
             };
             if (OwnKey.NameNotSaved(_original, deviceId, DeviceName(), deviceName) is { } note)
                 await Dialogs.InfoAsync(Owner, "Pairnets", note);

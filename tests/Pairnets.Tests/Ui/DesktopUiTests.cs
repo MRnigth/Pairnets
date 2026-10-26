@@ -107,6 +107,10 @@ public sealed class SampleActions : ITrayActions
 
     public void InviteFriendTo(string folder) => Calls.Add("invite-to:" + folder);
 
+    public string? LocalFolder { get; set; } = "/home/me/Pairnets";
+
+    public void ChangeLocalFolder() => Calls.Add("change-folder");
+
     public void OpenPeople() => Calls.Add("people");
 
     public void AddDownload() => Calls.Add("add-download");

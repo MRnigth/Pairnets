@@ -1956,3 +1956,20 @@ both apps (a pop-up window, a card on Overview, a card on Needs you); he picked 
 * **Buttons.** Turn on switches "Update the nest by itself" on for each named nest (nothing changes on the nest itself)
   and updates one that is behind right away; a notice says so. Not now puts the card away. Both last until the next
   app update. There is no "Don't ask again": it comes back at most once per update and Settings has the switch.
+
+## Where a nest is saved on this computer (invited nests too, 2026-10-23)
+
+* **Your own choice, per computer.** A nest's folder is only this computer's setting: it is never sent to the nest, so
+  choosing or changing it on a friend's nest never moves the friend's folder (or your other computers' folders). The
+  add window's folder step, the Settings folder row and the question before a change all say so in words
+  (`FolderChoiceText`); the old "This folder stays the same on all your computers" was wrong and is gone.
+* **A new folder starts fresh, it doesn't move files.** Save with another folder first asks (new folder fills from the
+  nest and is merged with what is in it; the old folder stays as it is but no longer syncs; delete it yourself). Moving
+  the files instead was left out: On-Demand and nest-only files are placeholders that a move would download or break,
+  and a move between drives can stop half-way. It can come later as its own choice.
+* **The Files page shows "Saved in … · Change…"**, which opens Settings at the folder row; the change is saved there, so
+  the folder checks (another nest's folder, and the protected-folder check of fix/program-files-folder through
+  `ClientSettings.FolderProblem`) stay in one place.
+* **A Settings save keeps a friend's nest theirs.** The saved nest now carries its access, shared folders and owner's
+  name; before, any Save on a friend's nest forgot whose it was until the nest was signed in to again.
+* Linked-nest invites ("From Oskar – …" inside your own nest) live in your nest's folder and get no place of their own.

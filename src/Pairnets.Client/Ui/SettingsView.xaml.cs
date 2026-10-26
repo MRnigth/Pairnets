@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using System.Windows.Threading;
 using Pairnets.Client.Themes;
 using Pairnets.Core;
 using Pairnets.Core.Api;
@@ -70,6 +71,7 @@ public partial class SettingsView : UserControl
         _original = current;
         _protector = protector;
         _folderProblem = folderProblem;
+        _nestTitle = nestTitle ?? current.NestLabel;
         if (nestCount > 1 && nestTitle is not null)
         {
             // Several nests: the nest card, the folder and the name are this nest's; the switches are for all of them.
@@ -99,6 +101,10 @@ public partial class SettingsView : UserControl
         }
         ServerUrlBox.Text = current.ServerUrl ?? string.Empty;
         FolderBox.Text = current.Folder ?? string.Empty;
+        // The folder is this computer's own: never sent to the nest, so a friend's folder on their computer stays put.
+        FolderLabel.Text = FolderChoiceText.FieldLabel(nestTitle ?? current.NestLabel);
+        System.Windows.Automation.AutomationProperties.SetName(FolderBox, FolderLabel.Text);
+        FolderHereText.Text = FolderChoiceText.OnlyHere(current.ShareAccess());
         DeviceBox.Text = current.DeviceName ?? ComputerName.Default();
         IgnoreBox.Text = string.Join(Environment.NewLine, current.ExtraIgnore);
         AutoStartBox.IsChecked = current.StartWithWindows;
@@ -453,6 +459,15 @@ public partial class SettingsView : UserControl
         }
     }
 
+    /// <summary>"Change…" on the Files page: the folder row is scrolled to and its box focused.</summary>
+    public void ShowFolderRow() =>
+        Dispatcher.BeginInvoke(DispatcherPriority.Loaded, () =>
+        {
+            FolderBox.BringIntoView();
+            FolderBox.Focus();
+            FolderBox.SelectAll();
+        });
+
     private void OnBrowse(object sender, RoutedEventArgs e)
     {
         if (Dialogs.PickFolder(Owner, "Choose the folder to keep in sync", FolderBox.Text) is { } folder)
@@ -532,6 +547,12 @@ public partial class SettingsView : UserControl
             Fail(problem);
             return;
         }
+        // Another folder: said first what happens (the new one fills from the nest, the old one is kept as it is).
+        if (FolderChoiceText.IsChange(_original.Folder, folder)
+            && Dialogs.Choose(Owner, FolderChoiceText.ChangeTitle(_nestTitle, folder), string.Empty,
+                FolderChoiceText.ChangePoints(_original.ShareAccess(), _original.Folder), FolderChoiceText.Cancel, FolderChoiceText.SaveHere)
+            != FolderChoiceText.SaveHere)
+            return;
         if (!Directory.Exists(folder))
         {
             if (Ask($"The folder {folder} does not exist. Create it?", "Pairnets", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
@@ -603,6 +624,10 @@ public partial class SettingsView : UserControl
                 NameOfferAnswered = _original.NameOfferAnswered,
                 LastRunVersion = _original.LastRunVersion,
                 NestAutoUpdateOfferFor = _original.NestAutoUpdateOfferFor,
+                // A friend's nest stays theirs: whose it is and what this computer may do there are kept.
+                Access = _original.Access,
+                SharedFolders = _original.SharedFolders is null ? null : [.. _original.SharedFolders],
+                SharedBy = _original.SharedBy,
             };
             if (OwnKey.NameNotSaved(_original, deviceId, DeviceName(), deviceName) is { } note)
                 Fail(note);
@@ -658,6 +683,7 @@ public partial class SettingsView : UserControl
     private void OnReset(object sender, RoutedEventArgs e) => ResetRequested?.Invoke();
 
     private readonly Func<string, string?>? _folderProblem;
+    private readonly string? _nestTitle;
 
     /// <summary>Where this nest's key is saved outside the settings file (Mac, Linux): see <see cref="ClientSettings.KeySlotFor"/>.</summary>
     public string? KeySlot { get; init; }
