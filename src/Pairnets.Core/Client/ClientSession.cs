@@ -177,7 +177,7 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
     // ------------------------------------------------------------------ downloads on the nest (1.0.61.8)
 
     private HashSet<string>? _downloadsSeen;
-    private int _downloadsRefreshing;
+    private readonly SemaphoreSlim _downloadsRefreshing = new(1, 1);
 
     /// <summary>
     /// Raised once for each download the nest finished (also one that finished while this computer was off: the ids already
@@ -185,14 +185,18 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
     /// </summary>
     public event Action<NestDownload>? DownloadFinished;
 
-    private string DownloadsSeenFile => Path.Combine(StateDirectory, "downloads-seen.txt");
+    /// <summary>The finished downloads already told, next to state.db (<see cref="LocalReset"/> removes it with it).</summary>
+    public const string DownloadsSeenFileName = "downloads-seen.txt";
+
+    private string DownloadsSeenFile => Path.Combine(StateDirectory, DownloadsSeenFileName);
 
     /// <summary>
     /// Reads the nest's downloads for the Computers page: with the device list every 30 seconds, and every second while one
     /// is busy (<see cref="LiveTickAsync"/>). Only the owner's computers have them; an older nest says so
     /// (<see cref="StatusSnapshot.NestDownloadsUnsupported"/>).
     /// </summary>
-    public async Task RefreshDownloadsAsync()
+    /// <param name="fresh">After the owner changed the list: wait for a read already under way, then read again (else it is skipped).</param>
+    public async Task RefreshDownloadsAsync(bool fresh = false)
     {
         if (!Engine.Access.IsOwner)
         {
@@ -200,7 +204,9 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
                 Update(s => s with { NestDownloads = null, NestDownloadsUnsupported = false });
             return;
         }
-        if (Interlocked.Exchange(ref _downloadsRefreshing, 1) == 1)
+        if (fresh)
+            await _downloadsRefreshing.WaitAsync().ConfigureAwait(false);
+        else if (!_downloadsRefreshing.Wait(0))
             return;
         try
         {
@@ -218,7 +224,7 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
         }
         finally
         {
-            Interlocked.Exchange(ref _downloadsRefreshing, 0);
+            _downloadsRefreshing.Release();
         }
     }
 
@@ -292,7 +298,7 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
         }
         if (error is not null)
             return NestDownloadErrors.Sentence(error);
-        await RefreshDownloadsAsync().ConfigureAwait(false);
+        await RefreshDownloadsAsync(fresh: true).ConfigureAwait(false);
         return null;
     }
 
@@ -318,7 +324,7 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
         {
             return false;
         }
-        await RefreshDownloadsAsync().ConfigureAwait(false);
+        await RefreshDownloadsAsync(fresh: true).ConfigureAwait(false);
         return done;
     }
 
