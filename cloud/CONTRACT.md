@@ -857,7 +857,7 @@ it away.
 
 With more than one nest the app MUST let the person choose (never pick one silently), showing label and address.
 
-**Sign in with a link** (migration 0010; `docs/DECISIONS.md`, "Sign in the app with a link and a code"). For when the
+**Sign in with a link** (migration 0011; `docs/DECISIONS.md`, "Sign in the app with a link and a code"). For when the
 app can't open a browser, or the sign-in can't come back to it (another computer, a phone, a Linux box without a
 screen). The app shows a long one-time link; it is opened in any browser, where the person signs in, picks the nest and
 presses Allow; the page then shows a long code, and only that code, pasted into the app, hands over the key. The poll

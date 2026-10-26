@@ -74,7 +74,7 @@ interface DeviceLoginRow {
   /** Where the sign-in request came from, as Cloudflare saw it at /v1/app/start: two-letter country and city only. */
   request_country: string | null;
   request_city: string | null;
-  /** 'code': a sign-in link, finished only by the long code (0010). */
+  /** 'code': a sign-in link, finished only by the long code (0011). */
   mode: "poll" | "code";
   code_hash: unknown;
   code_expires_at: number | null;

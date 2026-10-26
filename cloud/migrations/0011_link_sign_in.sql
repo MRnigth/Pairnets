@@ -1,4 +1,4 @@
--- Pairnets Cloud, migration 0010: signing an app in with a link (CONTRACT.md section 6.9, "Sign in with a link"). The
+-- Pairnets Cloud, migration 0011: signing an app in with a link (CONTRACT.md section 6.9, "Sign in with a link"). The
 -- app shows a long one-time link; it is opened in any browser, the person signs in and presses Allow, and the page
 -- shows a long code. Only that code, pasted into the app, finishes the sign-in: in this mode the app's poll never hands
 -- over a key. Additive: five columns on device_logins. Only hashes of the link and the code are kept.
