@@ -15,6 +15,8 @@
   <ItemGroup>
     <!-- The public half of the release signing key (docs/HOWTO.md, "Signed releases"): the one copy the apps use. -->
     <EmbeddedResource Include="..\..\deploy\release-signing.pub" LogicalName="Pairnets.release-signing.pub" />
+    <!-- The licence texts of everything the apps ship (scripts/make-notices.sh): "Open-source licences" in Settings opens it. -->
+    <EmbeddedResource Include="..\..\deploy\THIRD-PARTY-NOTICES.txt" LogicalName="Pairnets.THIRD-PARTY-NOTICES.txt" />
   </ItemGroup>
 
   <ItemGroup>
