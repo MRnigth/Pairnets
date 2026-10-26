@@ -415,6 +415,11 @@ ${sessions}
 </ul>
 </section>
 <section class="card">
+<h2>Your data</h2>
+<p>Download a copy of everything Pairnets stores about your account, as a JSON file. Your files are not in it: they are only on your own nest and computers.</p>
+<p><a class="button secondary" id="export-data" href="/v1/me/export" download>Download my data</a></p>
+</section>
+<section class="card">
 <h2>Delete account</h2>
 <p>This removes your account, your nests' links to Pairnets and everything stored about you here. Your nests keep their files.</p>
 <p class="muted"><a href="/delete-account">What gets deleted, and what stays</a></p>

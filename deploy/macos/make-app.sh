@@ -22,6 +22,9 @@ for s in 16 32 128 256 512; do
 done
 iconutil -c icns "$ICONSET" -o "$APP/Contents/Resources/Pairnets.icns"
 
+# The licence texts must go along with the program (the app also carries them inside, for Settings -> About).
+cp "$ROOT/deploy/THIRD-PARTY-NOTICES.txt" "$ROOT/LICENSE" "$APP/Contents/Resources/"
+
 sed -e "s/__VERSION__/$VERSION/g" "$ROOT/deploy/macos/Info.plist" > "$APP/Contents/Info.plist"
 
 # Ad-hoc signature: required for Apple Silicon to run the binary at all. Not notarized.

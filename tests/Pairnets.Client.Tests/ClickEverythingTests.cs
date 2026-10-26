@@ -1042,6 +1042,8 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
         On("Add a nest…", "ask the app to sign in to one more nest", c => c.Bench.Events.Items.Contains("AddNestRequested")),
         On("Invite a friend…", "ask the app to open the invite window", c => c.Bench.Events.Items.Contains("InviteFriendRequested")),
         On("Stop syncing…", "ask the app to stop syncing this nest on this computer", c => c.Bench.Events.Items.Contains("LeaveNestRequested")),
+        // "Open-source licences" opens the licence texts the app carries (a copy in the temp folder), not the website.
+        On("Open-source licences", "ask the app to open the licence texts it carries", c => c.Bench.Opened.Items.SequenceEqual([ThirdPartyNotices.CopyPath])),
         new(t => t.Handlers.Contains("SettingsView.OnAboutLink"),"ask the app to open that page of pairnets.app in the browser",
             c => c.Target.Element is Button { CommandParameter: string url } && url.StartsWith(PairnetsLinks.Website, StringComparison.Ordinal)
                 && c.Bench.Opened.Items.SequenceEqual([url])),

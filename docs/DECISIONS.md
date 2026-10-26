@@ -1973,3 +1973,62 @@ both apps (a pop-up window, a card on Overview, a card on Needs you); he picked 
 * **A Settings save keeps a friend's nest theirs.** The saved nest now carries its access, shared folders and owner's
   name; before, any Save on a friend's nest forgot whose it was until the nest was signed in to again.
 * Linked-nest invites ("From Oskar – …" inside your own nest) live in your nest's folder and get no place of their own.
+
+## Legal check fixes (2026-10-26)
+
+A legal check of the pages against the code (the checklist is outside the repo). The owner's choices: no paid items (no
+c/o address, CVR, app signing or trademark), keep "MRnigth" + support@pairnets.app, say plainly that support mail sits
+in a personal Gmail, build "Download my data", keep the Ko-fi name.
+
+* **Pages now match the code.** They now cover:
+  * join requests' rough place (country and city);
+  * the 4-nest limit;
+  * join requests kept up to 30 days;
+  * support mail in MRnigth's own Gmail, with no processing agreement;
+  * "Download my data".
+
+  The footer line "Only computers you have allowed can get in" now reads "allowed on your account", since the
+  service can allow a computer too. The privacy page no longer says "We can't see it" of the nest.
+* **Who runs Pairnets.** Only the name "MRnigth" is published. The privacy, terms and contact pages say that
+  authorities, and anyone who needs it for a legal claim or a data request, can get the full name and postal address by
+  email. A lawyer should confirm this is enough.
+* **Digital Services Act.** Terms section 11 gives:
+  * support@ as the single point of contact for users and authorities (English or Danish);
+  * how to report illegal content;
+  * what can be done (Pairnets can't see or remove files on a nest);
+  * reasons and appeals, always decided by a person.
+
+  The Guidelines and the Contact page link to it. Pairnets is treated as mostly a mere conduit: files are on users'
+  own nests.
+* **"Download my data"** (`GET /v1/me/export`, a button on the account page). It returns a JSON file of every row
+  about the account. Left out on purpose:
+  * hashes of tokens, codes and keys (secrets, not information about the person);
+  * crash and bug reports (they can't be tied to anyone).
+
+  Other people show only as the name and email the account page already shows. Each export writes `data_exported` to
+  the activity log.
+* **Terms acceptance.** Migration 0010 adds `accounts.terms_version` and `terms_accepted_at`. Each sign-in records
+  `TERMS_VERSION` (`cloud/src/accounts.ts`). A site test makes it equal the Terms page's "Last updated" date, so
+  changing the Terms date means changing the constant, and the next sign-in records the new one.
+  **Deploy order:** run migration 0010 before the Worker.
+* **Licence texts in every download.** `deploy/THIRD-PARTY-NOTICES.txt`, made by `scripts/make-notices.sh` from
+  `deploy/notices/` and the NuGet cache, holds:
+  * Pairnets' MIT licence;
+  * the list of parts;
+  * the MIT, Apache 2.0, OFL and Inno Setup texts;
+  * the SkiaSharp/HarfBuzzSharp native, .NET runtime and ASP.NET Core notices.
+
+  It goes into:
+  * the Windows installer and zip, with LICENSE.txt;
+  * the Mac app's Resources;
+  * the Linux app;
+  * the nest package.
+
+  Core embeds it. Settings → About → "Open-source licences" writes a copy to the temp folder and opens it (the
+  website's page if that fails). A test checks that every shipped package in Directory.Packages.props is listed.
+* **Export control.** The apps use only the standard cryptography built into .NET (AES-GCM, ECDH and ECDSA P-256,
+  SHA-256, TLS). They are open source and anyone can download them. The EU dual-use rules (Regulation 2021/821, the
+  general software and public-domain notes) exempt that, and US rules need no notice for standard crypto in public
+  open-source code. No paperwork.
+* **Private papers** live in a private folder on the owner's PC (never in the repo): the record of processing (GDPR art.
+  30), the data-leak checklist (art. 33/34) and the lawyer's open points.

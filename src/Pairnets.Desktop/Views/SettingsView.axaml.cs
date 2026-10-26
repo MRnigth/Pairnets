@@ -613,7 +613,8 @@ public partial class SettingsView : UserControl
     private void OnAboutLink(object? sender, RoutedEventArgs e)
     {
         if (sender is Button { CommandParameter: string url })
-            OpenLinkRequested?.Invoke(url);
+            // "Open-source licences" opens the licence texts the app carries, not only the website's list.
+            OpenLinkRequested?.Invoke(url == PairnetsLinks.Licenses ? ThirdPartyNotices.OpenTarget() : url);
     }
 
     /// <summary>"Change…" next to where the nest keeps its files: the controller opens the window with the nest's drives.</summary>

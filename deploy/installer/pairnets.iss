@@ -50,6 +50,9 @@ Name: "autostart"; Description: "Start Pairnets when I log in"; GroupDescription
 [Files]
 Source: "{#SourceDir}\Pairnets.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SourceDir}\README-client.txt"; DestDir: "{app}"; Flags: ignoreversion isreadme
+; The licence texts of Pairnets and of the open-source parts in it (they must go along with the program).
+Source: "{#SourceDir}\THIRD-PARTY-NOTICES.txt"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#SourceDir}\LICENSE.txt"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 Name: "{userprograms}\Pairnets"; Filename: "{app}\Pairnets.exe"; Tasks: startmenu
