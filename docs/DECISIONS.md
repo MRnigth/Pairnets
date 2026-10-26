@@ -1984,3 +1984,6 @@ opinion (chat 305) shaped the safety rules below.
 * **Channel support reaches computers through one normal stable release first**: older apps only read
   releases/latest and never see a beta. That release also carries the data check, the kept settings fields and the
   `channel` rule, which closes the "Latest build" hole.
+* **The first app that knows beta updates is one constant**, `BETA_MIN_APP` in `cloud/src/formats.ts` (now
+  "1.0.61.9"; 1.0.61.8 is the nest-downloads release). The account page greys out the choice for computers running an
+  older app. Set it to the version of the stable release that ships beta updates, before that Worker goes live.

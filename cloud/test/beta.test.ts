@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { BETA_TERMS_VERSION } from "../src/routes/beta";
+import { BETA_MIN_APP } from "../src/formats";
 import { DAY } from "../src/ratelimit";
 import type { FakeNestServer } from "./fake-relay";
 import { addServer, appSignIn, type Browser, Harness } from "./helpers";
@@ -252,6 +253,7 @@ describe("the account page's Beta program", () => {
     const page = (await b.call("GET", "/account")).text;
     expect(page).toContain('<h2>Beta program <span class="pill online">joined</span></h2>');
     expect(page).toContain('data-channels="public-beta developer-beta"');
+    expect(page).toContain(`data-min-app="${BETA_MIN_APP}"`); // the first app that knows beta updates, one constant
     expect(page).toContain("Joined 09.10.2026 and agreed to the beta terms of 26 October 2026. Developer beta is open to you as an invited tester.");
     expect(page).toContain('<ul class="list beta-list" id="beta-list">');
     expect(page).toContain('<button type="button" class="danger" data-action="beta-leave">Leave the beta program</button>');

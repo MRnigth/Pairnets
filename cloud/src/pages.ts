@@ -2,7 +2,7 @@
 
 import { assetUrl } from "./assets";
 import { escapeHtml as e } from "./http";
-import { displayUserCode, emailName, iso, MAX_USERNAME } from "./formats";
+import { BETA_MIN_APP, displayUserCode, emailName, iso, MAX_USERNAME } from "./formats";
 
 interface LayoutOptions {
   scripts?: string[];
@@ -376,7 +376,7 @@ ${betaTerms(b, "Join the beta program")}
 <p class="muted">Every computer goes back to Off. Each keeps its beta until the next normal version is newer, then moves onto it. Nothing is removed.</p></div>`;
   const head = `<h2>Beta program <span class="pill online">joined</span></h2>`;
   if (b.needsNewTerms) {
-    return `<section class="card" id="beta" data-joined data-channels="${channels}">
+    return `<section class="card" id="beta" data-joined data-channels="${channels}" data-min-app="${e(BETA_MIN_APP)}">
 ${head}
 <p class="muted">The beta terms changed on ${e(termsDay(b.termsCurrent))}${b.termsVersion ? ` (you agreed to the ones of ${e(termsDay(b.termsVersion))})` : ""}. Agree to the new terms to keep getting beta updates; until then your computers get only normal versions.</p>
 ${betaTerms(b, "Agree to the new beta terms")}
@@ -386,7 +386,7 @@ ${leave}
   const dev = b.channels.includes("developer-beta");
   const pub = b.channels.includes("public-beta");
   const open = dev ? "Developer beta is open to you as an invited tester." : pub ? "Developer beta is only for invited testers." : "The betas open to you once you are invited.";
-  return `<section class="card" id="beta" data-joined data-channels="${channels}">
+  return `<section class="card" id="beta" data-joined data-channels="${channels}" data-min-app="${e(BETA_MIN_APP)}">
 ${head}
 <p class="muted">Joined ${b.joinedAt !== null ? e(shortDay(b.joinedAt)) : ""} and agreed to the beta terms of ${e(termsDay(b.termsVersion ?? b.termsCurrent))}. ${open} Each computer chooses in its own Settings › Updates › Beta updates; you can change it here too.</p>
 <ul class="list beta-list" id="beta-list"><li class="muted">Loading...</li></ul>

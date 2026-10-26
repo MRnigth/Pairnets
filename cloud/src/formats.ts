@@ -168,6 +168,10 @@ export function cleanLabel(input: unknown): string | null | "invalid" {
 }
 
 /** Usernames are a display name only (never used to sign in), so they need not be unique. */
+// The first Pairnets app that knows beta updates; the account page greys out the choice for older ones. Set it to the
+// version of the release that ships beta updates (docs/DECISIONS.md, "Beta updates: the account, the nest and the apps").
+export const BETA_MIN_APP = "1.0.61.9";
+
 export const MAX_USERNAME = 32;
 
 /** The part of an email address before the @: what an account without a username is called. */

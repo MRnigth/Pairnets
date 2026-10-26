@@ -758,8 +758,9 @@ const ACCOUNT_JS = String.raw`(function () {
   var beta = document.getElementById("beta");
   var betaList = document.getElementById("beta-list");
   var BETA_WORDS = { "off": "Off", "public-beta": "Public beta", "developer-beta": "Developer beta" };
-  // The first app that knows beta updates; an older one (or one the nest has no version for) can't take them yet.
-  var BETA_FIRST = [1, 0, 61, 8];
+  // The first app that knows beta updates (BETA_MIN_APP, from the page); an older one (or one the nest has no version
+  // for) can't take them yet.
+  var BETA_FIRST = ((beta && beta.getAttribute("data-min-app")) || "1.0.61.9").split(".").map(Number).concat([0, 0, 0, 0]).slice(0, 4);
   function betaReady(app) {
     var m = /^(\d+)\.(\d+)\.(\d+)(?:\.(\d+))?/.exec(app || "");
     if (!m) return false;
