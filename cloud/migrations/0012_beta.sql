@@ -1,4 +1,4 @@
--- Pairnets Cloud, migration 0010: the beta program (src/routes/beta.ts). Additive: one row per account that joined (and
+-- Pairnets Cloud, migration 0012: the beta program (src/routes/beta.ts). Additive: one row per account that joined (and
 -- kept after it leaves, with left_at), what it may get (public_allowed, developer_allowed: set on /admin/beta), and a
 -- rev that goes up on every change. Each nest remembers the rev it was last told (beta_rev_pushed), so the hourly cron
 -- tells the ones that missed a change. Bug reports gain the app's channel and build. Apply this migration before the

@@ -1953,7 +1953,7 @@ opinion (chat 305) shaped the safety rules below.
 
 * **Join once, on the account page.** sync.pairnets.app/account has a "Beta program" section: tick the beta terms
   (`BETA_TERMS_VERSION`, the text at /beta-terms is the EULA chat's) and press "Join the beta program". The Worker keeps
-  it in D1 (`beta_members`, migration 0010). Public beta is open to every member while `BETA_PUBLIC_FOR_ALL` is "1";
+  it in D1 (`beta_members`, migration 0012; 0010 and 0011 belong to other branches). Public beta is open to every member while `BETA_PUBLIC_FOR_ALL` is "1";
   Developer beta only for accounts allowed on /admin/beta. New terms: the account agrees again before betas resume.
   "Leave the beta program" sets every own computer back to Off.
 * **The sign-up reaches the computers only through the owner's own nest.** The apps keep no account token, so the Worker
