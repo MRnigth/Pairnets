@@ -21,10 +21,32 @@ public static class PairnetsInfo
     public const string DpapiEntropy = "Pairnets.Client.Token.v1";
 
     /// <summary>
-    /// This build's release version, e.g. "1.0.58" (main builds are numbered 1.0.&lt;run&gt;), or "1.0.59.1" for a quick fix
-    /// released from a v1.0.59.1 tag.
+    /// This build's release version, e.g. "1.0.58" (main builds are numbered 1.0.&lt;run&gt;), "1.0.59.1" for a quick fix
+    /// released from a v1.0.59.1 tag, or "1.0.61.8.1" from a five-number tag (the release workflow builds with the full
+    /// number as InformationalVersion and its first four as Version, the most dotnet accepts).
     /// </summary>
-    public static string ProductVersion { get; } = FormatVersion(typeof(PairnetsInfo).Assembly.GetName().Version);
+    public static string ProductVersion { get; } = ReadVersion(typeof(PairnetsInfo).Assembly);
+
+    /// <summary>The informational version without any "+commit" ending when it is a release number, else the assembly version.</summary>
+    public static string ReadVersion(System.Reflection.Assembly assembly)
+    {
+        var info = System.Reflection.CustomAttributeExtensions
+            .GetCustomAttribute<System.Reflection.AssemblyInformationalVersionAttribute>(assembly)?.InformationalVersion;
+        return FromInformational(info) ?? FormatVersion(assembly.GetName().Version);
+    }
+
+    /// <summary>"1.0.61.8.1+4f2c9e1" → "1.0.61.8.1"; null when it is not a release number ("1.0.0-dev", empty).</summary>
+    public static string? FromInformational(string? informational)
+    {
+        var text = informational?.Split('+', 2)[0].Trim();
+        if (!ReleaseVersion.TryParse(text, out var version))
+            return null;
+        // "1.0.58.0" from a 4-number Version reads as 1.0.58, as it always has.
+        var s = version.ToString();
+        while (s.EndsWith(".0", StringComparison.Ordinal) && s.Count(c => c == '.') > 2)
+            s = s[..^2];
+        return s;
+    }
 
     /// <summary>"1.0.38; Windows": sent to the server so its Devices list shows each computer's app and system.</summary>
     public static string ClientDescription { get; } = $"{ProductVersion}; {SystemName()}";

@@ -7,6 +7,10 @@
 #ifndef AppVersion
   #define AppVersion "1.0.0"
 #endif
+; The Windows file version takes at most four numbers: release.yml passes the first four of a 1.0.61.8.1 release.
+#ifndef FileVersion
+  #define FileVersion AppVersion
+#endif
 #ifndef SourceDir
   #define SourceDir "..\..\publish\client"
 #endif
@@ -15,6 +19,8 @@
 AppId={{5DB04D62-50C8-4967-B220-449C44AC1BA3}
 AppName=Pairnets
 AppVersion={#AppVersion}
+VersionInfoVersion={#FileVersion}
+VersionInfoProductTextVersion={#AppVersion}
 AppPublisher=Pairnets
 AppCopyright=(c) 2026 Pairnets
 DefaultDirName={localappdata}\Programs\Pairnets

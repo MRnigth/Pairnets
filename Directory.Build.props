@@ -9,6 +9,8 @@
     <Product>Pairnets</Product>
     <Copyright>© 2026 Pairnets. MIT License.</Copyright>
     <Version>1.0.0</Version>
+    <!-- The release number alone (1.0.61.8.1), without "+commit": the apps call themselves by it (PairnetsInfo.ProductVersion). -->
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <InvariantGlobalization Condition="'$(InvariantGlobalization)' == ''">false</InvariantGlobalization>
     <!-- No telemetry, no source-link network fetches at build time. -->
     <EnableSourceLink>false</EnableSourceLink>

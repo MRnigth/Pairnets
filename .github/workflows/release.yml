@@ -39,7 +39,8 @@ jobs:
         id: v
         shell: bash
         run: |
-          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"; else echo "version=1.0.${{ github.run_number }}" >> "$GITHUB_OUTPUT"; fi
+          # version = the release number (1.0.61.8.1), file = its first four numbers (dotnet, Windows and macOS take no more)
+          bash scripts/release-version.sh "$GITHUB_REF" "${{ github.run_number }}" | tee -a "$GITHUB_OUTPUT"
       - name: Chromium for the website tests
         run: |
           if [ -d tests/Pairnets.Browser.Tests ]; then
@@ -54,7 +55,7 @@ jobs:
         run: >
           dotnet publish src/Pairnets.Server/Pairnets.Server.csproj -c Release -r linux-x64 --self-contained true
           -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=false -p:DebugType=none
-          -p:Version=${{ steps.v.outputs.version }} -o dist/pairnets-server-linux-x64
+          -p:Version=${{ steps.v.outputs.file }} -p:InformationalVersion=${{ steps.v.outputs.version }} -o dist/pairnets-server-linux-x64
       - name: Package
         # The same script makes the package for the pre-deploy check (scripts/pre-deploy.ps1).
         run: bash scripts/package-server.sh dist/pairnets-server-linux-x64 "${{ steps.v.outputs.version }}" dist
@@ -75,7 +76,8 @@ jobs:
         id: v
         shell: bash
         run: |
-          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"; else echo "version=1.0.${{ github.run_number }}" >> "$GITHUB_OUTPUT"; fi
+          # version = the release number (1.0.61.8.1), file = its first four numbers (dotnet, Windows and macOS take no more)
+          bash scripts/release-version.sh "$GITHUB_REF" "${{ github.run_number }}" | tee -a "$GITHUB_OUTPUT"
       - name: Test the Windows app
         shell: pwsh
         run: |
@@ -87,7 +89,7 @@ jobs:
         run: >
           dotnet publish src/Pairnets.Client/Pairnets.Client.csproj -c Release -r win-x64 --self-contained true
           -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none
-          -p:Version=${{ steps.v.outputs.version }} -o publish/client
+          -p:Version=${{ steps.v.outputs.file }} -p:InformationalVersion=${{ steps.v.outputs.version }} -o publish/client
       - name: Zip
         shell: pwsh
         run: |
@@ -100,7 +102,7 @@ jobs:
         run: |
           $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
           if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress | Out-Null }
-          & $iscc "/DAppVersion=${{ steps.v.outputs.version }}" "/DSourceDir=$PWD\publish\client" "/O$PWD\dist" deploy\installer\pairnets.iss
+          & $iscc "/DAppVersion=${{ steps.v.outputs.version }}" "/DFileVersion=${{ steps.v.outputs.file }}" "/DSourceDir=$PWD\publish\client" "/O$PWD\dist" deploy\installer\pairnets.iss
           if ($LASTEXITCODE -ne 0) { throw "ISCC failed" }
       - uses: actions/upload-artifact@v4
         with:
@@ -119,12 +121,13 @@ jobs:
         id: v
         shell: bash
         run: |
-          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"; else echo "version=1.0.${{ github.run_number }}" >> "$GITHUB_OUTPUT"; fi
+          # version = the release number (1.0.61.8.1), file = its first four numbers (dotnet, Windows and macOS take no more)
+          bash scripts/release-version.sh "$GITHUB_REF" "${{ github.run_number }}" | tee -a "$GITHUB_OUTPUT"
       - name: Publish
         run: >
           dotnet publish src/Pairnets.Desktop/Pairnets.Desktop.csproj -c Release -r linux-x64 --self-contained true
           -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none
-          -p:Version=${{ steps.v.outputs.version }} -o dist/pairnets-desktop-linux-x64
+          -p:Version=${{ steps.v.outputs.file }} -p:InformationalVersion=${{ steps.v.outputs.version }} -o dist/pairnets-desktop-linux-x64
       - name: Package
         run: |
           cp deploy/linux-desktop/install-desktop.sh dist/pairnets-desktop-linux-x64/
@@ -148,13 +151,14 @@ jobs:
         id: v
         shell: bash
         run: |
-          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"; else echo "version=1.0.${{ github.run_number }}" >> "$GITHUB_OUTPUT"; fi
+          # version = the release number (1.0.61.8.1), file = its first four numbers (dotnet, Windows and macOS take no more)
+          bash scripts/release-version.sh "$GITHUB_REF" "${{ github.run_number }}" | tee -a "$GITHUB_OUTPUT"
       - name: Publish and bundle
         run: |
           mkdir -p dist
           for arch in arm64 x64; do
             dotnet publish src/Pairnets.Desktop/Pairnets.Desktop.csproj -c Release -r osx-$arch --self-contained true \
-              -p:DebugType=none -p:Version=${{ steps.v.outputs.version }} -o publish/mac-$arch
+              -p:DebugType=none -p:Version=${{ steps.v.outputs.file }} -p:InformationalVersion=${{ steps.v.outputs.version }} -o publish/mac-$arch
             bash deploy/macos/make-app.sh publish/mac-$arch ${{ steps.v.outputs.version }} $arch dist
           done
           ls -la dist
@@ -281,8 +285,9 @@ jobs:
       - name: Version file (read by the apps' update check)
         shell: bash
         run: |
-          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then v="${GITHUB_REF_NAME#v}"; else v="1.0.${{ github.run_number }}"; fi
-          printf '{"version":"%s","commit":"%s"}\n' "$v" "$GITHUB_SHA" > release-files/version.json
+          # "version": at most four numbers, all that apps up to 1.0.61.7 can read; "release": the full number newer apps use.
+          eval "$(bash scripts/release-version.sh "$GITHUB_REF" "${{ github.run_number }}")"
+          printf '{"version":"%s","release":"%s","commit":"%s"}\n' "$file" "$version" "$GITHUB_SHA" > release-files/version.json
           cat release-files/version.json
       - name: Checksums
         working-directory: release-files
@@ -331,8 +336,9 @@ jobs:
       - name: Version file (read by the apps' update check)
         shell: bash
         run: |
-          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then v="${GITHUB_REF_NAME#v}"; else v="1.0.${{ github.run_number }}"; fi
-          printf '{"version":"%s","commit":"%s"}\n' "$v" "$GITHUB_SHA" > release-files/version.json
+          # "version": at most four numbers, all that apps up to 1.0.61.7 can read; "release": the full number newer apps use.
+          eval "$(bash scripts/release-version.sh "$GITHUB_REF" "${{ github.run_number }}")"
+          printf '{"version":"%s","release":"%s","commit":"%s"}\n' "$file" "$version" "$GITHUB_SHA" > release-files/version.json
           cat release-files/version.json
       - name: Checksums
         working-directory: release-files

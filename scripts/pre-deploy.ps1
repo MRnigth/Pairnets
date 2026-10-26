@@ -51,7 +51,9 @@ $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'predeploy-lib.ps1')
 
 # ---------------------------------------------------------------------------------------------- settings
-$LocalVersion = '1.0.65000.1'       # the version of the packages built here (newer than any real release)
+$LocalVersion = '1.0.65000.1.1'     # the version of the packages built here (newer than any real release; five numbers, as
+                                    # releases may have)
+$LocalFileVersion = '1.0.65000.1'   # its first four numbers: dotnet's Version and the Windows file version (release-version.sh)
 $BoxName = 'pairnets-test'
 $BoxShell = "wsl.exe -d $BoxName -u root --exec" # --exec: the script reaches bash as written, without a second shell
 $Ports = @(15075, 15443, 15025, 15480)
@@ -459,7 +461,7 @@ function Step-Publish($Ctx) {
     $r = Invoke-StepTool -Ctx $Ctx -What 'publish the server for Linux' -File 'dotnet.exe' -TimeoutSeconds 1800 -Arguments @(
         'publish', 'src/Pairnets.Server/Pairnets.Server.csproj', '-c', 'Release', '-r', 'linux-x64', '--self-contained', 'true',
         '-p:PublishSingleFile=true', '-p:IncludeNativeLibrariesForSelfExtract=false', '-p:DebugType=none',
-        "-p:Version=$LocalVersion", '-o', $linux)
+        "-p:Version=$LocalFileVersion", "-p:InformationalVersion=$LocalVersion", '-o', $linux)
     if ($r.ExitCode -eq 0) {
         $b = ConvertTo-PdBashPath $Dist
         Invoke-Bash $Ctx 'feed 1 (package-server.sh)' @('scripts/make-feed.sh', "$b/pairnets-server-linux-x64", $LocalVersion, "$b/feed1", $Sha) | Out-Null
@@ -472,15 +474,18 @@ function Step-Publish($Ctx) {
     Invoke-StepTool -Ctx $Ctx -What 'publish the server for Windows (for the tests)' -File 'dotnet.exe' -TimeoutSeconds 1800 -Arguments @(
         'publish', 'src/Pairnets.Server/Pairnets.Server.csproj', '-c', 'Release', '-r', 'win-x64', '--self-contained', 'true',
         '-p:PublishSingleFile=true', '-p:IncludeNativeLibrariesForSelfExtract=false', '-p:DebugType=none',
-        "-p:Version=$LocalVersion", '-o', $win) | Out-Null
+        "-p:Version=$LocalFileVersion", "-p:InformationalVersion=$LocalVersion", '-o', $win) | Out-Null
     if (-not (Test-Path (Join-Path $win 'pairnets-server.exe'))) { Add-Problem $Ctx 'pairnets-server.exe was not published' }
     # The Windows app, exactly as release.yml publishes it (a single-file smoke test).
     $client = Join-Path $Dist 'client'
     Invoke-StepTool -Ctx $Ctx -What 'publish the Windows app (single file)' -File 'dotnet.exe' -TimeoutSeconds 1800 -Arguments @(
         'publish', 'src/Pairnets.Client/Pairnets.Client.csproj', '-c', 'Release', '-r', 'win-x64', '--self-contained', 'true',
         '-p:PublishSingleFile=true', '-p:IncludeNativeLibrariesForSelfExtract=true', '-p:DebugType=none',
-        "-p:Version=$LocalVersion", '-o', $client) | Out-Null
+        "-p:Version=$LocalFileVersion", "-p:InformationalVersion=$LocalVersion", '-o', $client) | Out-Null
     if (-not (Test-Path (Join-Path $client 'Pairnets.exe'))) { Add-Problem $Ctx 'Pairnets.exe (the Windows app) was not published' }
+    elseif ((Get-Item (Join-Path $client 'Pairnets.exe')).VersionInfo.ProductVersion -notlike "$LocalVersion*") {
+        Add-Problem $Ctx "Pairnets.exe does not call itself $LocalVersion (five-number release versions)"
+    }
 }
 
 function Step-RenderScreens($Ctx) {

@@ -42,7 +42,9 @@ public class OldUpdaterCompatTests
             "pairnets-desktop-linux-x64.tar.gz" => TestUpdatePackages.Make(n, Encoding.UTF8.GetBytes("new Pairnets " + version)),
             _ => Encoding.UTF8.GetBytes($"release file {n} of {version}\n"),
         });
-        files["version.json"] = Encoding.UTF8.GetBytes($"{{\"version\":\"{version}\",\"commit\":\"{new string('a', 40)}\"}}\n");
+        // scripts/release-version.sh: "version" is the first four numbers (file=), "release" the full number (version=).
+        var file = string.Join('.', version.Split('.').Take(4));
+        files["version.json"] = Encoding.UTF8.GetBytes($"{{\"version\":\"{file}\",\"release\":\"{version}\",\"commit\":\"{new string('a', 40)}\"}}\n");
         var sums = new StringBuilder();
         foreach (var name in files.Keys.Order(StringComparer.Ordinal))
             sums.Append(Convert.ToHexString(SHA256.HashData(files[name])).ToLowerInvariant()).Append("  ").Append(name).Append('\n');
@@ -136,7 +138,7 @@ public class OldUpdaterCompatTests
         Assert.Contains("OutputBaseFilename=PairnetsSetup\n", RepoPaths.Read("deploy", "installer", "pairnets.iss"));
         Assert.Contains("gh release create latest release-files/*", workflow);
         // The two files every older updater reads first, in the format they parse.
-        Assert.Contains("printf '{\"version\":\"%s\",\"commit\":\"%s\"}\\n' \"$v\" \"$GITHUB_SHA\" > release-files/version.json", workflow);
+        Assert.Contains("printf '{\"version\":\"%s\",\"release\":\"%s\",\"commit\":\"%s\"}\\n' \"$file\" \"$version\" \"$GITHUB_SHA\" > release-files/version.json", workflow);
         Assert.Contains("find . -maxdepth 1 -type f ! -name 'SHA256SUMS.txt*' -printf '%P\\0' | sort -z | xargs -0 sha256sum > SHA256SUMS.txt", workflow);
         Assert.Contains("bash scripts/sign-release.sh release-files", workflow);
         // Pairnets.exe stays at the top of the zip and Pairnets at the top of the Linux app's folder (what an update swaps).
@@ -198,12 +200,74 @@ public class OldUpdaterCompatTests
     }
 
     [Fact]
+    public async Task AFiveNumberRelease_ReachesOldApps_ByItsFirstFourNumbers_AndNewAppsByAllFive()
+    {
+        var release = ReleaseAsTheWorkflowWritesIt("1.0.61.8.1");
+
+        // Apps up to 1.0.61.7 read only "version" (1.0.61.8), newer than theirs: they update, straight to 1.0.61.8.1.
+        var old = new Updater1_0_52(new HttpClient(new FakeGitHub(release)), Base);
+        Assert.Equal("1.0.61.8", (await old.CheckAsync("1.0.61.7", "PairnetsSetup.exe", CancellationToken.None))?.Version);
+        Assert.Equal("1.0.61.8", (await old.CheckAsync("1.0.52", "PairnetsSetup.exe", CancellationToken.None))?.Version);
+
+        // From 1.0.61.8 on, the apps read "release".
+        var checker = new UpdateChecker(new HttpClient(new FakeGitHub(release)), Base, signingKeyPem: TestReleaseKey.PublicKeyPem);
+        Assert.Equal("1.0.61.8.1", (await checker.CheckAsync("1.0.61.8", UpdatePackage.WindowsInstaller, CancellationToken.None))?.Version);
+        Assert.Equal("1.0.61.8.1", (await checker.CheckAsync("1.0.61.7", UpdatePackage.WindowsInstaller, CancellationToken.None))?.Version);
+        // Built with InformationalVersion 1.0.61.8.1 it calls itself that, and is then up to date.
+        var installed = PairnetsInfo.FromInformational("1.0.61.8.1")!;
+        Assert.Null(await checker.CheckAsync(installed, UpdatePackage.WindowsInstaller, CancellationToken.None));
+
+        foreach (var next in new[] { "1.0.61.8.2", "1.0.61.9", "1.0.61.999.999" })
+        {
+            var later = new UpdateChecker(new HttpClient(new FakeGitHub(ReleaseAsTheWorkflowWritesIt(next))), Base, signingKeyPem: TestReleaseKey.PublicKeyPem);
+            Assert.Equal(next, (await later.CheckAsync(installed, UpdatePackage.WindowsInstaller, CancellationToken.None))?.Version);
+        }
+        // A release from before "release" existed is not offered to a newer app.
+        var older = new UpdateChecker(new HttpClient(new FakeGitHub(ReleaseAsTheWorkflowWritesIt("1.0.61.8"))), Base, signingKeyPem: TestReleaseKey.PublicKeyPem);
+        Assert.Null(await older.CheckAsync(installed, UpdatePackage.WindowsInstaller, CancellationToken.None));
+    }
+
+    [Fact]
+    public void FiveNumberVersions_CompareNumberByNumber_AndTheServerLooksOlderOnlyWhenItIs()
+    {
+        Assert.True(UpdateChecker.IsNewer("1.0.61.8.1", "1.0.61.8"));
+        Assert.True(UpdateChecker.IsNewer("1.0.61.9", "1.0.61.8.999"));
+        Assert.True(UpdateChecker.IsNewer("1.0.61.10", "1.0.61.9.5"));
+        Assert.True(UpdateChecker.IsNewer("1.0.61.8.10", "1.0.61.8.9"));
+        Assert.False(UpdateChecker.IsNewer("1.0.61.8.0", "1.0.61.8"));
+        Assert.False(UpdateChecker.IsNewer("1.0.61.8.1.1", "1.0.61.8")); // six numbers: not a release number
+        Assert.True(UpdateChecker.ServerIsOlder("1.0.61.8", "1.0.61.8.1"));
+        Assert.False(UpdateChecker.ServerIsOlder("1.0.61.8.1", "1.0.61.8.1"));
+        Assert.False(UpdateChecker.ServerIsOlder("1.0.61.9", "1.0.61.8.1"));
+        // The 4-number file version dotnet, Windows and macOS get.
+        Assert.True(ReleaseVersion.TryParse("1.0.61.999.999", out var v));
+        Assert.Equal(new Version(1, 0, 61, 999), v.FileVersion);
+        Assert.Equal("1.0.61.999.999", v.ToString());
+    }
+
+    [Theory]
+    [InlineData("1.0.61.8.1", "1.0.61.8.1")]
+    [InlineData("1.0.61.8.1+4f2c9e1", "1.0.61.8.1")]   // a "+commit" ending, as the SDK adds with source information
+    [InlineData("1.0.58", "1.0.58")]
+    [InlineData("1.0.59.1", "1.0.59.1")]
+    [InlineData("1.0.58.0", "1.0.58")]                  // -p:Version=1.0.58.0 reads as 1.0.58, as it always has
+    [InlineData("1.0.0", "1.0.0")]                      // a build without a version
+    [InlineData("1.0.0-dev", null)]
+    [InlineData("", null)]
+    [InlineData(null, null)]
+    public void TheAppCallsItselfByItsInformationalVersion(string? informational, string? expected) =>
+        Assert.Equal(expected, PairnetsInfo.FromInformational(informational));
+
+    [Fact]
     public void ATaggedQuickFix_IsBuiltWithItsOwnNumber_AndBecomesTheLatestRelease()
     {
         var workflow = RepoPaths.Read(".github", "workflows", "release.yml");
-        // v1.0.59.1 -> 1.0.59.1 for every package, the installer and version.json.
-        Assert.Contains("if [[ \"$GITHUB_REF\" == refs/tags/v* ]]; then echo \"version=${GITHUB_REF_NAME#v}\"", workflow);
-        Assert.Contains("if [[ \"$GITHUB_REF\" == refs/tags/v* ]]; then v=\"${GITHUB_REF_NAME#v}\"", workflow);
+        // v1.0.59.1 -> 1.0.59.1 for every package, the installer and version.json (scripts/release-version.sh).
+        Assert.Contains("bash scripts/release-version.sh \"$GITHUB_REF\" \"${{ github.run_number }}\" | tee -a \"$GITHUB_OUTPUT\"", workflow);
+        Assert.Contains("eval \"$(bash scripts/release-version.sh \"$GITHUB_REF\" \"${{ github.run_number }}\")\"", workflow);
+        var script = RepoPaths.Read("scripts", "release-version.sh");
+        Assert.Contains("version=\"${REF#refs/tags/v}\"", script);
+        Assert.Contains("version=\"1.0.$RUN\"", script);
         // The apps and the server read GitHub's latest release, so the tagged one must be marked latest.
         Assert.Matches(new Regex(@"gh release create ""\$GITHUB_REF_NAME"" release-files/\* .*--latest"), workflow);
         // The server package and update.sh take only numbers and dots; four of them are fine.

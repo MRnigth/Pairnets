@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Net;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -8,7 +7,7 @@ using Pairnets.Core.Hashing;
 namespace Pairnets.Core.Client;
 
 /// <summary>A newer Pairnets release for this computer.</summary>
-/// <param name="Version">"1.0.58".</param>
+/// <param name="Version">"1.0.58", "1.0.61.8.1".</param>
 /// <param name="AssetName">The file for this platform, e.g. "PairnetsSetup.exe".</param>
 /// <param name="Sha256">Its checksum from SHA256SUMS.txt, verified after downloading.</param>
 /// <param name="Signed">
@@ -42,7 +41,14 @@ public sealed class UpdateChecker(HttpClient http, Uri? downloadBase = null, Uri
     private readonly Uri _page = releasePage ?? DefaultReleasePage;
     private readonly string _signingKey = signingKeyPem ?? ReleaseSigning.PublicKeyPem;
 
-    private sealed record VersionFile(string Version, string? Commit);
+    /// <summary>
+    /// version.json. <paramref name="Version"/> has at most four numbers, as apps up to 1.0.61.7 need (they read only it);
+    /// <paramref name="Release"/> is the full number ("1.0.61.8.1"), absent in releases before 1.0.61.8.
+    /// </summary>
+    private sealed record VersionFile(string Version, string? Commit, string? Release = null)
+    {
+        public string Newest => (string.IsNullOrWhiteSpace(Release) ? Version : Release)?.Trim() ?? string.Empty;
+    }
 
     /// <summary>The release file for this computer, or null where there is none (32-bit, ARM Linux).</summary>
     public static string? AssetForThisPlatform()
@@ -58,23 +64,11 @@ public sealed class UpdateChecker(HttpClient http, Uri? downloadBase = null, Uri
 
     /// <summary>True when <paramref name="candidate"/> is a higher version than <paramref name="current"/>.</summary>
     public static bool IsNewer(string? candidate, string? current) =>
-        TryParse(candidate, out var c) && TryParse(current, out var cur) && c > cur;
+        ReleaseVersion.TryParse(candidate, out var c) && ReleaseVersion.TryParse(current, out var cur) && c.CompareTo(cur) > 0;
 
     /// <summary>True when the server reports an older release than this app (old servers report none).</summary>
     public static bool ServerIsOlder(string? serverVersion, string appVersion) =>
         serverVersion is not null && IsNewer(appVersion, serverVersion);
-
-    private static bool TryParse(string? text, out Version version)
-    {
-        version = new Version(0, 0);
-        if (string.IsNullOrWhiteSpace(text))
-            return false;
-        var parts = text.Trim().TrimStart('v').Split('.');
-        if (parts.Length is < 2 or > 4 || parts.Any(p => !int.TryParse(p, NumberStyles.None, CultureInfo.InvariantCulture, out _)))
-            return false;
-        version = Version.Parse(string.Join('.', parts.Concat(Enumerable.Repeat("0", 4 - parts.Length))));
-        return true;
-    }
 
     /// <summary>
     /// The newer release for this platform, or null when this version is current, the platform has
@@ -89,7 +83,7 @@ public sealed class UpdateChecker(HttpClient http, Uri? downloadBase = null, Uri
             timeout.CancelAfter(TimeSpan.FromSeconds(15));
             var versionJson = await http.GetByteArrayAsync(new Uri(_base, "version.json"), timeout.Token).ConfigureAwait(false);
             var file = JsonSerializer.Deserialize<VersionFile>(versionJson, PairnetsJson.Options);
-            if (file is null || !IsNewer(file.Version, currentVersion) || asset is null)
+            if (file is null || !IsNewer(file.Newest, currentVersion) || asset is null)
                 return null;
             var sums = await http.GetByteArrayAsync(new Uri(_base, ReleaseSigning.SumsFile), timeout.Token).ConfigureAwait(false);
             var signature = await GetIfPresentAsync(new Uri(_base, ReleaseSigning.SignatureFile), timeout.Token).ConfigureAwait(false);
@@ -100,8 +94,8 @@ public sealed class UpdateChecker(HttpClient http, Uri? downloadBase = null, Uri
             var signed = ReleaseSigning.Verify(sums, signature, _signingKey)
                 && string.Equals(FindChecksum(text, "version.json"), ContentHash.Of(versionJson), StringComparison.OrdinalIgnoreCase);
             if (!signed)
-                return new UpdateInfo(file.Version.Trim(), asset, new Uri(_base, asset), sha ?? string.Empty, _page, Signed: false);
-            return sha is null ? null : new UpdateInfo(file.Version.Trim(), asset, new Uri(_base, asset), sha, _page, Signed: true);
+                return new UpdateInfo(file.Newest, asset, new Uri(_base, asset), sha ?? string.Empty, _page, Signed: false);
+            return sha is null ? null : new UpdateInfo(file.Newest, asset, new Uri(_base, asset), sha, _page, Signed: true);
         }
         catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException or JsonException or NotSupportedException)
         {

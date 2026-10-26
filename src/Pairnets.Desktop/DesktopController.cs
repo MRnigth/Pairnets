@@ -158,7 +158,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
 
     public void Start(string[] args)
     {
-        _log.LogInformation("Pairnets {Version} starting on {Platform}", typeof(DesktopController).Assembly.GetName().Version, _platform.Name);
+        _log.LogInformation("Pairnets {Version} starting on {Platform}", PairnetsInfo.ProductVersion, _platform.Name);
         // A pairnets:// link (the nest's website after approving this computer) starts a second
         // Pairnets, which pokes this one through the pipe and quits; come to the front for it, or do what a
         // right-click item in the file manager asked. The poke is answered once that is done.

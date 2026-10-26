@@ -44,7 +44,8 @@ if [[ -f "$SOURCE" && "$current" == "$VERSION" ]]; then
 else
   bash "$HERE/package-server.sh" "$SOURCE" "$VERSION" "$FEED" >/dev/null
 fi
-printf '{"version":"%s","commit":"%s"}\n' "$VERSION" "$COMMIT" > "$FEED/version.json"
+# As release.yml writes it: "version" at most four numbers (what apps up to 1.0.61.7 read), "release" the full number.
+printf '{"version":"%s","release":"%s","commit":"%s"}\n' "$(printf '%s' "$VERSION" | cut -d. -f1-4)" "$VERSION" "$COMMIT" > "$FEED/version.json"
 (cd "$FEED" && sha256sum "$NAME.tar.gz" version.json > SHA256SUMS.txt)
 KEY="${PAIRNETS_FEED_KEY:-$(dirname "$FEED")/feed-signing.key}"
 if [[ ! -f "$KEY" ]]; then

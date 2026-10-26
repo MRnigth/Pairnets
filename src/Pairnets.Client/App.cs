@@ -3,6 +3,7 @@ using System.Windows.Threading;
 using Microsoft.Extensions.Logging;
 using Pairnets.Client.Platform;
 using Pairnets.Client.Ui;
+using Pairnets.Core;
 using Pairnets.Core.Client;
 using Pairnets.Core.Logging;
 
@@ -26,7 +27,7 @@ public sealed class App : Application
         _fileLog = new RollingFileLoggerProvider(env.LogsDir, retentionDays: 14);
         _loggerFactory = LoggerFactory.Create(b => b.AddProvider(_fileLog).SetMinimumLevel(LogLevel.Debug));
         var log = _loggerFactory.CreateLogger("Pairnets.Client");
-        log.LogInformation("Pairnets {Version} starting", typeof(App).Assembly.GetName().Version);
+        log.LogInformation("Pairnets {Version} starting", PairnetsInfo.ProductVersion);
 
         // Errors nothing else caught are logged and kept as a cleaned crash card (nothing is sent anywhere).
         _crashes = new CrashCatcher(env.CrashesDir, TrayController.AppName, log,

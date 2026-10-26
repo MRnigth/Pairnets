@@ -122,7 +122,7 @@ server_facts() {
   host="${host#"${host%%[! ]*}"}"
   host="${host%"${host##*[! ]}"}"
   version="$({ tr -d '[:space:]' < "$SCRIPT_DIR/VERSION"; } 2>/dev/null || true)"
-  [[ "$version" =~ ^[0-9]+(\.[0-9]+){0,3}$ ]] || version=""
+  [[ "$version" =~ ^[0-9]+(\.[0-9]+){0,4}$ ]] || version=""
   printf '{"hostname":"%s"' "${host:-server}"
   [[ -z "$version" ]] || printf ',"serverVersion":"%s"' "$version"
   printf '}'

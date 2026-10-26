@@ -1904,3 +1904,29 @@ both had them:
   before it.
 * **Activity.** "Cannot reach the server; retrying." no longer adds the same sentence again when the reason is only the
   general "Pairnets cannot reach the server…".
+
+## Five-number versions: 1.0.61.8.1 … 1.0.61.999.999 (2026-10-26)
+
+Releases can now have a fifth number, so the 1.0.61 line can go on (tag `v1.0.61.8.1`). A five-number tag used to stop
+the build: dotnet (and Windows' file version, macOS' bundle version) take at most four numbers, and the apps compared
+versions with System.Version, which has four too.
+
+* **Two numbers per release** (`scripts/release-version.sh`, used by every job of release.yml): the *release number*
+  (`version=`, 1.0.61.8.1) for the tag, the server's VERSION file, the installer's AppVersion, macOS'
+  CFBundleShortVersionString and `-p:InformationalVersion`; and its first four numbers (`file=`, 1.0.61.8) for
+  `-p:Version`, the Windows file version and CFBundleVersion. Each number is at most 65534 (the Windows limit).
+* **The apps call themselves by the release number**: `PairnetsInfo.ProductVersion` reads the informational version
+  (without "+commit"; `IncludeSourceRevisionInInformationalVersion` is off), falling back to the assembly version.
+  `ReleaseVersion` compares 2 to 5 numbers, number by number (1.0.61.8 < 1.0.61.8.1 < 1.0.61.9); `UpdateChecker` uses
+  it instead of System.Version.
+* **version.json has both**: `{"version":"1.0.61.8","release":"1.0.61.8.1",...}`. Apps up to 1.0.61.7 read only
+  `version` and cannot read five numbers; the first four are enough for them to see the release as newer and install it.
+  Their prompt says "1.0.61.8" for that one update. From 1.0.61.8 on the apps read `release` (`version` when it is absent).
+* **Order of releases**: 1.0.61.8 (four numbers, with this change) comes out first. release-version.sh refuses a
+  five-number tag whose first four numbers are below 1.0.61.8: apps up to 1.0.61.7 would see nothing newer and never
+  update again.
+* **Nests**: update.sh compares with `sort -V`, which already handles five numbers, so nests on any version update.
+  An app up to 1.0.61.7 can't read a five-number nest version: it just doesn't say the nest is out of date, and after
+  updating a nest it shows the updater's "Updated from X to Y". pairnets-link.sh accepts five numbers.
+* **Pre-deploy** builds its packages as 1.0.65000.1.1 (file version 1.0.65000.1), so the whole check, the nest update
+  from feed 1 to feed 2 (1.0.65000.1.2) included, runs on five numbers, and checks that Pairnets.exe calls itself that.

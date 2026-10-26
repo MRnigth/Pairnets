@@ -98,7 +98,9 @@ public sealed class FakeReleaseFeed : IAsyncDisposable
             : Pairnets.Tests.Infrastructure.TestUpdatePackages.Make(ZipName, app);
         string Listed(byte[] file) =>
             Convert.ToHexString(SHA256.HashData(tampered ? Encoding.UTF8.GetBytes("a different file") : file)).ToLowerInvariant();
-        var versionJson = Encoding.UTF8.GetBytes($"{{\"version\":\"{version}\",\"commit\":\"0000000\"}}\n");
+        // As release.yml writes it: "version" at most four numbers (for apps up to 1.0.61.7), "release" the full number.
+        var versionJson = Encoding.UTF8.GetBytes(
+            $"{{\"version\":\"{string.Join('.', version.Split('.').Take(4))}\",\"release\":\"{version}\",\"commit\":\"0000000\"}}\n");
         var sums = Encoding.UTF8.GetBytes($"{Listed(asset)}  {AssetName}\n{Listed(zip)}  {ZipName}\n"
             + $"{Convert.ToHexString(SHA256.HashData(versionJson)).ToLowerInvariant()}  version.json\n");
         return new Release(version, asset, app, zip, versionJson, sums, signed ? Pairnets.Tests.Infrastructure.TestReleaseKey.Sign(sums) : null);
