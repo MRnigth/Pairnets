@@ -28,7 +28,9 @@ public static class BugReport
         sb.AppendLine("Pairnets bug report");
         sb.AppendLine("=================");
         sb.AppendLine(inv, $"Created:   {DateTimeOffset.Now:yyyy-MM-dd HH:mm:ss zzz}");
-        sb.AppendLine(inv, $"App:       {app} {PairnetsInfo.ProductVersion}");
+        sb.AppendLine(inv, $"App:       {app} {PairnetsInfo.DisplayVersion}");
+        if (PairnetsInfo.ThisRelease.IsBeta)
+            sb.AppendLine(inv, $"Channel:   {ReleaseChannel.DisplayName(PairnetsInfo.Channel)} (build {PairnetsInfo.Build})");
         sb.AppendLine(inv, $"System:    {RuntimeInformation.OSDescription} ({RuntimeInformation.OSArchitecture}), .NET {Environment.Version}");
 
         if (error is not null)

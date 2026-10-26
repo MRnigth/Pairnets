@@ -93,7 +93,7 @@ public sealed class TrayController : ITrayActions, IDisposable
         UpgradeSettings();
         TakeSetupChoices();
         _package = UpdatePackage.ForThisComputer(IsInstalledCopy);
-        _updates = new UpdateService(env.CreateUpdateChecker(), PairnetsInfo.ProductVersion, _package.Asset);
+        _updates = new UpdateService(env.CreateUpdateChecker(), PairnetsInfo.ThisRelease, _package.Asset);
         _fileLog.Minimum = _settings.DebugMode ? LogLevel.Debug : LogLevel.Information; // Debug mode: more detail in the log
         StartSimpleDrawing();
 
@@ -250,8 +250,9 @@ public sealed class TrayController : ITrayActions, IDisposable
             _dirty = true;
             if (!u.Signed)
                 return; // (the banner says it was not installed; no "update available" toast for it)
-            Toast("update:" + u.Version, "Pairnets update available", $"Version {u.Version} is ready. Open Pairnets to update.", Forms.ToolTipIcon.Info, ShowMainWindow);
+            Toast("update:" + u.Display, "Pairnets update available", $"Version {u.Display} is ready. Open Pairnets to update.", Forms.ToolTipIcon.Info, ShowMainWindow);
         });
+        _updates.SetChannel(_settings.EffectiveChannel);
         _updates.SetEnabled(_settings.CheckForUpdates);
         NoticeLastClose();
         if (!AnyNestReady || !_settings.FirstRunCompleted)
@@ -266,7 +267,7 @@ public sealed class TrayController : ITrayActions, IDisposable
         {
             // Updated itself from the window's "Update now": open the window again, with a note that it worked.
             ShowMainWindow();
-            Toast("updated", UpdateTexts.UpdatedTitle, UpdateTexts.Updated(PairnetsInfo.ProductVersion), Forms.ToolTipIcon.Info, ShowMainWindow);
+            Toast("updated", UpdateTexts.UpdatedTitle, UpdateTexts.Updated(PairnetsInfo.DisplayVersion), Forms.ToolTipIcon.Info, ShowMainWindow);
         }
         else if (!Arguments.Contains(AppActivation.AutoStartArgument))
             ShowMainWindow();
@@ -358,6 +359,7 @@ public sealed class TrayController : ITrayActions, IDisposable
         session.CatchUpCompleted += n => RunOnUi(() => Toast("catchup", PrefixOf(run) + "Pairnets is up to date",
             $"Synced {n} change(s) made while this computer was away.", Forms.ToolTipIcon.Info, () => ShowNest(run), run));
         session.ServerInfoChanged += info => RunOnUi(() => OnServerInfo(run, session, info));
+        session.BetaHeard += info => RunOnUi(() => OnBetaHeard(session, info));
         session.AccountChanged += (next, token) => RunOnUi(() => OnAccountChanged(run, session, next, token));
         session.Files.Opened.NestFullWhileSaving += _ => RunOnUi(() =>
         {
@@ -1525,6 +1527,12 @@ public sealed class TrayController : ITrayActions, IDisposable
             SetAutoStart(next.StartWithWindows);
         if (before.CheckForUpdates != next.CheckForUpdates)
             _updates.SetEnabled(next.CheckForUpdates);
+        if (SettingsSwitches.BetaChanged(before, next))
+        {
+            _updates.SetChannel(next.EffectiveChannel);
+            foreach (var session in _runs.Select(r => r.Session).OfType<ClientSession>().Where(OwnNest))
+                _ = SendBetaAsync(session);
+        }
         foreach (var run in _runs)
             run.Settings = _settings.ForNest(run.Id) ?? run.Settings;
         if (_runs.Any(r => r.Session is not null))
@@ -1604,6 +1612,51 @@ public sealed class TrayController : ITrayActions, IDisposable
             StartAll();
     }
 
+    // ------------------------------------------------------------------ beta updates
+
+    /// <summary>The owner's own nest, reached with this computer's own key: the only kind that decides Beta updates.</summary>
+    private static bool OwnNest(ClientSession session) => session.Engine.Access.IsOwner && session.Settings.HasOwnKey;
+
+    /// <summary>
+    /// A nest said what it knows about the beta program (every few minutes): take in a choice made on the account page, or
+    /// send this computer's newer one. A nest that says nothing changes nothing (<see cref="BetaUpdates.Heard"/>).
+    /// </summary>
+    private void OnBetaHeard(ClientSession session, BetaInfo? info)
+    {
+        var next = _settings.Clone();
+        var (changed, sendOurs) = BetaUpdates.Heard(next, info);
+        if (changed)
+            UseBetaSettings(next);
+        if (sendOurs && OwnNest(session))
+            _ = SendBetaAsync(session);
+    }
+
+    private async Task SendBetaAsync(ClientSession session)
+    {
+        var next = _settings.Clone();
+        if (await BetaUpdates.SendAsync(next, session.Api, CancellationToken.None))
+            RunOnUi(() =>
+            {
+                var current = _settings.Clone();
+                current.BetaChannel = next.BetaChannel;
+                current.BetaChannelAt = next.BetaChannelAt;
+                current.BetaProgram = next.BetaProgram;
+                UseBetaSettings(current);
+            });
+    }
+
+    /// <summary>Saves new Beta updates values, follows the channel they give, and shows them on an open Settings page.</summary>
+    private void UseBetaSettings(ClientSettings next)
+    {
+        _settings = next;
+        SettingsStore.Save(_env.SettingsPath, _settings);
+        foreach (var run in _runs)
+            run.Settings = _settings.ForNest(run.Id) ?? run.Settings;
+        _updates.SetChannel(_settings.EffectiveChannel);
+        _settingsView?.ShowBeta(_settings);
+        _dirty = true;
+    }
+
     // ------------------------------------------------------------------ updates and the server
 
     private void DrawUpdateBanner()
@@ -1618,13 +1671,13 @@ public sealed class TrayController : ITrayActions, IDisposable
         // A failed update says why in one line; its button is the next step (none for a release Pairnets did not sign),
         // and the X puts the card away.
         if (!update.Signed)
-            _window.ShowUpdate($"Pairnets {update.Version} could not be installed", UpdateProblem.NotSigned.Reason, UpdateProblem.NotSigned.ButtonText);
+            _window.ShowUpdate($"Pairnets {update.Display} could not be installed", UpdateProblem.NotSigned.Reason, UpdateProblem.NotSigned.ButtonText);
         else if (_updateError is { } problem)
-            _window.ShowUpdate($"Pairnets {update.Version} could not be installed", problem.Reason, problem.ButtonText);
+            _window.ShowUpdate($"Pairnets {update.Display} could not be installed", problem.Reason, problem.ButtonText);
         else if (_updateProgress is { } p)
-            _window.ShowUpdate($"Downloading Pairnets {update.Version}…", "Syncing continues while it downloads.", UpdateTexts.UpdateNow, p, busy: true);
+            _window.ShowUpdate($"Downloading Pairnets {update.Display}…", "Syncing continues while it downloads.", UpdateTexts.UpdateNow, p, busy: true);
         else
-            _window.ShowUpdate($"Pairnets {update.Version} is available", UpdateTexts.Ready(PairnetsInfo.ProductVersion), UpdateTexts.UpdateNow);
+            _window.ShowUpdate(UpdateTexts.Available(update), UpdateTexts.Ready(PairnetsInfo.DisplayVersion), UpdateTexts.UpdateNow);
     }
 
     /// <summary>True when this Pairnets.exe was put there by PairnetsSetup.exe (so the installer can replace it).</summary>

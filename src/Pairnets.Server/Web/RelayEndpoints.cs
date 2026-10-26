@@ -34,8 +34,16 @@ public static class RelayEndpoints
 
     /// <param name="Access">"owner", "edit" or "view".</param>
     /// <param name="Folders">The shared folders of a friend's computer; null for the whole nest.</param>
+    /// <param name="Beta">The computer's Beta updates choice (<see cref="NestBeta"/>); null when it never chose.</param>
+    /// <param name="App">The app's version as it last said it ("1.0.61.8 Public beta 3"), or null.</param>
     public sealed record Device(string Id, string Name, string? System, string CreatedAt, string? LastSeen, string Access, IReadOnlyList<string>? Folders,
-        string? Person, string? PersonId);
+        string? Person, string? PersonId, BetaChoice? Beta = null, string? App = null);
+
+    /// <summary>The body of <c>PUT /beta</c>: the account's beta program as the service keeps it.</summary>
+    public sealed record BetaProgramRequest(bool Member, string? TermsVersion, IReadOnlyList<string>? Channels, long Rev);
+
+    /// <summary>The body of <c>PUT /devices/{id}/beta</c>: a choice made on the account page.</summary>
+    public sealed record DeviceBetaRequest(string? Channel);
 
     public sealed record DeviceList(IReadOnlyList<Device> Devices);
 
@@ -113,19 +121,79 @@ public static class RelayEndpoints
             return Json(new { name });
         });
 
-        relay.MapGet("/devices", (DeviceKeys keys, DeviceRegistry devices) =>
+        relay.MapGet("/devices", (DeviceKeys keys, DeviceRegistry devices, NestBeta beta) =>
         {
-            // When each computer last asked something (only computers that ever did are in the registry).
+            // When each computer last asked something, and with which app (only computers that ever did are in the registry).
             var lastSeen = new Dictionary<string, DateTimeOffset>(StringComparer.Ordinal);
+            var apps = new Dictionary<string, string>(StringComparer.Ordinal);
             foreach (var seen in devices.List())
             {
                 if (seen.Id is { } id)
+                {
                     lastSeen.TryAdd(id, seen.LastSeen);
+                    if (seen.AppVersion is { } app)
+                        apps.TryAdd(id, app);
+                }
             }
             return Json(new DeviceList(keys.Store.ListDevices()
                 .Select(d => new Device(d.Id, d.Name, d.System, Iso(d.Created), lastSeen.TryGetValue(d.Id, out var at) ? Iso(at) : null,
-                    d.AccessOrOwner.Level, d.AccessOrOwner.Folders, d.Person, d.PersonId))
+                    d.AccessOrOwner.Level, d.AccessOrOwner.Folders, d.Person, d.PersonId,
+                    d.PersonId is null ? beta.ChoiceOf(d.Id) : null, apps.GetValueOrDefault(d.Id)))
                 .ToList()));
+        });
+
+        // Beta updates: whether the owner's account joined the beta program and which channels it may use. The newest
+        // message wins (rev); the owner's computers hear it in /api/me at their next check-in.
+        relay.MapPut("/beta", (HttpContext ctx, NestBeta beta, ILogger<NestBeta> log) =>
+        {
+            BetaProgramRequest? body;
+            try
+            {
+                body = JsonSerializer.Deserialize<BetaProgramRequest>(RelayAuthMiddleware.VerifiedBody(ctx)!, PairnetsJson.Options);
+            }
+            catch (JsonException)
+            {
+                body = null;
+            }
+            if (body is null || body.Rev < 0)
+                return Error(StatusCodes.Status400BadRequest, "bad_beta");
+            var kept = beta.Set(body.Member, PlainText.Clean(body.TermsVersion, 40), body.Channels, body.Rev);
+            log.LogInformation("Beta program from the service: {Member}, channels {Channels} (rev {Rev})",
+                kept.Member ? "joined" : "not joined", string.Join(", ", kept.Channels), kept.Rev);
+            return Json(new { rev = kept.Rev });
+        });
+
+        // Chosen on the account page: kept when it is newer than the computer's own choice, and the computer is told at
+        // once (it reads it again from /api/me). Only the owner's own computers.
+        relay.MapPut("/devices/{id}/beta", async (string id, HttpContext ctx, DeviceKeys keys, NestBeta beta, IHubContext<SyncHub> hub) =>
+        {
+            DeviceBetaRequest? body;
+            try
+            {
+                body = JsonSerializer.Deserialize<DeviceBetaRequest>(RelayAuthMiddleware.VerifiedBody(ctx)!, PairnetsJson.Options);
+            }
+            catch (JsonException)
+            {
+                body = null;
+            }
+            if (body?.Channel is not (ReleaseChannel.Off or ReleaseChannel.PublicBeta or ReleaseChannel.DeveloperBeta))
+                return Error(StatusCodes.Status400BadRequest, "bad_channel");
+            if (keys.Store.GetDevice(id) is not { IsActive: true } device)
+                return Error(StatusCodes.Status404NotFound, "no_device");
+            if (device.PersonId is not null)
+                return Error(StatusCodes.Status409Conflict, "not_owner_device");
+            if (!beta.Allows(body.Channel))
+                return Error(StatusCodes.Status409Conflict, "not_allowed");
+            var kept = beta.Choose(id, body.Channel, DateTimeOffset.UtcNow, NestBeta.ByWeb);
+            try
+            {
+                await hub.Clients.All.SendAsync(SyncHub.DeviceRenamedMethod, device.Id, device.Name, CancellationToken.None);
+            }
+            catch (Exception)
+            {
+                // The app also reads it every few minutes (/api/me).
+            }
+            return Json(kept);
         });
 
         // An app signed in with the owner's account, or a friend's the owner let in: the service asks for its key and hands

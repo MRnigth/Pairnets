@@ -52,6 +52,9 @@ export type ErrorCode =
   | "own_nest"
   | "already_member"
   | "cancelled"
+  | "terms_changed"
+  | "not_owner_device"
+  | "not_allowed"
   | "server_error";
 
 export const MESSAGES: Record<ErrorCode, string> = {
@@ -92,6 +95,9 @@ export const MESSAGES: Record<ErrorCode, string> = {
   own_nest: "This is your own nest.",
   already_member: "You already have this nest.",
   cancelled: "This invite was cancelled.",
+  terms_changed: "The beta terms changed. Reload the page and agree to the new ones.",
+  not_owner_device: "Only your own computers can get beta updates, not a friend's.",
+  not_allowed: "That beta is not open to you.",
   server_error: "Something went wrong on our side.",
 };
 

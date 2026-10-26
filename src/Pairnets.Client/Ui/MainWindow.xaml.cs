@@ -163,6 +163,11 @@ public partial class MainWindow : Window, IPageHost
         InitializeComponent();
         Icon = AppIcons.WindowIcon;
         _actions = actions;
+        if (PairnetsInfo.ThisRelease.IsBeta)
+        {
+            BetaTagText.Text = ReleaseChannel.DisplayName(PairnetsInfo.Channel);
+            BetaTag.Visibility = Visibility.Visible;
+        }
         Overview.Act += OnOverviewAction;
         Overview.SeeAllActivity += () => Navigate(MainPage.Activity);
         Overview.MoreComputers += () => Navigate(MainPage.Devices);

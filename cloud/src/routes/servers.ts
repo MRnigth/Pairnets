@@ -9,6 +9,7 @@
 //   GET  /v1/servers                     session                     -> servers with status, version, computers
 //   PATCH  /v1/servers/{id}/devices/{d}  session + Origin            -> the nest renames that computer
 //   DELETE /v1/servers/{id}/devices/{d}  session + Origin            -> the nest revokes that computer
+//   PUT    /v1/servers/{id}/devices/{d}/beta                          -> beta.ts
 //   PATCH  /v1/servers/{id}              session + Origin            -> new label, passed on to the nest
 //   DELETE /v1/servers/{id}              session + Origin, recent    -> router binding, tunnel and row go
 //
@@ -336,7 +337,24 @@ function deviceJson(v: unknown): Record<string, unknown> | null {
   if (!d || typeof d.id !== "string" || !DEVICE_ID_RE.test(d.id)) return null;
   const access = d.access === "view" || d.access === "edit" ? d.access : "owner";
   const personId = access !== "owner" && typeof d.personId === "string" && ACCOUNT_ID_RE.test(d.personId) ? d.personId : null;
-  return { id: d.id, name: str(d.name) ?? "", system: str(d.system), createdAt: str(d.createdAt, 64), lastSeen: str(d.lastSeen, 64), access, personId };
+  return {
+    id: d.id,
+    name: str(d.name) ?? "",
+    system: str(d.system),
+    createdAt: str(d.createdAt, 64),
+    lastSeen: str(d.lastSeen, 64),
+    access,
+    personId,
+    beta: betaChoice(d.beta),
+    app: str(d.app, 64),
+  };
+}
+
+/** A computer's beta choice as the nest keeps it ({channel, at, by}), or null (never chosen, or an older nest). */
+function betaChoice(v: unknown): Record<string, unknown> | null {
+  const b = obj(v);
+  if (!b || (b.channel !== "off" && b.channel !== "public-beta" && b.channel !== "developer-beta")) return null;
+  return { channel: b.channel, at: str(b.at, 64), by: b.by === "app" || b.by === "web" ? b.by : null };
 }
 
 /** What a nest's status says about friends (RELAY.md 10): whether it can have them, and whether it is encrypted. */

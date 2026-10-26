@@ -26,6 +26,7 @@ import {
 } from "./routes/account";
 import { appApproveRoute, appLogoutRoute, appPageRoute, appPollRoute, appRequestRoute, appStartRoute } from "./routes/apps";
 import { claimRoute } from "./routes/claim";
+import { betaAdminRoute, betaAdminSetRoute, betaGetRoute, betaJoinRoute, betaLeaveRoute, deviceBetaRoute } from "./routes/beta";
 import { bugReportListRoute, bugReportRoute, MAX_BUGREPORT_BODY } from "./routes/bugreport";
 import { crashListRoute, crashRoute, MAX_CRASH_BODY } from "./routes/crash";
 import {
@@ -91,7 +92,7 @@ const MUTATING = new Set(["POST", "PATCH", "PUT", "DELETE"]);
 
 /** The public website. Its legal and help pages also answer here (/privacy, /terms, ...) with a redirect to it. */
 export const WEBSITE = "https://pairnets.app";
-export const WEBSITE_PAGES = ["privacy", "terms", "guidelines", "cookies", "security", "faq", "help", "contact", "delete-account", "licenses"] as const;
+export const WEBSITE_PAGES = ["privacy", "terms", "guidelines", "cookies", "security", "faq", "help", "contact", "delete-account", "licenses", "beta-terms"] as const;
 
 type Handler = (ctx: Ctx, param: string, param2: string) => Promise<Response> | Response;
 
@@ -132,6 +133,7 @@ const API_ROUTES: Route[] = [
   { method: "GET", pattern: /^\/v1\/servers$/, handler: listServersRoute },
   { method: "PATCH", pattern: /^\/v1\/servers\/([^/]+)\/devices\/([^/]+)$/, handler: renameDeviceRoute },
   { method: "DELETE", pattern: /^\/v1\/servers\/([^/]+)\/devices\/([^/]+)$/, handler: removeDeviceRoute },
+  { method: "PUT", pattern: /^\/v1\/servers\/([^/]+)\/devices\/([^/]+)\/beta$/, handler: deviceBetaRoute },
   { method: "POST", pattern: /^\/v1\/servers\/([^/]+)\/invites$/, handler: createInviteRoute },
   { method: "DELETE", pattern: /^\/v1\/servers\/([^/]+)\/invites\/([^/]+)$/, handler: cancelInviteRoute },
   { method: "POST", pattern: /^\/v1\/servers\/([^/]+)\/invites\/([^/]+)\/approve$/, handler: approveInviteRoute },
@@ -149,6 +151,9 @@ const API_ROUTES: Route[] = [
   { method: "DELETE", pattern: /^\/v1\/servers\/([^/]+)$/, handler: removeServerRoute },
   { method: "POST", pattern: /^\/v1\/crash$/, handler: crashRoute },
   { method: "POST", pattern: /^\/v1\/bugreport$/, handler: bugReportRoute },
+  { method: "GET", pattern: /^\/v1\/beta$/, handler: betaGetRoute },
+  { method: "POST", pattern: /^\/v1\/beta\/join$/, handler: betaJoinRoute },
+  { method: "POST", pattern: /^\/v1\/beta\/leave$/, handler: betaLeaveRoute },
 ];
 
 const PAGE_ROUTES: Route[] = [
@@ -164,6 +169,8 @@ const PAGE_ROUTES: Route[] = [
   { method: "GET", pattern: /^\/nest-login$/, handler: nestLoginRoute },
   { method: "GET", pattern: /^\/admin\/crashes$/, handler: crashListRoute },
   { method: "GET", pattern: /^\/admin\/reports$/, handler: bugReportListRoute },
+  { method: "GET", pattern: /^\/admin\/beta$/, handler: betaAdminRoute },
+  { method: "POST", pattern: /^\/admin\/beta\/([^/]+)\/([a-z-]+)$/, handler: betaAdminSetRoute },
   ...WEBSITE_PAGES.map((page): Route => ({
     method: "GET",
     pattern: new RegExp(`^/${page}/?$`),

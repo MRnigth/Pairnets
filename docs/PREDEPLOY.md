@@ -1,7 +1,8 @@
 # The pre-deploy check
 
-Before anything is deployed (a push to `main`, which is a release; a `v*` tag; a GitHub release; a Cloudflare
-deploy; an install on a server), every part of Pairnets is tested on test servers first. If anything fails,
+Before anything is deployed (a push to `main`, which is a release; a push to a `beta/*` branch, which is a beta
+release; a `v*` tag; a GitHub release; a Cloudflare deploy; an install on a server), every part of Pairnets is tested
+on test servers first. If anything fails,
 the deploy is blocked.
 
 ## In plain words
@@ -22,8 +23,10 @@ Linux test computer. If the same version already passed, the deploy goes ahead a
 **Nothing appears on your screen.** The apps open their windows on a hidden desktop, the website is clicked by an
 invisible browser, and the Linux test computer runs in the background. You can keep working; the PC is just busier.
 
-**What it guards.** Pushing to `main` (that is a release), a `v…` tag, merging a pull request into `main`, a
-GitHub release, running the release workflow, a Cloudflare deploy, and installing on a server. This works both when
+**What it guards.** Pushing to `main` (that is a release), pushing to a `beta/…` branch such as `beta/public` or
+`beta/developer` (that is a beta release, which the beta testers' apps install by themselves), a `v…` tag, merging a
+pull request into `main` or a `beta/…` branch, a GitHub release, running the release workflow, a Cloudflare deploy, and
+installing on a server. Deleting a `beta/…` branch is not a deploy (its beta release stays as it was). This works both when
 the coding assistant does it and when you push from a terminal.
 
 **When it says no.** You get a short list of what broke, and nothing is deployed. The full report is a text file
@@ -53,7 +56,7 @@ this PC, and for `git push` from a terminal). `--check` says whether it is on, a
 
 | Part | Where | What |
 |---|---|---|
-| Gate | `scripts/deploy-gate/` (Node), installed by `node scripts/deploy-gate/install.mjs` (`--check`, `--uninstall`) | Coding-assistant `PreToolUse` hook (in `~/.claude/settings.json`, so every session and worktree) plus a git `pre-push` hook (in the shared `.git/hooks`). Spots deploy commands and demands a pass record for the exact commit; without one, the hook runs the check itself and blocks when it fails. The `pre-push` hook only looks for the record. It also runs `scripts/check-secrets.sh --range` (the copy installed next to the gate) on the commits every push sends, to any branch, and stops the push when one looks like a secret or personal data. Outside a Pairnets checkout the gate does nothing. |
+| Gate | `scripts/deploy-gate/` (Node), installed by `node scripts/deploy-gate/install.mjs` (`--check`, `--uninstall`) | Coding-assistant `PreToolUse` hook (in `~/.claude/settings.json`, so every session and worktree) plus a git `pre-push` hook (in the shared `.git/hooks`). Spots deploy commands (pushes to `main`, `beta/*` or a `v*` tag among them) and demands a pass record for the exact commit; without one, the hook runs the check itself and blocks when it fails. The `pre-push` hook only looks for the record. It also runs `scripts/check-secrets.sh --range` (the copy installed next to the gate) on the commits every push sends, to any branch, and stops the push when one looks like a secret or personal data. Outside a Pairnets checkout the gate does nothing. |
 | Runner | `scripts/pre-deploy.ps1` | Runs every step below in a clean temporary checkout of the commit and writes the pass record and a report. |
 | API tour | `tests/Pairnets.Tests/E2E/` | Calls every HTTP route, hub method/event and server CLI command, against three kinds of test server. Guard tests fail when something exists that the tour does not call. |
 | Avalonia buttons | `tests/Pairnets.Tests/Ui/` | Presses every button, toggle and menu item in every window (headless), and drives the real `DesktopController` against a real test server. |

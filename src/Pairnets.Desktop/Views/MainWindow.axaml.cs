@@ -173,6 +173,11 @@ public partial class MainWindow : Window
     public MainWindow(IMainActions? actions)
     {
         InitializeComponent();
+        if (PairnetsInfo.ThisRelease.IsBeta)
+        {
+            BetaTagText.Text = ReleaseChannel.DisplayName(PairnetsInfo.Channel);
+            BetaTag.IsVisible = true;
+        }
         _actions = actions;
         Overview.Act += OnOverviewAction;
         Overview.SeeAllActivity += () => Navigate(MainPage.Activity);

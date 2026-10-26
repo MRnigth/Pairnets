@@ -33,9 +33,24 @@ public static class Endpoints
 
         // Who the server thinks this computer is (the apps adopt a name changed on the nest), and who let it in
         // (the apps' account button shows the owner's email and how they signed in).
-        app.MapGet("/api/me", (HttpContext ctx, AuthStore auth) => DeviceIdentity.Of(ctx) is { } me
-            ? Json(Me(me, auth))
+        app.MapGet("/api/me", (HttpContext ctx, AuthStore auth, NestBeta beta, SyncOptions options) => DeviceIdentity.Of(ctx) is { } me
+            ? Json(Me(me, auth, beta, options.RelayMode))
             : Error(StatusCodes.Status401Unauthorized, ErrorCodes.Unauthorized, "Not signed in."));
+
+        // Beta updates: the choice made in this computer's Settings. Only the owner's own computers, with their own key,
+        // choose here; the newest choice (this one or one made on the account page) is kept and answered.
+        app.MapPut("/api/devices/me/beta", (HttpContext ctx, AuthStore auth, NestBeta beta, SyncOptions options, BetaChoiceRequest? body) =>
+        {
+            if (DeviceIdentity.Of(ctx) is not { Kind: DeviceAuthKind.DeviceKey, Id: { } id } || auth.GetDevice(id) is not { IsActive: true } device)
+                return Error(StatusCodes.Status409Conflict, ErrorCodes.WrongCredential, "Only a computer with its own key can choose beta updates.");
+            if (body is null || body.Channel is not (ReleaseChannel.Off or ReleaseChannel.PublicBeta or ReleaseChannel.DeveloperBeta))
+                return Error(StatusCodes.Status400BadRequest, ErrorCodes.BadRequest, "channel must be off, public-beta or developer-beta.");
+            if (!options.RelayMode || device.PersonId is not null)
+                return Error(StatusCodes.Status409Conflict, "not_owner_device", "Beta updates are chosen on the owner's own nest.");
+            if (!beta.Allows(body.Channel))
+                return Error(StatusCodes.Status409Conflict, "not_allowed", "The account has not joined the beta program for this channel.");
+            return Json(beta.Choose(id, body.Channel, body.At, NestBeta.ByApp));
+        });
 
         // There used to be a POST /api/devices/upgrade here that traded the shared token for a key with no
         // one asked. It is gone on purpose: the only way to a key is a person pressing Allow on the nest.
@@ -379,15 +394,15 @@ public static class Endpoints
     /// signed in, their email (the Google account's after a Google sign-in, else the one sign-in links go to) and
     /// when. The shared token says nothing more.
     /// </summary>
-    internal static DeviceMe Me(DeviceIdentity me, AuthStore auth)
+    internal static DeviceMe Me(DeviceIdentity me, AuthStore auth, NestBeta? beta = null, bool linked = false)
     {
         if (me.Kind != DeviceAuthKind.DeviceKey)
-            return new DeviceMe(me.Id, me.Name, DeviceMe.KindSharedToken);
+            return new DeviceMe(me.Id, me.Name, DeviceMe.KindSharedToken, Beta: beta?.For(null, ownKey: false, linked));
         var device = me.Id is { } id ? auth.GetDevice(id) : null;
         var method = device?.ApprovalMethod;
         var google = auth.GoogleAccount?.Email is { Length: > 0 } g ? g : null;
         var email = method == "google" ? google ?? auth.OwnerEmail : auth.OwnerEmail ?? google;
-        return new DeviceMe(me.Id, me.Name, DeviceMe.KindDeviceKey, email, method, device?.Created);
+        return new DeviceMe(me.Id, me.Name, DeviceMe.KindDeviceKey, email, method, device?.Created, beta?.For(device, ownKey: true, linked));
     }
 
     public static async Task<PairedDevice?> RenameDeviceAsync(string id, string name, DeviceKeys keys, DeviceRegistry devices, IHubContext<SyncHub> hub)

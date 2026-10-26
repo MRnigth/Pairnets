@@ -3,8 +3,9 @@
 #  1. Secrets: the commits this push sends that no remote branch has yet go through check-secrets.sh --range,
 #     before anything is public. It is the copy installed next to the gate, so branches made before --range existed
 #     are checked too.
-#  2. The pre-deploy check: a push to main or of a v* tag is a release, so it needs a passed check for exactly that
-#     commit. This hook only looks for the pass record; it never runs the check itself (that takes about 15 minutes).
+#  2. The pre-deploy check: a push to main, to a beta/* branch or of a v* tag is a release (a beta one for beta/*), so
+#     it needs a passed check for exactly that commit. This hook only looks for the pass record; it never runs the
+#     check itself (that takes about 15 minutes).
 dir="${HOME:-$USERPROFILE}/.claude/hooks/pairnets-deploy-gate"
 if command -v cygpath >/dev/null 2>&1; then dir="$(cygpath -m "$dir")"; fi
 gate="$dir/deploy-gate.mjs"

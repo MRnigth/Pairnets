@@ -21,6 +21,9 @@ public static class PairnetsLinks
     /// <summary>"Support Pairnets ♥": the site's _redirects sends it on to the Ko-fi page, so the service can change without an app update.</summary>
     public const string Donate = Website + "donate";
 
+    /// <summary>The beta program on the account page: join it once, then choose Beta updates in each computer's Settings.</summary>
+    public const string BetaProgram = "https://sync.pairnets.app/account#beta";
+
     /// <summary>"Made by MRnigth in Denmark": who runs Pairnets, as the website's footer and legal pages say.</summary>
     public const string MadeBy = "Made by MRnigth in Denmark";
 

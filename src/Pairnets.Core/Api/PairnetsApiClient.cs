@@ -318,6 +318,21 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
         return await ReadJsonAsync<DeviceMe>(resp, timeout, ct).ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// Tells the owner's nest what this computer chose under Beta updates; the answer is the choice the nest keeps (the
+    /// newest of this one and one made on the account page). Null from a nest from before beta updates.
+    /// </summary>
+    public async Task<BetaChoice?> SetBetaChoiceAsync(BetaChoiceRequest choice, CancellationToken ct)
+    {
+        using var timeout = Linked(ct, TimeSpan.FromSeconds(30));
+        using var resp = await SendAsync(() => new HttpRequestMessage(HttpMethod.Put, "api/devices/me/beta") { Content = JsonContent.Create(choice, options: PairnetsJson.Options) },
+            HttpCompletionOption.ResponseContentRead, timeout, ct).ConfigureAwait(false);
+        if ((int)resp.StatusCode is 404 or 405)
+            return null;
+        await ThrowForStatusAsync(resp).ConfigureAwait(false);
+        return await ReadJsonAsync<BetaChoice>(resp, timeout, ct).ConfigureAwait(false);
+    }
+
     /// <summary>Asks the nest to let this computer join (no key needed). Null for a server without sign-in.</summary>
     public async Task<PairStartResponse?> StartPairingAsync(PairStartRequest request, CancellationToken ct)
     {

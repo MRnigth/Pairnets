@@ -10,6 +10,7 @@ import migration6 from "../migrations/0006_friends.sql?raw";
 import migration7 from "../migrations/0007_links.sql?raw";
 import migration8 from "../migrations/0008_crash_reports.sql?raw";
 import migration9 from "../migrations/0009_bug_reports.sql?raw";
+import migration10 from "../migrations/0010_beta.sql?raw";
 import { b64urlEncode } from "../src/b64";
 import { FakeGoogle } from "./fake-google";
 import { addServer, appSignIn, claim, Harness, lastEmailCode, startServer } from "./helpers";
@@ -97,7 +98,7 @@ describe("schema", () => {
     await runSql(db, migration5);
     await runSql(db, migration6);
     await runSql(db, migration7);
-    for (const m of [migration8, migration9]) await runSql(db, m);
+    for (const m of [migration8, migration9, migration10]) await runSql(db, m);
   });
 
   it("migration 0004 adds the nullable place columns to device_logins and keeps its rows", async () => {
@@ -118,7 +119,7 @@ describe("schema", () => {
       request_country: null,
       request_city: null,
     });
-    for (const m of [migration5, migration6, migration7, migration8, migration9]) await runSql(db, m);
+    for (const m of [migration5, migration6, migration7, migration8, migration9, migration10]) await runSql(db, m);
   });
 
   it("migration 0005 adds the nullable inactive_warned_at to accounts and keeps its rows", async () => {
@@ -128,7 +129,7 @@ describe("schema", () => {
     await db.prepare("INSERT INTO accounts (id, email, created_at, updated_at) VALUES ('acc_testacct000000000000000001', 'you@example.com', 1, 2)").run();
     await runSql(db, migration5);
     expect(await db.prepare("SELECT email, inactive_warned_at FROM accounts").first()).toEqual({ email: "you@example.com", inactive_warned_at: null });
-    for (const m of [migration6, migration7, migration8, migration9]) await runSql(db, m);
+    for (const m of [migration6, migration7, migration8, migration9, migration10]) await runSql(db, m);
   });
 
   it("migration 0006 adds the friends' tables and keeps every row of 0005", async () => {
@@ -176,7 +177,7 @@ describe("schema", () => {
     await db.prepare("UPDATE nest_invites SET decision = 'declined', decided_at = 3").run();
     const indexes = (await db.prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name IN ('nest_members', 'nest_invites') AND name NOT LIKE 'sqlite_%' ORDER BY name").all<{ name: string }>()).results;
     expect(indexes.map((i) => i.name)).toEqual(["nest_invites_expires", "nest_invites_nest", "nest_members_account", "nest_members_synced"]);
-    for (const m of [migration7, migration8, migration9]) await runSql(db, m); // the full schema again, for the tests after this one
+    for (const m of [migration7, migration8, migration9, migration10]) await runSql(db, m); // the full schema again, for the tests after this one
   });
 
   it("migration 0008 adds crash_reports, with no column for who sent a report, and keeps the accounts", async () => {
@@ -189,7 +190,7 @@ describe("schema", () => {
     const columns = (await db.prepare("PRAGMA table_info(crash_reports)").all<{ name: string }>()).results.map((c) => c.name);
     expect(columns.filter((c) => /ip|account|device|nest|email/.test(c))).toEqual([]);
     expect(await db.prepare("SELECT COUNT(*) AS n FROM accounts").first()).toEqual({ n: 1 });
-    await runSql(db, migration9); // the full schema again, for the tests after this one
+    for (const m of [migration9, migration10]) await runSql(db, m); // the full schema again, for the tests after this one
   });
 
   it("migration 0009 adds bug_reports, with no column for who sent a report, and keeps the crash reports", async () => {
@@ -207,6 +208,39 @@ describe("schema", () => {
     expect(columns.sort()).toEqual(["app", "created_at", "id", "note", "report", "system", "version"]);
     expect(columns.filter((c) => /ip|account|device|nest|email/.test(c))).toEqual([]);
     expect(await db.prepare("SELECT COUNT(*) AS n FROM crash_reports").first()).toEqual({ n: 1 });
+    await runSql(db, migration10); // the full schema again, for the tests after this one
+  });
+
+  it("migration 0010 adds beta_members, the nests' beta rev and a bug report's channel and build, keeping every row", async () => {
+    const db = env.DB;
+    for (const t of TABLES) await db.prepare(`DROP TABLE IF EXISTS ${t}`).run();
+    for (const m of [migration, migration2, migration3, migration4, migration5, migration6, migration7, migration8, migration9]) await runSql(db, m);
+    await db.prepare("INSERT INTO accounts (id, email, created_at, updated_at) VALUES ('acc_testacct000000000000000001', 'you@example.com', 1, 2)").run();
+    await db
+      .prepare(
+        `INSERT INTO nests (id, account_id, label, public_url, status, created_at, mode) VALUES
+           ('nst_testnest000000000000000001', 'acc_testacct000000000000000001', 'Home nest', '', 'active', 10, 'relay')`,
+      )
+      .run();
+    await db.prepare("INSERT INTO bug_reports (app, version, system, report, created_at) VALUES ('Windows app', '1.0.61', 'Windows', 'x', 1)").run();
+    await runSql(db, migration10);
+    expect(await db.prepare("SELECT id, beta_rev_pushed FROM nests").first()).toEqual({ id: "nst_testnest000000000000000001", beta_rev_pushed: 0 });
+    expect(await db.prepare("SELECT app, channel, build FROM bug_reports").first()).toEqual({ app: "Windows app", channel: null, build: null });
+    await db.prepare("INSERT INTO beta_members (account_id, joined_at, terms_version) VALUES ('acc_testacct000000000000000001', 5, '2026-10-26')").run();
+    expect(await db.prepare("SELECT * FROM beta_members").first()).toEqual({
+      account_id: "acc_testacct000000000000000001",
+      joined_at: 5,
+      left_at: null,
+      terms_version: "2026-10-26",
+      public_allowed: 0,
+      developer_allowed: 0,
+      rev: 1,
+    });
+    // One row per account; deleting the account takes it with it.
+    await expect(db.prepare("INSERT INTO beta_members (account_id, joined_at, terms_version) VALUES ('acc_testacct000000000000000001', 6, '2026-10-26')").run()).rejects.toThrow();
+    await db.prepare("DELETE FROM nests").run();
+    await db.prepare("DELETE FROM accounts").run();
+    expect(await db.prepare("SELECT COUNT(*) AS n FROM beta_members").first()).toEqual({ n: 0 });
   });
 
   it("migration 0007 adds an invite's kind (old invites are for a person) and the links table, and keeps every row of 0006", async () => {
@@ -236,7 +270,7 @@ describe("schema", () => {
     expect(indexes.map((i) => i.name)).toEqual(["nest_links_account", "nest_links_to"]);
     await db.prepare("INSERT INTO link_ends (link_id, to_nest, created_at) VALUES ('lnk_testlink00000000000000001', 'nst_testnest000000000000000002', 1)").run();
     await expect(db.prepare("INSERT INTO link_ends (link_id, to_nest, created_at) VALUES ('lnk_testlink00000000000000001', 'nst_testnest000000000000000003', 2)").run()).rejects.toThrow();
-    for (const m of [migration8, migration9]) await runSql(db, m); // the full schema again, for the tests after this one
+    for (const m of [migration8, migration9, migration10]) await runSql(db, m); // the full schema again, for the tests after this one
   });
 
   it("no secret is stored in clear", async () => {
@@ -330,6 +364,9 @@ describe("schema", () => {
     await app.call("POST", "/v1/bugreport", {
       body: { app: "Windows app", version: "1.0.61", system: "Windows", report: "Pairnets bug report\nServer: <url>", note: null },
     });
+
+    // A member of the beta program (it holds no secret, but every table must have a row to look at).
+    expect((await b.call("POST", "/v1/beta/join", { body: { acceptTerms: true, termsVersion: "2026-10-26" } })).status).toBe(200);
 
     // The server's own secrets.
     secrets.push(h.env.HB_MASTER, h.env.COOKIE_KEY, h.signing.privateJwk.d!, h.env.CF_API_TOKEN);

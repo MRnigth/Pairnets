@@ -99,9 +99,10 @@ public class UpdateCheckerTests
     [Fact]
     public async Task AnOldSignedReleaseCannotPassForANewerVersion()
     {
-        // version.json says 1.0.99, but the signed checksums are those of the 1.0.58 release: its version.json differs.
+        // version.json says 1.0.61.99, but the signed checksums are those of the 1.0.58 release: its version.json differs. (A
+        // version.json without a channel past 1.0.61 is refused before any of this: see BetaUpdatesTests.)
         var old = Release("1.0.58");
-        old["version.json"] = Encoding.UTF8.GetBytes("{\"version\":\"1.0.99\",\"commit\":\"abc\"}");
+        old["version.json"] = Encoding.UTF8.GetBytes("{\"version\":\"1.0.61.99\",\"commit\":\"abc\"}");
         var info = await Checker(old).CheckAsync("1.0.60", "PairnetsSetup.exe", default);
         Assert.NotNull(info);
         Assert.False(info!.Signed);

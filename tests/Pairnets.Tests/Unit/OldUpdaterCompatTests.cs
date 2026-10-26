@@ -42,7 +42,8 @@ public class OldUpdaterCompatTests
             "pairnets-desktop-linux-x64.tar.gz" => TestUpdatePackages.Make(n, Encoding.UTF8.GetBytes("new Pairnets " + version)),
             _ => Encoding.UTF8.GetBytes($"release file {n} of {version}\n"),
         });
-        files["version.json"] = Encoding.UTF8.GetBytes($"{{\"version\":\"{version}\",\"commit\":\"{new string('a', 40)}\"}}\n");
+        files["version.json"] = Encoding.UTF8.GetBytes(
+            $"{{\"version\":\"{version}\",\"commit\":\"{new string('a', 40)}\",\"channel\":\"stable\",\"build\":123,\"data\":{{\"settings\":2,\"state\":2,\"sealed\":1}}}}\n");
         var sums = new StringBuilder();
         foreach (var name in files.Keys.Order(StringComparer.Ordinal))
             sums.Append(Convert.ToHexString(SHA256.HashData(files[name])).ToLowerInvariant()).Append("  ").Append(name).Append('\n');
@@ -136,7 +137,9 @@ public class OldUpdaterCompatTests
         Assert.Contains("OutputBaseFilename=PairnetsSetup\n", RepoPaths.Read("deploy", "installer", "pairnets.iss"));
         Assert.Contains("gh release create latest release-files/*", workflow);
         // The two files every older updater reads first, in the format they parse.
-        Assert.Contains("printf '{\"version\":\"%s\",\"commit\":\"%s\"}\\n' \"$v\" \"$GITHUB_SHA\" > release-files/version.json", workflow);
+        // version.json keeps "version" and "commit" first; the beta fields after them are ignored by older apps.
+        Assert.Equal(3, Regex.Matches(workflow, Regex.Escape(
+            "printf '{\"version\":\"%s\",\"commit\":\"%s\",\"channel\":\"%s\",\"build\":%d,\"data\":%s}\\n' \"$VERSION\" \"$GITHUB_SHA\" \"$CHANNEL\" \"$BUILD\" \"$data\" > release-files/version.json")).Count);
         Assert.Contains("find . -maxdepth 1 -type f ! -name 'SHA256SUMS.txt*' -printf '%P\\0' | sort -z | xargs -0 sha256sum > SHA256SUMS.txt", workflow);
         Assert.Contains("bash scripts/sign-release.sh release-files", workflow);
         // Pairnets.exe stays at the top of the zip and Pairnets at the top of the Linux app's folder (what an update swaps).
@@ -202,8 +205,11 @@ public class OldUpdaterCompatTests
     {
         var workflow = RepoPaths.Read(".github", "workflows", "release.yml");
         // v1.0.59.1 -> 1.0.59.1 for every package, the installer and version.json.
-        Assert.Contains("if [[ \"$GITHUB_REF\" == refs/tags/v* ]]; then echo \"version=${GITHUB_REF_NAME#v}\"", workflow);
-        Assert.Contains("if [[ \"$GITHUB_REF\" == refs/tags/v* ]]; then v=\"${GITHUB_REF_NAME#v}\"", workflow);
+        // (scripts/release-version.sh makes that number once, in the version job; ReleaseVersionScriptTests runs it.)
+        Assert.Contains("bash scripts/release-version.sh | tee -a \"$GITHUB_OUTPUT\"", workflow);
+        Assert.Contains("refs/tags/v*)\n    version=\"${REF#refs/tags/v}\"\n    channel=stable", RepoPaths.Read("scripts", "release-version.sh"));
+        Assert.DoesNotContain("1.0.${{ github.run_number }}", workflow);
+        Assert.Equal(4, Regex.Matches(workflow, Regex.Escape("-p:Version=${{ needs.version.outputs.version }} -p:PairnetsChannel=${{ needs.version.outputs.channel }}")).Count);
         // The apps and the server read GitHub's latest release, so the tagged one must be marked latest.
         Assert.Matches(new Regex(@"gh release create ""\$GITHUB_REF_NAME"" release-files/\* .*--latest"), workflow);
         // The server package and update.sh take only numbers and dots; four of them are fine.

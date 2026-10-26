@@ -35,6 +35,7 @@ export async function deleteAccountRows(ctx: Ctx, id: string, email: string): Pr
     db.prepare("DELETE FROM device_logins WHERE account_id = ?1").bind(id),
     db.prepare("DELETE FROM server_links WHERE account_id = ?1").bind(id),
     db.prepare("DELETE FROM audit WHERE account_id = ?1").bind(id),
+    db.prepare("DELETE FROM beta_members WHERE account_id = ?1").bind(id),
     db.prepare("DELETE FROM login_challenges WHERE email = ?1").bind(email),
     db.prepare("DELETE FROM accounts WHERE id = ?1").bind(id),
   ]);

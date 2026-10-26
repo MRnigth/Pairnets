@@ -126,6 +126,30 @@ label.choice span .muted { display: block; }
 .folder-ticks { max-height: 440px; overflow-y: auto; }
 .folder-ticks label.choice[data-linked-in] { opacity: .55; }
 .folder-ticks.off { opacity: .45; }
+/* The beta program: words and hairlines, blue only for Join. */
+ul.kinds { margin: 0 0 18px; padding-left: 1.1em; }
+ul.kinds li { margin: 4px 0; }
+.kindword { font-weight: 600; }
+.kindword.open { color: var(--accent); }
+.kindword.dev { color: var(--warn); }
+.terms label.choice { align-items: flex-start; gap: 12px; font-size: .9375rem; max-width: 600px; }
+.terms label.choice input { margin-top: 5px; accent-color: var(--blue); }
+button.join { background: var(--blue); border-color: var(--blue); color: var(--accent-text); margin-top: 14px; }
+button.join:hover:not(:disabled) { background: var(--blue-hover); border-color: var(--blue-hover); }
+.beta-list > li { display: grid; grid-template-columns: 1fr auto; gap: 4px 24px; align-items: center; }
+.beta-list > li.muted { display: block; }
+.beta-list .who { min-width: 0; overflow-wrap: anywhere; }
+.beta-list .note { grid-column: 1 / -1; margin: 2px 0 0; font-size: .9375rem; }
+.beta-list .note.warn { color: var(--warn); }
+select { font: inherit; font-size: 1rem; height: 44px; padding: 0 36px 0 12px; border-radius: 8px; border: 1px solid var(--line);
+  background: var(--bg) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%23656C7A' stroke-width='1.6'/%3E%3C/svg%3E") no-repeat right 12px center;
+  color: var(--text); appearance: none; min-width: 150px; cursor: pointer; }
+select:disabled { opacity: .5; cursor: default; }
+select:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
+.leave { margin-top: 22px; }
+.leave p { margin: 6px 0 0; }
+form.inline { display: inline; }
+form.inline button { margin-top: 0; }
 .cookie-notice { position: fixed; left: 24px; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); z-index: 20;
   width: 400px; max-width: calc(100% - 48px); background: var(--bg); color: var(--text); border: 1px solid var(--line);
   border-radius: 8px; padding: 16px 18px; font-size: 15px; line-height: 1.5;
@@ -145,6 +169,8 @@ label.choice span .muted { display: block; }
   footer { padding: 56px 16px 32px; }
   .input-row { flex-wrap: wrap; }
   .input-row input { flex-basis: 100%; }
+  .beta-list > li { grid-template-columns: 1fr; }
+  .beta-list select { width: 100%; }
   .cookie-notice { left: 16px; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); width: auto; max-width: none; }
 }
 @media print { .cookie-notice { display: none; } }
@@ -728,14 +754,132 @@ const ACCOUNT_JS = String.raw`(function () {
     } else return false;
     return true;
   }
+  // ---- The beta program: joining, leaving, and each own computer's choice (Off, Public beta, Developer beta).
+  var beta = document.getElementById("beta");
+  var betaList = document.getElementById("beta-list");
+  var BETA_WORDS = { "off": "Off", "public-beta": "Public beta", "developer-beta": "Developer beta" };
+  // The first app that knows beta updates; an older one (or one the nest has no version for) can't take them yet.
+  var BETA_FIRST = [1, 0, 61, 8];
+  function betaReady(app) {
+    var m = /^(\d+)\.(\d+)\.(\d+)(?:\.(\d+))?/.exec(app || "");
+    if (!m) return false;
+    for (var i = 0; i < 4; i++) {
+      var n = Number(m[i + 1] || 0);
+      if (n !== BETA_FIRST[i]) return n > BETA_FIRST[i];
+    }
+    return true;
+  }
+  function betaAllowed() {
+    return ((beta && beta.getAttribute("data-channels")) || "").split(" ").filter(function (c) { return c; });
+  }
+  // The line under a row: what Off means for a computer still on a beta, or why the choice can't be made yet.
+  function betaNote(item, d, value) {
+    Array.prototype.forEach.call(item.querySelectorAll(".note"), function (n) { item.removeChild(n); });
+    var text = "", cls = "note muted";
+    if (!betaReady(d.app)) { text = "Can get beta updates after it updates to the newest Pairnets."; cls = "note warn"; }
+    else if (value === "off" && /beta/i.test(d.app || "")) text = "Beta updates off. It keeps " + d.app + " until the next normal version is newer, then moves onto it by itself.";
+    if (text) item.appendChild(el("p", cls, text));
+  }
+  function betaRow(s, d, many) {
+    var item = el("li");
+    item.setAttribute("data-device", d.id);
+    item.setAttribute("data-server", s.id);
+    var who = el("div", "who");
+    who.appendChild(el("strong", "", d.name || "Computer"));
+    var parts = [];
+    if (d.system) parts.push(d.system);
+    if (d.app) parts.push("Pairnets " + d.app);
+    if (many) parts.push("on " + s.label);
+    if (parts.length) who.appendChild(el("span", "muted", " " + parts.join(" · ")));
+    item.appendChild(who);
+    var current = d.beta && BETA_WORDS[d.beta.channel] ? d.beta.channel : "off";
+    var select = el("select");
+    select.setAttribute("data-field", "beta-channel");
+    select.setAttribute("aria-label", "Beta updates for " + (d.name || "this computer"));
+    var ready = betaReady(d.app);
+    var choices = ready ? ["off"].concat(betaAllowed()) : ["off"];
+    if (choices.indexOf(current) < 0) choices.push(current);
+    choices.forEach(function (c) {
+      var o = el("option", "", BETA_WORDS[c]);
+      o.value = c;
+      o.selected = c === current;
+      select.appendChild(o);
+    });
+    select.disabled = !ready;
+    select.setAttribute("data-was", current);
+    item.appendChild(select);
+    betaNote(item, d, current);
+    select.addEventListener("change", function () {
+      var was = select.getAttribute("data-was");
+      var want = select.value;
+      select.disabled = true;
+      pnApi("PUT", "/v1/servers/" + s.id + "/devices/" + encodeURIComponent(d.id) + "/beta", { channel: want }).then(function (res) {
+        select.disabled = false;
+        if (!res.ok) {
+          if (res.body && (res.body.error === "reauth_required" || res.body.error === "unauthorized")) { ok(res); return; }
+          select.value = was;
+          betaNote(item, d, was);
+          item.appendChild(el("p", "note error", res.body.message || "That did not work. Try again."));
+          return;
+        }
+        select.setAttribute("data-was", res.body.channel);
+        select.value = res.body.channel;
+        betaNote(item, d, res.body.channel);
+      });
+    });
+    return item;
+  }
+  // One row per own computer on each connected nest (friends' computers are theirs to choose). The nest itself stays
+  // on normal versions for now, so it has no row.
+  function fillBeta(list) {
+    if (!betaList) return;
+    while (betaList.firstChild) betaList.removeChild(betaList.firstChild);
+    var many = list.length > 1;
+    list.forEach(function (s) {
+      if (!s.online) {
+        if (s.status !== "pending") betaList.appendChild(el("li", "muted", s.label + " is not connected right now, so its computers aren't listed."));
+        return;
+      }
+      s.devices.filter(function (d) { return !d.personId; }).forEach(function (d) { betaList.appendChild(betaRow(s, d, many)); });
+    });
+    if (!betaList.firstChild) betaList.appendChild(el("li", "muted", "No computers yet. Sign in to Pairnets on a computer with this account."));
+  }
+  if (beta) beta.addEventListener("change", function (ev) {
+    if (ev.target.getAttribute("data-field") !== "beta-terms") return;
+    var join = beta.querySelector("button[data-action=beta-join]");
+    if (join) join.disabled = !ev.target.checked;
+  });
+  if (beta) beta.addEventListener("click", function (ev) {
+    var b = ev.target.closest("button[data-action]");
+    if (!b) return;
+    var said = beta.querySelector("[data-field=beta-status]");
+    var action = b.getAttribute("data-action");
+    function answered(res) {
+      b.disabled = false;
+      if (res.body && (res.body.error === "reauth_required" || res.body.error === "unauthorized")) { ok(res); return; }
+      if (!res.ok) { pnShow(said, res.body.message || "That did not work. Try again.", true); return; }
+      location.reload();
+    }
+    if (action === "beta-join") {
+      var tick = beta.querySelector("[data-field=beta-terms]");
+      if (!tick || !tick.checked) return;
+      b.disabled = true;
+      pnApi("POST", "/v1/beta/join", { acceptTerms: true, termsVersion: b.getAttribute("data-terms-version") }).then(answered);
+    } else if (action === "beta-leave") {
+      if (!confirm("Leave the beta program? Every computer goes back to Off and keeps its beta until the next normal version is newer.")) return;
+      b.disabled = true;
+      pnApi("POST", "/v1/beta/leave").then(answered);
+    }
+  });
   function loadServers() {
-    if (!servers || !servers.querySelector("[data-server]")) return;
+    if ((!servers || !servers.querySelector("[data-server]")) && !betaList) return;
     pnApi("GET", "/v1/servers").then(function (res) {
       if (!ok(res) || !Array.isArray(res.body)) return;
       res.body.forEach(function (s) {
-        var li = servers.querySelector('[data-server="' + s.id + '"]');
+        var li = servers && servers.querySelector('[data-server="' + s.id + '"]');
         if (li) fillServer(li, s);
       });
+      fillBeta(res.body);
     });
   }
   if (servers) servers.addEventListener("click", function (ev) {

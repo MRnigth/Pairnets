@@ -128,6 +128,12 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
     /// <summary>Raised when the server's version, free space or updater state was (re)read.</summary>
     public event Action<ServerInfo>? ServerInfoChanged;
 
+    /// <summary>
+    /// What the nest said about the beta program for this computer (<c>GET /api/me</c>, every few minutes); null from a
+    /// nest from before beta updates. The app takes it in with <see cref="BetaUpdates.Heard"/>.
+    /// </summary>
+    public event Action<BetaInfo?>? BetaHeard;
+
     /// <summary>Reads the server's version, free space and updater state; failures are ignored (offline is shown elsewhere).</summary>
     public async Task<ServerInfo?> RefreshServerInfoAsync()
     {
@@ -343,6 +349,8 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
                 // No more silent key here: a person approves every computer on the nest's website.
                 RequireSignIn();
             }
+            if (!Settings.HasOwnKey)
+                BetaHeard?.Invoke(new BetaInfo(false, Reason: BetaInfo.ReasonSharedPassword)); // only a computer with its own key can get betas
             else if (Settings.HasOwnKey && await Api.GetMeAsync(ct).ConfigureAwait(false) is { } me && me.Id == Settings.DeviceId)
             {
                 // Who let this computer in (the account button); older servers do not say.
@@ -353,6 +361,7 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
                 var links = owner ? await Api.GetLinkedFoldersAsync(ct).ConfigureAwait(false) ?? [] : [];
                 var offers = owner ? await Api.GetSharedNestOffersAsync(ct).ConfigureAwait(false) ?? [] : [];
                 Update(s => s with { Account = account, LinkedFolders = links, SharedOffers = offers });
+                BetaHeard?.Invoke(me.Beta);
                 if (!string.Equals(me.Name, Settings.DeviceName, StringComparison.Ordinal))
                 {
                     (next.DeviceName, changed) = (me.Name, true);
@@ -1062,7 +1071,8 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
     public bool ServerNeedsUpdate(ServerInfo? info = null)
     {
         info ??= Status.Server;
-        return info?.ServerVersion is { } v && UpdateChecker.ServerIsOlder(v, PairnetsInfo.ProductVersion)
+        // A beta app compares with the stable release it follows: a nest only runs stable releases.
+        return info?.ServerVersion is { } v && UpdateChecker.ServerIsOlder(v, PairnetsInfo.StableBaseVersion)
             && !string.Equals(v, Settings.SkippedServerVersion, StringComparison.Ordinal);
     }
 

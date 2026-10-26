@@ -158,11 +158,36 @@ public sealed record RelayHello(string NestId, string ServiceUrl);
 public sealed record SignInMethods(bool Password, bool Passkeys, bool Email, bool Google);
 
 /// <summary>Answer of <c>GET /api/me</c>: who the server thinks this computer is. For a computer with its own key it also says who let it in: the owner's email, how they signed in ("google", "email", "passkey", "password", ...) and when. Null when not known, and from older servers.</summary>
-public sealed record DeviceMe(string? Id, string Name, string Kind, string? Email = null, string? Method = null, DateTimeOffset? Added = null)
+/// <para>Beta updates (docs/DECISIONS.md, "Beta updates"): <see cref="Beta"/> says whether the owner's account joined the beta
+/// program and what this computer chose. Only the owner's own nest sends it to the owner's own computers; older nests send none.</para>
+public sealed record DeviceMe(string? Id, string Name, string Kind, string? Email = null, string? Method = null, DateTimeOffset? Added = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] BetaInfo? Beta = null)
 {
     public const string KindDeviceKey = "device-key";
     public const string KindSharedToken = "shared-token";
 }
+
+/// <summary>
+/// This computer's beta choice as the nest keeps it: <see cref="Channel"/> is "off", "public-beta" or "developer-beta";
+/// <see cref="At"/> is when it was made and <see cref="By"/> where ("app", or "web" for the account page). The newest wins.
+/// </summary>
+public sealed record BetaChoice(string Channel, DateTimeOffset At, string? By = null);
+
+/// <summary>
+/// The beta program as the owner's nest passes it on (<c>GET /api/me</c>): whether the account joined, the terms it agreed
+/// to, the channels it may choose, and this computer's choice. <see cref="Reason"/> says why a computer cannot choose
+/// ("friend", "shared-password", "not-linked"); null when it can.
+/// </summary>
+public sealed record BetaInfo(bool Member, string? TermsVersion = null, IReadOnlyList<string>? Channels = null, BetaChoice? Choice = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Reason = null)
+{
+    public const string ReasonFriend = "friend";
+    public const string ReasonSharedPassword = "shared-password";
+    public const string ReasonNotLinked = "not-linked";
+}
+
+/// <summary>Body of <c>PUT /api/devices/me/beta</c>: the choice made in this computer's Settings.</summary>
+public sealed record BetaChoiceRequest(string Channel, DateTimeOffset At);
 
 /// <summary>
 /// A folder of this nest kept in step with another account's nest (GET /api/links; docs/DECISIONS.md, "4 nests per

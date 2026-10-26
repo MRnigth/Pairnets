@@ -230,7 +230,8 @@ public sealed partial class ApiTour
         Step("An old app on the shared token, and its push channel");
         var oldName = $"OLD-PC {_tag}";
         _oldPc = Api(_target.Token, oldName);
-        Assert.Equal(new DeviceMe(null, oldName, DeviceMe.KindSharedToken), await Read<DeviceMe>(Get(_oldPc, "api/me")));
+        Assert.Equal(new DeviceMe(null, oldName, DeviceMe.KindSharedToken, Beta: new BetaInfo(false, Reason: BetaInfo.ReasonNotLinked)),
+            await Read<DeviceMe>(Get(_oldPc, "api/me"))); // beta updates: only the owner's computers with their own key on a linked nest
         await Refused(HttpMethod.Get, "api/me");
         await Refused(HttpMethod.Post, "hub/negotiate?negotiateVersion=1");
         _oldHub = await Listen($"{oldName}'s push channel", _target.Token, oldName);
@@ -546,6 +547,8 @@ public sealed partial class ApiTour
                      (HttpMethod.Patch, "api/relay/devices/dev-1", new { name = "Desk" }),
                      (HttpMethod.Delete, "api/relay/devices/dev-1", null),
                      (HttpMethod.Put, "api/relay/name", new { name = "soro" }),
+                     (HttpMethod.Put, "api/relay/beta", new { member = true, channels = new[] { "public-beta" }, rev = 1 }),
+                     (HttpMethod.Put, "api/relay/devices/dev-1/beta", new { channel = "public-beta" }),
                      (HttpMethod.Get, "api/relay/folders", null),
                      (HttpMethod.Get, "api/relay/links", null),
                      (HttpMethod.Post, "api/relay/links", new { id = "lnk_tour00000001" }),
@@ -596,6 +599,26 @@ public sealed partial class ApiTour
         using var computer = new HttpClient(new RecordingHandler(Record, new SocketsHttpHandler { UseProxy = false })) { BaseAddress = linked.Url };
         computer.DefaultRequestHeaders.Add(PairnetsHeaders.Token, added.GetProperty("key").GetString());
         computer.DefaultRequestHeaders.Add(PairnetsHeaders.Client, PairnetsInfo.ClientDescription);
+        Step("Beta updates on the linked nest: the account joins the beta program, the owner's computer chooses Public beta, the account page sets it back to Off");
+        Assert.False((await Read<DeviceMe>(Get(computer, "api/me"))).Beta!.Member);
+        await Call(computer, HttpMethod.Put, "api/devices/me/beta", new BetaChoiceRequest("public-beta", DateTimeOffset.UtcNow), HttpStatusCode.Conflict); // not joined yet
+        await Call(computer, HttpMethod.Put, "api/devices/me/beta", new BetaChoiceRequest("nightly", DateTimeOffset.UtcNow), HttpStatusCode.BadRequest);
+        Assert.Equal(3, (await Signed(HttpMethod.Put, "/api/relay/beta", """{"member":true,"termsVersion":"2026-10-26","channels":["public-beta"],"rev":3}"""))
+            .GetProperty("rev").GetInt64());
+        Assert.Equal(3, (await Signed(HttpMethod.Put, "/api/relay/beta", """{"member":false,"channels":[],"rev":2}""")).GetProperty("rev").GetInt64()); // older: ignored
+        var joined = (await Read<DeviceMe>(Get(computer, "api/me"))).Beta!;
+        Assert.True(joined.Member);
+        Assert.Equal(["public-beta"], joined.Channels!);
+        await Call(computer, HttpMethod.Put, "api/devices/me/beta", new BetaChoiceRequest("developer-beta", DateTimeOffset.UtcNow), HttpStatusCode.Conflict); // not allowed
+        var chosen = await Read<BetaChoice>(Call(computer, HttpMethod.Put, "api/devices/me/beta", new BetaChoiceRequest("public-beta", DateTimeOffset.UtcNow)));
+        Assert.Equal(("public-beta", "app"), (chosen.Channel, chosen.By));
+        var listedBeta = (await Signed(HttpMethod.Get, "/api/relay/devices")).GetProperty("devices").EnumerateArray().Single();
+        Assert.Equal("public-beta", listedBeta.GetProperty("beta").GetProperty("channel").GetString());
+        Assert.Equal(PairnetsInfo.DisplayVersion, listedBeta.GetProperty("app").GetString());
+        Assert.Equal("off", (await Signed(HttpMethod.Put, $"/api/relay/devices/{Uri.EscapeDataString(id)}/beta", """{"channel":"off"}""")).GetProperty("channel").GetString());
+        var fromWeb = (await Read<DeviceMe>(Get(computer, "api/me"))).Beta!.Choice!;
+        Assert.Equal(("off", "web"), (fromWeb.Channel, fromWeb.By));
+
         var linkKey = AuthStore.KeyPrefix + Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(16)).ToLowerInvariant();
         _secrets.Add(linkKey);
         Assert.Equal(0, (await Signed(HttpMethod.Get, "/api/relay/links")).GetProperty("links").GetArrayLength());

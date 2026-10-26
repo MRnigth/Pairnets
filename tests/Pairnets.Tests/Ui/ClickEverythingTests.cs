@@ -796,6 +796,9 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
         // Switches apply at once, without Save (A11); a choice that was already made changes nothing.
         s.Expect["OnSwitchChanged"] = All(Raised(s, "switches"), That(() => view.SwitchesApplied, "the switch apply at once"));
         s.Expect["OnParChanged"] = That(() => view.SwitchesApplied, "the choice apply at once");
+        // Beta updates: the account has not joined, so only Off can be picked and the account page is one press away.
+        s.Expect["OnBetaChanged"] = That(() => view.SwitchesApplied, "the beta choice apply at once");
+        s.Expect["OnBetaJoin"] = That(() => s.Opened.SequenceEqual([PairnetsLinks.BetaProgram]), "the beta program on the account page open in the browser");
         s.Expect["OnReset"] = Raised(s, "reset");
         s.Expect["OnAddNest"] = Raised(s, "add-nest");
         s.Expect["OnInviteFriend"] = Raised(s, "invite-friend");

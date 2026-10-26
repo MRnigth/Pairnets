@@ -1904,3 +1904,83 @@ both had them:
   before it.
 * **Activity.** "Cannot reach the server; retrying." no longer adds the same sentence again when the reason is only the
   general "Pairnets cannot reach the server…".
+
+## Beta channels: how beta releases are made (2026-10-26)
+
+Pairnets gets two beta channels next to the normal releases: **Public beta** (anyone with a Pairnets account who agrees
+to the beta terms) and **Developer beta** (only invited accounts). The account, the nest and the apps' side are
+in "Beta updates: the account, the nest and the apps" below; this part is how the releases are made (`.github/workflows/release.yml`).
+
+* **Three feeds, same files.** Stable stays `releases/latest/download/` (`v*` tags, unchanged). A push to branch
+  `beta/public` replaces the pre-release with tag `public-beta`; a push to `beta/developer` replaces `developer-beta`.
+  Both are made with `--prerelease --latest=false`, so neither ever becomes GitHub's "Latest release" (see "Only tagged
+  versions are GitHub's Latest release"). They have the same file names as a release and are signed with the same key.
+  Each beta job has its own concurrency group, so two pushes to one branch never replace the release at the same time.
+* **A beta's version is the next stable number.** The newest `v*` tag with its last part one higher: after `v1.0.61.7`
+  the betas are 1.0.61.8; after a three-part tag like `v1.0.60` they get a fourth part, 1.0.60.1. Tags that are not
+  three or four numbers are skipped (never five parts: they break dotnet). Every build of that beta has the same
+  version; the build number (GitHub's run number) tells them apart: "1.0.61.8 Public beta 12". When 1.0.61.8 is
+  released as a tag, the next betas are 1.0.61.9, and the stable 1.0.61.8 is newer than every 1.0.61.8 beta (stable
+  beats a beta of the same number). The workflow needs every tag for this (`fetch-depth: 0` in its version job).
+* **One version per run.** A `version` job runs `scripts/release-version.sh` once and every other job takes its
+  `version`, `channel` and `build` (`needs.version.outputs`), so the packages, the installer, the Mac app and
+  version.json can never disagree. The apps get them as `-p:Version=… -p:PairnetsChannel=… -p:PairnetsBuild=…`.
+* **version.json says which channel it is for**: `{"version","commit","channel","build","data"}`, with `channel`
+  `stable`, `public-beta`, `developer-beta` or `main`. It is listed in the signed SHA256SUMS.txt, so it cannot be
+  changed. An app takes a release only when its `channel` is the feed it asked for. Without that, a beta copied into the
+  stable feed (or a mistake in a tag) would be installed by everyone; with it, a file in the wrong place is refused.
+* **Main's "Latest build" says `"channel":"main"`.** It keeps 1.0.<run number>, which is higher than every release, so
+  an app that took it would never update again (that happened with 1.0.68). No app asks for the `main` channel, so no
+  app ever installs it, from any feed. It stays a download for testing by hand.
+* **`data` keeps old apps from reading new data.** `scripts/data-versions.sh` reads `SettingsUpgrades.Current`,
+  `StateDb.SchemaVersion` and the sealed-file `Version` from the code (`{"settings":2,"state":2,"sealed":1}`); a test
+  pins the same patterns against `DataVersions.Current`, and the script fails when one is not found. An app never
+  installs a build with a lower number than its own, so leaving a beta waits for a stable release that reads
+  everything the beta wrote. Releases from before this have no `data` and count as today's numbers.
+* **A push to `beta/*` is a deploy.** The deploy gate (`scripts/deploy-gate/`) treats it exactly like a push to main:
+  `git push` to `beta/…` (also `HEAD:beta/…`, `--all`, patterns and an upstream that is a beta branch), the git
+  pre-push hook, and `gh pr merge` into a beta branch all need a passed pre-deploy check of that commit. Deleting a
+  beta branch is not a deploy.
+* **Only the repository admin may push to `beta/*` (set by hand on GitHub).** Settings › Rules › Rulesets › New ruleset › New branch
+  ruleset: name `Beta channels`, enforcement **Active**, bypass list **Repository admin** (Add bypass), target branches
+  **Include by pattern** `beta/*`, rules **Restrict creations**, **Restrict updates**, **Restrict deletions** and
+  **Block force pushes**. The workflow is not affected: it only makes the `public-beta` / `developer-beta` tags.
+
+## Beta updates: the account, the nest and the apps (2026-10-26)
+
+The owner asked for "the beta thing like how Apple does it": join once on a website, then choose per device. A second
+opinion (chat 305) shaped the safety rules below.
+
+* **Join once, on the account page.** sync.pairnets.app/account has a "Beta program" section: tick the beta terms
+  (`BETA_TERMS_VERSION`, the text at /beta-terms is the EULA chat's) and press "Join the beta program". The Worker keeps
+  it in D1 (`beta_members`, migration 0010). Public beta is open to every member while `BETA_PUBLIC_FOR_ALL` is "1";
+  Developer beta only for accounts allowed on /admin/beta. New terms: the account agrees again before betas resume.
+  "Leave the beta program" sets every own computer back to Off.
+* **The sign-up reaches the computers only through the owner's own nest.** The apps keep no account token, so the Worker
+  tells the owner's nest (signed ra1 `PUT /api/relay/beta`, at once and again by the hourly cron when a nest missed it).
+  The nest keeps it, and each own computer's choice, as two rows of its settings table (no database change) and tells
+  only the owner's own computers, checked by their own key, in `GET /api/me`. A friend's nest, the shared password and a
+  nest not linked to an account never decide anything; the app says why the choice is greyed out.
+* **The choice lives on the computer**, in Settings › Updates › Beta updates (Off / Public beta / Developer beta), in
+  both apps. The account page shows each computer's choice and can change it (`PUT /api/relay/devices/{id}/beta`); the
+  newest choice wins (`BetaUpdates.Heard`). A nest that says nothing (offline, older) changes nothing: the last choice
+  is kept. The app checks the nest every 5 minutes and right after a change on the account page.
+* **The app reads the stable feed and, on a beta, its beta feed too, and takes the newest build it may install**
+  (`UpdateChecker.Judge`): signed, `channel` in the signed version.json equal to the feed, newer (number, then stable
+  before a beta of the same number, then build), and its `data` not lower than this build's. A version.json without a
+  channel counts as stable only up to 1.0.61.x, so main's "Latest build" is never taken. A beta looks every 2 hours.
+* **Never backwards.** Off (or Developer → Public) waits for a build that is newer on the lower channel; the app says
+  "Waiting for the next Public beta" or "You keep 1.0.61.8 Developer beta 12 until the next normal version is newer".
+  There is no "Go back now". The next stable must contain everything the beta changed in data formats.
+* **Unknown settings survive.** `[JsonExtensionData]` on the settings (and each nest's), so a field a beta added is kept
+  by an older build that saves the file.
+* **One spelling:** "1.0.61.8 Public beta 3" in Settings, the update card, About, the bug report and the nest's
+  computers list. A beta build shows a "Public beta" label next to "Pairnets" and "This one · Public beta". A beta app
+  compares its nest with the stable release it follows (`PairnetsInfo.StableBaseVersion`), so it does not ask a stable
+  nest to "update" to a version update.sh can never fetch.
+* **Feedback** is the existing Send bug report: on a beta it is titled "Send beta feedback", the report carries
+  `Channel:` and the build, and /v1/bugreport stores both, so /admin/reports marks beta reports.
+* **The nest stays on stable for now** (one nest serves every computer, friends' included, and can never go back).
+* **Channel support reaches computers through one normal stable release first**: older apps only read
+  releases/latest and never see a beta. That release also carries the data check, the kept settings fields and the
+  `channel` rule, which closes the "Latest build" hole.
