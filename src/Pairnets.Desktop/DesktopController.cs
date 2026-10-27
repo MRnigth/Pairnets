@@ -112,7 +112,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
             _dirty = true;
             if (!u.Signed)
                 return; // (the banner says it was not installed; no "update available" notice for it)
-            Notify("update:" + u.Display, "Pairnets update available", $"Version {u.Display} is ready. Open Pairnets to update.");
+            Notify("update:" + u.Display, "Pairnets update available", $"Version {u.Display} is ready. Open Pairnets to update.", onClick: () => ShowMainWindow());
         };
     }
 
@@ -175,7 +175,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
         _updates.SetEnabled(_settings.CheckForUpdates);
         // Pairnets had to close after an error since it last ran: say so once (the card is in "Report a bug").
         if (CrashCards.TakeNewCloses(_env.CrashesDir).Count > 0)
-            Notify("crash", CrashNotice.Title, CrashNotice.Text);
+            Notify("crash", CrashNotice.Title, CrashNotice.Text, onClick: ReportBug);
         // Rewrite the login item so it follows the app (Tether.app became Pairnets.app; the app may have moved).
         if (SafeIsAutoStart())
         {
@@ -392,7 +392,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
         catch (Exception ex)
         {
             _log.LogWarning("Cannot read the saved token of {Nest}: {Error}", NestNames.Title(nest, _settings), ex.Message);
-            Notify("token", PrefixOf(run) + "Pairnets needs the token again", "The saved token cannot be read. Open Settings and enter it.", run);
+            Notify("token", PrefixOf(run) + "Pairnets needs the token again", "The saved token cannot be read. Open Settings and enter it.", run, () => ShowMainWindow(MainPage.Settings));
             return;
         }
 
@@ -402,9 +402,9 @@ public sealed class DesktopController : ITrayActions, IDisposable
         session.Activity.Added += _ => _dirty = true;
         session.Activity.Cleared += () => _dirty = true;
         session.ConflictCreated += c => Notify("conflict:" + c.Path, PrefixOf(run) + "Conflict: both computers changed a file",
-            $"{c.Path}: your version was kept as \"{PathRules.FileName(c.ConflictCopyPath)}\".", run);
+            $"{c.Path}: your version was kept as \"{PathRules.FileName(c.ConflictCopyPath)}\".", run, () => ShowNest(run));
         session.PathWarningRaised += w => Notify("warning:" + w.Path, PrefixOf(run) + (w.Code == ErrorCodes.CaseCollision ? "Name collision" : "File name not allowed"),
-            $"{w.Path}: {w.Message}", run);
+            $"{w.Path}: {w.Message}", run, () => ShowNest(run));
         session.PassCompleted += r => OnPassCompleted(run, r);
         session.ServerInfoChanged += info => Dispatcher.UIThread.Post(() => OnServerInfo(run, session, info));
         session.BetaHeard += info => Dispatcher.UIThread.Post(() => OnBetaHeard(session, info));
@@ -414,12 +414,17 @@ public sealed class DesktopController : ITrayActions, IDisposable
             if (ReferenceEquals(_session, session) && _window is { } w)
                 _ = w.ShowNestFullAsync(); // a file opened from the nest could not be saved back
         });
-        session.JoinRequested += r => Notify("join:" + r.Code, PrefixOf(run) + r.Title, $"Code {r.Code}. Review it on your nest (Pairnets → Needs attention).", run);
-        session.CatchUpCompleted += n => Notify("catchup", PrefixOf(run) + "Pairnets is up to date", $"Synced {n} change(s) made while this computer was away.", run);
+        session.JoinRequested += r => Notify("join:" + r.Code, PrefixOf(run) + r.Title, $"Code {r.Code}. Review it on your nest (Pairnets → Needs attention).", run, () => ReviewJoin(session, r));
+        session.CatchUpCompleted += n => Notify("catchup", PrefixOf(run) + "Pairnets is up to date", $"Synced {n} change(s) made while this computer was away.", run, () => ShowNest(run));
         session.DownloadFinished += d =>
         {
             var (title, text) = NestDownloadsSection.DoneNote(d);
-            Notify("download:" + d.Id, PrefixOf(run) + title, text, run);
+            Notify("download:" + d.Id, PrefixOf(run) + title, text, run, () =>
+            {
+                ShowNest(run);
+                if (!d.Plain)
+                    _window?.ShowFilesAt(d.Folder);
+            });
         };
         run.Session = session;
         _dirty = true;
@@ -432,21 +437,23 @@ public sealed class DesktopController : ITrayActions, IDisposable
         if (r.Outcome == PassOutcome.Blocked)
             Notify("blocked:" + r.BlockReason, PrefixOf(run) + (r.BlockReason is BlockReason.MassDelete or BlockReason.FolderEmpty ? "Deletions blocked"
                 : r.BlockReason == BlockReason.SignedOut ? "Signed out of your nest"
-                : r.BlockReason == BlockReason.SignInRequired ? "Sign in to your nest" : "Pairnets paused syncing"), r.Message ?? r.BlockReason.ToString(), run);
+                : r.BlockReason == BlockReason.SignInRequired ? "Sign in to your nest" : "Pairnets paused syncing"), r.Message ?? r.BlockReason.ToString(), run,
+                () => FixOrAttention(run));
         else if (r.DeletedLocal >= BigDeleteText.Threshold || r.DeletedRemote >= BigDeleteText.Threshold)
         {
             // A big delete went through (perhaps without asking, as the nest's "Before big deletes" says): never silent.
             Notify("bigdelete", PrefixOf(run) + BigDeleteText.ToastTitle(r.DeletedLocal + r.DeletedRemote),
-                BigDeleteText.Safe + " " + BigDeleteText.ToastHint, run);
+                BigDeleteText.Safe + " " + BigDeleteText.ToastHint, run,
+                () => { SelectIfSeveral(run); ShowMainWindow(MainPage.Attention); });
         }
         else if (r.Freed > 0)
         {
             // Copies removed here because their folder lives on the nest only: never silent.
             var (title, text) = FilesPageText.FreedNotice(r.Freed);
-            Notify("freed", PrefixOf(run) + title, Wording.Computer(text), run);
+            Notify("freed", PrefixOf(run) + title, Wording.Computer(text), run, () => { SelectIfSeveral(run); ShowMainWindow(MainPage.Files); });
         }
         else if (r.Outcome == PassOutcome.AuthFailed)
-            Notify("auth", PrefixOf(run) + "Sign in to your nest", "Your nest did not accept this computer's sign-in. Open Pairnets and sign in again to keep syncing.", run);
+            Notify("auth", PrefixOf(run) + "Sign in to your nest", "Your nest did not accept this computer's sign-in. Open Pairnets and sign in again to keep syncing.", run, ShowSignIn);
     }
 
     // ------------------------------------------------------------------ beta updates
@@ -967,7 +974,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
     }
 
     /// <summary>A notice from the desktop. Same key (per nest) at most once per 10 minutes.</summary>
-    private void Notify(string key, string title, string text, NestRun? run = null)
+    private void Notify(string key, string title, string text, NestRun? run = null, Action? onClick = null)
     {
         if (!NotifyPolicy.Allows(_settings, key))
             return; // turned off in the notification switches
@@ -979,7 +986,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
                 return;
             _lastNotice[seen] = now;
         }
-        Task.Run(() => _platform.Notify(title, text));
+        Task.Run(() => _platform.Notify(title, text, onClick ?? ComeToFront)); // (a click brings Pairnets forward; on a Mac it opens the page that fits)
     }
 
     // ------------------------------------------------------------------ drawing
@@ -1680,7 +1687,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
         if (session.Status.ServerSpaceLow && !run.LowSpaceNoticed)
         {
             run.LowSpaceNoticed = true;
-            Notify("disk", PrefixOf(run) + "Your nest is running out of space", $"{session.Status.ServerFreeText}. Free up space on your nest or delete old history.", run);
+            Notify("disk", PrefixOf(run) + "Your nest is running out of space", $"{session.Status.ServerFreeText}. Free up space on your nest or delete old history.", run, () => ShowNest(run));
         }
         if (!session.ServerNeedsUpdate(info) || run.ServerPromptShownFor == info.ServerVersion)
             return;
@@ -1741,7 +1748,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
         }
         _dirty = true;
         if (result.Success && !result.AlreadyUpToDate)
-            Notify("server-updated", PrefixOf(run) + "Server updated", $"Your server now runs {result.ServerVersion}.", run);
+            Notify("server-updated", PrefixOf(run) + "Server updated", $"Your server now runs {result.ServerVersion}.", run, () => ShowNest(run));
         else if (!result.CanUpdateItself)
             Dispatcher.UIThread.Post(() => ShowServerUpdate(run, serverVersion, result)); // needs the one-time setup
     }
@@ -1903,6 +1910,29 @@ public sealed class DesktopController : ITrayActions, IDisposable
         {
             _log.LogWarning("Could not save the upgraded settings: {Error}", ex.Message);
         }
+    }
+
+    /// <summary>A notice about one nest was clicked: pick that nest (when there are several) and show the window.</summary>
+    private void ShowNest(NestRun run)
+    {
+        SelectIfSeveral(run);
+        ShowMainWindow();
+    }
+
+    private void SelectIfSeveral(NestRun run)
+    {
+        if (_runs.Count > 1)
+            SelectNest(run.Id);
+    }
+
+    /// <summary>A "paused" notice was clicked: signed out here, the sign-in window; otherwise Needs attention.</summary>
+    private void FixOrAttention(NestRun run)
+    {
+        SelectIfSeveral(run);
+        if (run.Session is null)
+            FixBlocked();
+        else
+            ShowMainWindow(MainPage.Attention);
     }
 
     /// <summary>Opens the picked nest's folder.</summary>

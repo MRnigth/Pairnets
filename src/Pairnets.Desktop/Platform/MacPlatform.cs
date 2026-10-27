@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using System.Text;
+using Avalonia.Threading;
 using Microsoft.Extensions.Logging;
 using Pairnets.Core.Settings;
 using Pairnets.Core.Sync;
@@ -15,9 +16,17 @@ public sealed class MacPlatform : IPlatformServices
 
     public ILocalTrash CreateTrash(ILogger log) => new MacTrash(log);
 
-    public void Notify(string title, string text) =>
+    /// <summary>
+    /// A notice from Pairnets itself (its icon; a click runs <paramref name="onClick"/> on the UI thread). Only a copy that
+    /// is not a real Pairnets.app (a developer run) shows it the old way, which macOS credits to Script Editor.
+    /// </summary>
+    public void Notify(string title, string text, Action? onClick = null)
+    {
+        if (MacNotifications.TryShow(title, text, onClick is null ? null : () => Dispatcher.UIThread.Post(onClick)))
+            return;
         // Values are passed as argv to the script, never spliced into AppleScript source.
         Proc.Run("osascript", ["-e", "on run argv", "-e", "display notification (item 2 of argv) with title (item 1 of argv)", "-e", "end run", title, text], timeoutMs: 3000);
+    }
 
     private static string AgentFile => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Library", "LaunchAgents", "app.pairnets.client.plist");
 

@@ -662,6 +662,19 @@ public sealed class DesktopControllerTests
     }
 
     [AvaloniaFact]
+    public async Task ClickingANotice_BringsPairnetsForward()
+    {
+        // On a Mac a click on the notice runs its action (the notice is Pairnets' own, no longer Script Editor's).
+        await using var app = await AppUnderTest.StartAsync(args: [SelfReplace.AfterUpdateArgument]);
+        await app.WaitUntilIdleAsync();
+        await Wait.Until(() => app.Platform.Notices.Any(n => n.Title == UpdateTexts.UpdatedTitle), "the \"up to date\" note");
+        app.MainWindow.Hide(); // closed to the menu bar
+        Assert.True(app.Platform.ClickNotice(UpdateTexts.UpdatedTitle), "The notice carries a click action.");
+        await app.WaitUntilIdleAsync();
+        Assert.True(app.App.Window is { IsVisible: true }, "Clicking the notice brings the main window back.");
+    }
+
+    [AvaloniaFact]
     public async Task AfterAnUpdate_TheOverviewSuggestsLettingTheNestUpdateItself_TurnOnKeepsIt()
     {
         // The app ran an older version before: this start is the first after an update.
