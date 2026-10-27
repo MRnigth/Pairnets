@@ -176,7 +176,10 @@ jobs:
               -p:PairnetsChannel=${{ needs.version.outputs.channel }} \
               -p:PairnetsBuild=${{ needs.version.outputs.build }} -o publish/mac-$arch
             bash deploy/macos/make-app.sh publish/mac-$arch ${{ needs.version.outputs.version }} $arch dist
+            # The Mac app updates itself from this zip: it must unpack and verify the way the app does it.
+            bash tests/macos/zip-check.sh dist/Pairnets-macos-$arch.zip ${{ needs.version.outputs.version }}
           done
+          bash tests/macos/update-check.sh
           ls -la dist
       - uses: actions/upload-artifact@v4
         with:
@@ -393,7 +396,7 @@ jobs:
             --notes "Built automatically from the newest commit on main (${GITHUB_SHA::7}).
 
           * Windows: PairnetsSetup.exe (installer) or pairnets-client-win-x64.zip (just Pairnets.exe)
-          * Mac: Pairnets-macos-arm64.dmg (Apple silicon) or Pairnets-macos-x64.dmg (Intel)
+          * Mac: Pairnets-macos-arm64.dmg (Apple silicon) or Pairnets-macos-x64.dmg (Intel); the Mac app updates itself from the matching .zip
           * Linux desktop: pairnets-desktop-linux-x64.tar.gz
           * Server: pairnets-server-linux-x64.tar.gz
 

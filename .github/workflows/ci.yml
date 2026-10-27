@@ -316,6 +316,9 @@ jobs:
           mkdir -p dist
           bash deploy/macos/make-app.sh publish/mac-arm64 1.0.0 arm64 dist
           ls -la dist
+          # What the app's self-update relies on: the zip unpacks and verifies like MacAppUpdate.Stage does it, and the swap script works.
+          bash tests/macos/zip-check.sh dist/Pairnets-macos-arm64.zip 1.0.0
+          bash tests/macos/update-check.sh
 
       - name: Test (case-insensitive APFS)
         env:

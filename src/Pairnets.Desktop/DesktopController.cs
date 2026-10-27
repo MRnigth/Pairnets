@@ -79,6 +79,8 @@ public sealed class DesktopController : ITrayActions, IDisposable
     private bool _updateDismissed;
     private double? _updateProgress;
     private UpdateProblem? _updateError;
+    private UpdateProblem? _putBack; // the Mac's new version did not start and the old one was put back (shown on the next card)
+    private readonly IMacTools _macTools = new MacTools();
     private IDisposable? _activation;
 
     /// <param name="environment">Where the settings, sync notes and logs live and where updates come from
@@ -103,12 +105,14 @@ public sealed class DesktopController : ITrayActions, IDisposable
         Dispatcher.UIThread.UnhandledException += OnUnhandledException;
         _fileLog.Minimum = _settings.DebugMode ? LogLevel.Debug : LogLevel.Information; // Debug mode: more detail in the log
         _refresh = new DispatcherTimer(TimeSpan.FromMilliseconds(250), DispatcherPriority.Background, (_, _) => RefreshIfDirty());
-        _package = UpdatePackage.ForThisComputer(installedCopy: false); // (no installer looks after the Mac and Linux app)
+        _package = UpdatePackage.ForThisComputer(installedCopy: false, _env.AppFile); // (no installer looks after the Mac and Linux app)
+        if (OperatingSystem.IsMacOS() && MacAppUpdate.TakeFailedNote(_env.LocalDir) is { } putBack)
+            _putBack = new UpdateProblem(putBack, UpdateNextStep.TryAgain);
         _updates = new UpdateService(_env.CreateUpdateChecker(), PairnetsInfo.ThisRelease, _package.Asset);
         _updates.UpdateAvailable += u =>
         {
             _updateDismissed = false;
-            _updateError = null;
+            (_updateError, _putBack) = (_putBack, null);
             _dirty = true;
             if (!u.Signed)
                 return; // (the banner says it was not installed; no "update available" notice for it)
@@ -1584,7 +1588,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
         else if (_updateProgress is { } p)
             window.ShowUpdate($"Downloading Pairnets {update.Display}…", "Syncing continues while it downloads.", UpdateTexts.UpdateNow, p, busy: true);
         else if (_package.Method == UpdateMethod.ByHand)
-            window.ShowUpdate(UpdateTexts.Available(update), UpdateTexts.ByHand(PairnetsInfo.DisplayVersion), UpdateTexts.OpenDownloadPage);
+            window.ShowUpdate(UpdateTexts.Available(update), UpdateTexts.ByHand(PairnetsInfo.DisplayVersion, _package.WhyByHand), UpdateTexts.OpenDownloadPage);
         else
             window.ShowUpdate(UpdateTexts.Available(update), UpdateTexts.Ready(PairnetsInfo.DisplayVersion), UpdateTexts.UpdateNow);
     }
@@ -1624,6 +1628,23 @@ public sealed class DesktopController : ITrayActions, IDisposable
             await _env.CreateUpdateChecker().DownloadVerifiedAsync(update, download, progress, CancellationToken.None);
             if (app is null)
                 throw new IOException("Pairnets could not find its own file.");
+            if (_package.Method == UpdateMethod.ReplaceBundle)
+            {
+                // Mac: unpack and check the new Pairnets.app next to this one, then a script swaps them once this app has quit.
+                var bundle = MacAppUpdate.BundleOf(app) ?? throw new IOException("Pairnets could not find its own app.");
+                _log.LogInformation("Replacing {App} with Pairnets {Version}", bundle, update.Version);
+                try
+                {
+                    var staged = await Task.Run(() => MacAppUpdate.Stage(download, bundle, update.Version, _macTools));
+                    MacAppUpdate.StartSwap(bundle, staged, update.Version, Environment.ProcessId, _env.LocalDir, _env.LogsDir, _macTools);
+                }
+                finally
+                {
+                    File.Delete(download);
+                }
+                Quit();
+                return;
+            }
             _log.LogInformation("Replacing {App} with Pairnets {Version}", app, update.Version);
             try
             {
@@ -1635,7 +1656,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
             }
         }
         catch (Exception ex) when (ex is UpdateVerificationException or HttpRequestException or IOException or UnauthorizedAccessException
-            or InvalidDataException)
+            or InvalidDataException or System.ComponentModel.Win32Exception)
         {
             _log.LogWarning("Update failed: {Error}", FriendlyErrors.Technical(ex));
             _updateError = UpdateProblem.From(ex, app);
