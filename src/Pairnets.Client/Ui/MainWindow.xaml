@@ -158,19 +158,19 @@
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="Auto" />
                   </Grid.ColumnDefinitions>
                   <ui:LineIcon x:Name="UpdateIcon" Width="16" Height="16" StrokeThickness="2.2" Margin="0,0,8,0" Stroke="{DynamicResource T.AccentInk}" Data="{StaticResource I.Download}" VerticalAlignment="Center" />
                   <StackPanel Grid.Column="1" VerticalAlignment="Center">
                     <TextBlock x:Name="UpdateTitle" FontWeight="ExtraBold" FontSize="13" TextWrapping="Wrap" />
                   </StackPanel>
                   <TextBlock x:Name="UpdatePercent" Grid.Column="2" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource T.AccentInk}" VerticalAlignment="Center" Margin="8,0,4,0" Visibility="Collapsed" />
-                  <Button x:Name="UpdateButton" Grid.Column="3" Style="{StaticResource AccentButton}" Height="30" MinHeight="30" Padding="12,0" FontSize="12" Margin="8,0,0,0" Content="Update" Click="OnUpdateNow" />
-                  <Button x:Name="UpdateLater" Grid.Column="4" Style="{StaticResource RoundIconButton}" Width="28" Height="28" MinWidth="28" MinHeight="28" Margin="8,0,0,0"
+                  <Button x:Name="UpdateLater" Grid.Column="3" Style="{StaticResource RoundIconButton}" Width="28" Height="28" MinWidth="28" MinHeight="28" Margin="8,0,0,0"
                           Background="Transparent" ToolTip="Later" AutomationProperties.Name="Later" Click="OnUpdateLater">
                     <ui:LineIcon Width="12" Height="12" StrokeThickness="2.4" Stroke="{DynamicResource T.Muted}" Data="{StaticResource I.Close}" />
                   </Button>
                 </Grid>
+                <!-- The button is under the text, not beside it: a sidebar is too narrow for both -->
+                <Button x:Name="UpdateButton" Style="{StaticResource AccentButton}" Height="30" MinHeight="30" Padding="12,0" FontSize="12" HorizontalAlignment="Left" Margin="24,6,0,2" Content="Update" Click="OnUpdateNow" />
                 <!-- Why the update was not installed, or why it is done by hand (a Mac), the whole card wide -->
                 <TextBlock x:Name="UpdateReason" FontSize="12" Foreground="{DynamicResource T.Muted}" TextWrapping="Wrap" Margin="24,4,4,2" Visibility="Collapsed" />
                 <ProgressBar x:Name="UpdateProgress" Style="{StaticResource RoundProgress}" Height="5" Minimum="0" Maximum="100" Margin="0,8,4,2" Visibility="Collapsed" />
