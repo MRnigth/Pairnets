@@ -301,7 +301,7 @@ public static class SettingsStore
         }
         try
         {
-            return Parse(File.ReadAllText(path)) ?? new ClientSettings();
+            return Parse(ReadShared(path)) ?? new ClientSettings();
         }
         catch (JsonException ex)
         {
@@ -318,20 +318,56 @@ public static class SettingsStore
         }
     }
 
+    /// <summary>One lock per settings file in this process: two saves at once (a button and a background notice) never share the .tmp file.</summary>
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, object> Locks =
+        new(OperatingSystem.IsWindows() || OperatingSystem.IsMacOS() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
+
+    /// <summary>Reads a settings file without blocking a save that replaces it (Windows refuses to replace a file someone has open for reading unless they allow it).</summary>
+    private static string ReadShared(string path)
+    {
+        using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+        using var reader = new StreamReader(fs);
+        return reader.ReadToEnd();
+    }
+
+    private const int SaveTries = 5;
+    private static readonly TimeSpan SaveRetryWait = TimeSpan.FromMilliseconds(100);
+
+    /// <summary>
+    /// Saves the settings (a safety copy first, then the file in one move). Saves of the same file in this process take
+    /// turns, so the one that comes last is what stays; a move that fails because something else holds the file for a
+    /// moment (a virus scanner, a backup, a file-sync tool) is tried again up to five times over about half a second.
+    /// </summary>
     public static void Save(string path, ClientSettings settings)
     {
-        Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
-        var tmp = path + ".tmp";
-        File.WriteAllText(tmp, JsonSerializer.Serialize(settings, Json));
-        try
+        var full = Path.GetFullPath(path);
+        var json = JsonSerializer.Serialize(settings, Json);
+        lock (Locks.GetOrAdd(full, _ => new object()))
         {
-            File.Copy(tmp, path + BackupSuffix, overwrite: true);
+            Directory.CreateDirectory(Path.GetDirectoryName(full)!);
+            var tmp = full + ".tmp";
+            for (var attempt = 1; ; attempt++)
+            {
+                try
+                {
+                    File.WriteAllText(tmp, json);
+                    try
+                    {
+                        File.Copy(tmp, full + BackupSuffix, overwrite: true);
+                    }
+                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                    {
+                        // The safety copy is extra; the save itself goes on.
+                    }
+                    File.Move(tmp, full, overwrite: true);
+                    return;
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException && attempt < SaveTries)
+                {
+                    Thread.Sleep(SaveRetryWait);
+                }
+            }
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            // The safety copy is extra; the save itself goes on.
-        }
-        File.Move(tmp, path, overwrite: true);
     }
 
     /// <summary>
@@ -358,7 +394,7 @@ public static class SettingsStore
     {
         try
         {
-            return File.Exists(path) ? Parse(File.ReadAllText(path)) : null;
+            return File.Exists(path) ? Parse(ReadShared(path)) : null;
         }
         catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
         {
