@@ -36,7 +36,7 @@ public sealed class SyncEngine
         _clock = clock ?? TimeProvider.System;
         _hooks = hooks ?? new EngineHooks();
         Root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(options.Folder));
-        Ignore = new IgnoreList(options.ExtraIgnore);
+        Ignore = new IgnoreList(options.ExtraIgnore) { Build = options.SkipBuildFolders ? new BuildFolders() : null };
         _cloud = options.CloudFiles;
         Placement = options.Placement;
         _access = options.Access;
@@ -449,7 +449,8 @@ public sealed class SyncEngine
         cursor = manifest.Version;
         result.ServerVersion = cursor;
 
-        // ---- 3. Local scan.
+        // ---- 3. Local scan (it notes the projects it walks through, so their rebuilt folders are skipped already).
+        Ignore.Build?.Clear();
         StageChanged?.Invoke(SyncStage.Checking, 0, 0);
         var scan = await _scanner.ScanAsync(ct, (done, total) => StageChanged?.Invoke(SyncStage.Checking, done, total)).ConfigureAwait(false);
         result.Unstable = scan.UnstableCount;
@@ -466,6 +467,12 @@ public sealed class SyncEngine
         {
             if (f.BaseHash is not null)
                 paths.Add(f.Path);
+        }
+        // Projects known only from the nest or the last sync count too, before anything is decided.
+        if (Ignore.Build is { } build)
+        {
+            foreach (var path in paths)
+                build.Learn(path);
         }
 
         var plan = new List<PlannedAction>();

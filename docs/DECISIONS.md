@@ -2260,3 +2260,26 @@ yet; these are the places the code could do it, now limited, plus what is kept t
     about a person, so no change to the Privacy page was made; the owner may want a line there.
 * **Not done:** the scanner still opens any file it finds (devices and pipes are only avoided because `/`, `/dev` and the
   home folder can't be a nest folder now). Windows toasts are not queued (they start no process).
+
+## Ignore a folder from its right-click menu (feature/ignore-folder, 2026-10-27)
+* **Why:** opening a Unity project made Pairnets upload its rebuilt `Library` (82,000 files, 6 GB at 117 KB/s,
+  "about 8 h"). Ignoring a folder meant typing a pattern into Settings → Advanced.
+* **What:** "Ignore in Pairnets…" on a folder's right-click menu (Explorer; Dolphin, GNOME Files and Nemo on Linux; the
+  Mac has no right-click items). It asks, then adds the rule `/<path>/` to this computer's ignore rules and restarts that
+  nest's session. On a folder ignored by its own rule it offers "Sync it again". A folder skipped by some other rule
+  only gets a message pointing to Settings. Shared logic: `Core/Client/IgnoreFolder.cs`.
+* **Leading slash now anchors:** `/Library/` matches only the top-level Library. Before, the slash was dropped and it
+  matched every Library folder. Needed so ignoring a top-level folder doesn't catch same-named folders deeper down.
+* **Skip folders that projects rebuild (on by default, Settings → Advanced):** inside a project recognised by its own
+  file, Pairnets skips the folders its tools rebuild: Unity (`ProjectSettings/ProjectVersion.txt` → Library, Temp, Logs,
+  UserSettings), Unreal (`*.uproject` → Binaries, Intermediate, Saved, DerivedDataCache), Node (`package.json` →
+  node_modules). A plain folder with the same name still syncs.
+  - `Core/Paths/BuildFolders.cs` learns projects from the scan and from the nest's and last-synced paths before planning.
+    So the scan and the comparison with the nest skip the same folders, and nothing can look deleted.
+  - It is on by default because these folders are large, change all the time and are useless on another computer.
+* **Not done (next):** offering to remove copies that were uploaded before. Considered and rejected for now: asking an AI
+  model to judge each case. Detection is a fixed rule, so there's no guesswork to check. Sending folder names out would
+  break the self-hosted promise, and the person decides on any deletion anyway.
+* **Nothing is deleted:** ignore rules stay on this computer, and ignored paths are skipped before any sync decision. The
+  nest and the other computers keep their copies, and the folder is frozen here. Syncing it again catches up like a
+  computer that was offline (test `IgnoringASyncedFolderLeavesTheNestAlone_AndSyncingItAgainCatchesUp`).

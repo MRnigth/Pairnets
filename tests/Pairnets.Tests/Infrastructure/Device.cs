@@ -23,6 +23,7 @@ public sealed class Device : IAsyncDisposable
     {
         Name = name;
         Server = server;
+        IgnoreRules = extraIgnore ?? [];
         _folder = new TempDir(name);
         _stateDir = new TempDir(name + "-state");
         Url = url ?? server.Url;
@@ -38,7 +39,8 @@ public sealed class Device : IAsyncDisposable
             Folder = _folder.Path,
             DeviceName = name,
             StabilityWindow = stability ?? TimeSpan.Zero,
-            ExtraIgnore = extraIgnore ?? [],
+            ExtraIgnore = IgnoreRules,
+            SkipBuildFolders = SkipBuildFolders,
             MaxParallelTransfers = parallel,
             ResumeDownloadsFrom = resumeDownloadsFrom ?? new EngineOptions { Folder = ".", DeviceName = "x" }.ResumeDownloadsFrom,
             Placement = _placement,
@@ -49,6 +51,12 @@ public sealed class Device : IAsyncDisposable
     }
 
     public string Name { get; }
+
+    /// <summary>This computer's own ignore rules; a change counts from the next <see cref="RestartAppAsync"/>, as in the app.</summary>
+    public IReadOnlyList<string> IgnoreRules { get; set; }
+
+    /// <summary>"Skip folders that projects rebuild"; a change counts from the next <see cref="RestartAppAsync"/>.</summary>
+    public bool SkipBuildFolders { get; set; } = true;
     public TestServer Server { get; }
     public Uri Url { get; }
     public string Token { get; }

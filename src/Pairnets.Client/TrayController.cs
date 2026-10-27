@@ -602,6 +602,22 @@ public sealed class TrayController : ITrayActions, IDisposable
             _window?.ShowFilesAt(folderPath, choosePlacement: true);
             return;
         }
+        if (command.Action == FileManagerAction.Ignore)
+        {
+            var choice = IgnoreFolder.For(run.Settings.ExtraIgnore, rel, Directory.Exists(command.Path));
+            if (choice.Rules is not { } rules)
+            {
+                Dialogs.Ask(null, choice.Text, "Pairnets");
+                return;
+            }
+            if (Dialogs.Ask(null, choice.Text, "Pairnets", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
+                return;
+            var nest = run.Settings.Clone();
+            nest.ExtraIgnore = rules;
+            SaveNest(nest);
+            StartNest(run, null); // the engine reads its ignore rules when it starts
+            return;
+        }
         if (command.Action == FileManagerAction.Open)
         {
             if (rel.Length == 0 || Directory.Exists(command.Path))

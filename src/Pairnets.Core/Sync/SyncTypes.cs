@@ -172,6 +172,10 @@ public sealed class EngineOptions
     public required string Folder { get; init; }
     public required string DeviceName { get; init; }
     public IReadOnlyList<string> ExtraIgnore { get; init; } = [];
+
+    /// <summary>Skip the folders projects make again by themselves (Unity's Library, node_modules …; see <see cref="Paths.BuildFolders"/>).</summary>
+    public bool SkipBuildFolders { get; init; } = true;
+
     public TimeSpan StabilityWindow { get; init; } = TimeSpan.FromSeconds(2);
     public TimeSpan RacyWindow { get; init; } = TimeSpan.FromSeconds(2);
 

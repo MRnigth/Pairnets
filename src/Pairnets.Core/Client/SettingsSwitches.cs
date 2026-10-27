@@ -14,6 +14,7 @@ public static class SettingsSwitches
     /// <summary>True when going from <paramref name="before"/> to <paramref name="after"/> needs the session started again.</summary>
     public static bool NeedsNewSession(ClientSettings before, ClientSettings after) =>
         before.WaitForPeerBatches != after.WaitForPeerBatches
+        || before.SkipBuildFolders != after.SkipBuildFolders
         || before.EffectiveParallelTransfers != after.EffectiveParallelTransfers
         || before.CloudFolder != after.CloudFolder
         || PlacementChanged(before, after);
@@ -41,6 +42,7 @@ public static class SettingsSwitches
         next.StartWithWindows = from.StartWithWindows;
         next.CheckForUpdates = from.CheckForUpdates;
         next.WaitForPeerBatches = from.WaitForPeerBatches;
+        next.SkipBuildFolders = from.SkipBuildFolders;
         next.ShowMapSpeed = from.ShowMapSpeed;
         next.AutoUpdateServer = from.AutoUpdateServer;
         next.DebugMode = from.DebugMode;

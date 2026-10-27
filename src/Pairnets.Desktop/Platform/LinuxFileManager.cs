@@ -49,6 +49,7 @@ public sealed class LinuxFileManager(string home, Func<string[], int> runGio)
         ("Open in Pairnets", FileManagerCommand.OpenArgument),
         ("Show Pairnets sync status", FileManagerCommand.StatusArgument),
         ("Where this folder lives (Pairnets)", FileManagerCommand.WhereArgument),
+        ("Ignore in Pairnets", FileManagerCommand.IgnoreArgument),
     ];
 
     /// <summary>Adds (or brings up to date) the bookmark, the right-click items and the folder icon.</summary>
@@ -177,7 +178,7 @@ public sealed class LinuxFileManager(string home, Func<string[], int> runGio)
             X-KDE-Protocols=file
             X-KDE-RequiredNumberOfUrls=1
             X-KDE-Submenu=Pairnets
-            Actions=PairnetsOpen;PairnetsStatus;PairnetsWhere;
+            Actions=PairnetsOpen;PairnetsStatus;PairnetsWhere;PairnetsIgnore;
 
             [Desktop Action PairnetsOpen]
             Name=Open in Pairnets
@@ -193,6 +194,11 @@ public sealed class LinuxFileManager(string home, Func<string[], int> runGio)
             Name=Where this folder lives…
             Icon=pairnets
             Exec={DesktopQuote(exePath)} {FileManagerCommand.WhereArgument} %f
+
+            [Desktop Action PairnetsIgnore]
+            Name=Ignore in Pairnets…
+            Icon=pairnets
+            Exec={DesktopQuote(exePath)} {FileManagerCommand.IgnoreArgument} %f
 
             """;
         foreach (var file in ServiceMenus)

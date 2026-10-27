@@ -11,6 +11,9 @@ public enum FileManagerAction
 
     /// <summary>"Where this folder lives…": the Files page on that folder, with its choice open.</summary>
     WhereItLives,
+
+    /// <summary>"Ignore in Pairnets…": stop syncing that folder on this computer (or sync it again).</summary>
+    Ignore,
 }
 
 /// <summary>
@@ -23,6 +26,7 @@ public sealed record FileManagerCommand(FileManagerAction Action, string Path)
     public const string OpenArgument = "--open-in-pairnets";
     public const string StatusArgument = "--sync-status";
     public const string WhereArgument = "--where-it-lives";
+    public const string IgnoreArgument = "--ignore-in-pairnets";
 
     private const string MessagePrefix = "pairnets-file:";
 
@@ -36,6 +40,7 @@ public sealed record FileManagerCommand(FileManagerAction Action, string Path)
                 OpenArgument => FileManagerAction.Open,
                 StatusArgument => FileManagerAction.ShowStatus,
                 WhereArgument => FileManagerAction.WhereItLives,
+                IgnoreArgument => FileManagerAction.Ignore,
                 _ => (FileManagerAction?)null,
             };
             if (action is { } a && args[i + 1].Length > 0)
@@ -49,6 +54,7 @@ public sealed record FileManagerCommand(FileManagerAction Action, string Path)
     {
         FileManagerAction.Open => "open",
         FileManagerAction.WhereItLives => "where",
+        FileManagerAction.Ignore => "ignore",
         _ => "status",
     } + "\n" + Path;
 
@@ -66,6 +72,7 @@ public sealed record FileManagerCommand(FileManagerAction Action, string Path)
             "open" => FileManagerAction.Open,
             "status" => FileManagerAction.ShowStatus,
             "where" => FileManagerAction.WhereItLives,
+            "ignore" => FileManagerAction.Ignore,
             _ => (FileManagerAction?)null,
         };
         var path = rest[(newline + 1)..];

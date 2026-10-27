@@ -683,6 +683,7 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
             Folder = folder,
             DeviceName = settings.DeviceName!,
             ExtraIgnore = settings.ExtraIgnore,
+            SkipBuildFolders = settings.SkipBuildFolders,
             MaxParallelTransfers = settings.EffectiveParallelTransfers,
             CloudFiles = cloudFiles ?? ICloudFiles.None,
             Placement = settings.PlacementMap(onDemandWorks: cloudFiles?.IsActive == true),

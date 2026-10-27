@@ -64,6 +64,21 @@ public class IgnoreListTests
     }
 
     [Fact]
+    public void LeadingSlashMeansOnlyAtTheTop()
+    {
+        var list = new IgnoreList(["/Library/", "/notes.txt", "Work/game/Temp/"]);
+        Assert.True(list.IsIgnoredDirectory("Library"));
+        Assert.True(list.IsIgnored("Library/a/b.bin"));
+        Assert.False(list.IsIgnored("game/Library/b.bin"));
+        Assert.True(list.IsIgnored("notes.txt"));
+        Assert.False(list.IsIgnored("a/notes.txt"));
+        Assert.True(list.IsIgnored("Work/game/Temp/x.tmpfile"));
+        Assert.True(list.IsIgnored("work/Game/temp/x")); // letter case doesn't matter
+        Assert.False(list.IsIgnored("Work/game-copy/game/Temp/x"));
+        Assert.False(list.IsIgnored("Work/game/Temporary/x"));
+    }
+
+    [Fact]
     public void QuestionMarkMatchesOneCharacter()
     {
         var list = new IgnoreList(["file?.log"]);

@@ -9,6 +9,8 @@ namespace Pairnets.Core.Paths;
 /// <item>"name" or "*.ext" (no slash): matches any path segment (file or folder name).</item>
 /// <item>"dir/" (trailing slash): matches folders with that name anywhere.</item>
 /// <item>"a/b/*.txt" (inner slash): matches the full relative path (or one of its parents).</item>
+/// <item>"/dir/" or "/name" (leading slash): only at the top of the folder, like an inner slash
+/// ("Ignore in Pairnets" writes these).</item>
 /// </list>
 /// "*" never crosses a '/', "**" does, "?" matches one character.
 /// </summary>
@@ -38,19 +40,23 @@ public sealed class IgnoreList
             if (pattern.Length == 0 || pattern.StartsWith('#'))
                 continue;
             pattern = pattern.Replace('\\', '/');
+            var anchored = pattern.StartsWith('/');
             if (pattern.EndsWith('/'))
             {
                 var name = pattern.TrimEnd('/').TrimStart('/');
                 if (name.Length == 0)
                     continue;
-                if (name.Contains('/'))
+                if (anchored || name.Contains('/'))
                     _pathRules.Add(Compile(name));
                 else
                     _directoryRules.Add(Compile(name));
             }
             else if (pattern.Contains('/'))
             {
-                _pathRules.Add(Compile(pattern.TrimStart('/')));
+                var path = pattern.TrimStart('/');
+                if (path.Length == 0)
+                    continue;
+                _pathRules.Add(Compile(path));
             }
             else
             {
@@ -61,6 +67,9 @@ public sealed class IgnoreList
     }
 
     public List<string> Patterns { get; } = [];
+
+    /// <summary>The projects' rebuilt folders to skip as well (see <see cref="BuildFolders"/>), or null when that is off.</summary>
+    public BuildFolders? Build { get; init; }
 
     /// <summary>
     /// Where Finder keeps a folder's own icon ("Icon" and a carriage return). Never synced: it only means something to
@@ -78,10 +87,15 @@ public sealed class IgnoreList
     private bool Matches(string syncPath, bool isDirectory)
     {
         var segments = syncPath.Split('/');
+        var build = Build is { Any: true } b ? b : null;
+        var folder = 0; // where segment i ends in syncPath
         for (var i = 0; i < segments.Length; i++)
         {
             var segment = segments[i];
             var segmentIsDirectory = isDirectory || i < segments.Length - 1;
+            folder += (i == 0 ? 0 : 1) + segment.Length;
+            if (segmentIsDirectory && build is not null && build.IsBuildFolder(syncPath[..folder]))
+                return true;
             if (!segmentIsDirectory && segment == FinderIconFile)
                 return true;
             foreach (var rule in _segmentRules)

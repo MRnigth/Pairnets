@@ -237,6 +237,9 @@ public sealed class LocalScanner
                 throw new ScanFailedException($"Pairnets cannot read the folder '{relDir}'. {FriendlyErrors.Describe(ex)}", ex);
             }
 
+            if (_ignore.Build is { } build)
+                LearnProjects(build, relDir, fullDir, entries);
+
             foreach (var entry in entries)
             {
                 var rel = relDir.Length == 0 ? entry.Name : relDir + "/" + entry.Name;
@@ -282,6 +285,23 @@ public sealed class LocalScanner
             }
         }
         return candidates;
+    }
+
+    /// <summary>
+    /// Notes a project in this folder before its subfolders are looked at, so its rebuilt folders (Unity's Library …) are
+    /// skipped here already.
+    /// </summary>
+    private static void LearnProjects(BuildFolders build, string relDir, string fullDir, List<FileSystemInfo> entries)
+    {
+        foreach (var entry in entries)
+        {
+            var rel = relDir.Length == 0 ? entry.Name : relDir + "/" + entry.Name;
+            if (entry is FileInfo)
+                build.Learn(rel);
+            else if (entry.Name.Equals("ProjectSettings", StringComparison.OrdinalIgnoreCase)
+                && File.Exists(Path.Combine(fullDir, entry.Name, "ProjectVersion.txt")))
+                build.Learn(rel + "/ProjectVersion.txt");
+        }
     }
 
     private async Task<LocalFile> InspectFileAsync(

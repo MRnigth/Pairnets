@@ -114,6 +114,7 @@ public partial class SettingsView : UserControl
         DrawPlacement();
         UpdateBox.IsChecked = current.CheckForUpdates;
         WaitBox.IsChecked = current.WaitForPeerBatches;
+        BuildBox.IsChecked = current.SkipBuildFolders;
         MapSpeedBox.IsChecked = current.ShowMapSpeed;
         AutoServerBox.IsChecked = current.AutoUpdateServer;
         DebugBox.IsChecked = current.DebugMode;
@@ -150,7 +151,7 @@ public partial class SettingsView : UserControl
 
     private void WireSwitches()
     {
-        foreach (var box in new[] { AutoStartBox, UpdateBox, WaitBox, MapSpeedBox, AutoServerBox, DebugBox, UpLimitBox, DownLimitBox, ExplorerBox, RightClickBox, TicksBox })
+        foreach (var box in new[] { AutoStartBox, UpdateBox, WaitBox, BuildBox, MapSpeedBox, AutoServerBox, DebugBox, UpLimitBox, DownLimitBox, ExplorerBox, RightClickBox, TicksBox })
         {
             box.Checked += OnSwitchChanged;
             box.Unchecked += OnSwitchChanged;
@@ -179,7 +180,7 @@ public partial class SettingsView : UserControl
 
     /// <summary>True when what the switches show has been applied (the checks).</summary>
     internal bool SwitchesApplied => _applied is { } a && a.StartWithWindows == (AutoStartBox.IsChecked == true) && a.CheckForUpdates == (UpdateBox.IsChecked == true)
-        && a.WaitForPeerBatches == (WaitBox.IsChecked == true) && a.ShowMapSpeed == (MapSpeedBox.IsChecked == true) && a.AutoUpdateServer == (AutoServerBox.IsChecked == true)
+        && a.WaitForPeerBatches == (WaitBox.IsChecked == true) && a.SkipBuildFolders == (BuildBox.IsChecked == true) && a.ShowMapSpeed == (MapSpeedBox.IsChecked == true) && a.AutoUpdateServer == (AutoServerBox.IsChecked == true)
         && a.DebugMode == (DebugBox.IsChecked == true) && a.EffectiveParallelTransfers == ParallelChoice()
         && (a.UploadLimitMBps is not null) == (UpLimitBox.IsChecked == true) && (a.DownloadLimitMBps is not null) == (DownLimitBox.IsChecked == true)
         && a.ShowInFileManager == (ExplorerBox.IsChecked == true) && a.ExplorerRightClick == (RightClickBox.IsChecked == true)
@@ -196,6 +197,7 @@ public partial class SettingsView : UserControl
         next.StartWithWindows = AutoStartBox.IsChecked == true;
         next.CheckForUpdates = UpdateBox.IsChecked == true;
         next.WaitForPeerBatches = WaitBox.IsChecked == true;
+        next.SkipBuildFolders = BuildBox.IsChecked == true;
         next.ShowMapSpeed = MapSpeedBox.IsChecked == true;
         next.AutoUpdateServer = AutoServerBox.IsChecked == true;
         next.DebugMode = DebugBox.IsChecked == true;
@@ -270,6 +272,7 @@ public partial class SettingsView : UserControl
 
     private static bool Same(ClientSettings a, ClientSettings b) =>
         a.StartWithWindows == b.StartWithWindows && a.CheckForUpdates == b.CheckForUpdates && a.WaitForPeerBatches == b.WaitForPeerBatches
+        && a.SkipBuildFolders == b.SkipBuildFolders
         && a.ShowMapSpeed == b.ShowMapSpeed && a.AutoUpdateServer == b.AutoUpdateServer && a.DebugMode == b.DebugMode
         && a.EffectiveParallelTransfers == b.EffectiveParallelTransfers && !SettingsSwitches.LimitsChanged(a, b)
         && !SettingsSwitches.FileManagerChanged(a, b) && a.CloudFolder == b.CloudFolder && !SettingsSwitches.PlacementChanged(a, b);
@@ -672,6 +675,7 @@ public partial class SettingsView : UserControl
                 SoftwareDrawing = _original.SoftwareDrawing,
                 CheckForUpdates = UpdateBox.IsChecked == true,
                 WaitForPeerBatches = WaitBox.IsChecked == true,
+                SkipBuildFolders = BuildBox.IsChecked == true,
                 ShowMapSpeed = MapSpeedBox.IsChecked == true,
                 AutoUpdateServer = AutoServerBox.IsChecked == true,
                 DebugMode = DebugBox.IsChecked == true,

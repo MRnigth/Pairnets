@@ -637,6 +637,22 @@ public sealed class DesktopController : ITrayActions, IDisposable
             _window?.ShowFilesAt(folderPath, choosePlacement: true);
             return;
         }
+        if (command.Action == FileManagerAction.Ignore)
+        {
+            var choice = IgnoreFolder.For(run.Settings.ExtraIgnore, rel, Directory.Exists(command.Path));
+            if (choice.Rules is not { } rules)
+            {
+                await Dialogs.InfoAsync(_window, "Pairnets", choice.Text);
+                return;
+            }
+            if (!await Dialogs.ConfirmAsync(_window, "Pairnets", choice.Text, choice.Yes, "Cancel"))
+                return;
+            var nest = run.Settings.Clone();
+            nest.ExtraIgnore = rules;
+            SaveNest(nest);
+            StartNest(run, null); // the engine reads its ignore rules when it starts
+            return;
+        }
         if (command.Action == FileManagerAction.Open)
         {
             if (rel.Length == 0 || Directory.Exists(command.Path))

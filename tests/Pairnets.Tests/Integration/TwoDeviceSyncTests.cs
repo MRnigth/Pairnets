@@ -1,3 +1,4 @@
+using Pairnets.Core.Client;
 using Pairnets.Core;
 using System.Text;
 using Pairnets.Core.Hashing;
@@ -168,6 +169,78 @@ public class TwoDeviceSyncTests : IAsyncLifetime
         var r = await _desktop.SyncAsync();
         Assert.Equal(1, r.Uploaded);
         Assert.Equal(["real.txt"], _server.Store.ReadManifest(null).Entries.Select(e => e.Path));
+    }
+
+    [Fact]
+    public async Task ProjectsRebuiltFoldersStayOnTheirComputer_AndCopiesAlreadyOnTheNestAreLeftAlone()
+    {
+        // Uploaded by a computer that doesn't skip them (an older Pairnets, or the switch off).
+        _laptop.SkipBuildFolders = false;
+        await _laptop.RestartAppAsync();
+        _laptop.Write("Work/game/ProjectSettings/ProjectVersion.txt", "m_EditorVersion: 6000.0");
+        _laptop.Write("Work/game/Assets/Player.cs", "class Player {}");
+        _laptop.Write("Work/game/Library/old.asset", "old cache");
+        _laptop.Write("Work/web/package.json", "{}");
+        _laptop.Write("Work/web/node_modules/left-pad/index.js", "module.exports = 1");
+        _laptop.Write("Books/Library/novel.txt", "a book"); // not a project: syncs
+        await _laptop.SyncAsync();
+
+        // The desktop skips them: it doesn't download them, and its own rebuilt files are never uploaded.
+        _desktop.Write("Work/game/Library/new.asset", "desktop cache");
+        _desktop.Write("Work/game/Temp/lock", "x");
+        var down = await _desktop.SyncAsync();
+        Assert.Equal("class Player {}", _desktop.Read("Work/game/Assets/Player.cs"));
+        Assert.Equal("a book", _desktop.Read("Books/Library/novel.txt"));
+        Assert.False(_desktop.Exists("Work/game/Library/old.asset"));
+        Assert.False(_desktop.Exists("Work/web/node_modules/left-pad/index.js"));
+        Assert.Equal(0, down.Uploaded);
+        var onNest = _server.Store.ReadManifest(null).Entries.Select(e => e.Path).ToHashSet();
+        Assert.Contains("Work/game/Library/old.asset", onNest); // left alone, not deleted
+        Assert.Contains("Work/web/node_modules/left-pad/index.js", onNest);
+        Assert.DoesNotContain("Work/game/Library/new.asset", onNest);
+        Assert.DoesNotContain("Work/game/Temp/lock", onNest);
+
+        // Nothing more to do on either side, and the desktop's own Library stays.
+        Assert.Equal(0, (await _desktop.SyncAsync()).Changes);
+        Assert.Equal(0, (await _laptop.SyncAsync()).Changes);
+        Assert.True(_desktop.Exists("Work/game/Library/new.asset"));
+    }
+
+    [Fact]
+    public async Task IgnoringASyncedFolderLeavesTheNestAlone_AndSyncingItAgainCatchesUp()
+    {
+        _desktop.Write("game/Library/cache.bin", "v1");
+        _desktop.Write("game/Library/old.bin", "old");
+        _desktop.Write("game/Assets/a.txt", "a");
+        await _desktop.SyncAsync();
+        await _laptop.SyncAsync();
+
+        // Ignored on the desktop: its own changes and deletions there stay put, the nest and the laptop keep theirs.
+        _desktop.IgnoreRules = [IgnoreFolder.Rule("game/Library")];
+        await _desktop.RestartAppAsync();
+        _desktop.Write("game/Library/cache.bin", "v2 on desktop");
+        _desktop.Delete("game/Library/old.bin");
+        _laptop.Write("game/Library/new.bin", "from laptop");
+        var r = await _desktop.SyncAsync();
+        Assert.Equal(0, r.Uploaded);
+        await _laptop.SyncAsync();
+        Assert.Equal("v1", _laptop.Read("game/Library/cache.bin"));
+        Assert.True(_laptop.Exists("game/Library/old.bin"));
+        Assert.False(_desktop.Exists("game/Library/new.bin"));
+        var onNest = _server.Store.ReadManifest(null).Entries.Select(e => e.Path).ToHashSet();
+        Assert.Contains("game/Library/old.bin", onNest);
+        Assert.Contains("game/Library/new.bin", onNest);
+        Assert.Contains("game/Assets/a.txt", onNest);
+
+        // Synced again: the changes made while ignored now go through, as if the desktop had been offline.
+        _desktop.IgnoreRules = [];
+        await _desktop.RestartAppAsync();
+        await _desktop.SyncAsync();
+        await _laptop.SyncAsync();
+        Assert.Equal("v2 on desktop", _laptop.Read("game/Library/cache.bin"));
+        Assert.Equal("from laptop", _desktop.Read("game/Library/new.bin"));
+        Assert.False(_laptop.Exists("game/Library/old.bin"));
+        Assert.Equal(_desktop.Snapshot(), _laptop.Snapshot());
     }
 
     [Fact]

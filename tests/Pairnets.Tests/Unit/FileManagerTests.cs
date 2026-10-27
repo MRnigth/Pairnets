@@ -24,6 +24,7 @@ public sealed class FileManagerTests : IDisposable
     [InlineData(FileManagerCommand.OpenArgument, FileManagerAction.Open)]
     [InlineData(FileManagerCommand.StatusArgument, FileManagerAction.ShowStatus)]
     [InlineData(FileManagerCommand.WhereArgument, FileManagerAction.WhereItLives)]
+    [InlineData(FileManagerCommand.IgnoreArgument, FileManagerAction.Ignore)]
     public void Command_ComesFromTheProgramsArguments_AndTravelsAsAMessage(string argument, FileManagerAction action)
     {
         var path = Path.Combine(_dir.Path, "Photos", "Beach ø.jpg");
@@ -242,11 +243,13 @@ public sealed class FileManagerTests : IDisposable
             Assert.Contains("X-KDE-Submenu=Pairnets", text);
             Assert.Contains($"Exec=\"{exe}\" --open-in-pairnets %f", text);
             Assert.Contains($"Exec=\"{exe}\" --sync-status %f", text);
+            Assert.Contains($"Exec=\"{exe}\" --ignore-in-pairnets %f", text);
         }
         foreach (var dir in files.ScriptDirs)
         {
             Assert.EndsWith($"exec '{exe}' --open-in-pairnets \"$1\"\n", File.ReadAllText(Path.Combine(dir, "Open in Pairnets")));
             Assert.EndsWith($"exec '{exe}' --sync-status \"$1\"\n", File.ReadAllText(Path.Combine(dir, "Show Pairnets sync status")));
+            Assert.EndsWith($"exec '{exe}' --ignore-in-pairnets \"$1\"\n", File.ReadAllText(Path.Combine(dir, "Ignore in Pairnets")));
             if (!OperatingSystem.IsWindows())
                 Assert.True((File.GetUnixFileMode(Path.Combine(dir, "Open in Pairnets")) & UnixFileMode.UserExecute) != 0);
         }

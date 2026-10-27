@@ -91,6 +91,9 @@ public sealed partial class ClientSettings
     /// <summary>While another computer uploads a big batch, download it in one go when it's done.</summary>
     public bool WaitForPeerBatches { get; set; } = true;
 
+    /// <summary>Skip the folders projects make again by themselves (Unity's Library, node_modules …). On unless turned off.</summary>
+    public bool SkipBuildFolders { get; set; } = true;
+
     /// <summary>
     /// Pairnets in the file manager: Explorer's left side, the right-click items and the folder icon on Windows; the
     /// sidebar bookmark, right-click items and folder icon on Linux; the folder icon on a Mac.

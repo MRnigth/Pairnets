@@ -39,8 +39,9 @@ public static class ExplorerShell
     private const string OpenVerb = "Pairnets.Open";
     private const string StatusVerb = "Pairnets.Status";
     private const string WhereVerb = "Pairnets.Where";
+    private const string IgnoreVerb = "Pairnets.Ignore";
 
-    /// <summary>"Where this folder lives…": on folders only.</summary>
+    /// <summary>"Where this folder lives…" and "Ignore in Pairnets…": on folders only.</summary>
     private const string FolderVerbParent = @"Classes\Directory\shell";
 
     /// <summary>First line of the desktop.ini Pairnets writes, so it never takes away one it did not write.</summary>
@@ -111,6 +112,7 @@ public static class ExplorerShell
                 AddVerb(software, parent + BS + StatusVerb, "Show sync status", entries[0], folders, FileManagerCommand.StatusArgument);
             }
             AddVerb(software, FolderVerbParent + BS + WhereVerb, "Where this folder lives…", entries[0], folders, FileManagerCommand.WhereArgument);
+            AddVerb(software, FolderVerbParent + BS + IgnoreVerb, "Ignore in Pairnets…", entries[0], folders, FileManagerCommand.IgnoreArgument);
         }
         else
         {
@@ -238,6 +240,7 @@ public static class ExplorerShell
             software.DeleteSubKeyTree(parent + BS + StatusVerb, throwOnMissingSubKey: false);
         }
         software.DeleteSubKeyTree(FolderVerbParent + BS + WhereVerb, throwOnMissingSubKey: false);
+        software.DeleteSubKeyTree(FolderVerbParent + BS + IgnoreVerb, throwOnMissingSubKey: false);
     }
 
     /// <summary>The (first nest's) folder Pairnets is in Explorer for, or null when Pairnets is not in Explorer.</summary>

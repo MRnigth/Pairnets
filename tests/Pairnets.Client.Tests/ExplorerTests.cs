@@ -62,6 +62,7 @@ public sealed class ExplorerTests : IDisposable
     [InlineData(@"Classes\Directory\shell\Pairnets.Open", "Open in Pairnets", "--open-in-pairnets")]
     [InlineData(@"Classes\Directory\shell\Pairnets.Status", "Show sync status", "--sync-status")]
     [InlineData(@"Classes\Directory\shell\Pairnets.Where", "Where this folder lives…", "--where-it-lives")]
+    [InlineData(@"Classes\Directory\shell\Pairnets.Ignore", "Ignore in Pairnets…", "--ignore-in-pairnets")]
     public void Apply_AddsRightClickItems_OnlyInsideThePairnetsFolder(string key, string text, string argument)
     {
         var folder = _dir.Combine("Pairnets");
@@ -85,7 +86,7 @@ public sealed class ExplorerTests : IDisposable
 
         ExplorerShell.Apply(_software, Entry(folder), rightClick: false);
 
-        foreach (var verb in new[] { @"Classes\*\shell\Pairnets.Open", @"Classes\Directory\shell\Pairnets.Status", @"Classes\Directory\shell\Pairnets.Where" })
+        foreach (var verb in new[] { @"Classes\*\shell\Pairnets.Open", @"Classes\Directory\shell\Pairnets.Status", @"Classes\Directory\shell\Pairnets.Where", @"Classes\Directory\shell\Pairnets.Ignore" })
             Assert.Null(_software.OpenSubKey(verb));
         Assert.Equal("Pairnets", Value(@"Microsoft\Windows\CurrentVersion\Explorer\Desktop\NameSpace\" + ExplorerShell.FolderClsid));
         Assert.Equal(folder, ExplorerShell.RegisteredFolder(_software));
@@ -130,7 +131,7 @@ public sealed class ExplorerTests : IDisposable
         Assert.Null(_software.OpenSubKey(@"Microsoft\Windows\CurrentVersion\Explorer\Desktop\NameSpace\" + ExplorerShell.FolderClsid));
         Assert.Null(Value(@"Microsoft\Windows\CurrentVersion\Explorer\HideDesktopIcons\NewStartPanel", ExplorerShell.FolderClsid));
         Assert.Equal("1", Value(@"Microsoft\Windows\CurrentVersion\Explorer\HideDesktopIcons\NewStartPanel", "{someone-else}"));
-        foreach (var verb in new[] { @"Classes\*\shell\Pairnets.Open", @"Classes\*\shell\Pairnets.Status", @"Classes\Directory\shell\Pairnets.Open", @"Classes\Directory\shell\Pairnets.Status", @"Classes\Directory\shell\Pairnets.Where" })
+        foreach (var verb in new[] { @"Classes\*\shell\Pairnets.Open", @"Classes\*\shell\Pairnets.Status", @"Classes\Directory\shell\Pairnets.Open", @"Classes\Directory\shell\Pairnets.Status", @"Classes\Directory\shell\Pairnets.Where", @"Classes\Directory\shell\Pairnets.Ignore" })
             Assert.Null(_software.OpenSubKey(verb));
         Assert.Null(_software.OpenSubKey(@"Classes\*\shell\Pairnets.Where")); // folders only
         Assert.Null(ExplorerShell.RegisteredFolder(_software));

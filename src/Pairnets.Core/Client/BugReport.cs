@@ -75,6 +75,7 @@ public static class BugReport
         sb.AppendLine(inv, $"Auto-update server:  {YesNo(settings.AutoUpdateServer)}");
         sb.AppendLine(inv, $"Skipped server ver.: {settings.SkippedServerVersion ?? "-"}");
         sb.AppendLine(inv, $"Wait for big batch:  {YesNo(settings.WaitForPeerBatches)}");
+        sb.AppendLine(inv, $"Skip build folders:  {YesNo(settings.SkipBuildFolders)}");
         sb.AppendLine(inv, $"Speed on the map:    {YesNo(settings.ShowMapSpeed)}");
         sb.AppendLine(inv, $"Files at a time:     {settings.EffectiveParallelTransfers}");
         sb.AppendLine(inv, $"Speed limits:        {settings.LimitText ?? "none"}");

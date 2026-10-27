@@ -307,6 +307,17 @@
                 </Grid>
               </Expander.Header>
               <StackPanel>
+                <Grid Margin="0,0,0,14">
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                  </Grid.ColumnDefinitions>
+                  <StackPanel VerticalAlignment="Center">
+                    <TextBlock Style="{StaticResource RowTitle}" Text="Skip folders that projects rebuild" />
+                    <TextBlock Style="{StaticResource PgSmall}" TextWrapping="Wrap" Text="Unity's Library, Unreal's Intermediate, node_modules … only inside those projects." />
+                  </StackPanel>
+                  <CheckBox x:Name="BuildBox" Grid.Column="1" Style="{StaticResource PgSwitch}" Margin="16,0,0,0" AutomationProperties.Name="Skip folders that projects rebuild" />
+                </Grid>
                 <TextBox x:Name="IgnoreBox" Style="{StaticResource PgInput}" Height="96" AcceptsReturn="True" VerticalContentAlignment="Top" Padding="12,8"
                          VerticalScrollBarVisibility="Auto" ToolTip="One rule per line, e.g. *.bak or node_modules/" />
                 <TextBlock Style="{StaticResource PgSmall}" Margin="0,6,0,0" TextWrapping="Wrap"

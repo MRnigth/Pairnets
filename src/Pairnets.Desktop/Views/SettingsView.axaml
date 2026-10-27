@@ -186,6 +186,13 @@
               </Button>
               <Border x:Name="IgnorePanel" Classes="pcard" Padding="20,14" Margin="0,8,0,0" IsVisible="False">
                 <StackPanel Spacing="6">
+                  <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,8">
+                    <StackPanel VerticalAlignment="Center">
+                      <TextBlock Text="Skip folders that projects rebuild" FontWeight="SemiBold" TextWrapping="Wrap" />
+                      <TextBlock Classes="t3" TextWrapping="Wrap" Text="Unity's Library, Unreal's Intermediate, node_modules … only inside those projects." />
+                    </StackPanel>
+                    <ToggleSwitch x:Name="BuildBox" Grid.Column="1" Classes="bare" OnContent="Skip folders that projects rebuild" OffContent="Skip folders that projects rebuild" />
+                  </Grid>
                   <TextBox x:Name="IgnoreBox" Classes="field" Height="86" AcceptsReturn="True" Watermark="One pattern per line, e.g. *.bak or node_modules/" />
                   <TextBlock Classes="t3" Text="Temporary and system files (~$*, *.tmp, Thumbs.db, .git/ …) are always ignored." TextWrapping="Wrap" />
                 </StackPanel>
