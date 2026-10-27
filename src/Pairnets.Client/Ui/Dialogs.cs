@@ -131,21 +131,27 @@ public static class Dialogs
             BorderThickness = new Thickness(0),
             Background = System.Windows.Media.Brushes.Transparent,
             TextWrapping = TextWrapping.Wrap,
-            MaxHeight = 420,
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
         };
         body.SetResourceReference(Control.ForegroundProperty, "T.Text");
-        var content = new System.Windows.Controls.StackPanel { Margin = new Thickness(22, 20, 22, 18) };
+        // The text scrolls when it is long; the tick box and buttons stay pinned under it, always reachable.
+        var content = new Grid { Margin = new Thickness(22, 20, 22, 18) };
+        content.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        content.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         content.Children.Add(body);
+        var foot = new System.Windows.Controls.StackPanel();
+        Grid.SetRow(foot, 1);
+        content.Children.Add(foot);
         box = null;
         if (tick is not null)
         {
             box = new CheckBox { Content = tick, Margin = new Thickness(0, 14, 0, 0) };
             box.SetResourceReference(Control.ForegroundProperty, "T.Text");
-            content.Children.Add(box);
+            foot.Children.Add(box);
         }
-        content.Children.Add(buttons);
+        foot.Children.Add(buttons);
         window.Content = content;
+        FitToScreen(window);
         return window;
     }
 
@@ -196,7 +202,7 @@ public static class Dialogs
             return responder.Choose(new Choice(title, text, points, buttons));
         string? result = null;
         var popup = Popup(owner, title, text, points, out var body);
-        body.Children.Add(ButtonRow(popup, buttons.Select((b, i) => (b, i == buttons.Length - 1, (Action)(() => result = b))).ToArray()));
+        Pin(popup, ButtonRow(popup, buttons.Select((b, i) => (b, i == buttons.Length - 1, (Action)(() => result = b))).ToArray()));
         popup.ShowDialog();
         return result;
     }
@@ -205,7 +211,7 @@ public static class Dialogs
     public static Window ChoicePreview(string title, string text, IReadOnlyList<string> points, params string[] buttons)
     {
         var popup = Popup(null, title, text, points, out var body);
-        body.Children.Add(ButtonRow(popup, buttons.Select((b, i) => (b, i == buttons.Length - 1, (Action)(() => { }))).ToArray()));
+        Pin(popup, ButtonRow(popup, buttons.Select((b, i) => (b, i == buttons.Length - 1, (Action)(() => { }))).ToArray()));
         return popup;
     }
 
@@ -219,7 +225,7 @@ public static class Dialogs
         var box = new TextBox { Text = initial, Style = Find<Style>("PgInput"), Margin = new Thickness(0, 4, 0, 0) };
         System.Windows.Automation.AutomationProperties.SetName(box, title);
         body.Children.Add(box);
-        body.Children.Add(ButtonRow(popup, [("Cancel", false, () => { }), (ok, true, () => result = box.Text)]));
+        Pin(popup, ButtonRow(popup, [("Cancel", false, () => { }), (ok, true, () => result = box.Text)]));
         popup.Loaded += (_, _) =>
         {
             box.Focus();
@@ -239,7 +245,7 @@ public static class Dialogs
         var list = new ListBox { ItemsSource = items, Height = 220, Style = Find<Style>("PgFileList"), SelectedIndex = 0, Margin = new Thickness(0, 4, 0, 0) };
         System.Windows.Automation.AutomationProperties.SetName(list, title);
         body.Children.Add(list);
-        body.Children.Add(ButtonRow(popup, [("Cancel", false, () => { }), (ok, true, () => result = list.SelectedItem as string)]));
+        Pin(popup, ButtonRow(popup, [("Cancel", false, () => { }), (ok, true, () => result = list.SelectedItem as string)]));
         popup.ShowDialog();
         return result;
     }
@@ -273,7 +279,7 @@ public static class Dialogs
         void Check() => delete.IsEnabled = FilesPageText.SureReady(tick.IsChecked == true, word.Text);
         tick.Click += (_, _) => Check();
         word.TextChanged += (_, _) => Check();
-        body.Children.Add(row);
+        Pin(popup, row);
         popup.ShowDialog();
         return result;
     }
@@ -348,9 +354,27 @@ public static class Dialogs
             line.SetResourceReference(TextBlock.ForegroundProperty, "T.TextSoft");
             body.Children.Add(line);
         }
-        window.Content = body;
+        var scroller = new ScrollViewer { Content = body, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
+        var grid = new Grid();
+        grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        grid.Children.Add(scroller);
+        window.Content = grid;
+        FitToScreen(window);
         return window;
     }
+
+    /// <summary>Puts the button row of a <see cref="Popup"/> under its scrolling body, where a long text can't push it off the screen.</summary>
+    private static void Pin(Window popup, StackPanel row)
+    {
+        var grid = (Grid)popup.Content;
+        row.Margin = new Thickness(24, 0, 24, 20);
+        Grid.SetRow(row, 1);
+        grid.Children.Add(row);
+    }
+
+    /// <summary>Caps the window at 85% of the screen's usable height (the text scrolls instead).</summary>
+    private static void FitToScreen(Window window) => window.MaxHeight = Math.Max(240, SystemParameters.WorkArea.Height * 0.85);
 
     /// <summary>The buttons along the bottom, right-aligned; each closes the pop-up after its action.</summary>
     private static StackPanel ButtonRow(Window window, (string Label, bool Main, Action Act)[] buttons)

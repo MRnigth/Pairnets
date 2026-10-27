@@ -179,6 +179,49 @@ public static class Dialogs
         return paths.Count > 0 ? paths : null;
     }
 
+    /// <summary>The usable height of the screen a dialog opens on, in device-independent pixels; the tests swap in a small one.</summary>
+    internal static Func<Window, Window?, double> ScreenRoom { get; set; } = (window, owner) =>
+    {
+        var screen = (owner is { IsVisible: true } ? owner.Screens.ScreenFromWindow(owner) : null) ?? window.Screens.Primary;
+        return screen is null ? 700 : screen.WorkingArea.Height / screen.Scaling;
+    };
+
+    /// <summary>
+    /// <paramref name="top"/> scrolls, <paramref name="bottom"/> (tick box, buttons) is pinned under it: a long text can
+    /// never push the buttons off the screen.
+    /// </summary>
+    private static Grid PinnedBottom(Control top, Control bottom, double gap = 0)
+    {
+        var scroller = new ScrollViewer
+        {
+            Content = top,
+            HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled,
+            VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto,
+            Name = "DialogScroller",
+        };
+        top.Margin = new Thickness(0, 0, 10, 0); // clear of the scroll bar
+        bottom.Margin = new Thickness(0, gap, 0, 0);
+        var grid = new Grid { RowDefinitions = new RowDefinitions("*,Auto") };
+        grid.Children.Add(scroller);
+        Grid.SetRow(bottom, 1);
+        grid.Children.Add(bottom);
+        return grid;
+    }
+
+    /// <summary>Caps the window at 85% of the screen's usable height and pulls it back on screen if it opens partly off it.</summary>
+    private static void FitToScreen(Window window, Window? owner)
+    {
+        window.MaxHeight = Math.Max(240, ScreenRoom(window, owner) * 0.85);
+        window.Opened += (_, _) =>
+        {
+            if (window.Screens.ScreenFromWindow(window)?.WorkingArea is not { } area)
+                return;
+            var height = (int)(window.Bounds.Height * window.RenderScaling) + 40; // 40: the title bar
+            var y = Math.Min(window.Position.Y, area.Bottom - height);
+            window.Position = new PixelPoint(window.Position.X, Math.Max(area.Y, y));
+        };
+    }
+
     private static StackPanel Body(string title, string text, IReadOnlyList<string> points)
     {
         var body = new StackPanel { Spacing = 10 };
@@ -224,8 +267,8 @@ public static class Dialogs
             made.Add(b);
         }
         wire?.Invoke([.. made]);
-        body.Children.Add(row);
-        window.Content = new Border { Padding = new Thickness(24, 22, 24, 20), Child = body };
+        window.Content = new Border { Padding = new Thickness(24, 22, 24, 20), Child = PinnedBottom(body, row) };
+        FitToScreen(window, owner);
         if (owner is { IsVisible: true })
             await window.ShowDialog(owner);
         else
@@ -269,18 +312,17 @@ public static class Dialogs
                 safe = b;
         }
         window.Opened += (_, _) => safe?.Focus();
-        window.Content = new StackPanel
-        {
-            Margin = new Thickness(20),
-            Spacing = 16,
-            Children =
-            {
-                new SelectableTextBlock { Text = text, TextWrapping = Avalonia.Media.TextWrapping.Wrap },
-            },
-        };
+        // The text scrolls when it is long; the tick box and buttons stay pinned at the bottom, always reachable.
+        var foot = new StackPanel { Spacing = 16 };
         if (tick is not null)
-            ((StackPanel)window.Content).Children.Add(tick);
-        ((StackPanel)window.Content).Children.Add(row);
+            foot.Children.Add(tick);
+        foot.Children.Add(row);
+        window.Content = new Border
+        {
+            Padding = new Thickness(20),
+            Child = PinnedBottom(new SelectableTextBlock { Text = text, TextWrapping = Avalonia.Media.TextWrapping.Wrap }, foot, 16),
+        };
+        FitToScreen(window, owner);
         if (owner is { IsVisible: true })
             await window.ShowDialog(owner);
         else
