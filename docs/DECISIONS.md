@@ -2190,3 +2190,44 @@ with four numbers (1.0.61.10, .11, …) until a fifth is wanted.
   updating a nest it shows the updater's "Updated from X to Y". pairnets-link.sh accepts five numbers.
 * **Pre-deploy** builds its packages as 1.0.65000.1.1 (file version 1.0.65000.1), so the whole check, the nest update
   from feed 1 to feed 2 (1.0.65000.1.2) included, runs on five numbers, and checks that Pairnets.exe calls itself that.
+
+## Mac crash: safety limits and a way to find out why (fix/mac-crash, 2026-10-27)
+
+A real Mac froze or restarted while Pairnets ran. A normal app can't crash a Mac's core, so the likely causes are things
+Pairnets could use up (processes, disk space, memory, disk writes) or loops that never wait. Nothing is proven on that Mac
+yet; these are the places the code could do it, now limited, plus what is kept to find out why next time.
+
+* **Limits.**
+  * *Notices (Mac/Linux app):* every notice went through its own `osascript` process, once per file that can't sync or
+    conflicts. All notices now go through one queue (`NoticeQueue`): one at a time, at most 3 a minute, the rest said once
+    as "N more notices were held back". Warning and conflict notices are one per kind (10 minutes), not one per file.
+  * *Free space:* a download that would leave less than 2 GB free (on a small drive 5% of it) is not started; one
+    warning ("Not enough free space on this computer…", code `no-space`) per pass, and the next pass tries again.
+  * *Folder watcher:* after an error it stops the failing watcher and starts one new one after 5 s, 10 s, 30 s, 1 min, then
+    5 min (back to 5 s after 10 quiet minutes), never two at once. "Unstable file" retries wait 3 s, 6 s … up to 60 s.
+  * *Too broad a folder:* a nest folder can't be a drive's root, the home folder, the folder of all accounts, the Mac's
+    Library, `/Volumes`, `/Applications`…, or hold (or be inside) Pairnets' own settings/state/logs folders. Chosen in
+    Settings or sign-in: refused with a reason. Already chosen: that nest is blocked ("too big a folder to sync", nothing
+    changed) so it can't write its own database inside the folder it watches. Windows gets the same rule (C:\ , C:\Users,
+    the profile folder): shared code, and the same danger.
+  * *Disk cache:* on a Mac a download is made safe with a plain `fsync` instead of .NET's full drive-cache flush
+    (`F_FULLFSYNC`) for every file. Windows and Linux are unchanged.
+  * *Log size:* a day's log stops at 50 MB for Information/Debug (warnings and errors go on to 100 MB, then nothing).
+* **Finding out why.**
+  * *Health log:* one line a minute in `logs/health-yyyyMMdd.log` (5 MB a day, 14 days): memory, threads, open files,
+    thread-pool queue, folder watchers and their restarts, passes, notices waiting/held back, free space, log size.
+    Numbers only. Both apps.
+  * *Stopped without closing:* `running.json` is written at start, touched every minute, removed on a clean quit
+    (quit, log out, shut down). If it is still there next time, the last run was cut off (a crash nobody could catch, a
+    Force Quit, the whole Mac going down): a crash card "Pairnets stopped unexpectedly" and the usual "closed
+    unexpectedly" notice. Only the apps do this; tests do not.
+  * *Crash loop:* 3 such stops in 30 minutes: every nest starts paused (saved, like a Pause) with a notice saying why;
+    Resume goes on and forgets the earlier stops. (No separate card or buttons: the notice and the crash card in
+    "Report a bug", where "Send bug report" is, carry it, the same in both apps.)
+  * *Report a bug:* the report now has "Health" (newest 60 lines) and, on a Mac, "Mac reports" near the top (so the
+    60,000-character cut keeps them): Pairnets' own `.ips` reports from the last 14 days (kind of crash, top 15 frames of
+    the crashed thread) and the names/dates of panic, Jetsam, reset and hang reports, with the start of a panic's text
+    where macOS lets the app read it. Same cleaning, same preview, nothing sent without Send, same endpoint. No new data
+    about a person, so no change to the Privacy page was made; the owner may want a line there.
+* **Not done:** the scanner still opens any file it finds (devices and pipes are only avoided because `/`, `/dev` and the
+  home folder can't be a nest folder now). Windows toasts are not queued (they start no process).
