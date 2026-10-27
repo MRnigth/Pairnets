@@ -46,6 +46,11 @@ public sealed class DesktopController : ITrayActions, IDisposable
     private readonly ILogger _log;
     private readonly Dictionary<RunnerStatus, WindowIcon> _icons = [];
     private readonly Dictionary<string, DateTime> _lastNotice = [];
+    private readonly NoticeQueue _notices;
+    private StartGuard? _guard;
+    private HealthLog? _health;
+    private StartGuardResult? _loopGuard;
+    private int _passes;
     private readonly DispatcherTimer _refresh;
     /// <summary>This computer's settings: the app-wide values and every nest (the first in the top-level fields).</summary>
     private ClientSettings _settings;
@@ -95,6 +100,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
         _app = app;
         _lifetime = lifetime;
         _platform = platform;
+        _notices = new NoticeQueue((title, text, onClick) => _platform.Notify(title, text, onClick ?? ComeToFront)); // (a click brings Pairnets forward; on a Mac it opens the page that fits)
         _env = environment ?? ClientEnvironment.Default;
         _fileLog = new RollingFileLoggerProvider(_env.LogsDir, retentionDays: 14);
         _loggers = LoggerFactory.Create(b => b.AddProvider(_fileLog).SetMinimumLevel(LogLevel.Debug));
@@ -158,7 +164,68 @@ public sealed class DesktopController : ITrayActions, IDisposable
     public static string AppName => OperatingSystem.IsMacOS() ? "Mac app" : "Linux app";
 
     /// <summary>Also catches errors behind the scenes and in background tasks, for the whole app (the app does this; tests do not).</summary>
-    public void WatchForCrashes() => _crashes.Watch();
+    public void WatchForCrashes()
+    {
+        _crashes.Watch();
+        BeginDiagnostics();
+    }
+
+    /// <summary>
+    /// The health log (one line a minute) and the "did the last run end cleanly?" note. A run that was cut off (a crash, a
+    /// Force Quit, the whole Mac going down) becomes a crash card; three in half an hour are a crash loop and the next
+    /// start comes up paused (<see cref="StartGuard"/>). Only the app does this; tests do not.
+    /// </summary>
+    private void BeginDiagnostics()
+    {
+        if (_guard is not null)
+            return;
+        var guard = new StartGuard(_env.LocalDir);
+        _guard = guard;
+        var started = guard.Begin();
+        AppDomain.CurrentDomain.ProcessExit += (_, _) => guard.CleanExit(); // quit, log out, shut down: all clean
+        if (started.PreviousStoppedUnexpectedly)
+        {
+            _log.LogWarning("The last run of Pairnets stopped unexpectedly ({Recent} unexpected stop(s) in the last half hour)", started.RecentStops);
+            try
+            {
+                CrashCards.Add(_env.CrashesDir, CrashCard.From(new UnexpectedStopException(UnexpectedStopText.Card(started)), CrashPlace.Background, AppName, PrivateValues()));
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                _log.LogWarning("Could not keep the card for the unexpected stop: {Error}", ex.Message);
+            }
+        }
+        if (started.CrashLoop)
+            _loopGuard = started;
+        _health = new HealthLog(_env.LogsDir, HealthNow, () => LogBytesToday(), guard.Tick);
+        _health.Start();
+    }
+
+    private long LogBytesToday()
+    {
+        try
+        {
+            var file = new FileInfo(_fileLog.CurrentFile);
+            return file.Exists ? file.Length : 0;
+        }
+        catch (IOException)
+        {
+            return 0;
+        }
+    }
+
+    private HealthExtras HealthNow()
+    {
+        var sessions = _runs.Select(r => r.Session).OfType<ClientSession>().ToList();
+        var folders = _settings.Nests().Select(n => n.Folder).Where(f => !string.IsNullOrEmpty(f)).Select(f => f!).Distinct().ToList();
+        return new HealthExtras(
+            sessions.Count(s => s.Runner.WatcherRunning),
+            sessions.Sum(s => s.Runner.WatcherRestarts),
+            Interlocked.Exchange(ref _passes, 0),
+            _notices.Waiting,
+            _notices.Suppressed,
+            folders.Select(f => HealthLog.FreeGb(DiskSpace.Of(f))).ToList());
+    }
 
     public void Start(string[] args)
     {
@@ -178,7 +245,14 @@ public sealed class DesktopController : ITrayActions, IDisposable
         _updates.SetChannel(_settings.EffectiveChannel);
         _updates.SetEnabled(_settings.CheckForUpdates);
         // Pairnets had to close after an error since it last ran: say so once (the card is in "Report a bug").
-        if (CrashCards.TakeNewCloses(_env.CrashesDir).Count > 0)
+        if (_loopGuard is { } loop)
+        {
+            // Stopped unexpectedly over and over: start paused, and say why (Resume in the menu or the window goes on).
+            PauseForCrashLoop();
+            CrashCards.TakeNewCloses(_env.CrashesDir); // this notice says it already
+            Notify("crash-loop", UnexpectedStopText.Title, UnexpectedStopText.Text(loop), onClick: ReportBug);
+        }
+        else if (CrashCards.TakeNewCloses(_env.CrashesDir).Count > 0)
             Notify("crash", CrashNotice.Title, CrashNotice.Text, onClick: ReportBug);
         // Rewrite the login item so it follows the app (Tether.app became Pairnets.app; the app may have moved).
         if (SafeIsAutoStart())
@@ -407,9 +481,13 @@ public sealed class DesktopController : ITrayActions, IDisposable
         session.Activity.Cleared += () => _dirty = true;
         session.ConflictCreated += c => Notify("conflict:" + c.Path, PrefixOf(run) + "Conflict: both computers changed a file",
             $"{c.Path}: your version was kept as \"{PathRules.FileName(c.ConflictCopyPath)}\".", run, () => ShowNest(run));
-        session.PathWarningRaised += w => Notify("warning:" + w.Path, PrefixOf(run) + (w.Code == ErrorCodes.CaseCollision ? "Name collision" : "File name not allowed"),
+        session.PathWarningRaised += w => Notify("warning:" + w.Path, PrefixOf(run) + (w.Code == ErrorCodes.CaseCollision ? "Name collision" : w.Code == ErrorCodes.NoSpace ? "Not enough free space" : "File name not allowed"),
             $"{w.Path}: {w.Message}", run, () => ShowNest(run));
-        session.PassCompleted += r => OnPassCompleted(run, r);
+        session.PassCompleted += r =>
+        {
+            Interlocked.Increment(ref _passes);
+            OnPassCompleted(run, r);
+        };
         session.ServerInfoChanged += info => Dispatcher.UIThread.Post(() => OnServerInfo(run, session, info));
         session.BetaHeard += info => Dispatcher.UIThread.Post(() => OnBetaHeard(session, info));
         session.AccountChanged += (next, token) => Dispatcher.UIThread.Post(() => OnAccountChanged(run, session, next, token));
@@ -982,7 +1060,9 @@ public sealed class DesktopController : ITrayActions, IDisposable
     {
         if (!NotifyPolicy.Allows(_settings, key))
             return; // turned off in the notification switches
-        var seen = run is null ? key : run.Id + "/" + key; // two nests' notices never hide each other
+        // One notice per kind, not per file: a folder of 500 files that can't sync is one notice (the Needs you page lists them).
+        var kind = key.StartsWith("warning:", StringComparison.Ordinal) ? "warning" : key.StartsWith("conflict:", StringComparison.Ordinal) ? "conflict" : key;
+        var seen = run is null ? kind : run.Id + "/" + kind; // two nests' notices never hide each other
         lock (_lastNotice)
         {
             var now = DateTime.UtcNow;
@@ -990,7 +1070,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
                 return;
             _lastNotice[seen] = now;
         }
-        Task.Run(() => _platform.Notify(title, text, onClick ?? ComeToFront)); // (a click brings Pairnets forward; on a Mac it opens the page that fits)
+        _notices.Add(title, text, onClick); // one at a time, a few a minute (NoticeQueue): never one program started per file
     }
 
     // ------------------------------------------------------------------ drawing
@@ -1332,6 +1412,18 @@ public sealed class DesktopController : ITrayActions, IDisposable
     }
 
     /// <summary>Pausing is app-wide: every nest pauses and resumes together.</summary>
+    /// <summary>Every nest starts paused after a crash loop; the person's Resume (<see cref="TogglePause"/>) clears it.</summary>
+    private void PauseForCrashLoop()
+    {
+        _settings.Paused = true;
+        foreach (var nest in _settings.Nests())
+        {
+            nest.Paused = true;
+            _settings.PutNest(nest);
+        }
+        SaveSettings();
+    }
+
     public void TogglePause()
     {
         var sessions = _runs.Select(r => r.Session).OfType<ClientSession>().ToList();
@@ -1346,6 +1438,8 @@ public sealed class DesktopController : ITrayActions, IDisposable
                 session.Pause();
         }
         _settings.Paused = !resume;
+        if (resume)
+            _guard?.Forgive(); // they chose to go on: earlier unexpected stops no longer count as a loop
         SaveSettings();
         foreach (var run in _runs)
             run.Settings.Paused = _settings.Paused;
@@ -1993,7 +2087,9 @@ public sealed class DesktopController : ITrayActions, IDisposable
         var settings = Nest;
         var session = _session;
         var crashes = _env.CrashesDir;
-        var window = new BugReportWindow(() => BugReport.BuildAsync(settings, session, _fileLog.CurrentFile, error, AppName, crashes), _platform.Open,
+        var logs = _env.LogsDir;
+        var window = new BugReportWindow(() => Task.Run(() => BugReport.BuildAsync(settings, session, _fileLog.CurrentFile, error, AppName, crashes,
+                healthDir: logs, macReports: MacReports.Build())), _platform.Open,
             afterError: error is not null, saveDirectory: _env.LogsDir, crashesDir: crashes,
             sendCrashes: (cards, note) => CrashSender.SendAsync(crashes, cards, note, PrivacyCleaner.ThisComputer(settings)),
             prepareReport: report => BugReportSender.Prepare(report, PrivateValues(), BugReportSender.NamesIn(_settings.Nests().DefaultIfEmpty(_settings).Select(n => n.Folder))),
@@ -2074,6 +2170,9 @@ public sealed class DesktopController : ITrayActions, IDisposable
     {
         Dispatcher.UIThread.UnhandledException -= OnUnhandledException;
         _crashes.Dispose();
+        _notices.Dispose();
+        _health?.Dispose();
+        _guard?.CleanExit();
         _activation?.Dispose();
         _updates.Dispose();
         _refresh.Stop();

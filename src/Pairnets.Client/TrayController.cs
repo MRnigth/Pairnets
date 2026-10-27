@@ -34,6 +34,10 @@ public sealed class TrayController : ITrayActions, IDisposable
     private readonly Action _shutdown;
     private readonly Forms.NotifyIcon _icon;
     private readonly Dictionary<string, DateTime> _lastToast = [];
+    private StartGuard? _guard;
+    private HealthLog? _health;
+    private StartGuardResult? _loopGuard;
+    private int _passes;
     private readonly DispatcherTimer _refresh;
     /// <summary>This computer's settings: the app-wide values and every nest (the first in the top-level fields).</summary>
     private ClientSettings _settings;
@@ -278,8 +282,83 @@ public sealed class TrayController : ITrayActions, IDisposable
     /// <summary>Pairnets had to close after an error since it last ran: say so once (the card is in "Report a bug").</summary>
     private void NoticeLastClose()
     {
-        if (CrashCards.TakeNewCloses(_env.CrashesDir).Count > 0)
+        if (_loopGuard is { } loop)
+        {
+            // Stopped unexpectedly over and over: start paused, and say why (Resume goes on).
+            PauseForCrashLoop();
+            CrashCards.TakeNewCloses(_env.CrashesDir); // this notice says it already
+            Toast("crash-loop", UnexpectedStopText.Title, UnexpectedStopText.Text(loop), Forms.ToolTipIcon.Warning, ReportBug);
+        }
+        else if (CrashCards.TakeNewCloses(_env.CrashesDir).Count > 0)
             Toast("crash", CrashNotice.Title, CrashNotice.Text, Forms.ToolTipIcon.Warning, ReportBug);
+    }
+
+    /// <summary>
+    /// The health log (one line a minute) and the "did the last run end cleanly?" note: a run that was cut off becomes a
+    /// crash card, and three in half an hour are a crash loop (<see cref="StartGuard"/>). Only the app does this, before
+    /// <see cref="Start"/>; tests do not.
+    /// </summary>
+    public void BeginDiagnostics()
+    {
+        if (_guard is not null)
+            return;
+        var guard = new StartGuard(_env.LocalDir);
+        _guard = guard;
+        var started = guard.Begin();
+        AppDomain.CurrentDomain.ProcessExit += (_, _) => guard.CleanExit();
+        if (started.PreviousStoppedUnexpectedly)
+        {
+            try
+            {
+                CrashCards.Add(_env.CrashesDir, CrashCard.From(new UnexpectedStopException(UnexpectedStopText.Card(started)), CrashPlace.Background, AppName, PrivateValues()));
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // The card is a convenience.
+            }
+        }
+        if (started.CrashLoop)
+            _loopGuard = started;
+        _health = new HealthLog(_env.LogsDir, HealthNow, LogBytesToday, guard.Tick);
+        _health.Start();
+    }
+
+    private long LogBytesToday()
+    {
+        try
+        {
+            var file = new FileInfo(_fileLog.CurrentFile);
+            return file.Exists ? file.Length : 0;
+        }
+        catch (IOException)
+        {
+            return 0;
+        }
+    }
+
+    private HealthExtras HealthNow()
+    {
+        var sessions = _runs.Select(r => r.Session).OfType<ClientSession>().ToList();
+        var folders = _settings.Nests().Select(n => n.Folder).Where(f => !string.IsNullOrEmpty(f)).Select(f => f!).Distinct().ToList();
+        return new HealthExtras(
+            sessions.Count(s => s.Runner.WatcherRunning),
+            sessions.Sum(s => s.Runner.WatcherRestarts),
+            Interlocked.Exchange(ref _passes, 0),
+            0,
+            0,
+            folders.Select(f => HealthLog.FreeGb(DiskSpace.Of(f))).ToList());
+    }
+
+    /// <summary>Every nest starts paused after a crash loop; the person's Resume (<see cref="TogglePause"/>) clears it.</summary>
+    private void PauseForCrashLoop()
+    {
+        _settings.Paused = true;
+        foreach (var nest in _settings.Nests())
+        {
+            nest.Paused = true;
+            _settings.PutNest(nest);
+        }
+        SettingsStore.Save(_env.SettingsPath, _settings);
     }
 
     // ------------------------------------------------------------------ sessions: one per nest
@@ -355,9 +434,13 @@ public sealed class TrayController : ITrayActions, IDisposable
         session.Activity.Cleared += () => _dirty = true;
         session.ConflictCreated += c => RunOnUi(() => Toast("conflict:" + c.Path, PrefixOf(run) + "Conflict: both computers changed a file",
             $"{c.Path} was changed on both. Your version was kept as \"{PathRules.FileName(c.ConflictCopyPath)}\".", Forms.ToolTipIcon.Warning, () => ShowNest(run), run));
-        session.PathWarningRaised += w => RunOnUi(() => Toast("warning:" + w.Path, PrefixOf(run) + (w.Code == ErrorCodes.CaseCollision ? "Name collision" : "File name not allowed"),
+        session.PathWarningRaised += w => RunOnUi(() => Toast("warning:" + w.Path, PrefixOf(run) + (w.Code == ErrorCodes.CaseCollision ? "Name collision" : w.Code == ErrorCodes.NoSpace ? "Not enough free space" : "File name not allowed"),
             $"{w.Path}: {w.Message}", Forms.ToolTipIcon.Warning, () => ShowNest(run), run));
-        session.PassCompleted += r => RunOnUi(() => OnPassCompleted(run, r));
+        session.PassCompleted += r =>
+        {
+            Interlocked.Increment(ref _passes);
+            RunOnUi(() => OnPassCompleted(run, r));
+        };
         session.CatchUpCompleted += n => RunOnUi(() => Toast("catchup", PrefixOf(run) + "Pairnets is up to date",
             $"Synced {n} change(s) made while this computer was away.", Forms.ToolTipIcon.Info, () => ShowNest(run), run));
         session.DownloadFinished += d => RunOnUi(() =>
@@ -1390,6 +1473,8 @@ public sealed class TrayController : ITrayActions, IDisposable
                 session.Pause();
         }
         _settings.Paused = !resume;
+        if (resume)
+            _guard?.Forgive(); // they chose to go on: earlier unexpected stops no longer count as a loop
         SettingsStore.Save(_env.SettingsPath, _settings);
         foreach (var run in _runs)
             run.Settings.Paused = _settings.Paused;
@@ -2030,7 +2115,9 @@ public sealed class TrayController : ITrayActions, IDisposable
         var settings = Nest;
         var session = _session;
         var crashes = _env.CrashesDir;
-        var window = new BugReportWindow(() => BugReport.BuildAsync(settings, session, _fileLog.CurrentFile, error, AppName, crashes), Shell,
+        var logs = _env.LogsDir;
+        var window = new BugReportWindow(() => Task.Run(() => BugReport.BuildAsync(settings, session, _fileLog.CurrentFile, error, AppName, crashes,
+                healthDir: logs, macReports: MacReports.Build())), Shell,
             afterError: error is not null, logsDir: _env.LogsDir, crashesDir: crashes,
             sendCrashes: (cards, note) => CrashSender.SendAsync(crashes, cards, note, PrivacyCleaner.ThisComputer(settings)),
             prepareReport: report => BugReportSender.Prepare(report, PrivateValues(), BugReportSender.NamesIn(_settings.Nests().DefaultIfEmpty(_settings).Select(n => n.Folder))),
@@ -2145,6 +2232,8 @@ public sealed class TrayController : ITrayActions, IDisposable
 
     public void Dispose()
     {
+        _health?.Dispose();
+        _guard?.CleanExit();
         _activation?.Dispose();
         _updates.Dispose();
         _refresh.Stop();

@@ -110,6 +110,11 @@ public sealed class SyncRunner : IAsyncDisposable
     private long _syncedSent = -1;
     private bool _catchUpArmed = true;
     private int _offlineAttempts;
+    private int _unstableAttempts;
+    private static readonly TimeSpan UnstableRetryCap = TimeSpan.FromSeconds(60);
+    private readonly object _watcherGate = new();
+    private readonly WatcherRestartPolicy _watcherRestarts = new();
+    private bool _watcherRestartPending;
     private Task? _loop;
     private Task? _hubLoop;
     private FileSystemWatcher? _watcher;
@@ -650,9 +655,16 @@ public sealed class SyncRunner : IAsyncDisposable
                 else
                     SetStatus(RunnerStatus.Idle, "Up to date");
                 if (result.Unstable > 0 || result.Deferred > 0)
-                    RequestSync("retry-unstable", delay: _options.UnstableRetry);
-                else if (result.Errors > 0)
-                    RequestSync("retry-errors", delay: _options.ErrorRetry);
+                {
+                    // A file that stays unstable (unreadable, always being written) must not keep full passes running back to back.
+                    RequestSync("retry-unstable", delay: Backoff.Doubling(_options.UnstableRetry, _unstableAttempts++, UnstableRetryCap));
+                }
+                else
+                {
+                    _unstableAttempts = 0;
+                    if (result.Errors > 0)
+                        RequestSync("retry-errors", delay: _options.ErrorRetry);
+                }
                 break;
             case PassOutcome.Offline:
                 lock (_gate)
@@ -704,11 +716,56 @@ public sealed class SyncRunner : IAsyncDisposable
 
     // ------------------------------------------------------------------ file watcher
 
+    /// <summary>How many times the folder watcher was started again after an error (for the health log).</summary>
+    public int WatcherRestarts => _watcherRestarts.Restarts;
+
+    /// <summary>True while a folder watcher is running.</summary>
+    public bool WatcherRunning => _watcher is not null;
+
+    /// <summary>
+    /// The watcher said it failed: stop it, and start one new watcher after a wait that grows with every error. Only one
+    /// restart is ever waiting, however many errors arrive meanwhile (FSEvents can report them in bursts).
+    /// </summary>
+    private void WatcherFailed(FileSystemWatcher failed)
+    {
+        lock (_watcherGate)
+        {
+            if (ReferenceEquals(_watcher, failed))
+                _watcher = null;
+            try
+            {
+                failed.EnableRaisingEvents = false;
+                failed.Dispose();
+            }
+            catch (Exception ex) when (ex is ObjectDisposedException or IOException or InvalidOperationException)
+            {
+                // Already gone.
+            }
+            if (_watcherRestartPending)
+                return;
+            _watcherRestartPending = true;
+            var wait = _watcherRestarts.Next(_options.Clock.GetUtcNow());
+            _ = Task.Delay(wait).ContinueWith(_ =>
+            {
+                lock (_watcherGate)
+                    _watcherRestartPending = false;
+                if (!_stop.IsCancellationRequested)
+                    StartWatcher();
+            }, TaskScheduler.Default);
+        }
+    }
+
     private void StartWatcher()
     {
         try
         {
-            _watcher?.Dispose();
+            FileSystemWatcher? old;
+            lock (_watcherGate)
+            {
+                old = _watcher;
+                _watcher = null;
+            }
+            old?.Dispose();
             var w = new FileSystemWatcher(_engine.Root)
             {
                 IncludeSubdirectories = true,
@@ -729,10 +786,11 @@ public sealed class SyncRunner : IAsyncDisposable
                 RequestSync("watcher-overflow", full: true);
                 if (!Directory.Exists(_engine.Root))
                     return;
-                _ = Task.Delay(TimeSpan.FromSeconds(5)).ContinueWith(_ => { if (!_stop.IsCancellationRequested) StartWatcher(); }, TaskScheduler.Default);
+                WatcherFailed(w);
             };
             w.EnableRaisingEvents = true;
-            _watcher = w;
+            lock (_watcherGate)
+                _watcher = w;
         }
         catch (Exception ex) when (ex is ArgumentException or IOException or PlatformNotSupportedException)
         {

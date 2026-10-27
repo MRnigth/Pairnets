@@ -55,6 +55,7 @@ public sealed class App : Application
 
         // The tray also answers the pairnets:// "come to the front" pokes (it starts listening before the sign-in window).
         _tray = new TrayController(_loggerFactory, _fileLog, new WindowsPlatform(), env, Dispatcher, Shutdown);
+        _tray.BeginDiagnostics();
         _tray.Start();
     }
 
