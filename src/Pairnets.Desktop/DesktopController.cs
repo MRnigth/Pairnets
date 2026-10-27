@@ -49,6 +49,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
     private readonly NoticeQueue _notices;
     private StartGuard? _guard;
     private HealthLog? _health;
+    private UiStallMeter? _stall;
     private StartGuardResult? _loopGuard;
     private int _passes;
     private readonly DispatcherTimer _refresh;
@@ -110,7 +111,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
         _crashes = new CrashCatcher(_env.CrashesDir, AppName, _log, PrivateValues);
         Dispatcher.UIThread.UnhandledException += OnUnhandledException;
         _fileLog.Minimum = _settings.DebugMode ? LogLevel.Debug : LogLevel.Information; // Debug mode: more detail in the log
-        _refresh = new DispatcherTimer(TimeSpan.FromMilliseconds(250), DispatcherPriority.Background, (_, _) => RefreshIfDirty());
+        _refresh = new DispatcherTimer(TimeSpan.FromMilliseconds(250), DispatcherPriority.Background, (_, _) => RefreshIfDirty(force: false));
         _package = UpdatePackage.ForThisComputer(installedCopy: false, _env.AppFile); // (no installer looks after the Mac and Linux app)
         if (OperatingSystem.IsMacOS() && MacAppUpdate.TakeFailedNote(_env.LocalDir) is { } putBack)
             _putBack = new UpdateProblem(putBack, UpdateNextStep.TryAgain);
@@ -197,6 +198,8 @@ public sealed class DesktopController : ITrayActions, IDisposable
         }
         if (started.CrashLoop)
             _loopGuard = started;
+        _stall = new UiStallMeter(job => Dispatcher.UIThread.Post(job, DispatcherPriority.Background));
+        _stall.Start();
         _health = new HealthLog(_env.LogsDir, HealthNow, () => LogBytesToday(), guard.Tick);
         _health.Start();
     }
@@ -224,7 +227,8 @@ public sealed class DesktopController : ITrayActions, IDisposable
             Interlocked.Exchange(ref _passes, 0),
             _notices.Waiting,
             _notices.Suppressed,
-            folders.Select(f => HealthLog.FreeGb(DiskSpace.Of(f))).ToList());
+            folders.Select(f => HealthLog.FreeGb(DiskSpace.Of(f))).ToList(),
+            _stall?.TakeLongestMs() ?? -1);
     }
 
     public void Start(string[] args)
@@ -254,6 +258,9 @@ public sealed class DesktopController : ITrayActions, IDisposable
         }
         else if (CrashCards.TakeNewCloses(_env.CrashesDir).Count > 0)
             Notify("crash", CrashNotice.Title, CrashNotice.Text, onClick: ReportBug);
+        // A Mac copy that runs from the download can't update itself or start at login: say so once per version (the card stays in Needs you).
+        if (MacAppUpdate.MoveNoticeDue(_env.LocalDir, Environment.ProcessPath, PairnetsInfo.ProductVersion))
+            Notify("move-to-applications", UpdateTexts.MacMoveTitle, UpdateTexts.MacMoveText, onClick: OpenDownloadPage);
         // Rewrite the login item so it follows the app (Tether.app became Pairnets.app; the app may have moved).
         if (SafeIsAutoStart())
         {
@@ -1081,14 +1088,19 @@ public sealed class DesktopController : ITrayActions, IDisposable
     internal NestListModel NestList() =>
         NestListModel.Build(_settings, _runs.Select(r => (r.Settings, r.Session?.Status)), _runs.Count > 1 ? _selected : Current?.Id);
 
-    private void RefreshIfDirty()
+    private void RefreshIfDirty(bool force = true)
     {
         foreach (var run in _runs)
             run.Session?.PruneJoinRequests();
         // Redraw every 2 seconds while a window shows, so "2 min ago" and the map's moving dots stay current.
-        if (++_ticks % 8 == 0 && (_window is { IsVisible: true } || _panel is { IsVisible: true }))
+        var visible = _window is { IsVisible: true } || _panel is { IsVisible: true };
+        if (++_ticks % 8 == 0 && visible)
             _dirty = true;
         if (!_dirty)
+            return;
+        // Nobody looking (no window, or one that has not been in use for a few seconds): a change waits for the next
+        // slow tick instead of redrawing the menu and the window four times a second through a big sync.
+        if (!force && !RefreshPolicy.Due(_ticks, visible && Motion.Live))
             return;
         _dirty = false;
         var status = _session?.Status ?? StatusSnapshot.WithoutSession(Nest);
@@ -1204,6 +1216,8 @@ public sealed class DesktopController : ITrayActions, IDisposable
         var items = new List<AttentionItem>();
         if (_session is null)
             return items;
+        if (MacAppUpdate.RunsFromDownload(Environment.ProcessPath))
+            items.Add(new AttentionItem(UpdateTexts.MacMoveTitle, UpdateTexts.MacMoveText, UpdateTexts.MacMoveButton, OpenDownloadPage));
         if (NameOffer.For(Nest, ComputerName.Default()) is { } offer)
             items.Add(new AttentionItem(offer.Title, offer.Detail, offer.UseLabel, () => UseOwnName(offer), AttentionKind.Rename,
                 SecondLabel: offer.KeepLabel, Second: AnswerNameOffer));
@@ -1232,10 +1246,25 @@ public sealed class DesktopController : ITrayActions, IDisposable
             items.Add(new AttentionItem(w.Path, w.Message ?? w.Code, "Show in folder", () => RevealFile(w.Path), w.Code == ErrorCodes.CaseCollision ? AttentionKind.NameClash : AttentionKind.Warning));
         foreach (var c in _session.ConflictCopies.Items.Where(i => i.Path is not null))
         {
-            if (File.Exists(LocalPath(c.Path!)))
+            if (CopyExists(LocalPath(c.Path!)))
                 items.Add(new AttentionItem("Conflict copy: " + PathRules.FileName(c.Path!), "Both computers changed this file. Compare the two, keep what you want, delete the other.", "Show in folder", () => RevealFile(c.Path!), AttentionKind.Conflict, null, c.Time));
         }
         return items;
+    }
+
+    private readonly Dictionary<string, (bool Exists, DateTime At)> _copyExists = [];
+
+    /// <summary>File.Exists for the conflict copies on the Needs you page, asked at most every 10 seconds per file (the page is drawn often; thousands of copies were thousands of disk checks each time).</summary>
+    private bool CopyExists(string path)
+    {
+        var now = DateTime.UtcNow;
+        if (_copyExists.TryGetValue(path, out var known) && now - known.At < TimeSpan.FromSeconds(10))
+            return known.Exists;
+        if (_copyExists.Count > 5000)
+            _copyExists.Clear();
+        var exists = File.Exists(path);
+        _copyExists[path] = (exists, now);
+        return exists;
     }
 
     private string LocalPath(string syncPath) => Path.Combine(Nest.Folder ?? string.Empty, PathRules.ToOsRelative(syncPath));
@@ -1266,7 +1295,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
         if (opening && _session is { } session)
             _ = session.RefreshDevicesAsync(); // the other computer's state, fresh
         _dirty = true;
-        RefreshIfDirty();
+        RefreshIfDirty(force: true);
     }
 
     /// <summary>Opens the main window on one page.</summary>
@@ -2139,8 +2168,18 @@ public sealed class DesktopController : ITrayActions, IDisposable
         }
     }
 
+    private void OpenDownloadPage() => _platform.Open(_env.UpdateReleasePage.ToString());
+
     private void SetAutoStart(bool enabled)
     {
+        if (enabled && _platform.AutoStartRefusedReason is { } refused)
+        {
+            // Running from the download: a login item would point at a path macOS removes after a restart.
+            Notify("autostart", UpdateTexts.MacMoveTitle, refused, onClick: OpenDownloadPage);
+            if (_autoStartItem is not null)
+                _autoStartItem.IsChecked = SafeIsAutoStart();
+            return;
+        }
         try
         {
             _platform.SetAutoStart(enabled);
@@ -2172,6 +2211,7 @@ public sealed class DesktopController : ITrayActions, IDisposable
         _crashes.Dispose();
         _notices.Dispose();
         _health?.Dispose();
+        _stall?.Dispose();
         _guard?.CleanExit();
         _activation?.Dispose();
         _updates.Dispose();

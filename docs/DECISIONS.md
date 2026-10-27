@@ -2260,3 +2260,40 @@ yet; these are the places the code could do it, now limited, plus what is kept t
     about a person, so no change to the Privacy page was made; the owner may want a line there.
 * **Not done:** the scanner still opens any file it finds (devices and pipes are only avoided because `/`, `/dev` and the
   home folder can't be a nest folder now). Windows toasts are not queued (they start no process).
+
+## Mac hang: the window never waits for the sync, and motion stops when nobody looks (fix/mac-hang, 2026-10-27)
+
+A macOS report from a MacBook (Pairnets 1.0.59, 2026-10-20) showed three minutes of 51% CPU in Avalonia's render thread
+(drawing through OpenGL, which Apple translates to Metal) while Pairnets was not the frontmost app, and the person
+reports a spinning beachball about five minutes after start. The report is a CPU warning, not the hang itself; what was
+found by reading the code, and fixed, is below. A Sample taken during the beachball would say for sure.
+
+* **The window never asks the state database.** The state database is one connection behind one lock, and the sync
+  holds that lock while it loads or writes thousands of rows. The window redraws four times a second while syncing and
+  each redraw asked it for the warnings, so it waited behind the sync (the beachball). The warnings are now kept in
+  memory by the session (`ClientSession.Warnings()`), refreshed by the sync side after each pass and, for warnings
+  raised mid-pass, once a second at most. Both apps.
+* **Redraws slow down when nobody looks.** With no window on screen, or one not used for 6 seconds, the menu, tray and
+  window are redrawn every 2 seconds at most (`RefreshPolicy`), not four times a second through a big sync. Actions
+  (a button, opening the window) redraw at once.
+* **Motion stops when nobody looks.** The endless animations (spin, pulse, ripple, rise, fall, bob), the dots on the
+  lines and the hub run only while a window is shown, not minimized, and in use or used in the last 6 seconds
+  (`MotionGate`, `Motion.Live`; the styles apply under `Window.live`). Switching back to the window starts them again.
+  "Reduce motion" still wins.
+* **Mac drawing: Metal first, the processor as the fallback** (`MacRendering`). Avalonia's default there is OpenGL.
+  `PAIRNETS_RENDERING=opengl|software|metal` picks one by hand when something looks wrong.
+* **Smaller:** the Needs you page asks whether a conflict copy still exists at most every 10 seconds per file (it was a
+  disk check per copy on every redraw).
+* **A Mac copy that runs from the download** (macOS "App Translocation", or a disk image) can't update itself and its
+  path is gone after a restart. The update card now says: quit Pairnets, download the new version with the button, drag it
+  to Applications (replace the old one) and open it from there. The same short note shows once per version without an
+  update, and stays as a card on the Needs you page until the app runs from a real folder. **Start at login is refused**
+  while it runs from the download (the setting stays off and says why); a login item an earlier run wrote with that path
+  is removed.
+* **To see the next one:** the health log gets `ui-stall=…ms`, the longest wait of the window's thread that minute (a
+  small job is posted to it twice a second; one that hasn't run yet counts), in both apps. "Report a bug" on a Mac now
+  also summarizes `.spin`, `.hang` and `.cpu_resource.diag` reports (the header lines and the start of the heaviest or
+  main-thread stack), not only crashes.
+* **Not changed:** the Keychain read at start and the wait when a nest is stopped still run on the window's thread (they
+  are start/stop actions, not repeated); changing them needs the start to be asynchronous. Nothing here is proven to be
+  the cause until a Sample or a spin report from the hang is seen.

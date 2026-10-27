@@ -5,7 +5,8 @@ using System.Text;
 namespace Pairnets.Core.Client;
 
 /// <summary>What only the app knows, for one health line.</summary>
-public sealed record HealthExtras(int Watchers, int WatcherRestarts, int Passes, int NoticesWaiting, int NoticesHeldBack, IReadOnlyList<string> FreeDisk);
+/// <param name="UiStallMs">The longest wait of the window's thread in the last minute (<see cref="UiStallMeter"/>); -1 when not measured.</param>
+public sealed record HealthExtras(int Watchers, int WatcherRestarts, int Passes, int NoticesWaiting, int NoticesHeldBack, IReadOnlyList<string> FreeDisk, int UiStallMs = -1);
 
 /// <summary>
 /// A small diagnostic log, one line a minute, in its own file (health-yyyyMMdd.log, at most
@@ -94,6 +95,8 @@ public sealed class HealthLog : IDisposable
         sb.Append(inv, $" pool={ThreadPool.ThreadCount}/queued={ThreadPool.PendingWorkItemCount} files={OpenFiles()}");
         sb.Append(inv, $" watchers={x.Watchers} restarts={x.WatcherRestarts} passes={x.Passes}");
         sb.Append(inv, $" notices={x.NoticesWaiting}/held={x.NoticesHeldBack} log={Mb(logBytesToday)}MB");
+        if (x.UiStallMs >= 0)
+            sb.Append(inv, $" ui-stall={x.UiStallMs}ms");
         if (x.FreeDisk.Count > 0)
             sb.Append(inv, $" free={string.Join(',', x.FreeDisk)}");
         return sb.ToString();

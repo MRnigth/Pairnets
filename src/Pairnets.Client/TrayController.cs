@@ -36,6 +36,7 @@ public sealed class TrayController : ITrayActions, IDisposable
     private readonly Dictionary<string, DateTime> _lastToast = [];
     private StartGuard? _guard;
     private HealthLog? _health;
+    private UiStallMeter? _stall;
     private StartGuardResult? _loopGuard;
     private int _passes;
     private readonly DispatcherTimer _refresh;
@@ -319,6 +320,8 @@ public sealed class TrayController : ITrayActions, IDisposable
         }
         if (started.CrashLoop)
             _loopGuard = started;
+        _stall = new UiStallMeter(job => _ui.BeginInvoke(job, System.Windows.Threading.DispatcherPriority.Background));
+        _stall.Start();
         _health = new HealthLog(_env.LogsDir, HealthNow, LogBytesToday, guard.Tick);
         _health.Start();
     }
@@ -346,7 +349,8 @@ public sealed class TrayController : ITrayActions, IDisposable
             Interlocked.Exchange(ref _passes, 0),
             0,
             0,
-            folders.Select(f => HealthLog.FreeGb(DiskSpace.Of(f))).ToList());
+            folders.Select(f => HealthLog.FreeGb(DiskSpace.Of(f))).ToList(),
+            _stall?.TakeLongestMs() ?? -1);
     }
 
     /// <summary>Every nest starts paused after a crash loop; the person's Resume (<see cref="TogglePause"/>) clears it.</summary>
@@ -2233,6 +2237,7 @@ public sealed class TrayController : ITrayActions, IDisposable
     public void Dispose()
     {
         _health?.Dispose();
+        _stall?.Dispose();
         _guard?.CleanExit();
         _activation?.Dispose();
         _updates.Dispose();

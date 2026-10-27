@@ -89,10 +89,43 @@ public static class MacAppUpdate
         var bundle = BundleOf(programPath);
         if (bundle is null)
             return "Pairnets isn't running as an app.";
+        return RunsFromDownload(programPath) ? UpdateTexts.MacNotInApplications : null;
+    }
+
+    /// <summary>
+    /// True for an app macOS runs from a hidden read-only copy ("App Translocation": opened straight from Downloads or a
+    /// disk image) or straight from a mounted disk image. Such a copy can't update itself, and the path it runs from is
+    /// gone after a restart, so it must not be written into a login item.
+    /// </summary>
+    public static bool RunsFromDownload(string? programPath)
+    {
+        if (BundleOf(programPath) is not { } bundle)
+            return false;
         var unix = bundle.Replace('\\', '/');
-        if (unix.Contains("/AppTranslocation/", StringComparison.Ordinal) || unix.StartsWith("/Volumes/", StringComparison.Ordinal))
-            return UpdateTexts.MacNotInApplications;
-        return null;
+        return unix.Contains("/AppTranslocation/", StringComparison.Ordinal) || unix.StartsWith("/Volumes/", StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// True once per app version for a copy that runs from the download (and writes that down in <paramref name="localDir"/>):
+    /// the "Move Pairnets to Applications" note is not shown at every start.
+    /// </summary>
+    public static bool MoveNoticeDue(string localDir, string? programPath, string version)
+    {
+        if (!RunsFromDownload(programPath))
+            return false;
+        var marker = Path.Combine(localDir, "move-to-applications.noted");
+        try
+        {
+            if (File.Exists(marker) && File.ReadAllText(marker).Trim() == version)
+                return false;
+            Directory.CreateDirectory(localDir);
+            File.WriteAllText(marker, version);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // Unable to remember: say it this once.
+        }
+        return true;
     }
 
     /// <summary>Where the hidden folders of an update live: next to the app, so the final move never crosses a disk.</summary>
