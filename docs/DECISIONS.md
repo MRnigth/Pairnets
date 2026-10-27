@@ -190,6 +190,13 @@ what cannot lose or silently overwrite data.
   because files downloaded with curl are not quarantined. Signing and notarization can be added to
   `release.yml` later with repository secrets.
 * **Menu-bar app on Mac** (`LSUIElement`, no Dock icon), like other sync tools.
+* **Mac notices come from Pairnets itself (fix/mac-notifications).** They used to go through `osascript display
+  notification`, so macOS credited them to Script Editor (its icon; a click opened an empty Script Editor window).
+  Now `MacNotifications` posts them with `UNUserNotificationCenter` through the Objective-C runtime (no extra package,
+  like `MacTrash`): Pairnets' icon, a one-time "Allow notifications?" question, and a click runs the same action as
+  the Windows toast (opens that nest, Needs attention, the sign-in, the bug report, the download's folder; otherwise
+  the window comes forward). If the user says no, nothing is shown (the old way is never used then). Only a copy
+  without an app bundle (a developer run) still uses `osascript`, because macOS refuses bundle-less notices.
 * **Unicode normalization.** macOS treats "é" (one character) and "e + combining accent" as the
   same file name. The name-collision key is now NFC-normalized as well as lower-cased, so the
   server rejects such pairs like case variants.

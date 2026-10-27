@@ -14,7 +14,7 @@ public sealed class LinuxPlatform : IPlatformServices
 
     public ILocalTrash CreateTrash(ILogger log) => new GioTrash(log);
 
-    public void Notify(string title, string text) =>
+    public void Notify(string title, string text, Action? onClick = null) =>
         Proc.Run("notify-send", ["--app-name=Pairnets", "--icon=pairnets", title, text], timeoutMs: 3000);
 
     private static string AutostartFile => Path.Combine(

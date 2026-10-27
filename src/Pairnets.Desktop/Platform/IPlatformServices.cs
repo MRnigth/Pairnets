@@ -14,7 +14,8 @@ public interface IPlatformServices
 
     ILocalTrash CreateTrash(ILogger log);
 
-    void Notify(string title, string text);
+    /// <summary>Shows a notice. <paramref name="onClick"/> runs when it is clicked (Mac; Linux notices have no click).</summary>
+    void Notify(string title, string text, Action? onClick = null);
 
     bool IsAutoStartEnabled();
 

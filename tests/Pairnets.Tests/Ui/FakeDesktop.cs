@@ -111,6 +111,7 @@ public sealed class FakePlatform : IPlatformServices
     private readonly List<string> _opened = [];
     private readonly List<string> _revealed = [];
     private readonly List<(string Title, string Text)> _notices = [];
+    private readonly List<Action?> _noticeClicks = [];
     private readonly List<bool> _autoStartChanges = [];
     private bool _autoStart;
 
@@ -124,10 +125,23 @@ public sealed class FakePlatform : IPlatformServices
 
     public ILocalTrash CreateTrash(ILogger log) => new PermanentDeleteTrash();
 
-    public void Notify(string title, string text)
+    public void Notify(string title, string text, Action? onClick = null)
     {
         lock (_gate)
+        {
             _notices.Add((title, text));
+            _noticeClicks.Add(onClick);
+        }
+    }
+
+    /// <summary>Clicks the newest notice with this title, like a click on it in Notification Center; false when it has no click action.</summary>
+    public bool ClickNotice(string title)
+    {
+        Action? click;
+        lock (_gate)
+            click = _noticeClicks[_notices.FindLastIndex(n => n.Title == title)];
+        click?.Invoke();
+        return click is not null;
     }
 
     public bool IsAutoStartEnabled()
