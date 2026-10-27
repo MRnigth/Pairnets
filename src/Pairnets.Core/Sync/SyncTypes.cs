@@ -211,4 +211,7 @@ public sealed class EngineHooks
 
     /// <summary>Called when an upload or download starts, before any network traffic. May block.</summary>
     public Func<SyncAction, string, Task>? BeforeTransfer { get; set; }
+
+    /// <summary>Free and total space of the drive holding the sync folder (e.g. to simulate a nearly full drive).</summary>
+    public Func<string, DiskSpaceInfo?>? DiskSpace { get; set; }
 }

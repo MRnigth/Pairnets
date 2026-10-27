@@ -14,14 +14,17 @@ public static class BugReport
     public const int LogLines = 300;
     public const int ActivityItems = 30;
     public const int MaxCrashCards = 5;
+    public const int HealthLines = 60;
     private static readonly TimeSpan ServerTimeout = TimeSpan.FromSeconds(10);
 
     /// <param name="app">Which app wrote the report ("Windows app", "Mac app", …).</param>
     /// <param name="logFile">Today's log (<c>RollingFileLoggerProvider.CurrentFile</c>), or null.</param>
     /// <param name="error">The unexpected error that led to the report, or null when the user asked for it.</param>
     /// <param name="crashesDir">The crash cards kept on this computer (<see cref="ClientEnvironment.CrashesDir"/>), or null.</param>
+    /// <param name="healthDir">The folder of the health log (<see cref="HealthLog"/>, the same as the logs folder), or null.</param>
+    /// <param name="macReports">The text about macOS's own reports (<see cref="MacReports.Build"/>), or null/empty.</param>
     public static async Task<string> BuildAsync(ClientSettings settings, ClientSession? session, string? logFile, Exception? error,
-        string app, string? crashesDir = null, CancellationToken ct = default)
+        string app, string? crashesDir = null, CancellationToken ct = default, string? healthDir = null, string? macReports = null)
     {
         var sb = new StringBuilder();
         var inv = CultureInfo.InvariantCulture;
@@ -32,6 +35,19 @@ public static class BugReport
         if (PairnetsInfo.ThisRelease.IsBeta)
             sb.AppendLine(inv, $"Channel:   {ReleaseChannel.DisplayName(PairnetsInfo.Channel)} (build {PairnetsInfo.Build})");
         sb.AppendLine(inv, $"System:    {RuntimeInformation.OSDescription} ({RuntimeInformation.OSArchitecture}), .NET {Environment.Version}");
+
+        // Near the top, so the cut of a long report (BugReportSender) keeps it.
+        if (healthDir is not null)
+        {
+            var health = HealthLog.Tail(healthDir, HealthLines);
+            sb.AppendLine().AppendLine(inv, $"## Health (one line a minute; the newest {HealthLines}; numbers only)");
+            if (health.Count == 0)
+                sb.AppendLine("(none yet)");
+            foreach (var line in health)
+                sb.AppendLine(line);
+        }
+        if (!string.IsNullOrEmpty(macReports))
+            sb.AppendLine().AppendLine("## Mac reports (what macOS wrote about Pairnets and about the Mac going down)").AppendLine(macReports);
 
         if (error is not null)
         {

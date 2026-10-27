@@ -102,9 +102,79 @@ public static class SyncFolderCheck
             return OperatingSystem.IsWindows()
                 ? $"Windows protects {system}: only programs with admin rights can save files there, so Pairnets can't sync it. Choose a folder of your own, for example {suggested}."
                 : $"{system} is a system folder: only an administrator can save files there, so Pairnets can't sync it. Choose a folder of your own, for example {suggested}.";
+        if (TooBroad(folder) is not null)
+            return $"{Path.TrimEndingDirectorySeparator(folder.Trim())} is too big a folder to sync: it holds your whole account or Pairnets' own files, and syncing it would try to copy everything in it. Choose a folder of your own, for example {suggested}.";
         if (!CanWrite(folder))
             return $"This computer doesn't let Pairnets save files in {Path.TrimEndingDirectorySeparator(folder.Trim())}. Choose a folder of your own, for example {suggested}.";
         return null;
+    }
+
+    /// <summary>
+    /// Folders that hold more than a person's own files: a drive's root, the folder of all accounts, the home folder, the
+    /// Mac's Library and Applications, and the folders Pairnets keeps its own settings, state and logs in. Syncing one would
+    /// copy everything in it, and (home folder) feed Pairnets' own writes back into its own watcher.
+    /// </summary>
+    public static IReadOnlyList<string> BroadFolders()
+    {
+        var list = new List<string>();
+        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        if (!string.IsNullOrWhiteSpace(home))
+        {
+            list.Add(home);
+            if (OperatingSystem.IsMacOS())
+                list.Add(Path.Combine(home, "Library"));
+            var accounts = Path.GetDirectoryName(Path.TrimEndingDirectorySeparator(home));
+            if (!string.IsNullOrEmpty(accounts))
+                list.Add(accounts); // /Users, /home, C:\Users
+        }
+        if (OperatingSystem.IsMacOS())
+            list.AddRange(["/Volumes", "/Library", "/Applications", "/Users", "/private", "/opt", "/var", "/tmp"]);
+        else if (OperatingSystem.IsLinux())
+            list.AddRange(["/home", "/mnt", "/media", "/var", "/opt", "/tmp", "/root"]);
+        return list;
+    }
+
+    /// <summary>
+    /// Why <paramref name="folder"/> is too broad (see <see cref="BroadFolders"/>), or null. A folder is too broad when it
+    /// is one of those folders, a drive's root, inside the Mac's Library, or holds (or is inside) one of
+    /// <paramref name="ownFolders"/> (default: Pairnets' settings and state folders).
+    /// </summary>
+    public static string? TooBroad(string folder, IEnumerable<string>? broad = null, IEnumerable<string>? ownFolders = null)
+    {
+        string mine;
+        try
+        {
+            mine = Normal(folder);
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return null;
+        }
+        var root = Path.GetPathRoot(mine);
+        if (!string.IsNullOrEmpty(root) && string.Equals(Path.TrimEndingDirectorySeparator(root), Path.TrimEndingDirectorySeparator(mine), Cmp))
+            return "a drive's root";
+        foreach (var b in broad ?? BroadFolders())
+        {
+            var theirs = Normal(b);
+            if (string.Equals(mine, theirs, Cmp))
+                return theirs;
+            // Inside the Mac's own Library folder (its Application Support holds Pairnets' state).
+            if (OperatingSystem.IsMacOS() && broad is null && Path.GetFileName(theirs) == "Library" && IsInside(mine, theirs))
+                return theirs;
+        }
+        foreach (var own in ownFolders ?? [PairnetsPaths.LocalDir, PairnetsPaths.RoamingDir])
+        {
+            var theirs = Normal(own);
+            if (IsInside(mine, theirs) || IsInside(theirs, mine))
+                return theirs;
+        }
+        return null;
+    }
+
+    private static bool IsInside(string path, string parent)
+    {
+        var withSlash = Path.EndsInDirectorySeparator(parent) ? parent : parent + Path.DirectorySeparatorChar;
+        return path.StartsWith(withSlash, Cmp);
     }
 
     /// <summary>The folder to offer instead: Pairnets in the person's home folder.</summary>

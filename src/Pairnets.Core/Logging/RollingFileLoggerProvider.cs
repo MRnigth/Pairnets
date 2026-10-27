@@ -17,6 +17,15 @@ public sealed class RollingFileLoggerProvider : ILoggerProvider
     private StreamWriter? _writer;
     private DateOnly _currentDay;
 
+    private long _dayBytes;
+    private bool _fullNoted;
+
+    /// <summary>
+    /// A day's file never grows past this much for Information and Debug lines (a loop that logs each pass can write
+    /// gigabytes); then only warnings and errors go on, and nothing at all past twice this.
+    /// </summary>
+    public long MaxDailyBytes { get; init; } = 50L * 1024 * 1024;
+
     public RollingFileLoggerProvider(string directory, int retentionDays = 14, LogLevel minimum = LogLevel.Information, TimeProvider? clock = null)
     {
         _directory = directory;
@@ -54,10 +63,28 @@ public sealed class RollingFileLoggerProvider : ILoggerProvider
                 {
                     _writer?.Dispose();
                     _currentDay = day;
-                    _writer = new StreamWriter(new FileStream(FileFor(day), FileMode.Append, FileAccess.Write, FileShare.ReadWrite | FileShare.Delete)) { AutoFlush = true };
+                    var stream = new FileStream(FileFor(day), FileMode.Append, FileAccess.Write, FileShare.ReadWrite | FileShare.Delete);
+                    _writer = new StreamWriter(stream) { AutoFlush = true };
+                    _dayBytes = stream.Length;
+                    _fullNoted = false;
                     PurgeOld(day);
                 }
+                if (_dayBytes >= MaxDailyBytes)
+                {
+                    if (_dayBytes >= MaxDailyBytes * 2)
+                        return;
+                    if (level < LogLevel.Warning)
+                        return;
+                    if (!_fullNoted)
+                    {
+                        _fullNoted = true;
+                        var note = $"{now:yyyy-MM-dd HH:mm:ss.fff} [WRN] Log: today's log is full ({MaxDailyBytes / (1024 * 1024)} MB); only warnings and errors are kept until tomorrow";
+                        _writer.WriteLine(note);
+                        _dayBytes += note.Length + Environment.NewLine.Length;
+                    }
+                }
                 _writer.WriteLine(line);
+                _dayBytes += line.Length + Environment.NewLine.Length;
             }
             catch (IOException)
             {

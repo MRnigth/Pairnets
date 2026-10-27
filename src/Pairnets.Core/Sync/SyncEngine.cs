@@ -377,6 +377,16 @@ public sealed class SyncEngine
             return;
         }
 
+        // The home folder, a drive's root or a folder holding Pairnets' own state and logs: every pass would write its own
+        // database and log inside the folder it watches (a loop) and read the whole account into memory. Stop calmly.
+        if (Pairnets.Core.Settings.SyncFolderCheck.TooBroad(Root) is { } broad)
+        {
+            _log.LogWarning("The sync folder {Folder} is too broad to sync ({Why})", Root, broad);
+            Block(result, BlockReason.FolderNotWritable,
+                $"{Root} is too big a folder to sync: it holds your whole account or Pairnets' own files. Choose a folder of your own for this nest; nothing in this one is changed.");
+            return;
+        }
+
         // A folder synced as Tether: its marker becomes Pairnets' (same folder id), so nothing is blocked.
         Legacy.TetherMigration.MigrateSyncFolder(Root);
         var tracked = _state.CountTracked();
@@ -933,6 +943,14 @@ public sealed class SyncEngine
         if (TryPlaceOnline(path, serverHash, ctx))
             return;
         var size = ctx.Sizes.GetValueOrDefault(path);
+        if (!DiskSpace.Allows((_hooks.DiskSpace ?? DiskSpace.Of)(Root), size))
+        {
+            // Not enough room: a drive filled to the last byte can freeze a Mac. One warning per pass, the rest wait quietly.
+            _log.LogWarning("Not downloading {Path} ({Bytes} bytes): the drive of {Folder} would be left with too little free space", path, size, Root);
+            if (Interlocked.Exchange(ref ctx.LowSpaceWarned, 1) == 0)
+                RaiseWarning(path, ErrorCodes.NoSpace, "There is not enough free space on this computer to download files from the nest. Free up some space; Pairnets goes on by itself.", null, ctx);
+            return;
+        }
         // Big files keep what arrived when the connection breaks, and later ask only for the rest of the same version.
         if (serverHash is null || size < _options.ResumeDownloadsFrom || _hooks.WrapDownloadStream is not null)
         {
@@ -1022,12 +1040,12 @@ public sealed class SyncEngine
                 {
                     dl = await _api.DownloadAsync(path, target, bytes => Report(path, "download", bytes, 0, ctx), ct, resume).ConfigureAwait(false);
                     await target.FlushAsync(ct).ConfigureAwait(false);
-                    fs.Flush(flushToDisk: true);
+                    LightSync.Flush(fs);
                 }
                 catch (Exception ex) when (partial is not null && KeepsPartial(ex))
                 {
                     // Cut off, paused or closing: keep what arrived, recorded with the version it belongs to.
-                    fs.Flush(flushToDisk: true);
+                    LightSync.Flush(fs);
                     if (fs.Length > 0)
                     {
                         _state.SetDownload(partial with
@@ -1596,5 +1614,8 @@ public sealed class SyncEngine
         public HashSet<string> Taken { get; } = taken;
         public int FilesTotal { get; } = filesTotal;
         public int FilesDone { get; set; }
+
+        /// <summary>1 once this pass raised its "not enough free space" warning.</summary>
+        public int LowSpaceWarned;
     }
 }

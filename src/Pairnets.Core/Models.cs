@@ -280,6 +280,9 @@ public static class ErrorCodes
     public const string Conflict = "conflict";
     public const string CaseCollision = "case-collision";
     public const string InvalidName = "invalid-name";
+
+    /// <summary>A download was held back because it would leave the computer's drive with almost no free space.</summary>
+    public const string NoSpace = "no-space";
     public const string NotFound = "not-found";
     public const string Unauthorized = "unauthorized";
     public const string BadRequest = "bad-request";
