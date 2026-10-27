@@ -627,9 +627,9 @@ public sealed class DesktopControllerTests
         Assert.Equal("Pairnets 99.0.0 is ready", Screen.Named<TextBlock>(main, "UpdateTitle").Text);
         if (OperatingSystem.IsMacOS())
         {
-            // A Mac app bundle is not swapped yet: the card says so before its button opens the download page.
+            // The test runner is not a Pairnets.app bundle, so it can't swap itself: the card says why before its button opens the download page.
             Assert.True(Screen.Named<TextBlock>(main, "UpdateReason").IsVisible);
-            Assert.Contains("can't update itself on a Mac", Screen.Named<TextBlock>(main, "UpdateReason").Text);
+            Assert.Contains("isn't running as an app", Screen.Named<TextBlock>(main, "UpdateReason").Text);
             Person.Click(Screen.Find<Button>(main, "Open download page"));
             Assert.Equal(app.Feed.ReleasePage.ToString(), app.Platform.Opened[^1]);
             Person.Click(Screen.Find<Button>(main, "Later"));

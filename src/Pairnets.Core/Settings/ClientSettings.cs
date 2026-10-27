@@ -330,13 +330,13 @@ public static class SettingsStore
         return reader.ReadToEnd();
     }
 
-    private const int SaveTries = 5;
-    private static readonly TimeSpan SaveRetryWait = TimeSpan.FromMilliseconds(100);
+    private const int SaveTries = 8;
+    private static TimeSpan SaveRetryWait(int attempt) => TimeSpan.FromMilliseconds(Math.Min(100 * attempt, 400));
 
     /// <summary>
     /// Saves the settings (a safety copy first, then the file in one move). Saves of the same file in this process take
     /// turns, so the one that comes last is what stays; a move that fails because something else holds the file for a
-    /// moment (a virus scanner, a backup, a file-sync tool) is tried again up to five times over about half a second.
+    /// moment (a virus scanner, a backup, a file-sync tool) is tried again up to eight times over about two seconds.
     /// </summary>
     public static void Save(string path, ClientSettings settings)
     {
@@ -364,7 +364,7 @@ public static class SettingsStore
                 }
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException && attempt < SaveTries)
                 {
-                    Thread.Sleep(SaveRetryWait);
+                    Thread.Sleep(SaveRetryWait(attempt));
                 }
             }
         }
