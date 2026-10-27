@@ -19,14 +19,18 @@ public enum UpdateMethod
     /// </summary>
     ReplaceApp,
 
-    /// <summary>Mac: the person downloads the .dmg and replaces the app (an app bundle is not swapped yet).</summary>
+    /// <summary>Mac: download Pairnets-macos-&lt;arch&gt;.zip, check the app in it and swap the whole Pairnets.app (<see cref="MacAppUpdate"/>).</summary>
+    ReplaceBundle,
+
+    /// <summary>Mac, running from a disk image or Downloads (<see cref="MacAppUpdate.WhyNot"/>): the person downloads the .dmg and drags the app to Applications.</summary>
     ByHand,
 }
 
 /// <summary>The release file this copy updates from, and how it installs it.</summary>
 /// <param name="Asset">The release file, e.g. "PairnetsSetup.exe"; null for <see cref="UpdateMethod.None"/>.</param>
 /// <param name="AppFile">For <see cref="UpdateMethod.ReplaceApp"/>: the app's file inside the package ("Pairnets.exe", "Pairnets").</param>
-public sealed record UpdatePackage(UpdateMethod Method, string? Asset, string? AppFile = null)
+/// <param name="WhyByHand">For <see cref="UpdateMethod.ByHand"/>: what the card tells the person to do.</param>
+public sealed record UpdatePackage(UpdateMethod Method, string? Asset, string? AppFile = null, string? WhyByHand = null)
 {
     public const string WindowsInstaller = "PairnetsSetup.exe";
     public const string WindowsZip = "pairnets-client-win-x64.zip";
@@ -44,7 +48,8 @@ public sealed record UpdatePackage(UpdateMethod Method, string? Asset, string? A
     /// The package for this computer. <paramref name="installedCopy"/>: the Windows app runs from the folder
     /// PairnetsSetup.exe put it in (only then can the installer replace it).
     /// </summary>
-    public static UpdatePackage ForThisComputer(bool installedCopy)
+    /// <param name="programPath">The running program (a Mac decides from where it lives whether it can swap itself); null is this process.</param>
+    public static UpdatePackage ForThisComputer(bool installedCopy, string? programPath = null)
     {
         if (OperatingSystem.IsWindows())
         {
@@ -53,7 +58,11 @@ public sealed record UpdatePackage(UpdateMethod Method, string? Asset, string? A
             return new(UpdateMethod.ReplaceApp, WindowsZip, "Pairnets.exe"); // (the x64 app the zip holds is what this copy is)
         }
         if (OperatingSystem.IsMacOS())
-            return new(UpdateMethod.ByHand, UpdateChecker.AssetForThisPlatform());
+        {
+            if (MacAppUpdate.WhyNot(programPath ?? Environment.ProcessPath) is { } why)
+                return new(UpdateMethod.ByHand, UpdateChecker.AssetForThisPlatform(), WhyByHand: why);
+            return new(UpdateMethod.ReplaceBundle, MacAppUpdate.ZipForThisMac());
+        }
         if (OperatingSystem.IsLinux() && RuntimeInformation.OSArchitecture == Architecture.X64)
             return new(UpdateMethod.ReplaceApp, LinuxDesktop, "Pairnets");
         return None;
@@ -92,10 +101,18 @@ public static class UpdateTexts
     public static string Updated(string version) =>
         $"Pairnets updated itself to {version}. You are still signed in and your settings are kept.";
 
-    /// <summary>The Mac card: why Pairnets opens the download page instead of updating.</summary>
-    public static string ByHand(string current) =>
-        $"You have {current}. Pairnets can't update itself on a Mac yet: open the download page, get the new version " +
-        "and drag it to Applications (your settings are kept).";
+    /// <summary>Why a Mac can't swap the app it runs from (a disk image, Downloads).</summary>
+    public const string MacNotInApplications =
+        "Pairnets is running from the downloaded disk image or Downloads, where it can't replace itself.";
+
+    /// <summary>The Mac card for a copy that can't update itself: <paramref name="why"/> and what to do (the button opens the download page).</summary>
+    public static string ByHand(string current, string? why = null) =>
+        $"You have {current}. {why ?? MacNotInApplications} Download the new version and drag it to Applications, " +
+        "then open it from there: after that it updates by itself. Your settings are kept.";
+
+    /// <summary>Said on the card when the Mac's new version did not start and the old one was put back.</summary>
+    public static string MacPutBack(string version) =>
+        $"Pairnets {version} didn't start, so your old version was put back. Nothing else changed.";
 
     /// <summary>Why the update was not installed, in plain words. Nothing was changed in any of these cases.</summary>
     public static string Failed(Exception ex, string? appPath = null) => ex switch
@@ -106,6 +123,8 @@ public static class UpdateTexts
         UnauthorizedAccessException =>
             $"Pairnets isn't allowed to change its own folder{(appPath is null ? "" : $" ({Path.GetDirectoryName(appPath)})")}, " +
             "so it couldn't replace itself and kept your current version. Move Pairnets to a folder you can change, then try again.",
+        InvalidDataException { Message: { Length: > 0 } m } when m.StartsWith("The update", StringComparison.Ordinal) =>
+            m + " Nothing was installed.",
         InvalidDataException =>
             "The download wasn't a Pairnets package Pairnets could unpack, so nothing was installed.",
         HttpRequestException or SocketException or TaskCanceledException => "The download failed. " + FriendlyErrors.Describe(ex),

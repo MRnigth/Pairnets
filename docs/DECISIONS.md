@@ -225,8 +225,8 @@ what cannot lose or silently overwrite data.
   is ever stored, and Resume finishes the work.
 * **Update check** reads `version.json` from the latest release without signing in, so it needs a
   public repository. Builds are numbered `1.0.<release run>`. The Windows app installs updates
-  itself (checksum-verified, silent installer); the unsigned Mac and Linux apps open the download
-  page.
+  itself (checksum-verified, silent installer); the Linux app swaps its own file.
+  The Mac app swaps its whole `Pairnets.app` (see "Mac self-update" below).
 * **Server self-update** runs as root only through a systemd path unit that the unprivileged server
   triggers with an empty file, and only installs the newest official release after checking it.
   The server process never gets root. See SECURITY.md.
@@ -249,6 +249,28 @@ what cannot lose or silently overwrite data.
   OneDrive or Dropbox); double-click opens the window. On macOS Avalonia's menu-bar icon only ever
   shows its menu (it reports no clicks), so the panel opens from "Quick status…" in that menu; on
   Linux a click opens it where the desktop reports clicks.
+
+## Mac self-update
+
+* **The Mac updates itself from the release's `Pairnets-macos-<arch>.zip`**, which every release already
+  had (it is also what `get.sh --mac` installs) and which the signed `SHA256SUMS.txt` already lists, so the
+  built-in release key covers it and no new release file exists. The .dmg stays for downloads by hand.
+* **Check first, swap later.** While Pairnets keeps syncing, the zip is downloaded and verified, unpacked
+  with `ditto` into a hidden folder next to `Pairnets.app` (same disk, so the final move is a rename) and
+  checked: app id `app.pairnets.client`, the promised version, `codesign --verify` passes. Then
+  `deploy/macos/update-app.sh` (carried inside the app) waits for the app to quit, moves the old app to a
+  hidden backup, moves the new one in, opens it and waits up to 90 s for it to write `mac-update.ready`.
+  Ready: the backup is deleted. Not ready: the old app is put back, opened, and shows "didn't start, your old
+  version was put back" on its update card (`mac-update.failed`). Every step goes to `mac-update.log`.
+* **No Gatekeeper prompt.** The app downloads with its own code, so the file carries no quarantine mark, and
+  the swap removes the mark anyway. Builds stay ad-hoc signed and not notarized.
+* **Only from `/Applications`-style places.** A copy run straight from the disk image or Downloads
+  (App Translocation, `/Volumes`) is read-only and cannot replace itself: the card says to drag it to
+  Applications once, and its button still opens the download page. A Mac on a version from before this
+  needs that one manual download.
+* **Tested** by unit tests (`MacAppUpdateTests`), `tests/macos/update-check.sh` (the real script, four cases)
+  and `tests/macos/zip-check.sh` (the built zip unpacks and verifies on a real Mac); CI and the release job
+  run them, so a release cannot ship a Mac app that cannot update itself.
 
 ## Cloudflare Tunnel
 

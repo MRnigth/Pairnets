@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Builds Pairnets.app from a `dotnet publish` output folder, then a .zip and a .dmg.
 #   deploy/macos/make-app.sh <publish-dir> <version> <arch: arm64|x64> <out-dir>
-# Runs on macOS (uses sips, iconutil, codesign, ditto, hdiutil). The zip and dmg keep their
-# Tether-macos-* names because the apps look for those; release.yml adds Pairnets-macos-* copies.
+# Runs on macOS (uses sips, iconutil, codesign, ditto, hdiutil). The dmg is what people download by hand; the zip is
+# what the Mac app updates itself from (src/Pairnets.Core/Client/MacAppUpdate.cs, deploy/get.sh): keep both names.
 set -euo pipefail
 PUB="$1"; VERSION="$2"; ARCH="$3"; OUT="$4"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"

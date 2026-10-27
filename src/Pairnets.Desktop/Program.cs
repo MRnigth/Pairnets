@@ -35,6 +35,14 @@ internal static class Program
         }
 
         SelfReplace.CleanUp(Environment.ProcessPath);
+        if (OperatingSystem.IsMacOS())
+        {
+            // The Mac swaps the whole app (MacAppUpdate): the new one says it runs, which lets the script delete the old one.
+            if (args.Contains(SelfReplace.AfterUpdateArgument))
+                MacAppUpdate.SignalStarted(PairnetsPaths.LocalDir);
+            else
+                MacAppUpdate.CleanUp(Environment.ProcessPath);
+        }
         if (OperatingSystem.IsLinux())
             LinuxAppPlace.CleanUpOldCopy(PairnetsPaths.LocalDir, Environment.ProcessPath); // after "Program folder: Move…"
         using (instanceLock)
