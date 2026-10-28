@@ -2320,3 +2320,37 @@ found by reading the code, and fixed, is below. A Sample taken during the beachb
 * **Not changed:** the Keychain read at start and the wait when a nest is stopped still run on the window's thread (they
   are start/stop actions, not repeated); changing them needs the start to be asynchronous. Nothing here is proven to be
   the cause until a Sample or a spin report from the hang is seen.
+
+## 1.0.61.13 held 1.8 GB after a big upload: the motion gate leaked every animated control (fix/upload-memory, 2026-10-28)
+
+A Mac test with the official builds (50,000 small files uploaded) showed 1.0.61.12 peaking at ~350 MB and 1.0.61.13 at
+~1.8 GB, still ~1.7 GB (managed heap 1.4-1.56 GB) after 10 minutes idle. Measured on the PC with a probe (a ClientSession
+alone, and the Mac/Linux app `DesktopController` with its window open, both against a local nest, 50,000 files):
+
+| 50,000-file upload | Core only (.13) | Mac/Linux app .12 | Mac/Linux app .13 |
+|---|---|---|---|
+| live heap after a full GC | 51 MB | 109 MB | 2,069 MB |
+| managed heap at the end | 145 MB | 261 MB | 3,598 MB |
+
+So the sync code (warnings list, `SyncBatch`, `_recentlyTouched`, status snapshots) is not the holder; the window is.
+A heap dump of the .13 app showed hundreds of thousands of Avalonia objects (property stores, `DoubleAnimator`s,
+`StyleClassActivator`s) and ~26,000 entries in the window's class-change listener list: every control that ever carried
+an endless animation class (the Overview's pulse/spin/rise/fall, rebuilt on every redraw) was still alive.
+
+* **Cause:** .13 stopped the endless animations when nobody looks with the selector `Window.live :is(Control).spin`
+  (and bob, ripple, pulse, rise, fall, ...). Avalonia makes each control matching such a selector subscribe to the
+  *window's* classes, and the window keeps that subscription (and so the control, its animations and its subtree) after
+  the control has left the window. The window redraws four times a second during a sync, so the leak grew with every
+  redraw. .12 had `:is(Control).spin` and was fine.
+* **Fix:** the gate is a class on the animated element itself. The styles are `:is(Control).spin.go`; `Motion.Set` adds
+  the element to a weak list and gives it the class `go` while `Motion.Live`; when the gate changes, the live elements
+  get or lose `go` (dead ones drop out of the list). The idle-CPU gain of .13 stays: motion still stops about 6 seconds
+  after the last window stops being in use, and `RefreshPolicy` is unchanged. Rings written in XAML (sign-in, update
+  windows) carry `go` from the start and keep turning (as in .12).
+* **Platforms:** Mac and Linux (Avalonia, `Pairnets.Desktop`) were affected, not only the Mac (Metal has nothing to do
+  with it). Windows (WPF, `Pairnets.Client`) uses its own `Ui\Motion.cs`, got no selector change in .13, and is not affected.
+  Nothing in Core changed.
+* **Tests:** `MotionMemoryTests` syncs 3,000 small files in the real app with its window open and checks the live heap
+  afterwards (153 MB with the old selectors, about 80 MB with the fix; limit 125 MB), and checks the styles hold no
+  `Window.` selector. The 10,000-file probe ends at 86 MB live (before: 417 MB live, 581 MB heap).
+  `UploadMemoryProbe.cs` and `UploadMemoryUiProbe.cs` are the measuring harnesses (they do nothing unless `PAIRNETS_MEMPROBE=1`).

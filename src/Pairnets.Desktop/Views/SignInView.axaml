@@ -170,7 +170,7 @@
             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
               <Panel Width="18" Height="18" Margin="0,0,10,0" VerticalAlignment="Center">
                 <Ellipse Width="16.4" Height="16.4" Stroke="{DynamicResource T.Track}" StrokeThickness="2.4" />
-                <Arc x:Name="AccountRing" Classes="spin" Width="16.4" Height="16.4" StartAngle="-60" SweepAngle="90" StrokeThickness="2.4"
+                <Arc x:Name="AccountRing" Classes="spin go" Width="16.4" Height="16.4" StartAngle="-60" SweepAngle="90" StrokeThickness="2.4"
                      Stroke="{DynamicResource T.Accent}" StrokeLineCap="Round" />
               </Panel>
               <TextBlock x:Name="AccountWaitText" Classes="waittext" />
@@ -220,7 +220,7 @@
             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
               <Panel Width="18" Height="18" Margin="0,0,10,0" VerticalAlignment="Center">
                 <Ellipse Width="16.4" Height="16.4" Stroke="{DynamicResource T.Track}" StrokeThickness="2.4" />
-                <Arc x:Name="NoNestRing" Classes="spin" Width="16.4" Height="16.4" StartAngle="-60" SweepAngle="90" StrokeThickness="2.4"
+                <Arc x:Name="NoNestRing" Classes="spin go" Width="16.4" Height="16.4" StartAngle="-60" SweepAngle="90" StrokeThickness="2.4"
                      Stroke="{DynamicResource T.Accent}" StrokeLineCap="Round" />
               </Panel>
               <TextBlock x:Name="NoNestWaitText" Classes="waittext" Text="Waiting for your nest…" />

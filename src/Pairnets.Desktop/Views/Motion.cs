@@ -74,8 +74,52 @@ public static class Motion
     {
         foreach (var window in Tracked)
             window.Classes.Set("live", Gate.Live);
+        SetGo();
         LiveChanged?.Invoke();
     }
+
+    /// <summary>
+    /// The elements that asked for an endless animation (weakly held: rows are rebuilt all the time). The styles run an
+    /// animation only on an element that also has the class "go", which is on while <see cref="Live"/>. (Gating with an
+    /// ancestor selector, "Window.live :is(Control).spin", made every such control that ever existed subscribe to the
+    /// window's classes and stay in memory: 1.8 GB after a 50,000-file sync.)
+    /// </summary>
+    private static readonly List<WeakReference<StyledElement>> Wanting = [];
+
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<StyledElement, object> Registered = [];
+    private static int _pruneAt = 256;
+
+    private static void Register(StyledElement e)
+    {
+        if (Registered.TryGetValue(e, out _))
+        {
+            e.Classes.Set("go", Live);
+            return;
+        }
+        Registered.Add(e, true);
+        if (Wanting.Count >= _pruneAt)
+        {
+            Wanting.RemoveAll(w => !w.TryGetTarget(out _));
+            _pruneAt = Math.Max(256, Wanting.Count * 2);
+        }
+        Wanting.Add(new WeakReference<StyledElement>(e));
+        e.Classes.Set("go", Live);
+    }
+
+    private static void SetGo()
+    {
+        var live = Live;
+        Wanting.RemoveAll(w =>
+        {
+            if (!w.TryGetTarget(out var e))
+                return true;
+            e.Classes.Set("go", live);
+            return false;
+        });
+    }
+
+    /// <summary>Entries of elements that asked for motion and are still alive (tests).</summary>
+    internal static int WantingCount => Wanting.Count(w => w.TryGetTarget(out _));
 
     /// <summary>One timer for the end of the grace: when no window is in use, motion stops a few seconds later.</summary>
     private static void ScheduleEnd()
@@ -115,7 +159,10 @@ public static class Motion
     public static void Set(StyledElement e, string name, bool on)
     {
         e.Classes.Set(name, on && Enabled);
-        if (!on || e is not Visual visual)
+        if (!on || !Enabled)
+            return;
+        Register(e);
+        if (e is not Visual visual)
             return;
         if (TopLevel.GetTopLevel(visual) is Window window)
             Track(window);

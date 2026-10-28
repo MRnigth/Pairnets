@@ -11,7 +11,7 @@
       <Grid ColumnDefinitions="Auto,*">
         <!-- The round badge: a drive (a ring around it while the nest is asked or moves), pops when done -->
         <Panel Width="48" Height="48" Margin="0,0,16,0" VerticalAlignment="Top">
-          <Arc x:Name="Ring" Classes="spin" Width="45" Height="45" StartAngle="-90" SweepAngle="100" StrokeThickness="3"
+          <Arc x:Name="Ring" Classes="spin go" Width="45" Height="45" StartAngle="-90" SweepAngle="100" StrokeThickness="3"
                Stroke="{DynamicResource T.Accent}" StrokeLineCap="Round" IsVisible="False" />
           <Ellipse x:Name="RingTrack" Width="45" Height="45" Stroke="{DynamicResource T.Track}" StrokeThickness="3" IsVisible="False" />
           <Panel x:Name="BadgeHost" Width="48" Height="48">

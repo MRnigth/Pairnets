@@ -11,10 +11,10 @@
       <Grid ColumnDefinitions="Auto,*">
         <!-- The round badge: the nest (bobs while it waits for an answer, pops when done), a ring around it while it updates -->
         <Panel Width="48" Height="48" Margin="0,0,16,0" VerticalAlignment="Top">
-          <Arc x:Name="Ring" Classes="spin" Width="45" Height="45" StartAngle="-90" SweepAngle="100" StrokeThickness="3"
+          <Arc x:Name="Ring" Classes="spin go" Width="45" Height="45" StartAngle="-90" SweepAngle="100" StrokeThickness="3"
                Stroke="{DynamicResource T.Accent}" StrokeLineCap="Round" IsVisible="False" />
           <Ellipse x:Name="RingTrack" Width="45" Height="45" Stroke="{DynamicResource T.Track}" StrokeThickness="3" IsVisible="False" />
-          <Panel x:Name="BadgeHost" Classes="bob" Width="48" Height="48">
+          <Panel x:Name="BadgeHost" Classes="bob go" Width="48" Height="48">
             <Border x:Name="Badge" Width="48" Height="48" CornerRadius="24" Background="{DynamicResource T.AccentSoft}">
               <v:LineIcon x:Name="BadgeIcon" Width="22" Height="22" StrokeThickness="1.8" Stroke="{DynamicResource T.AccentInk}" Data="{StaticResource I.Nest}" />
             </Border>
