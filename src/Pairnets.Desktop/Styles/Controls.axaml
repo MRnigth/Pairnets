@@ -703,9 +703,9 @@
     <Setter Property="CornerRadius" Value="20" />
   </Style>
 
-  <!-- ================= Motion (runs only while a window is shown) ================= -->
+  <!-- ================= Motion (the endless ones run only while a window is shown and in use: Window.live, see Views/Motion.cs) ================= -->
   <!-- Gentle up-and-down bob: the server icon waiting for an update, the update arrow. -->
-  <Style Selector=":is(Control).bob">
+  <Style Selector="Window.live :is(Control).bob">
     <Style.Animations>
       <Animation Duration="0:0:1.6" IterationCount="INFINITE" Easing="SineEaseInOut">
         <KeyFrame Cue="0%"><Setter Property="TranslateTransform.Y" Value="0" /></KeyFrame>
@@ -715,7 +715,7 @@
     </Style.Animations>
   </Style>
   <!-- Continuous rotation: the sync glyph while syncing, the ring while the server updates. -->
-  <Style Selector=":is(Control).spin">
+  <Style Selector="Window.live :is(Control).spin">
     <Style.Animations>
       <Animation Duration="0:0:1.4" IterationCount="INFINITE">
         <KeyFrame Cue="0%"><Setter Property="RotateTransform.Angle" Value="0" /></KeyFrame>
@@ -724,7 +724,7 @@
     </Style.Animations>
   </Style>
   <!-- A calm turn: the badge while it only checks for changes. -->
-  <Style Selector=":is(Control).spin-slow">
+  <Style Selector="Window.live :is(Control).spin-slow">
     <Style.Animations>
       <Animation Duration="0:0:3.6" IterationCount="INFINITE">
         <KeyFrame Cue="0%"><Setter Property="RotateTransform.Angle" Value="0" /></KeyFrame>
@@ -733,7 +733,7 @@
     </Style.Animations>
   </Style>
   <!-- A ring that keeps growing out of a circle and fading: the other computer while it downloads. -->
-  <Style Selector=":is(Control).ripple">
+  <Style Selector="Window.live :is(Control).ripple">
     <Style.Animations>
       <Animation Duration="0:0:1.7" IterationCount="INFINITE" Easing="CubicEaseOut">
         <KeyFrame Cue="0%"><Setter Property="ScaleTransform.ScaleX" Value="1" /><Setter Property="ScaleTransform.ScaleY" Value="1" /><Setter Property="Opacity" Value="0.6" /></KeyFrame>
@@ -742,7 +742,7 @@
     </Style.Animations>
   </Style>
   <!-- Soft breathing: waiting for the other computer. -->
-  <Style Selector=":is(Control).pulse">
+  <Style Selector="Window.live :is(Control).pulse">
     <Style.Animations>
       <Animation Duration="0:0:2" IterationCount="INFINITE" Easing="SineEaseInOut">
         <KeyFrame Cue="0%"><Setter Property="ScaleTransform.ScaleX" Value="1" /><Setter Property="ScaleTransform.ScaleY" Value="1" /></KeyFrame>
@@ -761,7 +761,7 @@
     </Style.Animations>
   </Style>
   <!-- Arrows that keep travelling: up while uploading, down while downloading. -->
-  <Style Selector=":is(Control).rise">
+  <Style Selector="Window.live :is(Control).rise">
     <Style.Animations>
       <Animation Duration="0:0:1.1" IterationCount="INFINITE" Easing="QuadraticEaseOut">
         <KeyFrame Cue="0%"><Setter Property="TranslateTransform.Y" Value="5" /><Setter Property="Opacity" Value="0" /></KeyFrame>
@@ -770,7 +770,7 @@
       </Animation>
     </Style.Animations>
   </Style>
-  <Style Selector=":is(Control).fall">
+  <Style Selector="Window.live :is(Control).fall">
     <Style.Animations>
       <Animation Duration="0:0:1.1" IterationCount="INFINITE" Easing="QuadraticEaseOut">
         <KeyFrame Cue="0%"><Setter Property="TranslateTransform.Y" Value="-5" /><Setter Property="Opacity" Value="0" /></KeyFrame>
@@ -780,7 +780,7 @@
     </Style.Animations>
   </Style>
   <!-- The badge's second arrow while it goes both ways: falls half a beat after the first one rises. -->
-  <Style Selector=":is(Control).fall-late">
+  <Style Selector="Window.live :is(Control).fall-late">
     <Style.Animations>
       <Animation Duration="0:0:1.1" Delay="0:0:0.55" IterationCount="INFINITE" Easing="QuadraticEaseOut">
         <KeyFrame Cue="0%"><Setter Property="TranslateTransform.Y" Value="-5" /><Setter Property="Opacity" Value="0" /></KeyFrame>

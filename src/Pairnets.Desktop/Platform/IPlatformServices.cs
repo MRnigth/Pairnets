@@ -21,6 +21,9 @@ public interface IPlatformServices
 
     void SetAutoStart(bool enabled);
 
+    /// <summary>Why "Start at login" can't be switched on right now (the Mac app running from its download), or null. Said when the person tries.</summary>
+    string? AutoStartRefusedReason => null;
+
     /// <summary>Removes Tether's start-at-login entry. True when there was one (the user had it on).</summary>
     bool RemoveLegacyAutoStart();
 

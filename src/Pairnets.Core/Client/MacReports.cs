@@ -91,7 +91,9 @@ public static class MacReports
 
     internal static bool IsOwn(string name) =>
         name.StartsWith("Pairnets", StringComparison.OrdinalIgnoreCase)
-        && (name.EndsWith(".ips", StringComparison.OrdinalIgnoreCase) || name.EndsWith(".crash", StringComparison.OrdinalIgnoreCase));
+        && (name.EndsWith(".ips", StringComparison.OrdinalIgnoreCase) || name.EndsWith(".crash", StringComparison.OrdinalIgnoreCase)
+            || name.EndsWith(".spin", StringComparison.OrdinalIgnoreCase) || name.EndsWith(".hang", StringComparison.OrdinalIgnoreCase)
+            || name.EndsWith(".diag", StringComparison.OrdinalIgnoreCase)); // (a beachball: .spin/.hang; too much CPU: .cpu_resource.diag)
 
     internal static bool IsSystemDown(string name) =>
         name.EndsWith(".panic", StringComparison.OrdinalIgnoreCase)
@@ -112,12 +114,41 @@ public static class MacReports
             var cut = text.IndexOf('\n');
             if (cut > 0 && text.TrimStart().StartsWith('{') && text[(cut + 1)..].TrimStart().StartsWith('{'))
                 return FromIps(text[(cut + 1)..]);
-            return string.Join('\n', text.Split('\n').Take(40)).TrimEnd();
+            return TextSummary(text);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
         {
             return $"  (could not read it: {ex.GetType().Name})";
         }
+    }
+
+    private static readonly string[] HeaderKeys =
+        ["Event:", "Action taken:", "CPU:", "Duration:", "Steps:", "Hardware model:", "Memory size:", "Time Since Wake:", "Footprint:", "Note:", "Version:", "Num threads:", "Power Source:", "Process:"];
+
+    /// <summary>Text reports (.spin, .hang, .diag, old .crash): the few header lines that say what happened, then the start of the heaviest or main-thread stack.</summary>
+    internal static string TextSummary(string text)
+    {
+        var lines = text.Replace("\r", string.Empty).Split('\n');
+        var sb = new StringBuilder();
+        foreach (var line in lines.Take(80))
+        {
+            var trimmed = line.TrimStart();
+            if (HeaderKeys.Any(k => trimmed.StartsWith(k, StringComparison.Ordinal)))
+                sb.AppendLine("  " + Cut(trimmed, 200));
+        }
+        var at = Array.FindIndex(lines, l => l.Contains("Heaviest stack", StringComparison.OrdinalIgnoreCase) || l.Contains("main thread", StringComparison.OrdinalIgnoreCase));
+        if (at >= 0)
+        {
+            sb.AppendLine("  " + lines[at].Trim());
+            foreach (var line in lines.Skip(at + 1).Take(45))
+                sb.AppendLine("  " + Cut(line.TrimEnd(), 160));
+        }
+        else if (sb.Length == 0)
+        {
+            foreach (var line in lines.Take(40))
+                sb.AppendLine(line.TrimEnd());
+        }
+        return Cut(sb.ToString().TrimEnd(), 6000);
     }
 
     private static string FromIps(string body)

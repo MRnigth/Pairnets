@@ -103,12 +103,26 @@ public static class UpdateTexts
 
     /// <summary>Why a Mac can't swap the app it runs from (a disk image, Downloads).</summary>
     public const string MacNotInApplications =
-        "Pairnets is running from the downloaded disk image or Downloads, where it can't replace itself.";
+        "Pairnets is running from the downloaded file or its disk image, where macOS won't let it replace itself.";
+
+    /// <summary>The note, and the card on the Needs you page, for a Mac copy that runs from the download (see <see cref="MacAppUpdate.RunsFromDownload"/>).</summary>
+    public const string MacMoveTitle = "Move Pairnets to Applications";
+
+    public const string MacMoveText =
+        "Pairnets is running from the downloaded file or its disk image. Quit it, drag Pairnets to the Applications folder and open it from there. " +
+        "Only then can it update itself and start when you log in. Your settings are kept.";
+
+    public const string MacMoveButton = "Open the download page";
+
+    /// <summary>Why "Start at login" can't be switched on yet, said when the person tries.</summary>
+    public const string MacLoginNeedsApplications =
+        "Start at login needs Pairnets to be in the Applications folder: it is running from the download, a copy macOS removes after a restart. " +
+        "Quit Pairnets, drag it to Applications, open it from there, and switch this on again.";
 
     /// <summary>The Mac card for a copy that can't update itself: <paramref name="why"/> and what to do (the button opens the download page).</summary>
     public static string ByHand(string current, string? why = null) =>
-        $"You have {current}. {why ?? MacNotInApplications} Download the new version and drag it to Applications, " +
-        "then open it from there: after that it updates by itself. Your settings are kept.";
+        $"You have {current}. {why ?? MacNotInApplications} To update: quit Pairnets, download the new version with the button, " +
+        "then drag it to Applications (replace the old one) and open it from there, not from the download. After that it updates by itself. Your settings are kept.";
 
     /// <summary>Said on the card when the Mac's new version did not start and the old one was put back.</summary>
     public static string MacPutBack(string version) =>

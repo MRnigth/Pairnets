@@ -2,6 +2,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using Avalonia.Threading;
 using Microsoft.Extensions.Logging;
+using Pairnets.Core.Client;
 using Pairnets.Core.Settings;
 using Pairnets.Core.Sync;
 
@@ -41,6 +42,9 @@ public sealed class MacPlatform : IPlatformServices
         return true;
     }
 
+    /// <summary>Running from the download (hidden "translocated" copy or a disk image): the login item would point at a path that is gone after a restart.</summary>
+    public string? AutoStartRefusedReason => MacAppUpdate.RunsFromDownload(Environment.ProcessPath) ? UpdateTexts.MacLoginNeedsApplications : null;
+
     public void SetAutoStart(bool enabled)
     {
         if (!enabled)
@@ -49,9 +53,26 @@ public sealed class MacPlatform : IPlatformServices
                 File.Delete(AgentFile);
             return;
         }
+        if (AutoStartRefusedReason is not null)
+        {
+            RemoveBrokenLoginItem(AgentFile);
+            return;
+        }
         Directory.CreateDirectory(Path.GetDirectoryName(AgentFile)!);
-        var exe = System.Security.SecurityElement.Escape(Environment.ProcessPath ?? "/Applications/Pairnets.app/Contents/MacOS/Pairnets");
-        File.WriteAllText(AgentFile, $"""
+        File.WriteAllText(AgentFile, AgentPlist(Environment.ProcessPath ?? "/Applications/Pairnets.app/Contents/MacOS/Pairnets"));
+    }
+
+    /// <summary>A login item an earlier run wrote with a download path (it can never start anything): taken away.</summary>
+    internal static void RemoveBrokenLoginItem(string agentFile)
+    {
+        if (File.Exists(agentFile) && File.ReadAllText(agentFile).Contains("/AppTranslocation/", StringComparison.Ordinal))
+            File.Delete(agentFile);
+    }
+
+    internal static string AgentPlist(string programPath)
+    {
+        var exe = System.Security.SecurityElement.Escape(programPath);
+        return $"""
             <?xml version="1.0" encoding="UTF-8"?>
             <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
             <plist version="1.0">
@@ -62,7 +83,7 @@ public sealed class MacPlatform : IPlatformServices
               <key>ProcessType</key><string>Interactive</string>
             </dict>
             </plist>
-            """);
+            """;
     }
 
     public void Open(string path) => Proc.Start("open", path);

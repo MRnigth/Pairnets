@@ -698,6 +698,7 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
         engine.NestFull = () => session.Status.ServerSpaceLow;
         engine.BigDeletes = () => session.Status.Server?.BigDeletes;
         session.Wire();
+        session.RefreshWarnings();
         if (Directory.Exists(Path.Combine(stateDir, "opened")))
             _ = session.Files; // files opened from the nest before: changes still waiting are saved back
         session._status = session._status with
@@ -756,6 +757,7 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
         Engine.PathWarningRaised += w =>
         {
             Activity.Add(ActivityKind.Warning, w.Path, $"{w.Path}: {w.Message}", _clock);
+            RefreshWarningsSoon();
             PathWarningRaised?.Invoke(w);
         };
         // File counts run across back-to-back passes ("Sync now" while files keep arriving): a pass
@@ -1041,16 +1043,46 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
             Update(s => s with { JoinRequests = LiveJoinRequests(s).ToList() });
     }
 
-    private int SafeWarningCount()
+    /// <summary>
+    /// The warnings as of the last pass, kept in memory. The windows redraw several times a second while syncing; asking the
+    /// state database each time made them wait for the lock the sync holds while it loads or writes thousands of rows (a
+    /// spinning beachball on a Mac during the first full pass). Only the sync side reads the database (<see cref="RefreshWarnings"/>).
+    /// </summary>
+    private volatile IReadOnlyList<PathWarning> _warnings = [];
+
+    private int _warningsRefreshQueued;
+
+    /// <summary>Reads the warnings from the state database into <see cref="Warnings"/>. Never call it from a window's thread.</summary>
+    internal void RefreshWarnings()
     {
         try
         {
-            return State.LoadWarnings().Count;
+            _warnings = State.LoadWarnings().Values.OrderBy(w => w.Path, StringComparer.Ordinal).ToList();
         }
         catch (Exception ex) when (ex is ObjectDisposedException or InvalidOperationException or Microsoft.Data.Sqlite.SqliteException)
         {
-            return 0;
+            // Kept as it was.
         }
+    }
+
+    /// <summary>A warning was raised mid-pass: refresh the list soon, once for however many come (a folder can raise thousands).</summary>
+    private void RefreshWarningsSoon()
+    {
+        if (Interlocked.Exchange(ref _warningsRefreshQueued, 1) == 1)
+            return;
+        _ = Task.Delay(WarningsRefreshDelay).ContinueWith(_ =>
+        {
+            Volatile.Write(ref _warningsRefreshQueued, 0);
+            RefreshWarnings();
+        }, TaskScheduler.Default);
+    }
+
+    private static readonly TimeSpan WarningsRefreshDelay = TimeSpan.FromSeconds(1);
+
+    private int SafeWarningCount()
+    {
+        RefreshWarnings();
+        return _warnings.Count;
     }
 
     /// <summary>Tests: change the status as if the session had seen it (e.g. a nearly full nest).</summary>
@@ -1112,7 +1144,8 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
         Runner.RequestSync("relinked", full: true);
     }
 
-    public IReadOnlyList<PathWarning> Warnings() => State.LoadWarnings().Values.OrderBy(w => w.Path, StringComparer.Ordinal).ToList();
+    /// <summary>The warnings (files that can't sync) as of the last pass; never waits for the state database.</summary>
+    public IReadOnlyList<PathWarning> Warnings() => _warnings;
 
     public IReadOnlyList<(DeleteSide Side, string Path)> PendingDeletes() => Engine.PendingDeletes;
 

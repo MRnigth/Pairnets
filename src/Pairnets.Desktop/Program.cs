@@ -98,8 +98,8 @@ internal static class Program
     }
 
     public static AppBuilder BuildAvaloniaApp() =>
-        AppBuilder.Configure<App>()
+        Platform.MacRendering.Apply(AppBuilder.Configure<App>()
             .UsePlatformDetect()
-            .With(new MacOSPlatformOptions { ShowInDock = false })
+            .With(new MacOSPlatformOptions { ShowInDock = false }))
             .LogToTrace();
 }

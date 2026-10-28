@@ -108,13 +108,24 @@ public sealed class FlowLine : Control
     protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
     {
         base.OnAttachedToVisualTree(e);
+        if (TopLevel.GetTopLevel(this) is Window window)
+            Motion.Track(window);
+        Motion.LiveChanged += OnLiveChanged;
         UpdateMotion();
     }
+
+    protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        Motion.LiveChanged -= OnLiveChanged;
+        base.OnDetachedFromVisualTree(e);
+    }
+
+    private void OnLiveChanged() => UpdateMotion();
 
     private void UpdateMotion()
     {
         Classes.Set("flowing", Linked && Flow != LinkFlow.None);
-        if (IsFlowing && Motion.Enabled && !_frameRequested && TopLevel.GetTopLevel(this) is { } top)
+        if (IsFlowing && Motion.Enabled && Motion.Live && !_frameRequested && TopLevel.GetTopLevel(this) is { } top)
         {
             _frameRequested = true;
             _lastFrame = null;
@@ -125,9 +136,9 @@ public sealed class FlowLine : Control
     private void OnFrame(TimeSpan now)
     {
         _frameRequested = false;
-        if (!IsFlowing || TopLevel.GetTopLevel(this) is not { } top)
+        if (!IsFlowing || !Motion.Live || TopLevel.GetTopLevel(this) is not { } top)
         {
-            _upVelocity = _downVelocity = 0;
+            _upVelocity = _downVelocity = 0; // idle: no more frames until the window is in use again (Motion.LiveChanged)
             return;
         }
         var dt = _lastFrame is { } last ? Math.Clamp((now - last).TotalSeconds, 0, 0.1) : 0;

@@ -101,11 +101,15 @@ public sealed class HubView : UserControl
     protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
     {
         base.OnAttachedToVisualTree(e);
+        if (TopLevel.GetTopLevel(this) is Window window)
+            Motion.Track(window);
+        Motion.LiveChanged += UpdateTimer;
         UpdateTimer();
     }
 
     protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
     {
+        Motion.LiveChanged -= UpdateTimer;
         _timer.Stop();
         base.OnDetachedFromVisualTree(e);
     }
@@ -389,7 +393,7 @@ public sealed class HubView : UserControl
 
     private void UpdateTimer()
     {
-        var animate = IsEffectivelyVisible && this.GetVisualRoot() is not null && Motion.Enabled && AnyFlowing;
+        var animate = IsEffectivelyVisible && this.GetVisualRoot() is not null && Motion.Enabled && Motion.Live && AnyFlowing;
         if (animate && !_timer.IsEnabled)
         {
             _last = DateTime.UtcNow;
