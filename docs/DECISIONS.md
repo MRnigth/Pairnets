@@ -2350,7 +2350,8 @@ an endless animation class (the Overview's pulse/spin/rise/fall, rebuilt on ever
 * **Platforms:** Mac and Linux (Avalonia, `Pairnets.Desktop`) were affected, not only the Mac (Metal has nothing to do
   with it). Windows (WPF, `Pairnets.Client`) uses its own `Ui\Motion.cs`, got no selector change in .13, and is not affected.
   Nothing in Core changed.
-* **Tests:** `MotionMemoryTests` syncs 3,000 small files in the real app with its window open and checks the live heap
-  afterwards (153 MB with the old selectors, about 80 MB with the fix; limit 125 MB), and checks the styles hold no
-  `Window.` selector. The 10,000-file probe ends at 86 MB live (before: 417 MB live, 581 MB heap).
-  `UploadMemoryProbe.cs` and `UploadMemoryUiProbe.cs` are the measuring harnesses (they do nothing unless `PAIRNETS_MEMPROBE=1`).
+* **Tests:** `MotionMemoryTests` checks that the styles hold no `Window.` selector and that an animated control gets
+  the class `go` while motion is live. The leak itself builds up with redraws over minutes, so a short heap test did not
+  tell the old and the new styles apart (a first version failed in the whole suite on other tests' memory and was
+  dropped); it is measured with `UploadMemoryUiProbe.cs` (and `UploadMemoryProbe.cs` for the sync alone; both do
+  nothing unless `PAIRNETS_MEMPROBE=1`): 10,000 files end at 86 MB live with the fix, 417 MB live without it.
