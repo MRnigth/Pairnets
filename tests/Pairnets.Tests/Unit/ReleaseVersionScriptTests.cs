@@ -77,6 +77,41 @@ public class ReleaseVersionScriptTests
     }
 
     [Fact]
+    public void ABetaPin_SetsTheBetaNumber_ButNeverATagsOrMains()
+    {
+        if (Bash is null)
+            return;
+        using var repo = RepoWithTags("v1.0.61.13", "v1.0.61.14");
+        File.WriteAllText(repo.Combine([".beta-version"]), "1.0.61.14.2\n");
+
+        Assert.Equal(("1.0.61.14.2", "developer-beta", "9"), Run(repo, "refs/heads/beta/developer", "9"));
+        Assert.Equal("1.0.61.14", FileNumber(repo, "refs/heads/beta/developer"));
+        Assert.Equal(("1.0.61.15", "stable", "9"), Run(repo, "refs/tags/v1.0.61.15", "9"));
+        Assert.Equal(("1.0.9", "main", "9"), Run(repo, "refs/heads/main", "9"));
+
+        File.WriteAllText(repo.Combine([".beta-version"]), "\n"); // an empty pin pins nothing
+        Assert.Equal(("1.0.61.15", "developer-beta", "9"), Run(repo, "refs/heads/beta/developer", "9"));
+    }
+
+    [Fact]
+    public void AStaleOrBrokenBetaPin_StopsTheRun()
+    {
+        if (Bash is null)
+            return;
+        using var repo = RepoWithTags("v1.0.61.14", "v1.0.61.14.2");
+        var pin = repo.Combine([".beta-version"]);
+
+        File.WriteAllText(pin, "1.0.61.14.2\n"); // that release is out: delete the file
+        Assert.Contains("is not newer than the newest release v1.0.61.14.2", Fails(repo, "refs/heads/beta/developer", "1"));
+        File.WriteAllText(pin, "1.0.61.14.1\n"); // older than a release
+        Assert.Contains("is not newer than the newest release", Fails(repo, "refs/heads/beta/public", "1"));
+        File.WriteAllText(pin, "1.0.61.x\n");
+        Assert.Contains(".beta-version is not a version", Fails(repo, "refs/heads/beta/developer", "1"));
+        File.WriteAllText(pin, "1.0.61.15.1.1\n"); // newer, but not a number the apps can take
+        Assert.Contains("3 to 5 numbers", Fails(repo, "refs/heads/beta/developer", "1"));
+    }
+
+    [Fact]
     public void AnUnknownBetaBranch_NoTags_OrNoRunNumber_Fail()
     {
         if (Bash is null)

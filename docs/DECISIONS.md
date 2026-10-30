@@ -2382,3 +2382,9 @@ owner's comments, then built in both apps.
 * **Tests run as stable**, so the top bar and the ring are not pinned by the existing suites; `DevBetaLookTests` check
   who gets the look and what the ring says, and run the bar checks when `PAIRNETS_LOOK=devbeta`. With that variable set
   six side-panel tests fail by design (they press the hidden side tiles).
+* **This beta is numbered 1.0.61.14.2.** A beta is normally "the next stable number" (1.0.61.15 after v1.0.61.14), but the
+  owner wants the Developer beta look to be 1.0.61.14.2. A `.beta-version` file at the repository root (one version) now
+  pins a beta's number in `scripts/release-version.sh`, as long as it is newer than the newest v* tag; the file is
+  `1.0.61.14.2` on this branch. Once that number (or a newer one) is a release tag the pin is stale and the beta run
+  fails with "delete the file", so a beta can never be numbered older than a release. Delete `.beta-version` when it has
+  done its job. Tags and main are never pinned.
