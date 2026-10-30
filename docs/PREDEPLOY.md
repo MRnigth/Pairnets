@@ -62,6 +62,7 @@ this PC, and for `git push` from a terminal). `--check` says whether it is on, a
 | Avalonia buttons | `tests/Pairnets.Tests/Ui/` | Presses every button, toggle and menu item in every window (headless), and drives the real `DesktopController` against a real test server. |
 | WPF buttons | `tests/Pairnets.Client.Tests/` (Windows only) | The same for the Windows app and its `TrayController`. Its windows (and `tools/RenderScreens.Wpf`'s) open on a hidden desktop (`HiddenDesktop.cs`), so nothing shows on the screen. |
 | Website buttons | `tests/Pairnets.Browser.Tests/` | A real Chromium (Microsoft.Playwright) clicks every button on every page of the nest's website. |
+| Animations off | `PAIRNETS_TEST_ANIMATIONS=off` | In step 7 the click-everything tests of both Windows apps run a second time in their own process, beside the main suite, with Windows animations off (GitHub's computers have them off, this PC on). The main suite runs with `on`. Set only inside the test process (`AnimationSetting.ForTests`, `Motion.Enabled`); the Windows setting is never changed. Log: `07-tests-animations-off.log`. |
 | Linux test box | `scripts/wsl-testbox.ps1`, `tests/linux-server/` | A throwaway WSL Ubuntu with systemd: installs the server package the real way, runs the tour and the browser tests against it, then updates it and upgrades from the published release. |
 
 ### Test servers ("targets")
