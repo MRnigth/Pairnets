@@ -2362,9 +2362,9 @@ The owner asked for a redesign from a reference dashboard (dark cards, pill nav,
 Developer beta update so it can be tested before anyone else sees it. Drawn first as a private design page, changed by the
 owner's comments, then built in both apps.
 
-* **Only Developer beta builds draw it.** `DevBetaLook.On` (`Pairnets.Core`) is true for the `developer-beta` channel;
-  `PAIRNETS_LOOK=devbeta` forces it on and `PAIRNETS_LOOK=off` off, for local screenshots and tests. Stable and Public
-  beta are unchanged, so the look cannot reach everyone by accident. It is read once at startup.
+* **Only the beta channels draw it (the owner, 2026-10-30).** `DevBetaLook.On` (`Pairnets.Core`) is true for `public-beta` and `developer-beta`;
+  `PAIRNETS_LOOK=devbeta` forces it on and `PAIRNETS_LOOK=off` off, for local screenshots and tests. Public
+  beta testers get it from 1.0.61.14.3; stable is unchanged, so the look cannot reach everyone by accident. It is read once at startup.
 * **Top bar instead of the side panel.** Pills Overview, Activity, Files, Computers, Settings; an update pill that
   shows only when the old update card would (beta testers still get their update prompt); a bell with the attention
   count that replaces the Needs you strip and tile (its popup lists the same items, and the Needs you page stays
