@@ -2402,3 +2402,10 @@ owner's comments, then built in both apps.
 * **Numbered 1.0.61.14.3** (Public beta) with the `.beta-version` pin (`scripts/release-version.sh`, from the Developer beta
   branch's 90139e0): a beta run takes the pinned number while it is newer than the newest v* tag. Delete the file once
   1.0.61.14.3 or newer is a release tag.
+
+## Beta feed address (2026-10-30)
+
+The apps could never find a beta: `ClientEnvironment` passes `DefaultDownloadBase` to `UpdateChecker`, and `FeedOf` then built
+`releases/latest/developer-beta/`, a 404 that the checker counts as "nothing newer", so Settings said "Up to date". Fixed in
+`FeedOf`. Apps from before the fix (every stable up to 1.0.61.14) cannot reach a beta by themselves: the first beta has to be
+installed by hand from its GitHub release, or wait for a stable release that has this fix.

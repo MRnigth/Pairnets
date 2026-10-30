@@ -163,4 +163,15 @@ public class UpdateCheckerTests
         Assert.Single(announced); // once per version, not on every check
         Assert.NotNull(service.LastChecked);
     }
+
+    [Theory]
+    [InlineData("public-beta")]
+    [InlineData("developer-beta")]
+    public void TheAppsDefaultBaseFindsTheBetaFeedOnGitHub(string channel)
+    {
+        // ClientEnvironment passes the default base explicitly: it must give the same feed as no base at all.
+        var (root, page) = new UpdateChecker(new HttpClient(), UpdateChecker.DefaultDownloadBase, UpdateChecker.DefaultReleasePage).FeedOf(channel);
+        Assert.Equal($"https://github.com/MRnigth/Pairnets/releases/download/{channel}/", root.ToString());
+        Assert.Equal($"https://github.com/MRnigth/Pairnets/releases/tag/{channel}", page.ToString());
+    }
 }
