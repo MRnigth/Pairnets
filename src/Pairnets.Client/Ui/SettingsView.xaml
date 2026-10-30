@@ -70,14 +70,14 @@
     </Style>
   </UserControl.Resources>
 
-  <Grid>
+  <Grid x:Name="PageRoot">
     <Grid.RowDefinitions>
       <RowDefinition Height="Auto" />
       <RowDefinition Height="*" />
     </Grid.RowDefinitions>
 
     <!-- Header: the title, and Cancel and Save (for the text boxes; the switches apply at once) -->
-    <Grid Margin="28,8,28,16">
+    <Grid x:Name="HeaderGrid" Margin="28,8,28,16">
       <Grid.ColumnDefinitions>
         <ColumnDefinition Width="*" />
         <ColumnDefinition Width="Auto" />
@@ -87,7 +87,7 @@
         <TextBlock Style="{StaticResource PgTitle}" Text="Settings" />
         <TextBlock x:Name="PageSub" Style="{StaticResource PgSub}" FontSize="13" Text="Your nest, the folder, and how Pairnets behaves on this computer. Switches apply at once." />
       </StackPanel>
-      <Button Grid.Column="1" Style="{StaticResource PgButton}" Content="Cancel" Padding="16,0" Margin="8,0,0,0" VerticalAlignment="Center" Click="OnCancel" />
+      <Button x:Name="CancelButton" Grid.Column="1" Style="{StaticResource PgButton}" Content="Cancel" Padding="16,0" Margin="8,0,0,0" VerticalAlignment="Center" Click="OnCancel" />
       <Button x:Name="SaveButton" Grid.Column="2" Style="{StaticResource PgPrimary}" IsDefault="True" Padding="18,0" Margin="8,0,0,0" VerticalAlignment="Center" Click="OnSave">
         <StackPanel Orientation="Horizontal">
           <ui:LineIcon Width="16" Height="16" Margin="0,0,8,0" StrokeThickness="2.4" Stroke="White" Data="{StaticResource I.Check}" />
@@ -110,7 +110,7 @@
           <StackPanel VerticalAlignment="Top">
 
             <!-- Your nest -->
-            <Border Style="{StaticResource Section}">
+            <Border x:Name="NestCard" Style="{StaticResource Section}">
               <StackPanel>
                 <Grid>
                   <Grid.ColumnDefinitions>
@@ -210,7 +210,7 @@
             </Border>
 
             <!-- This computer -->
-            <Border Style="{StaticResource Section}" Margin="0,16,0,0">
+            <Border x:Name="ComputerCard" Style="{StaticResource Section}" Margin="0,16,0,0">
               <StackPanel>
                 <StackPanel Orientation="Horizontal">
                   <ui:LineIcon Style="{StaticResource CardIcon}" Data="{StaticResource I.Desktop}" />
@@ -330,7 +330,7 @@
           <StackPanel Grid.Column="2" VerticalAlignment="Top">
 
             <!-- Updates -->
-            <Border Style="{StaticResource Section}">
+            <Border x:Name="UpdatesCard" Style="{StaticResource Section}">
               <StackPanel>
                 <Grid>
                   <Grid.ColumnDefinitions>
@@ -407,7 +407,7 @@
             </Border>
 
             <!-- Speed -->
-            <Border Style="{StaticResource Section}" Margin="0,16,0,0">
+            <Border x:Name="SpeedCard" Style="{StaticResource Section}" Margin="0,16,0,0">
               <StackPanel>
                 <StackPanel Orientation="Horizontal">
                   <ui:LineIcon Style="{StaticResource CardIcon}" Data="{StaticResource I.Gauge}" />
@@ -532,7 +532,7 @@
         </Border>
 
         <!-- Help: a bug report, and debug mode -->
-        <Border Style="{StaticResource PgCard}" Margin="0,16,0,0">
+        <Border x:Name="HelpCard" Style="{StaticResource PgCard}" Margin="0,16,0,0">
           <Grid>
             <Grid.ColumnDefinitions>
               <ColumnDefinition Width="*" />
@@ -576,7 +576,7 @@
         </Border>
 
         <!-- Nests: one more nest, each in a folder of its own; with several, stop syncing this one here -->
-        <Border Style="{StaticResource PgCard}" Padding="20,18" Margin="0,16,0,0">
+        <Border x:Name="NestsCard" Style="{StaticResource PgCard}" Padding="20,18" Margin="0,16,0,0">
           <StackPanel>
             <Grid>
               <Grid.ColumnDefinitions>
@@ -617,7 +617,7 @@
         </Border>
 
         <!-- About: version and licence, and the website's help and legal pages (each link's CommandParameter is its address) -->
-        <Border Style="{StaticResource Section}" Margin="0,16,0,0">
+        <Border x:Name="AboutCard" Style="{StaticResource Section}" Margin="0,16,0,0">
           <StackPanel>
             <StackPanel Orientation="Horizontal">
               <ui:LineIcon Style="{StaticResource CardIcon}" Data="{StaticResource I.InfoCircle}" />

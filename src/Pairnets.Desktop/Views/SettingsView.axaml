@@ -4,13 +4,13 @@
              xmlns:core="using:Pairnets.Core"
              x:Class="Pairnets.Desktop.Views.SettingsView">
   <!-- The Settings page: a header with Cancel and Save (for the text boxes; the switches apply at once), then two columns of cards (one column when the window is narrow). -->
-  <Grid RowDefinitions="Auto,*">
-    <Grid ColumnDefinitions="*,Auto,Auto">
+  <Grid x:Name="PageRoot" RowDefinitions="Auto,*">
+    <Grid x:Name="HeaderGrid" ColumnDefinitions="*,Auto,Auto">
       <StackPanel VerticalAlignment="Center">
         <TextBlock Classes="PageTitle" Text="Settings" />
         <TextBlock x:Name="PageSub" Classes="t2" Margin="0,2,0,0" TextWrapping="Wrap" FontSize="13" Text="Your nest, the folder, and how Pairnets behaves on this computer. Switches apply at once." />
       </StackPanel>
-      <Button Grid.Column="1" Classes="SecondaryButton" Height="38" Padding="16,0" Margin="8,0" VerticalAlignment="Center" Content="Cancel" IsCancel="True" Click="OnCancel" />
+      <Button x:Name="CancelButton" Grid.Column="1" Classes="SecondaryButton" Height="38" Padding="16,0" Margin="8,0" VerticalAlignment="Center" Content="Cancel" IsCancel="True" Click="OnCancel" />
       <Button x:Name="SaveButton" Grid.Column="2" Classes="accent" Height="38" Padding="18,0" VerticalAlignment="Center" IsDefault="True" Click="OnSave">
         <StackPanel Orientation="Horizontal" Spacing="8">
           <v:LineIcon Classes="icon white" Width="15" Height="15" StrokeThickness="2.6" Data="{StaticResource I.Check}" />
@@ -25,7 +25,7 @@
           <!-- ======== Left column ======== -->
           <StackPanel x:Name="LeftColumn" Spacing="16" Margin="0,0,8,0">
             <!-- Your nest -->
-            <Border Classes="pcard" Padding="20,16">
+            <Border x:Name="NestCard" Classes="pcard" Padding="20,16">
               <StackPanel Spacing="14">
                 <Grid ColumnDefinitions="Auto,*,Auto">
                   <v:LineIcon Classes="icon ink-soft" Width="17" Height="17" Margin="0,0,8,0" Data="{StaticResource I.Nest}" />
@@ -103,7 +103,7 @@
             </Border>
 
             <!-- This computer -->
-            <Border Classes="pcard" Padding="20,16">
+            <Border x:Name="ComputerCard" Classes="pcard" Padding="20,16">
               <StackPanel Spacing="14">
                 <StackPanel Orientation="Horizontal" Spacing="8">
                   <v:LineIcon Classes="icon ink-soft" Width="17" Height="17" Data="{StaticResource I.Desktop}" />
@@ -172,7 +172,7 @@
             </Border>
 
             <!-- Advanced: files to ignore -->
-            <StackPanel>
+            <StackPanel x:Name="IgnoreSection">
               <Button x:Name="IgnoreHeader" Classes="rowbtn cardbtn" Padding="20,14" HorizontalContentAlignment="Stretch">
                 <Grid ColumnDefinitions="Auto,*,Auto,Auto">
                   <v:LineIcon Classes="icon ink-soft" Width="17" Height="17" Margin="0,0,12,0" Data="{StaticResource I.Sliders}" VerticalAlignment="Center" />
@@ -203,7 +203,7 @@
           <!-- ======== Right column ======== -->
           <StackPanel x:Name="RightColumn" Grid.Column="1" Spacing="16" Margin="8,0,0,0">
             <!-- Updates -->
-            <Border Classes="pcard" Padding="20,16">
+            <Border x:Name="UpdatesCard" Classes="pcard" Padding="20,16">
               <StackPanel Spacing="14">
                 <Grid ColumnDefinitions="Auto,*,Auto">
                   <v:LineIcon Classes="icon ink-soft" Width="17" Height="17" Margin="0,0,8,0" Data="{StaticResource I.Download}" />
@@ -262,7 +262,7 @@
             </Border>
 
             <!-- Speed -->
-            <Border Classes="pcard" Padding="20,16">
+            <Border x:Name="SpeedCard" Classes="pcard" Padding="20,16">
               <StackPanel Spacing="14">
                 <StackPanel Orientation="Horizontal" Spacing="8">
                   <v:LineIcon Classes="icon ink-soft" Width="17" Height="17" Data="{StaticResource I.Bolt}" />
@@ -344,7 +344,7 @@
         </Border>
 
         <!-- Help -->
-        <Border Classes="pcard">
+        <Border x:Name="HelpCard" Classes="pcard">
           <Grid x:Name="HelpGrid" ColumnDefinitions="*,*">
             <Button x:Name="ReportBugButton" Classes="rowbtn" Click="OnReportBug" Padding="20,14">
               <Grid ColumnDefinitions="Auto,*,Auto">
@@ -370,7 +370,7 @@
         </Border>
 
         <!-- Nests: one more nest, each in a folder of its own; with several, stop syncing this one here -->
-        <Border Classes="pcard" Padding="20,18">
+        <Border x:Name="NestsCard" Classes="pcard" Padding="20,18">
           <StackPanel>
             <Grid ColumnDefinitions="Auto,*,Auto">
               <Border Classes="sq44 tint-accent" Margin="0,0,16,0" VerticalAlignment="Center">
@@ -401,7 +401,7 @@
         </Border>
 
         <!-- About: version and licence, and the website's help and legal pages (each link's CommandParameter is its address) -->
-        <Border Classes="pcard" Padding="20,16">
+        <Border x:Name="AboutCard" Classes="pcard" Padding="20,16">
           <StackPanel Spacing="10">
             <StackPanel Orientation="Horizontal" Spacing="8">
               <v:LineIcon Classes="icon ink-soft" Width="17" Height="17" Data="{StaticResource I.Info}" />
@@ -425,7 +425,7 @@
         </Border>
 
         <!-- Advanced (folded shut): Start over, out of the way -->
-        <StackPanel>
+        <StackPanel x:Name="AdvancedSection">
           <Button x:Name="AdvancedHeader" Classes="rowbtn cardbtn" Padding="20,14" HorizontalContentAlignment="Stretch">
             <Grid ColumnDefinitions="Auto,*,Auto">
               <v:LineIcon Classes="icon ink-soft" Width="17" Height="17" Margin="0,0,12,0" Data="{StaticResource I.Sliders}" VerticalAlignment="Center" />

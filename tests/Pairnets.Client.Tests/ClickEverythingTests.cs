@@ -1058,6 +1058,7 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
         new(t => t.Handlers.Contains("SettingsView.OnAboutLink"),"ask the app to open that page of pairnets.app in the browser",
             c => c.Target.Element is Button { CommandParameter: string url } && url.StartsWith(PairnetsLinks.Website, StringComparison.Ordinal)
                 && c.Bench.Opened.Items.SequenceEqual([url])),
+        new(t => t.Handlers.Contains("SettingsView.OnSectionMenu"), "jump to that card and light its entry in the left menu (beta looks)", c => View(c).CurrentSection is not null),
         On("Cancel", "leave Settings without saving", c => c.Bench.Events.Items.Contains("Cancelled")),
         On("Save", "check the settings and save them", c => c.Bench.Events.Items.Contains("Saved") && View(c).Result is not null, seconds: 20),
         On("Scroller", "scroll the page", c => View(c).Scroller.VerticalOffset > 0),

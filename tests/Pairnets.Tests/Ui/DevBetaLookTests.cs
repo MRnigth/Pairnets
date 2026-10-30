@@ -171,4 +171,36 @@ public class DevBetaLookTests
         }
         Application.Current!.RequestedThemeVariant = Avalonia.Styling.ThemeVariant.Default;
     }
+
+    [AvaloniaFact]
+    public void TheSettingsPageHasALeftMenuWithSaveAndCancel()
+    {
+        if (!DevBetaLook.On)
+            return;
+        var outDir = Environment.GetEnvironmentVariable("PAIRNETS_SCREENSHOT_DIR");
+        var window = Open(1200, Synced());
+        var view = new SettingsView(new Pairnets.Core.Settings.ClientSettings { ServerUrl = "https://sync.example.com/", Folder = "/home/me/Pairnets", DeviceName = "PC-2", DeviceId = "id" }, new MemorySecrets(), autoStart: false);
+        window.ShowSettingsPage(view);
+        Layout(window);
+        var titles = view.MenuButtons.Select(b => b.Content as string).ToList();
+        Assert.Contains("Your nest", titles);
+        Assert.Contains("Speed", titles);
+        Assert.Contains("About", titles);
+        Assert.Equal("Your nest", view.CurrentSection);
+        // Save and Cancel are in the menu now, not in the page header.
+        var save = view.FindControl<Button>("SaveButton")!;
+        var cancel = view.FindControl<Button>("CancelButton")!;
+        Assert.True(save.IsEffectivelyVisible && cancel.IsEffectivelyVisible);
+        Assert.DoesNotContain(save, view.FindControl<Grid>("HeaderGrid")!.Children);
+        Assert.DoesNotContain(cancel, view.FindControl<Grid>("HeaderGrid")!.Children);
+        Save(window, outDir, "devbeta-settings-menu-top.png");
+        var about = view.MenuButtons.Single(b => b.Content as string == "About");
+        about.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+        Layout(window);
+        Assert.True(view.FindControl<ScrollViewer>("Scroller")!.Offset.Y > 0);
+        Assert.Equal("About", view.CurrentSection);
+        Assert.True(save.IsEffectivelyVisible);
+        Save(window, outDir, "devbeta-settings-menu-about.png");
+        Close(window);
+    }
 }

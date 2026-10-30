@@ -915,6 +915,7 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
         s.Expect["OnBrowse"] = That(() => Screen.Named<TextBox>(view, "FolderBox").Text == fixture.PickedFolder, "the picked folder fill the field");
         s.Expect["OnCheckNow"] = That(() => Screen.Named<TextBlock>(view, "VersionText").Text?.EndsWith(expected, StringComparison.Ordinal) == true, $"\"{expected}\" show");
         s.Expect["OnTest"] = That(() => Screen.Named<TextBlock>(view, "TestResult").Text?.StartsWith("✓", StringComparison.Ordinal) == true, "the test say the connection works");
+        s.Expect["OnSectionMenu"] = That(() => view.CurrentSection is not null, "an entry of the left menu (beta looks) be lit");
         s.Expect["OnScrollWheel"] = That(() => Screen.Named<ScrollViewer>(view, "Scroller").Offset.Y > 0, "the form scroll");
         foreach (var (label, url) in AboutLinks)
             s.Expect["OnAboutLink:" + label] = That(() => s.Opened.SequenceEqual([url]), $"{url} open in the browser");

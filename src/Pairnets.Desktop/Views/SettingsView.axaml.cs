@@ -72,6 +72,8 @@ public partial class SettingsView : UserControl
         _firstFiles = files;
         _placement = new Dictionary<string, FilePlacement>(current.Placement, StringComparer.Ordinal);
         InitializeComponent();
+        if (DevBetaLook.On)
+            BuildSectionMenu();
         _original = current;
         _protector = protector;
         _folderProblem = folderProblem;
