@@ -17,7 +17,7 @@ the deploy is blocked.
 - **Nothing new slips through**: a new button or request without a test makes the check fail.
 - **No secrets** (passwords, keys) in the files.
 
-**How long it takes.** About 15 minutes. The first time on a new PC it takes a few minutes more, to set up the
+**How long it takes.** About 15 minutes (the website-and-server tests under `cloud/` run at the same time as the main test suite, and the sync simulations run in four groups side by side). The first time on a new PC it takes a few minutes more, to set up the
 Linux test computer. If the same version already passed, the deploy goes ahead at once.
 
 **Nothing appears on your screen.** The apps open their windows on a hidden desktop, the website is clicked by an
@@ -166,7 +166,7 @@ the WSL kernel as it is (the checks look at the running service: no capabilities
 `scripts\pre-deploy.ps1 -Repo <checkout> -Commit <sha> [-SummaryFile <json>] [-Only <step,...>] [-KeepBox]`
 runs in a temporary git worktree of the commit (`%LOCALAPPDATA%\Pairnets-predeploy\work\<sha8>`, removed
 afterwards), one run at a time (`run.lock`). Steps: `0 preflight`, `1 line-endings`, `2 secrets`, `3 gate`,
-`4 build`, `5 publish`, `6 render-screens`, `7 tests`, `8 linux-box`, `9 cloud`. `-Only` takes names or
+`4 build`, `5 publish`, `6 render-screens`, `7 tests`, `8 linux-box`, `9 cloud` (it starts before `7 tests` and runs beside it, as `scripts/pre-deploy-cloud.ps1`; step 9 waits for it and reads its log `09-cloud.log` and `cloud-result.txt`). `-Only` takes names or
 numbers and adds the steps they need (`tests` and `linux-box` need `build` and `publish`). The packages it
 builds are version `1.0.65000` (feed 1) and `1.0.65001` (feed 2).
 
