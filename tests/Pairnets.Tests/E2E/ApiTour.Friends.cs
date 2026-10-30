@@ -71,6 +71,18 @@ public sealed partial class ApiTour
         await PutFile(desk, "Photos/beach.jpg");
         await PutFile(desk, "Taxes/2026.pdf");
         await using var friendHub = await HubProbe.ConnectAsync("ANNA-PC's push channel", linked.Url, friendKey, "ANNA-PC", Record, HttpTransportType.WebSockets);
+        // The client's connect call returns when the handshake is done; the server registers the connection (OnConnectedAsync)
+        // just after that. A change made in between is not pushed to it (the apps sync again after connecting, so nothing is
+        // lost), so wait until the server has the friend's connection before the tour changes anything. If it never does,
+        // that is a real failure and says so.
+        var friendConnections = linked.Services.GetRequiredService<FriendConnections>();
+        var registeredBy = DateTime.UtcNow + TimeSpan.FromSeconds(20);
+        while (friendConnections.Sharing("Photos/beach.jpg").Count == 0)
+        {
+            if (DateTime.UtcNow > registeredBy)
+                throw new TimeoutException("ANNA-PC's push channel connected, but the server never registered it as a friend's connection.");
+            await Task.Delay(20);
+        }
 
         var access = await Read<JsonElement>(Get(friend, "api/access"));
         Assert.Equal(("view", "Photos", "Anna Berg · a•••@example.com"),
