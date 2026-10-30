@@ -741,6 +741,16 @@
       </Animation>
     </Style.Animations>
   </Style>
+  <!-- The Developer beta look's line that needs you: it blinks, once a second. -->
+  <Style Selector=":is(Control).blink.go">
+    <Style.Animations>
+      <Animation Duration="0:0:1" IterationCount="INFINITE" Easing="SineEaseInOut">
+        <KeyFrame Cue="0%"><Setter Property="Opacity" Value="1" /></KeyFrame>
+        <KeyFrame Cue="50%"><Setter Property="Opacity" Value="0.18" /></KeyFrame>
+        <KeyFrame Cue="100%"><Setter Property="Opacity" Value="1" /></KeyFrame>
+      </Animation>
+    </Style.Animations>
+  </Style>
   <!-- Soft breathing: waiting for the other computer. -->
   <Style Selector=":is(Control).pulse.go">
     <Style.Animations>

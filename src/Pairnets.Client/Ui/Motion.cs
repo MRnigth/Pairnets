@@ -83,6 +83,15 @@ public static class Motion
 
     private static void StopSpin(UIElement e) => Transforms(e).Rotate.BeginAnimation(RotateTransform.AngleProperty, null);
 
+    /// <summary>The Developer beta look's line that needs you: it blinks (fades down and up, once a second); still when animations are off.</summary>
+    public static void Blink(UIElement e, bool on) => Loop(e, "blink", on,
+        x => x.BeginAnimation(UIElement.OpacityProperty, Wave(1, 0.18, 1)),
+        x =>
+        {
+            x.BeginAnimation(UIElement.OpacityProperty, null);
+            x.Opacity = 1;
+        });
+
     /// <summary>Soft breathing (waiting for the other computer).</summary>
     public static void Pulse(UIElement e, bool on) => Loop(e, "pulse", on,
         x =>

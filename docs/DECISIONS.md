@@ -2376,7 +2376,9 @@ owner's comments, then built in both apps.
   can't be reached; a thin arc circles it while syncing and is removed from the tree when sync ends (no idle CPU). Colours
   are new `T.Ring*` tokens in all four theme files.
 * **The app's own colours**, not the reference's lime and orange: blue moving, green done and online, amber needs you,
-  red can't reach. Barlow Condensed Bold (SIL OFL) is used for page titles, card headings and big numbers only.
+  red can't reach. The line between this computer and the nest follows the state: solid green when the sync is done, solid amber and
+  blinking (once a second, still when animations are off) when it needs you (`HubView`, both apps; `Motion.Blink` in WPF,
+  the `blink` class in Avalonia). Barlow Condensed Bold (SIL OFL) is used for page titles, card headings and big numbers only.
 * **Not in this round:** files travelling along the line to the nest, the Activity timeline, the deleted-file bars, the
   nest free-space ring on the Devices page, and an "Encrypting" step (removed by the owner from the design).
 * **Tests run as stable**, so the top bar and the ring are not pinned by the existing suites; `DevBetaLookTests` check

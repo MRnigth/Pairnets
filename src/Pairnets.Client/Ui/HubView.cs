@@ -4,6 +4,7 @@ using System.Windows.Media;
 using System.Windows.Shapes;
 using Path = System.Windows.Shapes.Path;
 using System.Windows.Threading;
+using Pairnets.Core;
 using Pairnets.Core.Client;
 
 namespace Pairnets.Client.Ui;
@@ -237,10 +238,10 @@ public sealed class HubView : UserControl
     private static (string Brush, double Thickness, bool Dashed) LineStyle(NestLineKind kind) => kind switch
     {
         NestLineKind.Active => ("T.Accent", 2.5, false),
-        NestLineKind.Ok => ("T.OkLine", 2.0, false),
+        NestLineKind.Ok => DevBetaLook.On ? ("T.Ok", 2.5, false) : ("T.OkLine", 2.0, false), // the Developer beta look: a finished sync is a solid green line
         NestLineKind.Idle => ("T.Line", 2.0, false),
         NestLineKind.Next => ("T.Line", 2.0, true),
-        NestLineKind.Warn => ("T.Warn", 2.0, true),
+        NestLineKind.Warn => DevBetaLook.On ? ("T.Warn", 2.5, false) : ("T.Warn", 2.0, true), // ... a stop that needs you is solid amber (and blinks, see Show)
         _ => ("T.Bad", 2.0, true),
     };
 
@@ -279,6 +280,9 @@ public sealed class HubView : UserControl
         var towardsNest = !line.Label.StartsWith('↓');
         _thisLeft.Apply(line.Kind, towardsNest ? 1 : -1);
         _thisRight.Apply(line.Kind, towardsNest ? 1 : -1);
+        var blink = DevBetaLook.On && line.Kind == NestLineKind.Warn;
+        Motion.Blink(_thisLeft, blink);
+        Motion.Blink(_thisRight, blink);
         if (line.Kind == NestLineKind.Active && !ShowSpeed)
             _thisLabel.Visibility = Visibility.Collapsed;
 
