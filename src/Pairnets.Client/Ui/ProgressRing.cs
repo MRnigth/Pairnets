@@ -304,7 +304,8 @@ public sealed class ProgressRing : Grid
         {
             if (generation != _orbitGeneration)
                 return; // syncing started again meanwhile
-            path.RenderTransform?.BeginAnimation(RotateTransform.AngleProperty, null);
+            // With Windows animations off the orbit keeps the frozen default transform, which can't be animated.
+            (path.RenderTransform as RotateTransform)?.BeginAnimation(RotateTransform.AngleProperty, null);
             path.BeginAnimation(OpacityProperty, null);
             Children.Remove(path);
         }
