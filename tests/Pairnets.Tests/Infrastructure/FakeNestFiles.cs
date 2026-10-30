@@ -113,8 +113,14 @@ public sealed class FakeNestFiles : INestFiles
             throw new InvalidOperationException("ExecuteReader can only be called when the connection is open.");
     }
 
+    private readonly System.Collections.Concurrent.ConcurrentBag<int> _readThreads = [];
+
+    /// <summary>The managed thread ids that read the list or counted the files here: a page must not do that on its own thread.</summary>
+    public IReadOnlyCollection<int> ReadThreads => _readThreads;
+
     public IReadOnlyList<NestEntry> List(string folder)
     {
+        _readThreads.Add(Environment.CurrentManagedThreadId);
         ThrowIfClosed();
         folder = PlacementMap.NormalizeFolder(folder);
         var prefix = folder.Length == 0 ? string.Empty : folder + "/";
@@ -151,7 +157,7 @@ public sealed class FakeNestFiles : INestFiles
         .Order(StringComparer.Ordinal)
         .ToList();
 
-    public IReadOnlyList<NestEntry> Search(string text, int max = 200) => All()
+    public IReadOnlyList<NestEntry> Search(string text, int max = 200) => Seen(All())
         .Where(f => text.Trim().Length > 0 && f.Key.Contains(text.Trim(), StringComparison.OrdinalIgnoreCase))
         .OrderBy(f => f.Key, StringComparer.Ordinal)
         .Take(max)
@@ -164,8 +170,15 @@ public sealed class FakeNestFiles : INestFiles
     /// <summary>How many times the files on this PC were counted (<see cref="BytesHere"/> and the one-pass read).</summary>
     public int BytesReads;
 
+    private List<KeyValuePair<string, (long Size, DateTimeOffset Changed, bool Here)>> Seen(List<KeyValuePair<string, (long Size, DateTimeOffset Changed, bool Here)>> all)
+    {
+        _readThreads.Add(Environment.CurrentManagedThreadId);
+        return all;
+    }
+
     public long BytesHere(string folder)
     {
+        _readThreads.Add(Environment.CurrentManagedThreadId);
         Interlocked.Increment(ref BytesReads);
         HoldBytes?.Wait(TimeSpan.FromSeconds(3));
         ThrowIfClosed();

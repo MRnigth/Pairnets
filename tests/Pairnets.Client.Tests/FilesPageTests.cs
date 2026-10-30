@@ -96,19 +96,19 @@ public sealed class FilesPageTests
     {
         var (window, _, nest, script, answers) = await OpenAsync();
         await Wpf.Ui(() => window.Navigate(MainPage.Files));
-        Assert.False(await Wpf.Ui(() => window.FilesPane.ChoosePlacement("Documents", FilePlacement.NestOnly)));
+        Assert.False(await Wpf.UiAsync(() => window.FilesPane.ChoosePlacementAsync("Documents", FilePlacement.NestOnly)));
         var asked = script.Popups.Items.Single();
         Assert.Equal("Keep Documents only on your nest?", asked);
         Assert.DoesNotContain(nest.Calls, c => c.StartsWith("place:", StringComparison.Ordinal));
 
         script.Chooses = choice => choice.Buttons[^1];
-        Assert.True(await Wpf.Ui(() => window.FilesPane.ChoosePlacement("Documents", FilePlacement.NestOnly)));
+        Assert.True(await Wpf.UiAsync(() => window.FilesPane.ChoosePlacementAsync("Documents", FilePlacement.NestOnly)));
         Assert.Contains("place:Documents:NestOnly", nest.Calls);
         Assert.Equal(FilePlacement.NestOnly, nest.PlacementOf("Documents/report.docx"));
 
         // Back to this PC needs no question.
         script.Chooses = _ => null;
-        Assert.True(await Wpf.Ui(() => window.FilesPane.ChoosePlacement("Photos", FilePlacement.OnThisPc)));
+        Assert.True(await Wpf.UiAsync(() => window.FilesPane.ChoosePlacementAsync("Photos", FilePlacement.OnThisPc)));
         Assert.Equal(2, script.Popups.Count);
         await Done(answers);
     }
@@ -307,6 +307,43 @@ public sealed class FilesPageTests
     }
 
     [Fact]
+    public async Task TheFilesPage_ReadsTheNestAndCountsFilesOffTheWindowsThread_SoASlowDiskNeverFreezesIt()
+    {
+        // The window froze 10-15 s each time the page opened or a sync finished: it counted every file on this PC
+        // (a file-exists check each, 70,000 of them) on its own thread.
+        var (window, actions, nest, _, answers) = await OpenAsync();
+        using var slowDisk = new ManualResetEventSlim(false);
+        nest.HoldBytes = slowDisk;
+        var ui = await Wpf.Ui(() => Environment.CurrentManagedThreadId);
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        await Wpf.Ui(() => window.Navigate(MainPage.Files));
+        var opened = watch.Elapsed;
+        Assert.True(opened < TimeSpan.FromSeconds(1.5), $"the Files page took {opened.TotalSeconds:0.0} s to open while the disk was slow");
+        var page = window.FilesPane;
+
+        await Wpf.WaitUntil(() => page.Dispatcher.Invoke(() => page.Rows.Count > 0), "the rows to show before the disk has answered");
+        Assert.EndsWith("counting what is on this PC…", await Wpf.Ui(() => page.FooterLine));
+
+        slowDisk.Set();
+        await Wpf.UiAsync(() => page.ListShown);
+        var footer = await Wpf.Ui(() => page.FooterLine);
+        Assert.EndsWith("of it on this PC", footer);
+        Assert.DoesNotContain("counting", footer);
+        Assert.NotEmpty(nest.ReadThreads);
+        Assert.DoesNotContain(ui, nest.ReadThreads);
+
+        // Typing in the search box and opening a folder read off the window's thread too.
+        await Wpf.Ui(() => page.SearchText = "re");
+        await Wpf.UiAsync(() => page.ListShown);
+        await Wpf.Ui(() => page.SearchText = string.Empty);
+        await Wpf.UiAsync(() => page.ListShown);
+        await Wpf.UiAsync(() => page.OpenAsync(page.Rows.First(r => r.IsFolder)));
+        await Wpf.UiAsync(() => page.ListShown);
+        Assert.DoesNotContain(ui, nest.ReadThreads);
+        await Done(answers);
+    }
+
+    [Fact]
     public async Task OpeningSettings_DoesNotWaitForTheFilesOnThisPcToBeCounted()
     {
         // The window froze 20-30 s when it counted, folder by folder, every file on this PC before it showed Settings.
@@ -364,10 +401,10 @@ public sealed class FilesPageTests
         await Wpf.Ui(() => window.Navigate(MainPage.Files));
 
         // At the top of the nest (the whole folder) nest only is refused without a question.
-        Assert.False(await Wpf.Ui(() => window.FilesPane.ChoosePlacement("", FilePlacement.NestOnly)));
+        Assert.False(await Wpf.UiAsync(() => window.FilesPane.ChoosePlacementAsync("", FilePlacement.NestOnly)));
         Assert.Empty(script.Popups.Items);
 
-        Assert.True(await Wpf.Ui(() => window.FilesPane.ChoosePlacement("Videos", FilePlacement.NestOnly)));
+        Assert.True(await Wpf.UiAsync(() => window.FilesPane.ChoosePlacementAsync("Videos", FilePlacement.NestOnly)));
         Assert.Equal(["place:Videos:NestOnly"], nest.Calls.Where(c => c.StartsWith("place:", StringComparison.Ordinal)));
         Assert.DoesNotContain("", nest.Placement.Keys);
         Assert.Equal("This changes: 1 file right in Videos.", script.Choices.Items.Single().Points[0]);

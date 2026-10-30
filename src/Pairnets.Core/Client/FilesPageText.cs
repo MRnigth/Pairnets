@@ -130,6 +130,9 @@ public static class FilesPageText
     public static string Footer(long total, long here) =>
         $"{Format.Bytes(total)} in this folder · {(here >= total && total > 0 ? "all" : Format.Bytes(here))} of it on this PC";
 
+    /// <summary>The footer while what is on this PC is still being counted.</summary>
+    public static string CountingFooter(long total) => $"{Format.Bytes(total)} in this folder · counting what is on this PC…";
+
     /// <summary>The line under a folder in Settings: "18.4 GB · 0 B on this PC", "3.4 GB · all on this PC".</summary>
     public static string SizeLine(long total, long here) =>
         $"{Format.Bytes(total)} · {(here >= total ? "all" : Format.Bytes(here))} on this PC";

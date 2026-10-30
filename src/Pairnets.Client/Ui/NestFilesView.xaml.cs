@@ -56,6 +56,10 @@ public partial class NestFilesView : UserControl
     private string _folder = string.Empty;
     private INestFiles? _shown;
     private DateTimeOffset? _lastSync;
+    private int _loadGeneration;
+    private Task _loaded = Task.CompletedTask;
+    private string? _drawnFor;
+    private (string Folder, long Bytes)? _bytesHere; // what the footer counted for the folder it shows, for the menus
 
     public NestFilesView()
     {
@@ -155,46 +159,80 @@ public partial class NestFilesView : UserControl
         }
     }
 
-    /// <summary>Reads the list again (the page opened, Refresh, or after a change).</summary>
+    /// <summary>
+    /// Reads the list again (the page opened, Refresh, or after a change). The nest's list and the files on this PC are read
+    /// on a background thread: on a nest with tens of thousands of files, counting what is here took 10-15 s, and ran on the
+    /// window's thread each time the page opened or a sync finished (the Files tab froze the window).
+    /// </summary>
     public void Refresh()
     {
         var files = _shown = Files;
-        _rows.Clear();
+        var search = FilesSearch.Text.Trim();
+        var drawn = _folder + '|' + search;
+        if (files is null || drawn != _drawnFor)
+            _rows.Clear(); // another folder or search: not the old rows meanwhile (the same one is redrawn in place)
+        _drawnFor = drawn;
+        _bytesHere = null;
         DrawCrumbs();
         OfflineBanner.Visibility = files is { NestOffline: true } ? Visibility.Visible : Visibility.Collapsed;
         OfflineRun.Text = FilesPageText.OfflineText;
         AddFilesButton.IsEnabled = files is { NestOffline: false };
         PlacementButton.IsEnabled = files is not null;
         ShowSavedIn();
+        var generation = ++_loadGeneration;
         if (files is null)
         {
             ShowEmpty(FilesPageText.NotConnected);
             FooterText.Text = string.Empty;
+            _loaded = Task.CompletedTask;
             return;
         }
-        var search = FilesSearch.Text.Trim();
-        var canInvite = Host?.Actions is { CanInviteToFolder: true };
-        if (search.Length > 0)
-        {
-            foreach (var entry in files.Search(search))
-                _rows.Add(NestRow.For(entry, canInvite, "in " + (PathRules.Parent(entry.Path) ?? FilesPageText.Top)));
-        }
-        else
-        {
-            foreach (var entry in files.List(_folder))
-                _rows.Add(NestRow.For(entry, canInvite));
-        }
-        ShowEmpty(_rows.Count > 0 ? null : search.Length > 0 ? FilesPageText.NoMatch : FilesPageText.Empty);
         var placement = files.PlacementOf(_folder);
         PickNestOnly.Visibility = PlacementMap.Allowed(_folder, FilePlacement.NestOnly) ? Visibility.Visible : Visibility.Collapsed;
         PlacementText.Text = NestFiles.PlacementText(placement);
         PlacementIcon.Data = Visuals.Resource<Geometry>(WhereIconConverter.Key(placement));
         PlacementIcon.SetResourceReference(LineIcon.StrokeProperty, WhereBrushConverter.Key(placement));
         LivesLabel.Text = _folder.Length == 0 ? "Your files live" : "This folder lives";
-        var total = search.Length > 0 ? _rows.Sum(r => r.Entry.Size) : files.List(_folder).Sum(e => e.Size);
-        FooterText.Text = search.Length > 0
-            ? $"{Format.Count(_rows.Count)} {(_rows.Count == 1 ? "file" : "files")} found · {Format.Bytes(total)}"
-            : FilesPageText.Footer(total, files.BytesHere(_folder));
+        _loaded = LoadAsync(files, _folder, search, Host?.Actions is { CanInviteToFolder: true }, generation);
+    }
+
+    /// <summary>Completes when the rows and the footer of the last <see cref="Refresh"/> are shown.</summary>
+    public Task ListShown => _loaded;
+
+    private async Task LoadAsync(INestFiles files, string folder, string search, bool canInvite, int generation)
+    {
+        var found = await Task.Run(() => Read(() => search.Length > 0 ? files.Search(search) : files.List(folder)));
+        if (generation != _loadGeneration || found is null)
+            return; // a newer draw asked again, or the nest stopped meanwhile (the old rows stay)
+        _rows.Clear();
+        foreach (var entry in found)
+            _rows.Add(NestRow.For(entry, canInvite, search.Length > 0 ? "in " + (PathRules.Parent(entry.Path) ?? FilesPageText.Top) : string.Empty));
+        ShowEmpty(_rows.Count > 0 ? null : search.Length > 0 ? FilesPageText.NoMatch : FilesPageText.Empty);
+        var total = found.Sum(e => e.Size);
+        if (search.Length > 0)
+        {
+            FooterText.Text = $"{Format.Count(_rows.Count)} {(_rows.Count == 1 ? "file" : "files")} found · {Format.Bytes(total)}";
+            return;
+        }
+        FooterText.Text = FilesPageText.CountingFooter(total);
+        var here = await Task.Run(() => Read(() => files.BytesHere(folder), -1L));
+        if (generation != _loadGeneration || here < 0)
+            return;
+        _bytesHere = (folder, here);
+        FooterText.Text = FilesPageText.Footer(total, here);
+    }
+
+    /// <summary>Reads from the nest's files; null when the nest has stopped meanwhile (its list is closed).</summary>
+    private static T? Read<T>(Func<T> read, T? fallback = default)
+    {
+        try
+        {
+            return read();
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or ObjectDisposedException)
+        {
+            return fallback;
+        }
     }
 
     /// <summary>A double-click on a row's "…" button is not a double-click on the row.</summary>
@@ -247,12 +285,21 @@ public partial class NestFilesView : UserControl
 
     private void OnPlacementMenu(object sender, RoutedEventArgs e) => OpenPlacementMenu();
 
-    private void OpenPlacementMenu()
+    private void OpenPlacementMenu() => _ = OpenPlacementMenuAsync();
+
+    /// <summary>What is on this PC in <paramref name="folder"/>: the footer's count, or counted now on a background thread.</summary>
+    private async Task<long> BytesHereAsync(INestFiles files, string folder) =>
+        _bytesHere is { } known && known.Folder == folder ? known.Bytes : await Task.Run(() => Read(() => files.BytesHere(folder), 0L));
+
+    private async Task OpenPlacementMenuAsync()
     {
         if (Files is not { } files)
             return;
-        var now = files.PlacementOf(_folder);
-        var here = files.BytesHere(_folder);
+        var folder = _folder;
+        var now = files.PlacementOf(folder);
+        var here = await BytesHereAsync(files, folder);
+        if (folder != _folder)
+            return; // the page moved on while counting
         foreach (var (item, placement) in new[] { (PickOnThisPc, FilePlacement.OnThisPc), (PickOnDemand, FilePlacement.OnDemand), (PickNestOnly, FilePlacement.NestOnly) })
         {
             var title = Parts.Text(NestFiles.PlacementText(placement) + (placement == now ? "  ✓" : string.Empty), 14, "T.Text", FontWeights.Bold);
@@ -272,30 +319,32 @@ public partial class NestFilesView : UserControl
     private void OnPickPlacement(object sender, RoutedEventArgs e)
     {
         if (sender is MenuItem { Tag: string tag } && FromTag(tag) is { } placement)
-            ChoosePlacement(_folder, placement);
+            _ = ChoosePlacementAsync(_folder, placement);
     }
 
     private void OnRowPlace(object sender, RoutedEventArgs e)
     {
         if (sender is MenuItem { Tag: string tag, DataContext: NestRow row } && FromTag(tag) is { } placement)
-            ChoosePlacement(row.Entry.Path, placement);
+            _ = ChoosePlacementAsync(row.Entry.Path, placement);
     }
 
     /// <summary>
     /// Asks first when files leave this PC (naming every folder and file it changes), then saves the choice for exactly
     /// <paramref name="folder"/> (syncing starts again with it). The whole Pairnets folder is never nest only.
     /// </summary>
-    public bool ChoosePlacement(string folder, FilePlacement placement)
+    public async Task<bool> ChoosePlacementAsync(string folder, FilePlacement placement)
     {
         if (Files is not { } files || !PlacementMap.Allowed(folder, placement))
             return false;
         var now = files.PlacementOf(folder);
-        if (now == placement
-            || !Dialogs.ConfirmAway(Owner, folder, now, placement, files.BytesHere(folder), FilesPageText.Affects(files.List(folder), folder, now)))
+        if (now == placement)
+            return false;
+        var (here, listed) = await Task.Run(() => (Read(() => files.BytesHere(folder), 0L), Read(() => files.List(folder)) ?? []));
+        if (!Dialogs.ConfirmAway(Owner, folder, now, placement, here, FilesPageText.Affects(listed, folder, now)))
             return false;
         files.SetPlacement(folder, placement);
         Say($"{FilesPageText.FolderName(folder)}: {NestFiles.PlacementText(placement)}. Pairnets moves the files now.", ok: true);
-        Dispatcher.BeginInvoke(DispatcherPriority.Background, Refresh);
+        _ = Dispatcher.BeginInvoke(DispatcherPriority.Background, Refresh);
         return true;
     }
 

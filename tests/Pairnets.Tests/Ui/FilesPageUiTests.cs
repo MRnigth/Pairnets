@@ -71,12 +71,14 @@ public class FilesPageUiTests
         Person.Click(Screen.Named<RadioButton>(window, "NavFiles"));
         Assert.Equal(MainPage.Files, window.Page);
         var page = window.FilesView;
+        await page.ListShown;
         Assert.Equal(["Documents", "Photos", "Videos", "notes.txt"], page.Rows.Select(r => r.Name));
         Assert.Equal(["Your nest"], page.CrumbTexts);
         Assert.Equal("Only on the nest", page.Rows.Single(r => r.Name == "Photos").WhereText);
         Assert.Equal(Wording.Computer(FilesPageText.Footer(nest.BytesOnNest(), nest.BytesHere(string.Empty))), page.FooterLine);
 
         await page.OpenAsync(page.Rows.Single(r => r.Name == "Documents"));
+        await page.ListShown;
         Assert.Equal("Documents", page.Folder);
         Assert.Equal(["Your nest", "Documents"], page.CrumbTexts);
         Assert.Equal(["taxes", "report.docx"], page.Rows.Select(r => r.Name));
@@ -87,6 +89,7 @@ public class FilesPageUiTests
         // Searching looks through every folder.
         page.SearchText = "2025";
         Dispatcher.UIThread.RunJobs();
+        await page.ListShown;
         Assert.Equal("2025.pdf", Assert.Single(page.Rows).Name);
         window.Close();
     }
@@ -96,11 +99,12 @@ public class FilesPageUiTests
     /// edge instead of wrapping. This app (Mac and Linux) says "this computer"; the hint wraps inside the page.
     /// </summary>
     [AvaloniaFact]
-    public void TheFilesPage_SaysThisComputer_AndItsHintWraps()
+    public async Task TheFilesPage_SaysThisComputer_AndItsHintWraps()
     {
         var (window, _, _) = Open();
         window.Navigate(MainPage.Files);
         Dispatcher.UIThread.RunJobs();
+        await window.FilesView.ListShown;
         window.UpdateLayout();
         var page = window.FilesView;
         Assert.Equal("On this computer", page.PlacementShown);
@@ -129,13 +133,14 @@ public class FilesPageUiTests
     }
 
     [AvaloniaFact]
-    public void WhileTheNestCantBeReached_TheBannerShowsAndNothingCanBeAdded()
+    public async Task WhileTheNestCantBeReached_TheBannerShowsAndNothingCanBeAdded()
     {
         var (window, _, nest) = Open();
         nest.NestOffline = true;
         window.Navigate(MainPage.Files);
         Assert.True(window.FilesView.OfflineShown);
         Assert.False(window.FilesView.AddEnabled);
+        await window.FilesView.ListShown;
         Assert.Equal(4, window.FilesView.Rows.Count); // the last list seen still shows
         window.Close();
     }
@@ -203,6 +208,40 @@ public class FilesPageUiTests
         Assert.Contains($"purge:{biggest.Path}:DELETE", nest.Calls);
         Assert.False(nest.Has(biggest.Path));
         Assert.DoesNotContain(window.Cleanup.Rows, r => r.Entry.Path == biggest.Path);
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public async Task TheFilesPage_ReadsTheNestAndCountsFilesOffTheWindowsThread_SoASlowDiskNeverFreezesIt()
+    {
+        // The window froze 10-15 s each time the page opened or a sync finished: it counted every file on this computer
+        // (a file-exists check each, 70,000 of them) on its own thread.
+        var (window, actions, nest) = Open();
+        using var slowDisk = new ManualResetEventSlim(false);
+        nest.HoldBytes = slowDisk;
+        var ui = Environment.CurrentManagedThreadId;
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        Person.Click(Screen.Named<RadioButton>(window, "NavFiles"));
+        var page = window.FilesView;
+        var opened = watch.Elapsed;
+        Assert.True(opened < TimeSpan.FromSeconds(1.5), $"the Files page took {opened.TotalSeconds:0.0} s to open while the disk was slow");
+
+        await Wait.For(() => page.Rows.Count > 0 ? page : null, "the rows to show before the disk has answered");
+        Assert.EndsWith("counting what is on this computer…", page.FooterLine);
+
+        slowDisk.Set();
+        await page.ListShown;
+        Assert.EndsWith("of it on this computer", page.FooterLine);
+        Assert.DoesNotContain("counting", page.FooterLine);
+        Assert.NotEmpty(nest.ReadThreads);
+        Assert.DoesNotContain(ui, nest.ReadThreads);
+
+        // Typing in the search box and opening a folder read off the window's thread too.
+        page.SearchText = "re";
+        await page.ListShown;
+        await page.OpenAsync(page.Rows.First(r => r.IsFolder));
+        await page.ListShown;
+        Assert.DoesNotContain(ui, nest.ReadThreads);
         window.Close();
     }
 

@@ -2412,3 +2412,19 @@ The apps could never find a beta: `ClientEnvironment` passes `DefaultDownloadBas
 `releases/latest/developer-beta/`, a 404 that the checker counts as "nothing newer", so Settings said "Up to date". Fixed in
 `FeedOf`. Apps from before the fix (every stable up to 1.0.61.14) cannot reach a beta by themselves: the first beta has to be
 installed by hand from its GitHub release, or wait for a stable release that has this fix.
+
+## Files tab freeze fix, Public and Developer beta 1.0.61.14.6 (2026-10-30)
+
+* **The bug:** the Files tab froze the Windows app (and the Mac/Linux app the same way). Opening the page, and every sync that
+  finished while it was open, ran `NestFiles.BytesHere` (a file-exists and attribute check for every nest file under the
+  folder) on the window's thread for the footer's "of it on this PC". Measured with 70,000 files in 700 folders:
+  `BytesHere("")` 13.4 s, `List("")` 0.15 s, `Search` 0.19 s. The menu "Where this folder lives" and the confirm box of a
+  placement choice counted the same way, and so did a folder with very many files directly in it (`List` checks each too).
+  The health log of the beta showed `ui-stall` lines of 5-10 s. Row drawing was not it: the WPF list virtualizes.
+* **The fix:** both pages read the list (`List`/`Search`) on a background thread and draw the rows, then count what is on this PC
+  on a background thread and fill in the footer ("counting what is on this PC…" until then). A newer draw cancels an older
+  one's result (a generation number). The menu and the confirm box use the footer's count, or count in the background first.
+  `ChoosePlacement` in the Windows app is now `ChoosePlacementAsync`. Tests await `NestFilesView.ListShown`.
+* **The test:** `TheFilesPage_ReadsTheNestAndCountsFilesOffTheWindowsThread_SoASlowDiskNeverFreezesIt` (both apps): the fake
+  nest writes down the thread of every read and holds the counting; the page must show its rows at once and no read may run
+  on the window's thread.
