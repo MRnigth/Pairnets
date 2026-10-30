@@ -172,6 +172,8 @@ public sealed class RelaySyncTests : IAsyncLifetime
         await WaitUntil(() => (offline = session.Status).Status == RunnerStatus.Offline, "offline");
         Assert.Equal(ServiceErrors.NestOfflineMessage, offline!.DetailText);
         Assert.Equal("Not connected", offline.ConnectionText);
+        // The status turns Offline when the pass ends; the Activity line is added a moment later, when the pass is reported.
+        await WaitUntil(() => session.Activity.Items.Any(i => i.Kind == ActivityKind.Offline), "the Offline line in Activity");
         Assert.Contains(session.Activity.Items, i => i.Kind == ActivityKind.Offline && i.Text.Contains(ServiceErrors.NestOfflineMessage, StringComparison.Ordinal));
         Assert.DoesNotContain(session.Activity.Items, i => i.Text.Contains("tunnel", StringComparison.OrdinalIgnoreCase));
 
