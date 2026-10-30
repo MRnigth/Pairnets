@@ -379,7 +379,7 @@ public sealed class HubView : UserControl
 
     private void UpdateTimer()
     {
-        _animate = IsVisible && IsLoaded && SystemParameters.ClientAreaAnimation && AnyFlowing;
+        _animate = IsVisible && IsLoaded && AnimationSetting.Enabled && AnyFlowing;
         if (_animate && !_timer.IsEnabled)
         {
             _last = DateTime.UtcNow;

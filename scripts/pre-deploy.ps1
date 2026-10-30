@@ -13,7 +13,8 @@
       4 build           dotnet build Pairnets.sln -c Release, and the Windows screenshot tool
       5 publish         the server for Linux (packaged into two update feeds) and Windows, and the Windows app
       6 render-screens  every Windows window, light and dark
-      7 tests           the whole test suite (250 convergence seeds), against the published Windows server too
+      7 tests           the whole test suite (250 convergence seeds), against the published Windows server too, and
+                        the click-everything tests of both Windows apps again with Windows animations off
       8 linux-box       a throwaway WSL Ubuntu: install, the API tour and website tests against it, update,
                         upgrade from the published release, shellcheck
       9 cloud           cloud/ tests and a dry-run deploy (when cloud/package.json is there); they start before
@@ -501,15 +502,54 @@ function Step-RenderScreens($Ctx) {
     }
 }
 
+# The click-everything tests of both Windows apps run a second time with Windows animations off, in their own process
+# beside the main suite (GitHub's computers have animations off, this one has them on, and a crash only seen with them off
+# once got through). The setting is only the test's own (PAIRNETS_TEST_ANIMATIONS): the Windows setting is never changed.
+$AnimationsOffFilter = 'FullyQualifiedName~ClickEverythingTests'
+
+function Start-AnimationsOffTests($Ctx) {
+    $log = Join-Path $ReportDir '07-tests-animations-off.log'
+    $errLog = Join-Path $ReportDir '07-tests-animations-off.err'
+    $args2 = @('test', 'Pairnets.sln', '-c', 'Release', '--no-build', '--filter', $AnimationsOffFilter,
+        '--logger', 'trx;LogFilePrefix=animations-off', '--logger', 'console;verbosity=normal',
+        '--results-directory', $TestResults, '--blame-hang-timeout', '10m')
+    Add-PdLogLine -Log $log -Text ('> dotnet.exe ' + (Join-PdArgs $args2) + '   (PAIRNETS_TEST_ANIMATIONS=off)')
+    $saved = @{}
+    foreach ($k in @('PAIRNETS_TEST_ANIMATIONS', 'DOTNET_CLI_TELEMETRY_OPTOUT', 'DOTNET_NOLOGO', 'MSBUILDDISABLENODEREUSE')) { $saved[$k] = [Environment]::GetEnvironmentVariable($k, 'Process') }
+    try {
+        [Environment]::SetEnvironmentVariable('PAIRNETS_TEST_ANIMATIONS', 'off', 'Process')
+        [Environment]::SetEnvironmentVariable('DOTNET_CLI_TELEMETRY_OPTOUT', '1', 'Process')
+        [Environment]::SetEnvironmentVariable('DOTNET_NOLOGO', '1', 'Process')
+        [Environment]::SetEnvironmentVariable('MSBUILDDISABLENODEREUSE', '1', 'Process')
+        $proc = Start-Process -FilePath 'dotnet.exe' -ArgumentList (Join-PdArgs $args2) -WorkingDirectory $Work -WindowStyle Hidden -PassThru `
+            -RedirectStandardOutput $log -RedirectStandardError $errLog
+    } finally {
+        foreach ($k in $saved.Keys) { [Environment]::SetEnvironmentVariable($k, $saved[$k], 'Process') }
+    }
+    return [pscustomobject]@{ Process = $proc; Log = $log; ErrLog = $errLog; Started = Get-Date }
+}
+
+function Complete-AnimationsOffTests($Ctx, $Run) {
+    $finished = $Run.Process.WaitForExit(3600 * 1000)
+    if (-not $finished) { try { & taskkill.exe /PID $Run.Process.Id /T /F | Out-Null } catch { } }
+    if ((Test-Path $Run.ErrLog) -and (Get-Item $Run.ErrLog).Length -gt 0) { Add-PdLogLine -Log $Run.Log -Text ((Get-Content -Path $Run.ErrLog -Raw -Encoding UTF8)) }
+    Remove-Item -Path $Run.ErrLog -Force -ErrorAction SilentlyContinue
+    $result = [pscustomobject]@{ ExitCode = $(if ($finished) { $Run.Process.ExitCode } else { -1 }); TimedOut = (-not $finished) }
+    Add-TestProblems $Ctx 'animations-off*.trx' $result 'the click tests with Windows animations off' -RequireTests
+    Add-Note $Ctx ('the click tests ran a second time with Windows animations off (log: 07-tests-animations-off.log), beside the main suite')
+}
+
 # The website tests install Chromium themselves the first time (Microsoft.Playwright, about 300 MB, once).
 function Step-Tests($Ctx) {
     $server = Join-Path $Dist 'pairnets-server-win-x64\pairnets-server.exe'
+    $off = Start-AnimationsOffTests $Ctx
     $r = Invoke-StepTool -Ctx $Ctx -What 'dotnet test Pairnets.sln' -File 'dotnet.exe' -TimeoutSeconds 7200 -AllowFail -Arguments @(
         'test', 'Pairnets.sln', '-c', 'Release', '--no-build',
         '--logger', 'trx;LogFilePrefix=windows', '--logger', 'console;verbosity=normal',
         '--results-directory', $TestResults, '--blame-hang-timeout', '10m') `
-        -Environment @{ 'PAIRNETS_CONVERGENCE_SEEDS' = '250'; 'PAIRNETS_E2E_SERVER' = $server; 'PAIRNETS_E2E_TARGET' = $null }
+        -Environment @{ 'PAIRNETS_CONVERGENCE_SEEDS' = '250'; 'PAIRNETS_E2E_SERVER' = $server; 'PAIRNETS_E2E_TARGET' = $null; 'PAIRNETS_TEST_ANIMATIONS' = 'on' }
     Add-TestProblems $Ctx 'windows*.trx' $r 'the test suite' -RequireTests
+    Complete-AnimationsOffTests $Ctx $off
 }
 
 function Step-LinuxBox($Ctx) {

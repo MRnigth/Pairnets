@@ -18,7 +18,9 @@ public static class HeadlessApp
 {
     public static AppBuilder BuildAvaloniaApp()
     {
-        Motion.Enabled = true; // the tests check which animations run, whatever this computer's motion setting is
+        // The tests check which animations run, whatever this computer's motion setting is. PAIRNETS_TEST_ANIMATIONS=off runs
+        // the click-everything tests with motion reduced instead (the pre-deploy check does both).
+        Motion.Enabled = Environment.GetEnvironmentVariable("PAIRNETS_TEST_ANIMATIONS") != "off";
         return AppBuilder.Configure<Pairnets.Desktop.App>()
             .UseSkia()
             .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false });
