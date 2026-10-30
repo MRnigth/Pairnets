@@ -207,6 +207,8 @@ public partial class MainWindow : Window
             BetaTag.IsVisible = true;
         }
         _actions = actions;
+        if (DevBetaLook.On)
+            BuildTopBar();
         Overview.Act += OnOverviewAction;
         Overview.OfferAnswered += OnNestOfferAnswered;
         Overview.SeeAllActivity += () => Navigate(MainPage.Activity);
@@ -370,6 +372,7 @@ public partial class MainWindow : Window
         PageSubtitle.IsVisible = PageSubtitle.Text.Length > 0;
         HeaderRow.IsVisible = page == MainPage.Overview; // every other page draws its own header
         DrawPageNest();
+        DrawTopBar();
         var allNests = page == MainPage.Overview && ShowsAllNests;
         if (allNests)
             PageTitle.Text = "All nests";
@@ -521,7 +524,7 @@ public partial class MainWindow : Window
         var now = DateTimeOffset.UtcNow;
         Overview.ShowSpeed = ShowMapSpeed;
         _overview = OverviewModel.Build(_status, ThisDevice, _folder, _attentionCount, _activityItems, now);
-        Overview.Show(_overview, NestMapModel.Build(_status, ThisDevice, now), ThisDevice);
+        Overview.Show(_overview, NestMapModel.Build(_status, ThisDevice, now), ThisDevice, _status);
         DrawSyncNow(_overview.SyncNow);
     }
 
@@ -644,7 +647,10 @@ public partial class MainWindow : Window
         UpdateCard.IsVisible = _update.Visible;
         Motion.Set(UpdateIcon, "bob", _update.Visible && !busy);
         if (!_update.Visible)
+        {
+            DrawTopBar();
             return;
+        }
         UpdateTitle.Text = _update.Title;
         ToolTip.SetTip(UpdateTitle, detail.Length > 0 ? detail : null);
         UpdateReason.Text = _update.ShowsReason ? detail : string.Empty;
@@ -656,6 +662,7 @@ public partial class MainWindow : Window
         UpdatePercent.Text = _update.PercentText;
         UpdateProgress.IsVisible = _update.ShowBar;
         UpdateProgress.Value = progress ?? 0;
+        DrawTopBar();
     }
 
     public void ShowActivity(IReadOnlyList<ActivityItem> items)

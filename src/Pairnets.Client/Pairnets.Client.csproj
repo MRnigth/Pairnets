@@ -35,6 +35,8 @@
     <Resource Include="..\..\assets\fonts\PlusJakartaSans-SemiBold.ttf" Link="Fonts\PlusJakartaSans-SemiBold.ttf" />
     <Resource Include="..\..\assets\fonts\PlusJakartaSans-Bold.ttf" Link="Fonts\PlusJakartaSans-Bold.ttf" />
     <Resource Include="..\..\assets\fonts\PlusJakartaSans-ExtraBold.ttf" Link="Fonts\PlusJakartaSans-ExtraBold.ttf" />
+    <!-- Barlow Condensed Bold (OFL): page titles, card headings and big numbers of the Developer beta look only. -->
+    <Resource Include="..\..\assets\fonts\BarlowCondensed-Bold.ttf" Link="Fonts\BarlowCondensed-Bold.ttf" />
   </ItemGroup>
 
   <ItemGroup>

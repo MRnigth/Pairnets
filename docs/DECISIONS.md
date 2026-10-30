@@ -2355,3 +2355,30 @@ an endless animation class (the Overview's pulse/spin/rise/fall, rebuilt on ever
   tell the old and the new styles apart (a first version failed in the whole suite on other tests' memory and was
   dropped); it is measured with `UploadMemoryUiProbe.cs` (and `UploadMemoryProbe.cs` for the sync alone; both do
   nothing unless `PAIRNETS_MEMPROBE=1`): 10,000 files end at 86 MB live with the fix, 417 MB live without it.
+
+## Developer beta look (2026-10-30)
+
+The owner asked for a redesign from a reference dashboard (dark cards, pill nav, condensed headings), to go out as a
+Developer beta update so it can be tested before anyone else sees it. Drawn first as a private design page, changed by the
+owner's comments, then built in both apps.
+
+* **Only Developer beta builds draw it.** `DevBetaLook.On` (`Pairnets.Core`) is true for the `developer-beta` channel;
+  `PAIRNETS_LOOK=devbeta` forces it on and `PAIRNETS_LOOK=off` off, for local screenshots and tests. Stable and Public
+  beta are unchanged, so the look cannot reach everyone by accident. It is read once at startup.
+* **Top bar instead of the side panel.** Pills Overview, Activity, Files, Computers, Settings; an update pill that
+  shows only when the old update card would (beta testers still get their update prompt); a bell with the attention
+  count that replaces the Needs you strip and tile (its popup lists the same items, and the Needs you page stays
+  reachable); the account button. The side panel and dock are hidden, not deleted, so stable still uses them. The
+  version ("Version 1.0.61.x Developer beta n") sits bottom left. The Nest pill replaces the nests list.
+* **Two-layer progress ring** on the Overview heading card (`ProgressRingModel`, drawn by `ProgressRing` in each app):
+  strong layer = files done this pass, lighter layer = files moving now, count in the centre; three waving dots while
+  there is no count yet (reading the server's list); green when up to date, amber when it needs you, red when the nest
+  can't be reached; a thin arc circles it while syncing and is removed from the tree when sync ends (no idle CPU). Colours
+  are new `T.Ring*` tokens in all four theme files.
+* **The app's own colours**, not the reference's lime and orange: blue moving, green done and online, amber needs you,
+  red can't reach. Barlow Condensed Bold (SIL OFL) is used for page titles, card headings and big numbers only.
+* **Not in this round:** files travelling along the line to the nest, the Activity timeline, the deleted-file bars, the
+  nest free-space ring on the Devices page, and an "Encrypting" step (removed by the owner from the design).
+* **Tests run as stable**, so the top bar and the ring are not pinned by the existing suites; `DevBetaLookTests` check
+  who gets the look and what the ring says, and run the bar checks when `PAIRNETS_LOOK=devbeta`. With that variable set
+  six side-panel tests fail by design (they press the hidden side tiles).

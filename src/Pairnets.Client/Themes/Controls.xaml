@@ -8,6 +8,8 @@
 
   <!-- The bundled font (Plus Jakarta Sans, 5 static faces linked as Resources). Segoe UI is the fallback. -->
   <FontFamily x:Key="F.Sans">pack://application:,,,/Pairnets;component/Fonts/#Plus Jakarta Sans, Segoe UI Variable Text, Segoe UI</FontFamily>
+  <!-- Developer beta look: condensed display face (Barlow Condensed Bold) for page titles, card headings and big numbers only. -->
+  <FontFamily x:Key="F.Display">pack://application:,,,/Pairnets;component/Fonts/#Barlow Condensed, Arial Narrow, Segoe UI</FontFamily>
 
   <!-- Keyboard focus (Tab and arrow keys; WPF does not draw it after a mouse click): a 2 px ring in the dark accent
        ink, 3 px outside the control. The Mac/Linux app draws the same ring (AdornerLayer in Styles/Controls.axaml). -->

@@ -46,6 +46,12 @@ public static class Visuals
         _ => ("S.Grey", "I.Info"),
     };
 
+    /// <summary>The app's body face (Plus Jakarta Sans).</summary>
+    public static FontFamily SansFamily() => Resource<FontFamily>("F.Sans") ?? FontFamily.Default;
+
+    /// <summary>The Developer beta look's condensed display face (Barlow Condensed Bold): titles, card headings, big numbers only.</summary>
+    public static FontFamily DisplayFamily() => Resource<FontFamily>("F.Display") ?? SansFamily();
+
     public static T? Resource<T>(string key) where T : class =>
         Application.Current?.TryFindResource(key, Application.Current.ActualThemeVariant, out var value) == true ? value as T : null;
 }

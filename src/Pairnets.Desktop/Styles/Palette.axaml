@@ -59,6 +59,15 @@
       <SolidColorBrush x:Key="T.SwitchOff" Color="#878F9F" />
       <SolidColorBrush x:Key="T.KnobOff" Color="#FFFFFF" />
       <SolidColorBrush x:Key="T.DangerButton" Color="#C62828" />
+      <!-- Developer beta look: progress ring layer 1 (strong) and layer 2 (lighter) -->
+      <SolidColorBrush x:Key="T.RingAccent" Color="#2F6FEB" />
+      <SolidColorBrush x:Key="T.RingOk" Color="#12A150" />
+      <SolidColorBrush x:Key="T.RingWarn" Color="#D98E04" />
+      <SolidColorBrush x:Key="T.RingBad" Color="#D93636" />
+      <SolidColorBrush x:Key="T.RingAccent2" Color="#9DBCF6" />
+      <SolidColorBrush x:Key="T.RingOk2" Color="#8FD5AE" />
+      <SolidColorBrush x:Key="T.RingWarn2" Color="#F3CC7A" />
+      <SolidColorBrush x:Key="T.RingBad2" Color="#F2A3A3" />
     </ResourceDictionary>
     <ResourceDictionary x:Key="Dark">
       <SolidColorBrush x:Key="T.Bg" Color="#0E1014" />
@@ -117,6 +126,15 @@
       <SolidColorBrush x:Key="T.SwitchOff" Color="#666E7E" />
       <SolidColorBrush x:Key="T.KnobOff" Color="#C9CFD9" />
       <SolidColorBrush x:Key="T.DangerButton" Color="#D93636" />
+      <!-- Developer beta look: progress ring layer 1 (strong) and layer 2 (lighter) -->
+      <SolidColorBrush x:Key="T.RingAccent" Color="#5B9BFF" />
+      <SolidColorBrush x:Key="T.RingOk" Color="#3DD68C" />
+      <SolidColorBrush x:Key="T.RingWarn" Color="#FFB547" />
+      <SolidColorBrush x:Key="T.RingBad" Color="#FF6B6B" />
+      <SolidColorBrush x:Key="T.RingAccent2" Color="#3C5F99" />
+      <SolidColorBrush x:Key="T.RingOk2" Color="#2D7A58" />
+      <SolidColorBrush x:Key="T.RingWarn2" Color="#7A5A24" />
+      <SolidColorBrush x:Key="T.RingBad2" Color="#7A3A3E" />
     </ResourceDictionary>
   </ResourceDictionary.ThemeDictionaries>
 

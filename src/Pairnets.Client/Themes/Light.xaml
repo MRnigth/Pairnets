@@ -55,4 +55,13 @@
   <SolidColorBrush x:Key="T.KnobOff" Color="#FFFFFF" />
   <SolidColorBrush x:Key="T.DangerBtn" Color="#C62828" />
   <SolidColorBrush x:Key="T.AccentRing" Color="#BFD3FA" />
+  <!-- Developer beta look: progress ring layer 1 (strong) and layer 2 (lighter) -->
+  <SolidColorBrush x:Key="T.RingAccent" Color="#2F6FEB" />
+  <SolidColorBrush x:Key="T.RingOk" Color="#12A150" />
+  <SolidColorBrush x:Key="T.RingWarn" Color="#D98E04" />
+  <SolidColorBrush x:Key="T.RingBad" Color="#D93636" />
+  <SolidColorBrush x:Key="T.RingAccent2" Color="#9DBCF6" />
+  <SolidColorBrush x:Key="T.RingOk2" Color="#8FD5AE" />
+  <SolidColorBrush x:Key="T.RingWarn2" Color="#F3CC7A" />
+  <SolidColorBrush x:Key="T.RingBad2" Color="#F2A3A3" />
 </ResourceDictionary>

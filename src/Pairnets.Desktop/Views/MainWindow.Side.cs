@@ -6,6 +6,7 @@ using Avalonia.Controls.Shapes;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Pairnets.Core;
 using Pairnets.Core.Client;
 
 namespace Pairnets.Desktop.Views;
@@ -31,6 +32,8 @@ public partial class MainWindow
         set
         {
             _sideFolded = value;
+            if (DevBetaLook.On)
+                return; // the top bar replaces the side panel: it stays hidden
             Root.ColumnDefinitions[0].Width = new GridLength(value ? 92 : 320);
             SideOpen.IsVisible = !value;
             SideDock.IsVisible = value;
@@ -73,6 +76,8 @@ public partial class MainWindow
         var m = SidePanelModel.Build(_status, ThisDevice, _activityItems.Count, _attentionCount, _update, DateTimeOffset.UtcNow);
         DrawOpen(m);
         DrawDock(m);
+        _sideModel = m;
+        DrawTopBar();
     }
 
     private static string PillKey(SideTone tone) => tone switch

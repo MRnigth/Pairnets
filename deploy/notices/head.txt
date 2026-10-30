@@ -39,6 +39,8 @@ Tmds.DBus.Protocol                            The Linux app                   Co
 MicroCom.Runtime                              The Mac app                     Copyright 2021 Nikita Tsukanov             MIT (A)
 Plus Jakarta Sans (font)                      The apps                        Copyright 2020 The Plus Jakarta Sans       SIL OFL 1.1 (G)
                                                                               Project Authors
+Barlow Condensed (font)                       The Developer beta look         Copyright 2017 The Barlow Project          SIL OFL 1.1 (G)
+                                                                              Authors
 Inno Setup (the installer's setup program)    PairnetsSetup.exe               Copyright (C) 1997-2026 Jordan Russell,    Inno Setup License (H)
                                                                               Martijn Laan
 

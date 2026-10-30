@@ -31,6 +31,8 @@
     <AvaloniaResource Include="..\..\assets\fonts\PlusJakartaSans-SemiBold.ttf" Link="Assets\Fonts\PlusJakartaSans-SemiBold.ttf" />
     <AvaloniaResource Include="..\..\assets\fonts\PlusJakartaSans-Bold.ttf" Link="Assets\Fonts\PlusJakartaSans-Bold.ttf" />
     <AvaloniaResource Include="..\..\assets\fonts\PlusJakartaSans-ExtraBold.ttf" Link="Assets\Fonts\PlusJakartaSans-ExtraBold.ttf" />
+    <!-- Barlow Condensed Bold (OFL): page titles, card headings and big numbers of the Developer beta look only. -->
+    <AvaloniaResource Include="..\..\assets\fonts\BarlowCondensed-Bold.ttf" Link="Assets\Fonts\BarlowCondensed-Bold.ttf" />
   </ItemGroup>
 
   <ItemGroup>

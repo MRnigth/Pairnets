@@ -5,6 +5,7 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Controls.Shapes;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Pairnets.Core;
 using Pairnets.Core.Client;
 using Pairnets.Core.Sync;
 
@@ -39,11 +40,17 @@ public partial class MainWindow
             ShowPage(MainPage.Overview); // between one nest's Overview and All nests
         else
             DrawPageNest();
+        DrawTopBar();
     }
 
     /// <summary>The picked nest's name over the page title ("WORK NEST"), when there are several.</summary>
     private void DrawPageNest()
     {
+        if (DevBetaLook.On)
+        {
+            PageNest.IsVisible = false; // the "Nest: name" pill in the header says it
+            return;
+        }
         var name = _nests is { Visible: true, AllSelected: false, Selected: { } picked } && Page != MainPage.Settings ? picked.Title.ToUpperInvariant() : null;
         if (_nests is { Visible: true, AllSelected: true } && Page == MainPage.Overview)
             name = "THIS COMPUTER";

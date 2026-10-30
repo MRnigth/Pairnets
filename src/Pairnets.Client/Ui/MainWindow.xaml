@@ -31,9 +31,19 @@
       <ColumnDefinition x:Name="SideColumn" Width="320" />
       <ColumnDefinition Width="*" />
     </Grid.ColumnDefinitions>
+    <!-- Rows 0 and 2 are for the Developer beta look only (top bar, version line); they are empty (height 0) in every other build. -->
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="*" />
+      <RowDefinition Height="Auto" />
+    </Grid.RowDefinitions>
+
+    <!-- ======================= Developer beta look: top bar (filled from code) ======================= -->
+    <Border x:Name="DevTopBar" Grid.Row="0" Grid.ColumnSpan="2" Margin="20,16,20,4" Visibility="Collapsed" />
+    <TextBlock x:Name="DevVersion" Grid.Row="2" Grid.ColumnSpan="2" Margin="24,0,24,10" FontSize="12" Foreground="{DynamicResource T.Muted}" Visibility="Collapsed" />
 
     <!-- ======================= Left side, open ======================= -->
-    <Grid x:Name="SideOpen" Margin="12,12,0,12">
+    <Grid x:Name="SideOpen" Grid.Row="1" Margin="12,12,0,12">
       <Border Style="{StaticResource SidePanel}">
         <!-- Top-aligned, so the page tiles sit right under the computers and the spare space goes to the bottom; the
              computers' row is the one that shrinks (and scrolls) when the window is short. -->
@@ -226,7 +236,7 @@
     </Grid>
 
     <!-- ======================= Left side, folded into the dock ======================= -->
-    <Grid x:Name="SideDock" Visibility="Collapsed" Margin="0,18">
+    <Grid x:Name="SideDock" Grid.Row="1" Visibility="Collapsed" Margin="0,18">
       <Grid.RowDefinitions>
         <RowDefinition Height="Auto" />
         <RowDefinition Height="*" />
@@ -325,7 +335,7 @@
     </Grid>
 
     <!-- ======================= Page ======================= -->
-    <Grid Grid.Column="1">
+    <Grid Grid.Row="1" Grid.Column="1">
       <Grid.RowDefinitions>
         <RowDefinition Height="Auto" />
         <RowDefinition Height="Auto" />

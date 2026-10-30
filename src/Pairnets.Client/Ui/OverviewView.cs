@@ -5,6 +5,7 @@ using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 using System.Windows.Shapes;
 using Path = System.Windows.Shapes.Path;
+using Pairnets.Core;
 using Pairnets.Core.Client;
 
 namespace Pairnets.Client.Ui;
@@ -34,6 +35,7 @@ public sealed class OverviewView : UserControl
     private string _heroSignature = string.Empty;
     private string _lowerSignature = string.Empty;
     private FrameworkElement? _pulse;
+    private readonly ProgressRing? _ring = DevBetaLook.On ? new ProgressRing() : null;
 
     public OverviewView()
     {
@@ -120,10 +122,15 @@ public sealed class OverviewView : UserControl
 
     internal int MovingRows => Model?.Moving.Count ?? 0;
 
-    public void Show(OverviewModel m, NestMapModel map, string? thisName)
+    /// <summary>The Developer beta look's progress ring (null in every other build).</summary>
+    internal ProgressRing? Ring => _ring;
+
+    public void Show(OverviewModel m, NestMapModel map, string? thisName, StatusSnapshot? status = null)
     {
         Model = m;
         _hub.Show(map, thisName);
+        if (_ring is not null && status is not null)
+            _ring.Apply(ProgressRingModel.Build(status, m.State));
 
         var hero = HeroSignature(m);
         _heroCard.SetResourceReference(Border.BorderBrushProperty, BorderKey(m.Border));
@@ -133,7 +140,7 @@ public sealed class OverviewView : UserControl
             _heroTop.Child = BuildHero(m);
         }
 
-        var needs = m.NeedsTitle is not null && !(m.State == NestMapState.Stopped && m.DeleteBox is not null);
+        var needs = m.NeedsTitle is not null && !DevBetaLook.On && !(m.State == NestMapState.Stopped && m.DeleteBox is not null);
         _needs.Visibility = needs ? Visibility.Visible : Visibility.Collapsed;
         _needsTitle.Text = m.NeedsTitle ?? string.Empty;
         _needsDetail.Text = m.NeedsDetail;
@@ -172,6 +179,16 @@ public sealed class OverviewView : UserControl
         OverviewTone.Bad => "T.BadBorder",
         _ => "T.Border",
     };
+
+    /// <summary>A card heading: the condensed display face in the Developer beta look, the usual bold line otherwise.</summary>
+    private static TextBlock Heading(string text)
+    {
+        if (!DevBetaLook.On)
+            return Txt(text, 16, FontWeights.ExtraBold);
+        var block = Txt(text, 19, FontWeights.Bold);
+        block.SetResourceReference(TextBlock.FontFamilyProperty, "F.Display");
+        return block;
+    }
 
     private static TextBlock Txt(string text, double size = 14, FontWeight? weight = null, string fg = "T.Text", bool wrap = false)
     {
@@ -321,6 +338,12 @@ public sealed class OverviewView : UserControl
     private UIElement BuildHero(OverviewModel m)
     {
         _pulse = null;
+        if (_ring is not null)
+        {
+            // The ring lives on between rebuilds so its arcs glide from where they are instead of from 0.
+            (_ring.Parent as Panel)?.Children.Remove(_ring);
+            return BuildRingHero(m);
+        }
         return m.IsSyncingBar ? BuildSyncingHero(m) : BuildStateHero(m);
     }
 
@@ -373,6 +396,80 @@ public sealed class OverviewView : UserControl
         return stack;
     }
 
+    /// <summary>Developer beta look: the ring at the left, the chip, title, detail and the Left/Right words beside it.</summary>
+    private UIElement BuildRingHero(OverviewModel m)
+    {
+        var head = new Grid();
+        head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        head.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        _ring!.Margin = new Thickness(0, 0, 24, 0);
+        head.Children.Add(_ring);
+
+        var texts = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+        var titleRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 8) };
+        if (m.IsSyncingBar)
+        {
+            var chip = new Border { Height = 26, CornerRadius = new CornerRadius(13), Padding = new Thickness(11, 0, 11, 0), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 14, 0) };
+            chip.SetResourceReference(Border.BackgroundProperty, Soft(m.ChipTone));
+            var chipRow = new StackPanel { Orientation = Orientation.Horizontal };
+            var dot = new Ellipse { Width = 7, Height = 7, Margin = new Thickness(0, 0, 7, 0), VerticalAlignment = VerticalAlignment.Center };
+            dot.SetResourceReference(Shape.FillProperty, m.ChipTone == OverviewTone.Warn ? "T.Warn" : "T.Accent");
+            chipRow.Children.Add(dot);
+            var chipText = Txt(m.Chip, 12, FontWeights.Bold, Ink(m.ChipTone));
+            chipText.VerticalAlignment = VerticalAlignment.Center;
+            chipRow.Children.Add(chipText);
+            chip.Child = chipRow;
+            titleRow.Children.Add(chip);
+        }
+        var title = Txt(m.Title, m.IsSyncingBar ? 20 : 24, FontWeights.ExtraBold);
+        title.TextTrimming = TextTrimming.None;
+        title.VerticalAlignment = VerticalAlignment.Center;
+        titleRow.Children.Add(title);
+        if (m.Badge is { } badge)
+        {
+            var pill = Pill(badge, m.BadgeTone);
+            pill.Margin = new Thickness(10, 0, 0, 0);
+            titleRow.Children.Add(pill);
+        }
+        texts.Children.Add(titleRow);
+        if (m.IsSyncingBar)
+        {
+            var words = new Grid();
+            words.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            words.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            var left = Txt(m.Progress?.Left ?? string.Empty, 13, null, "T.Muted");
+            var right = Txt(m.Progress?.Right ?? string.Empty, 13, null, m.Progress?.RightWarn == true ? "T.WarnText" : "T.Muted");
+            right.Margin = new Thickness(16, 0, 0, 0);
+            Grid.SetColumn(right, 1);
+            words.Children.Add(left);
+            words.Children.Add(right);
+            texts.Children.Add(words);
+        }
+        else if (m.Detail.Length > 0)
+        {
+            texts.Children.Add(Txt(m.Detail, 14, null, "T.Muted", wrap: true));
+        }
+        Grid.SetColumn(texts, 1);
+        head.Children.Add(texts);
+
+        if (!m.IsSyncingBar && m.HeadButton is { } headButton)
+        {
+            var button = MakeButton(headButton);
+            button.Margin = new Thickness(16, 0, 0, 0);
+            button.VerticalAlignment = VerticalAlignment.Center;
+            Grid.SetColumn(button, 2);
+            head.Children.Add(button);
+        }
+
+        // The rest of the state heading (boxes, checks, buttons) is the same as in the flat look.
+        if (m.IsSyncingBar)
+            return head;
+        var stack = new StackPanel();
+        stack.Children.Add(head);
+        return StateHeroRest(m, stack, ProgressRing.Size + 24);
+    }
+
     private UIElement BuildStateHero(OverviewModel m)
     {
         var stack = new StackPanel();
@@ -417,8 +514,13 @@ public sealed class OverviewView : UserControl
             head.Children.Add(button);
         }
         stack.Children.Add(head);
+        return StateHeroRest(m, stack, 68.0);
+    }
 
-        var indent = m.State is NestMapState.SignIn or NestMapState.Paused ? 68.0 : 0.0;
+    /// <summary>The boxes, checks, tiles and buttons under a state heading (<paramref name="iconWidth"/> = icon plus gap to line up with).</summary>
+    private UIElement StateHeroRest(OverviewModel m, StackPanel stack, double iconWidth)
+    {
+        var indent = m.State is NestMapState.SignIn or NestMapState.Paused ? iconWidth : 0.0;
 
         if (m.WaitBox is { } wait)
             stack.Children.Add(Space(BuildWaitBox(wait)));
@@ -767,7 +869,7 @@ public sealed class OverviewView : UserControl
         var head = new Grid();
         head.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        head.Children.Add(Txt("Moving now", 16, FontWeights.ExtraBold));
+        head.Children.Add(Heading("Moving now"));
         var count = Txt(m.MovingCount, 12, null, "T.TextSoft");
         count.VerticalAlignment = VerticalAlignment.Bottom;
         Grid.SetColumn(count, 1);
@@ -936,7 +1038,7 @@ public sealed class OverviewView : UserControl
         var head = new Grid();
         head.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        head.Children.Add(Txt("Latest changes", 16, FontWeights.ExtraBold));
+        head.Children.Add(Heading("Latest changes"));
         var see = new Button { Content = "See all in Activity", Style = (Style)Application.Current.FindResource("LinkButton"), VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, -6, -3) };
         see.SetResourceReference(Control.ForegroundProperty, "T.AccentInk");
         see.FontWeight = FontWeights.Bold;

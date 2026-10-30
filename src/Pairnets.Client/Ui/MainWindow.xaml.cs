@@ -205,6 +205,8 @@ public partial class MainWindow : Window, IPageHost
         AppIcon.Source = AppIcons.Large;
         DockIcon.Source = AppIcons.Large;
         RefreshSide();
+        if (DevBetaLook.On)
+            InitTopBar();
         HintShortcuts();
         IsVisibleChanged += (_, _) =>
         {
@@ -507,7 +509,7 @@ public partial class MainWindow : Window, IPageHost
         var now = DateTimeOffset.UtcNow;
         Overview.ShowSpeed = ShowMapSpeed;
         _overview = OverviewModel.Build(_status, ThisDevice, _folder, _attentionCount, _activityItems, now);
-        Overview.Show(_overview, NestMapModel.Build(_status, ThisDevice, now), ThisDevice);
+        Overview.Show(_overview, NestMapModel.Build(_status, ThisDevice, now), ThisDevice, _status);
         DrawSyncNow(_overview.SyncNow);
     }
 
@@ -575,6 +577,7 @@ public partial class MainWindow : Window, IPageHost
     public void ShowUpdate(string? title, string detail, string button, double? progress = null, bool busy = false)
     {
         _update = SideUpdate.From(title, detail, button, progress, busy);
+        DrawTopUpdate();
         UpdateCard.Visibility = Show(_update.Visible);
         Motion.Bob(UpdateIcon, _update.Visible && !busy);
         if (!_update.Visible)
@@ -614,7 +617,10 @@ public partial class MainWindow : Window, IPageHost
     public void ShowAttention(IReadOnlyList<AttentionItem> items)
     {
         AttentionPage.Show(items, _status);
+        _attentionItems = items;
         _attentionCount = items.Count;
+        if (_bellPopup is { IsOpen: true })
+            FillBell();
         RefreshSide();
         RefreshOverview();
     }

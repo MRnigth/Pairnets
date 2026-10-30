@@ -3,6 +3,7 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 using System.Windows.Shapes;
+using Pairnets.Core;
 using Pairnets.Core.Client;
 using Pairnets.Core.Sync;
 
@@ -26,6 +27,7 @@ public partial class MainWindow
         var before = _nests;
         _nests = nests;
         NestListPanel.Visibility = Show(nests.Visible);
+        DrawTopNest();
         ComputersLabel.Text = nests.Visible && nests.Selected is { } picked ? "IN " + picked.Title.ToUpperInvariant() : "YOUR COMPUTERS";
         if (before is null || !before.Rows.SequenceEqual(nests.Rows) || before.AllSub != nests.AllSub || before.AllSelected != nests.AllSelected)
         {
@@ -46,7 +48,7 @@ public partial class MainWindow
         if (_nests is { Visible: true, AllSelected: true } && Page == MainPage.Overview)
             name = "THIS COMPUTER";
         PageNest.Text = name ?? string.Empty;
-        PageNest.Visibility = Show(name is not null);
+        PageNest.Visibility = Show(name is not null && !DevBetaLook.On); // the Developer beta look shows the nest as a pill by the title
     }
 
     private void DrawNestRows(NestListModel m)

@@ -9,6 +9,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Pairnets.Core;
 using Pairnets.Core.Client;
 using Path = Avalonia.Controls.Shapes.Path;
 
@@ -39,6 +40,7 @@ public sealed class OverviewView : UserControl
     private string _heroSignature = string.Empty;
     private string _lowerSignature = string.Empty;
     private Control? _pulse;
+    private readonly ProgressRing _ring = new();
 
     public OverviewView()
     {
@@ -123,9 +125,11 @@ public sealed class OverviewView : UserControl
     /// <summary>Stops the breathing icon (nothing moves while the window is hidden).</summary>
     public void StopMotion() => _pulse?.Classes.Remove("pulse");
 
-    public void Show(OverviewModel m, NestMapModel map, string? thisName)
+    public void Show(OverviewModel m, NestMapModel map, string? thisName, StatusSnapshot? snapshot = null)
     {
         Model = m;
+        if (DevBetaLook.On && snapshot is not null)
+            _ring.Model = ProgressRingModel.Build(snapshot, m.State);
         _hub.Show(map, thisName);
 
         var hero = HeroSignature(m);
@@ -136,7 +140,7 @@ public sealed class OverviewView : UserControl
             _heroTop.Child = BuildHero(m);
         }
 
-        var needs = m.NeedsTitle is not null && !(m.State == NestMapState.Stopped && m.DeleteBox is not null);
+        var needs = m.NeedsTitle is not null && !DevBetaLook.On && !(m.State == NestMapState.Stopped && m.DeleteBox is not null);
         _needs.IsVisible = needs;
         _needsTitle.Text = m.NeedsTitle ?? string.Empty;
         _needsDetail.Text = m.NeedsDetail;
@@ -364,6 +368,7 @@ public sealed class OverviewView : UserControl
     private Control BuildHero(OverviewModel m)
     {
         _pulse = null;
+        (_ring.Parent as Panel)?.Children.Remove(_ring); // one ring for the life of the page, so it tweens from its old value
         return m.IsSyncingBar ? BuildSyncingHero(m) : BuildStateHero(m);
     }
 
@@ -380,6 +385,8 @@ public sealed class OverviewView : UserControl
 
     private Control BuildSyncingHero(OverviewModel m)
     {
+        if (DevBetaLook.On)
+            return BuildRingSyncingHero(m);
         var stack = new StackPanel();
         var top = Columns(Auto, Star, Auto);
 
@@ -423,24 +430,76 @@ public sealed class OverviewView : UserControl
         return stack;
     }
 
+    /// <summary>Developer beta look: the ring at the left, the chip and title with the two progress lines beside it.</summary>
+    private Control BuildRingSyncingHero(OverviewModel m)
+    {
+        var row = Columns(Auto, Star);
+        _ring.Margin = new Thickness(0, 0, 22, 0);
+        _ring.VerticalAlignment = VerticalAlignment.Center;
+        row.Children.Add(_ring);
+
+        var words = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+        var top = new StackPanel { Orientation = Orientation.Horizontal };
+        var chip = new Border { Height = 26, CornerRadius = new CornerRadius(13), Padding = new Thickness(11, 0, 11, 0), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 14, 0) };
+        Paint(chip, Border.BackgroundProperty, Soft(m.ChipTone));
+        var chipRow = new StackPanel { Orientation = Orientation.Horizontal };
+        var dot = new Ellipse { Width = 7, Height = 7, Margin = new Thickness(0, 0, 7, 0), VerticalAlignment = VerticalAlignment.Center };
+        Paint(dot, Shape.FillProperty, m.ChipTone == OverviewTone.Warn ? "T.Warn" : "T.Accent");
+        chipRow.Children.Add(dot);
+        var chipText = Txt(m.Chip, 12, FontWeight.Bold, Ink(m.ChipTone));
+        chipText.VerticalAlignment = VerticalAlignment.Center;
+        chipRow.Children.Add(chipText);
+        chip.Child = chipRow;
+        top.Children.Add(chip);
+        var title = Txt(m.Title, 26, FontWeight.Bold);
+        title.FontFamily = Visuals.DisplayFamily();
+        title.VerticalAlignment = VerticalAlignment.Center;
+        top.Children.Add(title);
+        words.Children.Add(top);
+
+        var left = Txt(m.Progress?.Left ?? string.Empty, 13, FontWeight.Normal, "T.Muted", wrap: true);
+        left.Margin = new Thickness(0, 10, 0, 0);
+        words.Children.Add(left);
+        if (!string.IsNullOrEmpty(m.Progress?.Right))
+        {
+            var right = Txt(m.Progress!.Right, 13, FontWeight.Normal, m.Progress.RightWarn ? "T.WarnText" : "T.Muted", wrap: true);
+            right.Margin = new Thickness(0, 2, 0, 0);
+            words.Children.Add(right);
+        }
+        Grid.SetColumn(words, 1);
+        row.Children.Add(words);
+        return row;
+    }
+
     private Control BuildStateHero(OverviewModel m)
     {
         var stack = new StackPanel();
         var head = Columns(Auto, Star, Auto);
 
-        var circle = new Border { Width = 52, Height = 52, CornerRadius = new CornerRadius(26), Margin = new Thickness(0, 0, 16, 0), VerticalAlignment = VerticalAlignment.Center };
-        Paint(circle, Border.BackgroundProperty, Soft(m.GlyphTone));
-        circle.Child = Glyph(m.Glyph, m.Glyph == OverviewIcon.Pause ? 24 : 26, Ink(m.GlyphTone), m.Glyph is OverviewIcon.Check or OverviewIcon.Pause ? 2.6 : 2);
-        head.Children.Add(circle);
-        if (m.Pulses)
+        if (DevBetaLook.On)
         {
-            _pulse = circle;
-            Motion.Set(circle, "pulse", true);
+            _ring.Margin = new Thickness(0, 0, 22, 0);
+            _ring.VerticalAlignment = VerticalAlignment.Center;
+            head.Children.Add(_ring);
+        }
+        else
+        {
+            var circle = new Border { Width = 52, Height = 52, CornerRadius = new CornerRadius(26), Margin = new Thickness(0, 0, 16, 0), VerticalAlignment = VerticalAlignment.Center };
+            Paint(circle, Border.BackgroundProperty, Soft(m.GlyphTone));
+            circle.Child = Glyph(m.Glyph, m.Glyph == OverviewIcon.Pause ? 24 : 26, Ink(m.GlyphTone), m.Glyph is OverviewIcon.Check or OverviewIcon.Pause ? 2.6 : 2);
+            head.Children.Add(circle);
+            if (m.Pulses)
+            {
+                _pulse = circle;
+                Motion.Set(circle, "pulse", true);
+            }
         }
 
         var texts = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
         var titleRow = new StackPanel { Orientation = Orientation.Horizontal };
-        var title = Txt(m.Title, 22, FontWeight.ExtraBold);
+        var title = Txt(m.Title, DevBetaLook.On ? 28 : 22, DevBetaLook.On ? FontWeight.Bold : FontWeight.ExtraBold);
+        if (DevBetaLook.On)
+            title.FontFamily = Visuals.DisplayFamily();
         title.TextTrimming = TextTrimming.None;
         titleRow.Children.Add(title);
         if (m.Badge is { } badge)
@@ -465,7 +524,7 @@ public sealed class OverviewView : UserControl
         }
         stack.Children.Add(head);
 
-        var indent = m.State is NestMapState.SignIn or NestMapState.Paused ? 68.0 : 0.0;
+        var indent = m.State is NestMapState.SignIn or NestMapState.Paused ? (DevBetaLook.On ? 126.0 : 68.0) : 0.0;
 
         if (m.WaitBox is { } wait)
             stack.Children.Add(Space(BuildWaitBox(wait)));

@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Shapes;
+using Pairnets.Core;
 using Pairnets.Core.Client;
 
 namespace Pairnets.Client.Ui;
@@ -28,6 +29,8 @@ public partial class MainWindow
         set
         {
             _sideFolded = value;
+            if (DevBetaLook.On)
+                return; // the Developer beta look has a top bar and no left side to fold
             SideColumn.Width = new GridLength(value ? 92 : 320);
             SideOpen.Visibility = value ? Visibility.Collapsed : Visibility.Visible;
             SideDock.Visibility = value ? Visibility.Visible : Visibility.Collapsed;
@@ -70,6 +73,7 @@ public partial class MainWindow
         var m = SidePanelModel.Build(_status, ThisDevice, _activityItems.Count, _attentionCount, _update, DateTimeOffset.UtcNow);
         DrawOpen(m);
         DrawDock(m);
+        DrawTopBar(m);
     }
 
     private static string PillKey(SideTone tone) => tone switch

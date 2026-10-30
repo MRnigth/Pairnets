@@ -11,6 +11,8 @@
       </ResourceDictionary.MergedDictionaries>
       <!-- Plus Jakarta Sans (bundled, OFL); system fonts only if it cannot load. -->
       <FontFamily x:Key="F.Sans">avares://Pairnets/Assets/Fonts#Plus Jakarta Sans, Segoe UI, Helvetica Neue, Inter, Noto Sans, sans-serif</FontFamily>
+      <!-- Developer beta look: condensed display face (Barlow Condensed Bold, OFL) for page titles, card headings and big numbers only. -->
+      <FontFamily x:Key="F.Display">avares://Pairnets/Assets/Fonts#Barlow Condensed, Arial Narrow, Segoe UI, sans-serif</FontFamily>
     </ResourceDictionary>
   </Application.Resources>
   <Application.Styles>

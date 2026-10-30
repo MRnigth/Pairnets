@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Interop;
 using System.Windows.Media;
 using Microsoft.Win32;
@@ -40,6 +41,8 @@ public static class ThemeManager
         if (_palette is null)
         {
             resources.Add(new ResourceDictionary { Source = new Uri(Base + "Controls.xaml") });
+            if (Pairnets.Core.DevBetaLook.On)
+                UseDisplayTitles(app);
         }
         else
         {
@@ -60,6 +63,24 @@ public static class ThemeManager
                 if (e.Category == UserPreferenceCategory.General && SystemPrefersDark() != IsDark)
                     app.Dispatcher.BeginInvoke(() => Apply(app));
             };
+        }
+    }
+
+    /// <summary>
+    /// The Developer beta look sets page titles and card headings in the condensed display face (Barlow Condensed Bold).
+    /// The same style keys, restyled on top of the originals, so every page that uses them follows without changes.
+    /// </summary>
+    private static void UseDisplayTitles(Application app)
+    {
+        var display = (FontFamily)app.FindResource("F.Display");
+        foreach (var (key, size) in new[] { ("Title", 38.0), ("PgTitle", 38.0), ("PgCardTitle", 18.0) })
+        {
+            var baseStyle = (Style)app.FindResource(key);
+            var style = new Style(typeof(TextBlock), baseStyle);
+            style.Setters.Add(new Setter(TextBlock.FontFamilyProperty, display));
+            style.Setters.Add(new Setter(TextBlock.FontSizeProperty, size));
+            style.Setters.Add(new Setter(TextBlock.FontWeightProperty, FontWeights.Bold));
+            app.Resources[key] = style;
         }
     }
 
