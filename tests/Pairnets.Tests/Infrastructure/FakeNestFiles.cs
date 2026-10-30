@@ -158,11 +158,27 @@ public sealed class FakeNestFiles : INestFiles
         .Select(f => File(f.Key, f.Value))
         .ToList();
 
+    /// <summary>While set (and not signalled), counting the files on this PC waits (at most 3 s): a slow disk.</summary>
+    public ManualResetEventSlim? HoldBytes { get; set; }
+
+    /// <summary>How many times the files on this PC were counted (<see cref="BytesHere"/> and the one-pass read).</summary>
+    public int BytesReads;
+
     public long BytesHere(string folder)
     {
+        Interlocked.Increment(ref BytesReads);
+        HoldBytes?.Wait(TimeSpan.FromSeconds(3));
         ThrowIfClosed();
         folder = PlacementMap.NormalizeFolder(folder);
         return All().Where(f => f.Value.Here && (folder.Length == 0 || f.Key.StartsWith(folder + "/", StringComparison.Ordinal))).Sum(f => f.Value.Size);
+    }
+
+    public IReadOnlyDictionary<string, long> BytesHereByFolder(IEnumerable<string> folders)
+    {
+        Interlocked.Increment(ref BytesReads);
+        HoldBytes?.Wait(TimeSpan.FromSeconds(3));
+        ThrowIfClosed();
+        return folders.Distinct(StringComparer.Ordinal).ToDictionary(f => f, f => All().Where(x => x.Value.Here && (f.Length == 0 || x.Key.StartsWith(PlacementMap.NormalizeFolder(f) + "/", StringComparison.Ordinal))).Sum(x => x.Value.Size), StringComparer.Ordinal);
     }
 
     public FilePlacement PlacementOf(string folder)

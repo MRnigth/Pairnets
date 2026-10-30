@@ -325,10 +325,44 @@ public partial class SettingsView : UserControl
 
     private DateTimeOffset _sizesAt;
 
-    private static string SizeText(string folder, INestFiles? files, IReadOnlyList<NestEntry> tops) =>
-        folder.Length == 0 ? FilesPageText.EverythingElseNote
-        : files is null ? string.Empty
-        : Wording.Computer(FilesPageText.SizeLine(tops.FirstOrDefault(e => e.IsFolder && e.Path == folder)?.Size ?? 0, Read(() => files.BytesHere(folder), 0L)));
+    /// <summary>The lines last worked out (kept so a redraw shows them at once instead of "Counting…").</summary>
+    private readonly Dictionary<string, string> _sizeTexts = new(StringComparer.Ordinal);
+
+    /// <summary>The bytes on this computer per folder, as last counted (the "move away" question shows them).</summary>
+    private readonly Dictionary<string, long> _bytesHere = new(StringComparer.Ordinal);
+
+    private int _sizesGeneration;
+
+    private Task _sizesTask = Task.CompletedTask;
+
+    /// <summary>Completes when the size lines last asked for are shown (the lines are worked out off the window's thread).</summary>
+    public Task PlacementSizesReady => _sizesTask;
+
+    /// <summary>
+    /// Works out each row's "500 MB · all on this PC" line on a background thread, in one pass over the nest's files for all
+    /// the folders, and shows them when done. Counting the files used to run on the window's thread, once per folder: the
+    /// window froze for 20-30 s on a nest with tens of thousands of files.
+    /// </summary>
+    private void FillSizes(INestFiles? files)
+    {
+        var generation = ++_sizesGeneration;
+        var folders = _sizeLines.Keys.Where(f => f.Length > 0).ToList();
+        _sizesTask = files is null || folders.Count == 0 ? Task.CompletedTask : FillSizesAsync(files, folders, generation);
+    }
+
+    private async Task FillSizesAsync(INestFiles files, List<string> folders, int generation)
+    {
+        var (tops, here) = await Task.Run(() => (Read(() => files.List(string.Empty), null) ?? [], Read(() => files.BytesHereByFolder(folders), null)));
+        if (generation != _sizesGeneration || here is null)
+            return; // a newer draw asked again, or the nest stopped meanwhile
+        foreach (var (folder, line) in _sizeLines)
+        {
+            if (folder.Length == 0)
+                continue;
+            _bytesHere[folder] = here.GetValueOrDefault(folder);
+            line.Text = _sizeTexts[folder] = Wording.Computer(FilesPageText.SizeLine(tops.FirstOrDefault(e => e.IsFolder && e.Path == folder)?.Size ?? 0, _bytesHere[folder]));
+        }
+    }
 
     /// <summary>
     /// Reads each row's "· all on this PC" line again: a choice frees or downloads its files after it is saved, so the
@@ -339,10 +373,7 @@ public partial class SettingsView : UserControl
         if (!now && DateTimeOffset.UtcNow - _sizesAt < TimeSpan.FromSeconds(2))
             return;
         _sizesAt = DateTimeOffset.UtcNow;
-        var files = _files;
-        var tops = Read(() => files?.List(string.Empty), null) ?? [];
-        foreach (var (folder, line) in _sizeLines)
-            line.Text = SizeText(folder, files, tops);
+        FillSizes(_files);
     }
 
     /// <summary>The "500 MB · all on this PC" line of a folder's row.</summary>
@@ -355,13 +386,12 @@ public partial class SettingsView : UserControl
         PlacementRows.IsEnabled = files is not null;
         PlacementRows.Opacity = files is null ? 0.55 : 1;
         PlacementNote.Text = files is null ? FilesPageText.SettingsOff : Wording.Computer(FilesPageText.SettingsText);
-        var tops = Read(() => files?.List(string.Empty), null) ?? [];
         _sizeLines.Clear();
         foreach (var folder in PlacementFolders)
         {
             var name = folder.Length == 0 ? FilesPageText.EverythingElse : folder;
             var row = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
-            var sizeLine = new TextBlock { Text = SizeText(folder, files, tops), Classes = { "t3" } };
+            var sizeLine = new TextBlock { Text = folder.Length == 0 ? FilesPageText.EverythingElseNote : files is null ? string.Empty : _sizeTexts.GetValueOrDefault(folder, Wording.Computer(FilesPageText.CountingSize)), Classes = { "t3" } };
             _sizeLines[folder] = sizeLine;
             row.Children.Add(new StackPanel
             {
@@ -397,6 +427,7 @@ public partial class SettingsView : UserControl
             row.Children.Add(frame);
             PlacementRows.Children.Add(row);
         }
+        FillSizes(files);
     }
 
     /// <summary>
@@ -414,7 +445,7 @@ public partial class SettingsView : UserControl
         }
         var files = _files;
         var affects = files is null ? null : Read(() => FilesPageText.Affects(files.List(folder), folder, now), null);
-        if (await Dialogs.ConfirmAwayAsync(Owner, folder, now, choice, files is null ? 0 : Read(() => files.BytesHere(folder), 0L), affects))
+        if (await Dialogs.ConfirmAwayAsync(Owner, folder, now, choice, files is null ? 0 : _bytesHere.TryGetValue(folder, out var counted) ? counted : Read(() => files.BytesHere(folder), 0L), affects))
         {
             PlacementMap.Choose(_placement, folder, choice);
             _lastChoice = (PlacementMap.NormalizeFolder(folder), choice, DateTimeOffset.UtcNow);

@@ -207,6 +207,26 @@ public class FilesPageUiTests
     }
 
     [AvaloniaFact]
+    public async Task OpeningSettings_DoesNotWaitForTheFilesOnThisComputerToBeCounted()
+    {
+        // The window froze 20-30 s when it counted, folder by folder, every file here before it showed Settings.
+        var nest = new FakeNestFiles();
+        using var slowDisk = new ManualResetEventSlim(false);
+        nest.HoldBytes = slowDisk;
+        var settings = new ClientSettings { ServerUrl = "https://nest.example.com/", Folder = "/Users/me/Work", DeviceName = "MacBook", FirstRunCompleted = true };
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        var view = new SettingsView(settings, new MemorySecrets(), autoStart: false, files: nest) { FilesSource = () => nest };
+        var opened = watch.Elapsed;
+        Assert.True(opened < TimeSpan.FromSeconds(1.5), $"Settings took {opened.TotalSeconds:0.0} s to open while the disk was slow");
+        Assert.Equal(Wording.Computer(FilesPageText.CountingSize), view.PlacementSizeShown("Documents"));
+
+        slowDisk.Set();
+        await view.PlacementSizesReady;
+        Assert.EndsWith("all on this computer", view.PlacementSizeShown("Documents"));
+        Assert.Equal(1, nest.BytesReads);
+    }
+
+    [AvaloniaFact]
     public async Task AFolderFreedAfterItsChoice_NoLongerSaysAllOnThisPc()
     {
         var nest = new FakeNestFiles();
@@ -214,6 +234,7 @@ public class FilesPageUiTests
         var view = new SettingsView(settings, new MemorySecrets(), autoStart: false, files: nest) { FilesSource = () => nest };
         var host = new Window { Content = view, Width = 900, Height = 780 };
         host.Show();
+        await view.PlacementSizesReady;
         Assert.EndsWith("all on this computer", view.PlacementSizeShown("Documents"));
 
         var choosing = view.ChoosePlacementAsync("Documents", FilePlacement.NestOnly);
@@ -226,6 +247,7 @@ public class FilesPageUiTests
         nest.Put("Documents/report.docx", 2_400_000, now, here: false);
         nest.Put("Documents/taxes/2025.pdf", 800_000, now, here: false);
         view.ShowPlacementStatus(StatusSnapshot.Initial with { Status = RunnerStatus.Idle, Text = "Up to date" });
+        await view.PlacementSizesReady;
         Assert.Equal(Wording.Computer(FilesPageText.SizeLine(nest.List(string.Empty).Single(e => e.Path == "Documents").Size, 0)), view.PlacementSizeShown("Documents"));
         host.Close();
     }

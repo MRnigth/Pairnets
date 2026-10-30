@@ -22,6 +22,13 @@ public interface INestFiles
 
     long BytesHere(string folder);
 
+    /// <summary>
+    /// <see cref="BytesHere"/> for several folders. The real one reads the nest's list and each file on disk once for all of
+    /// them (a page that asks folder by folder checked every file once per folder: 20-30 s on a big nest).
+    /// </summary>
+    IReadOnlyDictionary<string, long> BytesHereByFolder(IEnumerable<string> folders) =>
+        folders.Distinct(StringComparer.Ordinal).ToDictionary(f => f, BytesHere, StringComparer.Ordinal);
+
     FilePlacement PlacementOf(string folder);
 
     void SetPlacement(string folder, FilePlacement placement);

@@ -2390,3 +2390,15 @@ owner's comments, then built in both apps.
   `1.0.61.14.2` on this branch. Once that number (or a newer one) is a release tag the pin is stale and the beta run
   fails with "delete the file", so a beta can never be numbered older than a release. Delete `.beta-version` when it has
   done its job. Tags and main are never pinned.
+
+## Settings freeze fix, Public beta 1.0.61.14.3 (2026-10-30)
+
+* **The bug:** opening Settings froze the Windows app for 8-25 s. The "Where your files live" card counted, for each folder,
+  every nest file present on this PC (`NestFiles.BytesHere`: a file-exists and attribute check per file) on the UI thread.
+  The health log's `ui-stall` showed it. The Avalonia app had the same code.
+* **The fix:** `NestFiles.BytesHereByFolder` counts all folders in one pass, and both apps' Settings page draws "counting..."
+  first and fills the numbers in from a background task. (The Files page footer counts one folder per refresh and is
+  unchanged.)
+* **Numbered 1.0.61.14.3** (Public beta) with the `.beta-version` pin (`scripts/release-version.sh`, from the Developer beta
+  branch's 90139e0): a beta run takes the pinned number while it is newer than the newest v* tag. Delete the file once
+  1.0.61.14.3 or newer is a release tag.

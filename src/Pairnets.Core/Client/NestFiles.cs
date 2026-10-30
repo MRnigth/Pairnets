@@ -191,6 +191,28 @@ public sealed class NestFiles : INestFiles
         return bytes;
     }
 
+    /// <summary><see cref="BytesHere"/> for each of <paramref name="folders"/>, reading the list and each file on disk once.</summary>
+    public IReadOnlyDictionary<string, long> BytesHereByFolder(IEnumerable<string> folders)
+    {
+        var wanted = folders.Distinct(StringComparer.Ordinal)
+            .Select(f => (Folder: f, Prefix: PlacementMap.NormalizeFolder(f) is { Length: > 0 } n ? n + "/" : string.Empty))
+            .ToList();
+        var bytes = wanted.ToDictionary(w => w.Folder, _ => 0L, StringComparer.Ordinal);
+        if (wanted.Count == 0)
+            return bytes;
+        foreach (var e in Remote())
+        {
+            if (e.Deleted)
+                continue;
+            var inside = wanted.Where(w => e.Path.StartsWith(w.Prefix, StringComparison.Ordinal)).ToList();
+            if (inside.Count == 0 || WhereNow(e.Path) != FileWhere.Here)
+                continue;
+            foreach (var w in inside)
+                bytes[w.Folder] += e.Size;
+        }
+        return bytes;
+    }
+
     /// <summary>
     /// This computer's copy of the nest's list, for the pages that show it. Empty once the nest has stopped (its session
     /// closed the list's database while a page still shows): the page draws nothing instead of failing (crash 11eae5385eec).

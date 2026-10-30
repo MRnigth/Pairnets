@@ -102,6 +102,9 @@ public static class FilesPageText
     public const string SettingsNote = "This PC only · your other computers choose for themselves";
     public const string SettingsText = "Keep big folders on your nest to free space here. Pairnets only removes a file from this PC once it is safely on your nest.";
     public const string EverythingElse = "All other files";
+    /// <summary>A folder row's size line until the files on this PC are counted (off the window's thread).</summary>
+    public const string CountingSize = "Counting…";
+
     public const string EverythingElseNote = "Files right in your Pairnets folder and every folder not listed below";
     public const string SettingsLink = "Choose for a folder inside these… (opens Files)";
     public const string SettingsOff = "Sign in and connect to your nest to choose where your files live.";

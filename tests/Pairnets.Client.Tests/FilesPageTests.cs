@@ -291,6 +291,7 @@ public sealed class FilesPageTests
         using var answers = script.Install();
         var settings = new ClientSettings { ServerUrl = "https://nest.example.com/", Folder = @"D:\Sync", DeviceName = "DESKTOP", FirstRunCompleted = true };
         var view = await Wpf.Ui(() => new SettingsView(settings, new FakeSecrets(), files: nest) { FilesSource = () => nest });
+        await view.PlacementSizesReady;
         Assert.EndsWith("all on this PC", await Wpf.Ui(() => view.PlacementSizeShown("Documents")));
 
         await Wpf.Ui(() => view.ChoosePlacement("Documents", FilePlacement.NestOnly));
@@ -299,8 +300,30 @@ public sealed class FilesPageTests
         nest.Put("Documents/report.docx", 2_400_000, now, here: false);
         nest.Put("Documents/taxes/2025.pdf", 800_000, now, here: false);
         await Wpf.Ui(() => view.ShowPlacementStatus(StatusSnapshot.Initial with { Status = RunnerStatus.Idle, Text = "Up to date" }));
+        await view.PlacementSizesReady;
         Assert.Equal(FilesPageText.SizeLine(nest.List(string.Empty).Single(e => e.Path == "Documents").Size, 0),
             await Wpf.Ui(() => view.PlacementSizeShown("Documents")));
+        Assert.Empty(Wpf.TakeCrashes());
+    }
+
+    [Fact]
+    public async Task OpeningSettings_DoesNotWaitForTheFilesOnThisPcToBeCounted()
+    {
+        // The window froze 20-30 s when it counted, folder by folder, every file on this PC before it showed Settings.
+        var nest = new FakeNestFiles();
+        using var slowDisk = new ManualResetEventSlim(false);
+        nest.HoldBytes = slowDisk;
+        var settings = new ClientSettings { ServerUrl = "https://nest.example.com/", Folder = @"D:\Sync", DeviceName = "DESKTOP", FirstRunCompleted = true };
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        var view = await Wpf.Ui(() => new SettingsView(settings, new FakeSecrets(), files: nest) { FilesSource = () => nest });
+        var opened = watch.Elapsed;
+        Assert.True(opened < TimeSpan.FromSeconds(1.5), $"Settings took {opened.TotalSeconds:0.0} s to open while the disk was slow");
+        Assert.Equal(FilesPageText.CountingSize, await Wpf.Ui(() => view.PlacementSizeShown("Documents")));
+
+        slowDisk.Set();
+        await view.PlacementSizesReady;
+        Assert.EndsWith("all on this PC", await Wpf.Ui(() => view.PlacementSizeShown("Documents")));
+        Assert.Equal(1, nest.BytesReads); // one pass for every folder, not one per folder
         Assert.Empty(Wpf.TakeCrashes());
     }
 
