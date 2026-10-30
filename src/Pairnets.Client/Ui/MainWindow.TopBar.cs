@@ -116,8 +116,16 @@ public partial class MainWindow
             FontWeight = FontWeights.SemiBold,
         };
         System.Windows.Automation.AutomationProperties.SetName(button, label);
+        KeepPillShape(button);
         return button;
     }
+
+    /// <summary>The round style's large radius turns a wide button into an oval: half the height keeps the sides straight.</summary>
+    private static void KeepPillShape(Button button) => button.Loaded += (_, _) =>
+    {
+        if (button.Template.FindName("bd", button) is Border border)
+            border.CornerRadius = new CornerRadius(button.Height / 2);
+    };
 
     private void OpenFromTopBar(MainPage page)
     {
@@ -363,6 +371,7 @@ public partial class MainWindow
         _nestPill = new Button { Style = (Style)FindResource("RoundIconButton"), Height = 32, MinHeight = 32, Padding = new Thickness(14, 0, 14, 0), Margin = new Thickness(10, 0, 0, 0), Content = _nestPillText, Visibility = Visibility.Collapsed, VerticalAlignment = VerticalAlignment.Center };
         _nestPill.SetResourceReference(BackgroundProperty, "T.Card");
         _nestPill.Click += (_, _) => OpenNestMenu();
+        KeepPillShape(_nestPill);
         System.Windows.Automation.AutomationProperties.SetName(_nestPill, "Nest");
 
         column.Children.Add(new StackPanel { Orientation = Orientation.Horizontal, Children = { PageTitle, tag, _nestPill } });
