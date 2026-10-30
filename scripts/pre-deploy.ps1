@@ -526,6 +526,7 @@ function Start-AnimationsOffTests($Ctx) {
     } finally {
         foreach ($k in $saved.Keys) { [Environment]::SetEnvironmentVariable($k, $saved[$k], 'Process') }
     }
+    $null = $proc.Handle # without it Windows PowerShell 5.1 forgets the exit code of a process it did not wait for
     return [pscustomobject]@{ Process = $proc; Log = $log; ErrLog = $errLog; Started = Get-Date }
 }
 
