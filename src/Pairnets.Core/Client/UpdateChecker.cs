@@ -92,7 +92,8 @@ public sealed class UpdateChecker(HttpClient http, Uri? downloadBase = null, Uri
             return (_base, _page);
         if (betaFeed is not null)
             return betaFeed(channel);
-        return downloadBase is null
+        // The apps pass the default base explicitly, and "../tag/" from releases/latest/download/ is not a GitHub address.
+        return downloadBase is null || downloadBase == DefaultDownloadBase
             ? (new Uri($"https://github.com/MRnigth/Pairnets/releases/download/{tag}/"), new Uri($"https://github.com/MRnigth/Pairnets/releases/tag/{tag}"))
             : (new Uri(_base, $"../{tag}/"), _page);
     }

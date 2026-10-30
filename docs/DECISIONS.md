@@ -2355,3 +2355,10 @@ an endless animation class (the Overview's pulse/spin/rise/fall, rebuilt on ever
   tell the old and the new styles apart (a first version failed in the whole suite on other tests' memory and was
   dropped); it is measured with `UploadMemoryUiProbe.cs` (and `UploadMemoryProbe.cs` for the sync alone; both do
   nothing unless `PAIRNETS_MEMPROBE=1`): 10,000 files end at 86 MB live with the fix, 417 MB live without it.
+
+## Beta feed address (2026-10-30)
+
+The apps could never find a beta: `ClientEnvironment` passes `DefaultDownloadBase` to `UpdateChecker`, and `FeedOf` then built
+`releases/latest/developer-beta/`, a 404 that the checker counts as "nothing newer", so Settings said "Up to date". Fixed in
+`FeedOf`. Apps from before the fix (every stable up to 1.0.61.14) cannot reach a beta by themselves: the first beta has to be
+installed by hand from its GitHub release, or wait for a stable release that has this fix.
