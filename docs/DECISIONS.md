@@ -2113,6 +2113,9 @@ in "Beta updates: the account, the nest and the apps" below; this part is how th
   Both are made with `--prerelease --latest=false`, so neither ever becomes GitHub's "Latest release" (see "Only tagged
   versions are GitHub's Latest release"). They have the same file names as a release and are signed with the same key.
   Each beta job has its own concurrency group, so two pushes to one branch never replace the release at the same time.
+* **Only a push that changes files starts a beta.** Release skips a push that changes only `cloud/` and `site/` (its `paths-ignore`), so an empty commit or a
+  new branch with no new commits makes no beta. The Beta job runs on `push` only: starting Release by hand (`workflow_dispatch`) builds and tests but publishes nothing.
+  A beta whose run failed is made again by pushing a new commit that changes a file (and the pre-deploy check for that commit).
 * **A beta's version is the next stable number.** The newest `v*` tag with its last part one higher: after `v1.0.61.7`
   the betas are 1.0.61.8; after a three-part tag like `v1.0.60` they get a fourth part, 1.0.60.1. Tags that are not
   three or four numbers are skipped (never five parts: they break dotnet). Every build of that beta has the same
