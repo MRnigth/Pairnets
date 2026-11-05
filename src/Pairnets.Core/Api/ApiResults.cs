@@ -21,8 +21,14 @@ public sealed record ApiResult(ApiOutcome Outcome, ManifestEntry? Entry, string?
 /// <summary>Manifest entries plus the server identity and version they were read at.</summary>
 public sealed record ManifestResponse(IReadOnlyList<ManifestEntry> Entries, string ServerId, long Version);
 
-/// <summary>Outcome of a download. <see cref="Hash"/> is computed from the received bytes.</summary>
-public sealed record DownloadResult(bool Found, string Hash, long Size, long ModifiedMs);
+/// <summary>
+/// Outcome of a download. <see cref="Hash"/> is computed from the received bytes. <see cref="Tag"/> and <see cref="Meta"/>:
+/// what an encrypted nest sent with the version (its keyed tag and encrypted meta), null elsewhere.
+/// </summary>
+public sealed record DownloadResult(bool Found, string Hash, long Size, long ModifiedMs, string? Tag = null, string? Meta = null);
+
+/// <summary>What an upload to an encrypted nest sends with the new version: its keyed tag and its encrypted meta (docs/ENCRYPTION.md).</summary>
+public sealed record SealedUpload(string Tag, string Meta);
 
 public enum ConnectionTestStatus
 {

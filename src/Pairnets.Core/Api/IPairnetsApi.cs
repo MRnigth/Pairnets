@@ -31,4 +31,10 @@ public interface IPairnetsApi
     /// owner's). The engine asks before a pass that reads the whole list on a nest shared with it.
     /// </summary>
     Task<AccessAnswer?> GetAccessAsync(CancellationToken ct) => Task.FromResult<AccessAnswer?>(null);
+
+    /// <summary>
+    /// Whether a cut download may be continued later from the bytes already here (<see cref="DownloadResume"/>). An
+    /// encrypted nest's downloads start again from the beginning for now (see <c>SealedNestApi</c>).
+    /// </summary>
+    bool ContinuesDownloads => true;
 }

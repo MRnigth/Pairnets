@@ -33,6 +33,7 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
     private readonly TimeSpan _stallTimeout;
     private readonly TimeSpan _metadataTimeout;
     private volatile bool _piecesUnsupported;
+    private volatile bool _sendsSealedFeature;
 
     /// <param name="serviceUrl">The Pairnets service whose relay addresses this client recognises (tests; by default sync.pairnets.app).</param>
     public PairnetsApiClient(Uri serverUrl, string token, string deviceId, HttpMessageHandler? handler = null,
@@ -65,6 +66,17 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
     }
 
     public Uri BaseAddress { get; }
+
+    /// <summary>
+    /// Every request says the app encrypts (<c>X-Pairnets-Features: sealed</c>), so an encrypted nest lets it sync. Only
+    /// set while this computer's sync engine encrypts for the nest (see <c>SealedNestApi</c>): an app that would send
+    /// plain files must keep getting 426 from an encrypted nest. Off by default, so a plain nest sees the same requests as before.
+    /// </summary>
+    public bool SendsSealedFeature
+    {
+        get => _sendsSealedFeature;
+        set => _sendsSealedFeature = value;
+    }
 
     /// <summary>
     /// True when the server is reached through the Pairnets service (<c>https://sync.pairnets.app/n/&lt;nest id&gt;/</c>).
@@ -617,6 +629,8 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
             throw new PairnetsProtocolException("Download response has no valid content hash.");
         _ = long.TryParse(HeaderValue(resp, PairnetsHeaders.ModifiedMs, TetherNames.ModifiedMsHeader), NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var modifiedMs);
         var expectedLength = resp.Content.Headers.ContentLength;
+        var servedTag = HeaderValue(resp, PairnetsHeaders.Tag);
+        var servedMeta = HeaderValue(resp, PairnetsHeaders.Meta);
         long start = 0;
         if (resp.StatusCode == HttpStatusCode.PartialContent)
         {
@@ -636,6 +650,8 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
             resume.ServedHash = expectedHash;
             resume.ServedSize = expectedLength;
             resume.ContinuedFrom = start;
+            resume.ServedTag = servedTag;
+            resume.ServedMeta = servedMeta;
         }
 
         using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
@@ -690,7 +706,7 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
             throw new DownloadMismatchException(start > 0
                 ? $"'{path}' does not match the server hash after continuing its download; it will be downloaded again."
                 : $"Download of '{path}' does not match the server hash.");
-        return new DownloadResult(true, actual, received, modifiedMs);
+        return new DownloadResult(true, actual, received, modifiedMs, servedTag, servedMeta);
     }
 
     /// <summary>Hashes the first <paramref name="length"/> bytes the destination already holds and leaves it positioned after them.</summary>
@@ -711,13 +727,26 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
 
     // ------------------------------------------------------------------ upload
 
-    public async Task<(ApiResult Result, string SentHash, long SentBytes)> UploadAsync(
-        string path, string baseHash, long mtimeMs, Stream content, Action<long>? progress, CancellationToken ct, UploadResume? resume = null)
+    public Task<(ApiResult Result, string SentHash, long SentBytes)> UploadAsync(
+        string path, string baseHash, long mtimeMs, Stream content, Action<long>? progress, CancellationToken ct, UploadResume? resume = null) =>
+        UploadCoreAsync(path, baseHash, mtimeMs, content, progress, ct, resume, null);
+
+    /// <summary>
+    /// An upload to an encrypted nest: <paramref name="content"/> is already encrypted and <paramref name="path"/> is
+    /// the file's id. The tag and meta go with the new version (on the PUT, or on the commit of an upload in pieces) and
+    /// no modified time is sent (the real one is inside the meta).
+    /// </summary>
+    public Task<(ApiResult Result, string SentHash, long SentBytes)> UploadSealedAsync(
+        string path, string baseTag, Stream content, Action<long>? progress, CancellationToken ct, UploadResume? resume, SealedUpload fields) =>
+        UploadCoreAsync(path, baseTag, null, content, progress, ct, resume, fields);
+
+    private async Task<(ApiResult Result, string SentHash, long SentBytes)> UploadCoreAsync(
+        string path, string baseHash, long? mtimeMs, Stream content, Action<long>? progress, CancellationToken ct, UploadResume? resume, SealedUpload? sealedFields)
     {
         // An upload an earlier attempt started goes on in pieces, whatever the speed says now.
         if (!_piecesUnsupported && content.CanSeek && (resume?.Id is not null || Pieces.ShouldSplit(content.Length - content.Position)))
         {
-            var inPieces = await UploadInPiecesAsync(path, baseHash, mtimeMs, content, progress, resume ?? new UploadResume(), ct).ConfigureAwait(false);
+            var inPieces = await UploadInPiecesAsync(path, baseHash, mtimeMs, content, progress, resume ?? new UploadResume(), ct, sealedFields).ConfigureAwait(false);
             if (inPieces is { } done)
                 return done;
             // A server from before uploads in pieces: send the file in one request, as it always did.
@@ -730,7 +759,7 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
         }
 
         using var stall = Linked(ct, _stallTimeout);
-        var uri = $"api/file?path={Uri.EscapeDataString(path)}&base={Uri.EscapeDataString(baseHash)}&mtime={mtimeMs.ToString(CultureInfo.InvariantCulture)}";
+        var uri = $"api/file?path={Uri.EscapeDataString(path)}&base={Uri.EscapeDataString(baseHash)}{MtimeQuery(mtimeMs)}{SealedQuery(sealedFields)}";
         var start = content.CanSeek ? content.Position : -1;
         HashingStream? hashing = null;
         using var resp = await SendAsync(() =>
@@ -766,7 +795,8 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
     /// attempt continues from the server's count. Null when the server is too old to take uploads in pieces.
     /// </summary>
     private async Task<(ApiResult Result, string SentHash, long SentBytes)?> UploadInPiecesAsync(
-        string path, string baseHash, long mtimeMs, Stream content, Action<long>? progress, UploadResume resume, CancellationToken ct)
+        string path, string baseHash, long? mtimeMs, Stream content, Action<long>? progress, UploadResume resume, CancellationToken ct,
+        SealedUpload? sealedFields = null)
     {
         using var reader = new PieceReader(content, progress);
         long offset = 0;
@@ -813,7 +843,7 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
             }
             try
             {
-                var (result, hash) = await FinishUploadAsync(path, resume, reader, offset, ct).ConfigureAwait(false);
+                var (result, hash) = await FinishUploadAsync(path, resume, reader, offset, ct, sealedFields).ConfigureAwait(false);
                 return (result, result.Outcome == ApiOutcome.Ok ? hash : string.Empty, reader.Size);
             }
             catch (UploadGoneException) when (!startedAgain)
@@ -838,11 +868,11 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
     }
 
     /// <summary>POST /api/upload: the new session's id, or the server's refusal (conflict, ...), or neither from a server without uploads in pieces.</summary>
-    private async Task<(string? Id, ApiResult? Rejected)> StartUploadAsync(string path, string baseHash, long mtimeMs, long size, CancellationToken ct)
+    private async Task<(string? Id, ApiResult? Rejected)> StartUploadAsync(string path, string baseHash, long? mtimeMs, long size, CancellationToken ct)
     {
         using var timeout = Linked(ct, _metadataTimeout);
         var start = $"api/upload?path={Uri.EscapeDataString(path)}&base={Uri.EscapeDataString(baseHash)}" +
-            $"&size={size.ToString(CultureInfo.InvariantCulture)}&mtime={mtimeMs.ToString(CultureInfo.InvariantCulture)}";
+            $"&size={size.ToString(CultureInfo.InvariantCulture)}{MtimeQuery(mtimeMs)}";
         using var resp = await SendAsync(() => new HttpRequestMessage(HttpMethod.Post, start), HttpCompletionOption.ResponseContentRead, timeout, ct).ConfigureAwait(false);
         if ((int)resp.StatusCode is 404 or 405 && !IsJson(resp))
         {
@@ -860,7 +890,8 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
     /// <see cref="BusyTimeout"/>); after that the pass ends and the session stays for the next one. Once this
     /// returns, the session is finished on the server (stored, or refused like a PUT would be).
     /// </summary>
-    private async Task<(ApiResult Result, string Hash)> FinishUploadAsync(string path, UploadResume resume, PieceReader reader, long offset, CancellationToken ct)
+    private async Task<(ApiResult Result, string Hash)> FinishUploadAsync(string path, UploadResume resume, PieceReader reader, long offset, CancellationToken ct,
+        SealedUpload? sealedFields = null)
     {
         var id = resume.Id!;
         var patience = new Patience(this);
@@ -893,7 +924,7 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
                 await reader.SkipAsync(reader.Size, ct).ConfigureAwait(false); // the bytes an earlier attempt sent, if not read yet
                 var hash = reader.GetHash();
                 using var timeout = Linked(ct, _metadataTimeout);
-                using var resp = await SendAsync(() => new HttpRequestMessage(HttpMethod.Post, $"api/upload/{id}/commit?hash={hash}"),
+                using var resp = await SendAsync(() => new HttpRequestMessage(HttpMethod.Post, $"api/upload/{id}/commit?hash={hash}{SealedQuery(sealedFields)}"),
                     HttpCompletionOption.ResponseContentRead, timeout, ct).ConfigureAwait(false);
                 if (!resp.IsSuccessStatusCode && await TryReadErrorAsync(resp, ct).ConfigureAwait(false) is { } error)
                 {
@@ -1119,6 +1150,12 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
 
     /// <summary>How many 429s in a row one upload in pieces (or the engine, for one file) takes before it gives up for this pass.</summary>
     internal const int MaxSlowDownsInARow = 30;
+
+    private static string MtimeQuery(long? mtimeMs) =>
+        mtimeMs is { } ms ? "&mtime=" + ms.ToString(CultureInfo.InvariantCulture) : string.Empty;
+
+    private static string SealedQuery(SealedUpload? fields) =>
+        fields is null ? string.Empty : $"&tag={Uri.EscapeDataString(fields.Tag)}&meta={Uri.EscapeDataString(fields.Meta)}";
 
     // ------------------------------------------------------------------ delete
 
@@ -1397,6 +1434,8 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
         // would expose it, plain http through Cloudflare, can be caught before it is ever sent).
         if (req.RequestUri?.OriginalString != HealthPath)
             req.Headers.TryAddWithoutValidation(PairnetsHeaders.Token, _token);
+        if (_sendsSealedFeature)
+            req.Headers.TryAddWithoutValidation(PairnetsHeaders.Features, PairnetsHeaders.SealedFeature);
         try
         {
             var resp = await _http.SendAsync(req, completion, timeout.Token).ConfigureAwait(false);

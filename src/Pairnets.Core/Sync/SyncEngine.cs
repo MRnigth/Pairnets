@@ -959,7 +959,7 @@ public sealed class SyncEngine
             return;
         }
         // Big files keep what arrived when the connection breaks, and later ask only for the rest of the same version.
-        if (serverHash is null || size < _options.ResumeDownloadsFrom || _hooks.WrapDownloadStream is not null)
+        if (serverHash is null || size < _options.ResumeDownloadsFrom || _hooks.WrapDownloadStream is not null || !_api.ContinuesDownloads)
         {
             await DownloadOnceAsync(path, expectedLocalHash, null, ctx, ct).ConfigureAwait(false);
             return;

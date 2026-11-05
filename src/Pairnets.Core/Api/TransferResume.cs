@@ -48,4 +48,9 @@ public sealed class DownloadResume(string? hash, long offset)
 
     /// <summary>Where the bytes of this attempt start: <see cref="Offset"/> when the server continued, 0 when it sent the whole file.</summary>
     public long ContinuedFrom { get; set; }
+
+    /// <summary>On an encrypted nest: the keyed tag and encrypted meta of the version being sent, as soon as its answer arrived.</summary>
+    public string? ServedTag { get; set; }
+
+    public string? ServedMeta { get; set; }
 }
