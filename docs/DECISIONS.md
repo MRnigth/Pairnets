@@ -2527,8 +2527,9 @@ the existing tunnel and relay (SMB cannot pass them, and cannot be both safe and
   what its ignore list names), and the program deletes them when it is done. A rename onto a metadata name is refused (403), never
   answered "done".
 * **Paths:** only what `PathRules` accepts, no `.`/`..`/empty segments, no backslash or drive letter. A `Destination` header must be a
-  path under the same base the client connected to (or a full address with the nest's host; `localhost`, 127.0.0.1 and ::1 count as
-  one) and goes through the same checks; other hosts, `/api/...` and `..` are refused. Kestrel drops `.`/`..` segments and leaves `%2F`
+  path under the same base the client connected to (or a full `http`/`https` address with the nest's host; `localhost`, 127.0.0.1
+  and ::1 count as one; on Linux and macOS .NET also reads a bare path as a `file://` address, which made every MOVE a 400 there
+  until 2026-11-06, so only those two schemes count as an address) and goes through the same checks; other hosts, `/api/...` and `..` are refused. Kestrel drops `.`/`..` segments and leaves `%2F`
   encoded before routing, so the address exactly as sent (`RawTarget`) is checked too: an encoded slash or backslash, or a dot segment
   spelled out or encoded, is a 400. Tests send those addresses raw (.NET's `Uri` would tidy them away first).
 * **The address.** Nest reached through Pairnets: `https://pairnets.app/<nest-name>.<nest id>/` (a Pages Function passes it to the
