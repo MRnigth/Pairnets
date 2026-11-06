@@ -183,9 +183,9 @@ public static class WebEndpoints
         // take a leaked password away. Made only in the apps (the password is shown once, there). Same answer as the apps' list.
         signedIn.MapGet("/webdav/links", (AuthStore auth, SyncStore store) => Json(DavEndpoints.Links(auth, store)));
 
-        signedIn.MapDelete("/webdav/links/{id}", (string id, AuthStore auth, DeviceKeys keys, ILogger<DeviceKeys> log) =>
+        signedIn.MapDelete("/webdav/links/{id}", (string id, AuthStore auth, DeviceKeys keys, DavEmptyFiles emptyFiles, ILogger<DeviceKeys> log) =>
         {
-            if (DavEndpoints.RemoveLink(id, auth, keys) is not { } link)
+            if (DavEndpoints.RemoveLink(id, auth, keys, emptyFiles) is not { } link)
                 return Error(StatusCodes.Status404NotFound, ErrorCodes.NotFound, "No such WebDAV link.");
             log.LogInformation("WebDAV link {Name} was removed on the nest's website", link.Name);
             return Results.NoContent();

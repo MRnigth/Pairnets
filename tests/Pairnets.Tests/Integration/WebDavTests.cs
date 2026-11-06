@@ -528,9 +528,14 @@ public sealed class WebDavTests : IAsyncLifetime
         await PutOwnerAsync("trip/Day 2/c.txt", "C");
         var made = await LinkAsync();
         var hashes = new[] { "trip/a.txt", "trip/b.txt", "trip/Day 2/c.txt" }.ToDictionary(p => p, p => Entry(p)!.Hash!);
+        Assert.Equal(HttpStatusCode.Created, (await made.Http.PutAsync("dav/trip/new.txt", new ByteArrayContent([]))).StatusCode); // held, not stored yet
+        Assert.Equal(HttpStatusCode.Created, (await made.Http.SendAsync(Req("MKCOL", "dav/trip/Empty"))).StatusCode); // a folder with nothing in it yet
 
         Assert.Equal(HttpStatusCode.Created, (await made.Http.SendAsync(Req("MOVE", "dav/trip/", null, ("Destination", "/dav/Trip/")))).StatusCode);
         Assert.Equal(["Trip/Day 2/c.txt", "Trip/a.txt", "Trip/b.txt"], Live());
+        Assert.Equal((HttpStatusCode)207, (await made.Http.SendAsync(Req("PROPFIND", "dav/Trip/new.txt", null, ("Depth", "0")))).StatusCode); // they follow the new name
+        Assert.Equal((HttpStatusCode)207, (await made.Http.SendAsync(Req("PROPFIND", "dav/Trip/Empty", null, ("Depth", "0")))).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await made.Http.SendAsync(Req("PROPFIND", "dav/trip/new.txt", null, ("Depth", "0")))).StatusCode);
         foreach (var (path, hash) in hashes)
         {
             Assert.True(Entry(path)!.Deleted);
@@ -723,6 +728,7 @@ public sealed class WebDavTests : IAsyncLifetime
         Assert.Equal("the real one", await _owner.GetStringAsync("api/file?path=keep.bin"));
         Assert.Empty(_server.Store.ListHistory("keep.bin"));
         Assert.Equal(before, Changes()); // nothing at all was stored, so no computer heard of any of it
+        Assert.Equal(0, _server.Services.GetRequiredService<DavEmptyFiles>().Count); // and nothing is left to be stored empty later
         Assert.Empty(Directory.EnumerateFiles(_server.Paths.Tmp));
     }
 
@@ -760,6 +766,13 @@ public sealed class WebDavTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.NoContent, (await made.Http.SendAsync(Req("PUT", "dav/notes.txt", new StringContent("typed"), ("If-Match", HeldETag)))).StatusCode);
         Assert.Equal("typed", await _owner.GetStringAsync("api/file?path=notes.txt"));
         Assert.Null(Entry("New Text Document.txt"));
+
+        // renamed by letter case only: it simply follows
+        Assert.Equal(HttpStatusCode.Created, (await made.Http.PutAsync("dav/case.txt", Empty())).StatusCode);
+        Assert.Equal(HttpStatusCode.Created, (await made.Http.SendAsync(Req("MOVE", "dav/case.txt", null, ("Destination", "/dav/Case.txt"), ("Overwrite", "F")))).StatusCode);
+        Assert.Equal((HttpStatusCode)207, (await made.Http.SendAsync(Find("dav/Case.txt"))).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await made.Http.SendAsync(Find("dav/case.txt"))).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await made.Http.DeleteAsync("dav/Case.txt")).StatusCode);
 
         // deleted before anything was written into it: gone, and never stored
         Assert.Equal(HttpStatusCode.Created, (await made.Http.PutAsync("dav/gone.txt", Empty())).StatusCode);
@@ -810,34 +823,191 @@ public sealed class WebDavTests : IAsyncLifetime
         Assert.Null(Entry("Photos/new.jpg"));
     }
 
-    [Fact]
-    public async Task AnEmptyFileNothingIsWrittenIntoGoesAfterTenMinutesAndIsNeverStored()
+    /// <summary>A server of its own whose held empty files run on <paramref name="clock"/> (or are <paramref name="emptyFiles"/>), with an edit link "Mac" on it.</summary>
+    private async Task<Clocked> ClockedServerAsync(ManualClock clock, DavEmptyFiles? emptyFiles = null)
     {
-        var clock = new ManualClock(DateTimeOffset.UtcNow);
-        await using var server = await TestServer.StartAsync(configureBuilder: b => b.Services.AddSingleton(new DavEmptyFiles(clock)));
-        using var owner = server.RawHttp(server.Token);
+        var held = emptyFiles ?? new DavEmptyFiles(clock);
+        var server = await TestServer.StartAsync(configureBuilder: b => b.Services.AddSingleton(held));
+        var owner = server.RawHttp(server.Token);
         var resp = await owner.PostAsJsonAsync("api/webdav/links", new { label = "Mac", access = "edit" }, PairnetsJson.Options);
         Assert.Equal(HttpStatusCode.Created, resp.StatusCode);
         using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync());
-        using var dav = Dav("mac", doc.RootElement.GetProperty("password").GetString()!, server);
-        var before = server.Store.ReadManifest(null).Version;
+        return new Clocked(server, owner, Dav("mac", doc.RootElement.GetProperty("password").GetString()!, server), doc.RootElement.GetProperty("id").GetString()!, held,
+            server.Services.GetRequiredService<DavEmptyFileKeeper>());
+    }
 
-        Assert.Equal(HttpStatusCode.Created, (await dav.PutAsync("dav/empty.txt", Empty())).StatusCode);
-        clock.Advance(TimeSpan.FromMinutes(9));
-        var locked = await dav.SendAsync(Req("LOCK", "dav/empty.txt", new StringContent(LockBody))); // the client is still busy with it: ten more minutes
+    private sealed record Clocked(TestServer Server, HttpClient Owner, HttpClient Dav, string LinkId, DavEmptyFiles Held, DavEmptyFileKeeper Keeper) : IAsyncDisposable
+    {
+        public ManifestEntry? Entry(string path) => Server.Store.Manifest.Get(path);
+
+        public long Changes() => Server.Store.ReadManifest(null).Version;
+
+        public async ValueTask DisposeAsync()
+        {
+            Dav.Dispose();
+            Owner.Dispose();
+            await Server.DisposeAsync();
+        }
+    }
+
+    [Fact]
+    public async Task AnEmptyFileNothingIsWrittenIntoIsStoredOnceTheClientIsDoneWithIt()
+    {
+        var clock = new ManualClock(DateTimeOffset.UtcNow);
+        await using var s = await ClockedServerAsync(clock);
+        var computer = s.Server.MintKey("PC-1").Key;
+        var heard = new System.Collections.Concurrent.ConcurrentQueue<(string Device, string Path)>();
+        await using var hub = new HubConnectionBuilder()
+            .WithUrl(new Uri(s.Server.Url, "hub"), o => o.AccessTokenProvider = () => Task.FromResult<string?>(computer)).Build();
+        hub.On<string, string>(SyncHub.ChangedMethod, (device, path) => heard.Enqueue((device, path)));
+        await hub.StartAsync();
+        await hub.InvokeAsync(nameof(SyncHub.Synced), 0L);
+        var before = s.Changes();
+        var made = clock.Now;
+
+        // Finder copying an empty file: an empty PUT makes it, a LOCK, the content (empty too), an UNLOCK
+        Assert.Equal(HttpStatusCode.Created, (await s.Dav.PutAsync("dav/empty.txt", Empty())).StatusCode);
+        var locked = await s.Dav.SendAsync(Req("LOCK", "dav/empty.txt", new StringContent(LockBody)));
         Assert.Equal(HttpStatusCode.OK, locked.StatusCode);
-        clock.Advance(TimeSpan.FromMinutes(9));
-        Assert.Equal((HttpStatusCode)207, (await dav.SendAsync(Find("dav/empty.txt"))).StatusCode);
-        Assert.Equal(HttpStatusCode.NoContent, (await dav.SendAsync(Req("UNLOCK", "dav/empty.txt", null, ("Lock-Token", locked.Headers.GetValues("Lock-Token").Single())))).StatusCode);
-        Assert.Null(server.Store.Manifest.Get("empty.txt")); // letting go of it stores nothing
+        Assert.Equal(HttpStatusCode.NoContent, (await s.Dav.PutAsync("dav/empty.txt", Empty())).StatusCode);
+        clock.Advance(TimeSpan.FromMinutes(30));
+        await s.Keeper.StoreDueAsync();
+        Assert.Null(s.Entry("empty.txt")); // locked: its content may still be on its way
+        Assert.Equal(HttpStatusCode.NoContent, (await s.Dav.SendAsync(Req("UNLOCK", "dav/empty.txt", null, ("Lock-Token", locked.Headers.GetValues("Lock-Token").Single())))).StatusCode);
+        clock.Advance(DavEmptyFiles.QuietTime - TimeSpan.FromSeconds(1));
+        await s.Keeper.StoreDueAsync();
+        Assert.Null(s.Entry("empty.txt"));
+        Assert.Equal((HttpStatusCode)207, (await s.Dav.SendAsync(Find("dav/empty.txt"))).StatusCode); // there all along for the client
 
-        clock.Advance(TimeSpan.FromMinutes(2));
-        Assert.Equal(HttpStatusCode.NotFound, (await dav.SendAsync(Find("dav/empty.txt"))).StatusCode);
-        Assert.Equal(HttpStatusCode.NotFound, (await dav.GetAsync("dav/empty.txt")).StatusCode);
-        Assert.DoesNotContain("empty.txt", await BodyAsync(await dav.SendAsync(Find("dav/", "1"))));
-        Assert.Null(server.Store.Manifest.Get("empty.txt"));
-        Assert.Equal(before, server.Store.ReadManifest(null).Version);
-        Assert.Equal(HttpStatusCode.Created, (await dav.PutAsync("dav/empty.txt", Empty())).StatusCode); // the name is free again
+        clock.Advance(TimeSpan.FromSeconds(1)); // nothing more came: it was meant to be empty
+        await s.Keeper.StoreDueAsync();
+        var stored = s.Entry("empty.txt")!;
+        Assert.Equal((0L, before + 1, made.ToUnixTimeMilliseconds()), (stored.Size, stored.Version, stored.ModifiedMs)); // one version, made when the client made it
+        Assert.Empty(s.Server.Store.ListHistory("empty.txt"));
+        Assert.Contains("<D:getetag>\"" + stored.Hash + "\"</D:getetag>", await BodyAsync(await s.Dav.SendAsync(Find("dav/empty.txt"))));
+        Assert.Equal(string.Empty, await s.Owner.GetStringAsync("api/file?path=empty.txt"));
+        await WaitUntilAsync(() => heard.Contains(("Mac (WebDAV link)", "empty.txt"))); // computers hear it, in the link's name
+
+        // a client that only PUTs, without a lock: stored once nothing more came for the quiet time
+        Assert.Equal(HttpStatusCode.Created, (await s.Dav.PutAsync("dav/plain.txt", Empty())).StatusCode);
+        clock.Advance(DavEmptyFiles.QuietTime);
+        await s.Keeper.StoreDueAsync();
+        Assert.Equal((0L, before + 2), (s.Entry("plain.txt")!.Size, s.Changes()));
+        Assert.Equal(0, s.Held.Count);
+    }
+
+    [Fact]
+    public async Task ContentThatTakesLongToArriveKeepsTheEmptyFileFromBeingStoredFirst()
+    {
+        var clock = new ManualClock(DateTimeOffset.UtcNow);
+        await using var s = await ClockedServerAsync(clock);
+        var before = s.Changes();
+        Assert.Equal(HttpStatusCode.Created, (await s.Dav.PutAsync("dav/slow.bin", Empty())).StatusCode);
+
+        var gate = new TaskCompletionSource();
+        var put = s.Dav.PutAsync("dav/slow.bin", new SlowContent(new byte[64 * 1024], gate.Task, new byte[64 * 1024]));
+        await WaitUntilAsync(() => Directory.EnumerateFiles(s.Server.Paths.Tmp).Any()); // the nest is receiving it
+        clock.Advance(DavEmptyFiles.LockedTime + DavEmptyFiles.QuietTime);
+        await s.Keeper.StoreDueAsync();
+        Assert.Null(s.Entry("slow.bin")); // never stored empty while its content comes in
+        gate.SetResult();
+
+        Assert.Equal(HttpStatusCode.NoContent, (await put).StatusCode);
+        var stored = s.Entry("slow.bin")!;
+        Assert.Equal((128L * 1024, before + 1), (stored.Size, stored.Version));
+        Assert.Empty(s.Server.Store.ListHistory("slow.bin"));
+        Assert.Equal(0, s.Held.Count);
+    }
+
+    [Fact]
+    public async Task AHeldEmptyFileIsNeverStoredOnceItsLinkIsRemoved()
+    {
+        var clock = new ManualClock(DateTimeOffset.UtcNow);
+        await using var s = await ClockedServerAsync(clock);
+        var before = s.Changes();
+
+        // removed in the apps or on the nest's website: what it made goes at once
+        Assert.Equal(HttpStatusCode.Created, (await s.Dav.PutAsync("dav/a.txt", Empty())).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await s.Owner.DeleteAsync($"api/webdav/links/{s.LinkId}")).StatusCode);
+        Assert.Equal(0, s.Held.Count);
+
+        // removed on the command line (another process): the keeper finds it removed and stores nothing
+        var resp = await s.Owner.PostAsJsonAsync("api/webdav/links", new { label = "PC", access = "edit" }, PairnetsJson.Options);
+        using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync());
+        using var pc = Dav("pc", doc.RootElement.GetProperty("password").GetString()!, s.Server);
+        Assert.Equal(HttpStatusCode.Created, (await pc.PutAsync("dav/b.txt", Empty())).StatusCode);
+        Assert.Equal(0, await CliCommands.RunAsync(["devices", "remove", doc.RootElement.GetProperty("id").GetString()!, "--data-dir", s.Server.DataDir], new StringWriter(), new StringWriter()));
+        clock.Advance(DavEmptyFiles.QuietTime);
+        await s.Keeper.StoreDueAsync();
+
+        Assert.Null(s.Entry("a.txt"));
+        Assert.Null(s.Entry("b.txt"));
+        Assert.Equal(before, s.Changes());
+        Assert.Equal(0, s.Held.Count);
+        Assert.Contains(s.Server.Logs.Lines, l => l.Contains("Dropped the empty file b.txt", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task AStoppingNestStoresTheEmptyFilesNobodyHoldsALockOn()
+    {
+        var made = await LinkAsync();
+        Assert.Equal(HttpStatusCode.Created, (await made.Http.PutAsync("dav/plain.txt", Empty())).StatusCode);
+        Assert.Equal(HttpStatusCode.Created, (await made.Http.PutAsync("dav/locked.txt", Empty())).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await made.Http.SendAsync(Req("LOCK", "dav/locked.txt", new StringContent(LockBody)))).StatusCode);
+
+        await _server.RestartAsync();
+        Assert.Equal(0, Entry("plain.txt")!.Size);
+        Assert.Null(Entry("locked.txt")); // its content was on its way: the client puts it again after the restart
+        using var again = Dav(made.Username, made.Password);
+        Assert.Equal((HttpStatusCode)207, (await again.SendAsync(Find("dav/plain.txt"))).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await again.SendAsync(Find("dav/locked.txt"))).StatusCode);
+    }
+
+    [Fact]
+    public async Task WhenTooManyEmptyFilesAreHeldAnEmptyPutStoresItsFileAtOnce()
+    {
+        var clock = new ManualClock(DateTimeOffset.UtcNow);
+        var full = new DavEmptyFiles(clock);
+        var someone = new DeviceIdentity("dev_other", "Other (WebDAV link)", DeviceAuthKind.WebDavKey);
+        for (var i = 0; i < DavEmptyFiles.MaxHeld; i++)
+            Assert.True(full.TryAdd($"held/{i}.txt", someone));
+        await using var s = await ClockedServerAsync(clock, full);
+
+        var created = await s.Dav.PutAsync("dav/now.txt", Empty());
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        var stored = s.Entry("now.txt")!;
+        Assert.Equal(0, stored.Size);
+        Assert.Equal("\"" + stored.Hash + "\"", created.Headers.ETag?.Tag);
+        Assert.Null(full.MadeAt("now.txt"));
+    }
+
+    /// <summary>A body that sends its first part, waits for <paramref name="gate"/>, then sends the rest (a slow upload).</summary>
+    private sealed class SlowContent(byte[] first, Task gate, byte[] rest) : HttpContent
+    {
+        protected override async Task SerializeToStreamAsync(Stream stream, TransportContext? context)
+        {
+            await stream.WriteAsync(first);
+            await stream.FlushAsync();
+            await gate;
+            await stream.WriteAsync(rest);
+        }
+
+        protected override bool TryComputeLength(out long length)
+        {
+            length = first.Length + rest.Length;
+            return true;
+        }
+    }
+
+    private static async Task WaitUntilAsync(Func<bool> condition)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(20);
+        while (!condition())
+        {
+            if (DateTime.UtcNow > deadline)
+                throw new TimeoutException("The condition never came true.");
+            await Task.Delay(20);
+        }
     }
 
     // ------------------------------------------------------------------ staying in one's lane

@@ -44,6 +44,16 @@ public sealed class DavFolders(TimeProvider? clock = null)
         }
     }
 
+    /// <summary>A folder renamed (MOVE): it is remembered under <paramref name="to"/>, and so are the empty folders that were inside it.</summary>
+    public void Move(string from, string to)
+    {
+        var inside = Under(from);
+        Remove(from);
+        Add(to);
+        foreach (var folder in inside)
+            Add(to + folder[from.Length..]);
+    }
+
     public bool Has(string path) => _folders.TryGetValue(path, out var until) && until > _clock.GetUtcNow();
 
     /// <summary>The remembered folders at or under <paramref name="path"/> ("" for all), nearest first.</summary>
@@ -52,91 +62,6 @@ public sealed class DavFolders(TimeProvider? clock = null)
         var now = _clock.GetUtcNow();
         var prefix = path.Length == 0 ? string.Empty : path + "/";
         return _folders.Where(f => f.Value > now && f.Key.StartsWith(prefix, StringComparison.Ordinal)).Select(f => f.Key).Order(StringComparer.Ordinal).ToList();
-    }
-}
-
-/// <summary>
-/// New files a WebDAV client made empty and has not written into yet. Finder and Explorer make a file with an empty PUT (sometimes
-/// after a LOCK) and then PUT its content. Storing the empty one would put a throwaway version in history and push it to every
-/// computer, and for a file over 25 MB leave an empty file on every computer when the content then gets 413. So an empty PUT where
-/// no file is, is held here instead (in memory, for <see cref="Lifetime"/>) and listed, read, locked, renamed and deleted as if it
-/// were there. The PUT with the content stores the file. An empty file nothing is written into is never stored: it goes when its
-/// content is refused, after the lifetime, or at a restart (docs/DECISIONS.md, "WebDAV link").
-/// </summary>
-public sealed class DavEmptyFiles(TimeProvider? clock = null)
-{
-    public static readonly TimeSpan Lifetime = TimeSpan.FromMinutes(10);
-
-    /// <summary>The most files held at once. Past it the expired ones go, and if that is not enough, all of them: none was stored, so only a name is lost.</summary>
-    public const int MaxHeld = 5000;
-
-    /// <summary>A held file's ETag: not a SHA-256, so it never matches a stored version.</summary>
-    public const string ETag = "new-empty-file";
-
-    private readonly TimeProvider _clock = clock ?? TimeProvider.System;
-    private readonly ConcurrentDictionary<string, (DateTimeOffset Made, DateTimeOffset Until)> _files = new(StringComparer.Ordinal);
-
-    /// <summary>Holds <paramref name="path"/> (again: a second empty PUT keeps when it was made and starts the lifetime over).</summary>
-    public void Add(string path)
-    {
-        var now = _clock.GetUtcNow();
-        if (_files.Count >= MaxHeld)
-        {
-            foreach (var (key, held) in _files)
-            {
-                if (held.Until <= now)
-                    _files.TryRemove(key, out _);
-            }
-            if (_files.Count >= MaxHeld)
-                _files.Clear();
-        }
-        _files.AddOrUpdate(path, _ => (now, now + Lifetime), (_, old) => (old.Until > now ? old.Made : now, now + Lifetime));
-    }
-
-    /// <summary>Starts a held file's lifetime over (a LOCK or PROPPATCH on it: the client is still busy with it).</summary>
-    public void Touch(string path)
-    {
-        var now = _clock.GetUtcNow();
-        if (_files.TryGetValue(path, out var held) && held.Until > now)
-            _files.TryUpdate(path, (held.Made, now + Lifetime), held);
-    }
-
-    /// <summary>When the file held at <paramref name="path"/> was made; null when none is.</summary>
-    public DateTimeOffset? MadeAt(string path) => _files.TryGetValue(path, out var held) && held.Until > _clock.GetUtcNow() ? held.Made : null;
-
-    /// <summary>Stops holding <paramref name="path"/>; true when it was held.</summary>
-    public bool Remove(string path) => _files.TryRemove(path, out var held) && held.Until > _clock.GetUtcNow();
-
-    /// <summary>Stops holding every file inside folder <paramref name="folder"/>.</summary>
-    public void RemoveUnder(string folder)
-    {
-        foreach (var key in _files.Keys)
-        {
-            if (key.StartsWith(folder + "/", StringComparison.Ordinal))
-                _files.TryRemove(key, out _);
-        }
-    }
-
-    /// <summary>The held files inside folder <paramref name="path"/> ("" for all), with when each was made.</summary>
-    public IReadOnlyList<(string Path, DateTimeOffset Made)> Under(string path)
-    {
-        var now = _clock.GetUtcNow();
-        var prefix = path.Length == 0 ? string.Empty : path + "/";
-        return _files.Where(f => f.Value.Until > now && f.Key.StartsWith(prefix, StringComparison.Ordinal))
-            .Select(f => (f.Key, f.Value.Made)).OrderBy(f => f.Key, StringComparer.Ordinal).ToList();
-    }
-
-    /// <summary>A rename (MOVE): the file held at <paramref name="from"/>, or the held files inside folder <paramref name="from"/>, are held under <paramref name="to"/>.</summary>
-    public void Move(string from, string to)
-    {
-        var now = _clock.GetUtcNow();
-        if (_files.TryRemove(from, out var held) && held.Until > now)
-            _files[to] = (held.Made, now + Lifetime);
-        foreach (var key in _files.Keys)
-        {
-            if (key.StartsWith(from + "/", StringComparison.Ordinal) && _files.TryRemove(key, out var inner) && inner.Until > now)
-                _files[to + key[from.Length..]] = (inner.Made, now + Lifetime);
-        }
     }
 }
 
@@ -199,14 +124,16 @@ public static class DavEndpoints
         new(store.Sealed, MaxUploadBytes, auth.ListWebDavLinks().Select(Info).ToList());
 
     /// <summary>
-    /// Removes an active WebDAV link (never a computer): its password stops working at once, not after the key cache's 30 seconds.
+    /// Removes an active WebDAV link (never a computer): its password stops working at once, not after the key cache's 30 seconds,
+    /// and the empty files it made that are still held (<see cref="DavEmptyFiles"/>) go without being stored.
     /// The removed link, or null when <paramref name="id"/> is no active link.
     /// </summary>
-    internal static PairedDevice? RemoveLink(string id, AuthStore auth, DeviceKeys keys)
+    internal static PairedDevice? RemoveLink(string id, AuthStore auth, DeviceKeys keys, DavEmptyFiles emptyFiles)
     {
         if (auth.GetDevice(id) is not { IsWebDav: true, IsActive: true } link || !auth.RemoveDevice(link.Id))
             return null;
         keys.Forget(link.Id);
+        emptyFiles.RemoveBy(link.Id);
         return link;
     }
 
@@ -246,21 +173,24 @@ public static class DavEndpoints
             }
         });
 
-        app.MapDelete("/api/webdav/links/{id}", (string id, AuthStore auth, DeviceKeys keys) =>
-            RemoveLink(id, auth, keys) is null
+        app.MapDelete("/api/webdav/links/{id}", (string id, AuthStore auth, DeviceKeys keys, DavEmptyFiles emptyFiles) =>
+            RemoveLink(id, auth, keys, emptyFiles) is null
                 ? Error(StatusCodes.Status404NotFound, ErrorCodes.NotFound, "No such link.")
                 : Results.NoContent());
     }
 
     // ------------------------------------------------------------------ one WebDAV request
 
-    private sealed class Dav(HttpContext http, SyncStore store, DeviceAccess access, IReadOnlyList<string> linkedIn, DavFolders folders, DavEmptyFiles emptyFiles, string basePath)
+    private sealed class Dav(HttpContext http, SyncStore store, DeviceIdentity identity, IReadOnlyList<string> linkedIn, DavFolders folders, DavEmptyFiles emptyFiles, string basePath)
     {
         public HttpContext Http { get; } = http;
 
         public SyncStore Store { get; } = store;
 
-        public DeviceAccess Access { get; } = access;
+        /// <summary>The link this request signed in with (its id, its name in pushes, what it may do).</summary>
+        public DeviceIdentity Identity { get; } = identity;
+
+        public DeviceAccess Access { get; } = identity.AccessOrOwner;
 
         public DavFolders Folders { get; } = folders;
 
@@ -300,12 +230,12 @@ public static class DavEndpoints
 
     private static async Task<IResult> Handle(HttpContext ctx, SyncStore store, IHubContext<SyncHub> hub, DavFolders folders, DavEmptyFiles emptyFiles, LinkStore links, SyncOptions options)
     {
-        if (DeviceIdentity.Of(ctx) is not { Kind: DeviceAuthKind.WebDavKey, Access: { } access })
+        if (DeviceIdentity.Of(ctx) is not { Kind: DeviceAuthKind.WebDavKey, Access: not null } identity)
             return Text(StatusCodes.Status401Unauthorized, "Sign in with a WebDAV link's password.");
         if (store.Sealed)
             return Text(StatusCodes.Status403Forbidden, "This nest is encrypted, so its files can't be shown as a folder here. Use the Pairnets app.");
 
-        var dav = new Dav(ctx, store, access, links.LinkedInFolders(), folders, emptyFiles, BasePathOf(ctx, options));
+        var dav = new Dav(ctx, store, identity, links.LinkedInFolders(), folders, emptyFiles, BasePathOf(ctx, options));
         if (!TryPathOf(ctx, out var path, out var trailingSlash))
             return Text(StatusCodes.Status400BadRequest, "That is not a path in this nest.");
         var method = ctx.Request.Method.ToUpperInvariant();
@@ -345,9 +275,11 @@ public static class DavEndpoints
                 if (!dav.CanWrite)
                     return Text(StatusCodes.Status403Forbidden, "This link can only look at files.");
                 if (path.Length > 0 && dav.MayTouch(path))
-                    dav.EmptyFiles.Touch(path);
+                    dav.EmptyFiles.Locked(path); // a held empty file being locked: its content is on its way, so it waits longer
                 return Lock();
             case "UNLOCK":
+                if (dav.CanWrite && path.Length > 0 && dav.MayTouch(path))
+                    dav.EmptyFiles.Unlocked(path); // done with it: if no content came, it is stored empty soon (DavEmptyFileKeeper)
                 return Results.NoContent();
             default: // not mapped (COPY, POST); kept so a new method can't fall through silently
                 return Text(StatusCodes.Status501NotImplemented, "Copy inside the nest isn't supported here; copy the file to your computer and back.");
@@ -672,7 +604,9 @@ public static class DavEndpoints
             return Text(StatusCodes.Status403Forbidden, "This file is not in the folders shared with this link.");
 
         var current = dav.Store.Manifest.Get(path) is { Deleted: false } live ? live : null;
-        var held = current is null && dav.EmptyFiles.MadeAt(path) is not null;
+        // A held empty file (DavEmptyFiles) is never stored empty while this request writes into it, however long that takes.
+        using var writing = current is null ? dav.EmptyFiles.Writing(path) : null;
+        var held = writing is not null;
         if (current is null && (dav.Visible().Any(e => e.Path.StartsWith(path + "/", StringComparison.Ordinal)) || dav.HasHeldInside(path)))
             return Text(StatusCodes.Status405MethodNotAllowed, "That is a folder.");
         foreach (var parent in PathRules.DirectoryPrefixes(path))
@@ -700,15 +634,18 @@ public static class DavEndpoints
             baseValue = current?.Hash ?? "none";
         }
 
-        // A new file made empty is held, not stored (DavEmptyFiles): Finder and Explorer PUT the content next. An empty PUT over a
-        // stored file is not held: that is "make this file empty", stored like any change.
+        // A new file made empty is held, not stored (DavEmptyFiles): Finder and Explorer PUT the content next, and when none comes
+        // it is stored empty a little later (DavEmptyFileKeeper). An empty PUT over a stored file is not held: that is "make this
+        // file empty", stored like any change. When too many are held already, it is stored at once.
         if (current is null && HasNoBody(http))
         {
             if (baseValue != "none")
                 return Text(StatusCodes.Status412PreconditionFailed, "The file changed on the nest in the meantime.");
-            dav.EmptyFiles.Add(path);
-            http.Response.Headers.ETag = "\"" + DavEmptyFiles.ETag + "\"";
-            return Results.StatusCode(held ? StatusCodes.Status204NoContent : StatusCodes.Status201Created);
+            if (dav.EmptyFiles.TryAdd(path, dav.Identity))
+            {
+                http.Response.Headers.ETag = "\"" + DavEmptyFiles.ETag + "\"";
+                return Results.StatusCode(held ? StatusCodes.Status204NoContent : StatusCodes.Status201Created);
+            }
         }
 
         var limited = new LimitedStream(http.Request.Body, MaxUploadBytes);
@@ -914,8 +851,7 @@ public static class DavEndpoints
         {
             if (!dav.Folders.Has(from) && !dav.HasHeldInside(from))
                 return Text(StatusCodes.Status404NotFound, "Not found.");
-            dav.Folders.Remove(from);
-            dav.Folders.Add(to);
+            dav.Folders.Move(from, to);
             dav.EmptyFiles.Move(from, to);
             return Results.StatusCode(StatusCodes.Status201Created);
         }
@@ -960,8 +896,7 @@ public static class DavEndpoints
             return PartlyDone(dav, failed);
         if (source is null)
         {
-            dav.Folders.Remove(from);
-            dav.Folders.Add(to);
+            dav.Folders.Move(from, to);
             dav.EmptyFiles.Move(from, to);
         }
         return Results.StatusCode(existed ? StatusCodes.Status204NoContent : StatusCodes.Status201Created);
@@ -1025,8 +960,8 @@ public static class DavEndpoints
         }
         if (folder)
         {
-            dav.Folders.Remove(from);
-            dav.Folders.Add(to);
+            dav.Folders.Move(from, to);
+            dav.EmptyFiles.Move(from, to); // held empty files inside follow the new name
         }
         return Results.StatusCode(StatusCodes.Status201Created);
     }
@@ -1058,7 +993,7 @@ public static class DavEndpoints
         {
             dav.Http.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger(typeof(DavEndpoints))
                 .LogWarning("A rename by letter case failed ({Reason}) and could not be undone for {Paths}", message, string.Join(", ", stuck));
-            message += $" Some files kept a passing name ending in {PassingMark}…; rename them in the Pairnets app.";
+            message += $" Some files kept a passing name ending in {PassingMark}â€¦; rename them in the Pairnets app.";
         }
         return Text(failure.Status == ChangeStatus.Conflict ? StatusCodes.Status412PreconditionFailed : StatusCodes.Status409Conflict, message);
     }

@@ -444,18 +444,24 @@ public static class Endpoints
         return renamed;
     }
 
-    internal static async Task BroadcastAsync(HttpContext ctx, IHubContext<SyncHub> hub, string path)
+    internal static Task BroadcastAsync(HttpContext ctx, IHubContext<SyncHub> hub, string path)
     {
         var device = DeviceId(ctx);
-        ctx.RequestServices.GetRequiredService<DeviceRegistry>().Changed(DeviceIdentity.Of(ctx)?.RegistryKey ?? device);
+        return BroadcastAsync(ctx.RequestServices, hub, device, DeviceIdentity.Of(ctx)?.RegistryKey ?? device, path);
+    }
+
+    /// <summary>Tells every computer that <paramref name="path"/> changed, made by <paramref name="device"/> (also outside a request: a WebDAV link's held empty file).</summary>
+    internal static async Task BroadcastAsync(IServiceProvider services, IHubContext<SyncHub> hub, string device, string registryKey, string path)
+    {
+        services.GetRequiredService<DeviceRegistry>().Changed(registryKey);
         try
         {
             // Every connection but friends' hears it; a friend's computer only when the path is in its share (see FriendConnections).
-            await ctx.RequestServices.GetRequiredService<FriendConnections>().SendChangedAsync(hub, device, path);
+            await services.GetRequiredService<FriendConnections>().SendChangedAsync(hub, device, path);
         }
         catch (Exception ex)
         {
-            ctx.RequestServices.GetRequiredService<ILogger<SyncHub>>().LogWarning("Broadcast failed: {Error}", ex.Message);
+            services.GetRequiredService<ILogger<SyncHub>>().LogWarning("Broadcast failed: {Error}", ex.Message);
         }
     }
 

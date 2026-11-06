@@ -42,7 +42,9 @@ public sealed partial class ApiTour
 
         var options = await Dav("OPTIONS", file, HttpStatusCode.OK);
         Assert.Equal("1, 2", options.Headers.GetValues("DAV").Single());
-        await Dav("PUT", file, HttpStatusCode.Created, "put through WebDAV");
+        await Dav("PUT", file, HttpStatusCode.Created, string.Empty); // Finder and Explorer make the file empty first: held, not stored
+        await Dav("PUT", file, HttpStatusCode.NoContent, "put through WebDAV"); // then its content: stored once, with no empty version before it
+        Assert.Empty(await Read<JsonElement[]>(Get(_laptopApi, $"api/history?path={Uri.EscapeDataString($"tour-{_tag}.txt")}")));
         Assert.Equal("put through WebDAV", await (await Dav("GET", file, HttpStatusCode.OK)).Content.ReadAsStringAsync());
         await Dav("HEAD", file, HttpStatusCode.OK);
         Assert.Contains($"tour-{_tag}.txt", await (await Dav("PROPFIND", file, (HttpStatusCode)207, null, ("Depth", "0"))).Content.ReadAsStringAsync());
