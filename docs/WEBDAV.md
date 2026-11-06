@@ -59,7 +59,9 @@ empty PUT (`Content-Length: 0`), a LOCK, the PUT with the content, an UNLOCK. Th
 `If-Match: "new-empty-file"` matches it, `If-None-Match: *` and MKCOL find it taken. Then:
 
 - the PUT with the content stores the file: one version, nothing empty in history, one push;
-- content over 25 MB (413), a DELETE, or removing the link takes the held file away: nothing was stored, so no computer hears of it;
+- content over 25 MB (413, from the nest or, through pairnets.app, from the Worker, which tells the nest with
+  `X-Pairnets-Dav-Refused: too_large`), a DELETE, or removing the link takes the held file away: nothing was stored, so no computer
+  hears of it;
 - when nothing more comes, the file was meant to be empty and is stored as an empty file (base `none`, dated when the client made
   it, pushed in the link's name): 2 minutes after the last request about it (empty PUT, PROPPATCH, UNLOCK), or, while a client
   holds a lock on it, an hour after the last LOCK (the lock's own timeout; Finder copies a big file into its cache before it PUTs).
@@ -67,7 +69,9 @@ empty PUT (`Content-Length: 0`), a LOCK, the PUT with the content, an UNLOCK. Th
 - the nest stopping stores the held files nobody holds a lock on; a locked one's content was on its way and is put again.
 
 An empty PUT over a stored file is a real change (the file becomes empty, the old version goes to history). At most 5,000 files are
-held; past that an empty PUT stores its file at once.
+held; past that an empty PUT stores its file at once. Left: through pairnets.app, a file over 100 MB is refused by Cloudflare before
+the Worker sees it, so the nest can't tell it from a file meant to be empty and stores the empty file after the wait (what every
+empty PUT did before files were held).
 
 ## Worker side
 
@@ -82,8 +86,13 @@ held; past that an empty PUT stores its file at once.
   `a-z2-9` without i, l, o, once "-" and spaces are gone) goes on; elsewhere only `Bearer` (the hub). Anything else is dropped.
 - **The password is the key for limits.** For `dav/` the HTTP Basic password (lower-case, without "-") is hashed like a
   computer's key: its own 6,000 a minute, the nest's 30,000, and a refused password counts against the address.
-- **25 MB.** A PUT whose `Content-Length` is over 26,214,400 gets `413 {"error":"too_large"}` before the nest is asked.
-  A PUT without a length is stopped by the nest. The Worker's other refusals under `dav/` (404, 429, 503) are plain text.
+- **25 MB.** A PUT whose `Content-Length` is over 26,214,400 gets `413 {"error":"too_large"}` and its body is never read or
+  passed on. The nest is told with the same PUT without a body, `X-Pairnets-Dav-Refused: too_large` and `If-Match:
+  "new-empty-file"`, so it drops the empty file the client made first (below) instead of storing it later; the If-Match makes it
+  something no nest can take for a change (412 on a stored file). A caller's own `X-Pairnets-Dav-Refused` is dropped. The client
+  gets the Worker's 413 whatever the nest answered, also when it is offline. The notice counts against the link's budget like any
+  request. A PUT without a length is stopped by the nest. The Worker's other refusals under `dav/` (404, 429, 503) are plain text.
+  Cloudflare itself refuses a request over 100 MB before the Worker runs: the nest never hears of that one (see below).
 - **Links in answers.** The Worker sends `X-Pairnets-Dav-Base` (a caller's own copy is dropped): `https://pairnets.app/<name>.<id>`
   when the website's function passed the request on, else `https://sync.pairnets.app/dav/<name>.<id>`, or
   `…/n/<id>/dav` on the first door. The nest writes every `href` under it (no trailing slash).

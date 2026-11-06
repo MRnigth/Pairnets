@@ -733,6 +733,34 @@ public sealed class WebDavTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task WhenThePairnetsServiceRefusesTheContentForItsSizeTheHeldFileGoesToo()
+    {
+        // Through pairnets.app the Worker refuses a PUT over 25 MB itself and tells the nest with this request (cloud/src/relay.ts).
+        await PutOwnerAsync("keep.txt", "kept");
+        var kept = Entry("keep.txt")!;
+        var made = await LinkAsync();
+        var viewer = await LinkAsync("Viewer", "view");
+        static HttpRequestMessage Told(string url) => Req("PUT", url, Empty(), (DavEndpoints.RefusedHeader, "too_large"), ("If-Match", HeldETag));
+        var before = Changes();
+
+        Assert.Equal(HttpStatusCode.Created, (await made.Http.PutAsync("dav/movie.mov", Empty())).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await made.Http.SendAsync(Req("LOCK", "dav/movie.mov", new StringContent(LockBody)))).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await viewer.Http.SendAsync(Told("dav/movie.mov"))).StatusCode); // only a link that may change it
+        Assert.Equal((HttpStatusCode)207, (await made.Http.SendAsync(Find("dav/movie.mov"))).StatusCode);
+        Assert.Equal(HttpStatusCode.RequestEntityTooLarge, (await made.Http.SendAsync(Told("dav/movie.mov"))).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await made.Http.SendAsync(Find("dav/movie.mov"))).StatusCode);
+        Assert.Equal(0, _server.Services.GetRequiredService<DavEmptyFiles>().Count); // nothing left to be stored empty later
+
+        // over a stored file, or where nothing is, it changes nothing
+        Assert.Equal(HttpStatusCode.RequestEntityTooLarge, (await made.Http.SendAsync(Told("dav/keep.txt"))).StatusCode);
+        Assert.Equal(HttpStatusCode.RequestEntityTooLarge, (await made.Http.SendAsync(Told("dav/nothing.txt"))).StatusCode);
+        Assert.Equal(kept, Entry("keep.txt"));
+        Assert.Null(Entry("nothing.txt"));
+        Assert.Null(Entry("movie.mov"));
+        Assert.Equal(before, Changes());
+    }
+
+    [Fact]
     public async Task AnEmptyPutOverAStoredFileEmptiesItAsBefore()
     {
         await PutOwnerAsync("notes.txt", "some notes");

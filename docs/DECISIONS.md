@@ -2511,6 +2511,12 @@ the existing tunnel and relay (SMB cannot pass them, and cannot be both safe and
   nest stores the unlocked ones (a restart would otherwise lose a file the person saw) and drops the locked ones (their content was on
   its way, and the client puts it again; for a big one that is a 413 and nothing left behind). Past 5,000 held files an empty PUT is
   stored at once, as before. An empty PUT over a stored file is a real change ("make it empty") and is stored as it always was.
+  Through pairnets.app the Worker refuses a PUT over 25 MB before the nest sees it, which from the nest looks exactly like "nothing
+  more came" (Finder's empty-file copy is PUT, LOCK, UNLOCK too). So the Worker now tells the nest: the same PUT with no body,
+  `X-Pairnets-Dav-Refused: too_large` and `If-Match: "new-empty-file"`. The header can only take a held, never-stored file away (what
+  a DELETE by that link could do anyway), so the nest believes it from any link that may change the file and needs no proof that the
+  Worker sent it; the If-Match keeps any nest from storing anything from it (412 on a stored file, 412 where nothing is). The Worker
+  still answers its own 413 at once afterwards, nest online or not, and the notice counts against the link's budget.
 * **Locks are a formality.** Finder mounts read-write only when LOCK works, so LOCK returns a token and UNLOCK answers 204, but nothing
   is held; the base check is what protects. A view-only link advertises DAV class 1 only, so Finder mounts it read-only.
 * **Folder metadata is dropped, not stored.** `._*` (AppleDouble), `.DS_Store`, `.localized`, `Thumbs.db` and `desktop.ini` get a
@@ -2542,4 +2548,6 @@ the existing tunnel and relay (SMB cannot pass them, and cannot be both safe and
   whose old folder still holds something that is not synced (Finder's `.DS_Store`, an ignored file) keeps that folder, so on a disk
   that ignores case the new files land under the old folder name and its next pass sends the old name back to the nest. That is the
   sync engine (a folder renamed by case on one computer does the same to another); the fix belongs there (give the folder the nest's
-  case before downloading into it).
+  case before downloading into it). Through pairnets.app a file over 100 MB is refused by Cloudflare before the Worker runs, so the
+  nest is not told and stores the empty file Finder made first once nothing more comes (2026-11-06; a direct address, a file
+  between 25 and 100 MB, or chunked uploads leave nothing behind).

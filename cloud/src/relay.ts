@@ -58,7 +58,7 @@ const ROUTER_BASE = "https://pairnets-router";
  */
 const STRIP = new Set([
   "cookie", "host", "x-pairnets-client-ip", "x-pairnets-route", "x-pairnets-sig", "x-pairnets-nonce", "x-pairnets-ts", "x-pairnets-nest",
-  "x-pairnets-dav-base", "x-pairnets-dav-ip", "x-pairnets-dav-ts", "x-pairnets-dav-sig",
+  "x-pairnets-dav-base", "x-pairnets-dav-ip", "x-pairnets-dav-ts", "x-pairnets-dav-sig", "x-pairnets-dav-refused",
   "expect", "keep-alive", "proxy-connection", "te", "trailer", "transfer-encoding",
 ]);
 
@@ -94,6 +94,14 @@ export function isDavRest(rest: string): boolean {
 
 /** The biggest file a WebDAV client may PUT (WEBDAV.md: 25 MB); the nest checks again, this one only saves the trip. */
 export const DAV_MAX_UPLOAD = 26214400;
+
+/**
+ * Sent to the nest, with no body, in place of a PUT too big for WebDAV (WEBDAV.md): Finder and Explorer make the file empty first,
+ * and the nest holds that empty file until its content comes. This tells it none will, so it is not stored empty later. With
+ * `If-Match` of a held empty file (DAV_HELD_ETAG, the nest's DavEmptyFiles.ETag), so no nest can take it for a change.
+ */
+export const DAV_REFUSED_HEADER = "X-Pairnets-Dav-Refused";
+export const DAV_HELD_ETAG = "new-empty-file";
 
 /** Step 2: only the API, the hub and WebDAV, and never the admin endpoints (RELAY.md 5.2). `rest` is the path after the id. */
 export function relayAllowed(rest: string): boolean {
@@ -299,10 +307,8 @@ async function forward(ctx: Ctx, dav?: DavOptions): Promise<Response> {
   const isDav = isDavRest(rest);
   const key = isDav ? basicPasswordOf(ctx.req) : deviceKeyOf(ctx.req, ctx.url);
   const method = ctx.req.method.toUpperCase();
-  if (isDav && method === "PUT" && Number(ctx.req.headers.get("content-length") ?? "0") > DAV_MAX_UPLOAD) {
-    // Before anything else is counted or sent: the file is too big for WebDAV (the apps take bigger ones).
-    throw new HttpError(413, "too_large", "Files over 25 MB can't be uploaded this way. Use the Pairnets app for bigger files.");
-  }
+  // The file is too big for WebDAV (the apps take bigger ones): refused below, and its body never read or sent.
+  const tooLarge = isDav && method === "PUT" && Number(ctx.req.headers.get("content-length") ?? "0") > DAV_MAX_UPLOAD;
   if (key === null) {
     if (!(await countAgainstAddress(ctx))) throw tooMany(RELAY_LIMIT_PERIOD);
   } else if (!(await allowed(ctx, "RELAY_DEVICE_LIMIT", await keyedHash(ctx.env, `${nest.id}\n${key}`)))) {
@@ -328,6 +334,22 @@ async function forward(ctx: Ctx, dav?: DavOptions): Promise<Response> {
   headers.set("X-Pairnets-Client-IP", ctx.ip);
   headers.set("X-Pairnets-Route", nest.id);
   if (isDav) headers.set("X-Pairnets-Dav-Base", dav?.base ?? `${ctx.url.origin}/n/${nest.id}/dav`);
+  if (tooLarge) {
+    // The nest still hears of it, in a PUT without a body (DAV_REFUSED_HEADER), so the empty file the client made first is not
+    // stored once nothing more comes for it. Then the caller gets this service's 413, whatever the nest said or if it is offline.
+    headers.delete("content-length");
+    headers.delete("content-type");
+    headers.set(DAV_REFUSED_HEADER, "too_large");
+    headers.set("If-Match", `"${DAV_HELD_ETAG}"`);
+    try {
+      const told = await ctx.env.ROUTER.fetch(`${ROUTER_BASE}/${rest}${ctx.url.search}`, { method, headers, body: "", redirect: "manual" });
+      await told.body?.cancel().catch(() => undefined);
+      if (key !== null && (told.status === 401 || told.status === 403)) await countAgainstAddress(ctx);
+    } catch {
+      // the nest can't be reached: the 413 below is all that is left to say
+    }
+    throw new HttpError(413, "too_large", "Files over 25 MB can't be uploaded this way. Use the Pairnets app for bigger files.");
+  }
   let resp: Response;
   try {
     resp = await ctx.env.ROUTER.fetch(`${ROUTER_BASE}/${rest}${ctx.url.search}`, {

@@ -275,7 +275,7 @@ public sealed class NestWebsiteTests : IAsyncLifetime
     {
         var computer = _server.MintKey("DESK");
         var (link, password) = Auth.AddWebDavLink("Mac mini", new DeviceAccess(DeviceAccess.View, ["Photos"]));
-        Auth.AddWebDavLink("DESK", new DeviceAccess(DeviceAccess.Edit)); // a link may share a computer's name
+        var (desk, deskPassword) = Auth.AddWebDavLink("DESK", new DeviceAccess(DeviceAccess.Edit)); // a link may share a computer's name
         using var dav = Dav(password);
         Assert.Equal((HttpStatusCode)207, await PropfindAsync(dav)); // its key is cached by now
         using var web = await SignedIn();
@@ -305,6 +305,14 @@ public sealed class NestWebsiteTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.NotFound, (await web.DeleteAsync($"web/api/webdav/links/{link.Id}")).StatusCode);
         Assert.Equal(["DESK"], Auth.ListWebDavLinks().Select(l => l.Name));
         Assert.True(Auth.GetDevice(computer.Id)!.IsActive);
+
+        // A file the link made empty and the nest still holds (waiting for its content) goes with it, never stored.
+        using (var deskDav = Dav(deskPassword))
+            Assert.Equal(HttpStatusCode.Created, (await deskDav.PutAsync("dav/new.txt", new ByteArrayContent([]))).StatusCode);
+        Assert.Equal(1, _server.Services.GetRequiredService<DavEmptyFiles>().Count);
+        Assert.Equal(HttpStatusCode.NoContent, (await web.DeleteAsync($"web/api/webdav/links/{desk.Id}")).StatusCode);
+        Assert.Equal(0, _server.Services.GetRequiredService<DavEmptyFiles>().Count);
+        Assert.Null(_server.Store.Manifest.Get("new.txt"));
         Assert.Contains(_server.Logs.Lines, l => l.Contains("WebDAV link Mac mini was removed on the nest's website", StringComparison.Ordinal));
         Assert.DoesNotContain(_server.Logs.Lines, l => l.Contains(password, StringComparison.Ordinal));
     }

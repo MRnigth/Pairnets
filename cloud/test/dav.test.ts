@@ -3,8 +3,9 @@ import { describe, expect, it } from "vitest";
 // @ts-ignore no declaration file
 import { onRequest as pagesFunction } from "../../site/functions/[[path]].js";
 import { keyedHash } from "../src/ratelimit";
-import { DAV_MAX_UPLOAD, RELAY_DEVICE_PER_MINUTE, RELAY_LIMIT_PERIOD, relayAllowed } from "../src/relay";
+import { DAV_HELD_ETAG, DAV_MAX_UPLOAD, DAV_REFUSED_HEADER, RELAY_DEVICE_PER_MINUTE, RELAY_LIMIT_PERIOD, relayAllowed } from "../src/relay";
 import type { Env } from "../src/env";
+import type { SeenRequest } from "./fake-relay";
 import { addServer, Harness } from "./helpers";
 
 const SECRET = "test-dav-edge-secret";
@@ -36,7 +37,7 @@ async function signed(h: Harness, segment: string, ip: string, ts = h.clock.now,
   };
 }
 
-const davRequests = (nest: { appRequests(): { path: string }[] }) => nest.appRequests().filter((r) => r.path.startsWith("/dav"));
+const davRequests = (nest: { appRequests(): SeenRequest[] }) => nest.appRequests().filter((r) => r.path.startsWith("/dav"));
 
 describe("WebDAV through the relay", () => {
   it("passes PROPFIND, MKCOL, MOVE and LOCK on with method, path, headers and body, and a base for the links", async () => {
@@ -145,7 +146,7 @@ describe("WebDAV through the relay", () => {
     expect(h.limits.fail.keys.length).toBeGreaterThanOrEqual(3);
   });
 
-  it("refuses a PUT announcing more than 25 MB with 413 before it reaches the nest, and lets a small one through", async () => {
+  it("refuses a PUT announcing more than 25 MB with 413 without passing its body on, tells the nest, and lets a small one through", async () => {
     const { nest, app } = await setup();
     expect(DAV_MAX_UPLOAD).toBe(25 * 1024 * 1024);
     const path = `/dav/soro.${nest.nestId}/big.bin`;
@@ -154,10 +155,19 @@ describe("WebDAV through the relay", () => {
     const big = await app.call("PUT", path, { rawBody: "x", contentType: "application/octet-stream", headers: { ...auth, "Content-Length": String(DAV_MAX_UPLOAD + 1) } });
     expect(big.status).toBe(413);
     expect(big.json.error).toBe("too_large");
-    expect(davRequests(nest)).toEqual([]);
-    const small = await app.call("PUT", path, { rawBody: "hello", contentType: "application/octet-stream", headers: auth });
+    // The nest hears of it without the body, in a request no nest can take for a change: it drops the empty file the client
+    // made first (Finder and Explorer do), which it would otherwise store once nothing more came.
+    const told = davRequests(nest);
+    expect(told.map((r) => [r.method, r.path, r.body])).toEqual([["PUT", "/dav/big.bin", ""]]);
+    expect(told[0].headers.get(DAV_REFUSED_HEADER)).toBe("too_large");
+    expect(told[0].headers.get("if-match")).toBe(`"${DAV_HELD_ETAG}"`);
+    expect(told[0].headers.get("authorization")).toBe(basic(PASSWORD));
+    expect(DAV_HELD_ETAG).toBe("new-empty-file"); // the nest's DavEmptyFiles.ETag
+    // A caller's own copy of that header never reaches the nest.
+    const small = await app.call("PUT", path, { rawBody: "hello", contentType: "application/octet-stream", headers: { ...auth, [DAV_REFUSED_HEADER]: "too_large" } });
     expect(small.status).toBe(200);
     expect(small.json).toMatchObject({ method: "PUT", body: "hello" });
+    expect(davRequests(nest).at(-1)!.headers.get(DAV_REFUSED_HEADER)).toBeNull();
     // Reading a bigger file is not a PUT.
     expect((await app.call("GET", path, { headers: auth })).status).toBe(200);
   });

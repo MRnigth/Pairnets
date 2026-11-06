@@ -81,6 +81,9 @@ public static class DavEndpoints
     public const int MaxFilesPerFolderCall = 100;
 
     private const string BaseHeader = "X-Pairnets-Dav-Base";
+
+    /// <summary>The Worker's word that it refused a PUT for its size (cloud/src/relay.ts, DAV_REFUSED_HEADER): the held empty file goes.</summary>
+    public const string RefusedHeader = "X-Pairnets-Dav-Refused";
     private const string AllMethods = "OPTIONS, PROPFIND, PROPPATCH, GET, HEAD, PUT, DELETE, MKCOL, MOVE, LOCK, UNLOCK";
     private const string ReadMethods = "OPTIONS, PROPFIND, GET, HEAD";
     // COPY and POST are not mapped: routing answers 405 and Finder and Explorer fall back to reading and putting the file.
@@ -586,6 +589,15 @@ public static class DavEndpoints
             return Text(StatusCodes.Status403Forbidden, "This link can only look at files.");
         if (path.Length == 0)
             return Text(StatusCodes.Status405MethodNotAllowed, "That is a folder.");
+        if (http.Request.Headers[RefusedHeader].ToString() == "too_large")
+        {
+            // The Pairnets service refused this file's content for its size before it came here (it sends this without a body): the
+            // empty file the client made first goes, as when the nest refuses the content itself. It does nothing a DELETE of that
+            // held file would not, so any link that may change the file is believed.
+            if (dav.MayTouch(path))
+                dav.EmptyFiles.Remove(path);
+            return await TooLargeAsync(http);
+        }
         if (http.Features.Get<IHttpMaxRequestBodySizeFeature>() is { IsReadOnly: false } size)
             size.MaxRequestBodySize = DrainLimitBytes; // LimitedStream below stops the file itself at MaxUploadBytes
         if (http.Request.ContentLength > MaxUploadBytes)
