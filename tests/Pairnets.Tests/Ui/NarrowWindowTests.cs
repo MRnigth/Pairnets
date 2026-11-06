@@ -53,6 +53,22 @@ public class NarrowWindowTests
         }
     }
 
+    /// <summary>
+    /// Lays the window out until <paramref name="find"/> finds what it looks for. The files page reads its list on a
+    /// background thread (so the window never freezes), and a busy computer can take longer than three passes.
+    /// </summary>
+    private static T WaitFor<T>(MainWindow window, Func<T?> find, string what) where T : class
+    {
+        var until = DateTime.UtcNow.AddSeconds(10);
+        while (true)
+        {
+            Layout(window);
+            if (find() is { } found) return found;
+            if (DateTime.UtcNow > until) throw new TimeoutException($"After 10 s the window still shows no {what}.");
+            Thread.Sleep(20);
+        }
+    }
+
     private static void Close(MainWindow window)
     {
         window.AllowClose = true;
@@ -194,8 +210,8 @@ public class NarrowWindowTests
     {
         var window = Open(width, Synced());
         window.Navigate(MainPage.Files);
-        Layout(window);
         var page = window.FilesView;
+        var name = WaitFor(window, () => Screen.All<TextBlock>(page).FirstOrDefault(t => t.Text == "Documents" && t.IsEffectivelyVisible), "Documents row");
         var search = Where(Screen.Named<TextBox>(page, "FilesSearch"), window);
         var add = Where(Screen.Named<Button>(page, "AddFilesButton"), window);
         Assert.False(search.Intersects(add), "Add files is drawn over the search box");
@@ -203,7 +219,6 @@ public class NarrowWindowTests
         var card = Where(Screen.Named<Border>(page, "ListCard"), window);
         foreach (var more in Screen.All<Button>(page).Where(b => ToolTip.GetTip(b) is string tip && tip.StartsWith("More", StringComparison.Ordinal) && b.IsEffectivelyVisible))
             Assert.True(Where(more, window).Right <= card.Right + 0.5, "a row's … button is cut off");
-        var name = Screen.All<TextBlock>(page).First(t => t.Text == "Documents" && t.IsEffectivelyVisible);
         var column = ((Control)name.Parent!).Bounds.Width;
         Assert.True(column >= (width < 900 ? 80 : 100), $"the names get only {column:0} px");
         Close(window);

@@ -48,11 +48,16 @@ public sealed class ClickLog
           document.addEventListener('submit', (e) => send('submit', e.target), true);
           document.addEventListener('change', (e) => { if (e.target.matches && e.target.matches('input[type=checkbox]')) send('click', e.target); }, true);
           const seen = (node) => {
-            if (node.nodeType !== 1) return;
+            if (node.nodeType !== 1 || !node.isConnected) return;
             if (node.matches('button, a[href], form, input[type=checkbox]')) send('seen', node);
             node.querySelectorAll('button, a[href], form, input[type=checkbox]').forEach((n) => send('seen', n));
           };
-          new MutationObserver((changes) => changes.forEach((c) => c.addedNodes.forEach(seen))).observe(document, { childList: true, subtree: true });
+          // While the HTML is still being parsed an element can be reported before its text arrives (a busy computer
+          // makes the parser pause mid-page), which names it without its text: name those once the page is parsed.
+          const parsing = [];
+          document.addEventListener('DOMContentLoaded', () => parsing.splice(0).forEach(seen));
+          const added = (node) => { if (document.readyState === 'loading') parsing.push(node); else seen(node); };
+          new MutationObserver((changes) => changes.forEach((c) => c.addedNodes.forEach(added))).observe(document, { childList: true, subtree: true });
         })();
         """;
 
