@@ -2467,9 +2467,11 @@ the existing tunnel and relay (SMB cannot pass them, and cannot be both safe and
 * **Revoking without a computer** (2026-11-05): an owner who lost every computer could not take a leaked link password away. The
   nest's website now lists the links in a section of their own on Devices, with **Remove…** (asks first: "Its password stops working
   at once"), through `GET`/`DELETE /web/api/webdav/links[/{id}]`, signed-in and same-origin like `/web/api/devices`, and sharing
-  `DavEndpoints.Links`/`RemoveLink` with the apps' routes (so `DeviceKeys.Forget` makes it instant there too). `devices list` prints
+  `DavEndpoints.Links`/`RemoveLink` with the apps' routes (so `DeviceKeys.Forget` makes it instant there too, and the empty files the
+  link made that are still held are dropped unstored: a removed link does nothing more, not even later). `devices list` prints
   the links after the computers (label, access, folders, made, last used, never a secret), and `devices remove` says when it removed
-  a link; a name shared by a computer and a link is refused there, the id decides. Making a link stays in the apps: its password is
+  a link; a name shared by a computer and a link is refused there, the id decides (the running nest's keeper checks a link is still
+  there before it stores a held file, so a removal there also stops those). Making a link stays in the apps: its password is
   shown once and a website page that shows passwords is a door worth keeping shut. The account page (pairnets.app) still shows
   computers only: it would need a relay route on the nest, a route and UI in the Worker and a Worker deploy, so it is left for later.
 * **Writes go through `SyncStore`**: `PutAsync`, `DeleteAsync`, `MoveAsync`, then the same push message the apps' changes send. So the
@@ -2493,6 +2495,22 @@ the existing tunnel and relay (SMB cannot pass them, and cannot be both safe and
   `MoveAsync` steps with the base check, as the apps' own rename does (`NestFiles`): to a passing name `<old>.pairnets-rename-<8 hex>`,
   then to the new name; a failed step moves back what had moved. `SyncStore` and `/api/move` are unchanged. Computers see the old name
   deleted and the new one added, delete the old file first and end with one file under the new name; history keeps the old version.
+  Only the last name may change its case in one MOVE (a folder above it too → 409, rename that folder on its own): two names that differ
+  in case at two levels would need a passing name at each. Empty folders and held empty files inside a renamed folder follow it (review,
+  2026-11-06; before, a folder rename by case left them under the old name, as an ordinary folder MOVE left the empty folders inside).
+* **Finder's empty first PUT is held, not stored** (2026-11-06). Finder and Explorer copy a file in as an empty PUT, a LOCK, the PUT
+  with the content and an UNLOCK. Storing the empty file put a throwaway version in history and on every computer, and for a file over
+  25 MB the content then got 413 and left an empty file everywhere. So an empty PUT where no file is goes into `DavEmptyFiles` (memory)
+  and every WebDAV method treats it as there (0 bytes, ETag `new-empty-file`, which no stored version can have). The content PUT stores
+  the file once; a 413, a DELETE or removing the link takes it away and nothing was ever stored. A file that was meant to be empty
+  must still arrive (the owner): `DavEmptyFileKeeper` stores it as an empty file when nothing more comes, 2 minutes after the last
+  request about it, or an hour after the last LOCK while a client holds one, and never while a PUT is writing into it. Why not store
+  on UNLOCK: a client that unlocks between the empty PUT and its content would bring the empty version back, and the gain is only
+  that an empty file reaches the computers two minutes sooner. Why wait an hour while locked: Finder copies a big file into its own
+  cache before it PUTs, with no request in between, and the lock it was given lasts an hour (a refresh starts it over). A stopping
+  nest stores the unlocked ones (a restart would otherwise lose a file the person saw) and drops the locked ones (their content was on
+  its way, and the client puts it again; for a big one that is a 413 and nothing left behind). Past 5,000 held files an empty PUT is
+  stored at once, as before. An empty PUT over a stored file is a real change ("make it empty") and is stored as it always was.
 * **Locks are a formality.** Finder mounts read-write only when LOCK works, so LOCK returns a token and UNLOCK answers 204, but nothing
   is held; the base check is what protects. A view-only link advertises DAV class 1 only, so Finder mounts it read-only.
 * **Folder metadata is dropped, not stored.** `._*` (AppleDouble), `.DS_Store`, `.localized`, `Thumbs.db` and `desktop.ini` get a
