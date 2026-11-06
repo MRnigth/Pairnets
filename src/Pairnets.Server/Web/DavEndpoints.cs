@@ -1061,7 +1061,9 @@ public static class DavEndpoints
         if (header.Length == 0 || header.Length > 2048)
             return false;
         string path;
-        if (Uri.TryCreate(header, UriKind.Absolute, out var absolute))
+        // Only http(s) is a full address: on Linux and macOS .NET also reads "/dav/x" as an absolute file:// address, which
+        // made every MOVE with just a path (what Explorer and the tests send) a 400 there.
+        if (Uri.TryCreate(header, UriKind.Absolute, out var absolute) && (absolute.Scheme == Uri.UriSchemeHttp || absolute.Scheme == Uri.UriSchemeHttps))
         {
             // On the nest itself the host must be its own ("localhost", 127.0.0.1 and ::1 count as one); behind the service it is
             // the public name, which the service vouches for.
