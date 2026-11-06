@@ -153,6 +153,27 @@ public sealed class NestApi(IServerTarget target) : IDisposable
     public async Task<IReadOnlyList<DeviceInfo>> DevicesAsync() =>
         (await App(Watcher.Key, Watcher.Name).GetFromJsonAsync<List<DeviceInfo>>("api/devices", PairnetsJson.Options))!;
 
+    /// <summary>A WebDAV link made the way the owner's app makes one (the Watcher is one of the owner's computers).</summary>
+    public sealed record WebDavLink(string Id, string Label, string Password);
+
+    public async Task<WebDavLink> AddWebDavLinkAsync(string label)
+    {
+        var response = await Expect(App(Watcher.Key, Watcher.Name).PostAsJsonAsync("api/webdav/links", new { label, access = "edit" }, PairnetsJson.Options), HttpStatusCode.Created);
+        var made = await response.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>(PairnetsJson.Options);
+        return new WebDavLink(made.GetProperty("id").GetString()!, made.GetProperty("label").GetString()!, made.GetProperty("password").GetString()!);
+    }
+
+    /// <summary>How /dav answers a link's password, the way Finder asks first (PROPFIND, depth 0): 207, or 401 once it is removed.</summary>
+    public async Task<int> DavAnswerAsync(string password)
+    {
+        var dav = App();
+        dav.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Basic",
+            Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes("finder:" + password)));
+        using var request = new HttpRequestMessage(new HttpMethod("PROPFIND"), "dav/");
+        request.Headers.Add("Depth", "0");
+        return (int)(await dav.SendAsync(request)).StatusCode;
+    }
+
     /// <summary>How the API answers a key or the shared token: OK, or the error code it was turned away with.</summary>
     public async Task<string> AnswerToAsync(string key, string device)
     {

@@ -367,8 +367,8 @@ previous current version goes to history too, so a restore can itself be undone.
 These work while the service runs:
 
 ```bash
-sudo -u pairnets /opt/pairnets/pairnets-server devices list               # computers with their own key
-sudo -u pairnets /opt/pairnets/pairnets-server devices remove "LAPTOP"    # its key stops within 30 s
+sudo -u pairnets /opt/pairnets/pairnets-server devices list               # computers with their own key, then WebDAV links
+sudo -u pairnets /opt/pairnets/pairnets-server devices remove "LAPTOP"    # its key (or a link's password) stops within 30 s
 sudo -u pairnets /opt/pairnets/pairnets-server owner-link                 # one-time link to the website
 ```
 

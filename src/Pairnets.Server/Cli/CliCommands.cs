@@ -7,8 +7,8 @@ namespace Pairnets.Server.Cli;
 
 /// <summary>
 /// Maintenance commands: "rescan", "history list|restore|purge" require the service to be stopped (the
-/// data directory lock enforces this); "devices list|remove" work while it runs (auth.db is shared
-/// safely; the service notices a removal within 30 seconds). None of them needs the token.
+/// data directory lock enforces this); "devices list|remove" (computers and WebDAV links) work while it runs (auth.db
+/// is shared safely; the service notices a removal within 30 seconds). None of them needs the token.
 /// </summary>
 public static class CliCommands
 {
@@ -21,9 +21,10 @@ public static class CliCommands
                                                   restore a version as the new current version
           pairnets-server history purge [--dry-run]
                                                   apply the retention policy now
-          pairnets-server devices list            the computers with their own key
+          pairnets-server devices list            the computers with their own key, then the WebDAV links
           pairnets-server devices remove <name or id>
-                                                  remove a computer: its key stops working
+                                                  remove a computer or a WebDAV link: its key or
+                                                  password stops working
           pairnets-server owner-link [--if-new]   print a one-time link to set up (or get back into)
                                                   the nest's website (it cancels older unused links);
                                                   --if-new: only if no way to sign in is set up yet
@@ -177,16 +178,31 @@ public static class CliCommands
                     foreach (var d in all)
                         await output.WriteLineAsync($"{d.Id}  {d.Name,-24} {d.System ?? "-",-10} added {d.Created:yyyy-MM-dd} ({d.ApprovedBy})");
                     await output.WriteLineAsync($"Shared token: {(auth.AllowSharedToken ? "still accepted" : "turned off")}");
+                    await WebDavLinksAsync(auth, output);
                     return 0;
                 case ["devices", "remove", var which]:
-                    var device = auth.GetDevice(which) is { IsActive: true } byId ? byId : auth.FindActiveByName(which);
+                    // By id, else by name. Names are unique per kind only: a computer and a link may share one, and then the id decides.
+                    var device = auth.GetDevice(which) is { IsActive: true } byId ? byId : null;
                     if (device is null)
                     {
-                        await error.WriteLineAsync($"No computer called '{which}'. See: pairnets-server devices list");
+                        var computer = auth.FindActiveByName(which);
+                        var link = auth.FindActiveByName(which, PairedDevice.WebDavKind);
+                        if (computer is not null && link is not null)
+                        {
+                            await error.WriteLineAsync($"A computer and a WebDAV link are both called '{which}'. Remove one by its id (the first column of: pairnets-server devices list).");
+                            return 1;
+                        }
+                        device = computer ?? link;
+                    }
+                    if (device is null)
+                    {
+                        await error.WriteLineAsync($"No computer or WebDAV link called '{which}'. See: pairnets-server devices list");
                         return 1;
                     }
                     auth.RemoveDevice(device.Id);
-                    await output.WriteLineAsync($"Removed {device.Name}. Its key stops working within 30 seconds; its files stay on it.");
+                    await output.WriteLineAsync(device.IsWebDav
+                        ? $"Removed the WebDAV link {device.Name}. Its password stops working within 30 seconds; files already copied with it stay where they are."
+                        : $"Removed {device.Name}. Its key stops working within 30 seconds; its files stay on it.");
                     return 0;
                 default:
                     return await UsageErrorAsync(error);
@@ -195,6 +211,30 @@ public static class CliCommands
         finally
         {
             Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+        }
+    }
+
+    /// <summary>
+    /// The WebDAV links, in a section of their own under the computers (they are never computers): label, what it may do, its
+    /// folders, when it was made and last used. Never the password or its hash (only a hash is stored anyway).
+    /// </summary>
+    private static async Task WebDavLinksAsync(AuthStore auth, TextWriter output)
+    {
+        var links = auth.ListWebDavLinks();
+        await output.WriteLineAsync();
+        if (links.Count == 0)
+        {
+            await output.WriteLineAsync("WebDAV links: none.");
+            return;
+        }
+        await output.WriteLineAsync($"WebDAV links ({links.Count}; passwords that open the nest's files in Finder or Explorer, not computers):");
+        foreach (var l in links)
+        {
+            var access = l.AccessOrOwner;
+            var what = access.CanWrite ? "can change" : "view only";
+            var folders = access.Folders is { Count: > 0 } some ? "folders: " + string.Join(", ", some) : "whole nest";
+            var used = l.LastUsed is { } u ? $"last used {u:yyyy-MM-dd HH:mm} UTC" : "never used";
+            await output.WriteLineAsync($"{l.Id}  {l.Name,-24} {what,-10} {folders}; made {l.Created:yyyy-MM-dd}, {used}");
         }
     }
 

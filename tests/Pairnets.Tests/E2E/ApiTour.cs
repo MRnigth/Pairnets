@@ -147,6 +147,8 @@ public sealed partial class ApiTour : IAsyncDisposable
         new("DELETE", "/web/api/devices/{id}"),
         new("PATCH", "/web/api/devices/{id}"),
         new("POST", "/web/api/devices/forget"),
+        new("GET", "/web/api/webdav/links"),
+        new("DELETE", "/web/api/webdav/links/{id}"),
         new("GET", "/web/api/pair/{code}"),
         new("POST", "/web/api/pair/{code}/approve"),
         new("POST", "/web/api/pair/{code}/deny"),

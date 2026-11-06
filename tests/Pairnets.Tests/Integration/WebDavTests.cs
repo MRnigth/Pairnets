@@ -9,6 +9,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Pairnets.Core;
 using Pairnets.Core.Crypto;
 using Pairnets.Server.Auth;
+using Pairnets.Server.Cli;
 using Pairnets.Server.Storage;
 using Pairnets.Server.Web;
 using Pairnets.Tests.Infrastructure;
@@ -49,9 +50,9 @@ public sealed class WebDavTests : IAsyncLifetime
         return new Made(doc.RootElement.GetProperty("id").GetString()!, password, doc.RootElement.GetProperty("username").GetString()!, Dav(doc.RootElement.GetProperty("username").GetString()!, password));
     }
 
-    private HttpClient Dav(string user, string password)
+    private HttpClient Dav(string user, string password, TestServer? server = null)
     {
-        var http = new HttpClient { BaseAddress = _server.Url };
+        var http = new HttpClient { BaseAddress = (server ?? _server).Url };
         http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", Convert.ToBase64String(Encoding.UTF8.GetBytes(user + ":" + password)));
         return http;
     }
@@ -70,6 +71,8 @@ public sealed class WebDavTests : IAsyncLifetime
     private static async Task<string> BodyAsync(HttpResponseMessage r) => await r.Content.ReadAsStringAsync();
 
     private ManifestEntry? Entry(string path) => _server.Store.Manifest.Get(path);
+
+    private List<string> Live() => _server.Store.ReadManifest(null).Entries.Where(e => !e.Deleted).Select(e => e.Path).Order(StringComparer.Ordinal).ToList();
 
     // ------------------------------------------------------------------ the link and its password
 
@@ -135,6 +138,67 @@ public sealed class WebDavTests : IAsyncLifetime
 
         Assert.Equal(HttpStatusCode.NotFound, (await _owner.DeleteAsync("api/devices/" + made.Id)).StatusCode);
         Assert.Single(auth.ListWebDavLinks());
+    }
+
+    private async Task<(int Code, string Output, string Error)> CliAsync(params string[] args)
+    {
+        var output = new StringWriter();
+        var error = new StringWriter();
+        var code = await CliCommands.RunAsync([.. args, "--data-dir", _server.DataDir], output, error);
+        return (code, output.ToString(), error.ToString());
+    }
+
+    [Fact]
+    public async Task DevicesListShowsLinksInASectionOfTheirOwnAndDevicesRemoveSaysItRemovedALink()
+    {
+        var auth = _server.Services.GetRequiredService<AuthStore>();
+        var computer = _server.MintKey("DESK");
+        var photos = await LinkAsync("Mac mini", "view", ["Photos", "Work"]);
+        var desk = await LinkAsync("DESK", "edit"); // a link may share a computer's name
+        Assert.Equal((HttpStatusCode)207, (await photos.Http.SendAsync(Req("PROPFIND", "dav/", null, ("Depth", "0")))).StatusCode);
+
+        var (code, output, error) = await CliAsync("devices", "list");
+        Assert.True(code == 0, error);
+        var lines = output.ReplaceLineEndings("\n").Split('\n');
+        var linksAt = Array.FindIndex(lines, l => l.StartsWith("WebDAV links (2;", StringComparison.Ordinal));
+        Assert.True(linksAt > Array.FindIndex(lines, l => l.StartsWith("Shared token:", StringComparison.Ordinal)), output);
+        var computers = lines[..linksAt];
+        var links = lines[(linksAt + 1)..];
+        Assert.Contains(computers, l => l.StartsWith(computer.Id, StringComparison.Ordinal));
+        Assert.DoesNotContain(computers, l => l.Contains(photos.Id, StringComparison.Ordinal) || l.Contains(desk.Id, StringComparison.Ordinal));
+        Assert.DoesNotContain(links, l => l.Contains(computer.Id, StringComparison.Ordinal));
+        Assert.Contains(links, l => l.StartsWith(photos.Id, StringComparison.Ordinal) && l.Contains("Mac mini", StringComparison.Ordinal)
+            && l.Contains("view only", StringComparison.Ordinal) && l.Contains("folders: Photos, Work", StringComparison.Ordinal)
+            && l.Contains($"made {DateTime.UtcNow:yyyy-MM-dd}", StringComparison.Ordinal) && l.Contains("last used ", StringComparison.Ordinal) && l.Contains(" UTC", StringComparison.Ordinal));
+        Assert.Contains(links, l => l.StartsWith(desk.Id, StringComparison.Ordinal) && l.Contains("can change", StringComparison.Ordinal)
+            && l.Contains("whole nest", StringComparison.Ordinal) && l.Contains("never used", StringComparison.Ordinal));
+        foreach (var password in new[] { photos.Password, desk.Password })
+        {
+            var hash = AuthStore.HashKey(AuthStore.WebDavKeyOf(password)!);
+            Assert.DoesNotContain(password.Replace("-", string.Empty, StringComparison.Ordinal), output.Replace("-", string.Empty, StringComparison.Ordinal));
+            Assert.DoesNotContain(Convert.ToHexString(hash), output, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain(Convert.ToBase64String(hash).TrimEnd('='), output, StringComparison.Ordinal);
+        }
+
+        // "DESK" names a computer and a link: the id decides. Otherwise the name does, and the answer says a link went.
+        var (both, _, why) = await CliAsync("devices", "remove", "desk");
+        Assert.Equal(1, both);
+        Assert.Contains("both called 'desk'", why);
+        Assert.True(auth.GetDevice(computer.Id)!.IsActive && auth.GetDevice(desk.Id)!.IsActive);
+        var (byName, saidByName, _) = await CliAsync("devices", "remove", "mac mini");
+        Assert.Equal((0, "Removed the WebDAV link Mac mini. Its password stops working within 30 seconds; files already copied with it stay where they are."),
+            (byName, saidByName.Trim()));
+        var (byId, saidById, _) = await CliAsync("devices", "remove", desk.Id);
+        Assert.True(byId == 0 && saidById.StartsWith("Removed the WebDAV link DESK.", StringComparison.Ordinal), saidById);
+        var (pc, saidPc, _) = await CliAsync("devices", "remove", "DESK");
+        Assert.True(pc == 0 && saidPc.StartsWith("Removed DESK. Its key stops", StringComparison.Ordinal), saidPc);
+        Assert.Empty(auth.ListWebDavLinks());
+        Assert.Contains("WebDAV links: none.", (await CliAsync("devices", "list")).Output);
+
+        // The command line is another process: the running nest drops the password within its key cache's 30 seconds, a restart at once.
+        await _server.RestartAsync();
+        using var again = Dav(photos.Username, photos.Password);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await again.SendAsync(Req("PROPFIND", "dav/", null, ("Depth", "0")))).StatusCode);
     }
 
     // ------------------------------------------------------------------ keeping the wrong people out
@@ -431,6 +495,92 @@ public sealed class WebDavTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task ARenameThatOnlyChangesLetterCaseWorksForAFile()
+    {
+        await PutOwnerAsync("Docs/photo.jpg", "jpeg");
+        await PutOwnerAsync("Docs/other.txt", "o");
+        var made = await LinkAsync();
+        var old = Entry("Docs/photo.jpg")!;
+
+        // Finder's rename: Overwrite F, as the new name is "free"
+        Assert.Equal(HttpStatusCode.Created, (await made.Http.SendAsync(Req("MOVE", "dav/Docs/photo.jpg", null, ("Destination", "/dav/Docs/Photo.jpg"), ("Overwrite", "F")))).StatusCode);
+        Assert.True(Entry("Docs/photo.jpg")!.Deleted); // computers see the old name deleted and the new one added
+        var renamed = Entry("Docs/Photo.jpg")!;
+        Assert.Equal(old.Hash, renamed.Hash);
+        Assert.Equal(old.ModifiedMs, renamed.ModifiedMs);
+        Assert.Equal("jpeg", await made.Http.GetStringAsync("dav/Docs/Photo.jpg"));
+        Assert.Contains(old.Hash![..8], await _owner.GetStringAsync("api/history?path=Docs%2Fphoto.jpg")); // the old version is in history
+        Assert.Equal(["Docs/Photo.jpg", "Docs/other.txt"], Live()); // one file, and no passing name left
+        Assert.Equal(["Photo.jpg", "other.txt"], Directory.GetFiles(Path.Combine(_server.Paths.Files, "Docs")).Select(Path.GetFileName).Order(StringComparer.Ordinal));
+        Assert.Contains("<D:href>/dav/Docs/Photo.jpg</D:href>", await BodyAsync(await made.Http.SendAsync(Req("PROPFIND", "dav/Docs", null, ("Depth", "1")))));
+
+        // and back again
+        Assert.Equal(HttpStatusCode.Created, (await made.Http.SendAsync(Req("MOVE", "dav/Docs/Photo.jpg", null, ("Destination", "/dav/Docs/photo.jpg")))).StatusCode);
+        Assert.Equal(["Docs/other.txt", "Docs/photo.jpg"], Live());
+        Assert.Equal("jpeg", await _owner.GetStringAsync("api/file?path=Docs%2Fphoto.jpg"));
+    }
+
+    [Fact]
+    public async Task ARenameThatOnlyChangesLetterCaseWorksForAFolder()
+    {
+        await PutOwnerAsync("trip/a.txt", "A");
+        await PutOwnerAsync("trip/b.txt", "B");
+        await PutOwnerAsync("trip/Day 2/c.txt", "C");
+        var made = await LinkAsync();
+        var hashes = new[] { "trip/a.txt", "trip/b.txt", "trip/Day 2/c.txt" }.ToDictionary(p => p, p => Entry(p)!.Hash!);
+
+        Assert.Equal(HttpStatusCode.Created, (await made.Http.SendAsync(Req("MOVE", "dav/trip/", null, ("Destination", "/dav/Trip/")))).StatusCode);
+        Assert.Equal(["Trip/Day 2/c.txt", "Trip/a.txt", "Trip/b.txt"], Live());
+        foreach (var (path, hash) in hashes)
+        {
+            Assert.True(Entry(path)!.Deleted);
+            Assert.Equal(hash, Entry("T" + path[1..])!.Hash);
+            Assert.Contains(hash[..8], await _owner.GetStringAsync("api/history?path=" + Uri.EscapeDataString(path)));
+        }
+        Assert.Equal("C", await made.Http.GetStringAsync("dav/Trip/Day%202/c.txt"));
+        Assert.Equal(["Trip"], Directory.GetDirectories(_server.Paths.Files).Select(Path.GetFileName)); // the nest's own folder follows too
+        Assert.Equal(HttpStatusCode.NotFound, (await made.Http.SendAsync(Req("PROPFIND", "dav/trip", null, ("Depth", "0")))).StatusCode);
+
+        // only the last name may change its letter case in one go
+        Assert.Equal(HttpStatusCode.Conflict, (await made.Http.SendAsync(Req("MOVE", "dav/Trip/a.txt", null, ("Destination", "/dav/trip/a.txt")))).StatusCode);
+        Assert.Equal(["Trip/Day 2/c.txt", "Trip/a.txt", "Trip/b.txt"], Live());
+    }
+
+    [Fact]
+    public async Task ARenameByLetterCaseThatFailsHalfwayPutsEverythingBack()
+    {
+        await PutOwnerAsync("trip/a.txt", "A");
+        await PutOwnerAsync("trip/b.txt", "B");
+        var made = await LinkAsync();
+        await File.WriteAllTextAsync(Path.Combine(_server.Paths.Files, "trip", "b.txt"), "changed under the nest"); // b.txt can't be moved
+
+        Assert.Equal(HttpStatusCode.PreconditionFailed, (await made.Http.SendAsync(Req("MOVE", "dav/trip", null, ("Destination", "/dav/Trip")))).StatusCode);
+        Assert.Equal(["trip/a.txt", "trip/b.txt"], Live()); // a.txt had gone to its passing name and is back
+        Assert.Equal("A", await _owner.GetStringAsync("api/file?path=trip%2Fa.txt"));
+        Assert.DoesNotContain(_server.Store.ReadManifest(null).Entries, e => !e.Deleted && e.Path.Contains(DavEndpoints.PassingMark, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task AComputerFollowsARenameByLetterCaseWithOneFileUnderTheNewName()
+    {
+        await using var laptop = new Device("laptop", _server);
+        laptop.Write("photo.jpg", "jpeg");
+        laptop.Write("trip/a.txt", "A");
+        laptop.Write("trip/b.txt", "B");
+        await laptop.SyncUntilQuietAsync();
+        var made = await LinkAsync();
+        Assert.Equal(HttpStatusCode.Created, (await made.Http.SendAsync(Req("MOVE", "dav/photo.jpg", null, ("Destination", "/dav/Photo.jpg")))).StatusCode);
+        Assert.Equal(HttpStatusCode.Created, (await made.Http.SendAsync(Req("MOVE", "dav/trip", null, ("Destination", "/dav/Trip")))).StatusCode);
+        var version = _server.Store.ReadManifest(null).Version;
+
+        // The pass sees "photo.jpg deleted, Photo.jpg added": it deletes the old one first, then downloads the new one.
+        await laptop.SyncUntilQuietAsync();
+        Assert.Equal(["Photo.jpg", "Trip/a.txt", "Trip/b.txt"], laptop.Files()); // as named on its disk (case-insensitive here)
+        Assert.Equal("A", laptop.Read("Trip/a.txt"));
+        Assert.Equal(version, _server.Store.ReadManifest(null).Version); // and it sends nothing back
+    }
+
+    [Fact]
     public async Task LockingIsAFormalityForLinksThatCanChangeAndRefusedForViewOnly()
     {
         var edit = await LinkAsync("Editor", "edit");
@@ -483,6 +633,211 @@ public sealed class WebDavTests : IAsyncLifetime
         Assert.Equal("new", await _owner.GetStringAsync("api/file?path=Docs%2Freport.docx"));
         Assert.Equal("new", await made.Http.GetStringAsync("dav/Docs/report.docx"));
         Assert.DoesNotContain(_server.Store.ReadManifest(null).Entries, e => !e.Deleted && e.Path.EndsWith(".tmp", StringComparison.Ordinal));
+    }
+
+    // ------------------------------------------------------------------ a new file made empty first (Finder, Explorer)
+
+    private const string LockBody = """<D:lockinfo xmlns:D="DAV:"><D:lockscope><D:exclusive/></D:lockscope><D:locktype><D:write/></D:locktype></D:lockinfo>""";
+
+    private const string HeldETag = "\"" + DavEmptyFiles.ETag + "\"";
+
+    private static ByteArrayContent Empty() => new([]);
+
+    private static HttpRequestMessage Find(string url, string depth = "0") => Req("PROPFIND", url, null, ("Depth", depth));
+
+    private long Changes() => _server.Store.ReadManifest(null).Version;
+
+    [Fact]
+    public async Task AFinderStyleCopyHoldsTheEmptyFileAndStoresOnlyTheContent()
+    {
+        // How Finder and Explorer copy a file in: an empty PUT makes it, they look at it, lock it and set its times, then PUT the content.
+        var made = await LinkAsync();
+        Assert.Equal(HttpStatusCode.Created, (await made.Http.SendAsync(Req("MKCOL", "dav/Copies"))).StatusCode);
+        var before = Changes();
+
+        var created = await made.Http.PutAsync("dav/Copies/photo.jpg", Empty());
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        Assert.Equal(HeldETag, created.Headers.ETag?.Tag);
+        Assert.Null(Entry("Copies/photo.jpg")); // held, not stored: no version, no push
+        Assert.Equal(before, Changes());
+
+        var one = await BodyAsync(await made.Http.SendAsync(Find("dav/Copies/photo.jpg")));
+        Assert.Contains("<D:href>/dav/Copies/photo.jpg</D:href>", one);
+        Assert.Contains("<D:getcontentlength>0</D:getcontentlength>", one);
+        Assert.Contains("<D:getetag>" + HeldETag + "</D:getetag>", one);
+        Assert.Contains("<D:href>/dav/Copies/photo.jpg</D:href>", await BodyAsync(await made.Http.SendAsync(Find("dav/Copies/", "1"))));
+        var head = await made.Http.SendAsync(Req("HEAD", "dav/Copies/photo.jpg"));
+        Assert.Equal(HttpStatusCode.OK, head.StatusCode);
+        Assert.Equal(0, head.Content.Headers.ContentLength);
+        Assert.Equal(HeldETag, head.Headers.ETag?.Tag);
+        Assert.Equal(string.Empty, await made.Http.GetStringAsync("dav/Copies/photo.jpg"));
+        var locked = await made.Http.SendAsync(Req("LOCK", "dav/Copies/photo.jpg", new StringContent(LockBody)));
+        Assert.Equal(HttpStatusCode.OK, locked.StatusCode);
+        var token = locked.Headers.GetValues("Lock-Token").Single();
+        Assert.Equal((HttpStatusCode)207, (await made.Http.SendAsync(Req("PROPPATCH", "dav/Copies/photo.jpg", new StringContent("""<?xml version="1.0"?><propertyupdate xmlns="DAV:"/>""")))).StatusCode);
+        Assert.Null(Entry("Copies/photo.jpg"));
+
+        Assert.Equal(HttpStatusCode.NoContent, (await made.Http.SendAsync(Req("PUT", "dav/Copies/photo.jpg", new StringContent("jpeg bytes"), ("If", "(" + token + ")")))).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await made.Http.SendAsync(Req("UNLOCK", "dav/Copies/photo.jpg", null, ("Lock-Token", token)))).StatusCode);
+
+        var stored = Entry("Copies/photo.jpg")!;
+        Assert.Equal(10, stored.Size);
+        Assert.Equal(before + 1, Changes()); // one change for the whole copy: the file with its content
+        Assert.Equal(before + 1, stored.Version);
+        Assert.Empty(_server.Store.ListHistory("Copies/photo.jpg")); // and no empty version before it
+        Assert.Contains("<D:getetag>\"" + stored.Hash + "\"</D:getetag>", await BodyAsync(await made.Http.SendAsync(Find("dav/Copies/photo.jpg"))));
+        Assert.Equal("jpeg bytes", await made.Http.GetStringAsync("dav/Copies/photo.jpg"));
+    }
+
+    [Fact]
+    public async Task ABigFileAfterAnEmptyPutGets413AndLeavesNothingBehind()
+    {
+        await PutOwnerAsync("keep.bin", "the real one");
+        var kept = Entry("keep.bin")!;
+        var made = await LinkAsync();
+        var before = Changes();
+        var over = new byte[DavEndpoints.MaxUploadBytes + 1];
+
+        // the content with its length: refused before it is read, and the held empty file goes with it
+        Assert.Equal(HttpStatusCode.Created, (await made.Http.PutAsync("dav/movie.mov", Empty())).StatusCode);
+        var locked = await made.Http.SendAsync(Req("LOCK", "dav/movie.mov", new StringContent(LockBody)));
+        Assert.Equal(HttpStatusCode.RequestEntityTooLarge, (await made.Http.PutAsync("dav/movie.mov", new ByteArrayContent(over))).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await made.Http.SendAsync(Req("UNLOCK", "dav/movie.mov", null, ("Lock-Token", locked.Headers.GetValues("Lock-Token").Single())))).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await made.Http.SendAsync(Find("dav/movie.mov"))).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await made.Http.GetAsync("dav/movie.mov")).StatusCode);
+        Assert.DoesNotContain("movie.mov", await BodyAsync(await made.Http.SendAsync(Find("dav/", "1"))));
+
+        // the content without a length (chunked): stopped at the limit, and the held file goes too
+        Assert.Equal(HttpStatusCode.Created, (await made.Http.PutAsync("dav/chunked.mov", Empty())).StatusCode);
+        var chunked = new HttpRequestMessage(HttpMethod.Put, "dav/chunked.mov") { Content = new StreamContent(new MemoryStream(over)) };
+        chunked.Headers.TransferEncodingChunked = true;
+        Assert.Equal(HttpStatusCode.RequestEntityTooLarge, (await made.Http.SendAsync(chunked)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await made.Http.SendAsync(Find("dav/chunked.mov"))).StatusCode);
+
+        // a stored file of that name stays as it was
+        Assert.Equal(HttpStatusCode.RequestEntityTooLarge, (await made.Http.PutAsync("dav/keep.bin", new ByteArrayContent(over))).StatusCode);
+
+        Assert.Null(Entry("movie.mov"));
+        Assert.Null(Entry("chunked.mov"));
+        Assert.Equal(kept, Entry("keep.bin"));
+        Assert.Equal("the real one", await _owner.GetStringAsync("api/file?path=keep.bin"));
+        Assert.Empty(_server.Store.ListHistory("keep.bin"));
+        Assert.Equal(before, Changes()); // nothing at all was stored, so no computer heard of any of it
+        Assert.Empty(Directory.EnumerateFiles(_server.Paths.Tmp));
+    }
+
+    [Fact]
+    public async Task AnEmptyPutOverAStoredFileEmptiesItAsBefore()
+    {
+        await PutOwnerAsync("notes.txt", "some notes");
+        var old = Entry("notes.txt")!;
+        var made = await LinkAsync();
+
+        var emptied = await made.Http.PutAsync("dav/notes.txt", Empty());
+        Assert.Equal(HttpStatusCode.NoContent, emptied.StatusCode);
+        var now = Entry("notes.txt")!;
+        Assert.Equal(0, now.Size);
+        Assert.True(now.Version > old.Version);
+        Assert.Equal("\"" + now.Hash + "\"", emptied.Headers.ETag?.Tag);
+        Assert.Contains(_server.Store.ListHistory("notes.txt"), h => h.Hash8 == old.Hash![..8]); // the old content is one click away
+        Assert.Equal(string.Empty, await _owner.GetStringAsync("api/file?path=notes.txt"));
+    }
+
+    [Fact]
+    public async Task AHeldEmptyFileIsRenamedAndDeletedLikeAFile()
+    {
+        await PutOwnerAsync("taken.txt", "taken");
+        var made = await LinkAsync();
+
+        // Explorer's "New > Text Document": made empty, renamed, then written by Notepad
+        Assert.Equal(HttpStatusCode.Created, (await made.Http.PutAsync("dav/New%20Text%20Document.txt", Empty())).StatusCode);
+        Assert.Equal(HttpStatusCode.MethodNotAllowed, (await made.Http.SendAsync(Req("MKCOL", "dav/New%20Text%20Document.txt"))).StatusCode);
+        Assert.Equal(HttpStatusCode.PreconditionFailed, (await made.Http.SendAsync(Req("PUT", "dav/New%20Text%20Document.txt", Empty(), ("If-None-Match", "*")))).StatusCode);
+        Assert.Equal(HttpStatusCode.Created, (await made.Http.SendAsync(Req("MOVE", "dav/New%20Text%20Document.txt", null, ("Destination", "/dav/notes.txt")))).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await made.Http.SendAsync(Find("dav/New%20Text%20Document.txt"))).StatusCode);
+        Assert.Equal((HttpStatusCode)207, (await made.Http.SendAsync(Find("dav/notes.txt"))).StatusCode);
+        Assert.Null(Entry("notes.txt"));
+        Assert.Equal(HttpStatusCode.NoContent, (await made.Http.SendAsync(Req("PUT", "dav/notes.txt", new StringContent("typed"), ("If-Match", HeldETag)))).StatusCode);
+        Assert.Equal("typed", await _owner.GetStringAsync("api/file?path=notes.txt"));
+        Assert.Null(Entry("New Text Document.txt"));
+
+        // deleted before anything was written into it: gone, and never stored
+        Assert.Equal(HttpStatusCode.Created, (await made.Http.PutAsync("dav/gone.txt", Empty())).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await made.Http.DeleteAsync("dav/gone.txt")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await made.Http.SendAsync(Find("dav/gone.txt"))).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await made.Http.DeleteAsync("dav/gone.txt")).StatusCode);
+        Assert.Null(Entry("gone.txt"));
+
+        // a held file in a new folder moves with the folder, and goes with it
+        Assert.Equal(HttpStatusCode.Created, (await made.Http.SendAsync(Req("MKCOL", "dav/New%20folder"))).StatusCode);
+        Assert.Equal(HttpStatusCode.Created, (await made.Http.PutAsync("dav/New%20folder/a.txt", Empty())).StatusCode);
+        Assert.Equal(HttpStatusCode.Created, (await made.Http.SendAsync(Req("MOVE", "dav/New%20folder", null, ("Destination", "/dav/Trip")))).StatusCode);
+        Assert.Contains("<D:href>/dav/Trip/a.txt</D:href>", await BodyAsync(await made.Http.SendAsync(Find("dav/Trip", "1"))));
+        Assert.Equal(HttpStatusCode.NoContent, (await made.Http.DeleteAsync("dav/Trip")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await made.Http.SendAsync(Find("dav/Trip/a.txt"))).StatusCode);
+
+        // renamed onto a stored file it is a real change: that file becomes empty and its old version is kept
+        var taken = Entry("taken.txt")!;
+        Assert.Equal(HttpStatusCode.Created, (await made.Http.PutAsync("dav/blank.txt", Empty())).StatusCode);
+        Assert.Equal(HttpStatusCode.PreconditionFailed, (await made.Http.SendAsync(Req("MOVE", "dav/blank.txt", null, ("Destination", "/dav/taken.txt"), ("Overwrite", "F")))).StatusCode);
+        Assert.Equal(taken, Entry("taken.txt"));
+        Assert.Equal(HttpStatusCode.NoContent, (await made.Http.SendAsync(Req("MOVE", "dav/blank.txt", null, ("Destination", "/dav/taken.txt")))).StatusCode);
+        Assert.Equal(0, Entry("taken.txt")!.Size);
+        Assert.Contains(_server.Store.ListHistory("taken.txt"), h => h.Hash8 == taken.Hash![..8]);
+        Assert.Equal(HttpStatusCode.NotFound, (await made.Http.SendAsync(Find("dav/blank.txt"))).StatusCode);
+        Assert.Null(Entry("blank.txt"));
+    }
+
+    [Fact]
+    public async Task OnlyALinkThatMayChangeAPlaceMakesAnEmptyFileThere()
+    {
+        var view = await LinkAsync("Viewer", "view");
+        var photos = await LinkAsync("Photos only", "edit", ["Photos"]);
+        var edit = await LinkAsync("Editor", "edit");
+
+        Assert.Equal(HttpStatusCode.Forbidden, (await view.Http.PutAsync("dav/v.txt", Empty())).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await photos.Http.PutAsync("dav/top.txt", Empty())).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await edit.Http.SendAsync(Find("dav/v.txt"))).StatusCode); // nothing was held for them
+        Assert.Equal(HttpStatusCode.NotFound, (await edit.Http.SendAsync(Find("dav/top.txt"))).StatusCode);
+
+        Assert.Equal(HttpStatusCode.Created, (await photos.Http.PutAsync("dav/Photos/new.jpg", Empty())).StatusCode);
+        Assert.Contains("<D:href>/dav/Photos/</D:href>", await BodyAsync(await photos.Http.SendAsync(Find("dav/", "1"))));
+        Assert.Contains("<D:href>/dav/Photos/new.jpg</D:href>", await BodyAsync(await photos.Http.SendAsync(Find("dav/Photos", "1"))));
+        Assert.Equal(HttpStatusCode.Forbidden, (await view.Http.DeleteAsync("dav/Photos/new.jpg")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await view.Http.SendAsync(Req("MOVE", "dav/Photos/new.jpg", null, ("Destination", "/dav/Photos/x.jpg")))).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await photos.Http.SendAsync(Req("MOVE", "dav/Photos/new.jpg", null, ("Destination", "/dav/x.jpg")))).StatusCode);
+        Assert.Equal((HttpStatusCode)207, (await photos.Http.SendAsync(Find("dav/Photos/new.jpg"))).StatusCode);
+        Assert.Null(Entry("Photos/new.jpg"));
+    }
+
+    [Fact]
+    public async Task AnEmptyFileNothingIsWrittenIntoGoesAfterTenMinutesAndIsNeverStored()
+    {
+        var clock = new ManualClock(DateTimeOffset.UtcNow);
+        await using var server = await TestServer.StartAsync(configureBuilder: b => b.Services.AddSingleton(new DavEmptyFiles(clock)));
+        using var owner = server.RawHttp(server.Token);
+        var resp = await owner.PostAsJsonAsync("api/webdav/links", new { label = "Mac", access = "edit" }, PairnetsJson.Options);
+        Assert.Equal(HttpStatusCode.Created, resp.StatusCode);
+        using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync());
+        using var dav = Dav("mac", doc.RootElement.GetProperty("password").GetString()!, server);
+        var before = server.Store.ReadManifest(null).Version;
+
+        Assert.Equal(HttpStatusCode.Created, (await dav.PutAsync("dav/empty.txt", Empty())).StatusCode);
+        clock.Advance(TimeSpan.FromMinutes(9));
+        var locked = await dav.SendAsync(Req("LOCK", "dav/empty.txt", new StringContent(LockBody))); // the client is still busy with it: ten more minutes
+        Assert.Equal(HttpStatusCode.OK, locked.StatusCode);
+        clock.Advance(TimeSpan.FromMinutes(9));
+        Assert.Equal((HttpStatusCode)207, (await dav.SendAsync(Find("dav/empty.txt"))).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await dav.SendAsync(Req("UNLOCK", "dav/empty.txt", null, ("Lock-Token", locked.Headers.GetValues("Lock-Token").Single())))).StatusCode);
+        Assert.Null(server.Store.Manifest.Get("empty.txt")); // letting go of it stores nothing
+
+        clock.Advance(TimeSpan.FromMinutes(2));
+        Assert.Equal(HttpStatusCode.NotFound, (await dav.SendAsync(Find("dav/empty.txt"))).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await dav.GetAsync("dav/empty.txt")).StatusCode);
+        Assert.DoesNotContain("empty.txt", await BodyAsync(await dav.SendAsync(Find("dav/", "1"))));
+        Assert.Null(server.Store.Manifest.Get("empty.txt"));
+        Assert.Equal(before, server.Store.ReadManifest(null).Version);
+        Assert.Equal(HttpStatusCode.Created, (await dav.PutAsync("dav/empty.txt", Empty())).StatusCode); // the name is free again
     }
 
     // ------------------------------------------------------------------ staying in one's lane

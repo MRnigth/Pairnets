@@ -3,6 +3,7 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using Pairnets.Core;
+using Pairnets.Server.Web;
 using Pairnets.Tests.Infrastructure;
 
 namespace Pairnets.Tests.E2E;
@@ -27,9 +28,7 @@ public sealed partial class ApiTour
         Assert.Contains(id, (await Read<JsonElement>(Get(_laptopApi, "api/webdav/links"))).GetProperty("links").EnumerateArray().Select(l => l.GetProperty("id").GetString()));
 
         Step("Its password opens the nest's files the way Finder and Explorer ask for them, and nothing else");
-        var dav = new HttpClient(new RecordingHandler(Record, Localhost.Handler())) { BaseAddress = _target.ApiUrl, Timeout = TimeSpan.FromSeconds(60) };
-        dav.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", Convert.ToBase64String(Encoding.UTF8.GetBytes("tour:" + password)));
-        _clients.Add(dav);
+        var dav = DavClient(password);
         var file = $"dav/tour-{_tag}.txt";
         var folder = $"dav/tour-{_tag}-folder";
         async Task<HttpResponseMessage> Dav(string method, string url, HttpStatusCode expect, string? body = null, params (string Name, string Value)[] headers) =>
@@ -66,5 +65,42 @@ public sealed partial class ApiTour
         await Delete(_laptopApi, $"api/webdav/links/{Uri.EscapeDataString(id)}");
         await Dav("PROPFIND", "dav/", HttpStatusCode.Unauthorized, null, ("Depth", "0"));
         await Delete(_laptopApi, $"api/webdav/links/{Uri.EscapeDataString(id)}", HttpStatusCode.NotFound);
+
+        Step("The owner sees links apart from the computers on the nest's website, and removes one there (no computer needed)");
+        var leaked = await Read<JsonElement>(Post(_laptopApi, "api/webdav/links", new { label = $"Leaked {_tag}", access = "view", folders = new[] { "Photos" } }, HttpStatusCode.Created));
+        var leakedId = leaked.GetProperty("id").GetString()!;
+        var leakedPassword = leaked.GetProperty("password").GetString()!;
+        _secrets.Add(leakedPassword);
+        _secrets.Add(leakedPassword.Replace("-", string.Empty, StringComparison.Ordinal));
+        var leakedDav = DavClient(leakedPassword);
+        await Call(leakedDav, new HttpMethod("PROPFIND"), "dav/", expect: (HttpStatusCode)207, tweak: r => r.Headers.TryAddWithoutValidation("Depth", "0"));
+        await Refused(HttpMethod.Get, "web/api/webdav/links", Browser());
+        var withPassword = Browser();
+        withPassword.DefaultRequestHeaders.Authorization = leakedDav.DefaultRequestHeaders.Authorization;
+        await Refused(HttpMethod.Get, "web/api/webdav/links", withPassword); // the link's own password is no sign-in
+        var onWebsite = await Get(_owner, "web/api/webdav/links");
+        var listed = await onWebsite.Content.ReadAsStringAsync();
+        Assert.DoesNotContain(leakedPassword, listed);
+        Assert.DoesNotContain(leakedPassword.Replace("-", string.Empty, StringComparison.Ordinal), listed);
+        var row = JsonDocument.Parse(listed).RootElement.GetProperty("links").EnumerateArray().Single(l => l.GetProperty("id").GetString() == leakedId);
+        Assert.Equal(($"Leaked {_tag}", "view", "Photos"), (row.GetProperty("label").GetString(), row.GetProperty("access").GetString(), row.GetProperty("folders")[0].GetString()));
+        Assert.DoesNotContain((await Read<WebEndpoints.DevicesView>(Get(_owner, "web/api/devices"))).Devices, d => d.Id == leakedId);
+        await Refused(HttpMethod.Delete, $"web/api/webdav/links/{Uri.EscapeDataString(leakedId)}", Browser());
+        await Call(Browser("https://evil.example"), HttpMethod.Delete, $"web/api/webdav/links/{Uri.EscapeDataString(leakedId)}", expect: HttpStatusCode.Forbidden);
+        await Delete(_owner, $"web/api/devices/{Uri.EscapeDataString(leakedId)}", HttpStatusCode.NotFound); // a link is no computer
+        await Delete(_owner, $"web/api/webdav/links/{Uri.EscapeDataString(_laptop.Id)}", HttpStatusCode.NotFound); // and a computer no link
+        await Delete(_owner, $"web/api/webdav/links/{Uri.EscapeDataString(leakedId)}");
+        await Call(leakedDav, new HttpMethod("PROPFIND"), "dav/", expect: HttpStatusCode.Unauthorized, tweak: r => r.Headers.TryAddWithoutValidation("Depth", "0"));
+        await Delete(_owner, $"web/api/webdav/links/{Uri.EscapeDataString(leakedId)}", HttpStatusCode.NotFound);
+        Assert.DoesNotContain(leakedId, await (await Get(_owner, "web/api/webdav/links")).Content.ReadAsStringAsync());
+    }
+
+    /// <summary>A WebDAV client (Finder, Explorer) that signs in with a link's password.</summary>
+    private HttpClient DavClient(string password)
+    {
+        var dav = new HttpClient(new RecordingHandler(Record, Localhost.Handler())) { BaseAddress = _target.ApiUrl, Timeout = TimeSpan.FromSeconds(60) };
+        dav.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", Convert.ToBase64String(Encoding.UTF8.GetBytes("tour:" + password)));
+        _clients.Add(dav);
+        return dav;
     }
 }

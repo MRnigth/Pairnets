@@ -203,6 +203,24 @@ public sealed partial class WebsiteTests(WebsiteFixture site, ITestOutputHelper 
         await Expect(Title(page, oldPc)).ToHaveCountAsync(0, Patiently);
         Assert.DoesNotContain((await Api.WebDevicesAsync()).Devices, d => d.Name == oldPc);
 
+        Step("a WebDAV link: listed apart from the computers; Cancel keeps it, Remove stops its password at once");
+        var link = await Api.AddWebDavLinkAsync($"MAC MINI {tag}");
+        await page.Page.ReloadAsync();
+        var linkRow = page.Page.Locator("#links li", new() { HasText = link.Label });
+        await linkRow.WaitForAsync();
+        await page.VisibleAsync("#links-section");
+        await Expect(Title(page, link.Label)).ToHaveCountAsync(0); // never among the computers
+        await linkRow.Locator("button", new() { HasText = "Remove…" }).ClickAsync();
+        await page.ShowsAsync("#link-remove-name", link.Label);
+        await page.ClickAsync("#link-remove-dialog button[data-close]");
+        await page.HiddenAsync("#link-remove-dialog");
+        Assert.Equal(207, await Api.DavAnswerAsync(link.Password));
+        await linkRow.Locator("button", new() { HasText = "Remove…" }).ClickAsync();
+        await page.ClickAsync("#link-remove-confirm");
+        await Expect(linkRow).ToHaveCountAsync(0, Patiently);
+        await page.HiddenAsync("#links-section");
+        Assert.Equal(401, await Api.DavAnswerAsync(link.Password));
+
         Step("a computer asking to join shows up by itself, and is reviewed and let in");
         var tablet = await Api.AskToJoinAsync($"TABLET {tag}");
         var waiting = page.Page.Locator("#pending li", new() { HasText = $"TABLET {tag}" });

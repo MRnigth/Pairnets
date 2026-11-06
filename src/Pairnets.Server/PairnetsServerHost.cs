@@ -61,6 +61,7 @@ public static class PairnetsServerHost
         builder.Services.AddSingleton<FriendRequests>();
         builder.Services.AddSingleton<FriendConnections>();
         builder.Services.AddSingleton<DavFolders>();
+        builder.Services.TryAddSingleton<DavEmptyFiles>(); // a test can register its own (with its own clock) first
         builder.Services.AddSingleton(sp => new RelaySignature(sp.GetRequiredService<SyncOptions>()));
         builder.Services.AddSingleton<OwnerAuth>();
         builder.Services.AddSingleton<Pairnets.Server.Auth.WebAuthn.WebAuthnChallenges>();

@@ -179,6 +179,18 @@ public static class WebEndpoints
             return Results.NoContent();
         });
 
+        // WebDAV links (docs/WEBDAV.md), apart from the computers: an owner who lost every computer can still see them here and
+        // take a leaked password away. Made only in the apps (the password is shown once, there). Same answer as the apps' list.
+        signedIn.MapGet("/webdav/links", (AuthStore auth, SyncStore store) => Json(DavEndpoints.Links(auth, store)));
+
+        signedIn.MapDelete("/webdav/links/{id}", (string id, AuthStore auth, DeviceKeys keys, ILogger<DeviceKeys> log) =>
+        {
+            if (DavEndpoints.RemoveLink(id, auth, keys) is not { } link)
+                return Error(StatusCodes.Status404NotFound, ErrorCodes.NotFound, "No such WebDAV link.");
+            log.LogInformation("WebDAV link {Name} was removed on the nest's website", link.Name);
+            return Results.NoContent();
+        });
+
         signedIn.MapGet("/pair/{code}", (string code, HttpContext ctx, AuthStore auth) =>
             auth.FindPairRequestByCode(code) is { } request
                 ? Json(View(request, ctx))

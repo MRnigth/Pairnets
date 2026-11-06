@@ -66,6 +66,11 @@ sudo -u pairnets /opt/pairnets/pairnets-server devices list
 sudo -u pairnets /opt/pairnets/pairnets-server devices remove "LAPTOP"
 ```
 
+**A WebDAV link's password leaked** (Finder or Explorer). Remove the link in the Pairnets app, or on
+your nest's website under **Devices → WebDAV links → Remove…** (no computer needed). Its password
+stops working at once. On the server, `devices list` shows the links in their own section and
+`devices remove "<label or id>"` removes one (within 30 seconds while the service runs).
+
 **The old shared token.** Once every computer has its own key, switch the shared token off on the
 website's **Security** page (it shows how many computers still use it). If an older app still needs
 it and it may have leaked, make a new one. This writes it straight into the settings file, so it

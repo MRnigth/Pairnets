@@ -56,6 +56,7 @@
     wait: "M12 7v5l3 2M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z",
     mail: "M3 6.5A1.5 1.5 0 0 1 4.5 5h15A1.5 1.5 0 0 1 21 6.5v11a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5zM3.5 7l8.5 6 8.5-6",
     globe: "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM3 12h18M12 3c2.5 2.5 3.8 5.5 3.8 9s-1.3 6.5-3.8 9c-2.5-2.5-3.8-5.5-3.8-9S9.5 5.5 12 3z",
+    folder: "M3 7.5A1.5 1.5 0 0 1 4.5 6h4.4l2 2h8.6A1.5 1.5 0 0 1 21 9.5v8a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5z",
   };
 
   function icon(name) {
@@ -501,7 +502,17 @@
     let removing = null;
     let renaming = null;
     let forgetting = null;
+    let unlinking = null;
     let sharedTokenAllowed = true;
+    $("link-remove-confirm").addEventListener("click", async () => {
+      $("link-remove-dialog").close();
+      try {
+        await api("DELETE", "/webdav/links/" + encodeURIComponent(unlinking.id));
+        await load();
+      } catch (error) {
+        showError(error);
+      }
+    });
     $("forget-confirm").addEventListener("click", async () => {
       $("forget-dialog").close();
       try {
@@ -597,15 +608,35 @@
         allow);
     }
 
+    // A WebDAV link: a password for Finder or Explorer, never a computer. "Can change · Whole nest", then
+    // "Made 3 Oct · last used 5 min ago". Its password is never sent here; it was shown once, in the app.
+    function linkRow(l) {
+      const what = (l.access === "edit" ? "Can change" : "View only") + " · " + (l.folders && l.folders.length ? l.folders.join(", ") : "Whole nest");
+      const when = "Made " + day(l.created) + " · " + (l.lastUsed ? "last used " + ago(l.lastUsed) : "never used");
+      return h("li", {},
+        ring("folder"),
+        h("div", { class: "grow" },
+          h("div", { class: "title" }, l.label),
+          h("div", { class: "detail" }, what),
+          h("div", { class: "detail" }, when)),
+        h("button", { type: "button", "aria-label": `Remove the link ${l.label}`, onclick: () => {
+          unlinking = l;
+          $("link-remove-name").textContent = l.label;
+          $("link-remove-dialog").showModal();
+        } }, "Remove…"));
+    }
+
     async function load() {
       showError(null);
       try {
-        const data = await api("GET", "/devices");
+        const [data, links] = await Promise.all([api("GET", "/devices"), api("GET", "/webdav/links")]);
         sharedTokenAllowed = data.sharedTokenAllowed;
         const list = $("devices");
         list.replaceChildren(...(data.devices.length ? data.devices.map(deviceRow) : [h("li", { class: "empty" }, "No computers yet. Add one: open Pairnets on it and press “Sign in with your browser”.")]));
         $("pending-section").hidden = data.pending.length === 0;
         $("pending").replaceChildren(...data.pending.map(pendingRow));
+        $("links-section").hidden = links.links.length === 0;
+        $("links").replaceChildren(...links.links.map(linkRow));
       } catch (error) {
         if (error.status === 401) return goSignIn();
         showError(error);

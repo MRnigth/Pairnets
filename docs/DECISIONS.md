@@ -2464,6 +2464,14 @@ the existing tunnel and relay (SMB cannot pass them, and cannot be both safe and
   `AccessGate` skips `/dav`; `DavEndpoints` checks view-only, shared folders and folders that came in through a link itself, on
   every method, both ends of a MOVE. Only the owner's computers make, list or remove links (`/api/webdav` is in the owner-only list).
   At most 10 links per nest.
+* **Revoking without a computer** (2026-11-05): an owner who lost every computer could not take a leaked link password away. The
+  nest's website now lists the links in a section of their own on Devices, with **Remove…** (asks first: "Its password stops working
+  at once"), through `GET`/`DELETE /web/api/webdav/links[/{id}]`, signed-in and same-origin like `/web/api/devices`, and sharing
+  `DavEndpoints.Links`/`RemoveLink` with the apps' routes (so `DeviceKeys.Forget` makes it instant there too). `devices list` prints
+  the links after the computers (label, access, folders, made, last used, never a secret), and `devices remove` says when it removed
+  a link; a name shared by a computer and a link is refused there, the id decides. Making a link stays in the apps: its password is
+  shown once and a website page that shows passwords is a door worth keeping shut. The account page (pairnets.app) still shows
+  computers only: it would need a relay route on the nest, a route and UI in the Worker and a Worker deploy, so it is left for later.
 * **Writes go through `SyncStore`**: `PutAsync`, `DeleteAsync`, `MoveAsync`, then the same push message the apps' changes send. So the
   manifest version, tombstones, history, case-collision check and "Changed" on the hub work as for an app. A PUT with `If-Match` or
   `If-None-Match: *` uses the base check (412 when the file changed); a plain PUT means "replace": the current version is the base and
@@ -2481,6 +2489,10 @@ the existing tunnel and relay (SMB cannot pass them, and cannot be both safe and
   file lands in it. DELETE or MOVE of a folder is done file by file and refused above 100 files ("do it in the app, which asks first"),
   a small version of the apps' mass-delete guard. Every file is tried; files that changed meanwhile stay, and the answer is 207 naming
   them (never a plain "done"). COPY answers 501 (Finder falls back to downloading and putting).
+* **A rename that only changes letter case** (2026-11-05; `photo.jpg` → `Photo.jpg`, a folder `trip` → `Trip`) is two ordinary
+  `MoveAsync` steps with the base check, as the apps' own rename does (`NestFiles`): to a passing name `<old>.pairnets-rename-<8 hex>`,
+  then to the new name; a failed step moves back what had moved. `SyncStore` and `/api/move` are unchanged. Computers see the old name
+  deleted and the new one added, delete the old file first and end with one file under the new name; history keeps the old version.
 * **Locks are a formality.** Finder mounts read-write only when LOCK works, so LOCK returns a token and UNLOCK answers 204, but nothing
   is held; the base check is what protects. A view-only link advertises DAV class 1 only, so Finder mounts it read-only.
 * **Folder metadata is dropped, not stored.** `._*` (AppleDouble), `.DS_Store`, `.localized`, `Thumbs.db` and `desktop.ini` get a
@@ -2506,7 +2518,10 @@ the existing tunnel and relay (SMB cannot pass them, and cannot be both safe and
 * **Known gaps, left on purpose for the first version:** no COPY, no real locks, PROPFIND reads the whole manifest each time (fine for
   a home nest, slow for hundreds of thousands of files), no quota properties (Finder shows no free space), Windows' built-in client
   limits files to 50 MB by default and wants HTTPS with a certificate it trusts, folders of nests linked into this one are hidden
-  from links, and a link cannot be edited (remove and make a new one). Found in the 2026-11-05 review and left for later: a rename that
-  only changes letter case fails (`MoveAsync` refuses it; Finder shows an error); links can only be listed and removed from an owner's
-  app (not the website or `devices list`); a folder MOVE copies each file rather than renaming; and a server going back to a release
-  before schema 7 refuses to start on this auth.db.
+  from links, and a link cannot be edited (remove and make a new one). Found in the 2026-11-05 review and left for later: links are
+  not on the account page (pairnets.app), only in the apps, the nest's website and the server's command line; a folder MOVE copies
+  each file rather than renaming; and a server going back to a release before schema 7 refuses to start on this auth.db. A computer
+  whose old folder still holds something that is not synced (Finder's `.DS_Store`, an ignored file) keeps that folder, so on a disk
+  that ignores case the new files land under the old folder name and its next pass sends the old name back to the nest. That is the
+  sync engine (a folder renamed by case on one computer does the same to another); the fix belongs there (give the folder the nest's
+  case before downloading into it).

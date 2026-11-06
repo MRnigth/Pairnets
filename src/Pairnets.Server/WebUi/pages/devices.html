@@ -33,6 +33,11 @@
     <h2>Waiting for approval</h2>
     <div class="card"><ul class="list" id="pending"></ul></div>
   </div>
+  <div class="section" id="links-section" hidden>
+    <h2>WebDAV links</h2>
+    <p class="muted">Passwords that open your nest's files in Finder or Explorer. They are not computers. Make new ones in the Pairnets app.</p>
+    <div class="card"><ul class="list" id="links"></ul></div>
+  </div>
 </main>
 
 <dialog id="add-dialog">
@@ -48,6 +53,12 @@
   <h2>Remove <span id="remove-name"></span>?</h2>
   <p>It stops syncing right away. Its files stay on it, and nothing on your nest is deleted. To add it back, sign in on it again.</p>
   <div class="row end"><button type="button" data-close>Cancel</button><button type="button" class="danger" id="remove-confirm">Remove</button></div>
+</dialog>
+
+<dialog id="link-remove-dialog">
+  <h2>Remove the link <span id="link-remove-name"></span>?</h2>
+  <p>Its password stops working at once, and whoever uses it can no longer open your files. Files already copied stay where they are.</p>
+  <div class="row end"><button type="button" data-close>Cancel</button><button type="button" class="danger" id="link-remove-confirm">Remove</button></div>
 </dialog>
 
 <dialog id="forget-dialog">

@@ -679,6 +679,25 @@ public sealed partial class ApiTour
         Assert.True(byId.ExitCode == 0 && byId.Output.Contains($"Removed {two.Name}.", StringComparison.Ordinal), byId.ToString());
         Assert.Equal(1, (await Cli("devices", "remove", $"NOBODY {_tag}")).ExitCode);
 
+        Step("devices list shows the WebDAV links in a section of their own (never a password), and devices remove takes one away");
+        var cliLink = await Read<JsonElement>(Post(_laptopApi, "api/webdav/links", new { label = $"CLI-LINK {_tag}", access = "edit" }, HttpStatusCode.Created));
+        var cliLinkId = cliLink.GetProperty("id").GetString()!;
+        var cliLinkPassword = cliLink.GetProperty("password").GetString()!;
+        _secrets.Add(cliLinkPassword);
+        _secrets.Add(cliLinkPassword.Replace("-", string.Empty, StringComparison.Ordinal));
+        var withLink = await Cli("devices", "list");
+        Assert.True(withLink.ExitCode == 0, withLink.ToString());
+        var lines = withLink.Output.ReplaceLineEndings("\n").Split('\n');
+        var linksAt = Array.FindIndex(lines, l => l.StartsWith("WebDAV links (", StringComparison.Ordinal));
+        Assert.True(linksAt > Array.FindIndex(lines, l => l.StartsWith("Shared token:", StringComparison.Ordinal)), withLink.ToString());
+        Assert.DoesNotContain(lines[..linksAt], l => l.Contains(cliLinkId, StringComparison.Ordinal)); // not among the computers
+        Assert.Contains(lines[(linksAt + 1)..], l => l.StartsWith(cliLinkId, StringComparison.Ordinal) && l.Contains($"CLI-LINK {_tag}", StringComparison.Ordinal)
+            && l.Contains("can change", StringComparison.Ordinal) && l.Contains("whole nest", StringComparison.Ordinal) && l.Contains("never used", StringComparison.Ordinal));
+        Assert.DoesNotContain(cliLinkPassword.Replace("-", string.Empty, StringComparison.Ordinal), withLink.Output.Replace("-", string.Empty, StringComparison.Ordinal));
+        var unlinked = await Cli("devices", "remove", cliLinkId);
+        Assert.True(unlinked.ExitCode == 0 && unlinked.Output.Contains($"Removed the WebDAV link CLI-LINK {_tag}.", StringComparison.Ordinal), unlinked.ToString());
+        Assert.DoesNotContain(cliLinkId, (await Cli("devices", "list")).Output, StringComparison.Ordinal);
+
         Step("Getting ready for rescan and history purge: a file put in by hand, and an old version");
         var hand = $"tour-{_tag}/by-hand.txt";
         await _target.WriteDataFileAsync("files/" + hand, Encoding.UTF8.GetBytes("put here by hand"));
@@ -731,6 +750,7 @@ public sealed partial class ApiTour
         Assert.DoesNotContain(devices, d => d.Id == one.Id || d.Id == two.Id);
         await Refused(HttpMethod.Get, "api/info", Api(one.Key, one.Name), ErrorCodes.DeviceRemoved);
         await Refused(HttpMethod.Get, "api/info", Api(two.Key, two.Name), ErrorCodes.DeviceRemoved);
+        await Call(DavClient(cliLinkPassword), new HttpMethod("PROPFIND"), "dav/", expect: HttpStatusCode.Unauthorized, tweak: r => r.Headers.TryAddWithoutValidation("Depth", "0"));
         Assert.True((await State(_owner)).SignedIn); // browsers stay signed in across a restart
 
         Step("owner-link: nothing with --if-new once a way in exists, otherwise a fresh link that works");

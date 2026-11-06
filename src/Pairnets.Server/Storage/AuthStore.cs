@@ -302,11 +302,14 @@ public sealed partial class AuthStore
         return r.Read() ? ReadDevice(r) : null;
     }
 
-    /// <summary>The active computer with this name (case-insensitive), or null.</summary>
-    public PairedDevice? FindActiveByName(string name)
+    /// <summary>
+    /// The active computer (or, with <paramref name="kind"/> <see cref="PairedDevice.WebDavKind"/>, WebDAV link) with this name
+    /// (case-insensitive), or null. Names are unique per kind only, so a link may share a computer's name.
+    /// </summary>
+    public PairedDevice? FindActiveByName(string name, string kind = PairedDevice.ComputerKind)
     {
         using var conn = Open();
-        using var cmd = Command(conn, $"{SelectDevice} WHERE name=$name COLLATE NOCASE AND revokedMs IS NULL", ("$name", name));
+        using var cmd = Command(conn, $"{SelectDevice} WHERE name=$name COLLATE NOCASE AND revokedMs IS NULL AND kind=$kind", ("$name", name), ("$kind", kind));
         using var r = cmd.ExecuteReader();
         return r.Read() ? ReadDevice(r) : null;
     }

@@ -120,6 +120,7 @@ main.narrow > p { margin-top: 16px; }
 }
 .card + .card, .section + .section { margin-top: 18px; }
 .section > h2 { margin: 26px 0 10px; font-size: 15px; }
+.section > h2 + p { margin: -6px 0 10px; font-size: 13.5px; }
 
 .center { text-align: center; }
 .logo-big { width: 56px; height: 56px; display: block; margin: 0 auto 14px; }

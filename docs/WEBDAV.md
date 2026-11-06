@@ -23,12 +23,32 @@ Not available on an encrypted (sealed) nest.
 - `Link` = `{ id, label, username, access, folders, created, lastUsed }`. `username` = the label as a lower-case slug
   (informational; the password is the credential).
 
+## Seeing and removing links without a computer
+
+An owner who lost every computer can still take a leaked password away:
+
+- **The nest's website** (signed-in owner; same protection as `/web/api/devices`: the nest's own name, the owner's session
+  cookie, and for DELETE a same-origin request): `GET /web/api/webdav/links` → the same answer as `GET /api/webdav/links`;
+  `DELETE /web/api/webdav/links/{id}` → `204` (the password stops working at once), `404` for an unknown, removed or
+  computer id. A computer's key, a link's password or a friend's key is no sign-in there (`401`). The Devices page shows the
+  links in a "WebDAV links" section of their own (hidden when there are none) with **Remove…**, which asks first. Links are
+  made only in the apps (the password is shown once, there). `/web/api/devices` never lists a link, and `DELETE
+  /web/api/devices/{id}` refuses one.
+- **The server's command line**: `pairnets-server devices list` prints the computers, then a "WebDAV links" section (label,
+  view only or can change, folders, made, last used; never a password or hash). `devices remove <name or id>` removes a
+  link too and says "Removed the WebDAV link …". A computer and a link may share a name; then a removal by that name is
+  refused and the id decides. The running nest notices within its key cache's 30 seconds (another process).
+- **Not on the account page** (pairnets.app) yet: `/api/relay/devices` lists computers only and refuses a link's id.
+
 ## On the wire (`/dav/…` on the nest)
 
 Basic auth, the password alone is checked. Methods: OPTIONS, PROPFIND (Depth 0/1), GET/HEAD (ranges), PUT, DELETE,
 MKCOL, MOVE, LOCK/UNLOCK (formal locks only), PROPPATCH (accepted, ignored). COPY → 501. Reads outside the link's folders → 404,
 changes there → 403. A folder DELETE/MOVE that left files behind → 207 listing them. Folder metadata (`._*`, `.DS_Store`, `Thumbs.db`,
 `desktop.ini`) is accepted and dropped; Office/LibreOffice temp files are stored (their saves rename them onto the document).
+A MOVE that only changes the last name's letter case (`photo.jpg` → `Photo.jpg`, a folder `trip` → `Trip`) → 201, done in two moves
+through a passing name `<old name>.pairnets-rename-<8 hex>`; a step that fails is undone and answered 412/409. Changing the case of a
+folder above the name in the same MOVE → 409.
 A nonsense `If-Match` → 412. Over 25 MB → 413 (the rest of the body is read first, up to 100 MB, so the client hears it).
 
 ## Worker side

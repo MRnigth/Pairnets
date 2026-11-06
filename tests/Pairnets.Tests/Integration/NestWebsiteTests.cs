@@ -1,5 +1,7 @@
 using System.Net;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text;
 using Microsoft.Extensions.DependencyInjection;
 using Pairnets.Core;
 using Pairnets.Server.Auth;
@@ -126,6 +128,7 @@ public sealed class NestWebsiteTests : IAsyncLifetime
             ("GET", "web/api/devices"), ("GET", "web/api/security"), ("POST", "web/api/password"), ("DELETE", "web/api/password"),
             ("POST", "web/api/shared-token"), ("DELETE", "web/api/devices/x"), ("PATCH", "web/api/devices/x"), ("GET", "web/api/pair/BBBBBBBB"),
             ("POST", "web/api/pair/BBBBBBBB/approve"), ("POST", "web/api/pair/BBBBBBBB/deny"), ("DELETE", "web/api/sessions/x"), ("POST", "web/api/signout"),
+            ("GET", "web/api/webdav/links"), ("DELETE", "web/api/webdav/links/x"),
         })
         {
             using var request = new HttpRequestMessage(new HttpMethod(method), path) { Content = JsonContent.Create(new { }) };
@@ -248,6 +251,102 @@ public sealed class NestWebsiteTests : IAsyncLifetime
         var quiet = new StringWriter();
         Assert.Equal(0, await CliCommands.RunAsync(["owner-link", "--if-new", "--data-dir", _server.DataDir], quiet, error));
         Assert.Equal(string.Empty, quiet.ToString());
+    }
+
+    // ------------------------------------------------------------------ WebDAV links (an owner who lost every computer)
+
+    /// <summary>A WebDAV client (Finder, Explorer) with a link's password, on the nest's address.</summary>
+    private HttpClient Dav(string password)
+    {
+        var http = new HttpClient { BaseAddress = _server.Url };
+        http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", Convert.ToBase64String(Encoding.UTF8.GetBytes("mac-mini:" + password)));
+        return http;
+    }
+
+    private static async Task<HttpStatusCode> PropfindAsync(HttpClient dav)
+    {
+        using var request = new HttpRequestMessage(new HttpMethod("PROPFIND"), "dav/");
+        request.Headers.Add("Depth", "0");
+        return (await dav.SendAsync(request)).StatusCode;
+    }
+
+    [Fact]
+    public async Task TheOwnerSeesWebDavLinksApartFromTheComputersAndRemovingOneStopsItsPasswordAtOnce()
+    {
+        var computer = _server.MintKey("DESK");
+        var (link, password) = Auth.AddWebDavLink("Mac mini", new DeviceAccess(DeviceAccess.View, ["Photos"]));
+        Auth.AddWebDavLink("DESK", new DeviceAccess(DeviceAccess.Edit)); // a link may share a computer's name
+        using var dav = Dav(password);
+        Assert.Equal((HttpStatusCode)207, await PropfindAsync(dav)); // its key is cached by now
+        using var web = await SignedIn();
+
+        var listed = await web.GetStringAsync("web/api/webdav/links");
+        Assert.DoesNotContain(password, listed);
+        Assert.DoesNotContain(password.Replace("-", string.Empty, StringComparison.Ordinal), listed);
+        var answer = System.Text.Json.JsonSerializer.Deserialize<DavEndpoints.LinksAnswer>(listed, PairnetsJson.Options)!;
+        Assert.Equal(["Mac mini", "DESK"], answer.Links.Select(l => l.Label));
+        var row = answer.Links[0];
+        Assert.Equal((link.Id, "view", "mac-mini"), (row.Id, row.Access, row.Username));
+        Assert.Equal(["Photos"], row.Folders!);
+        Assert.NotNull(row.LastUsed); // the PROPFIND above
+        Assert.Null(answer.Links[1].LastUsed);
+
+        // Links are never computers here: not in the list, not counted, not removable as one (and a computer is no link).
+        var devices = (await web.GetFromJsonAsync<WebEndpoints.DevicesView>("web/api/devices", PairnetsJson.Options))!;
+        Assert.Equal([computer.Id], devices.Devices.Where(d => d.OwnKey).Select(d => d.Id));
+        Assert.Equal(1, (await web.GetFromJsonAsync<WebEndpoints.SecurityView>("web/api/security", PairnetsJson.Options))!.DevicesWithOwnKey);
+        Assert.Equal(HttpStatusCode.NotFound, (await web.DeleteAsync($"web/api/devices/{link.Id}")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await web.DeleteAsync($"web/api/webdav/links/{computer.Id}")).StatusCode);
+        Assert.True(Auth.GetDevice(computer.Id)!.IsActive);
+        Assert.True(Auth.GetDevice(link.Id)!.IsActive);
+
+        Assert.Equal(HttpStatusCode.NoContent, (await web.DeleteAsync($"web/api/webdav/links/{link.Id}")).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, await PropfindAsync(dav)); // at once, not after the key cache's 30 seconds
+        Assert.Equal(HttpStatusCode.NotFound, (await web.DeleteAsync($"web/api/webdav/links/{link.Id}")).StatusCode);
+        Assert.Equal(["DESK"], Auth.ListWebDavLinks().Select(l => l.Name));
+        Assert.True(Auth.GetDevice(computer.Id)!.IsActive);
+        Assert.Contains(_server.Logs.Lines, l => l.Contains("WebDAV link Mac mini was removed on the nest's website", StringComparison.Ordinal));
+        Assert.DoesNotContain(_server.Logs.Lines, l => l.Contains(password, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task OnlyTheSignedInOwnerOnTheNestsOwnPagesSeesOrRemovesWebDavLinks()
+    {
+        var (link, password) = Auth.AddWebDavLink("Mac mini", new DeviceAccess(DeviceAccess.Edit));
+        var friendKey = Auth.AddDevice("Anna's PC", "test", "test", new DeviceAccess(DeviceAccess.Edit), "Anna", "acc_anna").Key;
+        var cookies = new CookieContainer();
+        using (var signIn = _server.WebBrowser(cookies))
+            Assert.Equal(HttpStatusCode.NoContent, (await signIn.PostAsJsonAsync("web/api/setup", new { code = Auth.CreateSetupCode() })).StatusCode);
+
+        // Not signed in, a friend's computer key, a computer key of the owner's, the link's own password: none is a sign-in here.
+        using var nobody = _server.WebBrowser();
+        using var friend = _server.WebBrowser();
+        friend.DefaultRequestHeaders.Add(PairnetsHeaders.Token, friendKey);
+        using var ownersComputer = _server.WebBrowser();
+        ownersComputer.DefaultRequestHeaders.Add(PairnetsHeaders.Token, _server.MintKey("LAPTOP").Key);
+        using var withPassword = _server.WebBrowser();
+        withPassword.DefaultRequestHeaders.Authorization = Dav(password).DefaultRequestHeaders.Authorization;
+        foreach (var http in new[] { nobody, friend, ownersComputer, withPassword })
+        {
+            Assert.Equal(HttpStatusCode.Unauthorized, (await http.GetAsync("web/api/webdav/links")).StatusCode);
+            Assert.Equal(HttpStatusCode.Unauthorized, (await http.DeleteAsync($"web/api/webdav/links/{link.Id}")).StatusCode);
+        }
+
+        // The owner's cookie, sent by another site or without an Origin: refused. The nest's address without its name: not there.
+        using var evil = _server.WebBrowser(cookies, origin: "https://evil.example");
+        Assert.Equal(HttpStatusCode.Forbidden, (await evil.DeleteAsync($"web/api/webdav/links/{link.Id}")).StatusCode);
+        using var noOrigin = _server.WebBrowser(cookies, origin: null);
+        Assert.Equal(HttpStatusCode.Forbidden, (await noOrigin.DeleteAsync($"web/api/webdav/links/{link.Id}")).StatusCode);
+        using var plain = _server.RawHttp(_server.Token);
+        Assert.Equal(HttpStatusCode.NotFound, (await plain.GetAsync("web/api/webdav/links")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await plain.DeleteAsync($"web/api/webdav/links/{link.Id}")).StatusCode);
+        Assert.True(Auth.GetDevice(link.Id)!.IsActive);
+
+        // The owner, signed in on the nest's own pages.
+        using var owner = _server.WebBrowser(cookies);
+        Assert.Contains(link.Id, await owner.GetStringAsync("web/api/webdav/links"));
+        Assert.Equal(HttpStatusCode.NoContent, (await owner.DeleteAsync($"web/api/webdav/links/{link.Id}")).StatusCode);
+        Assert.Empty(Auth.ListWebDavLinks());
     }
 
     [Fact]
