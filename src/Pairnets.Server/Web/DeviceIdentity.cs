@@ -9,6 +9,9 @@ public enum DeviceAuthKind
 {
     DeviceKey,
     SharedToken,
+
+    /// <summary>A WebDAV link's password: it opens <c>/dav</c> and nothing else (<see cref="TokenAuthMiddleware"/>).</summary>
+    WebDavKey,
 }
 
 /// <summary>
@@ -28,7 +31,7 @@ public sealed record DeviceIdentity(string? Id, string Name, DeviceAuthKind Kind
     public string RegistryKey => Id is null ? Name : "id:" + Id;
 
     /// <summary>What this computer may do (the owner's access unless its key says less).</summary>
-    public DeviceAccess AccessOrOwner => Kind == DeviceAuthKind.DeviceKey && Access is { } access ? access : DeviceAccess.Full;
+    public DeviceAccess AccessOrOwner => Kind is DeviceAuthKind.DeviceKey or DeviceAuthKind.WebDavKey && Access is { } access ? access : DeviceAccess.Full;
 
     public void AttachTo(HttpContext context)
     {

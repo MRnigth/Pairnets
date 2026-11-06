@@ -165,6 +165,16 @@ public interface IMainActions
     void ForgetDownload(string id)
     {
     }
+
+    /// <summary>"Make a link…" under Files in Finder or Explorer: the window that makes a WebDAV link and shows its password once.</summary>
+    void MakeWebDavLink()
+    {
+    }
+
+    /// <summary>Remove on a WebDAV link: asks first, then the link's password stops working at once.</summary>
+    void RemoveWebDavLink(string id)
+    {
+    }
 }
 
 public partial class MainWindow : Window
@@ -609,6 +619,7 @@ public partial class MainWindow : Window
         DevicesEmptyText.Text = DevicesSummary.EmptyText(s);
 
         DrawPeople(PeopleSection.From(s));
+        DrawWebDav(WebDavSection.From(s, DateTimeOffset.UtcNow));
         DrawDownloads(NestDownloadsSection.From(s, DateTimeOffset.UtcNow));
         var cards = DeviceCard.From(s, ThisDevice, DateTimeOffset.UtcNow);
         var count = _devices.Count;
@@ -687,6 +698,42 @@ public partial class MainWindow : Window
         if (!people.Rows.SequenceEqual(_people))
             PeopleList.ItemsSource = people.Rows;
         _people = people.Rows;
+    }
+
+    private IReadOnlyList<WebDavRow> _webDav = [];
+
+    /// <summary>"Files in Finder or Explorer": shown on the owner's computers (see <see cref="WebDavSection"/>).</summary>
+    private void DrawWebDav(WebDavSection webDav)
+    {
+        WebDavPanel.IsVisible = webDav.Visible;
+        WebDavSummary.Text = webDav.Summary;
+        MakeLinkButton.IsVisible = webDav.CanMake;
+        WebDavCard.IsVisible = webDav.HasRows;
+        WebDavNote.Text = webDav.Note;
+        WebDavAddress.Text = webDav.AddressLine;
+        WebDavAddress.IsVisible = webDav.Address is not null;
+        WebDavHow.Text = webDav.Address is null ? string.Empty : WebDavSection.MacHow + " " + WebDavSection.WindowsHow;
+        WebDavHow.IsVisible = webDav.Address is not null;
+        if (!webDav.Rows.SequenceEqual(_webDav))
+            WebDavList.ItemsSource = webDav.Rows;
+        _webDav = webDav.Rows;
+    }
+
+    /// <summary>The WebDAV links shown, in order.</summary>
+    internal IReadOnlyList<WebDavRow> WebDavRows => WebDavPanel.IsVisible ? _webDav : [];
+
+    internal string WebDavNoteValue => WebDavPanel.IsVisible ? WebDavNote.Text ?? string.Empty : string.Empty;
+
+    internal string WebDavAddressValue => WebDavAddress.IsVisible ? WebDavAddress.Text ?? string.Empty : string.Empty;
+
+    internal bool CanMakeWebDavLink => WebDavPanel.IsVisible && MakeLinkButton.IsVisible;
+
+    private void OnMakeWebDavLink(object? sender, Avalonia.Interactivity.RoutedEventArgs e) => _actions?.MakeWebDavLink();
+
+    private void OnRemoveWebDavLink(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        if ((sender as Control)?.DataContext is WebDavRow row)
+            _actions?.RemoveWebDavLink(row.Id);
     }
 
     private IReadOnlyList<NestDownloadRow> _downloads = [];

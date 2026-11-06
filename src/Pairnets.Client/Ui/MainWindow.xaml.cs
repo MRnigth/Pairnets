@@ -165,6 +165,16 @@ public interface IMainActions
     void ForgetDownload(string id)
     {
     }
+
+    /// <summary>"Make a link…" under Files in Finder or Explorer: the window that makes a WebDAV link and shows its password once.</summary>
+    void MakeWebDavLink()
+    {
+    }
+
+    /// <summary>Remove on a WebDAV link: asks first, then the link's password stops working at once.</summary>
+    void RemoveWebDavLink(string id)
+    {
+    }
 }
 
 /// <summary>

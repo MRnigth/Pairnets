@@ -13,8 +13,16 @@ namespace Pairnets.Server.Storage;
 /// the Pairnets service, which changing or ending a share goes by.
 /// </summary>
 public sealed record PairedDevice(string Id, string Name, string? System, DateTimeOffset Created, string ApprovedBy, DateTimeOffset? Revoked, string? Icon = null,
-    DeviceAccess? Access = null, string? Person = null, string? PersonId = null)
+    DeviceAccess? Access = null, string? Person = null, string? PersonId = null, string Kind = PairedDevice.ComputerKind, DateTimeOffset? LastUsed = null)
 {
+    /// <summary>A computer that syncs with its own key.</summary>
+    public const string ComputerKind = "computer";
+
+    /// <summary>A WebDAV link's password (Finder, Explorer): it opens <c>/dav</c> and nothing else.</summary>
+    public const string WebDavKind = "webdav";
+
+    public bool IsWebDav => Kind == WebDavKind;
+
     public bool IsActive => Revoked is null;
 
     /// <summary>What this computer may do: <see cref="Access"/>, or the owner's access when none is written down.</summary>
@@ -50,10 +58,13 @@ public sealed record PairedDevice(string Id, string Name, string? System, DateTi
 /// </summary>
 public sealed partial class AuthStore
 {
-    public const int SchemaVersion = 6;
+    public const int SchemaVersion = 7;
 
     /// <summary>Prefix of every computer key, so they are easy to recognise (and to keep out of commits).</summary>
     public const string KeyPrefix = "pn_";
+
+    /// <summary>The start of a WebDAV link's stored key ("pd_" and the password without dashes, lower case); never a computer's.</summary>
+    public const string WebDavKeyPrefix = "pd_";
 
     public const string SettingAllowSharedToken = "allowSharedToken";
 
@@ -188,6 +199,26 @@ public sealed partial class AuthStore
                 PRAGMA user_version=6;
                 """);
         }
+        if (version < 7)
+        {
+            // WebDAV links (feature/webdav): a password that opens /dav only is a device row of its own kind, so removing it,
+            // the key cache and the failure throttle work as they do for computers. Every row from before is a computer.
+            // Names are unique per kind (UniqueName), so the one name index becomes one per kind. In one transaction: a crash
+            // halfway would otherwise leave a column added and the version not, and every later start would fail on it.
+            using var tx = conn.BeginTransaction();
+            using (var cmd = Command(conn, """
+                ALTER TABLE devices ADD COLUMN kind TEXT NOT NULL DEFAULT 'computer';
+                ALTER TABLE devices ADD COLUMN lastUsedMs INTEGER NULL;
+                DROP INDEX IF EXISTS ix_devices_active_name;
+                CREATE UNIQUE INDEX ix_devices_active_name ON devices(kind, name COLLATE NOCASE) WHERE revokedMs IS NULL;
+                PRAGMA user_version=7;
+                """))
+            {
+                cmd.Transaction = tx;
+                cmd.ExecuteNonQuery();
+            }
+            tx.Commit();
+        }
     }
 
     // ------------------------------------------------------------------ keys
@@ -255,7 +286,7 @@ public sealed partial class AuthStore
     /// <summary>The computer this key belongs to (also when it was removed), or null for an unknown key.</summary>
     public PairedDevice? FindByKey(string key)
     {
-        if (!key.StartsWith(KeyPrefix, StringComparison.Ordinal))
+        if (!key.StartsWith(KeyPrefix, StringComparison.Ordinal) && !key.StartsWith(WebDavKeyPrefix, StringComparison.Ordinal))
             return null;
         using var conn = Open();
         using var cmd = Command(conn, $"{SelectDevice} WHERE tokenHash=$hash", ("$hash", HashKey(key)));
@@ -283,12 +314,90 @@ public sealed partial class AuthStore
     public IReadOnlyList<PairedDevice> ListDevices(bool includeRemoved = false)
     {
         using var conn = Open();
-        using var cmd = Command(conn, includeRemoved ? $"{SelectDevice} ORDER BY createdMs" : $"{SelectDevice} WHERE revokedMs IS NULL ORDER BY createdMs");
+        using var cmd = Command(conn, includeRemoved ? $"{SelectDevice} WHERE kind='computer' ORDER BY createdMs" : $"{SelectDevice} WHERE kind='computer' AND revokedMs IS NULL ORDER BY createdMs");
         using var r = cmd.ExecuteReader();
         var list = new List<PairedDevice>();
         while (r.Read())
             list.Add(ReadDevice(r));
         return list;
+    }
+
+    // ------------------------------------------------------------------ WebDAV links
+
+    /// <summary>The most WebDAV links a nest keeps at once.</summary>
+    public const int MaxWebDavLinks = 10;
+
+    private const string PasswordAlphabet = "abcdefghjkmnpqrstuvwxyz23456789"; // no i, l, o, 0, 1: easy to read out and type
+
+    /// <summary>A new WebDAV password: 20 of 31 characters (about 99 bits), in groups of five: "abcde-fghjk-mnpqr-stuvw".</summary>
+    public static string NewWebDavPassword()
+    {
+        var chars = new char[24];
+        for (var i = 0; i < chars.Length; i++)
+            chars[i] = i % 6 == 5 ? '-' : PasswordAlphabet[RandomNumberGenerator.GetInt32(PasswordAlphabet.Length)];
+        return new string(chars, 0, 23);
+    }
+
+    /// <summary>
+    /// The key a typed WebDAV password is stored and found under: lower case, without dashes and spaces (a person types
+    /// it into a dialog), behind <see cref="WebDavKeyPrefix"/>. Null for something that cannot be one.
+    /// </summary>
+    public static string? WebDavKeyOf(string? password)
+    {
+        if (string.IsNullOrEmpty(password) || password.Length > 64)
+            return null;
+        var clean = password.Replace("-", "", StringComparison.Ordinal).Replace(" ", "", StringComparison.Ordinal).ToLowerInvariant();
+        return clean.Length == 20 ? WebDavKeyPrefix + clean : null;
+    }
+
+    /// <summary>Makes a WebDAV link: a device of its own kind with what it may do. The password is returned once, never stored.</summary>
+    public (PairedDevice Link, string Password) AddWebDavLink(string label, DeviceAccess access)
+    {
+        var password = NewWebDavPassword();
+        using var conn = Open();
+        using var tx = conn.BeginTransaction();
+        var baseName = CleanName(label) ?? "WebDAV link";
+        var unique = UniqueName(conn, tx, baseName, exceptId: null, PairedDevice.WebDavKind);
+        var id = Guid.NewGuid().ToString("N");
+        var now = _clock.GetUtcNow();
+        using (var cmd = Command(conn, """
+            INSERT INTO devices(id, name, tokenHash, system, createdMs, approvedBy, revokedMs, access, folders, person, personId, kind, lastUsedMs)
+            VALUES($id, $name, $hash, NULL, $created, 'owner (WebDAV link)', NULL, $access, $folders, NULL, NULL, 'webdav', NULL)
+            """, ("$id", id), ("$name", unique), ("$hash", HashKey(WebDavKeyOf(password)!)), ("$created", now.ToUnixTimeMilliseconds()),
+            ("$access", access.Level), ("$folders", DeviceAccess.FoldersToJson(access.Folders))))
+        {
+            cmd.Transaction = tx;
+            cmd.ExecuteNonQuery();
+        }
+        tx.Commit();
+        return (new PairedDevice(id, unique, null, FromMs(now.ToUnixTimeMilliseconds()), "owner (WebDAV link)", null, null, access, null, null,
+            PairedDevice.WebDavKind), password);
+    }
+
+    /// <summary>The active WebDAV links, oldest first.</summary>
+    public IReadOnlyList<PairedDevice> ListWebDavLinks()
+    {
+        using var conn = Open();
+        using var cmd = Command(conn, $"{SelectDevice} WHERE kind='webdav' AND revokedMs IS NULL ORDER BY createdMs");
+        using var r = cmd.ExecuteReader();
+        var list = new List<PairedDevice>();
+        while (r.Read())
+            list.Add(ReadDevice(r));
+        return list;
+    }
+
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, long> _linkTouched = new(StringComparer.Ordinal);
+
+    /// <summary>Remembers that a WebDAV link was used (at most one write a minute per link).</summary>
+    public void TouchWebDavLink(string id)
+    {
+        var now = _clock.GetUtcNow().ToUnixTimeMilliseconds();
+        if (_linkTouched.TryGetValue(id, out var last) && now - last < 60_000)
+            return;
+        _linkTouched[id] = now;
+        using var conn = Open();
+        using var cmd = Command(conn, "UPDATE devices SET lastUsedMs=$now WHERE id=$id AND kind='webdav'", ("$now", now), ("$id", id));
+        cmd.ExecuteNonQuery();
     }
 
     /// <summary>The active computers of a friend (never the owner's, whatever they were sent with), oldest first.</summary>
@@ -365,25 +474,30 @@ public sealed partial class AuthStore
         return clean;
     }
 
-    private static string UniqueName(SqliteConnection conn, SqliteTransaction tx, string name, string? exceptId)
+    /// <summary>
+    /// <paramref name="name"/>, or "name (2)" and so on, so no two active rows of the same <paramref name="kind"/> share it. Computers
+    /// and WebDAV links are named apart: a link called "DESK" does not turn a new computer DESK into "DESK (2)".
+    /// </summary>
+    private static string UniqueName(SqliteConnection conn, SqliteTransaction tx, string name, string? exceptId, string kind = PairedDevice.ComputerKind)
     {
         for (var n = 1; ; n++)
         {
             var candidate = n == 1 ? name : $"{(name.Length > MaxNameLength - 6 ? name[..(MaxNameLength - 6)] : name)} ({n})";
-            using var cmd = Command(conn, "SELECT COUNT(*) FROM devices WHERE name=$name COLLATE NOCASE AND revokedMs IS NULL AND id<>$id",
-                ("$name", candidate), ("$id", exceptId ?? string.Empty));
+            using var cmd = Command(conn, "SELECT COUNT(*) FROM devices WHERE name=$name COLLATE NOCASE AND revokedMs IS NULL AND id<>$id AND kind=$kind",
+                ("$name", candidate), ("$id", exceptId ?? string.Empty), ("$kind", kind));
             cmd.Transaction = tx;
             if (Convert.ToInt64(cmd.ExecuteScalar(), CultureInfo.InvariantCulture) == 0)
                 return candidate;
         }
     }
 
-    private const string SelectDevice = "SELECT id, name, system, createdMs, approvedBy, revokedMs, icon, access, folders, person, personId FROM devices";
+    private const string SelectDevice = "SELECT id, name, system, createdMs, approvedBy, revokedMs, icon, access, folders, person, personId, kind, lastUsedMs FROM devices";
 
     private static PairedDevice ReadDevice(SqliteDataReader r) => new(
         r.GetString(0), r.GetString(1), r.IsDBNull(2) ? null : r.GetString(2), FromMs(r.GetInt64(3)), r.GetString(4),
         r.IsDBNull(5) ? null : FromMs(r.GetInt64(5)), r.IsDBNull(6) ? null : r.GetString(6),
-        ReadAccess(r.GetString(7), r.IsDBNull(8) ? null : r.GetString(8)), r.IsDBNull(9) ? null : r.GetString(9), r.IsDBNull(10) ? null : r.GetString(10));
+        ReadAccess(r.GetString(7), r.IsDBNull(8) ? null : r.GetString(8)), r.IsDBNull(9) ? null : r.GetString(9), r.IsDBNull(10) ? null : r.GetString(10),
+        r.GetString(11), r.IsDBNull(12) ? null : FromMs(r.GetInt64(12)));
 
     /// <summary>
     /// What a row may do. A level this server does not know counts as "view" with nothing shared: a damaged or newer row

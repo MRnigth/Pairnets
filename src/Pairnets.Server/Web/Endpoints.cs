@@ -79,7 +79,7 @@ public static class Endpoints
         // Remove a computer (the Devices page, or "Sign out of this computer"): its key stops working at once.
         app.MapDelete("/api/devices/{id}", async (string id, HttpContext ctx, DeviceKeys keys, DeviceRegistry devices, IHubContext<SyncHub> hub) =>
         {
-            if (keys.Store.GetDevice(id) is not { IsActive: true } device)
+            if (keys.Store.GetDevice(id) is not { IsActive: true, IsWebDav: false } device)
                 return Error(StatusCodes.Status404NotFound, ErrorCodes.NotFound, "No such computer.");
             await RemoveDeviceAsync(device, $"removed by {DeviceIdentity.Of(ctx)?.Name}", keys, devices, hub,
                 ctx.RequestServices.GetRequiredService<ILogger<DeviceKeys>>());
@@ -444,7 +444,7 @@ public static class Endpoints
         return renamed;
     }
 
-    private static async Task BroadcastAsync(HttpContext ctx, IHubContext<SyncHub> hub, string path)
+    internal static async Task BroadcastAsync(HttpContext ctx, IHubContext<SyncHub> hub, string path)
     {
         var device = DeviceId(ctx);
         ctx.RequestServices.GetRequiredService<DeviceRegistry>().Changed(DeviceIdentity.Of(ctx)?.RegistryKey ?? device);

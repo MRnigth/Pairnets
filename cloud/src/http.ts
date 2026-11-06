@@ -42,6 +42,7 @@ export type ErrorCode =
   | "not_confirmed"
   | "nest_unknown"
   | "nest_offline"
+  | "too_large"
   | "nest_too_old"
   | "bad_name"
   | "full"
@@ -89,6 +90,7 @@ export const MESSAGES: Record<ErrorCode, string> = {
   not_confirmed: "This nest has not finished linking.",
   nest_unknown: "This server is not linked to Pairnets any more.",
   nest_offline: "Your server is not connected right now. Check that it is on.",
+  too_large: "That is too big to upload this way.",
   nest_too_old: "Update your nest to rename computers here.",
   bad_name: "Type a name.",
   full: "Pairnets cannot take more servers right now. Try again later.",
@@ -193,6 +195,12 @@ const RELAY_PASS_HEADERS = new Set([
   "last-modified",
   "retry-after",
   "allow",
+  // WebDAV (the nest's /dav/): what a client reads to know it may write. Never WWW-Authenticate: a nest's challenge
+  // would make a browser ask for a password in a box that says this service's name (relay.ts adds its own, fixed one
+  // on WebDAV 401s only).
+  "dav",
+  "ms-author-via",
+  "lock-token",
   "x-pairnets-server-id",
   "x-pairnets-version",
   "x-pairnets-hash",

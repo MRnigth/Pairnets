@@ -33,8 +33,9 @@ public static class AccessGate
 
     public static async Task InvokeAsync(HttpContext ctx, Func<Task> next)
     {
-        if (DeviceIdentity.Of(ctx) is not { } me || me.AccessOrOwner is not { IsOwner: false } access)
+        if (DeviceIdentity.Of(ctx) is not { } me || me.AccessOrOwner is not { IsOwner: false } access || TokenAuthMiddleware.IsDav(ctx.Request.Path))
         {
+            // WebDAV checks view-only, shared folders and linked-in folders itself (DavEndpoints): its paths are not API paths.
             await next();
             return;
         }
@@ -112,6 +113,7 @@ public static class AccessGate
             || path.StartsWithSegments("/api/storage", StringComparison.OrdinalIgnoreCase) // where the nest keeps its files, and moving them
             || path.StartsWithSegments("/api/purge", StringComparison.OrdinalIgnoreCase) // deleting for good, older versions too
             || path.StartsWithSegments("/api/links", StringComparison.OrdinalIgnoreCase) // the owner's linked folders
+            || path.StartsWithSegments("/api/webdav", StringComparison.OrdinalIgnoreCase) // WebDAV links and their passwords
             || path.StartsWithSegments("/api/downloads", StringComparison.OrdinalIgnoreCase) // links the nest downloads by itself
             || path.StartsWithSegments("/api/offers", StringComparison.OrdinalIgnoreCase) // nests shared with the owner's account, and by whom
             || path.StartsWithSegments("/api/keys/seal", StringComparison.OrdinalIgnoreCase)

@@ -82,19 +82,38 @@ public sealed class TokenAuthMiddleware
         _log.LogWarning("Rejected request {Method} {Path} from {Address}: {Reason} ({Failures} recent failure(s))",
             context.Request.Method, context.Request.Path.Value, address, code, failures);
         context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+        if (IsDav(context.Request.Path))
+            context.Response.Headers.WWWAuthenticate = "Basic realm=\"Pairnets\", charset=\"UTF-8\"";
         await context.Response.WriteAsJsonAsync(new ErrorBody(code, message), PairnetsJson.Options);
     }
 
     private (DeviceIdentity? Identity, string Code, string Message) Authenticate(HttpContext context)
     {
-        var provided = Provided(context.Request);
+        // WebDAV (/dav) is a door of its own: only a WebDAV link's password opens it, and that password opens nothing else.
+        var dav = IsDav(context.Request.Path);
+        var provided = dav ? DavPassword(context.Request) : Provided(context.Request);
         if (string.IsNullOrEmpty(provided))
             return (null, ErrorCodes.Unauthorized, "Missing or wrong token.");
+
+        if (dav || provided.StartsWith(AuthStore.WebDavKeyPrefix, StringComparison.Ordinal))
+        {
+            var link = dav && provided.StartsWith(AuthStore.WebDavKeyPrefix, StringComparison.Ordinal) ? _keys.Find(provided) : null;
+            if (link is not { IsWebDav: true })
+                return (null, ErrorCodes.Unauthorized, "Missing or wrong token.");
+            if (!link.IsActive)
+                return (null, ErrorCodes.DeviceRemoved, "This link was removed from your nest.");
+            _keys.Store.TouchWebDavLink(link.Id);
+            // Named apart from computers: a link may share a computer's name (names are unique per kind), and a computer skips a
+            // push carrying its own name as its own echo, so a link "Mac mini" would hide its changes from the Mac mini.
+            return (new DeviceIdentity(link.Id, link.Name + " (WebDAV link)", DeviceAuthKind.WebDavKey, link.AccessOrOwner), string.Empty, string.Empty);
+        }
 
         if (provided.StartsWith(AuthStore.KeyPrefix, StringComparison.Ordinal))
         {
             var device = _keys.Find(provided);
             if (device is null)
+                return (null, ErrorCodes.Unauthorized, "Missing or wrong token.");
+            if (device.IsWebDav)
                 return (null, ErrorCodes.Unauthorized, "Missing or wrong token.");
             if (!device.IsActive)
                 return (null, ErrorCodes.DeviceRemoved, "This computer was removed from your nest. Sign in again to keep syncing.");
@@ -107,6 +126,30 @@ public sealed class TokenAuthMiddleware
         if (!_keys.AllowSharedToken)
             return (null, ErrorCodes.SharedTokenOff, "The shared token was turned off on your nest. Sign in from Pairnets to keep syncing.");
         return (new DeviceIdentity(null, DeviceIdentity.HeaderName(context), DeviceAuthKind.SharedToken), string.Empty, string.Empty);
+    }
+
+    /// <summary>Whether a path is WebDAV's: <c>/dav</c> and everything under it.</summary>
+    public static bool IsDav(PathString path) => path.StartsWithSegments("/dav", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The WebDAV password from "Authorization: Basic" (the user name is only a label and is not checked), as the key it is
+    /// stored under; null when there is none or it cannot be a password.
+    /// </summary>
+    private static string? DavPassword(HttpRequest request)
+    {
+        var auth = request.Headers.Authorization.ToString();
+        if (!auth.StartsWith("Basic ", StringComparison.OrdinalIgnoreCase))
+            return null;
+        try
+        {
+            var text = Encoding.UTF8.GetString(Convert.FromBase64String(auth["Basic ".Length..].Trim()));
+            var colon = text.IndexOf(':', StringComparison.Ordinal);
+            return AuthStore.WebDavKeyOf(colon < 0 ? text : text[(colon + 1)..]);
+        }
+        catch (FormatException)
+        {
+            return null;
+        }
     }
 
     private static string? Provided(HttpRequest request)

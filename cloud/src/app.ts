@@ -9,7 +9,7 @@ import { apiError, finalize, HttpError, htmlResponse, MESSAGES, redirect, SIGNED
 import { makeMailer } from "./mail";
 import { errorPage } from "./pages";
 import { hit, limitAddress, MINUTE } from "./ratelimit";
-import { relay } from "./relay";
+import { davRoute, isDavRoute, relay } from "./relay";
 import {
   accountPageRoute,
   cancelClaimCodesRoute,
@@ -306,6 +306,7 @@ export function createWorker(overrides: Partial<Deps> = {}): ExportedHandler<Env
         defer: (p) => exec.waitUntil(p),
       };
       if (isRelayPath(url.pathname)) return relay(ctx);
+      if (isDavRoute(url.pathname)) return davRoute(ctx);
       let resp: Response;
       try {
         resp = await route(ctx, isApi);

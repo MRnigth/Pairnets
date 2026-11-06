@@ -1,0 +1,108 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:v="using:Pairnets.Desktop.Views"
+        x:Class="Pairnets.Desktop.Views.WebDavLinkWindow"
+        Title="Make a link for Finder or Explorer" Width="560" MinHeight="380" MaxHeight="820" SizeToContent="Height" CanResize="False"
+        Background="{DynamicResource T.Card}"
+        WindowStartupLocation="CenterOwner" Icon="avares://Pairnets/Assets/pairnets-icon-256.png">
+  <!-- "Make a link…" under Files in Finder or Explorer: a name, what it may do, the whole nest or chosen folders; then the
+       address, username and password, shown once. -->
+  <Grid Margin="24,20">
+    <StackPanel x:Name="FormPanel">
+      <Grid ColumnDefinitions="Auto,*">
+        <Border Width="40" Height="40" CornerRadius="20" Margin="0,0,14,0" VerticalAlignment="Top" Background="{DynamicResource T.AccentSoft}">
+          <v:LineIcon Width="20" Height="20" StrokeThickness="2.2" Stroke="{DynamicResource T.AccentInk}" Data="{StaticResource I.Key}" />
+        </Border>
+        <StackPanel Grid.Column="1" Spacing="4">
+          <TextBlock FontSize="20" FontWeight="ExtraBold" TextWrapping="Wrap" Text="Open your nest in Finder or Explorer" />
+          <TextBlock Classes="muted" FontSize="13" TextWrapping="Wrap" Text="The link comes with its own password. You can take it back any time." />
+        </StackPanel>
+      </Grid>
+
+      <StackPanel Margin="0,18,0,0" Spacing="6">
+        <TextBlock Text="Name this link" FontSize="13" FontWeight="Bold" />
+        <TextBox x:Name="LabelBox" Classes="field" MaxLength="40" AutomationProperties.Name="Name of the link" TextChanged="OnChanged" />
+      </StackPanel>
+
+      <TextBlock FontSize="15" FontWeight="ExtraBold" Margin="0,18,0,0" Text="What it gets" />
+      <WrapPanel Margin="0,8,0,0" ItemSpacing="6" LineSpacing="6">
+        <RadioButton x:Name="WholeChoice" Classes="pill" GroupName="scope" Content="The whole nest" IsChecked="True" IsCheckedChanged="OnScopeChanged" />
+        <RadioButton x:Name="FoldersChoice" Classes="pill" GroupName="scope" Content="Chosen folders" IsCheckedChanged="OnScopeChanged" />
+      </WrapPanel>
+      <Border x:Name="FolderBox" Margin="0,6,0,0" CornerRadius="14" BorderThickness="1" BorderBrush="{DynamicResource T.Border}" Background="{DynamicResource T.Card}"
+              Padding="14,10" IsVisible="False">
+        <StackPanel>
+          <TextBlock x:Name="FolderNote" Classes="muted" FontSize="12.5" TextWrapping="Wrap" Margin="0,0,0,6" />
+          <ScrollViewer MaxHeight="170" HorizontalScrollBarVisibility="Disabled">
+            <StackPanel x:Name="FolderList" />
+          </ScrollViewer>
+        </StackPanel>
+      </Border>
+
+      <TextBlock FontSize="15" FontWeight="ExtraBold" Margin="0,18,0,0" Text="What it can do" />
+      <RadioButton x:Name="ViewChoice" GroupName="access" IsChecked="True" Margin="0,10,0,0" AutomationProperties.Name="View only">
+        <StackPanel Margin="4,0,0,0">
+          <TextBlock Text="View only" FontWeight="Bold" />
+          <TextBlock Classes="muted" FontSize="12.5" TextWrapping="Wrap" Text="Open and copy files. Nothing can be changed." />
+        </StackPanel>
+      </RadioButton>
+      <RadioButton x:Name="EditChoice" GroupName="access" Margin="0,10,0,0" AutomationProperties.Name="Can change">
+        <StackPanel Margin="4,0,0,0">
+          <TextBlock Text="Can change" FontWeight="Bold" />
+          <TextBlock Classes="muted" FontSize="12.5" TextWrapping="Wrap"
+                     Text="Add, edit, rename and delete files up to 25 MB. Replaced and deleted files stay in your nest's history." />
+        </StackPanel>
+      </RadioButton>
+
+      <Grid ColumnDefinitions="*,Auto" Margin="0,18,0,0">
+        <TextBlock x:Name="Problem" Foreground="{DynamicResource T.BadText}" FontSize="12" FontWeight="Bold" TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,0,12,0" IsVisible="False" />
+        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+          <Button x:Name="CancelButton" Classes="SecondaryButton" Background="{DynamicResource T.Chip}" Content="Cancel" IsCancel="True" Click="OnCancel" />
+          <Button x:Name="MakeButton" Classes="accent" Padding="20,0" IsDefault="True" Click="OnMake">
+            <TextBlock x:Name="MakeLabel" Text="Make the link" VerticalAlignment="Center" />
+          </Button>
+        </StackPanel>
+      </Grid>
+    </StackPanel>
+
+    <StackPanel x:Name="ResultPanel" IsVisible="False">
+      <Grid ColumnDefinitions="Auto,*">
+        <Border Width="40" Height="40" CornerRadius="20" Margin="0,0,14,0" VerticalAlignment="Top" Background="{DynamicResource T.OkPill}">
+          <v:LineIcon Width="20" Height="20" StrokeThickness="2.2" Stroke="{DynamicResource T.OkText}" Data="{StaticResource I.Check}" />
+        </Border>
+        <StackPanel Grid.Column="1" Spacing="4">
+          <TextBlock x:Name="ResultHeading" FontSize="20" FontWeight="ExtraBold" TextWrapping="Wrap" />
+          <TextBlock Classes="muted" FontSize="13" TextWrapping="Wrap" Text="Type these into Finder (Go → Connect to Server) or Windows (Map network drive)." />
+        </StackPanel>
+      </Grid>
+
+      <TextBlock Text="Address" FontSize="13" FontWeight="Bold" Margin="0,18,0,6" />
+      <Grid ColumnDefinitions="*,Auto">
+        <TextBox x:Name="AddressBox" Classes="field" IsReadOnly="True" AutomationProperties.Name="Address" />
+        <Button x:Name="CopyAddressButton" Grid.Column="1" Classes="small" Margin="8,0,0,0" Content="Copy" AutomationProperties.Name="Copy the address" Click="OnCopyAddress" />
+      </Grid>
+
+      <TextBlock Text="Username" FontSize="13" FontWeight="Bold" Margin="0,14,0,6" />
+      <Grid ColumnDefinitions="*,Auto">
+        <TextBox x:Name="UsernameBox" Classes="field" IsReadOnly="True" AutomationProperties.Name="Username" />
+        <Button x:Name="CopyUsernameButton" Grid.Column="1" Classes="small" Margin="8,0,0,0" Content="Copy" AutomationProperties.Name="Copy the username" Click="OnCopyUsername" />
+      </Grid>
+
+      <TextBlock Text="Password" FontSize="13" FontWeight="Bold" Margin="0,14,0,6" />
+      <Grid ColumnDefinitions="*,Auto">
+        <TextBox x:Name="PasswordBox" Classes="field" FontWeight="SemiBold" IsReadOnly="True" AutomationProperties.Name="Password" />
+        <Button x:Name="CopyPasswordButton" Grid.Column="1" Classes="small" Margin="8,0,0,0" Content="Copy" AutomationProperties.Name="Copy the password" Click="OnCopyPassword" />
+      </Grid>
+
+      <Border Margin="0,16,0,0" Background="{DynamicResource T.WarnPill}" BorderBrush="{DynamicResource T.WarnBorder}" BorderThickness="1" CornerRadius="14" Padding="14,10">
+        <TextBlock Foreground="{DynamicResource T.WarnText}" FontSize="13" FontWeight="Bold" TextWrapping="Wrap"
+                   Text="This password is shown once. Copy it now: Pairnets doesn't keep it. If you lose it, remove the link and make a new one." />
+      </Border>
+      <TextBlock x:Name="CopyNote" Classes="muted" FontSize="12" Margin="0,8,0,0" TextWrapping="Wrap" />
+
+      <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
+        <Button x:Name="DoneButton" Classes="accent" Padding="24,0" IsDefault="True" Content="Done" Click="OnDone" />
+      </StackPanel>
+    </StackPanel>
+  </Grid>
+</Window>

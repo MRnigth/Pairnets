@@ -1,0 +1,138 @@
+<Window x:Class="Pairnets.Client.Ui.WebDavLinkWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ui="clr-namespace:Pairnets.Client.Ui"
+        Title="Make a link for Finder or Explorer" Width="560" MinHeight="380" MaxHeight="820" SizeToContent="Height" ResizeMode="NoResize"
+        WindowStartupLocation="CenterOwner">
+  <!-- "Make a link…" under Files in Finder or Explorer: a name, what it may do, the whole nest or chosen folders; then the
+       address, username and password, shown once. -->
+  <Grid Margin="24,20">
+    <StackPanel x:Name="FormPanel">
+      <Grid>
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="Auto" />
+          <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+        <Border Width="40" Height="40" CornerRadius="20" Background="{DynamicResource T.AccentSoft}" VerticalAlignment="Top" Margin="0,0,14,0">
+          <ui:LineIcon Width="20" Height="20" StrokeThickness="2.2" Stroke="{DynamicResource T.AccentInk}" Data="{StaticResource I.Key}" />
+        </Border>
+        <StackPanel Grid.Column="1">
+          <TextBlock FontSize="20" FontWeight="ExtraBold" TextWrapping="Wrap" Text="Open your nest in Finder or Explorer" />
+          <TextBlock Foreground="{DynamicResource T.Muted}" FontSize="13" TextWrapping="Wrap" Margin="0,4,0,0"
+                     Text="The link comes with its own password. You can take it back any time." />
+        </StackPanel>
+      </Grid>
+
+      <TextBlock Text="Name this link" FontSize="13" FontWeight="Bold" Margin="0,18,0,6" />
+      <TextBox x:Name="LabelBox" Style="{StaticResource PgInput}" FontWeight="Normal" FontSize="13" MaxLength="40"
+               AutomationProperties.Name="Name of the link" TextChanged="OnChanged" />
+
+      <TextBlock Style="{StaticResource PgCardTitle}" Margin="0,18,0,0" Text="What it gets" />
+      <WrapPanel Margin="0,8,0,0">
+        <RadioButton x:Name="WholeChoice" Style="{StaticResource PgSeg}" GroupName="scope" Width="Auto" Margin="0,0,6,6"
+                     AutomationProperties.Name="The whole nest" IsChecked="True" Checked="OnScopeChanged">
+          <TextBlock Text="The whole nest" Margin="12,0" />
+        </RadioButton>
+        <RadioButton x:Name="FoldersChoice" Style="{StaticResource PgSeg}" GroupName="scope" Width="Auto" Margin="0,0,6,6"
+                     AutomationProperties.Name="Chosen folders" Checked="OnScopeChanged">
+          <TextBlock Text="Chosen folders" Margin="12,0" />
+        </RadioButton>
+      </WrapPanel>
+      <Border x:Name="FolderBox" Margin="0,6,0,0" CornerRadius="14" BorderThickness="1" BorderBrush="{DynamicResource T.Border}" Background="{DynamicResource T.Card}"
+              Padding="14,10" Visibility="Collapsed">
+        <StackPanel>
+          <TextBlock x:Name="FolderNote" Foreground="{DynamicResource T.Muted}" FontSize="12.5" TextWrapping="Wrap" Margin="0,0,0,6" />
+          <ScrollViewer MaxHeight="170" VerticalScrollBarVisibility="Auto">
+            <StackPanel x:Name="FolderList" />
+          </ScrollViewer>
+        </StackPanel>
+      </Border>
+
+      <TextBlock Style="{StaticResource PgCardTitle}" Margin="0,18,0,0" Text="What it can do" />
+      <RadioButton x:Name="ViewChoice" GroupName="access" IsChecked="True" Margin="0,10,0,0" AutomationProperties.Name="View only">
+        <StackPanel Margin="4,0,0,0">
+          <TextBlock Text="View only" FontWeight="Bold" Foreground="{DynamicResource T.Text}" />
+          <TextBlock Foreground="{DynamicResource T.Muted}" FontSize="12.5" TextWrapping="Wrap" Text="Open and copy files. Nothing can be changed." />
+        </StackPanel>
+      </RadioButton>
+      <RadioButton x:Name="EditChoice" GroupName="access" Margin="0,10,0,0" AutomationProperties.Name="Can change">
+        <StackPanel Margin="4,0,0,0">
+          <TextBlock Text="Can change" FontWeight="Bold" Foreground="{DynamicResource T.Text}" />
+          <TextBlock Foreground="{DynamicResource T.Muted}" FontSize="12.5" TextWrapping="Wrap"
+                     Text="Add, edit, rename and delete files up to 25 MB. Replaced and deleted files stay in your nest's history." />
+        </StackPanel>
+      </RadioButton>
+
+      <Grid Margin="0,18,0,0">
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="*" />
+          <ColumnDefinition Width="Auto" />
+        </Grid.ColumnDefinitions>
+        <TextBlock x:Name="Problem" Foreground="{DynamicResource T.BadText}" FontSize="12" FontWeight="Bold" TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,0,12,0" Visibility="Collapsed" />
+        <StackPanel Grid.Column="1" Orientation="Horizontal">
+          <Button x:Name="CancelButton" Style="{StaticResource SecondaryButton}" Content="Cancel" Margin="0,0,8,0" IsCancel="True" Click="OnCancel" />
+          <Button x:Name="MakeButton" Style="{StaticResource AccentButton}" Padding="20,0" IsDefault="True" Click="OnMake">
+            <TextBlock x:Name="MakeLabel" Text="Make the link" />
+          </Button>
+        </StackPanel>
+      </Grid>
+    </StackPanel>
+
+    <StackPanel x:Name="ResultPanel" Visibility="Collapsed">
+      <Grid>
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="Auto" />
+          <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+        <Border Width="40" Height="40" CornerRadius="20" Background="{DynamicResource T.OkPill}" VerticalAlignment="Top" Margin="0,0,14,0">
+          <ui:LineIcon Width="20" Height="20" StrokeThickness="2.2" Stroke="{DynamicResource T.OkText}" Data="{StaticResource I.Check}" />
+        </Border>
+        <StackPanel Grid.Column="1">
+          <TextBlock x:Name="ResultHeading" FontSize="20" FontWeight="ExtraBold" TextWrapping="Wrap" />
+          <TextBlock Foreground="{DynamicResource T.Muted}" FontSize="13" TextWrapping="Wrap" Margin="0,4,0,0"
+                     Text="Type these into Finder (Go → Connect to Server) or Windows (Map network drive)." />
+        </StackPanel>
+      </Grid>
+
+      <TextBlock Text="Address" FontSize="13" FontWeight="Bold" Margin="0,18,0,6" />
+      <Grid>
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="*" />
+          <ColumnDefinition Width="Auto" />
+        </Grid.ColumnDefinitions>
+        <TextBox x:Name="AddressBox" Style="{StaticResource PgInput}" FontWeight="Normal" FontSize="13" IsReadOnly="True" AutomationProperties.Name="Address" />
+        <Button x:Name="CopyAddressButton" Grid.Column="1" Style="{StaticResource PgChipButton}" Height="34" Margin="8,0,0,0" Content="Copy" AutomationProperties.Name="Copy the address" Click="OnCopyAddress" />
+      </Grid>
+
+      <TextBlock Text="Username" FontSize="13" FontWeight="Bold" Margin="0,14,0,6" />
+      <Grid>
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="*" />
+          <ColumnDefinition Width="Auto" />
+        </Grid.ColumnDefinitions>
+        <TextBox x:Name="UsernameBox" Style="{StaticResource PgInput}" FontWeight="Normal" FontSize="13" IsReadOnly="True" AutomationProperties.Name="Username" />
+        <Button x:Name="CopyUsernameButton" Grid.Column="1" Style="{StaticResource PgChipButton}" Height="34" Margin="8,0,0,0" Content="Copy" AutomationProperties.Name="Copy the username" Click="OnCopyUsername" />
+      </Grid>
+
+      <TextBlock Text="Password" FontSize="13" FontWeight="Bold" Margin="0,14,0,6" />
+      <Grid>
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="*" />
+          <ColumnDefinition Width="Auto" />
+        </Grid.ColumnDefinitions>
+        <TextBox x:Name="PasswordBox" Style="{StaticResource PgInput}" FontWeight="SemiBold" FontSize="14" IsReadOnly="True" AutomationProperties.Name="Password" />
+        <Button x:Name="CopyPasswordButton" Grid.Column="1" Style="{StaticResource PgChipButton}" Height="34" Margin="8,0,0,0" Content="Copy" AutomationProperties.Name="Copy the password" Click="OnCopyPassword" />
+      </Grid>
+
+      <Border Margin="0,16,0,0" Background="{DynamicResource T.WarnPill}" BorderBrush="{DynamicResource T.WarnBorder}" BorderThickness="1" CornerRadius="14" Padding="14,10">
+        <TextBlock Foreground="{DynamicResource T.WarnText}" FontSize="13" FontWeight="Bold" TextWrapping="Wrap"
+                   Text="This password is shown once. Copy it now: Pairnets doesn't keep it. If you lose it, remove the link and make a new one." />
+      </Border>
+      <TextBlock x:Name="CopyNote" Foreground="{DynamicResource T.Muted}" FontSize="12" Margin="0,8,0,0" TextWrapping="Wrap" />
+
+      <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
+        <Button x:Name="DoneButton" Style="{StaticResource AccentButton}" Padding="24,0" IsDefault="True" Content="Done" Click="OnDone" />
+      </StackPanel>
+    </StackPanel>
+  </Grid>
+</Window>

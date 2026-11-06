@@ -231,6 +231,16 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
         [new FriendRequestEntry("inv_oskar", "Oskar Nilsson", "oskar.n@example.com", "view", ["Music"])]),
     };
 
+    /// <summary>The owner's nest with two WebDAV links: one view only for the whole nest, one that can change two folders.</summary>
+    private static StatusSnapshot OwnersNestWithWebDav => OwnersNestWithFriends with
+    {
+        WebDav = new WebDavLinks(false, WebDavSection.MaxUploadBytes,
+        [
+            new WebDavLink("dav_mac", "Mac mini", "mac-mini", "view", null, Utc.AddDays(-3), Utc.AddMinutes(-4)),
+            new WebDavLink("dav_pc", "Work PC", "work-pc", "edit", ["Photos", "School"], Utc.AddHours(-5), null),
+        ]),
+    };
+
     /// <summary>The nest's downloads: one running, one waiting, one finished, one stopped, and one held on an encrypted nest.</summary>
     private static NestDownloadList NestDownloads => new(
     [
@@ -282,6 +292,9 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
     public Task NestDownloadWindow_EveryButtonWorks() => Expect(fixture.Run("nest download", () => PressEverything(NestDownloadScreens(), DownloadWindowRules)));
 
     [Fact]
+    public Task WebDavLinkWindow_EveryButtonWorks() => Expect(fixture.Run("webdav link", () => PressEverything(WebDavLinkScreens(), WebDavLinkRules)));
+
+    [Fact]
     public Task TrayMenu_EveryItemWorks() => Expect(fixture.Run("tray menu", PressTheTrayMenu));
 
     /// <summary>The guard: nothing in the XAML, and nothing in the tray menu, goes unpressed.</summary>
@@ -290,7 +303,7 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
     {
         // Run every window first (each runs once, whichever test asks first).
         foreach (var run in new Func<Task>[] { TrayPanel_EveryButtonWorks, MainWindow_EveryButtonWorks, Settings_EveryButtonWorks, SignIn_EveryButtonWorks,
-                     ServerUpdateWindow_EveryButtonWorks, NestPlaceWindow_EveryButtonWorks, BugReportWindow_EveryButtonWorks, InviteWindow_EveryButtonWorks, NestDownloadWindow_EveryButtonWorks,
+                     ServerUpdateWindow_EveryButtonWorks, NestPlaceWindow_EveryButtonWorks, BugReportWindow_EveryButtonWorks, InviteWindow_EveryButtonWorks, NestDownloadWindow_EveryButtonWorks, WebDavLinkWindow_EveryButtonWorks,
                      TrayMenu_EveryItemWorks })
         {
             try
@@ -714,6 +727,12 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
                 FolderPath, "DESKTOP");
             main.Navigate(MainPage.Devices);
         }));
+        yield return new Screen(name, "the Devices page with Files in Finder or Explorer", NewMainWindow, (b, w) => Wpf.Ui(() =>
+        {
+            var main = (MainWindow)w;
+            main.ShowStatus(OwnersNestWithWebDav, FolderPath, "DESKTOP");
+            main.Navigate(MainPage.Devices);
+        }));
         yield return new Screen(name, "the Needs you page with changes held back on a nest shared to view", NewMainWindow, (b, w) => Wpf.Ui(() =>
         {
             var main = (MainWindow)w;
@@ -902,6 +921,9 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
         new(t => t.Handlers.Contains("DevicesPageView.OnInviteFriend"), "open the invite window", Called("InviteFriend")),
         new(t => t.Handlers.Any(h => h.StartsWith("DevicesPageView.OnPerson", StringComparison.Ordinal)), "open the account page at this nest's People",
             Called("OpenPeople")),
+        new(t => t.Element.Name == "MakeLinkButton", "open the window that makes a WebDAV link", Called("MakeWebDavLink")),
+        new(t => t.Handlers.Contains("DevicesPageView.OnRemoveWebDavLink"), "ask to remove that WebDAV link",
+            c => c.Item is WebDavRow row && Called($"RemoveWebDavLink({row.Id})")(c)),
         new(t => t.Element.Name == "JoinChip", "show the Needs you page", OnPage(MainPage.Attention)),
         new(t => t.Element.Name == "CardMoreButton", "open the nest's Devices page", Called("ManageDevices")),
 
@@ -1445,6 +1467,63 @@ public sealed class ClickEverythingTests(ClickFixture fixture) : IClassFixture<C
             c => ((NestDownloadWindow)c.Window).Link == DownloadLink
                 ? c.Bench.Opened.Items is [$"download {DownloadLink} into Downloads"] && c.Bench.Closed && ((NestDownloadWindow)c.Window).Started
                 : c.Bench.Opened.Items.Count == 0 && ((NestDownloadWindow)c.Window).ProblemText.Length > 0),
+        new(t => t.Element.Name == "CancelButton", "close the window without asking the nest", c => c.Bench.Closed && c.Bench.Opened.Items.Count == 0),
+    ];
+
+    // ------------------------------------------------------------------ the "Make a link" window (WebDAV)
+
+    private const string WebDavAddress = "https://pairnets.app/soro.nst_0123456789abcdefghjkmnpqrs/";
+    private const string WebDavPassword = "abcde-fghjk-mnpqr-stuvw";
+
+    private static IEnumerable<Screen> WebDavLinkScreens()
+    {
+        const string name = "the WebDAV link window";
+        static Window Build(Bench b) => new WebDavLinkWindow(WebDavAddress, ["Photos", "School"],
+            (label, canChange, folders) =>
+            {
+                b.Opened.Add($"make {label} {(canChange ? "edit" : "view")} {(folders is null ? "whole" : string.Join("+", folders))}");
+                return Task.FromResult<(NewWebDavLink?, string?)>((new NewWebDavLink("dav_new", label, WebDavChoices.Slug(label), canChange ? "edit" : "view", folders, DateTimeOffset.UtcNow, WebDavPassword), null));
+            },
+            text =>
+            {
+                b.Opened.Add("copy " + text);
+                return true;
+            });
+        yield return new Screen(name, "a name typed, the whole nest", b => Build(b), (_, w) => Wpf.Ui(() => ((WebDavLinkWindow)w).Label = "Mac mini"));
+        yield return new Screen(name, "no name", b => Build(b));
+        yield return new Screen(name, "chosen folders, none ticked", b => Build(b), (_, w) => Wpf.Ui(() =>
+        {
+            ((WebDavLinkWindow)w).Label = "Mac mini";
+            ((WebDavLinkWindow)w).WholeNest = false;
+        }));
+        yield return new Screen(name, "the link made, its password shown", b => Build(b), async (_, w) =>
+        {
+            await Wpf.Ui(() =>
+            {
+                var window = (WebDavLinkWindow)w;
+                window.Label = "Mac mini";
+                ((Button)window.FindName("MakeButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            });
+            await Wpf.WaitUntil(() => ((WebDavLinkWindow)w).ShowingResult, "the password");
+        });
+    }
+
+    private static readonly IReadOnlyList<Rule> WebDavLinkRules =
+    [
+        new(t => t.Element.Name == "LabelBox", "take the typed name and drop the old problem", c => ((WebDavLinkWindow)c.Window) is { Label: Presser.TypedText, ProblemText: "" }),
+        new(t => t.Element.Name == "FoldersChoice", "show the folders to tick", c => ((FrameworkElement)((WebDavLinkWindow)c.Window).FindName("FolderBox")).Visibility == Visibility.Visible),
+        new(t => t.Element.Name == "WholeChoice", "share the whole nest (no folders to tick)", c => ((FrameworkElement)((WebDavLinkWindow)c.Window).FindName("FolderBox")).Visibility != Visibility.Visible),
+        new(t => t.Element.Name is "ViewChoice" or "EditChoice", "pick what the link can do", c => ((RadioButton)c.Target.Element).IsChecked == true),
+        Switch, // a folder's tick box
+        new(t => t.Element.Name == "MakeButton", "make the link and show its password once (or say what is missing)",
+            c => ((WebDavLinkWindow)c.Window).ShowingResult
+                ? c.Bench.Opened.Items.Count == 1 && c.Bench.Opened.Items[0].StartsWith("make ", StringComparison.Ordinal) && ((WebDavLinkWindow)c.Window).ResultPassword == WebDavPassword
+                    && ((WebDavLinkWindow)c.Window).ResultAddress == WebDavAddress
+                : c.Bench.Opened.Items.Count == 0 && ((WebDavLinkWindow)c.Window).ProblemText.Length > 0),
+        new(t => t.Element.Name == "CopyAddressButton", "copy the address", c => c.Bench.Opened.Items.SequenceEqual(["copy " + WebDavAddress]) && ((WebDavLinkWindow)c.Window).CopyNoteText == "Address copied."),
+        new(t => t.Element.Name == "CopyUsernameButton", "copy the username", c => c.Bench.Opened.Items.SequenceEqual(["copy mac-mini"]) && ((WebDavLinkWindow)c.Window).CopyNoteText == "Username copied."),
+        new(t => t.Element.Name == "CopyPasswordButton", "copy the password", c => c.Bench.Opened.Items.SequenceEqual(["copy " + WebDavPassword]) && ((WebDavLinkWindow)c.Window).CopyNoteText == "Password copied."),
+        new(t => t.Element.Name == "DoneButton", "close the window and forget the password", c => c.Bench.Closed && ((WebDavLinkWindow)c.Window).ResultPassword.Length == 0),
         new(t => t.Element.Name == "CancelButton", "close the window without asking the nest", c => c.Bench.Closed && c.Bench.Opened.Items.Count == 0),
     ];
 

@@ -13,10 +13,12 @@
       4 build           dotnet build Pairnets.sln -c Release, and the Windows screenshot tool
       5 publish         the server for Linux (packaged into two update feeds) and Windows, and the Windows app
       6 render-screens  every Windows window, light and dark
-      7 tests           the whole test suite (250 convergence seeds), against the published Windows server too
+      7 tests           the whole test suite (250 convergence seeds), against the published Windows server too, and
+                        the click-everything tests of both Windows apps again with Windows animations off
       8 linux-box       a throwaway WSL Ubuntu: install, the API tour and website tests against it, update,
                         upgrade from the published release, shellcheck
-      9 cloud           cloud/ tests and a dry-run deploy (when cloud/package.json is there)
+      9 cloud           cloud/ tests and a dry-run deploy (when cloud/package.json is there); they start before
+                        the tests and run alongside them, step 9 only waits for them
 
     Only one run at a time (others wait). Writes a report folder under
     %LOCALAPPDATA%\Pairnets-predeploy\reports, and only after a full pass the record
@@ -252,7 +254,7 @@ function Get-FailedTests([string]$Pattern) {
                 $class = $classes[$r.GetAttribute('testId')]
                 if (-not $class) { $class = 'Unknown' }
                 $msgNode = $r.SelectSingleNode('t:Output/t:ErrorInfo/t:Message', $ns)
-                $msgLines = if ($msgNode) { @($msgNode.InnerText -split "`r?`n" | ForEach-Object { $_.Trim() } | Where-Object { $_ }) } else { @('no message') }
+                $msgLines = @(if ($msgNode) { $msgNode.InnerText -split "`r?`n" | ForEach-Object { $_.Trim() } | Where-Object { $_ } } else { 'no message' })
                 if (-not $msgLines.Count) { $msgLines = @('no message') }
                 # "2 presses went wrong:" is followed by the presses themselves: keep a few of them.
                 $msg = if ($msgLines[0].EndsWith(':')) { ($msgLines | Select-Object -First 4) -join ' ' } else { $msgLines[0] }
@@ -500,15 +502,55 @@ function Step-RenderScreens($Ctx) {
     }
 }
 
+# The click-everything tests of both Windows apps run a second time with Windows animations off, in their own process
+# beside the main suite (GitHub's computers have animations off, this one has them on, and a crash only seen with them off
+# once got through). The setting is only the test's own (PAIRNETS_TEST_ANIMATIONS): the Windows setting is never changed.
+$AnimationsOffFilter = 'FullyQualifiedName~ClickEverythingTests'
+
+function Start-AnimationsOffTests($Ctx) {
+    $log = Join-Path $ReportDir '07-tests-animations-off.log'
+    $errLog = Join-Path $ReportDir '07-tests-animations-off.err'
+    $args2 = @('test', 'Pairnets.sln', '-c', 'Release', '--no-build', '--filter', $AnimationsOffFilter,
+        '--logger', 'trx;LogFilePrefix=animations-off', '--logger', 'console;verbosity=normal',
+        '--results-directory', $TestResults, '--blame-hang-timeout', '10m')
+    Add-PdLogLine -Log $log -Text ('> dotnet.exe ' + (Join-PdArgs $args2) + '   (PAIRNETS_TEST_ANIMATIONS=off)')
+    $saved = @{}
+    foreach ($k in @('PAIRNETS_TEST_ANIMATIONS', 'DOTNET_CLI_TELEMETRY_OPTOUT', 'DOTNET_NOLOGO', 'MSBUILDDISABLENODEREUSE')) { $saved[$k] = [Environment]::GetEnvironmentVariable($k, 'Process') }
+    try {
+        [Environment]::SetEnvironmentVariable('PAIRNETS_TEST_ANIMATIONS', 'off', 'Process')
+        [Environment]::SetEnvironmentVariable('DOTNET_CLI_TELEMETRY_OPTOUT', '1', 'Process')
+        [Environment]::SetEnvironmentVariable('DOTNET_NOLOGO', '1', 'Process')
+        [Environment]::SetEnvironmentVariable('MSBUILDDISABLENODEREUSE', '1', 'Process')
+        $proc = Start-Process -FilePath 'dotnet.exe' -ArgumentList (Join-PdArgs $args2) -WorkingDirectory $Work -WindowStyle Hidden -PassThru `
+            -RedirectStandardOutput $log -RedirectStandardError $errLog
+    } finally {
+        foreach ($k in $saved.Keys) { [Environment]::SetEnvironmentVariable($k, $saved[$k], 'Process') }
+    }
+    $null = $proc.Handle # without it Windows PowerShell 5.1 forgets the exit code of a process it did not wait for
+    return [pscustomobject]@{ Process = $proc; Log = $log; ErrLog = $errLog; Started = Get-Date }
+}
+
+function Complete-AnimationsOffTests($Ctx, $Run) {
+    $finished = $Run.Process.WaitForExit(3600 * 1000)
+    if (-not $finished) { try { & taskkill.exe /PID $Run.Process.Id /T /F | Out-Null } catch { } }
+    if ((Test-Path $Run.ErrLog) -and (Get-Item $Run.ErrLog).Length -gt 0) { Add-PdLogLine -Log $Run.Log -Text ((Get-Content -Path $Run.ErrLog -Raw -Encoding UTF8)) }
+    Remove-Item -Path $Run.ErrLog -Force -ErrorAction SilentlyContinue
+    $result = [pscustomobject]@{ ExitCode = $(if ($finished) { $Run.Process.ExitCode } else { -1 }); TimedOut = (-not $finished) }
+    Add-TestProblems $Ctx 'animations-off*.trx' $result 'the click tests with Windows animations off' -RequireTests
+    Add-Note $Ctx ('the click tests ran a second time with Windows animations off (log: 07-tests-animations-off.log), beside the main suite')
+}
+
 # The website tests install Chromium themselves the first time (Microsoft.Playwright, about 300 MB, once).
 function Step-Tests($Ctx) {
     $server = Join-Path $Dist 'pairnets-server-win-x64\pairnets-server.exe'
+    $off = Start-AnimationsOffTests $Ctx
     $r = Invoke-StepTool -Ctx $Ctx -What 'dotnet test Pairnets.sln' -File 'dotnet.exe' -TimeoutSeconds 7200 -AllowFail -Arguments @(
         'test', 'Pairnets.sln', '-c', 'Release', '--no-build',
         '--logger', 'trx;LogFilePrefix=windows', '--logger', 'console;verbosity=normal',
         '--results-directory', $TestResults, '--blame-hang-timeout', '10m') `
-        -Environment @{ 'PAIRNETS_CONVERGENCE_SEEDS' = '250'; 'PAIRNETS_E2E_SERVER' = $server; 'PAIRNETS_E2E_TARGET' = $null }
+        -Environment @{ 'PAIRNETS_CONVERGENCE_SEEDS' = '250'; 'PAIRNETS_E2E_SERVER' = $server; 'PAIRNETS_E2E_TARGET' = $null; 'PAIRNETS_TEST_ANIMATIONS' = 'on' }
     Add-TestProblems $Ctx 'windows*.trx' $r 'the test suite' -RequireTests
+    Complete-AnimationsOffTests $Ctx $off
 }
 
 function Step-LinuxBox($Ctx) {
@@ -638,6 +680,22 @@ function Step-LinuxBox($Ctx) {
     $script:CurrentBox = $BoxName
 }
 
+# The cloud commands (scripts/pre-deploy-cloud.ps1) run in a second process, started before the tests so that the two
+# overlap; Step-Cloud then only waits for them. Without the tests in the run (-Only cloud) it starts them itself.
+$script:CloudRun = $null
+
+function Start-CloudAlongside {
+    $cloud = Join-Path $Work 'cloud'
+    if (-not (Test-Path (Join-Path $cloud 'package.json'))) { return }
+    $cloudCtx = New-StepContext 'cloud' ([array]::IndexOf($StepOrder, 'cloud'))
+    $result = Join-Path $ReportDir 'cloud-result.txt'
+    $args2 = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $PSScriptRoot 'pre-deploy-cloud.ps1'),
+        '-Cloud', $cloud, '-Out', (Join-Path $Work 'dist\wrangler-dry-run'), '-Log', $cloudCtx.Log, '-ResultFile', $result)
+    $proc = Start-Process -FilePath 'powershell.exe' -ArgumentList (Join-PdArgs $args2) -WindowStyle Hidden -PassThru
+    $script:CloudRun = [pscustomobject]@{ Process = $proc; Result = $result; Started = Get-Date }
+    Add-PdLogLine -Log $MainLog -Text "cloud commands started alongside the tests (pid $($proc.Id))"
+}
+
 function Step-Cloud($Ctx) {
     $cloud = Join-Path $Work 'cloud'
     if (-not (Test-Path (Join-Path $cloud 'package.json'))) {
@@ -645,10 +703,26 @@ function Step-Cloud($Ctx) {
         Add-Note $Ctx 'cloud/package.json is not in this commit'
         return
     }
-    $out = Join-Path $Work 'dist\wrangler-dry-run'
-    foreach ($cmd in @(@('npm', 'ci'), @('npm', 'test'), @('npx', '--yes', 'wrangler', 'deploy', '--dry-run', '--outdir', $out))) {
-        $r = Invoke-StepTool -Ctx $Ctx -What ($cmd -join ' ') -File 'cmd.exe' -WorkingDirectory $cloud -TimeoutSeconds 1800 -Arguments (@('/d', '/c') + $cmd)
-        if ($r.ExitCode -ne 0) { break }
+    if (-not $script:CloudRun) { Start-CloudAlongside }
+    $run = $script:CloudRun
+    if (-not $run.Process.WaitForExit(1800 * 1000)) {
+        try { & taskkill.exe /PID $run.Process.Id /T /F | Out-Null } catch { }
+        Add-Problem $Ctx 'the cloud commands did not finish within 1800 seconds'
+        return
+    }
+    $fields = @{}
+    if (Test-Path $run.Result) {
+        foreach ($l in (Get-Content -Path $run.Result -Encoding UTF8)) { if ($l -match '^(\w+)=(.*)$') { $fields[$Matches[1]] = $Matches[2] } }
+    }
+    if (-not $fields.ContainsKey('exit')) {
+        Add-Problem $Ctx 'the cloud commands stopped without a result; see the log'
+    } elseif ($fields['exit'] -ne '0') {
+        $logText = if (Test-Path $Ctx.Log) { Get-Content -Path $Ctx.Log -Encoding UTF8 } else { @() }
+        $problems = @($logText | Where-Object { $_ -like 'PROBLEM: *' } | ForEach-Object { $_ -replace '^PROBLEM: ', '' })
+        if ($problems.Count -eq 0) { $problems = @("the cloud commands failed (exit code $($fields['exit'])); see the log") }
+        foreach ($p in $problems) { Add-Problem $Ctx $p }
+    } else {
+        Add-Note $Ctx ("the cloud commands took {0} s (they ran alongside the tests)" -f $fields['seconds'])
     }
 }
 
@@ -723,7 +797,7 @@ try {
                 'build' { Step-Build $ctx }
                 'publish' { Step-Publish $ctx }
                 'render-screens' { Step-RenderScreens $ctx }
-                'tests' { Step-Tests $ctx }
+                'tests' { if ($selected.Contains('cloud')) { Start-CloudAlongside }; Step-Tests $ctx }
                 'linux-box' { Step-LinuxBox $ctx }
                 'cloud' { Step-Cloud $ctx }
             }

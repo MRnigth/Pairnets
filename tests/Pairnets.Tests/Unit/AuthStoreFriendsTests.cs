@@ -4,7 +4,7 @@ using Pairnets.Tests.Infrastructure;
 
 namespace Pairnets.Tests.Unit;
 
-/// <summary>auth.db and friends' computers (schema 6): what each computer may do, kept with its key; nothing changes for the owner's.</summary>
+/// <summary>auth.db and friends' computers (schema 6 and later): what each computer may do, kept with its key; nothing changes for the owner's.</summary>
 public sealed class AuthStoreFriendsTests : IDisposable
 {
     private readonly TempDir _dir = new("auth-friends");
@@ -70,7 +70,7 @@ public sealed class AuthStoreFriendsTests : IDisposable
 
         var store = Store();
 
-        Assert.Equal(6, UserVersion());
+        Assert.Equal(AuthStore.SchemaVersion, UserVersion());
         var desk = store.FindByKey(key)!;
         Assert.Equal(("dev-desk", "DESK", "desktop", "google"), (desk.Id, desk.Name, desk.Icon, desk.ApprovalMethod));
         Assert.True(desk.AccessOrOwner.IsOwner);
@@ -82,7 +82,7 @@ public sealed class AuthStoreFriendsTests : IDisposable
         // Opening it again changes nothing more.
         SqliteConnection.ClearAllPools();
         Assert.True(Store().GetDevice("dev-desk")!.AccessOrOwner.IsOwner);
-        Assert.Equal(6, UserVersion());
+        Assert.Equal(AuthStore.SchemaVersion, UserVersion());
     }
 
     [Fact]

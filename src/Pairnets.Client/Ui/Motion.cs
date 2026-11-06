@@ -16,7 +16,7 @@ public static class Motion
 {
     private static readonly ConditionalWeakTable<UIElement, HashSet<string>> Running = new();
 
-    private static bool Enabled => SystemParameters.ClientAreaAnimation;
+    private static bool Enabled => AnimationSetting.Enabled;
 
     /// <summary>Scale, rotate and translate around the element's centre.</summary>
     private static (ScaleTransform Scale, RotateTransform Rotate, TranslateTransform Move) Transforms(UIElement e)

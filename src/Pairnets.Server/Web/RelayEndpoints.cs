@@ -178,7 +178,7 @@ public static class RelayEndpoints
             }
             if (body?.Channel is not (ReleaseChannel.Off or ReleaseChannel.PublicBeta or ReleaseChannel.DeveloperBeta))
                 return Error(StatusCodes.Status400BadRequest, "bad_channel");
-            if (keys.Store.GetDevice(id) is not { IsActive: true } device)
+            if (keys.Store.GetDevice(id) is not { IsActive: true, IsWebDav: false } device)
                 return Error(StatusCodes.Status404NotFound, "no_device");
             if (device.PersonId is not null)
                 return Error(StatusCodes.Status409Conflict, "not_owner_device");
@@ -251,7 +251,7 @@ public static class RelayEndpoints
             }
             if (AuthStore.CleanName(body?.Name) is not { } name)
                 return Error(StatusCodes.Status400BadRequest, "bad_name");
-            if (keys.Store.GetDevice(id) is not { IsActive: true })
+            if (keys.Store.GetDevice(id) is not { IsActive: true, IsWebDav: false })
                 return Error(StatusCodes.Status404NotFound, "not_found");
             var renamed = await Endpoints.RenameDeviceAsync(id, name, keys, devices, hub);
             if (renamed is null)
@@ -264,7 +264,7 @@ public static class RelayEndpoints
         relay.MapDelete("/devices/{id}", async (string id, DeviceKeys keys, DeviceRegistry devices, IHubContext<SyncHub> hub, SyncOptions options,
             ILogger<DeviceKeys> log) =>
         {
-            if (keys.Store.GetDevice(id) is not { IsActive: true } device)
+            if (keys.Store.GetDevice(id) is not { IsActive: true, IsWebDav: false } device)
                 return Error(StatusCodes.Status404NotFound, "not_found");
             await Endpoints.RemoveDeviceAsync(device, $"removed on {options.RelayServiceHost}", keys, devices, hub, log);
             return Json(new RemoveResult(true));

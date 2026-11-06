@@ -9,7 +9,7 @@ import type { Ctx } from "./context";
 import { NEST_ID_RE } from "./formats";
 import { apiError, finalizeRelay, HttpError, MESSAGES } from "./http";
 import { markReached } from "./nestadmin";
-import { hit, keyedHash, MINUTE } from "./ratelimit";
+import { hit, keyedHash, limitAddress, MINUTE } from "./ratelimit";
 import { linkFailed, ROUTER_ERROR_HEADER, runRouterLogged, SELF_HEAL_AFTER } from "./router";
 
 /**
@@ -58,31 +58,50 @@ const ROUTER_BASE = "https://pairnets-router";
  */
 const STRIP = new Set([
   "cookie", "host", "x-pairnets-client-ip", "x-pairnets-route", "x-pairnets-sig", "x-pairnets-nonce", "x-pairnets-ts", "x-pairnets-nest",
+  "x-pairnets-dav-base", "x-pairnets-dav-ip", "x-pairnets-dav-ts", "x-pairnets-dav-sig",
   "expect", "keep-alive", "proxy-connection", "te", "trailer", "transfer-encoding",
 ]);
 
 const RELAY_PATH_RE = /^\/n\/([^/]*)(?:\/(.*))?$/s;
 
-/** Whether a path (the decoded, dot-resolved, lower-cased form, as the nest's router would see it) is an admin one. */
-function isAdminPath(rest: string): boolean {
+/** The decoded, dot-resolved, lower-cased, slash-collapsed form of `rest`, as the nest's router would see it; null if malformed. */
+function resolvedPath(rest: string): string | null {
   let decoded: string;
   try {
     decoded = decodeURIComponent(rest);
   } catch {
-    return true; // malformed percent-encoding: refuse rather than guess what the nest would make of it
+    return null; // malformed percent-encoding: refuse rather than guess what the nest would make of it
   }
   let path: string;
   try {
     path = new URL(`/${decoded}`, "http://nest.invalid").pathname;
   } catch {
-    return true;
+    return null;
   }
-  path = path.replace(/\/{2,}/g, "/").toLowerCase();
-  return path === "/api/relay" || path.startsWith("/api/relay/");
+  return path.replace(/\/{2,}/g, "/").toLowerCase();
 }
 
-/** Step 2: only the API and the hub, and never the admin endpoints (RELAY.md 5.2). `rest` is the path after the id. */
+/** Whether a path is an admin one (api/relay, in every spelling). */
+function isAdminPath(rest: string): boolean {
+  const path = resolvedPath(rest);
+  return path === null || path === "/api/relay" || path.startsWith("/api/relay/");
+}
+
+/** The nest's WebDAV part (WEBDAV.md): everything under dav/, as `rest` after the id. */
+export function isDavRest(rest: string): boolean {
+  return rest === "dav" || rest.startsWith("dav/");
+}
+
+/** The biggest file a WebDAV client may PUT (WEBDAV.md: 25 MB); the nest checks again, this one only saves the trip. */
+export const DAV_MAX_UPLOAD = 26214400;
+
+/** Step 2: only the API, the hub and WebDAV, and never the admin endpoints (RELAY.md 5.2). `rest` is the path after the id. */
 export function relayAllowed(rest: string): boolean {
+  if (isDavRest(rest)) {
+    // WebDAV must stay inside dav/ after dot-resolving ("dav/../api/x" is not a way to reach the API with a WebDAV password).
+    const path = resolvedPath(rest);
+    return path !== null && (path === "/dav" || path.startsWith("/dav/"));
+  }
   if (!(rest.startsWith("api/") || rest === "hub" || rest.startsWith("hub/"))) return false;
   return !isAdminPath(rest);
 }
@@ -157,16 +176,72 @@ function tooMany(retryAfter: number, message?: string): HttpError {
 }
 
 /** ANY /n/... : never throws; JSON errors, relayed answers made inert for browsers (http.ts finalizeRelay). */
-export async function relay(ctx: Ctx): Promise<Response> {
+export async function relay(ctx: Ctx, dav?: DavOptions): Promise<Response> {
   const nestId = ctx.url.pathname.split("/")[2] ?? "";
   const where = NEST_ID_RE.test(nestId) ? { url: ctx.url, nestId } : undefined;
+  const isDav = dav !== undefined || isDavRest(RELAY_PATH_RE.exec(ctx.url.pathname)?.[2] ?? "");
   try {
-    return finalizeRelay(await forward(ctx), where);
+    const resp = finalizeRelay(await forward(ctx, dav), where);
+    // A WebDAV client only asks for a password when the 401 says how (Finder and Windows both need the challenge). The
+    // nest's own challenge never passes (http.ts): this one is fixed, only on WebDAV, and never to a browser, which
+    // would show it as a "sign in to pairnets.app" box on any link a nest owner sends round.
+    if (isDav && resp.status === 401 && !fromBrowser(ctx.req)) resp.headers.set("WWW-Authenticate", DAV_CHALLENGE);
+    return resp;
   } catch (e) {
-    if (e instanceof HttpError) return finalizeRelay(apiError(e.status, e.code, e.message, e.headers));
+    if (e instanceof HttpError) return finalizeRelay(isDav ? davError(e) : apiError(e.status, e.code, e.message, e.headers));
     console.error("relay: unexpected error", e instanceof Error ? `${e.name}: ${e.message}` : "unknown");
-    return finalizeRelay(apiError(500, "server_error", MESSAGES.server_error));
+    return finalizeRelay(isDav ? davError(new HttpError(500, "server_error", MESSAGES.server_error)) : apiError(500, "server_error", MESSAGES.server_error));
   }
+}
+
+export const DAV_CHALLENGE = 'Basic realm="Pairnets"';
+
+/**
+ * Whether a request came from a web browser: every current browser sends Sec-Fetch-Mode on every request (navigate for a
+ * page, no-cors for an image, cors for a script's fetch), and WebDAV clients (Finder, Windows, rclone, Cyberduck) never do.
+ */
+export function fromBrowser(req: Request): boolean {
+  return req.headers.has("sec-fetch-mode");
+}
+
+/** WebDAV clients read the status and a line of text, not JSON: the Worker's own refusals under dav/ are plain text. */
+function davError(e: HttpError): Response {
+  if (e.status === 413) return apiError(413, e.code, e.message, e.headers); // the one JSON answer (the apps and tests read it)
+  const headers = new Headers(e.headers);
+  headers.set("Content-Type", "text/plain; charset=utf-8");
+  return new Response(`${e.message || e.code}
+`, { status: e.status, headers });
+}
+
+/** What the /dav/<name>.<id>/ route adds to a relayed WebDAV request (davRoute below). */
+export interface DavOptions {
+  /** The public address of this nest's WebDAV folder, without a trailing slash: the nest writes its links under it. */
+  base: string;
+}
+
+/**
+ * A WebDAV link's password: 20 of these characters once "-" and spaces are gone and it is lower-case (AuthStore.cs
+ * NewWebDavPassword / WebDavKeyOf). Anything else someone types into a sign-in box never reaches a nest.
+ */
+const LINK_PASSWORD_RE = /^[a-hjkmnp-z2-9]{20}$/;
+
+/**
+ * The password of an HTTP Basic "Authorization" header when it is shaped like a WebDAV link's, or null. Lower-case and
+ * without "-" or spaces: how the nest stores it and how passwords are counted.
+ */
+export function basicPasswordOf(req: Request): string | null {
+  const auth = req.headers.get("authorization")?.trim() ?? "";
+  const m = /^basic\s+([A-Za-z0-9+/=_-]+)$/i.exec(auth);
+  if (!m) return null;
+  let text: string;
+  try {
+    const bin = atob(m[1].replace(/-/g, "+").replace(/_/g, "/"));
+    text = new TextDecoder().decode(Uint8Array.from(bin, (c) => c.charCodeAt(0)));
+  } catch {
+    return null;
+  }
+  const password = text.slice(text.indexOf(":") + 1).toLowerCase().replace(/[- ]/g, "");
+  return LINK_PASSWORD_RE.test(password) ? password : null;
 }
 
 /**
@@ -176,8 +251,9 @@ export async function relay(ctx: Ctx): Promise<Response> {
 export function deviceKeyOf(req: Request, url: URL): string | null {
   const token = req.headers.get("x-sync-token")?.trim();
   if (token) return token;
-  const auth = req.headers.get("authorization")?.trim();
-  if (auth) return (/^bearer\s+(.+)$/i.exec(auth)?.[1] ?? auth).trim() || null;
+  // Only Bearer: the nest reads no other kind on its API, and the relay drops the rest (forward below).
+  const bearer = /^bearer\s+(.+)$/i.exec(req.headers.get("authorization")?.trim() ?? "")?.[1].trim();
+  if (bearer) return bearer;
   return url.searchParams.get("access_token")?.trim() || null;
 }
 
@@ -189,7 +265,7 @@ async function countAgainstAddress(ctx: Ctx): Promise<boolean> {
   return false;
 }
 
-async function forward(ctx: Ctx): Promise<Response> {
+async function forward(ctx: Ctx, dav?: DavOptions): Promise<Response> {
   // 6. An address that used up its budget for keyless and failing requests gets nothing more for a while, and no
   //    address gets more than the flood ceiling (the relay's own limits, instead of the 300 of the account pages).
   const blocked = blockedAddresses.get(ctx.ipKey);
@@ -218,7 +294,15 @@ async function forward(ctx: Ctx): Promise<Response> {
 
   // 6. A request with a computer's key counts against that computer's own budget at this nest (the key only ever as a
   //    keyed hash); one without, against the address.
-  const key = deviceKeyOf(ctx.req, ctx.url);
+  //    A WebDAV client sends its password as HTTP Basic: that is its key here, so each link has its own budget (and the
+  //    nest's /dav reads nothing else, so nothing else counts as a key there).
+  const isDav = isDavRest(rest);
+  const key = isDav ? basicPasswordOf(ctx.req) : deviceKeyOf(ctx.req, ctx.url);
+  const method = ctx.req.method.toUpperCase();
+  if (isDav && method === "PUT" && Number(ctx.req.headers.get("content-length") ?? "0") > DAV_MAX_UPLOAD) {
+    // Before anything else is counted or sent: the file is too big for WebDAV (the apps take bigger ones).
+    throw new HttpError(413, "too_large", "Files over 25 MB can't be uploaded this way. Use the Pairnets app for bigger files.");
+  }
   if (key === null) {
     if (!(await countAgainstAddress(ctx))) throw tooMany(RELAY_LIMIT_PERIOD);
   } else if (!(await allowed(ctx, "RELAY_DEVICE_LIMIT", await keyedHash(ctx.env, `${nest.id}\n${key}`)))) {
@@ -236,9 +320,14 @@ async function forward(ctx: Ctx): Promise<Response> {
     const n = name.toLowerCase();
     if (STRIP.has(n) || n.startsWith("cf-")) headers.delete(name);
   }
+  //    Authorization only as the nest reads it: on dav/ a link-shaped Basic password, elsewhere Bearer (the hub). A
+  //    password a browser or a person offers for this service's name (a saved one, or one typed into a sign-in box)
+  //    never reaches a nest.
+  const auth = headers.get("authorization");
+  if (auth !== null && (isDav ? key === null : !/^\s*bearer\s/i.test(auth))) headers.delete("authorization");
   headers.set("X-Pairnets-Client-IP", ctx.ip);
   headers.set("X-Pairnets-Route", nest.id);
-  const method = ctx.req.method.toUpperCase();
+  if (isDav) headers.set("X-Pairnets-Dav-Base", dav?.base ?? `${ctx.url.origin}/n/${nest.id}/dav`);
   let resp: Response;
   try {
     resp = await ctx.env.ROUTER.fetch(`${ROUTER_BASE}/${rest}${ctx.url.search}`, {
@@ -311,4 +400,54 @@ async function selfHeal(ctx: Ctx, nest: RelayNest): Promise<void> {
   }
   if ((await hit(ctx, "router-heal", "service", 1, MINUTE)).limited) return;
   ctx.defer(runRouterLogged(ctx.env, ctx.now, ctx.deps.fetch));
+}
+
+/** /dav/<name>.<nst id>/<rest>: the name is for people to read, only the id routes. */
+const DAV_ROUTE_RE = /^\/dav\/([a-z0-9-]{0,40})\.(nst_[0-9a-hjkmnp-tv-z]{26})(?:\/(.*))?$/s;
+
+export function isDavRoute(path: string): boolean {
+  return path === "/dav" || path.startsWith("/dav/");
+}
+
+/** How far a signed header from the Pages function (site/functions) may be from this Worker's clock, seconds. */
+const EDGE_SIGNATURE_WINDOW = 60;
+
+async function hmacHex(secret: string, message: string): Promise<string> {
+  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const mac = new Uint8Array(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(message)));
+  return [...mac].map((x) => x.toString(16).padStart(2, "0")).join("");
+}
+
+/** The caller's address as the Pages function saw it, when its signature is good and fresh; otherwise null. */
+async function edgeAddress(ctx: Ctx, target: string): Promise<string | null> {
+  const secret = ctx.env.DAV_EDGE_SECRET;
+  const ip = ctx.req.headers.get("x-pairnets-dav-ip") ?? "";
+  const ts = ctx.req.headers.get("x-pairnets-dav-ts") ?? "";
+  const sig = ctx.req.headers.get("x-pairnets-dav-sig") ?? "";
+  if (!secret || !ip || ip.length > 64 || !/^[0-9]{1,12}$/.test(ts) || !/^[0-9a-f]{64}$/.test(sig)) return null;
+  if (Math.abs(ctx.now - Number(ts)) > EDGE_SIGNATURE_WINDOW) return null;
+  const expected = await hmacHex(secret, `${ts}|${ip}|${target}`);
+  // Equal-length hex strings, compared without stopping at the first difference.
+  let diff = 0;
+  for (let i = 0; i < expected.length; i++) diff |= expected.charCodeAt(i) ^ sig.charCodeAt(i);
+  return diff === 0 ? ip : null;
+}
+
+/**
+ * The WebDAV address (WEBDAV.md): any method on /dav/<name>.<nst id>/<rest> is relayed as /n/<id>/dav/<rest>. A request
+ * the Pages function on pairnets.app passed on carries a signed copy of the caller's address (so the per-address limits
+ * and the nest's throttle see the person, not Cloudflare's Pages) and the nest writes its links under pairnets.app;
+ * a request that came here directly gets links under this address.
+ */
+export async function davRoute(ctx: Ctx): Promise<Response> {
+  const m = DAV_ROUTE_RE.exec(ctx.url.pathname);
+  if (!m) return finalizeRelay(davError(new HttpError(404, "not_found", MESSAGES.not_found)));
+  const [, name, id, rest] = m;
+  const edgeIp = await edgeAddress(ctx, `${name}.${id}`);
+  const url = new URL(ctx.url.toString());
+  url.pathname = `/n/${id}/dav${rest === undefined ? "" : "/" + rest}`; // a trailing slash stays
+  const origin = edgeIp !== null ? (ctx.env.SITE_ORIGIN || "https://pairnets.app").replace(/\/+$/, "") : ctx.url.origin;
+  const base = edgeIp !== null ? `${origin}/${name}.${id}` : `${origin}/dav/${name}.${id}`;
+  const inner: Ctx = edgeIp !== null ? { ...ctx, url, ip: edgeIp, ipKey: limitAddress(edgeIp) } : { ...ctx, url };
+  return relay(inner, { base });
 }

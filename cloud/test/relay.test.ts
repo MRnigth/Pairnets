@@ -591,6 +591,10 @@ ${nest.nestId}`);
     expect(deviceKeyOf(req({}), new URL("https://sync.pairnets.app/n/x/hub?id=1&access_token=k4"))).toBe("k4");
     expect(deviceKeyOf(req({}), url)).toBeNull();
     expect(deviceKeyOf(req({ "X-Sync-Token": "  " }), url)).toBeNull();
+    // Any other kind of Authorization is not a key (the nest reads none, and the relay drops it).
+    expect(deviceKeyOf(req({ Authorization: "Basic YTpi" }), url)).toBeNull();
+    expect(deviceKeyOf(req({ Authorization: "k5" }), url)).toBeNull();
+    expect(deviceKeyOf(req({ Authorization: "Bearer " }), url)).toBeNull();
   });
 });
 

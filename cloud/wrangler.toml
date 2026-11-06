@@ -95,6 +95,12 @@ crons = ["17 * * * *"]
 #                         Account > Workers Scripts > Edit, and the Connectivity Directory permission that binding
 #                         VPC networks needs. It never leaves this Worker.
 #   CF_ACCOUNT_ID         the Cloudflare account that owns the tunnels and the pairnets-router Worker
+#   DAV_EDGE_SECRET       (WebDAV, optional) base64url of 32 random bytes; the SAME value is set as a secret on the Pages
+#                         project of pairnets.app (site/functions/[[path]].js), which signs the caller's address with it.
+#                         Without it on the Pages project, the WebDAV address on pairnets.app answers 503. Without it
+#                         (or with a different value) here, signed headers are ignored: /dav/... here still works, but
+#                         the nest writes its links under sync.pairnets.app/dav/..., so Finder and Explorer on
+#                         pairnets.app/<name>.<id>/ see broken links. Set both before the Pages deploy.
 #
 # Not private, but kept out of the code all the same (set the same way):
 #

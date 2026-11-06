@@ -1022,6 +1022,68 @@
                 </Grid>
               </StackPanel>
 
+              <!-- Files in Finder or Explorer: WebDAV links, each with its own generated password. Only on the owner's
+                   computers; see WebDavSection. "Make a link…" opens the window that makes one and shows its password once. -->
+              <StackPanel x:Name="WebDavPanel" Spacing="10" IsVisible="False">
+                <Grid ColumnDefinitions="Auto,*,Auto" Height="38" Margin="4,6,0,0">
+                  <TextBlock Classes="ctitle" Text="Files in Finder or Explorer" VerticalAlignment="Center" />
+                  <TextBlock x:Name="WebDavSummary" Grid.Column="1" Classes="t3" VerticalAlignment="Center" Margin="12,0" TextTrimming="CharacterEllipsis" />
+                  <Button x:Name="MakeLinkButton" Grid.Column="2" Classes="SecondaryButton" Height="38" Padding="14,0" VerticalAlignment="Center" Foreground="{DynamicResource T.AccentInk}" Click="OnMakeWebDavLink">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                      <v:LineIcon Classes="icon ink-accent" Width="16" Height="16" Data="{StaticResource I.Key}" />
+                      <TextBlock Text="Make a link…" VerticalAlignment="Center" />
+                    </StackPanel>
+                  </Button>
+                </Grid>
+                <Border x:Name="WebDavCard" Classes="pcard" ClipToBounds="True">
+                  <ItemsControl x:Name="WebDavList">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate DataType="c:WebDavRow">
+                        <Border BorderThickness="0,0,0,1" BorderBrush="{DynamicResource T.Border}" Padding="20,14">
+                          <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto">
+                            <Border Width="40" Height="40" CornerRadius="20" Margin="0,0,14,0" Background="{DynamicResource T.AccentSoft}">
+                              <v:LineIcon Classes="icon ink-accent" Width="19" Height="19" StrokeThickness="2" Data="{StaticResource I.Key}" />
+                            </Border>
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                              <TextBlock Text="{Binding Title}" FontSize="15" FontWeight="ExtraBold" TextTrimming="CharacterEllipsis" />
+                              <TextBlock Text="{Binding Line}" Classes="t3" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Line}" />
+                            </StackPanel>
+                            <ItemsControl Grid.Column="2" ItemsSource="{Binding Chips}" VerticalAlignment="Center" Margin="10,0,0,0">
+                              <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                  <StackPanel Orientation="Horizontal" Spacing="6" />
+                                </ItemsPanelTemplate>
+                              </ItemsControl.ItemsPanel>
+                              <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                  <Border Background="{DynamicResource T.Chip}" CornerRadius="13" Padding="10,4">
+                                    <TextBlock Text="{Binding}" FontSize="12" FontWeight="Bold" />
+                                  </Border>
+                                </DataTemplate>
+                              </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <Border Grid.Column="3" CornerRadius="13" Padding="10,4" MinWidth="92" Margin="10,0" VerticalAlignment="Center"
+                                    Background="{Binding ViewOnly, Converter={x:Static v:BrushWhen.Instance}, ConverterParameter=T.Chip|T.OkPill}">
+                              <TextBlock Text="{Binding Pill}" FontSize="12" FontWeight="Bold" HorizontalAlignment="Center" Foreground="{Binding ViewOnly, Converter={x:Static v:BrushWhen.Instance}, ConverterParameter=T.Muted|T.OkText}" />
+                            </Border>
+                            <Button Grid.Column="4" Classes="link" Content="Remove" VerticalAlignment="Center" Foreground="{DynamicResource T.BadText}"
+                                    ToolTip.Tip="Its password stops working at once" AutomationProperties.Name="{Binding RemoveLabel}" Click="OnRemoveWebDavLink" />
+                          </Grid>
+                        </Border>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </Border>
+                <Grid ColumnDefinitions="Auto,*" Margin="4,0,0,0">
+                  <v:LineIcon Classes="icon ink-soft" Width="16" Height="16" StrokeThickness="2" Data="{StaticResource I.InfoCircle}" VerticalAlignment="Top" Margin="0,1,8,0" />
+                  <StackPanel Grid.Column="1" Spacing="6">
+                    <TextBlock x:Name="WebDavNote" Classes="t2" FontSize="13" TextWrapping="Wrap" />
+                    <TextBlock x:Name="WebDavAddress" Classes="t2" FontSize="13" TextWrapping="Wrap" />
+                    <TextBlock x:Name="WebDavHow" Classes="t2" FontSize="13" TextWrapping="Wrap" />
+                  </StackPanel>
+                </Grid>
+              </StackPanel>
+
               <Grid ColumnDefinitions="Auto,*" Margin="4,0,0,0">
                 <v:LineIcon Classes="icon ink-soft" Width="16" Height="16" StrokeThickness="2" Data="{StaticResource I.InfoCircle}" VerticalAlignment="Top" Margin="0,1,8,0" />
                 <TextBlock Grid.Column="1" Classes="t2" FontSize="13" VerticalAlignment="Center" TextWrapping="Wrap"

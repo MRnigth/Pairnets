@@ -2365,7 +2365,7 @@ The owner asked for a redesign from a reference dashboard (dark cards, pill nav,
 Developer beta update so it can be tested before anyone else sees it. Drawn first as a private design page, changed by the
 owner's comments, then built in both apps.
 
-* **Only the beta channels draw it (the owner, 2026-10-30).** `DevBetaLook.On` (`Pairnets.Core`) is true for `public-beta` and `developer-beta`;
+* **Only the beta channels draw it (the owner, 2026-10-30; off for every channel from 1.0.61.14.7, see below).** `DevBetaLook.On` (`Pairnets.Core`) is true for `public-beta` and `developer-beta`;
   `PAIRNETS_LOOK=devbeta` forces it on and `PAIRNETS_LOOK=off` off, for local screenshots and tests. Public
   beta testers get it from 1.0.61.14.3; stable is unchanged, so the look cannot reach everyone by accident. It is read once at startup.
 * **Top bar instead of the side panel.** Pills Overview, Activity, Files, Computers, Settings; an update pill that
@@ -2393,6 +2393,16 @@ owner's comments, then built in both apps.
   `1.0.61.14.2` on this branch. Once that number (or a newer one) is a release tag the pin is stale and the beta run
   fails with "delete the file", so a beta can never be numbered older than a release. Delete `.beta-version` when it has
   done its job. Tags and main are never pinned.
+
+## Betas back on the 1.0.61.14 look, 1.0.61.14.7 (2026-11-02)
+
+* **The owner, 2026-11-02:** "make the ui from 1.0.61.14 for 1.0.61.14.7". `DevBetaLook.For` is now false for every
+  channel; only `PAIRNETS_LOOK=devbeta` turns the new look on (local screenshots and tests). The code of the new look stays,
+  hidden, so it can come back with a one-line change.
+* **What beta testers lose with it:** the top bar, the progress ring, the bell and the Settings left menu (all drawn only by
+  the new look). They keep every fix since 1.0.61.14: the beta feed fix, the Settings and Files tab freeze fixes.
+* **Side effect:** pre-deploy's click tests run the stable look, and that is now the look the betas ship, so the
+  "new look is not click-tested" gap is gone.
 
 ## Settings freeze fix, Public beta 1.0.61.14.3 (2026-10-30)
 
@@ -2428,3 +2438,75 @@ installed by hand from its GitHub release, or wait for a stable release that has
 * **The test:** `TheFilesPage_ReadsTheNestAndCountsFilesOffTheWindowsThread_SoASlowDiskNeverFreezesIt` (both apps): the fake
   nest writes down the thread of every read and holds the counting; the page must show its rows at once and no read may run
   on the window's thread.
+
+## WebDAV link: the nest's files in Finder or Explorer (feature/webdav, 2026-10-30)
+
+Built from v1.0.61.14, local only (not pushed, not released). Design and wire details: [WEBDAV.md](WEBDAV.md). The owner asked
+for "a link people open with a username and password, or one we generate"; the research answer was WebDAV over HTTPS through
+the existing tunnel and relay (SMB cannot pass them, and cannot be both safe and open to the internet). These are the calls:
+
+* **Generated credentials only.** A link has a label (shown as its user name, lower-case: "Mac mini" becomes `mac-mini`) and a
+  generated password, 20 characters from 31 (about 99 bits, no `i l o 0 1`) in groups of five. Chosen passwords were left out:
+  this door faces the internet and people choose weak ones. The user name is only a label and is not checked; the password is
+  the credential (Finder and Explorer remember both, so nobody types it twice). Typed without dashes or in capitals it still works.
+* **Names are unique per kind** (review, 2026-11-05): a link called "DESK" does not turn a new computer DESK into "DESK (2)"; the
+  active-name index is on `(kind, name)` (made in the same schema-7 step, in one transaction). Because a link may share a computer's
+  name, a link's changes are announced as "<label> (WebDAV link)": a computer skips a push carrying its own name as its own echo.
+* **A password is its own key, of its own kind.** It is a `devices` row with `kind = 'webdav'` (auth.db schema 7, plus
+  `lastUsedMs`), hashed like a computer's key, stored behind the prefix `pd_`. So removing it (`DeviceKeys.Forget`, at once, not
+  after the 30 s cache), restarts, and the per-address failure throttle all work the way they do for computers. It opens `/dav` and
+  nothing else, and a computer's key or the shared token opens nothing under `/dav`: `TokenAuthMiddleware` checks both ways, and a
+  test tries the stored form of the key as `X-Sync-Token` and as Bearer on API paths. `ListDevices()` leaves WebDAV rows out, so
+  they are never counted or shown as computers.
+* **Reading outside a link's folders is 404, changing there is 403.** Reads answer as if the file were not there; every change
+  method refuses with 403 whether or not the file exists, so neither answer gives anything away.
+* **What a link may do reuses the friends' model.** `view` or `edit`, optionally 1 to 20 top-level folders (`DeviceAccess`).
+  `AccessGate` skips `/dav`; `DavEndpoints` checks view-only, shared folders and folders that came in through a link itself, on
+  every method, both ends of a MOVE. Only the owner's computers make, list or remove links (`/api/webdav` is in the owner-only list).
+  At most 10 links per nest.
+* **Writes go through `SyncStore`**: `PutAsync`, `DeleteAsync`, `MoveAsync`, then the same push message the apps' changes send. So the
+  manifest version, tombstones, history, case-collision check and "Changed" on the hub work as for an app. A PUT with `If-Match` or
+  `If-None-Match: *` uses the base check (412 when the file changed); a plain PUT means "replace": the current version is the base and
+  the one it replaces lands in history. (No conflict *copy* is made over WebDAV: a person using Finder chose to save over it; the old
+  version is one click away in History.)
+* **25 MB per upload (the owner).** Nothing over 25 MiB is stored: `Content-Length` over it gets 413, a body without a length is stopped at
+  the limit (`LimitedStream`, the temp file is removed), and the Worker answers 413 first for a PUT it can see is too big. The nest reads
+  the rest of a too-big body (up to 100 MB, thrown away) before it answers, because answering mid-upload drops the connection and Finder
+  and Explorer then show a vague network error; a client that sent `Expect: 100-continue` is answered before it sends anything. A plain text
+  line says "That file is over 25 MB … use the Pairnets app", which Finder shows as a copy error. Bigger files stay visible and can be
+  downloaded (with ranges). This also keeps one request under Cloudflare's 100 MB.
+* **Encrypted nests are refused**: no link can be made (409 `sealed`), and `/dav` on a nest that was sealed later answers 403 with
+  a plain sentence. Encryption is still not on in the apps, so today this only matters for test nests.
+* **Folders.** The nest stores files only, so MKCOL is remembered in memory for an hour (`DavFolders`) and the folder lives on once a
+  file lands in it. DELETE or MOVE of a folder is done file by file and refused above 100 files ("do it in the app, which asks first"),
+  a small version of the apps' mass-delete guard. Every file is tried; files that changed meanwhile stay, and the answer is 207 naming
+  them (never a plain "done"). COPY answers 501 (Finder falls back to downloading and putting).
+* **Locks are a formality.** Finder mounts read-write only when LOCK works, so LOCK returns a token and UNLOCK answers 204, but nothing
+  is held; the base check is what protects. A view-only link advertises DAV class 1 only, so Finder mounts it read-only.
+* **Folder metadata is dropped, not stored.** `._*` (AppleDouble), `.DS_Store`, `.localized`, `Thumbs.db` and `desktop.ini` get a
+  success answer on PUT/DELETE and are never stored, so a Finder copy does not stop on them; reading one is 404 before the file list is
+  read. **Temp files are kept** (review, 2026-11-05): Word saves to a mapped drive by writing `~WRD0000.tmp`, moving the document aside
+  and moving the temp file onto it, LibreOffice through `lu*.tmp`. Dropping `*.tmp` and `~$*` like the apps' ignore list does would
+  answer every step with success and lose the save. They are stored like any file; the apps never see them (the sync engine skips
+  what its ignore list names), and the program deletes them when it is done. A rename onto a metadata name is refused (403), never
+  answered "done".
+* **Paths:** only what `PathRules` accepts, no `.`/`..`/empty segments, no backslash or drive letter. A `Destination` header must be a
+  path under the same base the client connected to (or a full address with the nest's host; `localhost`, 127.0.0.1 and ::1 count as
+  one) and goes through the same checks; other hosts, `/api/...` and `..` are refused. Kestrel drops `.`/`..` segments and leaves `%2F`
+  encoded before routing, so the address exactly as sent (`RawTarget`) is checked too: an encoded slash or backslash, or a dot segment
+  spelled out or encoded, is a 400. Tests send those addresses raw (.NET's `Uri` would tidy them away first).
+* **The address.** Nest reached through Pairnets: `https://pairnets.app/<nest-name>.<nest id>/` (a Pages Function passes it to the
+  Worker, which relays `dav/…`). The name is decoration (wrong or missing name works, only the id routes); the URL reveals the nest's
+  name and id and nothing else (the password is never in it). A nest at its own address: `<address>/dav/`. A path under `pairnets.app`
+  was chosen over a subdomain per nest (no per-user DNS, one certificate, the "one address" rule in `one-address-sync-pairnets`).
+  The price: every page of the website now goes through the Function first, which hands anything that is not a link straight back
+  (`context.next()`); `_routes.json` skips assets. Deploying that is the owner's separate call.
+* **Limits and rate limiting are the same budgets.** The Worker reads the Basic password as the key for `RELAY_DEVICE_LIMIT`, the
+  address budget and the nest budget; the nest's `FailureThrottle` slows repeated wrong passwords per address (a test measures it).
+* **Known gaps, left on purpose for the first version:** no COPY, no real locks, PROPFIND reads the whole manifest each time (fine for
+  a home nest, slow for hundreds of thousands of files), no quota properties (Finder shows no free space), Windows' built-in client
+  limits files to 50 MB by default and wants HTTPS with a certificate it trusts, folders of nests linked into this one are hidden
+  from links, and a link cannot be edited (remove and make a new one). Found in the 2026-11-05 review and left for later: a rename that
+  only changes letter case fails (`MoveAsync` refuses it; Finder shows an error); links can only be listed and removed from an owner's
+  app (not the website or `devices list`); a folder MOVE copies each file rather than renaming; and a server going back to a release
+  before schema 7 refuses to start on this auth.db.

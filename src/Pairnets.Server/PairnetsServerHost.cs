@@ -60,6 +60,7 @@ public static class PairnetsServerHost
         builder.Services.AddSingleton<NestBeta>();
         builder.Services.AddSingleton<FriendRequests>();
         builder.Services.AddSingleton<FriendConnections>();
+        builder.Services.AddSingleton<DavFolders>();
         builder.Services.AddSingleton(sp => new RelaySignature(sp.GetRequiredService<SyncOptions>()));
         builder.Services.AddSingleton<OwnerAuth>();
         builder.Services.AddSingleton<Pairnets.Server.Auth.WebAuthn.WebAuthnChallenges>();
@@ -147,6 +148,7 @@ public static class PairnetsServerHost
         RelayEndpoints.Map(app);
         LinkEndpoints.Map(app);
         DownloadEndpoints.Map(app);
+        DavEndpoints.Map(app);
         WebUi.Map(app);
         WebEndpoints.Map(app);
         app.Lifetime.ApplicationStopped.Register(store.Dispose);

@@ -107,7 +107,7 @@ public sealed class FlowLine : FrameworkElement
 
     private void UpdateMotion()
     {
-        var flowing = Linked && Flow != LinkFlow.None && IsVisible && SystemParameters.ClientAreaAnimation;
+        var flowing = Linked && Flow != LinkFlow.None && IsVisible && AnimationSetting.Enabled;
         if (flowing == IsFlowing)
             return;
         if (flowing)

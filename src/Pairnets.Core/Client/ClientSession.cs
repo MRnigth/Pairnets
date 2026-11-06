@@ -177,7 +177,86 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
         {
         }
         await RefreshPeopleAsync().ConfigureAwait(false);
+        await RefreshWebDavAsync().ConfigureAwait(false);
         await RefreshDownloadsAsync().ConfigureAwait(false);
+    }
+
+
+    // ------------------------------------------------------------------ WebDAV links (Files in Finder or Explorer)
+
+    /// <summary>
+    /// Reads the nest's WebDAV links for the Computers page, with the device list. Only the owner's computers have them; an
+    /// older nest has none (the section stays hidden). The passwords are never in the answer.
+    /// </summary>
+    public async Task RefreshWebDavAsync()
+    {
+        if (!Engine.Access.IsOwner)
+        {
+            if (Status.WebDav is not null)
+                Update(s => s with { WebDav = null });
+            return;
+        }
+        try
+        {
+            var links = await Api.GetWebDavLinksAsync(CancellationToken.None).ConfigureAwait(false);
+            Update(s => s with { WebDav = links });
+        }
+        catch (PairnetsAuthException ex) when (ex.NeedsSignIn)
+        {
+            NoticeSignedOut();
+        }
+        catch (Exception ex) when (ex is PairnetsNetworkException or PairnetsAuthException or PairnetsProtocolException or ObjectDisposedException or OperationCanceledException)
+        {
+        }
+    }
+
+    /// <summary>
+    /// "Make a link": the new link with its password (shown once, kept nowhere), or what the window says went wrong.
+    /// The list is read again. The password is not logged and not put in the status.
+    /// </summary>
+    public async Task<(NewWebDavLink? Link, string? Error)> CreateWebDavLinkAsync(string label, bool canChange, IReadOnlyList<string>? folders)
+    {
+        (NewWebDavLink? Link, string? Error) made;
+        try
+        {
+            made = await Api.CreateWebDavLinkAsync(label.Trim(), WebDavChoices.Access(canChange), folders, CancellationToken.None).ConfigureAwait(false);
+        }
+        catch (PairnetsAuthException ex) when (ex.NeedsSignIn)
+        {
+            NoticeSignedOut();
+            return (null, FriendlyErrors.NotAllowed);
+        }
+        catch (Exception ex) when (ex is PairnetsNetworkException or PairnetsAuthException or PairnetsProtocolException or ObjectDisposedException or OperationCanceledException)
+        {
+            return (null, "Couldn't reach the nest. Try again in a moment.");
+        }
+        if (made.Error is not null)
+            return (null, WebDavErrors.Sentence(made.Error));
+        await RefreshWebDavAsync().ConfigureAwait(false);
+        return (made.Link, null);
+    }
+
+    /// <summary>
+    /// "Remove" on a link: its password stops working at once; the list is read again. True when the link is gone (also when the
+    /// nest no longer had it); false when the nest could not be reached, so the password may still work.
+    /// </summary>
+    public async Task<bool> RemoveWebDavLinkAsync(string id)
+    {
+        try
+        {
+            await Api.RemoveWebDavLinkAsync(id, CancellationToken.None).ConfigureAwait(false); // false: no such link, so gone too
+            await RefreshWebDavAsync().ConfigureAwait(false);
+            return true;
+        }
+        catch (PairnetsAuthException ex) when (ex.NeedsSignIn)
+        {
+            NoticeSignedOut();
+            return false;
+        }
+        catch (Exception ex) when (ex is PairnetsNetworkException or PairnetsAuthException or PairnetsProtocolException or ObjectDisposedException or OperationCanceledException)
+        {
+            return false;
+        }
     }
 
     // ------------------------------------------------------------------ downloads on the nest (1.0.61.8)
@@ -367,7 +446,7 @@ public sealed class ClientSession : IAsyncDisposable, IHistorySource
     /// <summary>Shows the nest's access, and saves it when it is not what the settings say (the owner changed the share).</summary>
     private void OnAccess(NestAccess now)
     {
-        Update(s => s.Access.Equals(now) ? s : s with { Access = now, People = now.IsOwner ? s.People : null });
+        Update(s => s.Access.Equals(now) ? s : s with { Access = now, People = now.IsOwner ? s.People : null, WebDav = now.IsOwner ? s.WebDav : null });
         var saved = _savedAccess ?? Settings.ShareAccess();
         if (new NestAccess(now.Level, now.Folders).Equals(new NestAccess(saved.Level, saved.Folders)))
             return;

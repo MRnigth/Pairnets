@@ -1,9 +1,9 @@
 namespace Pairnets.Core;
 
 /// <summary>
-/// The Developer beta look (docs/DECISIONS.md, "Developer beta look"): a redesign that both beta channels show,
-/// so stable never changes. <c>PAIRNETS_LOOK=devbeta</c> turns it on and <c>PAIRNETS_LOOK=off</c> turns it
-/// off in any build (local screenshots and tests); without it the build's own channel decides.
+/// The Developer beta look (docs/DECISIONS.md, "Developer beta look"): a redesign that no channel shows by default since
+/// 1.0.61.14.7 (every build draws the 1.0.61.14 stable look). <c>PAIRNETS_LOOK=devbeta</c> turns it on and
+/// <c>PAIRNETS_LOOK=off</c> turns it off in any build (local screenshots and tests).
 /// </summary>
 public static class DevBetaLook
 {
@@ -12,11 +12,10 @@ public static class DevBetaLook
     /// <summary>True when this process draws the Developer beta look.</summary>
     public static bool On { get; } = For(PairnetsInfo.Channel, Environment.GetEnvironmentVariable(Variable));
 
-    /// <summary>The rule on its own, for tests: the override wins, otherwise both beta channels.</summary>
+    /// <summary>The rule on its own, for tests: only the override turns it on; every channel draws the stable look.</summary>
     public static bool For(string? channel, string? overrideValue) => overrideValue?.Trim().ToLowerInvariant() switch
     {
         "devbeta" => true,
-        "off" => false,
-        _ => ReleaseChannel.Normalize(channel) is ReleaseChannel.PublicBeta or ReleaseChannel.DeveloperBeta,
+        _ => false,
     };
 }

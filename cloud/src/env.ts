@@ -17,6 +17,14 @@ export interface Env {
   RELAY_FAIL_LIMIT?: RateLimit;
   RELAY_NEST_LIMIT?: RateLimit;
 
+  /**
+   * The WebDAV address on pairnets.app (site/functions) signs the caller's address with this secret, so the Worker can
+   * trust it (relay.ts davRoute). Unset: such headers are ignored.
+   */
+  DAV_EDGE_SECRET?: string;
+  /** Where the website lives, for the WebDAV links the nest writes. Unset: https://pairnets.app. */
+  SITE_ORIGIN?: string;
+
   // Secrets (dashboard / `wrangler secret put`; tests generate them).
   SIGNING_KEY: string;
   HB_MASTER: string;

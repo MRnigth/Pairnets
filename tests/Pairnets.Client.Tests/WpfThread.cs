@@ -21,6 +21,9 @@ public sealed class WpfThread
 
     private WpfThread()
     {
+        // PAIRNETS_TEST_ANIMATIONS=on|off runs the windows with Windows animations on or off, whatever this computer's setting
+        // is (only in this process: the Windows setting itself is never changed). Unset: follow Windows, as the app does.
+        Pairnets.Client.Ui.AnimationSetting.ForTests = Environment.GetEnvironmentVariable("PAIRNETS_TEST_ANIMATIONS") switch { "on" => (bool?)true, "off" => false, _ => null };
         var ready = new TaskCompletionSource<Dispatcher>(TaskCreationOptions.RunContinuationsAsynchronously);
         var running = HiddenDesktop.Run("Pairnets WPF tests", () =>
         {

@@ -12,34 +12,28 @@ namespace Pairnets.Tests.Convergence;
 /// folders must be byte-identical to each other and to the server, and every content a sync pass
 /// ever saw must still exist somewhere: in a folder, in files/, or in history/.
 /// </summary>
-public class ConvergenceTests(ITestOutputHelper output)
+public abstract class ConvergenceTests(ITestOutputHelper output)
 {
     private static readonly string[] Dirs = ["", "d1/", "d1/s/", "d2/"];
     private static readonly string[] Names = ["f0.txt", "f1.txt", "f2.md", "f3.bin"];
 
-    public static IEnumerable<object[]> Seeds()
+    /// <summary>How many groups the seeds are split into; every group is a test class, and xUnit runs classes side by side.</summary>
+    public const int Groups = 4;
+
+    /// <summary>The seeds of one group (<paramref name="group"/> 0 to <see cref="Groups"/> - 1): together all of them, each once.</summary>
+    public static IEnumerable<object[]> Seeds(int group)
     {
         var count = int.TryParse(Environment.GetEnvironmentVariable("PAIRNETS_CONVERGENCE_SEEDS"), out var n) && n > 0 ? n : 30;
         for (var seed = 1; seed <= count; seed++)
-            yield return [seed];
+        {
+            if (seed % Groups == group)
+                yield return [seed];
+        }
     }
-
-    [Theory]
-    [MemberData(nameof(Seeds))]
-    public Task DevicesConvergeAndNothingIsLost(int seed) => RunAsync(seed, nestOnly: false);
-
-    /// <summary>
-    /// The same, while each computer now and then switches a folder (or everything) to "only on the nest", or back to
-    /// keeping everything here: at the end each computer has exactly the nest's files of the folders it keeps here and
-    /// none of the others, and still nothing is lost.
-    /// </summary>
-    [Theory]
-    [MemberData(nameof(Seeds))]
-    public Task WithFoldersOnTheNestOnlyNothingIsLost(int seed) => RunAsync(seed, nestOnly: true);
 
     private static readonly string[] PlacementFolders = ["d1", "d1/s", "d2", ""];
 
-    private async Task RunAsync(int seed, bool nestOnly)
+    protected async Task RunAsync(int seed, bool nestOnly)
     {
         await using var server = await TestServer.StartAsync();
         await using var desktop = new Device("desktop", server);
@@ -172,4 +166,68 @@ public class ConvergenceTests(ITestOutputHelper output)
 
     private static string Dump(Dictionary<string, string> d) =>
         string.Join("\n", d.OrderBy(k => k.Key, StringComparer.Ordinal).Select(k => $"{k.Key} {k.Value[..8]}"));
+}
+
+/// <summary>
+/// The same two tests for the seeds of one group. With "only on the nest" each computer now and then switches a folder
+/// (or everything) to "only on the nest", or back to keeping everything here: at the end each computer has exactly the
+/// nest's files of the folders it keeps here and none of the others, and still nothing is lost.
+/// </summary>
+public class ConvergenceGroup0(ITestOutputHelper output) : ConvergenceTests(output)
+{
+    [Theory]
+    [MemberData(nameof(Seeds), 0)]
+    public Task DevicesConvergeAndNothingIsLost(int seed) => RunAsync(seed, nestOnly: false);
+
+    [Theory]
+    [MemberData(nameof(Seeds), 0)]
+    public Task WithFoldersOnTheNestOnlyNothingIsLost(int seed) => RunAsync(seed, nestOnly: true);
+}
+
+/// <summary>
+/// The same two tests for the seeds of one group. With "only on the nest" each computer now and then switches a folder
+/// (or everything) to "only on the nest", or back to keeping everything here: at the end each computer has exactly the
+/// nest's files of the folders it keeps here and none of the others, and still nothing is lost.
+/// </summary>
+public class ConvergenceGroup1(ITestOutputHelper output) : ConvergenceTests(output)
+{
+    [Theory]
+    [MemberData(nameof(Seeds), 1)]
+    public Task DevicesConvergeAndNothingIsLost(int seed) => RunAsync(seed, nestOnly: false);
+
+    [Theory]
+    [MemberData(nameof(Seeds), 1)]
+    public Task WithFoldersOnTheNestOnlyNothingIsLost(int seed) => RunAsync(seed, nestOnly: true);
+}
+
+/// <summary>
+/// The same two tests for the seeds of one group. With "only on the nest" each computer now and then switches a folder
+/// (or everything) to "only on the nest", or back to keeping everything here: at the end each computer has exactly the
+/// nest's files of the folders it keeps here and none of the others, and still nothing is lost.
+/// </summary>
+public class ConvergenceGroup2(ITestOutputHelper output) : ConvergenceTests(output)
+{
+    [Theory]
+    [MemberData(nameof(Seeds), 2)]
+    public Task DevicesConvergeAndNothingIsLost(int seed) => RunAsync(seed, nestOnly: false);
+
+    [Theory]
+    [MemberData(nameof(Seeds), 2)]
+    public Task WithFoldersOnTheNestOnlyNothingIsLost(int seed) => RunAsync(seed, nestOnly: true);
+}
+
+/// <summary>
+/// The same two tests for the seeds of one group. With "only on the nest" each computer now and then switches a folder
+/// (or everything) to "only on the nest", or back to keeping everything here: at the end each computer has exactly the
+/// nest's files of the folders it keeps here and none of the others, and still nothing is lost.
+/// </summary>
+public class ConvergenceGroup3(ITestOutputHelper output) : ConvergenceTests(output)
+{
+    [Theory]
+    [MemberData(nameof(Seeds), 3)]
+    public Task DevicesConvergeAndNothingIsLost(int seed) => RunAsync(seed, nestOnly: false);
+
+    [Theory]
+    [MemberData(nameof(Seeds), 3)]
+    public Task WithFoldersOnTheNestOnlyNothingIsLost(int seed) => RunAsync(seed, nestOnly: true);
 }

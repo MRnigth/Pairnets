@@ -211,6 +211,9 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
     [AvaloniaFact]
     public async Task TheNestDownloadWindow_EveryButtonDoesWhatItSays() => Pass(await RunAsync("nest download"));
 
+    [AvaloniaFact]
+    public async Task TheWebDavLinkWindow_EveryButtonDoesWhatItSays() => Pass(await RunAsync("webdav link"));
+
     /// <summary>Every handler an AXAML file names ran at least once in the runs above.</summary>
     /// <summary>
     /// Every button in the main window and the tray panel, in every state, has a name screen readers read out. A button
@@ -429,6 +432,11 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
                 w.ShowStatus(Idle with { NestDownloads = NestDownloads }, "/Users/me/Work", "MacBook");
                 w.Navigate(MainPage.Devices);
             })),
+            new("the main window (Devices page with Files in Finder or Explorer)", s => MainStage(s, w =>
+            {
+                w.ShowStatus(OwnersNestWithWebDav, "/Users/me/Work", "MacBook");
+                w.Navigate(MainPage.Devices);
+            })),
             new("the main window (Needs you page with changes held back on a nest shared to view)", s => MainStage(s, w =>
             {
                 w.ShowAttention([new AttentionItem("3 changes stay on this computer", "Your edits to trip.jpg aren't sent.", "Put back Anna's version",
@@ -578,6 +586,12 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
             new("the nest download window (a link that isn't a web link)", s => NestDownloadStage(s, "ftp://example.com/file.iso", sealedNest: false)),
             new("the nest download window (on an encrypted nest)", s => NestDownloadStage(s, DownloadLink, sealedNest: true)),
         ],
+        ["webdav link"] =
+        [
+            new("the WebDAV link window (a name typed, the whole nest)", s => WebDavLinkStage(s, named: true, made: false)),
+            new("the WebDAV link window (no name)", s => WebDavLinkStage(s, named: false, made: false)),
+            new("the WebDAV link window (the link made, its password shown)", s => WebDavLinkStage(s, named: true, made: true)),
+        ],
         ["invite"] =
         [
             new("the invite window (the whole nest, view only)", s => InviteStage(s, chooseFolders: false)),
@@ -714,6 +728,8 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
             () => $"{a.Samples.Restored.Count} restored, it says \"{w.RestoreText}\"");
         s.Expect["OnInviteFriend"] = Calls(a, "invite-friend");
         s.Expect["OnAddDownload"] = Calls(a, "add-download");
+        s.Expect["OnMakeWebDavLink"] = Calls(a, "make-webdav-link");
+        s.Expect["OnRemoveWebDavLink"] = That(() => a.Calls is ["remove-webdav-link:dav_mac"] or ["remove-webdav-link:dav_pc"], "that WebDAV link be asked about removing");
         s.Expect["OnCancelDownload"] = That(() => a.Calls is ["cancel-download:dl_run"] or ["cancel-download:dl_wait"], "that download stop on the nest");
         s.Expect["OnRetryDownload"] = Calls(a, "retry-download:dl_stop");
         s.Expect["OnClearDownload"] = Calls(a, "forget-download:dl_done");
@@ -1110,6 +1126,41 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
         return Task.CompletedTask;
     }
 
+    private const string WebDavAddress = "https://pairnets.app/soro.nst_0123456789abcdefghjkmnpqrs/";
+    private const string WebDavPassword = "abcde-fghjk-mnpqr-stuvw";
+
+    /// <summary>"Make a link…" under Files in Finder or Explorer. With <paramref name="made"/> the link was made and its password shows.</summary>
+    private static async Task WebDavLinkStage(Stage s, bool named, bool made)
+    {
+        WebDavLinkWindow? window = null;
+        window = s.Show(new WebDavLinkWindow(WebDavAddress, ["Photos", "School"],
+            (label, canChange, folders) =>
+            {
+                s.Events.Add($"make {label} {(canChange ? "edit" : "view")} {(folders is null ? "whole" : string.Join("+", folders))}");
+                return Task.FromResult<(NewWebDavLink?, string?)>((new NewWebDavLink("dav_new", label, WebDavChoices.Slug(label), canChange ? "edit" : "view", folders, DateTimeOffset.UtcNow, WebDavPassword), null));
+            },
+            text => Pairnets.Desktop.Views.Dialogs.CopyTextAsync(window, text)));
+        if (named || made)
+            window.Label = "Mac mini";
+        if (made)
+        {
+            window.OnMake(null, new Avalonia.Interactivity.RoutedEventArgs());
+            await Wait.Until(() => window.ShowingResult, "the password to show");
+        }
+        s.Expect["OnChanged"] = That(() => window.Label == "test" && window.ProblemText.Length == 0, "the typed name be taken and no problem show");
+        s.Expect["OnScopeChanged:Chosen folders"] = That(() => Screen.Named<Border>(window, "FolderBox").IsVisible && Screen.Named<StackPanel>(window, "FolderList").Children.Count == 2,
+            "the nest's folders show to tick");
+        s.Expect["OnScopeChanged:The whole nest"] = That(() => !Screen.Named<Border>(window, "FolderBox").IsVisible, "the folders to tick go away");
+        s.Expect["OnMake"] = That(() => window.ShowingResult
+            ? s.Events.Count == 1 && s.Events[0].StartsWith("make ", StringComparison.Ordinal) && window.ResultPassword == WebDavPassword && window.ResultAddress == WebDavAddress
+            : s.Events.Count == 0 && window.ProblemText.Length > 0, "the link be made and its password show once (or it say what is missing)");
+        s.Expect["OnCopyAddress"] = All(Clipboard(window, () => WebDavAddress), That(() => window.CopyNoteText == "Address copied.", "it say the address was copied"));
+        s.Expect["OnCopyUsername"] = All(Clipboard(window, () => "mac-mini"), That(() => window.CopyNoteText == "Username copied.", "it say the username was copied"));
+        s.Expect["OnCopyPassword"] = All(Clipboard(window, () => WebDavPassword), That(() => window.CopyNoteText == "Password copied.", "it say the password was copied"));
+        s.Expect["OnDone"] = That(() => !window.IsVisible && window.ResultPassword.Length == 0, "the window close and forget the password");
+        s.Expect["OnCancel"] = That(() => !window.IsVisible && s.Events.Count == 0, "the window close without asking the nest");
+    }
+
     private const string FriendsNest = "nst_0123456789abcdefghjkmnpqrs";
 
     /// <summary>The owner's computer on a nest reached through Pairnets, shared with two friends and with someone waiting to be let in.</summary>
@@ -1125,6 +1176,15 @@ public sealed class ClickEverythingTests(ClickEverythingFixture fixture, ITestOu
         [new FriendRequestEntry("inv_oskar", "Oskar Nilsson", "oskar.n@example.com", "view", ["Music"])]),
     };
 
+    /// <summary>The owner's nest with two WebDAV links: one view only for the whole nest, one that can change two folders.</summary>
+    private static StatusSnapshot OwnersNestWithWebDav => OwnersNestWithFriends with
+    {
+        WebDav = new WebDavLinks(false, WebDavSection.MaxUploadBytes,
+        [
+            new WebDavLink("dav_mac", "Mac mini", "mac-mini", "view", null, DateTimeOffset.UtcNow.AddDays(-3), DateTimeOffset.UtcNow.AddMinutes(-4)),
+            new WebDavLink("dav_pc", "Work PC", "work-pc", "edit", ["Photos", "School"], DateTimeOffset.UtcNow.AddHours(-5), null),
+        ]),
+    };
     /// <summary>"Invite a friend…" for a nest whose folder holds Photos and School.</summary>
     private async Task InviteStage(Stage s, bool chooseFolders, string? startFolder = null)
     {

@@ -62,6 +62,22 @@ public sealed partial class ApiTour : IAsyncDisposable
         new("GET", "/api/access"),
         new("GET", "/api/people"),
 
+        // WebDAV links: the owner's list, and the nest's files for Finder and Explorer (Web/DavEndpoints.cs).
+        new("GET", "/api/webdav/links"),
+        new("POST", "/api/webdav/links"),
+        new("DELETE", "/api/webdav/links/{id}"),
+        new("OPTIONS", "/dav/{**rest}"),
+        new("PROPFIND", "/dav/{**rest}"),
+        new("PROPPATCH", "/dav/{**rest}"),
+        new("GET", "/dav/{**rest}"),
+        new("HEAD", "/dav/{**rest}"),
+        new("PUT", "/dav/{**rest}"),
+        new("DELETE", "/dav/{**rest}"),
+        new("MKCOL", "/dav/{**rest}"),
+        new("MOVE", "/dav/{**rest}"),
+        new("LOCK", "/dav/{**rest}"),
+        new("UNLOCK", "/dav/{**rest}"),
+
         // An encrypted nest's key mailbox (Web/KeyEndpoints.cs).
         new("GET", "/api/keys"),
         new("GET", "/api/keys/envelopes/{id}"),

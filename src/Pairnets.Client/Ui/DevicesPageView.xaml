@@ -325,6 +325,89 @@
         </Grid>
       </StackPanel>
 
+      <!-- Files in Finder or Explorer: WebDAV links, each with its own generated password. Only on the owner's computers;
+           see WebDavSection. "Make a link…" opens the window that makes one and shows its password once. -->
+      <StackPanel x:Name="WebDavPanel" Visibility="Collapsed">
+        <Grid Margin="4,22,0,0" Height="38">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="Auto" />
+          </Grid.ColumnDefinitions>
+          <TextBlock Text="Files in Finder or Explorer" FontSize="16" FontWeight="ExtraBold" VerticalAlignment="Center" />
+          <TextBlock x:Name="WebDavSummary" Grid.Column="1" Style="{StaticResource PgSmall}" Margin="12,0,0,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+          <Button x:Name="MakeLinkButton" Grid.Column="2" Style="{StaticResource PgButton}" VerticalAlignment="Center" Foreground="{DynamicResource T.AccentInk}" Click="OnMakeWebDavLink">
+            <StackPanel Orientation="Horizontal">
+              <ui:LineIcon Width="16" Height="16" Margin="0,0,8,0" StrokeThickness="2" Stroke="{DynamicResource T.AccentInk}" Data="{StaticResource I.Key}" />
+              <TextBlock Text="Make a link…" VerticalAlignment="Center" />
+            </StackPanel>
+          </Button>
+        </Grid>
+        <Border x:Name="WebDavCard" Style="{StaticResource PgCard}" Margin="0,10,0,0" ClipToBounds="True">
+          <ItemsControl x:Name="WebDavList" Focusable="False">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <Border BorderThickness="0,0,0,1" BorderBrush="{DynamicResource T.Border}" Padding="20,14">
+                  <Grid>
+                    <Grid.ColumnDefinitions>
+                      <ColumnDefinition Width="Auto" />
+                      <ColumnDefinition Width="*" />
+                      <ColumnDefinition Width="Auto" />
+                      <ColumnDefinition Width="Auto" />
+                      <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <Border Width="40" Height="40" CornerRadius="20" Margin="0,0,14,0" Background="{DynamicResource T.AccentSoft}">
+                      <ui:LineIcon Width="19" Height="19" StrokeThickness="2" Stroke="{DynamicResource T.AccentInk}" Data="{StaticResource I.Key}" />
+                    </Border>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                      <TextBlock Text="{Binding Title}" FontSize="15" FontWeight="ExtraBold" TextTrimming="CharacterEllipsis" />
+                      <TextBlock Text="{Binding Line}" Style="{StaticResource PgSmall}" TextTrimming="CharacterEllipsis" ToolTip="{Binding Line}" />
+                    </StackPanel>
+                    <ItemsControl Grid.Column="2" ItemsSource="{Binding Chips}" VerticalAlignment="Center" Focusable="False" Margin="10,0,0,0">
+                      <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                          <StackPanel Orientation="Horizontal" />
+                        </ItemsPanelTemplate>
+                      </ItemsControl.ItemsPanel>
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                          <Border Background="{DynamicResource T.Chip}" CornerRadius="13" Padding="10,4" Margin="0,0,6,0">
+                            <TextBlock Text="{Binding}" FontSize="12" FontWeight="Bold" />
+                          </Border>
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <Border x:Name="Pill" Grid.Column="3" CornerRadius="13" Padding="10,4" MinWidth="92" Margin="4,0,10,0" VerticalAlignment="Center" Background="{DynamicResource T.OkPill}">
+                      <TextBlock x:Name="PillText" Text="{Binding Pill}" FontSize="12" FontWeight="Bold" HorizontalAlignment="Center" Foreground="{DynamicResource T.OkText}" />
+                    </Border>
+                    <Button Grid.Column="4" Style="{StaticResource PgLink}" VerticalAlignment="Center" FontSize="13" Foreground="{DynamicResource T.BadText}" Content="Remove"
+                            ToolTip="Its password stops working at once" AutomationProperties.Name="{Binding RemoveLabel}" Click="OnRemoveWebDavLink" />
+                  </Grid>
+                </Border>
+                <DataTemplate.Triggers>
+                  <DataTrigger Binding="{Binding ViewOnly}" Value="True">
+                    <Setter TargetName="Pill" Property="Background" Value="{DynamicResource T.Chip}" />
+                    <Setter TargetName="PillText" Property="Foreground" Value="{DynamicResource T.Muted}" />
+                  </DataTrigger>
+                </DataTemplate.Triggers>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </Border>
+        <Grid x:Name="WebDavNoteRow" Margin="4,10,0,0">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="*" />
+          </Grid.ColumnDefinitions>
+          <ui:LineIcon Width="16" Height="16" Margin="0,1,8,0" VerticalAlignment="Top" StrokeThickness="1.9" Stroke="{DynamicResource T.Muted}" Data="{StaticResource I.InfoCircle}" />
+          <StackPanel Grid.Column="1">
+            <TextBlock x:Name="WebDavNote" Style="{StaticResource PgSub}" Margin="0" FontSize="13" TextWrapping="Wrap" />
+            <TextBlock x:Name="WebDavAddress" Style="{StaticResource PgSub}" Margin="0,6,0,0" FontSize="13" TextWrapping="Wrap" />
+            <TextBlock x:Name="WebDavHow" Style="{StaticResource PgSub}" Margin="0,6,0,0" FontSize="13" TextWrapping="Wrap" />
+          </StackPanel>
+        </Grid>
+      </StackPanel>
+
       <!-- Removing and renaming happens on the nest's website -->
       <Grid Margin="4,16,0,0">
         <Grid.ColumnDefinitions>

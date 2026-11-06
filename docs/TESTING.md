@@ -14,7 +14,8 @@ PAIRNETS_CONVERGENCE_SEEDS=250 dotnet test --filter "FullyQualifiedName~Converge
 
 A plain `dotnet test` runs about 750 tests: a little over 700 of their own, plus one convergence
 test per seed (30 by default). `PAIRNETS_CONVERGENCE_SEEDS` sets the number of seeds; CI uses 250 on
-Linux and 50 on Windows and macOS.
+Linux and 50 on Windows and macOS. The seeds are split over four test classes (`ConvergenceGroup0` to `3`, seed
+modulo 4) so that xUnit runs them side by side; use at least 4 seeds, or a group has no data.
 
 The Windows app (`net8.0-windows`) builds on Linux because its project sets
 `EnableWindowsTargeting=true`. Its logic lives in Pairnets.Core and is tested there; the WPF windows

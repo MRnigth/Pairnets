@@ -60,6 +60,17 @@ public sealed class AuthStoreTests : IDisposable
     }
 
     [Fact]
+    public void ComputersAndWebDavLinksAreNamedApart()
+    {
+        var store = Store();
+        Assert.Equal("Mac", store.AddWebDavLink("Mac", new DeviceAccess(DeviceAccess.Edit)).Link.Name);
+        Assert.Equal("Mac", store.AddDevice("Mac", null, "test").Device.Name); // a link does not take a computer's name
+        Assert.Equal("mac (2)", store.AddWebDavLink("mac", new DeviceAccess(DeviceAccess.View)).Link.Name); // links stay unique among themselves
+        var desk = store.AddDevice("Desk", null, "test").Device;
+        Assert.Equal("Mac (2)", store.RenameDevice(desk.Id, "Mac")!.Name);
+    }
+
+    [Fact]
     public void ARemovedComputerIsStillRecognisedButNotActive()
     {
         var store = Store();

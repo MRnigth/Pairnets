@@ -146,7 +146,7 @@ public sealed partial class TourRecord(IEnumerable<Route> claimed)
             _unknown.Enqueue($"{who}: {method} {path} -> {status}");
     }
 
-    [GeneratedRegex(@"\b(?<method>GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS) (?<path>/\S*)(?: .*?)? -> (?<status>\d{3}) in \d+ ms")]
+    [GeneratedRegex(@"\b(?<method>GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS|PROPFIND|PROPPATCH|MKCOL|MOVE|LOCK|UNLOCK) (?<path>/\S*)(?: .*?)? -> (?<status>\d{3}) in \d+ ms")]
     private static partial Regex RequestLine();
 }
 

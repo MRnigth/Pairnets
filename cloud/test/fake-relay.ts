@@ -245,6 +245,8 @@ export class FakeNestServer {
   private seq = 0;
   /** Keys of the computers this nest lets in on /api/secret (what its own API would check). */
   deviceKeys = new Set<string>();
+  /** The WWW-Authenticate its /dav 401 sends (a nest is anyone's server: it may say anything here); null for none. */
+  davChallenge: string | null = 'Basic realm="Pairnets"';
   /** cloudflared is running (the link works). */
   running = true;
   serverVersion = "1.0.48";
@@ -315,6 +317,7 @@ export class FakeNestServer {
         },
       });
     }
+    if (p === "/api/challenge") return new Response("Sign in.", { status: 401, headers: { "WWW-Authenticate": 'Basic realm="Pairnets account"' } });
     if (p === "/api/redirect") return new Response(null, { status: 302, headers: { Location: "elsewhere" } });
     if (p === "/api/redirect-out") return new Response(null, { status: 302, headers: { Location: "https://evil.example/login" } });
     if (p === "/api/redirect-root") return new Response(null, { status: 302, headers: { Location: "/account" } });
@@ -344,6 +347,13 @@ export class FakeNestServer {
       // Like the nest's own API: only a key it gave out gets in (X-Sync-Token, or Bearer on the hub).
       const key = req.headers.get("x-sync-token") ?? (req.headers.get("authorization") ?? "").replace(/^bearer\s+/i, "");
       return this.deviceKeys.has(key) ? jsonResp(200, { ok: true }) : jsonResp(401, { code: "unauthorized" });
+    }
+    if (p === "/dav" || p.startsWith("/dav/")) {
+      // Like the nest's WebDAV: a link's password (HTTP Basic) gets in, everything else is turned away with a challenge.
+      const auth = /^basic\s+(.+)$/i.exec(req.headers.get("authorization") ?? "")?.[1];
+      const pass = auth ? atob(auth).split(":").slice(1).join(":") : "";
+      if (!this.deviceKeys.has(pass)) return new Response("Sign in.", { status: 401, headers: this.davChallenge === null ? {} : { "WWW-Authenticate": this.davChallenge } });
+      return jsonResp(200, { method: req.method, path: url.pathname, query: url.search, headers: Object.fromEntries(req.headers), length: bytes.length, body: body.slice(0, 200) });
     }
     if (p.startsWith("/api/echo") || p === "/hub" || p.startsWith("/hub/")) {
       return jsonResp(200, { method: req.method, path: url.pathname, query: url.search, headers: Object.fromEntries(req.headers), length: bytes.length, body: body.slice(0, 200) });

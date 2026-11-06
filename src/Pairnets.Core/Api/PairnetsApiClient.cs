@@ -7,6 +7,7 @@ using System.Net.Sockets;
 using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 using System.Text.Json;
+using Pairnets.Core.Client;
 using Pairnets.Core.Hashing;
 using Pairnets.Core.Legacy;
 
@@ -283,6 +284,51 @@ public sealed class PairnetsApiClient : IPairnetsApi, IDisposable
             return null;
         await ThrowForStatusAsync(resp).ConfigureAwait(false);
         return await ReadJsonAsync<PeopleAnswer>(resp, timeout, ct).ConfigureAwait(false);
+    }
+
+    // ------------------------------------------------------------------ WebDAV links (Files in Finder or Explorer)
+
+    /// <summary>
+    /// The WebDAV links of the nest (the owner's computers only; never their passwords). Null for a nest from before WebDAV
+    /// links, and for a computer that is not the owner's (403 owner_only).
+    /// </summary>
+    public async Task<WebDavLinks?> GetWebDavLinksAsync(CancellationToken ct)
+    {
+        using var timeout = Linked(ct, TimeSpan.FromSeconds(30));
+        using var resp = await SendAsync(() => new HttpRequestMessage(HttpMethod.Get, "api/webdav/links"), HttpCompletionOption.ResponseContentRead, timeout, ct).ConfigureAwait(false);
+        if ((int)resp.StatusCode is 403 or 404 or 405)
+            return null;
+        await ThrowForStatusAsync(resp).ConfigureAwait(false);
+        return await ReadJsonAsync<WebDavLinks>(resp, timeout, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Makes a link. Returns it with its password (the only time the password exists), or the <see cref="WebDavErrors"/>
+    /// code the nest refused with ("update_nest" for a nest from before WebDAV links).
+    /// </summary>
+    public async Task<(NewWebDavLink? Link, string? Error)> CreateWebDavLinkAsync(string label, string access, IReadOnlyList<string>? folders, CancellationToken ct)
+    {
+        using var timeout = Linked(ct, TimeSpan.FromSeconds(30));
+        using var resp = await SendAsync(() => new HttpRequestMessage(HttpMethod.Post, "api/webdav/links")
+            { Content = JsonContent.Create(new WebDavLinkRequest(label, access, folders), options: PairnetsJson.Options) },
+            HttpCompletionOption.ResponseContentRead, timeout, ct).ConfigureAwait(false);
+        if ((int)resp.StatusCode is 404 or 405)
+            return (null, WebDavErrors.UpdateNest);
+        if ((int)resp.StatusCode is 400 or 409)
+            return (null, (await TryReadErrorAsync(resp, ct).ConfigureAwait(false))?.Code ?? WebDavErrors.Refused);
+        await ThrowForStatusAsync(resp).ConfigureAwait(false);
+        return (await ReadJsonAsync<NewWebDavLink>(resp, timeout, ct).ConfigureAwait(false), null);
+    }
+
+    /// <summary>Takes a link away: its password stops working at once. False when the nest doesn't know it.</summary>
+    public async Task<bool> RemoveWebDavLinkAsync(string id, CancellationToken ct)
+    {
+        using var timeout = Linked(ct, TimeSpan.FromSeconds(30));
+        using var resp = await SendAsync(() => new HttpRequestMessage(HttpMethod.Delete, "api/webdav/links/" + Uri.EscapeDataString(id)), HttpCompletionOption.ResponseContentRead, timeout, ct).ConfigureAwait(false);
+        if ((int)resp.StatusCode is 404 or 405)
+            return false;
+        await ThrowForStatusAsync(resp).ConfigureAwait(false);
+        return true;
     }
 
     // ------------------------------------------------------------------ downloads on the nest (1.0.61.8)

@@ -17,7 +17,7 @@ the deploy is blocked.
 - **Nothing new slips through**: a new button or request without a test makes the check fail.
 - **No secrets** (passwords, keys) in the files.
 
-**How long it takes.** About 15 minutes. The first time on a new PC it takes a few minutes more, to set up the
+**How long it takes.** About 15 minutes (the website-and-server tests under `cloud/` run at the same time as the main test suite, and the sync simulations run in four groups side by side). The first time on a new PC it takes a few minutes more, to set up the
 Linux test computer. If the same version already passed, the deploy goes ahead at once.
 
 **Nothing appears on your screen.** The apps open their windows on a hidden desktop, the website is clicked by an
@@ -62,6 +62,7 @@ this PC, and for `git push` from a terminal). `--check` says whether it is on, a
 | Avalonia buttons | `tests/Pairnets.Tests/Ui/` | Presses every button, toggle and menu item in every window (headless), and drives the real `DesktopController` against a real test server. |
 | WPF buttons | `tests/Pairnets.Client.Tests/` (Windows only) | The same for the Windows app and its `TrayController`. Its windows (and `tools/RenderScreens.Wpf`'s) open on a hidden desktop (`HiddenDesktop.cs`), so nothing shows on the screen. |
 | Website buttons | `tests/Pairnets.Browser.Tests/` | A real Chromium (Microsoft.Playwright) clicks every button on every page of the nest's website. |
+| Animations off | `PAIRNETS_TEST_ANIMATIONS=off` | In step 7 the click-everything tests of both Windows apps run a second time in their own process, beside the main suite, with Windows animations off (GitHub's computers have them off, this PC on). The main suite runs with `on`. Set only inside the test process (`AnimationSetting.ForTests`, `Motion.Enabled`); the Windows setting is never changed. Log: `07-tests-animations-off.log`. |
 | Linux test box | `scripts/wsl-testbox.ps1`, `tests/linux-server/` | A throwaway WSL Ubuntu with systemd: installs the server package the real way, runs the tour and the browser tests against it, then updates it and upgrades from the published release. |
 
 ### Test servers ("targets")
@@ -166,7 +167,7 @@ the WSL kernel as it is (the checks look at the running service: no capabilities
 `scripts\pre-deploy.ps1 -Repo <checkout> -Commit <sha> [-SummaryFile <json>] [-Only <step,...>] [-KeepBox]`
 runs in a temporary git worktree of the commit (`%LOCALAPPDATA%\Pairnets-predeploy\work\<sha8>`, removed
 afterwards), one run at a time (`run.lock`). Steps: `0 preflight`, `1 line-endings`, `2 secrets`, `3 gate`,
-`4 build`, `5 publish`, `6 render-screens`, `7 tests`, `8 linux-box`, `9 cloud`. `-Only` takes names or
+`4 build`, `5 publish`, `6 render-screens`, `7 tests`, `8 linux-box`, `9 cloud` (it starts before `7 tests` and runs beside it, as `scripts/pre-deploy-cloud.ps1`; step 9 waits for it and reads its log `09-cloud.log` and `cloud-result.txt`). `-Only` takes names or
 numbers and adds the steps they need (`tests` and `linux-box` need `build` and `publish`). The packages it
 builds are version `1.0.65000` (feed 1) and `1.0.65001` (feed 2).
 

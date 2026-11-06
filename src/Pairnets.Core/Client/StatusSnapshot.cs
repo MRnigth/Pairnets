@@ -427,6 +427,12 @@ public sealed record StatusSnapshot(
     /// </summary>
     public PeopleAnswer? People { get; init; }
 
+    /// <summary>
+    /// The nest's WebDAV links (the Computers page's "Files in Finder or Explorer"), without passwords, or null: not read yet, a nest
+    /// from before WebDAV links, or not the owner's computer.
+    /// </summary>
+    public WebDavLinks? WebDav { get; init; }
+
     // ---- links the nest downloads by itself (1.0.61.8)
 
     /// <summary>The nest's downloads (the Computers page's "Downloads on the nest"), or null: not read yet, or not the owner's computer.</summary>

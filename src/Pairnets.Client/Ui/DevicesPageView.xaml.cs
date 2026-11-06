@@ -13,6 +13,7 @@ public partial class DevicesPageView : UserControl
     private IReadOnlyList<DeviceCard> _shown = [];
     private IReadOnlyList<PersonRow> _people = [];
     private IReadOnlyList<NestDownloadRow> _downloads = [];
+    private IReadOnlyList<WebDavRow> _webDav = [];
 
     public DevicesPageView()
     {
@@ -75,6 +76,7 @@ public partial class DevicesPageView : UserControl
         DevicesEmptyText.Text = DevicesSummary.EmptyText(s);
 
         DrawPeople(PeopleSection.From(s));
+        DrawWebDav(WebDavSection.From(s, DateTimeOffset.UtcNow));
         DrawDownloads(NestDownloadsSection.From(s, DateTimeOffset.UtcNow));
 
         var cards = DeviceCard.From(s, thisDevice, DateTimeOffset.UtcNow);
@@ -115,6 +117,40 @@ public partial class DevicesPageView : UserControl
         if (!people.Rows.SequenceEqual(_people))
             PeopleList.ItemsSource = people.Rows;
         _people = people.Rows;
+    }
+
+    /// <summary>"Files in Finder or Explorer": shown on the owner's computers (see <see cref="WebDavSection"/>).</summary>
+    private void DrawWebDav(WebDavSection webDav)
+    {
+        WebDavPanel.Visibility = webDav.Visible ? Visibility.Visible : Visibility.Collapsed;
+        WebDavSummary.Text = webDav.Summary;
+        MakeLinkButton.Visibility = webDav.CanMake ? Visibility.Visible : Visibility.Collapsed;
+        WebDavCard.Visibility = webDav.HasRows ? Visibility.Visible : Visibility.Collapsed;
+        WebDavNote.Text = webDav.Note;
+        WebDavAddress.Text = webDav.AddressLine;
+        WebDavAddress.Visibility = webDav.Address is null ? Visibility.Collapsed : Visibility.Visible;
+        WebDavHow.Text = webDav.Address is null ? string.Empty : WebDavSection.MacHow + " " + WebDavSection.WindowsHow;
+        WebDavHow.Visibility = webDav.Address is null ? Visibility.Collapsed : Visibility.Visible;
+        if (!webDav.Rows.SequenceEqual(_webDav))
+            WebDavList.ItemsSource = webDav.Rows;
+        _webDav = webDav.Rows;
+    }
+
+    /// <summary>The WebDAV links shown, in order.</summary>
+    public IReadOnlyList<WebDavRow> WebDavRows => WebDavPanel.Visibility == Visibility.Visible ? _webDav : [];
+
+    public string WebDavNoteText => WebDavPanel.Visibility == Visibility.Visible ? WebDavNote.Text : string.Empty;
+
+    public string WebDavAddressText => WebDavAddress.Visibility == Visibility.Visible ? WebDavAddress.Text : string.Empty;
+
+    public bool CanMakeWebDavLink => WebDavPanel.Visibility == Visibility.Visible && MakeLinkButton.Visibility == Visibility.Visible;
+
+    private void OnMakeWebDavLink(object sender, RoutedEventArgs e) => Host?.Actions?.MakeWebDavLink();
+
+    private void OnRemoveWebDavLink(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is WebDavRow row)
+            Host?.Actions?.RemoveWebDavLink(row.Id);
     }
 
     /// <summary>"Downloads on the nest": shown on the owner's computers (see <see cref="NestDownloadsSection"/>).</summary>

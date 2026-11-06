@@ -284,6 +284,11 @@ public class NestFilesTests : IAsyncLifetime
             "the folder here under its new name, and none left under the old one");
         Assert.Equal("b", File.ReadAllText(Here("Trip 2/day 1/b.txt")));
 
+        // The rename reaches the nest with a sync that starts a moment later, so "idle" alone can still be the idle from
+        // before it; a delete landing mid-sync could bring "Trip 2" back. Wait until the nest has the new name only.
+        await WaitUntil(() => OnNest("Trip 2/a.txt") == "a" && OnNest("Trip 2/day 1/b.txt") == "b"
+                && OnNest("Trip/a.txt") is null && OnNest("Trip/day 1/b.txt") is null,
+            "the rename on the nest: Trip 2/ there and no Trip/");
         await WaitUntil(() => session.Status.Status == RunnerStatus.Idle, "idle");
         Assert.True((await session.Files.DeleteAsync("Trip 2")).Ok);
         Assert.False(Directory.Exists(Here("Trip 2")), "still here: " + Inside("Trip 2"));

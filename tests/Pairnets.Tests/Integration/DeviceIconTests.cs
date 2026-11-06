@@ -61,7 +61,7 @@ public sealed class DeviceIconServerTests : IDisposable
         using var version = check.CreateCommand();
         version.CommandText = "PRAGMA user_version;";
         Assert.Equal(AuthStore.SchemaVersion, Convert.ToInt32(version.ExecuteScalar()));
-        Assert.Equal(6, AuthStore.SchemaVersion); // 6 = friend access (DeviceAccess)
+        Assert.Equal(7, AuthStore.SchemaVersion); // 6 = friend access (DeviceAccess), 7 = WebDAV links (kind, lastUsedMs)
     }
 
     [Fact]

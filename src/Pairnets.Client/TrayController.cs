@@ -1438,6 +1438,64 @@ public sealed class TrayController : ITrayActions, IDisposable
 
     void IMainActions.ForgetDownload(string id) => _ = _session?.CancelDownloadAsync(id);
 
+    // ------------------------------------------------------------------ WebDAV links (Files in Finder or Explorer)
+
+    private WebDavLinkWindow? _webDavWindow;
+    private bool _webDavOpening;
+
+    /// <summary>"Make a link…": the window that makes a WebDAV link on the nest and shows its password once.</summary>
+    async void IMainActions.MakeWebDavLink()
+    {
+        if (_session is not { } session || WebDavSection.From(session.Status, DateTimeOffset.UtcNow) is not { CanMake: true, Address: { } address })
+            return;
+        if (_webDavWindow is { } open)
+        {
+            open.Activate();
+            return;
+        }
+        if (_webDavOpening)
+            return;
+        // The nest's list is read off the window's thread: on a big nest it takes a moment (as on the Files tab).
+        List<string> folders;
+        _webDavOpening = true;
+        try
+        {
+            folders = await Task.Run(() => session.Files.Folders(depth: 1).Where(f => Pairnets.Core.Sync.NestAccess.IsFolderName(f)).ToList());
+        }
+        finally
+        {
+            _webDavOpening = false;
+        }
+        if (_session != session)
+            return;
+        var window = new WebDavLinkWindow(address, folders, (label, canChange, chosen) => session.CreateWebDavLinkAsync(label, canChange, chosen), Dialogs.CopyText)
+        {
+            Owner = _window is { IsVisible: true } ? _window : null,
+        };
+        _webDavWindow = window;
+        try
+        {
+            window.ShowDialog();
+        }
+        finally
+        {
+            _webDavWindow = null;
+        }
+    }
+
+    /// <summary>Remove on a link: asks first, because whoever uses its password loses the nest's files at once.</summary>
+    async void IMainActions.RemoveWebDavLink(string id)
+    {
+        if (_session is not { } session || session.Status.WebDav?.Links?.FirstOrDefault(l => l.Id == id) is not { } link)
+            return;
+        if (!Dialogs.Confirm(_window is { IsVisible: true } ? _window : null,
+                $"Remove the link \"{link.Label}\"? Its password stops working at once, and whoever uses it can no longer open your files. Files already copied stay where they are.",
+                "Remove link", "Remove"))
+            return;
+        if (!await session.RemoveWebDavLinkAsync(id))
+            Dialogs.Ask(_window is { IsVisible: true } ? _window : null, "The link could not be removed: the nest did not answer. Its password still works. Try again when this computer is connected to the nest.", "Remove link");
+    }
+
     /// <summary>The quick-look panel next to the taskbar; a second click on the icon closes it.</summary>
     private void TogglePanel()
     {

@@ -9,17 +9,18 @@ public class DevBetaLookTests
 {
     [Theory]
     [InlineData("stable", null, false)]
-    [InlineData("public-beta", null, true)]
-    [InlineData("developer-beta", null, true)]
+    [InlineData("public-beta", null, false)] // since 1.0.61.14.7 the betas draw the 1.0.61.14 look too
+    [InlineData("developer-beta", null, false)]
     [InlineData("main", null, false)]
     [InlineData(null, null, false)]
     [InlineData("stable", "devbeta", true)] // the override, for local screenshots and tests
     [InlineData("stable", " DevBeta ", true)]
+    [InlineData("developer-beta", "devbeta", true)]
     [InlineData("developer-beta", "off", false)]
-    [InlineData("public-beta", "nonsense", true)]
+    [InlineData("public-beta", "nonsense", false)]
     [InlineData("public-beta", "off", false)]
     [InlineData("stable", "nonsense", false)]
-    public void OnlyTheBetasGetTheLookUnlessOverridden(string? channel, string? overrideValue, bool expected) =>
+    public void NoChannelGetsTheLookUnlessOverridden(string? channel, string? overrideValue, bool expected) =>
         Assert.Equal(expected, DevBetaLook.For(channel, overrideValue));
 
     private static StatusSnapshot Syncing() =>

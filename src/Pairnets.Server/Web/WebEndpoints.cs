@@ -155,7 +155,7 @@ public static class WebEndpoints
 
         signedIn.MapDelete("/devices/{id}", async (string id, HttpContext ctx, DeviceKeys keys, DeviceRegistry devices, IHubContext<SyncHub> hub, ILogger<DeviceKeys> log) =>
         {
-            if (keys.Store.GetDevice(id) is not { IsActive: true } device)
+            if (keys.Store.GetDevice(id) is not { IsActive: true, IsWebDav: false } device)
                 return Error(StatusCodes.Status404NotFound, ErrorCodes.NotFound, "No such computer.");
             await Endpoints.RemoveDeviceAsync(device, "removed on the nest's website", keys, devices, hub, log);
             return Results.NoContent();

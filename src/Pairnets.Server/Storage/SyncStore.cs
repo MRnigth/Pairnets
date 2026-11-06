@@ -356,9 +356,11 @@ public sealed class SyncStore : IDisposable
     /// Moves or renames a file on the nest (the apps' Files page): <paramref name="to"/>, which must not exist, gets the
     /// content of <paramref name="from"/>, then <paramref name="from"/> is deleted as by <see cref="DeleteAsync"/> (its
     /// version goes to history). Computers see a new file and a deleted one. Nothing changes when <paramref name="from"/>
-    /// is no longer the version <paramref name="baseValue"/>. Returns the new file's entry.
+    /// is no longer the version <paramref name="baseValue"/>. Returns the new file's entry. With
+    /// <paramref name="replacingBase"/>, <paramref name="to"/> may exist as exactly that version: it is replaced in one
+    /// step (its old version goes to history), so a failed move never leaves the target gone.
     /// </summary>
-    public async Task<ChangeResult> MoveAsync(string from, string to, string baseValue, CancellationToken ct)
+    public async Task<ChangeResult> MoveAsync(string from, string to, string baseValue, CancellationToken ct, string? replacingBase = null)
     {
         if (!PathRules.IsValid(from))
             return new ChangeResult(ChangeStatus.InvalidName, null, "Invalid path.");
@@ -395,9 +397,9 @@ public sealed class SyncStore : IDisposable
             }
             if (!string.Equals(hash, expectedBase, StringComparison.Ordinal))
                 return new ChangeResult(ChangeStatus.Conflict, null, "The file changed on the server since your last sync.");
-            var put = await CommitFileAsync(to, tmp, hash, size, current.ModifiedMs, existing => existing is null).ConfigureAwait(false);
+            var put = await CommitFileAsync(to, tmp, hash, size, current.ModifiedMs, existing => existing is null || (replacingBase is not null && string.Equals(existing, replacingBase, StringComparison.Ordinal))).ConfigureAwait(false);
             if (put.Status == ChangeStatus.Conflict)
-                return new ChangeResult(ChangeStatus.Conflict, null, "A file with the new name already exists.");
+                return new ChangeResult(ChangeStatus.Conflict, null, replacingBase is null ? "A file with the new name already exists." : "The file being replaced changed meanwhile.");
             if (put.Status is not (ChangeStatus.Ok or ChangeStatus.Unchanged))
                 return put;
             var removed = await DeleteAsync(from, baseValue).ConfigureAwait(false);

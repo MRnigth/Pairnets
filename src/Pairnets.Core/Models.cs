@@ -452,6 +452,31 @@ public sealed record AccessAnswer(string? Access, IReadOnlyList<string>? Folders
 /// </summary>
 public sealed record PeopleAnswer(IReadOnlyList<FriendPerson>? People, IReadOnlyList<FriendRequestEntry>? Requests);
 
+/// <summary>
+/// One WebDAV link (<c>GET /api/webdav/links</c>): a username and password a Mac's Finder or Windows' Explorer uses to
+/// open the nest's files. The password is never in this: it is shown once, when the link is made (<see cref="NewWebDavLink"/>).
+/// </summary>
+/// <param name="Label">What the owner called it ("Mac mini").</param>
+/// <param name="Username">The label as a lower-case word ("mac-mini"); the password is the credential.</param>
+/// <param name="Access">"view" or "edit".</param>
+/// <param name="Folders">The shared top-level folders, or null for the whole nest.</param>
+public sealed record WebDavLink(string Id, string Label, string? Username, string? Access, IReadOnlyList<string>? Folders, DateTimeOffset? Created, DateTimeOffset? LastUsed);
+
+/// <summary><c>GET /api/webdav/links</c> (the owner's computers only).</summary>
+/// <param name="Sealed">An encrypted nest: it can't show its files this way.</param>
+/// <param name="MaxUploadBytes">The biggest file that can be added over WebDAV (25 MB).</param>
+public sealed record WebDavLinks(bool Sealed, long MaxUploadBytes, IReadOnlyList<WebDavLink>? Links);
+
+/// <summary><c>POST /api/webdav/links</c>: the new link with its password, which the nest shows once and never keeps.</summary>
+public sealed record NewWebDavLink(string Id, string Label, string? Username, string? Access, IReadOnlyList<string>? Folders, DateTimeOffset? Created, string Password)
+{
+    // A record prints all its fields: the password must never reach a log or a crash report that way.
+    public override string ToString() => $"NewWebDavLink {{ Id = {Id}, Label = {Label} }}";
+}
+
+/// <summary>Body of <c>POST /api/webdav/links</c>.</summary>
+public sealed record WebDavLinkRequest(string Label, string Access, IReadOnlyList<string>? Folders);
+
 /// <summary>One friend: their account id at the service, the line about them ("Anna Berg · a•••@gmail.com"), what they may do, their computers.</summary>
 public sealed record FriendPerson(string? PersonId, string? Person, string? Access, IReadOnlyList<string>? Folders, IReadOnlyList<FriendDevice>? Devices);
 
