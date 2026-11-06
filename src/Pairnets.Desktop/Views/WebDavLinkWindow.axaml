@@ -77,19 +77,19 @@
       </Grid>
 
       <TextBlock Text="Address" FontSize="13" FontWeight="Bold" Margin="0,18,0,6" />
-      <Grid ColumnDefinitions="*,Auto">
+      <Grid x:Name="AddressRow" ColumnDefinitions="*,Auto">
         <TextBox x:Name="AddressBox" Classes="field" IsReadOnly="True" AutomationProperties.Name="Address" />
         <Button x:Name="CopyAddressButton" Grid.Column="1" Classes="small" Margin="8,0,0,0" Content="Copy" AutomationProperties.Name="Copy the address" Click="OnCopyAddress" />
       </Grid>
 
       <TextBlock Text="Username" FontSize="13" FontWeight="Bold" Margin="0,14,0,6" />
-      <Grid ColumnDefinitions="*,Auto">
+      <Grid x:Name="UsernameRow" ColumnDefinitions="*,Auto">
         <TextBox x:Name="UsernameBox" Classes="field" IsReadOnly="True" AutomationProperties.Name="Username" />
         <Button x:Name="CopyUsernameButton" Grid.Column="1" Classes="small" Margin="8,0,0,0" Content="Copy" AutomationProperties.Name="Copy the username" Click="OnCopyUsername" />
       </Grid>
 
       <TextBlock Text="Password" FontSize="13" FontWeight="Bold" Margin="0,14,0,6" />
-      <Grid ColumnDefinitions="*,Auto">
+      <Grid x:Name="PasswordRow" ColumnDefinitions="*,Auto">
         <TextBox x:Name="PasswordBox" Classes="field" FontWeight="SemiBold" IsReadOnly="True" AutomationProperties.Name="Password" />
         <Button x:Name="CopyPasswordButton" Grid.Column="1" Classes="small" Margin="8,0,0,0" Content="Copy" AutomationProperties.Name="Copy the password" Click="OnCopyPassword" />
       </Grid>
